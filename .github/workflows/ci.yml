@@ -44,13 +44,3 @@ jobs:
 
       - name: Generate Documentation
         run: npm run typedoc
-
-      - id: "upload-documentation"
-        name: "Upload Pages artifact"
-        uses: "actions/upload-pages-artifact@v2"
-        with:
-          path: "docs/"
-
-      - id: "deployment"
-        name: "Deploy documentation to GitHub Pages"
-        uses: "actions/deploy-pages@v2"
