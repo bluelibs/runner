@@ -39,10 +39,6 @@ jobs:
       - name: Run tests and coverage
         run: npm run coverage
 
-      # Run docs creation
-      - name: Run docs creation
-        run: npm run typedoc
-
       # Upload coverage to Coveralls
       - name: Coveralls
         uses: coverallsapp/github-action@v2
