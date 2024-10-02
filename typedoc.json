@@ -1,0 +1,8 @@
+{
+  "entryPoints": ["src/index.ts"],
+  "out": "docs",
+  "exclude": ["**/__tests__/**/*"],
+  "includeVersion": true,
+  "theme": "default",
+  "readme": "README.md"
+}
