@@ -1,15 +1,9 @@
 # BlueLibs Runner
 
 <p align="center">
-<a href="https://travis-ci.org/bluelibs/runner">
-  <img src="https://github.com/bluelibs/runner/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build Status" />
-</a>
-<a href="https://coveralls.io/github/bluelibs/runner?branch=main">
-  <img src="https://coveralls.io/repos/github/bluelibs/runner/badge.svg?branch=main" alt="Coverage Status" />
-</a>
-<a href="https://bluelibs.github.io/runner/" target="_blank">
-  <img src="https://img.shields.io/badge/read-typedocs-blue" alt="Docs" />
-</a>
+<a href="https://travis-ci.org/bluelibs/runner"><img src="https://github.com/bluelibs/runner/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build Status" /></a>
+<a href="https://coveralls.io/github/bluelibs/runner?branch=main"><img src="https://coveralls.io/repos/github/bluelibs/runner/badge.svg?branch=main" alt="Coverage Status" /></a>
+<a href="https://bluelibs.github.io/runner/" target="_blank"><img src="https://img.shields.io/badge/read-typedocs-blue" alt="Docs" /></a>
 </p>
 
 These are the building blocks to create amazing applications. It's a more functional approach to building small and large-scale applications.
