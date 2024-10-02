@@ -75,7 +75,7 @@ describe("Store", () => {
   });
 
   it("should dispose of resources correctly", async () => {
-    const disposeFn = jest.fn();
+    const disposeFn = jest.fn(async () => {});
     const testResource = defineResource({
       id: "test.resource",
       dispose: disposeFn,
@@ -83,6 +83,9 @@ describe("Store", () => {
     });
 
     store.storeGenericItem(testResource);
+
+    // Simulate resource initialization
+    store.resources.get("test.resource")!.value = "Resource Value";
 
     await store.dispose();
 
@@ -97,6 +100,6 @@ describe("Store", () => {
 
     store.storeGenericItem(testTask);
 
-    expect(() => store.storeGenericItem(testTask)).toThrow(/duplicate registration/i);
+    expect(() => store.storeGenericItem(testTask)).toThrow(/already registered/i);
   });
 });
