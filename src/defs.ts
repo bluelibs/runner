@@ -132,6 +132,19 @@ export interface IResourceDefinintion<
     config: TConfig,
     dependencies: DependencyValuesType<TDependencies>
   ) => Promise<TValue>;
+  /**
+   * Clean-up function for the resource. This is called when the resource is no longer needed.
+   *
+   * @param value The value of the resource
+   * @param config The configuration it received
+   * @param dependencies The dependencies it needed
+   * @returns
+   */
+  dispose?: (
+    value: TValue,
+    config: TConfig,
+    dependencies: DependencyValuesType<TDependencies>
+  ) => Promise<TValue>;
   meta?: IResourceMeta;
 }
 

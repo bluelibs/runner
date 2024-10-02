@@ -39,5 +39,6 @@ jobs:
       - name: Run tests and coverage
         run: npm run coverage
 
-      # - name: Coveralls
-      #   uses: coverallsapp/github-action@v2
+      # Upload coverage to Coveralls
+      - name: Coveralls
+        uses: coverallsapp/github-action@v2

@@ -1,4 +1,5 @@
 import { EventHandlerType, IEvent, IEventDefinition } from "./defs";
+import { Errors } from "./errors";
 
 const HandlerOptionsDefaults = { order: 0 };
 
@@ -16,6 +17,21 @@ export interface IEventHandlerOptions<T = any> {
 export class EventManager {
   private listeners: Map<string, IListenerStorage[]> = new Map();
   private globalListeners: IListenerStorage[] = [];
+  #isLocked = false;
+
+  get isLocked() {
+    return this.#isLocked;
+  }
+
+  lock() {
+    this.#isLocked = true;
+  }
+
+  checkLock() {
+    if (this.#isLocked) {
+      throw Errors.locked("EventManager");
+    }
+  }
 
   async emit<TInput>(
     eventDefinition: IEventDefinition<TInput>,
@@ -46,6 +62,8 @@ export class EventManager {
     handler: EventHandlerType<T>,
     options: IEventHandlerOptions<T> = HandlerOptionsDefaults
   ): void {
+    this.checkLock();
+
     if (Array.isArray(event)) {
       event.forEach((id) => this.addListener(id, handler, options));
     } else {
@@ -66,6 +84,8 @@ export class EventManager {
     handler: EventHandlerType,
     options: IEventHandlerOptions = HandlerOptionsDefaults
   ): void {
+    this.checkLock();
+
     const newListener: IListenerStorage = {
       handler,
       order: options.order || 0,

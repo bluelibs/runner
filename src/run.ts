@@ -58,7 +58,7 @@ export type RunnerType = {
 };
 
 export async function run<C, V>(
-  resource: IResource<C>,
+  resource: IResource<C, V>,
   config?: C
 ): Promise<V> {
   const eventManager = new EventManager();
@@ -69,7 +69,6 @@ export async function run<C, V>(
   // In the registration phase we register deeply all the resources, tasks, middleware and events
   store.initializeStore(resource, config);
   store.storeGenericItem(globalResources.taskRunner.with(taskRunner));
-  store.computeRegisterOfResource(resource, config);
 
   // We verify that there isn't any circular dependencies before we begin computing the dependencies
   const dependentNodes = store.getDependentNodes();
@@ -93,6 +92,9 @@ export async function run<C, V>(
   await processor.initializeRoot();
 
   await eventManager.emit(globalEvents.afterInit);
+
+  // disallow manipulation or attaching more
+  store.lock();
 
   return store.root.value;
 }

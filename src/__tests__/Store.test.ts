@@ -1,6 +1,11 @@
 import { Store } from "../Store";
 import { EventManager } from "../EventManager";
-import { defineResource, defineTask, defineMiddleware, defineEvent } from "../define";
+import {
+  defineResource,
+  defineTask,
+  defineMiddleware,
+  defineEvent,
+} from "../define";
 import { globalResources } from "../globalResources";
 
 describe("Store", () => {
@@ -28,7 +33,9 @@ describe("Store", () => {
     store.lock();
     expect(store.isLocked).toBe(true);
 
-    expect(() => store.checkLock()).toThrow("Cannot modify the Store when it is locked.");
+    expect(() => store.checkLock()).toThrow(
+      "Cannot modify the Store when it is locked."
+    );
   });
 
   it("should store a task and retrieve it", () => {
@@ -75,7 +82,7 @@ describe("Store", () => {
   });
 
   it("should dispose of resources correctly", async () => {
-    const disposeFn = jest.fn(async () => {});
+    const disposeFn = jest.fn(async (...args: any[]) => {});
     const testResource = defineResource({
       id: "test.resource",
       dispose: disposeFn,
@@ -86,6 +93,7 @@ describe("Store", () => {
 
     // Simulate resource initialization
     store.resources.get("test.resource")!.value = "Resource Value";
+    store.resources.get("test.resource")!.isInitialized = true;
 
     await store.dispose();
 
@@ -100,6 +108,21 @@ describe("Store", () => {
 
     store.storeGenericItem(testTask);
 
-    expect(() => store.storeGenericItem(testTask)).toThrow(/already registered/i);
+    expect(() => store.storeGenericItem(testTask)).toThrow(
+      /already registered/i
+    );
+  });
+
+  it("should throw an error if you're trying to initialize the store twice", () => {
+    const rootResource = defineResource({
+      id: "root",
+      init: async () => "Root Value",
+    });
+
+    store.initializeStore(rootResource, {});
+
+    expect(() => store.initializeStore(rootResource, {})).toThrow(
+      /Store already initialized/i
+    );
   });
 });

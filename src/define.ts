@@ -21,14 +21,6 @@ export function defineTask<
 >(
   config: ITaskDefinition<Input, Output, Deps, Test>
 ): ITask<Input, Output, Deps, Test> {
-  const autorun: any = {};
-  // if (config.autorun) {
-  //   if (config.autorun.on) {
-  //     autorun.on = Array.isArray(config.autorun.on);
-  //     autorun.schedule = config.autorun.schedule;
-  //   }
-  // }
-
   return {
     [symbols.task]: true,
     id: config.id,
@@ -63,6 +55,7 @@ export function defineResource<
     id: constConfig.id,
     dependencies: constConfig.dependencies,
     hooks: constConfig.hooks || [],
+    dispose: constConfig.dispose,
     register: constConfig.register || [],
     init: constConfig.init,
     with: function (config: TConfig) {

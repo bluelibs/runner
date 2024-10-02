@@ -19,4 +19,10 @@ export const Errors = {
 
   middlewareAlreadyGlobal: (id: string) =>
     new Error("Cannot call global on a global middleware: " + id),
+
+  locked: (what: string) =>
+    new Error(`Cannot modify the ${what} when it is locked.`),
+
+  storeAlreadyInitialized: () =>
+    new Error("Store already initialized. Cannot reinitialize."),
 };

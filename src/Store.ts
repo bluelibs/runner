@@ -51,7 +51,7 @@ export type EventStoreElementType = {
 };
 
 /**
- * @internal This should be used for testing purposes only.
+ * Store class which is used to store all the resources, tasks, middleware and events.
  */
 export class Store {
   root!: ResourceStoreElementType;
@@ -59,8 +59,30 @@ export class Store {
   public resources: Map<string, ResourceStoreElementType> = new Map();
   public events: Map<string, EventStoreElementType> = new Map();
   public middlewares: Map<string, MiddlewareStoreElementType> = new Map();
+  #isLocked = false;
+  #isInitialized = false;
 
   constructor(protected readonly eventManager: EventManager) {}
+
+  get isLocked() {
+    return this.#isLocked;
+  }
+
+  lock() {
+    this.#isLocked = true;
+    this.eventManager.lock();
+    // freeze the maps so they can't be modified
+    Object.freeze(this.tasks);
+    Object.freeze(this.resources);
+    Object.freeze(this.events);
+    Object.freeze(this.middlewares);
+  }
+
+  checkLock() {
+    if (this.#isLocked) {
+      throw new Error("Cannot modify the Store when it is locked.");
+    }
+  }
 
   /**
    * Store the root before beginning registration
@@ -68,6 +90,10 @@ export class Store {
    * @param config
    */
   initializeStore(root: IResource<any>, config: any) {
+    if (this.#isInitialized) {
+      throw Errors.storeAlreadyInitialized();
+    }
+
     this.storeGenericItem(globalResources.eventManager.with(this.eventManager));
     this.storeGenericItem(globalResources.store.with(this));
 
@@ -89,7 +115,11 @@ export class Store {
       this.storeEvent(event);
     });
 
+    this.computeRegisterOfResource(root, config);
+
     this.resources.set(root.id, this.root);
+
+    this.#isInitialized = true;
   }
 
   /**
@@ -97,7 +127,7 @@ export class Store {
    * @param element
    * @param config
    */
-  computeRegisterOfResource<C>(element: IResource<C>, config?: C) {
+  private computeRegisterOfResource<C>(element: IResource<C>, config?: C) {
     const items =
       typeof element.register === "function"
         ? element.register(config as C)
@@ -121,6 +151,18 @@ export class Store {
     }
     if (this.events.has(id)) {
       throw Errors.duplicateRegistration("Event", id);
+    }
+  }
+
+  public async dispose() {
+    for (const resource of this.resources.values()) {
+      if (resource.resource.dispose) {
+        await resource.resource.dispose(
+          resource.value,
+          resource.config,
+          resource.computedDependencies as DependencyMapType
+        );
+      }
     }
   }
 

@@ -5,6 +5,7 @@ import {
   defineMiddleware,
 } from "../define";
 import { run } from "../run";
+import { globalResources } from "../globalResources";
 
 describe("run", () => {
   // Tasks
@@ -603,12 +604,38 @@ describe("run", () => {
       dependencies: () => ({ middle }),
       register: () => [middle, testTask],
       async init(_, { middle }) {
-        console.log(middle.toString());
         expect(await middle()).toBe("middle");
       },
     });
 
     await run(app);
     expect(mockFn).toHaveBeenCalled();
+  });
+
+  describe("disposal", () => {
+    it("should be able to dispose of a resource", async () => {
+      const disposeFn = jest.fn();
+      const testResource = defineResource({
+        id: "test.resource",
+        dispose: disposeFn,
+        init: async () => "Resource Value",
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [testResource],
+        dependencies: { testResource, store: globalResources.store },
+        async init(_, { testResource, store }) {
+          expect(testResource).toBe("Resource Value");
+
+          return {
+            dispose: () => store.dispose(),
+          };
+        },
+      });
+
+      const result = await run(app);
+      await result.dispose();
+    });
   });
 });

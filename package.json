@@ -17,7 +17,6 @@
     "test:clean": "jest --clearCache",
     "testonly": "npm test",
     "test:ci": "npm run coverage -- --ci --maxWorkers=2  --reporters=default --reporters=jest-junit",
-    "coverage:upload": "codecov",
     "prepublishOnly": "npm run build",
     "typedoc": "typedoc",
     "benchmark": "jest --testMatch=\"**/__tests__/benchmark/benchmark.test.ts\" --testTimeout 10000"

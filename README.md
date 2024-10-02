@@ -77,7 +77,7 @@ const app = resource({
 });
 ```
 
-### When to use a task vs a resource.
+### When to use each?
 
 It is unrealistic to create a task for everything you're doing in your system, not only it will be tedious for the developer, but it will affect performance unnecessarily. The idea is to think of a task of something that you want trackable as an action, for example:
 
@@ -86,6 +86,47 @@ It is unrealistic to create a task for everything you're doing in your system, n
 - "app.user.updateFriendList" - this task can be re-used from many other tasks or resources as necessary
 
 Resources are more like services, they are singletons, they are meant to be used as a shared functionality across your application. They can be constants, services, functions, etc.
+
+### Resource dispose()
+
+Resources can have a `dispose()` method that can be used to clean up resources. This is useful for cleaning up resources like closing database connections, etc. You typically want to use this when you have opened pending connections or you need to do some cleanup or a graceful shutdown.
+
+```ts
+import { task, run, resource } from "@bluelibs/runner";
+
+const dbResource = resource({
+  async init(config, deps) {
+    const db = await connectToDatabase();
+    return db;
+  },
+  async dispose(db, config, deps) {
+    return db.close();
+  },
+});
+```
+
+If you want to call dispose, you have to do it through the global store.
+
+```ts
+import { task, run, resource, global } from "@bluelibs/runner";
+
+const app = resource({
+  id: "app",
+  register: [dbResource],
+  dependencies: {
+    store: global.resources.store,
+  },
+  async init(_, deps) {
+    return {
+      dispose: async () => deps.store.dispose(),
+    };
+  },
+});
+
+const value = await run(app);
+// To begin the disposal process.
+await value.dispose();
+```
 
 ## Encapsulation
 

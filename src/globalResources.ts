@@ -3,17 +3,19 @@ import { EventManager } from "./EventManager";
 import { Store } from "./Store";
 import { TaskRunner } from "./TaskRunner";
 
+const store = defineResource({
+  id: "global.store",
+  init: async (store: Store) => store,
+});
+
 export const globalResources = {
-  store: defineResource<Store>({
-    id: "global.store",
-    init: async (store) => store,
-  }),
-  eventManager: defineResource<EventManager>({
+  store,
+  eventManager: defineResource({
     id: "global.eventManager",
-    init: async (em) => em,
+    init: async (em: EventManager) => em,
   }),
-  taskRunner: defineResource<TaskRunner>({
+  taskRunner: defineResource({
     id: "global.taskRunner",
-    init: async (runner) => runner,
+    init: async (runner: TaskRunner) => runner,
   }),
 };

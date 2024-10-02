@@ -1,4 +1,5 @@
 import { IEvent, IEventDefinition } from "../defs";
+import { Errors } from "../errors";
 import { EventManager } from "../EventManager";
 
 describe("EventManager", () => {
@@ -92,5 +93,22 @@ describe("EventManager", () => {
 
       expect(globalListener).toHaveBeenCalledWith(createEvent("test data"));
     });
+  });
+
+  it("should lock the EventManager", () => {
+    eventManager.lock();
+    expect(eventManager.isLocked).toBe(true);
+
+    expect(() => eventManager.checkLock()).toThrow(
+      Errors.locked("EventManager")
+    );
+
+    expect(() => eventManager.addListener(testEvent, jest.fn())).toThrow(
+      Errors.locked("EventManager")
+    );
+
+    expect(() => eventManager.addGlobalListener(jest.fn())).toThrow(
+      Errors.locked("EventManager")
+    );
   });
 });
