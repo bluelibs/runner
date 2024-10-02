@@ -9,8 +9,6 @@
   </a>
 </p>
 
-# BlueLibs Runner
-
 These are the building blocks to create amazing applications. It's a more functional approach to building small and large-scale applications.
 
 These are the building blocks:
