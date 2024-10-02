@@ -8,7 +8,7 @@
     <img src="https://coveralls.io/repos/github/bluelibs/runner/badge.svg?branch=main" alt="Coverage Status" />
   </a>
   <a href="https://bluelibs.github.io/runner/" target="_blank">
-    <img src="https://img.shields.io/badge/Read%20the%20Docs-blue?style=for-the-badge" alt="Docs" />
+    <img src="https://img.shields.io/badge/read-typedocs-blue" alt="Docs" />
   </a>
 </p>
 
