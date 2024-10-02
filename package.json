@@ -1,0 +1,49 @@
+{
+  "name": "@bluelibs/runner",
+  "version": "1.0.0",
+  "description": "BlueLibs Runner",
+  "main": "dist/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/bluelibs/bluelibs"
+  },
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "pretest": "npm run build",
+    "test": "jest --verbose dist/__tests__/index.js",
+    "test:dev": "jest --verbose src/__tests__/index.ts --watch",
+    "coverage": "jest --verbose src/__tests__/index.ts --coverage",
+    "test:clean": "jest --clearCache",
+    "testonly": "npm test",
+    "test:ci": "npm run coverage -- --ci --maxWorkers=2  --reporters=default --reporters=jest-junit",
+    "coverage:upload": "codecov",
+    "prepublishOnly": "npm run build",
+    "gen-doc": "typedoc ./src/index.ts --exclude ./src/__tests__ --out typeDocs --tsconfig tsconfig.json",
+    "benchmark": "jest --testMatch=\"**/__tests__/benchmark/benchmark.test.ts\" --testTimeout 10000"
+  },
+  "devDependencies": {
+    "@types/benchmark": "^2.1.5",
+    "@types/graphql": "^0.11.3",
+    "@types/jest": "^27.0.0",
+    "@types/node": "^20.0.0",
+    "@typescript-eslint/eslint-plugin": "2.3.0",
+    "@typescript-eslint/parser": "2.3.0",
+    "benchmark": "^2.1.4",
+    "eslint": "^6.6.0",
+    "eslint-config-prettier": "6.3.0",
+    "eslint-plugin-prettier": "3.1.1",
+    "jest": "^27.0.0",
+    "jest-junit": "^10.0.0",
+    "prettier": "^2.0.5",
+    "reflect-metadata": "^0.2.2",
+    "source-map-support": "^0.5.13",
+    "ts-jest": "^27.1.5",
+    "typescript": "^5.6.2"
+  },
+  "typings": "dist/index.d.ts",
+  "typescript": {
+    "definition": "dist/index.d.ts"
+  },
+  "license": "MIT"
+}
