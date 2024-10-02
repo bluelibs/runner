@@ -7,7 +7,6 @@ import {
 import { globalEvents } from "./globalEvents";
 import { globalResources } from "./globalResources";
 import { run } from "./run";
-import { IEvent } from "../dist/EventManager";
 
 const globals = {
   events: globalEvents,
