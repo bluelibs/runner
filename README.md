@@ -2,7 +2,7 @@
 
 <p align="center">
   <a href="https://travis-ci.org/bluelibs/runner">
-    <img src="https://api.travis-ci.org/bluelibs/runner.svg?branch=main" alt="Build Status" />
+    <img src="https://github.com/bluelibs/runner/actions/workflows/ci.yml/badge.svg?branch=feature-1" alt="Build Status" />
   </a>
   <a href="https://coveralls.io/github/bluelibs/runner?branch=main">
     <img src="https://coveralls.io/repos/github/bluelibs/runner/badge.svg?branch=main" alt="Coverage Status" />
