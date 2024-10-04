@@ -131,6 +131,39 @@ const value = await run(app);
 await value.dispose();
 ```
 
+### Resource with()
+
+Resources can be configured with a configuration object. This is useful when you want to pass in configuration to your resources.
+
+```ts
+import { task, run, resource } from "@bluelibs/runner";
+
+type Config = { smtpUrl: string; defaultFrom: string };
+const emailerResource = resource({
+  async init(config: Config) {
+    // run config checks
+    return {
+      sendEmail: async (to: string, subject: string, body: string) => {
+        // send *email*
+      },
+    };
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [
+    emailerResource.with({ smtpUrl: "smtp://localhost", defaultFrom: "" }),
+  ],
+});
+```
+
+If by any chance your main `app` has configs then they will be passed via the second argument of `run`, like this:
+
+```ts
+run(app, config);
+```
+
 ## Dependencies
 
 You can depend on `tasks`, `resources`, `events` and `middleware`.
@@ -492,7 +525,7 @@ Now you can freely use any of the tasks, resources, events, and middlewares from
 
 This approach is very powerful when you have multiple packages and you want to compose them together.
 
-## Real world usage.
+## Real world examples
 
 Typically you have an express server (to handle HTTP requests), a database, and a bunch of services. You can define all of these in a single file and run them.
 
@@ -567,47 +600,7 @@ const app = resource({
 run();
 ```
 
-### Resources can receive configs
-
-Resources are super configurable.
-
-```ts
-import { resource, run } from "@bluelibs/runner";
-
-type EmailerOptions = {
-  smtpUrl: string;
-  defaultFrom: string;
-};
-
-const emailerResource = resource({
-  id: "app.config",
-  async init(config: EmailerOptions) {
-    return {
-      sendEmail: async (to: string, subject: string, body: string) => {
-        // send *email*
-      },
-    };
-    // or return some service that sends email
-  },
-});
-
-const app = resource({
-  id: "app",
-  register: [
-    // You can pass the config here
-    emailerResource.with({
-      smtpUrl: "smtp://localhost",
-      defaultFrom: "",
-    }),
-    // Leaving it simply emailerResource is similar to passing an empty object.
-    // We leave this for simplicity in some cases but we recommend using .with() for clarity.
-  ],
-});
-
-run(app);
-```
-
-## Useful events
+## Global Events
 
 ### Task level
 
@@ -647,15 +640,19 @@ const app = resource({
 run(app);
 ```
 
-## Resource level
+### Business Config
 
 ```ts
 import { task, run, event } from "@bluelibs/runner";
 
+const businessData = {
+  pricePerSubscription: 9.99,
+};
+
 const businessConfig = resource({
   id: "app.config",
   async init() {
-    return businessData;
+    return businessData; // if you use it as a const you will have full typesafety
   },
 });
 
@@ -687,9 +684,11 @@ const app = resource({
 run(app);
 ```
 
-## Moving further
+### Moving further
 
 This is just a "language" of developing applications. It simplifies dependency injection to the barebones, it forces you to think more functional and use classes less.
+
+This doesn't mean you shouldn't use classes, just not for hooking things up together.
 
 You can add many services or external things into the runner ecosystem with things like:
 
@@ -740,7 +739,7 @@ const app = resource({
 run(app);
 ```
 
-## Inter-communication between resources
+### Inter-communication between resources
 
 By stating dependencies you often don't care about the initialisation order, but sometimes you really do, for example, let's imagine a security service that allows you to inject a custom hashing function let's say to shift from md5 to sha256.
 
@@ -826,6 +825,39 @@ const app = resource({
 });
 ```
 
+## Overrides
+
+Previously, we explored how we can extend functionality through events. However, sometimes you want to override a resource with a new one or simply swap out a task or a middleware that you import from another package and they don't offer the ability.
+
+```ts
+import { resource, run, event } from "@bluelibs/runner";
+
+// This example is for resources but override works for tasks, events, and middleware as well.
+const securityResource = resource({
+  id: "app.security",
+  async init() {
+    // returns a security service
+  },
+});
+
+const override = resource({
+  ...securityResource,
+  init: async () => {
+    // a new and custom service
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [securityResource], // this resource might be registered by any element in the dependency tree.
+  overrides: [override],
+});
+```
+
+Now the `securityResource` will be overriden by the new one and whenever it's used it will use the new one.
+
+Overrides can only happen once and only if the overriden resource is registered. If two resources try to override the same resource, an error will be thrown.
+
 ## Logging
 
 We expose through globals a logger that you can use to log things.
@@ -887,39 +919,6 @@ const app = resource({
 You can in theory do it in `hooks` as well, but as specified `hooks` are mostly used for configuration and blending in the system.
 
 The logger's `log()` function is async as it works with events. If you don't want your system hanging on logs, simply omit the `await`
-
-## Overrides
-
-Previously, we explored how we can extend functionality through events. However, sometimes you want to override a resource with a new one or simply swap out a task or a middleware that you import from another package and they don't offer the ability.
-
-```ts
-import { resource, run, event } from "@bluelibs/runner";
-
-// This example is for resources but override works for tasks, events, and middleware as well.
-const securityResource = resource({
-  id: "app.security",
-  async init() {
-    // returns a security service
-  },
-});
-
-const override = resource({
-  ...securityResource,
-  init: async () => {
-    // a new and custom service
-  },
-});
-
-const app = resource({
-  id: "app",
-  register: [securityResource], // this resource might be registered by any element in the dependency tree.
-  overrides: [override],
-});
-```
-
-Now the `securityResource` will be overriden by the new one and whenever it's used it will use the new one.
-
-Overrides can only happen once and only if the overriden resource is registered. If two resources try to override the same resource, an error will be thrown.
 
 ## Testing
 
