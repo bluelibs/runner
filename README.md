@@ -6,9 +6,11 @@
 <a href="https://bluelibs.github.io/runner/" target="_blank"><img src="https://img.shields.io/badge/read-typedocs-blue" alt="Docs" /></a>
 </p>
 
-These are the building blocks to create amazing applications. It's a more functional approach to building small and large-scale applications.
+BlueLibs Runner is a framework that provides a functional approach to building applications, whether small or large-scale. Its core concepts include Tasks, Resources, Events, and Middleware. Tasks represent the units of logic, while resources are singletons that provide shared services across the application. Events facilitate communication between different parts of the system, and middleware allows interception and modification of task execution. The framework emphasizes an async-first philosophy, ensuring that all operations are executed asynchronously for smoother application flow.
 
-These are the building blocks:
+To use BlueLibs Runner, developers need to follow an explicit registration process for all tasks, resources, events, and middleware. Resources are defined with an async init() method, where they initialize their functionality and optionally return values to be used across the application. Tasks, on the other hand, have a run() method for their execution logic. Both resources and tasks can depend on one another, allowing developers to manage dependencies efficiently and ensure modular application design.
+
+## Building Blocks
 
 - **Tasks**: Core units of logic that encapsulate specific tasks. They can depend on resources, other tasks, and event emitters.
 - **Resources**: Singleton objects providing shared functionality. They can be constants, services, functions. They can depend on other resources, tasks, and event emitters.
@@ -105,7 +107,7 @@ const dbResource = resource({
 });
 ```
 
-If you want to call dispose, you have to do it through the global store.
+If you want to call dispose, you have to do it through the global store, as everything is encapsulated.
 
 ```ts
 import { task, run, resource, globals } from "@bluelibs/runner";
@@ -117,6 +119,7 @@ const app = resource({
     store: globals.resources.store,
   },
   async init(_, deps) {
+    // We use the fact that we can reuse the value we got from here
     return {
       dispose: async () => deps.store.dispose(),
     };
@@ -127,12 +130,6 @@ const value = await run(app);
 // To begin the disposal process.
 await value.dispose();
 ```
-
-## Encapsulation
-
-We want to make sure that our tasks are not dependent on the outside world. This is why we have the `dependencies` object.
-
-You cannot call on an task outside from dependencies. And not only that, it has to be explicitly registered to the container.
 
 ## Dependencies
 
