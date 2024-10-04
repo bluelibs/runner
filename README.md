@@ -1009,9 +1009,7 @@ describe("app", () => {
 
 ## Support
 
-This package is part of the [BlueLibs](https://www.bluelibs.com) family. If you enjoy this work, please show your support by starring [the main repository](https://github.com/bluelibs/bluelibs).
-
-For feedback or suggestions, please use our [feedback form](https://forms.gle/DTMg5Urgqey9QqLFA).
+This package is part of the [BlueLibs](https://www.bluelibs.com) family. If you enjoy this work, please show your support by starring [the main repository](https://github.com/bluelibs/runner).
 
 ## License
 
