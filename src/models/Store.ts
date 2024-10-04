@@ -9,12 +9,12 @@ import {
   RegisterableItems,
   symbols,
   IMiddleware,
-} from "./defs";
-import * as utils from "./define";
-import { IDependentNode } from "./tools/findCircularDependencies";
-import { globalEventsArray } from "./globalEvents";
-import { Errors } from "./errors";
-import { globalResources } from "./globalResources";
+} from "../defs";
+import * as utils from "../define";
+import { IDependentNode } from "../tools/findCircularDependencies";
+import { globalEventsArray } from "../globalEvents";
+import { Errors } from "../errors";
+import { globalResources } from "../globalResources";
 import { EventManager } from "./EventManager";
 import { TaskRunner } from "./TaskRunner";
 
@@ -59,6 +59,11 @@ export class Store {
   public resources: Map<string, ResourceStoreElementType> = new Map();
   public events: Map<string, EventStoreElementType> = new Map();
   public middlewares: Map<string, MiddlewareStoreElementType> = new Map();
+  public overrides: Map<
+    string,
+    IResource | IMiddleware | ITask | IResourceWithConfig
+  > = new Map();
+
   #isLocked = false;
   #isInitialized = false;
 
@@ -71,11 +76,6 @@ export class Store {
   lock() {
     this.#isLocked = true;
     this.eventManager.lock();
-    // freeze the maps so they can't be modified
-    Object.freeze(this.tasks);
-    Object.freeze(this.resources);
-    Object.freeze(this.events);
-    Object.freeze(this.middlewares);
   }
 
   checkLock() {
@@ -115,9 +115,12 @@ export class Store {
       this.storeEvent(event);
     });
 
-    this.computeRegisterOfResource(root, config);
-
+    this.computeRegistrationDeeply(root, config);
     this.resources.set(root.id, this.root);
+
+    for (const resource of this.resources.values()) {
+      this.storeOverridesDeeply(resource.resource);
+    }
 
     this.#isInitialized = true;
   }
@@ -127,15 +130,35 @@ export class Store {
    * @param element
    * @param config
    */
-  private computeRegisterOfResource<C>(element: IResource<C>, config?: C) {
+  private computeRegistrationDeeply<C>(element: IResource<C>, config?: C) {
     const items =
       typeof element.register === "function"
         ? element.register(config as C)
         : element.register;
 
     for (const item of items) {
+      // will call registration if it detects another resource.
       this.storeGenericItem<C>(item);
     }
+  }
+
+  /**
+   * @param element
+   */
+  private storeOverridesDeeply<C>(element: IResource<C, any, any>) {
+    element.overrides.forEach((override) => {
+      // the one on top has priority of setting the last override.
+      if (utils.isResource(override)) {
+        this.storeOverridesDeeply(override);
+      }
+
+      if (utils.isResourceWithConfig(override)) {
+        this.storeOverridesDeeply(override.resource);
+        this.overrides.set(override.resource.id, override);
+      } else {
+        this.overrides.set(override.id, override);
+      }
+    });
   }
 
   /**
@@ -152,8 +175,14 @@ export class Store {
     if (this.events.has(id)) {
       throw Errors.duplicateRegistration("Event", id);
     }
+    if (this.middlewares.has(id)) {
+      throw Errors.duplicateRegistration("Middleware", id);
+    }
   }
 
+  /**
+   * Cleanup
+   */
   public async dispose() {
     for (const resource of this.resources.values()) {
       if (resource.resource.dispose) {
@@ -162,6 +191,45 @@ export class Store {
           resource.config,
           resource.computedDependencies as DependencyMapType
         );
+      }
+    }
+  }
+
+  /**
+   * When this is called, all overrides should have been stored in the "overrides" store.
+   */
+  public processOverrides() {
+    // If we are trying to use override on something that wasn't previously registered, we throw an error.
+    for (const override of this.overrides.values()) {
+      let hasAnyItem = false;
+      if (utils.isTask(override)) {
+        hasAnyItem = this.tasks.has(override.id);
+      } else if (utils.isResource(override)) {
+        hasAnyItem = this.resources.has(override.id);
+      } else if (utils.isMiddleware(override)) {
+        hasAnyItem = this.middlewares.has(override.id);
+      } else if (utils.isResourceWithConfig(override)) {
+        hasAnyItem = this.resources.has(override.resource.id);
+      }
+
+      if (!hasAnyItem) {
+        const id = utils.isResourceWithConfig(override)
+          ? override.resource.id
+          : override.id;
+
+        throw Errors.dependencyNotFound(id);
+      }
+    }
+
+    for (const override of this.overrides.values()) {
+      if (utils.isTask(override)) {
+        this.storeTask(override, false);
+      } else if (utils.isResource(override)) {
+        this.storeResource(override, false);
+      } else if (utils.isMiddleware(override)) {
+        this.storeMiddleware(override, false);
+      } else if (utils.isResourceWithConfig(override)) {
+        this.storeResourceWithConfig(override, false);
       }
     }
   }
@@ -186,24 +254,26 @@ export class Store {
     } else if (utils.isEvent(item)) {
       this.storeEvent<C>(item);
     } else if (utils.isMiddleware(item)) {
-      if (this.middlewares.has(item.id)) {
-        throw Errors.duplicateRegistration("Middleware", item.id);
-      }
-
-      item.dependencies =
-        typeof item.dependencies === "function"
-          ? item.dependencies()
-          : item.dependencies;
-
-      this.middlewares.set(item.id, {
-        middleware: item,
-        computedDependencies: {},
-      });
+      this.storeMiddleware<C>(item);
     } else if (utils.isResourceWithConfig(item)) {
       this.storeResourceWithConfig<C>(item);
     } else {
       throw Errors.unknownItemType(item);
     }
+  }
+
+  private storeMiddleware<C>(item: IMiddleware<any>, check = true) {
+    check && this.checkIfIDExists(item.id);
+
+    item.dependencies =
+      typeof item.dependencies === "function"
+        ? item.dependencies()
+        : item.dependencies;
+
+    this.middlewares.set(item.id, {
+      middleware: item,
+      computedDependencies: {},
+    });
   }
 
   public storeEvent<C>(item: IEventDefinition<void>) {
@@ -212,8 +282,13 @@ export class Store {
     this.events.set(item.id, { event: item });
   }
 
-  private storeResourceWithConfig<C>(item: IResourceWithConfig<any, any, any>) {
-    this.checkIfIDExists(item.resource.id);
+  private storeResourceWithConfig<C>(
+    item: IResourceWithConfig<any, any, any>,
+    check = true
+  ) {
+    check && this.checkIfIDExists(item.resource.id);
+
+    this.prepareResource(item.resource, item.config);
 
     this.resources.set(item.resource.id, {
       resource: item.resource,
@@ -222,20 +297,17 @@ export class Store {
       isInitialized: false,
     });
 
-    this.computeRegisterOfResource(item.resource, item.config);
+    this.computeRegistrationDeeply(item.resource, item.config);
   }
 
-  private storeResource<C>(item: IResource<any, any, any>) {
-    this.checkIfIDExists(item.id);
+  /**
+   * This is for storing a resource without a config.
+   * @param item
+   */
+  private storeResource<C>(item: IResource<any, any, any>, check = true) {
+    check && this.checkIfIDExists(item.id);
 
-    this.storeEvent(item.events.beforeInit);
-    this.storeEvent(item.events.afterInit);
-    this.storeEvent(item.events.onError);
-
-    item.dependencies =
-      typeof item.dependencies === "function"
-        ? item.dependencies()
-        : item.dependencies;
+    this.prepareResource(item, {});
 
     this.resources.set(item.id, {
       resource: item,
@@ -244,20 +316,46 @@ export class Store {
       isInitialized: false,
     });
 
-    this.computeRegisterOfResource(item, {});
+    this.computeRegistrationDeeply(item, {});
   }
 
-  private storeTask<C>(item: ITask<any, any, {}>) {
-    this.checkIfIDExists(item.id);
+  public storeEventsForAllTasks() {
+    for (const task of this.tasks.values()) {
+      this.storeEvent(task.task.events.beforeRun);
+      this.storeEvent(task.task.events.afterRun);
+      this.storeEvent(task.task.events.onError);
+    }
+
+    for (const resource of this.resources.values()) {
+      this.storeEvent(resource.resource.events.beforeInit);
+      this.storeEvent(resource.resource.events.afterInit);
+      this.storeEvent(resource.resource.events.onError);
+    }
+  }
+
+  /**
+   * This is for storing a resource without a config.
+   * @param item
+   */
+  private prepareResource<C>(
+    item: IResource<any, any, any>,
+    config: any
+  ): IResource<any, any, any> {
+    item.dependencies =
+      typeof item.dependencies === "function"
+        ? item.dependencies(config)
+        : item.dependencies;
+
+    return item;
+  }
+
+  private storeTask<C>(item: ITask<any, any, {}>, check = true) {
+    check && this.checkIfIDExists(item.id);
 
     item.dependencies =
       typeof item.dependencies === "function"
         ? item.dependencies()
         : item.dependencies;
-
-    this.storeEvent(item.events.beforeRun);
-    this.storeEvent(item.events.afterRun);
-    this.storeEvent(item.events.onError);
 
     this.tasks.set(item.id, {
       task: item,

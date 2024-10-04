@@ -23,6 +23,6 @@ export {
 };
 
 export * as definitions from "./defs";
-export { Store } from "./Store";
-export { EventManager } from "./EventManager";
-export { TaskRunner } from "./TaskRunner";
+export { Store } from "./models/Store";
+export { EventManager } from "./models/EventManager";
+export { TaskRunner } from "./models/TaskRunner";

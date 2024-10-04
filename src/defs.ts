@@ -21,7 +21,7 @@ export interface IMiddlewareMeta extends IMeta {}
 // DependencyMap types
 export type DependencyMapType = Record<
   string,
-  ITask | IResource | IEventDefinition
+  ITask | IResource | IEventDefinition | IResourceWithConfig<any, any>
 >;
 
 export type DependencyValueType<T> = T extends ITask<
@@ -146,6 +146,7 @@ export interface IResourceDefinintion<
     dependencies: DependencyValuesType<TDependencies>
   ) => Promise<TValue>;
   meta?: IResourceMeta;
+  overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
 }
 
 export interface IResource<
@@ -168,6 +169,8 @@ export interface IResource<
   hooks:
     | IHookDefinition<TDependencies>[]
     | ((config: TConfig) => IHookDefinition<TDependencies>[]);
+
+  overrides: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
 }
 
 export interface IResourceWithConfig<
@@ -225,10 +228,10 @@ export interface IMiddlewareExecutionInput {
   next: (input?: any) => Promise<any>;
 }
 
-export interface IHookDefinition<D extends DependencyMapType = {}> {
-  event: IEventDefinition;
+export interface IHookDefinition<D extends DependencyMapType = {}, T = any> {
+  event: IEventDefinition<T>;
   run: (
-    event: IEvent,
+    event: IEvent<T>,
     dependencies: DependencyValuesType<D>
   ) => Promise<void> | void;
 }

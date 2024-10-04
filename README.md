@@ -108,13 +108,13 @@ const dbResource = resource({
 If you want to call dispose, you have to do it through the global store.
 
 ```ts
-import { task, run, resource, global } from "@bluelibs/runner";
+import { task, run, resource, globals } from "@bluelibs/runner";
 
 const app = resource({
   id: "app",
   register: [dbResource],
   dependencies: {
-    store: global.resources.store,
+    store: globals.resources.store,
   },
   async init(_, deps) {
     return {
@@ -194,7 +194,7 @@ const root = resource({
 
 There are only 2 ways to listen to events:
 
-#### `on` property
+### `on` property
 
 ```ts
 import { task, run, event } from "@bluelibs/runner";
@@ -225,10 +225,10 @@ const root = resource({
 
 ### `hooks` property
 
-This is only for resources
+This can only be applied to a `resource()`.
 
 ```ts
-import { task, resource, run, event } from "@bluelibs/runner";
+import { task, resource, run, event, global } from "@bluelibs/runner";
 
 const afterRegisterEvent = event<{ userId: string }>({
   id: "app.user.registered",
@@ -237,14 +237,11 @@ const afterRegisterEvent = event<{ userId: string }>({
 const root = resource({
   id: "app",
   register: [afterRegisterEvent],
-  dependencies: {
-    // ...
-  }
+  dependencies: {},
   hooks: [
     {
-      event: afterRegisterEvent,
+      event: global.events.afterInit,
       async run(event, deps) {
-        // the dependencies from init() also arrive inside the hooks()
         console.log("User has been registered!");
       },
     },
@@ -254,6 +251,10 @@ const root = resource({
   },
 });
 ```
+
+When using hooks, inside resource() you benefit of autocompletion, in order to keep things clean, if your hooks become large and long consider switching to tasks and `on`. This is a more explicit way to listen to events, and your resource registers them.
+
+The hooks from a `resource` are mostly used for configuration, and blending in the system.
 
 ## Middleware
 
@@ -804,6 +805,7 @@ const securityResource = resource({
     securityConfigurationPhaseEvent,
   },
   async init(config: SecurityOptions) {
+    // Give the ability to other listeners to modify the configuration
     securityConfigurationPhaseEvent(config);
 
     return {
@@ -824,6 +826,184 @@ const app = resource({
       },
     },
   ],
+});
+```
+
+## Logging
+
+We expose through globals a logger that you can use to log things.
+
+By default logs are not printed unless a resource listens to the log event. This is by design, when something is logged an event is emitted. You can listen to this event and print the logs.
+
+```ts
+import { task, run, event, globals } from "@bluelibs/runner";
+
+const helloWorld = task({
+  id: "app.helloWorld",
+  dependencies: {
+    logger: globals.resources.logger,
+  },
+  run: async (_, { logger }) => {
+    await logger.info("Hello World!");
+    // or logger.log(level, data);
+  },
+});
+```
+
+### Logs Summary Table
+
+| Log Level    | Description                               | Usage Example                          |
+| ------------ | ----------------------------------------- | -------------------------------------- |
+| **trace**    | Very detailed logs, usually for debugging | "Entering function X with params Y."   |
+| **debug**    | Detailed debug information                | "Fetching user data: userId=123."      |
+| **info**     | General application information           | "Service started on port 8080."        |
+| **warn**     | Indicates a potential issue               | "Disk space running low."              |
+| **error**    | Indicates a significant problem           | "Unable to connect to database."       |
+| **critical** | Serious problem causing a crash           | "System out of memory, shutting down." |
+
+### Print logs
+
+Logs don't get printed by default in this system.
+
+```ts
+import { task, run, event, globals, resource } from "@bluelibs/runner";
+
+const printLog = task({
+  id: "app.task.printLog",
+  on: globals.events.log,
+  dependencies: {
+    logger: globals.resources.logger,
+  },
+  run: async (event, { logger }) => {
+    logger.print(event);
+  },
+});
+
+const app = resource({
+  id: "root",
+  register: [printLog],
+});
+
+// Now your app will print all logs
+```
+
+You can in theory do it in `hooks` as well, but as specified `hooks` are mostly used for configuration and blending in the system.
+
+The logger's `log()` function is async as it works with events. If you don't want your system hanging on logs, simply omit the `await`
+
+## Overrides
+
+Previously, we explored how we can extend functionality through events. However, sometimes you want to override a resource with a new one or simply swap out a task or a middleware that you import from another package and they don't offer the ability.
+
+```ts
+import { resource, run, event } from "@bluelibs/runner";
+
+// This example is for resources but override works for tasks, events, and middleware as well.
+const securityResource = resource({
+  id: "app.security",
+  async init() {
+    // returns a security service
+  },
+});
+
+const override = resource({
+  ...securityResource,
+  init: async () => {
+    // a new and custom service
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [securityResource], // this resource might be registered by any element in the dependency tree.
+  overrides: [override],
+});
+```
+
+Now the `securityResource` will be overriden by the new one and whenever it's used it will use the new one.
+
+Overrides can only happen once and only if the overriden resource is registered. If two resources try to override the same resource, an error will be thrown.
+
+## Testing
+
+### Unit Testing
+
+You can easily test your resources and tasks by running them in a test environment.
+
+The only bits that you need to test are the `run` function and the `init` functions with the propper dependencies.
+
+```ts
+import { task, resource } from "@bluelibs/runner";
+
+const helloWorld = task({
+  id: "app.helloWorld",
+  run: async () => {
+    return "Hello World!";
+  },
+});
+
+const helloWorldResource = resource({
+  id: "app.helloWorldResource",
+  init: async () => {
+    return "Hello World!";
+  },
+});
+
+// sample tests for the task
+describe("app.helloWorld", () => {
+  it("should return Hello World!", async () => {
+    const result = await helloWorld.run(input, dependencies); // pass in the arguments and the mocked dependencies.
+    expect(result).toBe("Hello World!");
+  });
+});
+
+// sample tests for the resource
+describe("app.helloWorldResource", () => {
+  it("should return Hello World!", async () => {
+    const result = await helloWorldResource.init(config, dependencies); // pass in the arguments and the mocked dependencies.
+    expect(result).toBe("Hello World!");
+  });
+});
+```
+
+### Integration
+
+Unit testing can be very simply with mocks, since all dependencies are explicit. However, if you would like to run an integration test, and have a task be tested and within the full container.
+
+```ts
+import { task, resource, run, global } from "@bluelibs/runner";
+
+const task = task({
+  id: "app.myTask",
+  run: async () => {
+    return "Hello World!";
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [myTask],
+});
+```
+
+Then your tests can now be cleaner:
+
+```ts
+describe("app", () => {
+  it("an example to override a task or resource", async () => {
+    const testApp = resource({
+      id: "app.test",
+      register: [myApp], // wrap your existing app
+      overrides: [override], // apply the overrides
+      init: async (_, deps) => {
+        // you can now test a task simply by depending on it, and running it, then asserting the response of run()
+      },
+    });
+
+    // Same concept applies for resources as well.
+
+    await run(testApp);
+  });
 });
 ```
 

@@ -1,7 +1,7 @@
-import { DependencyMapType, DependencyValuesType, ITask } from "./defs";
-import { Errors } from "./errors";
+import { DependencyMapType, DependencyValuesType, ITask } from "../defs";
+import { Errors } from "../errors";
 import { EventManager } from "./EventManager";
-import { globalEvents } from "./globalEvents";
+import { globalEvents } from "../globalEvents";
 import {
   MiddlewareStoreElementType,
   Store,
@@ -22,6 +22,9 @@ export class TaskRunner {
   /**
    * Begins the execution of an task. These are registered tasks and all sanity checks have been performed at this stage to ensure consistency of the object.
    * This function can throw only if any of the event listeners or run function throws
+   * @param task the task to be run
+   * @param input the input to be passed to the task
+   * @param taskDependencies optional dependencies to be passed to the task, if not provided, the dependencies will be the ones already computed from the store.
    */
   public async run<
     TInput,

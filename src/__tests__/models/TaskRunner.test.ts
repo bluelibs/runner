@@ -1,8 +1,8 @@
-import { TaskRunner } from "../TaskRunner";
-import { Store } from "../Store";
-import { EventManager } from "../EventManager";
-import { defineTask, defineResource, defineMiddleware } from "../define";
-import { ITask } from "../defs";
+import { TaskRunner } from "../../models/TaskRunner";
+import { Store } from "../../models/Store";
+import { EventManager } from "../../models/EventManager";
+import { defineTask, defineResource, defineMiddleware } from "../../define";
+import { ITask } from "../../defs";
 
 describe("TaskRunner", () => {
   let store: Store;

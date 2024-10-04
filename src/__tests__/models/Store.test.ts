@@ -1,12 +1,12 @@
-import { Store } from "../Store";
-import { EventManager } from "../EventManager";
+import { Store } from "../../models/Store";
+import { EventManager } from "../../models/EventManager";
 import {
   defineResource,
   defineTask,
   defineMiddleware,
   defineEvent,
-} from "../define";
-import { globalResources } from "../globalResources";
+} from "../../define";
+import { globalResources } from "../../globalResources";
 
 describe("Store", () => {
   let eventManager: EventManager;

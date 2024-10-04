@@ -3,9 +3,9 @@ import {
   DependencyValuesType,
   ITask,
   IResource,
-} from "./defs";
+} from "../defs";
 import { EventManager } from "./EventManager";
-import { globalEvents } from "./globalEvents";
+import { globalEvents } from "../globalEvents";
 import { Store } from "./Store";
 
 export class ResourceInitializer {

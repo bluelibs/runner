@@ -1,5 +1,6 @@
 import { defineEvent } from "./define";
 import { ITask, IResource } from "./defs";
+import { ILog } from "./models/Logger";
 
 export const globalEvents = {
   beforeInit: defineEvent({
@@ -7,6 +8,9 @@ export const globalEvents = {
   }),
   afterInit: defineEvent({
     id: "global.afterInit",
+  }),
+  log: defineEvent<ILog>({
+    id: "global.log",
   }),
   tasks: {
     beforeRun: defineEvent<{

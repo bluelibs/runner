@@ -1,7 +1,7 @@
-import { ResourceInitializer } from "../ResourceInitializer";
-import { Store } from "../Store";
-import { EventManager } from "../EventManager";
-import { defineResource } from "../define";
+import { ResourceInitializer } from "../../models/ResourceInitializer";
+import { Store } from "../../models/Store";
+import { EventManager } from "../../models/EventManager";
+import { defineResource } from "../../define";
 
 describe("ResourceInitializer", () => {
   let store: Store;

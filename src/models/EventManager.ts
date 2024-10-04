@@ -1,5 +1,5 @@
-import { EventHandlerType, IEvent, IEventDefinition } from "./defs";
-import { Errors } from "./errors";
+import { EventHandlerType, IEvent, IEventDefinition } from "../defs";
+import { Errors } from "../errors";
 
 const HandlerOptionsDefaults = { order: 0 };
 

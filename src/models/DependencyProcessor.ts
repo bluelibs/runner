@@ -5,13 +5,13 @@ import {
   IResource,
   IHookDefinition,
   IEventDefinition,
-} from "./defs";
+} from "../defs";
 import { ResourceStoreElementType, Store } from "./Store";
-import * as utils from "./define";
+import * as utils from "../define";
 import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";
 import { TaskRunner } from "./TaskRunner";
-import { Errors } from "./errors";
+import { Errors } from "../errors";
 
 /**
  * This class is responsible of setting up dependencies with their respective computedValues.
@@ -113,11 +113,11 @@ export class DependencyProcessor {
    * Processes all hooks, should run before emission of any event.
    * @returns
    */
-  public processHooks() {
+  public attachHooks() {
     // iterate through resources and send them to processHooks
     for (const resource of this.store.resources.values()) {
       if (resource.resource.hooks) {
-        this.processHooksForResource(resource);
+        this.attachHooksToResource(resource);
       }
     }
   }
@@ -127,7 +127,7 @@ export class DependencyProcessor {
    * @param hooks
    * @param deps
    */
-  public processHooksForResource(
+  public attachHooksToResource(
     resourceStoreElement: ResourceStoreElementType<any, any, {}>
   ) {
     let hooks = resourceStoreElement.resource.hooks;

@@ -10,6 +10,8 @@ import {
   DependencyMapType,
   DependencyValuesType,
   IMiddleware,
+  IHookDefinition,
+  IEvent,
 } from "./defs";
 import { Errors } from "./errors";
 
@@ -57,6 +59,7 @@ export function defineResource<
     hooks: constConfig.hooks || [],
     dispose: constConfig.dispose,
     register: constConfig.register || [],
+    overrides: constConfig.overrides || [],
     init: constConfig.init,
     with: function (config: TConfig) {
       return {

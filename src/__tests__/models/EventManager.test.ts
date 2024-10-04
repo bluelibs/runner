@@ -1,6 +1,6 @@
-import { IEvent, IEventDefinition } from "../defs";
-import { Errors } from "../errors";
-import { EventManager } from "../EventManager";
+import { IEvent, IEventDefinition } from "../../defs";
+import { Errors } from "../../errors";
+import { EventManager } from "../../models/EventManager";
 
 describe("EventManager", () => {
   let eventManager: EventManager;
