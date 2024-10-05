@@ -141,15 +141,24 @@ export class DependencyProcessor {
 
     for (const hook of hooks) {
       const event = hook.event;
-      if (this.store.events.has(event.id) === false) {
-        throw Errors.eventNotFound(event.id);
+      if (event === "*") {
+        this.eventManager.addGlobalListener(async (receivedEvent) => {
+          return hook.run(
+            receivedEvent,
+            resourceStoreElement.computedDependencies as DependencyValuesType<{}>
+          );
+        });
+      } else {
+        if (this.store.events.has(event.id) === false) {
+          throw Errors.eventNotFound(event.id);
+        }
+        this.eventManager.addListener(event, async (receivedEvent) => {
+          return hook.run(
+            receivedEvent,
+            resourceStoreElement.computedDependencies as DependencyValuesType<{}>
+          );
+        });
       }
-      this.eventManager.addListener(event, async (receivedEvent) => {
-        return hook.run(
-          receivedEvent,
-          resourceStoreElement.computedDependencies as DependencyValuesType<{}>
-        );
-      });
     }
   }
 

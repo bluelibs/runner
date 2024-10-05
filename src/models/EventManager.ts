@@ -33,28 +33,64 @@ export class EventManager {
     }
   }
 
+  private mergeSortedListeners(
+    a: IListenerStorage[],
+    b: IListenerStorage[]
+  ): IListenerStorage[] {
+    const result: IListenerStorage[] = [];
+    let i = 0,
+      j = 0;
+    while (i < a.length && j < b.length) {
+      if (a[i].order <= b[j].order) {
+        result.push(a[i++]);
+      } else {
+        result.push(b[j++]);
+      }
+    }
+    while (i < a.length) result.push(a[i++]);
+    while (j < b.length) result.push(b[j++]);
+    return result;
+  }
+
   async emit<TInput>(
     eventDefinition: IEventDefinition<TInput>,
     ...args: TInput extends void ? [] : [TInput]
   ): Promise<void> {
     const data = args[0];
     const eventListeners = this.listeners.get(eventDefinition.id) || [];
-    const allListeners = this.sortListeners([
-      ...eventListeners,
-      ...this.globalListeners,
-    ]);
+    const allListeners = this.mergeSortedListeners(
+      eventListeners,
+      this.globalListeners
+    );
 
     const event: IEvent = {
       id: eventDefinition.id,
       data,
+      timestamp: new Date(),
     };
 
     for (const listener of allListeners) {
-      const ok = !listener.filter || listener.filter(event);
-      if (ok) {
+      if (!listener.filter || listener.filter(event)) {
         await listener.handler(event);
       }
     }
+  }
+
+  private insertListener(
+    listeners: IListenerStorage[],
+    newListener: IListenerStorage
+  ): void {
+    let low = 0;
+    let high = listeners.length;
+    while (low < high) {
+      const mid = (low + high) >>> 1;
+      if (listeners[mid].order < newListener.order) {
+        low = mid + 1;
+      } else {
+        high = mid;
+      }
+    }
+    listeners.splice(low, 0, newListener);
   }
 
   addListener<T>(
@@ -63,20 +99,22 @@ export class EventManager {
     options: IEventHandlerOptions<T> = HandlerOptionsDefaults
   ): void {
     this.checkLock();
+    const newListener: IListenerStorage = {
+      handler,
+      order: options.order || 0,
+      filter: options.filter,
+    };
 
     if (Array.isArray(event)) {
       event.forEach((id) => this.addListener(id, handler, options));
     } else {
       const eventId = event.id;
-      const listeners = this.listeners.get(eventId) || [];
-      const newListener: IListenerStorage = {
-        handler,
-        order: options.order || 0,
-        filter: options.filter,
-      };
-
-      const newListeners = this.sortListeners([...listeners, newListener]);
-      this.listeners.set(eventId, newListeners);
+      const listeners = this.listeners.get(eventId);
+      if (listeners) {
+        this.insertListener(listeners, newListener);
+      } else {
+        this.listeners.set(eventId, [newListener]);
+      }
     }
   }
 
@@ -85,20 +123,11 @@ export class EventManager {
     options: IEventHandlerOptions = HandlerOptionsDefaults
   ): void {
     this.checkLock();
-
     const newListener: IListenerStorage = {
       handler,
       order: options.order || 0,
       filter: options.filter,
     };
-
-    this.globalListeners = this.sortListeners([
-      ...this.globalListeners,
-      newListener,
-    ]);
-  }
-
-  private sortListeners(listeners: IListenerStorage[]): IListenerStorage[] {
-    return [...listeners].sort((a, b) => a.order - b.order);
+    this.insertListener(this.globalListeners, newListener);
   }
 }

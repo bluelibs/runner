@@ -192,6 +192,7 @@ export interface IResourceWithConfig<
 export interface IEvent<TPayload = any> {
   id: string;
   data: TPayload;
+  timestamp: Date;
 }
 
 export type EventHandlerType<T = any> = (
@@ -238,7 +239,7 @@ export interface IMiddlewareExecutionInput {
 }
 
 export interface IHookDefinition<D extends DependencyMapType = {}, T = any> {
-  event: IEventDefinition<T>;
+  event: "*" | IEventDefinition<T>;
   run: (
     event: IEvent<T>,
     dependencies: DependencyValuesType<D>

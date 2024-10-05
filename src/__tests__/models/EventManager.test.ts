@@ -4,111 +4,382 @@ import { EventManager } from "../../models/EventManager";
 
 describe("EventManager", () => {
   let eventManager: EventManager;
+  let eventDefinition: IEventDefinition<string>;
 
   beforeEach(() => {
     eventManager = new EventManager();
+    eventDefinition = { id: "testEvent" };
   });
 
-  const testEvent: IEventDefinition<string> = {
-    id: "test-event",
-  };
+  it("should add and emit event listener", async () => {
+    const handler = jest.fn();
+    eventManager.addListener(eventDefinition, handler);
 
-  const createEvent = (data: string): IEvent<string> => ({
-    id: testEvent.id,
-    data,
+    await eventManager.emit(eventDefinition, "testData");
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "testEvent",
+        data: "testData",
+      })
+    );
   });
 
-  describe("emit", () => {
-    it("should emit an event and call the appropriate listeners", async () => {
-      const listener1 = jest.fn();
-      const listener2 = jest.fn();
+  it("should respect listener order", async () => {
+    const results: number[] = [];
 
-      eventManager.addListener(testEvent, listener1);
-      eventManager.addListener(testEvent, listener2);
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        results.push(1);
+      },
+      { order: 2 }
+    );
 
-      await eventManager.emit(testEvent, "test data");
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        results.push(0);
+      },
+      { order: 1 }
+    );
 
-      expect(listener1).toHaveBeenCalledWith(createEvent("test data"));
-      expect(listener2).toHaveBeenCalledWith(createEvent("test data"));
-    });
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        results.push(3);
+      },
+      { order: 4 }
+    );
 
-    it("should respect the order of listeners", async () => {
-      const calls: number[] = [];
-      const listener1 = jest.fn(() => calls.push(1));
-      const listener2 = jest.fn(() => calls.push(2));
-      const listener3 = jest.fn(() => calls.push(3));
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        results.push(2);
+      },
+      { order: 3 }
+    );
 
-      eventManager.addListener(testEvent, listener2, { order: 2 });
-      eventManager.addListener(testEvent, listener1, { order: 1 });
-      eventManager.addListener(testEvent, listener3, { order: 3 });
+    await eventManager.emit(eventDefinition, "testData");
 
-      await eventManager.emit(testEvent, "test data");
-
-      expect(calls).toEqual([1, 2, 3]);
-    });
-
-    it("should apply filters to listeners", async () => {
-      const listener = jest.fn();
-      const filter = jest.fn((event: IEvent<string>) => event.data === "pass");
-
-      eventManager.addListener(testEvent, listener, { filter });
-
-      await eventManager.emit(testEvent, "pass");
-      await eventManager.emit(testEvent, "fail");
-
-      expect(listener).toHaveBeenCalledTimes(1);
-      expect(listener).toHaveBeenCalledWith(createEvent("pass"));
-    });
+    expect(results).toEqual([0, 1, 2, 3]);
   });
 
-  describe("addListener", () => {
-    it("should add a listener for a single event", () => {
-      const listener = jest.fn();
-      eventManager.addListener(testEvent, listener);
+  it("should apply filters correctly", async () => {
+    const handler = jest.fn();
+    const filter = (event: IEvent<string>) => event.data === "allowed";
 
-      // @ts-ignore: Accessing private property for testing
-      expect(eventManager.listeners.get(testEvent.id)).toHaveLength(1);
-    });
+    eventManager.addListener(eventDefinition, handler, { filter });
 
-    it("should add a listener for multiple events", () => {
-      const listener = jest.fn();
-      const event1: IEventDefinition = { id: "event1" };
-      const event2: IEventDefinition = { id: "event2" };
+    await eventManager.emit(eventDefinition, "blocked");
+    expect(handler).not.toHaveBeenCalled();
 
-      eventManager.addListener([event1, event2], listener);
-
-      // @ts-ignore: Accessing private property for testing
-      expect(eventManager.listeners.get(event1.id)).toHaveLength(1);
-      // @ts-ignore: Accessing private property for testing
-      expect(eventManager.listeners.get(event2.id)).toHaveLength(1);
-    });
+    await eventManager.emit(eventDefinition, "allowed");
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: "allowed",
+      })
+    );
   });
 
-  describe("addGlobalListener", () => {
-    it("should add a global listener", async () => {
-      const globalListener = jest.fn();
-      eventManager.addGlobalListener(globalListener);
+  it("should add and emit global listener", async () => {
+    const handler = jest.fn();
 
-      await eventManager.emit(testEvent, "test data");
+    eventManager.addGlobalListener(handler);
 
-      expect(globalListener).toHaveBeenCalledWith(createEvent("test data"));
-    });
+    await eventManager.emit(eventDefinition, "testData");
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "testEvent",
+        data: "testData",
+      })
+    );
   });
 
-  it("should lock the EventManager", () => {
+  it("global listeners should respect order with event listeners", async () => {
+    const results: string[] = [];
+
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        results.push("eventListener1");
+      },
+      { order: 2 }
+    );
+
+    eventManager.addGlobalListener(
+      () => {
+        results.push("globalListener1");
+      },
+      { order: 1 }
+    );
+
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        results.push("eventListener2");
+      },
+      { order: 4 }
+    );
+
+    eventManager.addGlobalListener(
+      () => {
+        results.push("globalListener2");
+      },
+      { order: 3 }
+    );
+
+    await eventManager.emit(eventDefinition, "testData");
+
+    expect(results).toEqual([
+      "globalListener1",
+      "eventListener1",
+      "globalListener2",
+      "eventListener2",
+    ]);
+  });
+
+  it("should lock and prevent adding new listeners", () => {
     eventManager.lock();
+
     expect(eventManager.isLocked).toBe(true);
 
-    expect(() => eventManager.checkLock()).toThrow(
-      Errors.locked("EventManager")
+    const handler = jest.fn();
+
+    expect(() => {
+      eventManager.addListener(eventDefinition, handler);
+    }).toThrowError("Cannot modify the EventManager when it is locked.");
+
+    expect(() => {
+      eventManager.addGlobalListener(handler);
+    }).toThrowError("Cannot modify the EventManager when it is locked.");
+  });
+
+  it("should handle multiple events", async () => {
+    const eventDef1: IEventDefinition<string> = { id: "event1" };
+    const eventDef2: IEventDefinition<string> = { id: "event2" };
+
+    const handler1 = jest.fn();
+    const handler2 = jest.fn();
+
+    eventManager.addListener(eventDef1, handler1);
+    eventManager.addListener(eventDef2, handler2);
+
+    await eventManager.emit(eventDef1, "data1");
+    await eventManager.emit(eventDef2, "data2");
+
+    expect(handler1).toHaveBeenCalledTimes(1);
+    expect(handler1).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "event1",
+        data: "data1",
+      })
     );
 
-    expect(() => eventManager.addListener(testEvent, jest.fn())).toThrow(
-      Errors.locked("EventManager")
+    expect(handler2).toHaveBeenCalledTimes(1);
+    expect(handler2).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "event2",
+        data: "data2",
+      })
+    );
+  });
+
+  it("should allow adding multiple listeners to the same event", async () => {
+    const handler1 = jest.fn();
+    const handler2 = jest.fn();
+
+    eventManager.addListener(eventDefinition, handler1);
+    eventManager.addListener(eventDefinition, handler2);
+
+    await eventManager.emit(eventDefinition, "testData");
+
+    expect(handler1).toHaveBeenCalledTimes(1);
+    expect(handler2).toHaveBeenCalledTimes(1);
+  });
+
+  it("should handle listeners added to multiple events", async () => {
+    const eventDef1: IEventDefinition<string> = { id: "event1" };
+    const eventDef2: IEventDefinition<string> = { id: "event2" };
+
+    const handler = jest.fn();
+
+    eventManager.addListener([eventDef1, eventDef2], handler);
+
+    await eventManager.emit(eventDef1, "data1");
+    await eventManager.emit(eventDef2, "data2");
+
+    expect(handler).toHaveBeenCalledTimes(2);
+    expect(handler).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        id: "event1",
+        data: "data1",
+      })
+    );
+    expect(handler).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        id: "event2",
+        data: "data2",
+      })
+    );
+  });
+
+  it("should not affect other events when emitting one", async () => {
+    const eventDef1: IEventDefinition<string> = { id: "event1" };
+    const eventDef2: IEventDefinition<string> = { id: "event2" };
+
+    const handler1 = jest.fn();
+    const handler2 = jest.fn();
+
+    eventManager.addListener(eventDef1, handler1);
+    eventManager.addListener(eventDef2, handler2);
+
+    await eventManager.emit(eventDef1, "data1");
+
+    expect(handler1).toHaveBeenCalledTimes(1);
+    expect(handler2).not.toHaveBeenCalled();
+  });
+
+  it("should handle asynchronous handlers", async () => {
+    const results: number[] = [];
+
+    eventManager.addListener(
+      eventDefinition,
+      async () => {
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        results.push(1);
+      },
+      { order: 1 }
     );
 
-    expect(() => eventManager.addGlobalListener(jest.fn())).toThrow(
-      Errors.locked("EventManager")
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        results.push(0);
+      },
+      { order: 0 }
+    );
+
+    await eventManager.emit(eventDefinition, "testData");
+
+    expect(results).toEqual([0, 1]);
+  });
+
+  it("should handle handler throwing an error", async () => {
+    const handler = jest.fn().mockImplementation(() => {
+      throw new Error("Handler error");
+    });
+
+    eventManager.addListener(eventDefinition, handler);
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData")
+    ).rejects.toThrow("Handler error");
+  });
+
+  it("should continue calling other handlers if one fails", async () => {
+    const handler1 = jest.fn().mockImplementation(() => {
+      throw new Error("Handler error");
+    });
+    const handler2 = jest.fn();
+
+    eventManager.addListener(eventDefinition, handler1);
+    eventManager.addListener(eventDefinition, handler2);
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData")
+    ).rejects.toThrow("Handler error");
+
+    // The second handler should have been called despite the error in the first
+    expect(handler2).toHaveBeenCalledTimes(1);
+  });
+
+  it("should not allow modification after lock", () => {
+    const handler = jest.fn();
+    eventManager.addListener(eventDefinition, handler);
+    eventManager.lock();
+
+    expect(() => {
+      eventManager.addListener(eventDefinition, handler);
+    }).toThrowError("Cannot modify the EventManager when it is locked.");
+  });
+
+  it("should not throw when emitting after lock", async () => {
+    const handler = jest.fn();
+    eventManager.addListener(eventDefinition, handler);
+    eventManager.lock();
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData")
+    ).resolves.toBeUndefined();
+
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("should correctly merge global and event listeners with same order", async () => {
+    const results: string[] = [];
+
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        results.push("eventListener");
+      },
+      { order: 1 }
+    );
+
+    eventManager.addGlobalListener(
+      () => {
+        results.push("globalListener");
+      },
+      { order: 1 }
+    );
+
+    await eventManager.emit(eventDefinition, "testData");
+
+    // According to the merge logic, event listeners come before global listeners when orders are equal
+    expect(results).toEqual(["eventListener", "globalListener"]);
+  });
+
+  it("should handle filters in global listeners", async () => {
+    const handler = jest.fn();
+    const filter = (event: IEvent<string>) => event.data === "allowed";
+
+    eventManager.addGlobalListener(handler, { filter });
+
+    await eventManager.emit(eventDefinition, "blocked");
+    expect(handler).not.toHaveBeenCalled();
+
+    await eventManager.emit(eventDefinition, "allowed");
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("should handle emitting with no listeners", async () => {
+    await expect(
+      eventManager.emit(eventDefinition, "testData")
+    ).resolves.toBeUndefined();
+  });
+
+  it("should handle listeners with no data", async () => {
+    const handler = jest.fn();
+
+    const voidEventDefinition: IEventDefinition<void> = { id: "voidEvent" };
+
+    eventManager.addListener(voidEventDefinition, handler);
+
+    await eventManager.emit(voidEventDefinition);
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "voidEvent",
+        data: undefined,
+      })
     );
   });
 });

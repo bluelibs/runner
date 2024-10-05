@@ -272,7 +272,42 @@ const root = resource({
     {
       event: global.events.afterInit,
       async run(event, deps) {
+        // both dependencies and event are properly infered through typescript
         console.log("User has been registered!");
+      },
+    },
+  ],
+  async init(_, deps) {
+    deps.afterRegisterEvent({ userId: "XXX" });
+  },
+});
+```
+
+### hooks wildcard
+
+You can listen to all events by using the wildcard `*`.
+
+```ts
+import { task, resource, run, event, global } from "@bluelibs/runner";
+
+const afterRegisterEvent = event<{ userId: string }>({
+  id: "app.user.registered",
+});
+
+const root = resource({
+  id: "app",
+  register: [afterRegisterEvent],
+  dependencies: {},
+  hooks: [
+    {
+      event: "*",
+      async run(event, deps) {
+        console.log(
+          "Generic event detected",
+          event.id,
+          event.data,
+          event.timestamp
+        );
       },
     },
   ],

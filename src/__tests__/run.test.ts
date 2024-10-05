@@ -334,6 +334,33 @@ describe("run", () => {
     expect(eventHandler).toHaveBeenCalled();
   });
 
+  it("should be able to listen to global events", async () => {
+    const testEvent = defineEvent<{ message: string }>({ id: "test.event" });
+    const eventHandler = jest.fn();
+
+    const resource = defineResource({
+      id: "app",
+      hooks: [
+        {
+          event: "*",
+          run: eventHandler,
+        },
+      ],
+    });
+
+    const app = defineResource({
+      id: "app.resource",
+      register: [testEvent, resource],
+      dependencies: { resource, testEvent },
+      async init(_, deps) {
+        await deps.testEvent({ message: "Event emitted" });
+      },
+    });
+
+    await run(app);
+    expect(eventHandler).toHaveBeenCalled();
+  });
+
   // Resources
   describe("Resources", () => {
     it("should be able to register a resource and get its value", async () => {

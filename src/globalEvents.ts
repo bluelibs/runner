@@ -1,5 +1,5 @@
 import { defineEvent } from "./define";
-import { ITask, IResource } from "./defs";
+import { ITask, IResource, IEvent } from "./defs";
 import { ILog } from "./models/Logger";
 
 export const globalEvents = {
