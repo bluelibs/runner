@@ -21,26 +21,27 @@ export function defineTask<
   Deps extends DependencyMapType = any,
   Test = any
 >(
-  config: ITaskDefinition<Input, Output, Deps, Test>
+  taskConfig: ITaskDefinition<Input, Output, Deps, Test>
 ): ITask<Input, Output, Deps, Test> {
   return {
     [symbols.task]: true,
-    id: config.id,
-    dependencies: config.dependencies || ({} as Deps),
-    middleware: config.middleware || [],
-    run: config.run,
-    on: config.on,
+    id: taskConfig.id,
+    dependencies: taskConfig.dependencies || ({} as Deps),
+    middleware: taskConfig.middleware || [],
+    run: taskConfig.run,
+    on: taskConfig.on,
     events: {
       beforeRun: defineEvent({
-        id: `${config.id}.beforeRun`,
+        id: `${taskConfig.id}.beforeRun`,
       }),
       afterRun: defineEvent({
-        id: `${config.id}.afterRun`,
+        id: `${taskConfig.id}.afterRun`,
       }),
       onError: defineEvent({
-        id: `${config.id}.onError`,
+        id: `${taskConfig.id}.onError`,
       }),
     },
+    meta: taskConfig.meta || {},
     // autorun,
   };
 }
@@ -48,9 +49,10 @@ export function defineTask<
 export function defineResource<
   TConfig = void,
   TValue = any,
-  TDeps extends DependencyMapType = {}
+  TDeps extends DependencyMapType = {},
+  THooks = any
 >(
-  constConfig: IResourceDefinintion<TConfig, TValue, TDeps>
+  constConfig: IResourceDefinintion<TConfig, TValue, TDeps, THooks>
 ): IResource<TConfig, TValue, TDeps> {
   return {
     [symbols.resource]: true,
@@ -80,6 +82,8 @@ export function defineResource<
         id: `${constConfig.id}.onError`,
       }),
     },
+    meta: constConfig.meta || {},
+    middleware: constConfig.middleware || [],
   };
 }
 

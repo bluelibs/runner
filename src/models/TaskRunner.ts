@@ -71,16 +71,19 @@ export class TaskRunner {
 
       return output;
     } catch (e) {
+      let isSuppressed = false;
+      const suppress = () => (isSuppressed = true);
       error = e;
 
       // If you want to rewthrow the error, this should be done inside the onError event.
-      await this.eventManager.emit(task.events.onError, { error });
+      await this.eventManager.emit(task.events.onError, { error, suppress });
       await this.eventManager.emit(globalEvents.tasks.onError, {
         task,
         error,
+        suppress,
       });
 
-      throw e;
+      if (!isSuppressed) throw e;
     }
   }
 

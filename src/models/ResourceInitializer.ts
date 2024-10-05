@@ -6,7 +6,7 @@ import {
 } from "../defs";
 import { EventManager } from "./EventManager";
 import { globalEvents } from "../globalEvents";
-import { Store } from "./Store";
+import { MiddlewareStoreElementType, Store } from "./Store";
 
 export class ResourceInitializer {
   constructor(
@@ -39,7 +39,7 @@ export class ResourceInitializer {
     let error, value;
     try {
       if (resource.init) {
-        value = await resource.init(config, dependencies);
+        value = await this.initWithMiddleware(resource, config, dependencies);
       }
 
       await this.eventManager.emit(resource.events.afterInit, {
@@ -55,15 +55,60 @@ export class ResourceInitializer {
       return value;
     } catch (e) {
       error = e;
+      let isSuppressed = false;
+      const suppress = () => (isSuppressed = true);
 
       // If you want to rewthrow the error, this should be done inside the onError event.
-      await this.eventManager.emit(resource.events.onError, { error });
+      await this.eventManager.emit(resource.events.onError, {
+        error,
+        suppress,
+      });
       await this.eventManager.emit(globalEvents.resources.onError, {
         error,
         resource,
+        suppress,
       });
 
-      throw e;
+      if (!isSuppressed) throw e;
     }
+  }
+
+  public async initWithMiddleware<C, V, D extends DependencyMapType>(
+    resource: IResource<C, V>,
+    config: C,
+    dependencies: D
+  ) {
+    let next = async (config: C): Promise<V | undefined> => {
+      if (resource.init) {
+        return resource.init.call(null, config, dependencies);
+      }
+    };
+
+    const existingMiddlewares = resource.middleware;
+    const createdMiddlewares = [
+      ...this.store.getGlobalMiddlewares(existingMiddlewares.map((x) => x.id)),
+      ...existingMiddlewares,
+    ];
+
+    for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
+      const middleware = createdMiddlewares[i];
+      const storeMiddleware = this.store.middlewares.get(
+        middleware.id
+      ) as MiddlewareStoreElementType; // we know it exists because at this stage all sanity checks have been done.
+
+      const nextFunction = next;
+      next = async (config: C) => {
+        return storeMiddleware.middleware.run(
+          {
+            resourceDefinition: resource as any,
+            config: config,
+            next: nextFunction,
+          },
+          storeMiddleware.computedDependencies
+        );
+      };
+    }
+
+    return next(config);
   }
 }

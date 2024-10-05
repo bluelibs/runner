@@ -27,7 +27,8 @@ export const globalEvents = {
       id: "global.tasks.afterRun",
     }),
     onError: defineEvent<{
-      error: Error;
+      error: any;
+      suppress: () => void;
       task: ITask<any, any, any>;
     }>({
       id: "global.tasks.onError",
@@ -49,6 +50,7 @@ export const globalEvents = {
     }),
     onError: defineEvent<{
       error: Error;
+      suppress: () => void;
       resource: IResource<any, any, any>;
     }>({
       id: "global.resources.onError",

@@ -77,6 +77,7 @@ describe("ResourceInitializer", () => {
     });
     expect(emitSpy).toHaveBeenCalledWith(mockResource.events.onError, {
       error: mockError,
+      suppress: expect.any(Function),
     });
   });
 

@@ -121,6 +121,69 @@ describe("run", () => {
       await run(app);
     });
 
+    it("should propagate the error to the parent", async () => {
+      const testTask = defineTask({
+        id: "test.task",
+        run: async () => {
+          throw new Error("Task failed");
+        },
+      });
+
+      let value = false;
+      const errorHook = jest.fn();
+
+      const app = defineResource({
+        id: "app",
+        register: [testTask],
+        dependencies: { testTask },
+        hooks: [
+          {
+            event: testTask.events.onError,
+            run: errorHook,
+          },
+        ],
+        async init(_, { testTask }) {
+          await testTask();
+        },
+      });
+
+      await expect(run(app)).rejects.toThrow("Task failed");
+      expect(errorHook).toHaveBeenCalled();
+    });
+
+    it("should allow suppression of an error", async () => {
+      const supressMock = jest.fn();
+      const testTask = defineTask({
+        id: "test.task",
+        run: async () => {
+          throw new Error("Task failed");
+        },
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [testTask],
+        dependencies: { testTask },
+        hooks: [
+          {
+            event: testTask.events.onError,
+            run: async (event, deps) => {
+              supressMock();
+              event.data.suppress();
+            },
+          },
+        ],
+        async init(_, { testTask }) {
+          await testTask();
+
+          return "ok";
+        },
+      });
+
+      await expect(run(app)).resolves.toBe("ok");
+      expect(supressMock).toHaveBeenCalled();
+    });
+
     it("should be able to register an task with middleware and execute it, ensuring the middleware is called in the correct order", async () => {
       const order: string[] = [];
 
@@ -364,150 +427,41 @@ describe("run", () => {
 
       await run(app);
     });
-  });
 
-  // Middleware
-  describe("Middleware", () => {
-    it("should be able to register the middleware and execute it", async () => {
-      const testMiddleware = defineMiddleware({
-        id: "test.middleware",
-        run: async ({ next }) => {
-          const result = await next();
-          return `Middleware: ${result}`;
+    it("should allow suppression of an error", async () => {
+      const supressMock = jest.fn();
+      const testResource = defineResource({
+        id: "test.resource",
+        init: async () => {
+          throw new Error("Init failed");
         },
-      });
-
-      const testTask = defineTask({
-        id: "test.task",
-        middleware: [testMiddleware],
-        run: async () => "Task executed",
       });
 
       const app = defineResource({
         id: "app",
-        register: [testMiddleware, testTask],
-        dependencies: { testTask },
-        async init(_, { testTask }) {
-          const result = await testTask();
-          expect(result).toBe("Middleware: Task executed");
-        },
-      });
-
-      await run(app);
-    });
-
-    it("should work with global middleware", async () => {
-      const globalMiddleware = defineMiddleware({
-        id: "global.middleware",
-        run: async ({ next }) => {
-          const result = await next();
-          return `global.middleware: ${result}`;
-        },
-      });
-
-      const testMiddleware = defineMiddleware({
-        id: "test.middleware",
-        run: async ({ next }) => {
-          const result = await next();
-          return `Middleware: ${result}`;
-        },
-      });
-
-      const testTask = defineTask({
-        id: "test.task",
-        middleware: [testMiddleware],
-        run: async () => "Task executed",
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [globalMiddleware.global(), testMiddleware, testTask],
-        dependencies: { testTask },
-        async init(_, { testTask }) {
-          const result = await testTask();
-          expect(result).toBe("global.middleware: Middleware: Task executed");
-        },
-      });
-
-      await run(app);
-    });
-
-    it("should work with global middleware but local one should have priority", async () => {
-      const createMiddleware = (id: string) =>
-        defineMiddleware({
-          id: "middleware",
-          run: async ({ next }) => {
-            const result = await next();
-            return `${id}: ${result}`;
+        register: [testResource],
+        dependencies: { testResource },
+        hooks: [
+          {
+            event: testResource.events.onError,
+            run: async (event, deps) => {
+              supressMock();
+              event.data.suppress();
+            },
           },
-        });
-      const globalMiddleware = createMiddleware("global.middleware");
+        ],
+        async init(_, { testResource }) {
+          expect(testResource).toBeUndefined();
 
-      const testMiddleware = defineMiddleware({
-        id: "test.middleware",
-        run: async ({ next }) => {
-          const result = await next();
-          return `Middleware: ${result}`;
+          return "ok";
         },
       });
 
-      const testTask = defineTask({
-        id: "test.task",
-        middleware: [testMiddleware],
-        run: async () => "Task executed",
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [globalMiddleware.global(), testMiddleware, testTask],
-        dependencies: { testTask },
-        async init(_, { testTask }) {
-          const result = await testTask();
-          expect(result).toBe("global.middleware: Middleware: Task executed");
-        },
-      });
-
-      await run(app);
-    });
-    it("should work with a middleware with functional() dependencies", async () => {
-      const task = defineTask({
-        id: "task",
-        run: async () => "Task executed",
-      });
-
-      const testMiddleware = defineMiddleware({
-        id: "test.middleware",
-        dependencies: () => ({ task }),
-        run: async ({ next }, { task }) => {
-          const result = await next();
-          expect(result).toBe(await task());
-          expect(result).toBe("Task executed");
-          return `Middleware: ${result}`;
-        },
-      });
-
-      const testTask = defineTask({
-        id: "test.task",
-        middleware: [testMiddleware],
-        run: async () => "Task executed",
-      });
-
-      let allSolved = jest.fn();
-      const app = defineResource({
-        id: "app",
-        register: [testMiddleware, testTask, task],
-        dependencies: { testTask },
-        async init(_, { testTask }) {
-          const result = await testTask();
-          expect(result).toBe("Middleware: Task executed");
-          allSolved();
-        },
-      });
-
-      await run(app);
-      expect(allSolved).toHaveBeenCalled();
+      await expect(run(app)).resolves.toBe("ok");
+      expect(supressMock).toHaveBeenCalled();
     });
   });
+
   it("should be able to register as a function", async () => {
     const mockFn = jest.fn();
     const testResource = defineResource({

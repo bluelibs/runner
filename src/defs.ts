@@ -10,7 +10,7 @@ export const symbols = {
 export interface IMeta {
   title?: string;
   description?: string;
-  tags: string[];
+  tags?: string[];
 }
 
 export interface ITaskMeta extends IMeta {}
@@ -77,6 +77,10 @@ export type AfterRunEventPayload<TInput, TOutput> = {
 
 export type OnErrorEventPayload = {
   error: any;
+  /**
+   * This function can be called to suppress the error from being thrown.
+   */
+  suppress(): void;
 };
 
 export type BeforeInitEventPayload<TConfig> = {
@@ -118,13 +122,14 @@ export interface ITask<
 export interface IResourceDefinintion<
   TConfig = void,
   TValue = unknown,
-  TDependencies extends DependencyMapType = {}
+  TDependencies extends DependencyMapType = {},
+  THooks = any
 > {
   id: string;
   dependencies?: TDependencies | ((config: TConfig) => TDependencies);
   hooks?:
-    | IHookDefinition<TDependencies>[]
-    | ((config: TConfig) => IHookDefinition<TDependencies>[]);
+    | IHookDefinition<TDependencies, THooks>[]
+    | ((config: TConfig) => IHookDefinition<TDependencies, THooks>[]);
   register?:
     | Array<RegisterableItems>
     | ((config: TConfig) => Array<RegisterableItems>);
@@ -147,6 +152,7 @@ export interface IResourceDefinintion<
   ) => Promise<TValue>;
   meta?: IResourceMeta;
   overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
+  middleware?: IMiddlewareDefinition[];
 }
 
 export interface IResource<
@@ -171,6 +177,7 @@ export interface IResource<
     | ((config: TConfig) => IHookDefinition<TDependencies>[]);
 
   overrides: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
+  middleware: IMiddlewareDefinition[];
 }
 
 export interface IResourceWithConfig<
@@ -224,8 +231,10 @@ export interface IMiddlewareDefinitionConfigured<
 
 export interface IMiddlewareExecutionInput {
   taskDefinition?: ITask;
-  input: any;
-  next: (input?: any) => Promise<any>;
+  resourceDefinition?: IResource;
+  config?: any;
+  input?: any;
+  next: (taskInputOrResourceConfig?: any) => Promise<any>;
 }
 
 export interface IHookDefinition<D extends DependencyMapType = {}, T = any> {

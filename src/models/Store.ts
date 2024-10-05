@@ -118,11 +118,25 @@ export class Store {
     this.computeRegistrationDeeply(root, config);
     this.resources.set(root.id, this.root);
 
+    this.runSanityChecks();
+
     for (const resource of this.resources.values()) {
       this.storeOverridesDeeply(resource.resource);
     }
 
     this.#isInitialized = true;
+  }
+
+  private runSanityChecks() {
+    for (const task of this.tasks.values()) {
+      task.task.middleware.forEach((middleware) => {
+        if (!this.middlewares.has(middleware.id)) {
+          throw Errors.dependencyNotFound(
+            `Middleware ${middleware.id} in Task ${task.task.id}`
+          );
+        }
+      });
+    }
   }
 
   /**

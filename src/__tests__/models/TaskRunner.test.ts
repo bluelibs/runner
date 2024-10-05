@@ -39,7 +39,7 @@ describe("TaskRunner", () => {
   it("should run an task with middleware", async () => {
     const middleware1 = defineMiddleware({
       id: "middleware1",
-      run: async ({ input, next }) => {
+      run: async ({ next, input }) => {
         const result = await next(input);
         return result + 1;
       },
@@ -129,7 +129,9 @@ describe("TaskRunner", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
 
     expect(onErrorSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { error } })
+      expect.objectContaining({
+        data: { error, suppress: expect.any(Function) },
+      })
     );
   });
 });
