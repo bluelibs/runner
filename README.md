@@ -8,12 +8,26 @@
 
 BlueLibs Runner is a framework that provides a functional approach to building applications, whether small or large-scale. Its core concepts include Tasks, Resources, Events, and Middleware. Tasks represent the units of logic, while resources are singletons that provide shared services across the application. Events facilitate communication between different parts of the system, and middleware allows interception and modification of task execution. The framework emphasizes an async-first philosophy, ensuring that all operations are executed asynchronously for smoother application flow.
 
+## Pros
+
+- Simplifies dependency injection
+- Encourages functional programming
+- Provides a clear structure for building applications
+- Ensures type safety with TypeScript
+- Facilitates communication between different parts of the system
+- Allows interception and modification of task execution
+- Ensures all operations are executed asynchronously
+- Provides a clean and organized way to build applications
+- Encourages a modular and reusable codebase
+- Facilitates testing and debugging
+- Offers a flexible and extensible architecture
+
 ## Building Blocks
 
 - **Tasks**: Core units of logic that encapsulate specific tasks. They can depend on resources, other tasks, and event emitters.
 - **Resources**: Singleton objects providing shared functionality. They can be constants, services, functions. They can depend on other resources, tasks, and event emitters.
 - **Events**: Facilitate asynchronous communication between different parts of your application. All tasks and resources emit events, allowing you to easily hook. Events can be listened to by tasks, resources, and middleware.
-- **Middleware**: Intercept and modify the execution of tasks. They can be used to add additional functionality to your tasks. Middleware can be global or task-specific.
+- **Middleware**: Intercept and modify the execution of tasks or initialisation of your resources. They can be used to add additional functionality to your tasks. Middleware can be global or task-specific.
 
 These are the concepts and philosophy:
 
@@ -23,7 +37,7 @@ These are the concepts and philosophy:
 - **Explicit Registration**: All tasks, resources, events, and middleware have to be explicitly registered to be used.
 - **Dependencies**: Tasks, resources, and middleware can have access to each other by depending on one another and event emitters. This is a powerful way to explicitly declare the dependencies.
 
-Resources return through `async init()` their value to the container which can be used throughout the application. Resources might not have a value, they can just register things, like tasks, events, or middleware.
+Resources return through `async init()` their value to the container which can be used throughout the application.
 
 Tasks return through `async run()` function and the value from run, can be used throughout the application.
 
@@ -62,7 +76,7 @@ import { task, run, resource } from "@bluelibs/runner";
 
 const helloTask = task({
   id: "app.hello",
-  run: async () => console.log("Hello World!"),
+  run: async () => "Hello World!",
 });
 
 const app = resource({
@@ -72,9 +86,11 @@ const app = resource({
     hello: helloTask,
   },
   async init(_, deps) {
-    await deps.hello();
+    return await deps.hello();
   },
 });
+
+const result = await run(app); // "Hello World!"
 ```
 
 ### When to use each?
@@ -106,7 +122,7 @@ const dbResource = resource({
 });
 ```
 
-If you want to call dispose, you have to do it through the global resource called `store`, as everything is encapsulated.
+If you want to call dispose, you have to do it through the global resource called `store`, as everything is encapsulated. So you have to reach the "insides" of the system to begin disposal.
 
 ```ts
 import { task, run, resource, globals } from "@bluelibs/runner";
@@ -139,6 +155,7 @@ import { task, run, resource } from "@bluelibs/runner";
 
 type Config = { smtpUrl: string; defaultFrom: string };
 const emailerResource = resource({
+  // automatic type inference.
   async init(config: Config) {
     // run config checks
     return {
@@ -176,10 +193,15 @@ const helloWorld = task({
   dependencies: {
     userRegisteredEvent,
   },
+  async run(_, deps) {
+    await deps.userRegisteredEvent();
+    return "Hello World!";
+  },
 });
 
 const app = resource({
   id: "app",
+  // You have to register everything you use.
   register: [helloWorld, logMiddleware],
   dependencies: {
     helloWorld,
@@ -192,9 +214,18 @@ const app = resource({
 run(app);
 ```
 
-Resources can also depend on other resources and tasks. We have a circular dependency checker which ensures consistency. If a circular dependency is detected, an error will be thrown showing you the exact pathways.
+We have a circular dependency checker which ensures consistency. If a circular dependency is detected, an error will be thrown showing you the exact pathways.
 
 Tasks are not limited to this constraint, actions can use depend on each other freely.
+
+The dependencies get injected as follows:
+
+| Component    | Injection Description                                     |
+| ------------ | --------------------------------------------------------- |
+| `tasks`      | Injected as functions with their input argument           |
+| `resources`  | Injected as their return value                            |
+| `events`     | Injected as functions with their payload argument         |
+| `middleware` | Not typically injected; used via a `middleware: []` array |
 
 ## Events
 
@@ -222,9 +253,9 @@ const root = resource({
 });
 ```
 
-There are only 2 ways to listen to events:
+There are only 2 recommended ways to listen to events:
 
-### `on` property
+### `task.on` property
 
 ```ts
 import { task, run, event } from "@bluelibs/runner";
@@ -236,6 +267,7 @@ const afterRegisterEvent = event<{ userId: string }>({
 const helloTask = task({
   id: "app.hello",
   on: afterRegisterEvent,
+  priority: 0, // this is the order in which the task will be executed when `on` is present
   run(event) {
     console.log("User has been registered!");
   },
@@ -253,7 +285,7 @@ const app = resource({
 });
 ```
 
-### `hooks` property
+### `resource.hooks` property
 
 This can only be applied to a `resource()`.
 
@@ -271,6 +303,7 @@ const root = resource({
   hooks: [
     {
       event: global.events.afterInit,
+      priority: 1000, // event priority, the higher the number, the sooner it will run
       async run(event, deps) {
         // both dependencies and event are properly infered through typescript
         console.log("User has been registered!");
@@ -283,7 +316,7 @@ const root = resource({
 });
 ```
 
-### hooks wildcard
+#### wildcard events
 
 You can listen to all events by using the wildcard `*`.
 
@@ -324,7 +357,7 @@ The hooks from a `resource` are mostly used for configuration, and blending in t
 ### When to use either?
 
 - `hooks` are for resources to extend each other, compose functionalities, they are mostly used for configuration and blending in the system.
-- `on` is for when you want to perform a task when something happens.
+- `on` is for when you want to perform a task when something happens, like send an email, begin processing something, etc.
 
 ## Middleware
 
@@ -365,7 +398,9 @@ const helloTask = task({
 });
 ```
 
-However, if you want to register a middleware for all tasks and resources, here's how you can do it:
+### Global
+
+If you want to register a middleware for all tasks and resources, here's how you can do it:
 
 ```ts
 import { run, resource } from "@bluelibs/runner";
@@ -381,7 +416,7 @@ const root = resource({
 });
 ```
 
-The middleware can only be registered once. This means that if you register a middleware as global, you cannot specify it as a task middleware.
+The middleware can only be registered once. This means that if you register a middleware as global, you cannot specify it as a task middleware. This is to avoid confusion and to keep the system clean.
 
 ## Errors
 
@@ -417,9 +452,22 @@ You can listen to errors via events:
 
 ```ts
 const helloWorld = task({
-  id: "app.onError",
+  id: "app.tasks.helloWorld.onError",
   on: helloWorld.events.onError,
   run({ error, input, suppress }, deps) {
+    // this will be called when an error happens
+
+    // if you handled the error, and you don't want it propagated to the top, supress the propagation.
+    suppress();
+  },
+});
+```
+
+```ts
+const helloWorld = resource({
+  id: "app.resources.helloWorld.onError",
+  on: helloWorld.events.onError,
+  init({ error, input, suppress }, deps) {
     // this will be called when an error happens
 
     // if you handled the error, and you don't want it propagated to the top, supress the propagation.
@@ -467,7 +515,7 @@ export interface IMiddlewareMeta extends IMeta {}
 
 Which means you can extend them in your system to add more keys to better describe your actions.
 
-## Global Services
+## Internal Services
 
 We expose direct access to the following internal services:
 
@@ -495,16 +543,20 @@ const helloWorld = task({
 
 ## Namespacing
 
-We typically namespace using `.` like `app.helloWorld`. This is a convention that we use to make sure that we can easily identify where the task belongs to.
+Domain usually is "app", but as your application grows or you plan on building external libraries the naming convention should be: "companyName.packageName".
 
-When creating special packages the convention is:
-
-- `{companyName}.{packageName}.{taskName}`
+| Type           | Format                                    |
+| -------------- | ----------------------------------------- |
+| Tasks          | `{domain}.tasks.{taskName}`               |
+| Listener Tasks | `{domain}.tasks.{taskName}.on{EventName}` |
+| Resources      | `{domain}.resources.{resourceName}`       |
+| Events         | `{domain}.events.{eventName}`             |
+| Middleware     | `{domain}.middleware.{middlewareName}`    |
 
 You can always create helpers for you as you're creating your tasks, resources, middleware:
 
 ```ts
-function getNamespace(id) {
+function namespaced(id) {
   return `bluelibs.core.${id}`;
 }
 ```
@@ -661,7 +713,7 @@ const app = resource({
 run(app);
 ```
 
-### Business Config
+### Resource level
 
 ```ts
 import { task, run, event } from "@bluelibs/runner";
@@ -705,7 +757,7 @@ const app = resource({
 run(app);
 ```
 
-### Moving further
+## Advanced Usage
 
 This is just a "language" of developing applications. It simplifies dependency injection to the barebones, it forces you to think more functional and use classes less.
 
@@ -846,7 +898,7 @@ const app = resource({
 });
 ```
 
-## Overrides
+### Overrides
 
 Previously, we explored how we can extend functionality through events. However, sometimes you want to override a resource with a new one or simply swap out a task or a middleware that you import from another package and they don't offer the ability.
 
@@ -1016,8 +1068,6 @@ describe("app", () => {
         // you can now test a task simply by depending on it, and running it, then asserting the response of run()
       },
     });
-
-    // Same concept applies for resources as well.
 
     await run(testApp);
   });

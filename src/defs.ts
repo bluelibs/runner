@@ -59,6 +59,11 @@ export interface ITaskDefinition<
   dependencies?: TDependencies | (() => TDependencies);
   middleware?: IMiddlewareDefinition[];
   on?: IEventDefinition<TEventDefinitionInput>;
+  /**
+   * This represents the order of the event. It only makes sense to be used when `on` is also defined.
+   * You use this when you have multiple tasks listening to the same event and want to control the order.
+   */
+  priority?: number;
   meta?: ITaskMeta;
   run: (
     input: TEventDefinitionInput extends null ? TInput : TEventDefinitionInput,
@@ -240,6 +245,11 @@ export interface IMiddlewareExecutionInput {
 
 export interface IHookDefinition<D extends DependencyMapType = {}, T = any> {
   event: "*" | IEventDefinition<T>;
+  /**
+   * The higher the number, the higher the priority.
+   * We recommend using numbers between -1000 and 1000.
+   */
+  priority?: number;
   run: (
     event: IEvent<T>,
     dependencies: DependencyValuesType<D>

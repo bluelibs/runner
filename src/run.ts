@@ -63,10 +63,10 @@ export async function run<C, V>(
   config?: C
 ): Promise<V> {
   const eventManager = new EventManager();
+  const logger = new Logger(eventManager);
   const store = new Store(eventManager);
   const taskRunner = new TaskRunner(store, eventManager);
   const processor = new DependencyProcessor(store, eventManager, taskRunner);
-  const logger = new Logger(eventManager);
 
   // In the registration phase we register deeply all the resources, tasks, middleware and events
   store.initializeStore(resource, config);

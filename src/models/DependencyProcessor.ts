@@ -6,7 +6,7 @@ import {
   IHookDefinition,
   IEventDefinition,
 } from "../defs";
-import { ResourceStoreElementType, Store } from "./Store";
+import { ResourceStoreElementType, Store, TaskStoreElementType } from "./Store";
 import * as utils from "../define";
 import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";
@@ -39,30 +39,39 @@ export class DependencyProcessor {
     }
 
     for (const task of this.store.tasks.values()) {
-      const deps = task.task.dependencies as DependencyMapType;
-      task.computedDependencies = await this.extractDependencies(deps);
-
-      let eventDefinition = task.task.on;
-      if (eventDefinition) {
-        if (this.store.events.get(eventDefinition.id) === undefined) {
-          throw Errors.eventNotFound(eventDefinition.id);
-        }
-
-        this.eventManager.addListener(
-          eventDefinition,
-          async (receivedEvent) => {
-            return this.taskRunner.run(
-              task.task,
-              receivedEvent,
-              task.computedDependencies
-            );
-          }
-        );
-      }
+      await this.computeTaskDependencies(task);
     }
 
     for (const resource of this.store.resources.values()) {
       await this.processResourceDependencies(resource);
+    }
+  }
+
+  private async computeTaskDependencies(
+    task: TaskStoreElementType<any, any, any>
+  ) {
+    const deps = task.task.dependencies as DependencyMapType;
+    task.computedDependencies = await this.extractDependencies(deps);
+
+    let eventDefinition = task.task.on;
+    if (eventDefinition) {
+      if (this.store.events.get(eventDefinition.id) === undefined) {
+        throw Errors.eventNotFound(eventDefinition.id);
+      }
+
+      this.eventManager.addListener(
+        eventDefinition,
+        async (receivedEvent) => {
+          return this.taskRunner.run(
+            task.task,
+            receivedEvent,
+            task.computedDependencies
+          );
+        },
+        {
+          order: task.task.priority || 0,
+        }
+      );
     }
   }
 
@@ -141,23 +150,35 @@ export class DependencyProcessor {
 
     for (const hook of hooks) {
       const event = hook.event;
+      const order = hook.priority || 0;
       if (event === "*") {
-        this.eventManager.addGlobalListener(async (receivedEvent) => {
-          return hook.run(
-            receivedEvent,
-            resourceStoreElement.computedDependencies as DependencyValuesType<{}>
-          );
-        });
+        this.eventManager.addGlobalListener(
+          async (receivedEvent) => {
+            return hook.run(
+              receivedEvent,
+              resourceStoreElement.computedDependencies as DependencyValuesType<{}>
+            );
+          },
+          {
+            order,
+          }
+        );
       } else {
         if (this.store.events.has(event.id) === false) {
           throw Errors.eventNotFound(event.id);
         }
-        this.eventManager.addListener(event, async (receivedEvent) => {
-          return hook.run(
-            receivedEvent,
-            resourceStoreElement.computedDependencies as DependencyValuesType<{}>
-          );
-        });
+        this.eventManager.addListener(
+          event,
+          async (receivedEvent) => {
+            return hook.run(
+              receivedEvent,
+              resourceStoreElement.computedDependencies as DependencyValuesType<{}>
+            );
+          },
+          {
+            order,
+          }
+        );
       }
     }
   }
