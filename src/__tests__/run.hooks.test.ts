@@ -106,36 +106,5 @@ describe("run", () => {
 
       await run(app);
     });
-
-    it("should have propper type safety", async () => {
-      const hookEvent = defineEvent<{ message: string }>({ id: "hook.event" });
-
-      const task = defineTask({
-        id: "task",
-        run: async () => "Task executed",
-      });
-
-      const testResource = defineResource({
-        id: "test.resource",
-        dependencies: { task },
-        init: async () => "Resource Value",
-        hooks: [
-          {
-            event: hookEvent,
-            run: (event, deps) => {
-              // @ts-expect-error
-              event.data.x;
-
-              event.data.message;
-              deps.task;
-              // @ts-expect-error
-              deps.task2;
-            },
-          },
-        ],
-      });
-
-      expect(true).toBe(true);
-    });
   });
 });

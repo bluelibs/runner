@@ -133,8 +133,51 @@ describe("Logger", () => {
 
         await logger[level]("Test log message");
 
-        expect(logSpy).toHaveBeenCalledWith(level, "Test log message");
+        expect(logSpy).toHaveBeenCalledWith(
+          level,
+          "Test log message",
+          undefined // the context parameter
+        );
       });
     }
+  });
+
+  it("should auto-print logs based on autoPrintLogsAfter option", async () => {
+    const autoPrintLevel: LogLevels = "warn";
+    logger.setPrintThreshold(autoPrintLevel);
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
+
+    const levels: Array<LogLevels> = [
+      "trace",
+      "debug",
+      "info",
+      "warn",
+      "error",
+      "critical",
+    ];
+
+    for (const level of levels) {
+      logger.setPrintThreshold(level);
+      await logger.log(level, `Test ${level} message`);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining(`Test ${level} message`)
+      );
+    }
+
+    // ensure events with a higher level thatn auto print level are printed, and lower levels are not
+    logger.setPrintThreshold("error");
+    await logger.log("info", "xx Test info message");
+    await logger.log("error", "xx Test error message");
+
+    expect(consoleLogSpy).toHaveBeenCalledWith(
+      expect.stringContaining("xx Test error message")
+    );
+
+    expect(consoleLogSpy).not.toHaveBeenCalledWith(
+      expect.stringContaining("xx Test info message")
+    );
+
+    consoleLogSpy.mockRestore();
   });
 });

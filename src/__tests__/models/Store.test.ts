@@ -6,15 +6,17 @@ import {
   defineMiddleware,
   defineEvent,
 } from "../../define";
-import { globalResources } from "../../globalResources";
+import { Logger } from "../../models";
 
 describe("Store", () => {
   let eventManager: EventManager;
   let store: Store;
+  let logger: Logger;
 
   beforeEach(() => {
     eventManager = new EventManager();
-    store = new Store(eventManager);
+    logger = new Logger(eventManager);
+    store = new Store(eventManager, logger);
   });
 
   it("should initialize the store with a root resource", () => {

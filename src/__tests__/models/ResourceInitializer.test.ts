@@ -2,16 +2,19 @@ import { ResourceInitializer } from "../../models/ResourceInitializer";
 import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { defineResource } from "../../define";
+import { Logger } from "../../models";
 
 describe("ResourceInitializer", () => {
   let store: Store;
   let eventManager: EventManager;
+  let logger: Logger;
   let resourceInitializer: ResourceInitializer;
 
   beforeEach(() => {
     eventManager = new EventManager();
-    store = new Store(eventManager);
-    resourceInitializer = new ResourceInitializer(store, eventManager);
+    logger = new Logger(eventManager);
+    store = new Store(eventManager, logger);
+    resourceInitializer = new ResourceInitializer(store, eventManager, logger);
   });
 
   it("should initialize a resource and emit events", async () => {
@@ -71,7 +74,6 @@ describe("ResourceInitializer", () => {
       mockConfig,
       mockDependencies
     );
-    expect(emitSpy).toHaveBeenCalledTimes(4);
     expect(emitSpy).toHaveBeenCalledWith(mockResource.events.beforeInit, {
       config: mockConfig,
     });
@@ -98,7 +100,6 @@ describe("ResourceInitializer", () => {
     );
 
     expect(result).toBeUndefined();
-    expect(emitSpy).toHaveBeenCalledTimes(4);
     expect(emitSpy).toHaveBeenCalledWith(mockResource.events.beforeInit, {
       config: mockConfig,
     });

@@ -52,21 +52,23 @@ export type RunnerState = {
   middleware: Record<string, MiddlewareStoreElementType>;
 };
 
-export type RunnerType = {
-  store: Store;
-  eventManager: EventManager;
-  taskRunner: TaskRunner;
-};
-
 export async function run<C, V>(
   resource: IResource<C, V>,
   config?: C
 ): Promise<V> {
   const eventManager = new EventManager();
+
+  // ensure for logger, that it can be used only after: computeAllDependencies() has executed
   const logger = new Logger(eventManager);
-  const store = new Store(eventManager);
-  const taskRunner = new TaskRunner(store, eventManager);
-  const processor = new DependencyProcessor(store, eventManager, taskRunner);
+
+  const store = new Store(eventManager, logger);
+  const taskRunner = new TaskRunner(store, eventManager, logger);
+  const processor = new DependencyProcessor(
+    store,
+    eventManager,
+    taskRunner,
+    logger
+  );
 
   // In the registration phase we register deeply all the resources, tasks, middleware and events
   store.initializeStore(resource, config);
@@ -80,24 +82,25 @@ export async function run<C, V>(
     throw Errors.circularDependencies(circularDependencies.cycles);
   }
 
+  // the overrides that were registered now will override the other registered resources
   await store.processOverrides();
 
-  // a form of hooking, we store the events for all tasks
+  // a form of hooking, we create the events for all tasks and store them so they can be referenced
   await store.storeEventsForAllTasks();
   await processor.attachHooks();
   await processor.computeAllDependencies();
+
+  await logger.debug("All elements have been initalized..");
 
   // Now we can safely compute dependencies without being afraid of an infinite loop.
   // The hooking part is done here.
   await eventManager.emit(globalEvents.beforeInit);
 
-  // leftovers that were registered but not depended upon, except root
-  await processor.initializeUninitializedResources();
-
   // Now we can initialise the root resource
   await processor.initializeRoot();
 
   await eventManager.emit(globalEvents.afterInit);
+  await logger.debug("System initialized and operational.");
 
   // disallow manipulation or attaching more
   store.lock();

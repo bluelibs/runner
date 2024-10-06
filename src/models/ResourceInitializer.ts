@@ -7,11 +7,13 @@ import {
 import { EventManager } from "./EventManager";
 import { globalEvents } from "../globalEvents";
 import { MiddlewareStoreElementType, Store } from "./Store";
+import { Logger } from "./Logger";
 
 export class ResourceInitializer {
   constructor(
     protected readonly store: Store,
-    protected readonly eventManager: EventManager
+    protected readonly eventManager: EventManager,
+    protected readonly logger: Logger
   ) {}
 
   /**
@@ -27,9 +29,6 @@ export class ResourceInitializer {
     config: TConfig,
     dependencies: DependencyValuesType<TDeps>
   ): Promise<TValue | undefined> {
-    // begin by dispatching the event of creating it.
-    // then ensure the hooks are called
-    // then ensure the middleware are called
     await this.eventManager.emit(globalEvents.resources.beforeInit, {
       config,
       resource,
@@ -51,6 +50,8 @@ export class ResourceInitializer {
         resource,
         value,
       });
+
+      this.logger.debug(`Resource ${resource.id} initialized`);
 
       return value;
     } catch (e) {

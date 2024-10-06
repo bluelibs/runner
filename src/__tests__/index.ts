@@ -12,3 +12,4 @@ import "./run.overrides.test";
 import "./run.middleware.test";
 import "./globalEvents.test";
 import "./errors.test";
+import "./typesafety.test";

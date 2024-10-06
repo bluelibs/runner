@@ -17,7 +17,7 @@ export interface ILog {
 }
 
 export class Logger {
-  public static defaultContext = "app";
+  printThreshold: LogLevels | null = null;
 
   public severity = {
     trace: 0,
@@ -28,23 +28,43 @@ export class Logger {
     critical: 5,
   };
 
-  constructor(private eventManager: EventManager) {}
+  constructor(protected eventManager: EventManager) {}
 
   /**
    * @param level
    * @param message
    */
-  public async log(level: LogLevels, data: any): Promise<void> {
+  public async log(
+    level: LogLevels,
+    data: any,
+    source?: string
+  ): Promise<void> {
     const log: ILog = {
       level,
       data,
+      context: source,
       timestamp: new Date(),
     };
+
+    if (
+      this.printThreshold &&
+      this.severity[level] >= this.severity[this.printThreshold]
+    ) {
+      this.print(log);
+    }
 
     await this.eventManager.emit(globalEvents.log, log);
   }
 
-  public async print(log: ILog) {
+  /**
+   * Will print logs after that, use `null` to disable autoprinting.
+   * @param level
+   */
+  public setPrintThreshold(level: LogLevels | null) {
+    this.printThreshold = level;
+  }
+
+  public print(log: ILog) {
     // Extract the relevant information from the log
     const { level, context, data, timestamp } = log;
 
@@ -74,27 +94,27 @@ export class Logger {
     console.log(logMessage);
   }
 
-  public async info(data: any) {
-    await this.log("info", data);
+  public async info(data: any, context?: string) {
+    await this.log("info", data, context);
   }
 
-  public async error(data: any) {
-    await this.log("error", data);
+  public async error(data: any, context?: string) {
+    await this.log("error", data, context);
   }
 
-  public async warn(data: any) {
-    await this.log("warn", data);
+  public async warn(data: any, context?: string) {
+    await this.log("warn", data, context);
   }
 
-  public async debug(data: any) {
-    await this.log("debug", data);
+  public async debug(data: any, context?: string) {
+    await this.log("debug", data, context);
   }
 
-  public async trace(data: any) {
-    await this.log("trace", data);
+  public async trace(data: any, context?: string) {
+    await this.log("trace", data, context);
   }
 
-  public async critical(data: any) {
-    await this.log("critical", data);
+  public async critical(data: any, context?: string) {
+    await this.log("critical", data, context);
   }
 }

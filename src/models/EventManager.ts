@@ -1,5 +1,6 @@
 import { EventHandlerType, IEvent, IEventDefinition } from "../defs";
 import { Errors } from "../errors";
+import { Logger } from "./Logger";
 
 const HandlerOptionsDefaults = { order: 0 };
 

@@ -59,6 +59,7 @@ export const globalEvents = {
 };
 
 export const globalEventsArray = [
+  globalEvents.log,
   globalEvents.beforeInit,
   globalEvents.afterInit,
   globalEvents.tasks.beforeRun,

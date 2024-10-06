@@ -24,17 +24,26 @@ export type DependencyMapType = Record<
   ITask | IResource | IEventDefinition | IResourceWithConfig<any, any>
 >;
 
-export type DependencyValueType<T> = T extends ITask<
-  infer I,
-  infer O,
-  /** The infer D, while not used is crucial for making this work correctly, otherwise it forces input: unknown to a dependency that has a dependency. */
-  infer D
->
-  ? (...args: I extends unknown ? [] : [I]) => O
-  : T extends IResource<any, infer V>
+// Helper Types for Extracting Generics
+type ExtractTaskInput<T> = T extends ITask<infer I, any, infer D> ? I : never;
+type ExtractTaskOutput<T> = T extends ITask<any, infer O, infer D> ? O : never;
+type ExtractResourceValue<T> = T extends IResource<any, infer V, infer D>
   ? V
-  : T extends IEventDefinition<infer P>
-  ? (input: P) => Promise<void> | never
+  : never;
+type ExtractEventParams<T> = T extends IEventDefinition<infer P> ? P : never;
+
+// Helper Types for Dependency Value Construction
+type TaskDependency<I, O> = (...args: I extends null | void ? [] : [I]) => O;
+type ResourceDependency<V> = V;
+type EventDependency<P> = (input: P) => Promise<void>;
+
+// Main DependencyValueType Definition
+export type DependencyValueType<T> = T extends ITask<any, any, any>
+  ? TaskDependency<ExtractTaskInput<T>, ExtractTaskOutput<T>>
+  : T extends IResource<any, any>
+  ? ResourceDependency<ExtractResourceValue<T>>
+  : T extends IEventDefinition<any>
+  ? EventDependency<ExtractEventParams<T>>
   : never;
 
 export type DependencyValuesType<T extends DependencyMapType> = {
@@ -43,8 +52,8 @@ export type DependencyValuesType<T extends DependencyMapType> = {
 
 // RegisterableItems Type with Conditional Inclusion
 export type RegisterableItems =
-  | IResource<void> // Always include IResource<void>
   | IResourceWithConfig<any>
+  | IResource<any>
   | ITaskDefinition
   | IMiddlewareDefinition
   | IEventDefinition;
@@ -58,12 +67,15 @@ export interface ITaskDefinition<
   id: string;
   dependencies?: TDependencies | (() => TDependencies);
   middleware?: IMiddlewareDefinition[];
+  /**
+   * Listen to events in a simple way
+   */
   on?: IEventDefinition<TEventDefinitionInput>;
   /**
-   * This represents the order of the event. It only makes sense to be used when `on` is also defined.
-   * You use this when you have multiple tasks listening to the same event and want to control the order.
+   * This makes sense only when `on` is specified to provide the order of the execution.
+   * The event with the lowest order will be executed first.
    */
-  priority?: number;
+  listenerOrder?: number;
   meta?: ITaskMeta;
   run: (
     input: TEventDefinitionInput extends null ? TInput : TEventDefinitionInput,
@@ -125,10 +137,11 @@ export interface ITask<
 }
 // Resource interfaces
 export interface IResourceDefinintion<
-  TConfig = void,
+  TConfig = any,
   TValue = unknown,
   TDependencies extends DependencyMapType = {},
-  THooks = any
+  THooks = any,
+  TRegisterableItems = any
 > {
   id: string;
   dependencies?: TDependencies | ((config: TConfig) => TDependencies);
@@ -243,15 +256,24 @@ export interface IMiddlewareExecutionInput {
   next: (taskInputOrResourceConfig?: any) => Promise<any>;
 }
 
-export interface IHookDefinition<D extends DependencyMapType = {}, T = any> {
+export interface IHookDefinition<
+  D extends DependencyMapType = {},
+  T = any,
+  B extends boolean = false
+> {
   event: "*" | IEventDefinition<T>;
   /**
    * The higher the number, the higher the priority.
    * We recommend using numbers between -1000 and 1000.
    */
-  priority?: number;
+  order?: number;
+  /**
+   * These are hooks that run before any resource instantiation.
+   * @param event
+   */
+  early?: B;
   run: (
     event: IEvent<T>,
-    dependencies: DependencyValuesType<D>
+    dependencies: T extends true ? void : DependencyValuesType<D>
   ) => Promise<void> | void;
 }

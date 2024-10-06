@@ -220,4 +220,30 @@ describe("Middleware", () => {
 
     expect(await run(app)).toBe("Middleware: Middleware: Sub initialized");
   });
+
+  it("Should prevent circular dependencies when middleware depends on the same task", async () => {
+    const middleware = defineMiddleware({
+      id: "middleware",
+      dependencies: () => ({ task }),
+      run: async (_, { task }) => {
+        // example
+      },
+    });
+
+    const task = defineTask({
+      id: "task",
+      middleware: [middleware],
+      run: async () => "Task executed",
+    });
+
+    const app = defineResource({
+      id: "sub",
+      async init(_, {}) {
+        return "Sub initialized";
+      },
+      register: [middleware, task],
+    });
+
+    expect(run(app)).rejects.toThrowError(/Circular dependencies detected/);
+  });
 });

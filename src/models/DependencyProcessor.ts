@@ -12,6 +12,7 @@ import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";
 import { TaskRunner } from "./TaskRunner";
 import { Errors } from "../errors";
+import { Logger } from "./Logger";
 
 /**
  * This class is responsible of setting up dependencies with their respective computedValues.
@@ -24,9 +25,14 @@ export class DependencyProcessor {
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
-    protected readonly taskRunner: TaskRunner
+    protected readonly taskRunner: TaskRunner,
+    protected readonly logger: Logger
   ) {
-    this.resourceInitializer = new ResourceInitializer(store, eventManager);
+    this.resourceInitializer = new ResourceInitializer(
+      store,
+      eventManager,
+      logger
+    );
   }
 
   /**
@@ -45,6 +51,10 @@ export class DependencyProcessor {
     for (const resource of this.store.resources.values()) {
       await this.processResourceDependencies(resource);
     }
+
+    // leftovers that were registered but not depended upon, except root
+    // they should still be initialized as they might extend other
+    await this.initializeUninitializedResources();
   }
 
   private async computeTaskDependencies(
@@ -62,6 +72,11 @@ export class DependencyProcessor {
       this.eventManager.addListener(
         eventDefinition,
         async (receivedEvent) => {
+          this.logger.debug({
+            message: `Task ${task.task.id} listened to event: ${eventDefinition.id}`,
+            event: receivedEvent,
+          });
+
           return this.taskRunner.run(
             task.task,
             receivedEvent,
@@ -69,7 +84,7 @@ export class DependencyProcessor {
           );
         },
         {
-          order: task.task.priority || 0,
+          order: task.task.listenerOrder || 0,
         }
       );
     }
@@ -120,10 +135,8 @@ export class DependencyProcessor {
 
   /**
    * Processes all hooks, should run before emission of any event.
-   * @returns
    */
   public attachHooks() {
-    // iterate through resources and send them to processHooks
     for (const resource of this.store.resources.values()) {
       if (resource.resource.hooks) {
         this.attachHooksToResource(resource);
@@ -150,7 +163,7 @@ export class DependencyProcessor {
 
     for (const hook of hooks) {
       const event = hook.event;
-      const order = hook.priority || 0;
+      const order = hook.order || 0;
       if (event === "*") {
         this.eventManager.addGlobalListener(
           async (receivedEvent) => {
@@ -214,6 +227,7 @@ export class DependencyProcessor {
    */
   extractEventDependency(object: IEventDefinition<Record<string, any>>) {
     return async (input) => {
+      this.logger.debug(`Emitting event ${object.id}`);
       return this.eventManager.emit(object, input);
     };
   }

@@ -3,16 +3,19 @@ import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { defineTask, defineResource, defineMiddleware } from "../../define";
 import { ITask } from "../../defs";
+import { Logger } from "../../models";
 
 describe("TaskRunner", () => {
   let store: Store;
   let eventManager: EventManager;
   let taskRunner: TaskRunner;
+  let logger: Logger;
 
   beforeEach(() => {
     eventManager = new EventManager();
-    store = new Store(eventManager);
-    taskRunner = new TaskRunner(store, eventManager);
+    logger = new Logger(eventManager);
+    store = new Store(eventManager, logger);
+    taskRunner = new TaskRunner(store, eventManager, logger);
   });
 
   it("should run an task without middleware", async () => {

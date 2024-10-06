@@ -7,6 +7,7 @@ import {
   Store,
   TaskStoreElementType,
 } from "./Store";
+import { Logger } from "./Logger";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
@@ -16,7 +17,8 @@ export class TaskRunner {
 
   constructor(
     protected readonly store: Store,
-    protected readonly eventManager: EventManager
+    protected readonly eventManager: EventManager,
+    protected readonly logger: Logger
   ) {}
 
   /**
@@ -104,6 +106,11 @@ export class TaskRunner {
   ) {
     // this is the final next()
     let next = async (input) => {
+      this.logger.debug({
+        message: `Running task ${task.id}`,
+        input,
+      });
+
       return task.run.call(null, input, taskDependencies as any);
     };
 

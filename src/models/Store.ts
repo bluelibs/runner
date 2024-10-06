@@ -17,6 +17,7 @@ import { Errors } from "../errors";
 import { globalResources } from "../globalResources";
 import { EventManager } from "./EventManager";
 import { TaskRunner } from "./TaskRunner";
+import { Logger } from "./Logger";
 
 export type ResourceStoreElementType<
   C = any,
@@ -67,7 +68,10 @@ export class Store {
   #isLocked = false;
   #isInitialized = false;
 
-  constructor(protected readonly eventManager: EventManager) {}
+  constructor(
+    protected readonly eventManager: EventManager,
+    protected readonly logger: Logger
+  ) {}
 
   get isLocked() {
     return this.#isLocked;
@@ -378,12 +382,22 @@ export class Store {
     });
   }
 
+  private middlewareAsMap(middleware: IMiddlewareDefinition[]) {
+    return middleware.reduce((acc, item) => {
+      acc[item.id] = item;
+      return acc;
+    }, {} as Record<string, IMiddlewareDefinition>);
+  }
+
   getDependentNodes(): IDependentNode[] {
     const depenedants: IDependentNode[] = [];
     for (const task of this.tasks.values()) {
       depenedants.push({
         id: task.task.id,
-        dependencies: task.task.dependencies,
+        dependencies: {
+          ...task.task.dependencies,
+          ...this.middlewareAsMap(task.task.middleware),
+        },
       });
     }
     for (const middleware of this.middlewares.values()) {
@@ -395,7 +409,10 @@ export class Store {
     for (const resource of this.resources.values()) {
       depenedants.push({
         id: resource.resource.id,
-        dependencies: resource.resource.dependencies || {},
+        dependencies: {
+          ...resource.resource.dependencies,
+          ...this.middlewareAsMap(resource.resource.middleware),
+        },
       });
     }
 
