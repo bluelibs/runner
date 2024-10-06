@@ -3,6 +3,7 @@
   "out": "docs",
   "exclude": ["**/__tests__/**/*"],
   "includeVersion": true,
-  "theme": "default",
+  "plugin": ["typedoc-material-theme"],
+  "themeColor": "#4A6D7C",
   "readme": "README.md"
 }

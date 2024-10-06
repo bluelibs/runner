@@ -18,7 +18,7 @@
     "testonly": "npm test",
     "test:ci": "npm run coverage -- --ci --maxWorkers=2  --reporters=default --reporters=jest-junit",
     "prepublishOnly": "npm run build",
-    "typedoc": "typedoc",
+    "typedoc": "typedoc --options typedoc.json",
     "benchmark": "jest --testMatch=\"**/__tests__/benchmark/benchmark.test.ts\" --testTimeout 10000"
   },
   "devDependencies": {
@@ -39,6 +39,7 @@
     "source-map-support": "^0.5.13",
     "ts-jest": "^29.0.0",
     "typedoc": "^0.26.7",
+    "typedoc-material-theme": "^1.1.0",
     "typescript": "^5.6.2"
   },
   "typings": "dist/index.d.ts",
