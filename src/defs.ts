@@ -136,7 +136,7 @@ export interface ITask<
   };
 }
 // Resource interfaces
-export interface IResourceDefinintion<
+export interface IResourceDefinition<
   TConfig = any,
   TValue = unknown,
   TDependencies extends DependencyMapType = {},
@@ -177,7 +177,7 @@ export interface IResource<
   TConfig = void,
   TValue = any,
   TDependencies extends DependencyMapType = any
-> extends IResourceDefinintion<TConfig, TValue, TDependencies> {
+> extends IResourceDefinition<TConfig, TValue, TDependencies> {
   with(config: TConfig): IResourceWithConfig<TConfig, TValue, TDependencies>;
   register:
     | Array<RegisterableItems>

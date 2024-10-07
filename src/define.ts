@@ -3,7 +3,7 @@ import {
   ITaskDefinition,
   IResource,
   IResourceWithConfig,
-  IResourceDefinintion,
+  IResourceDefinition,
   IEventDefinition,
   IMiddlewareDefinition,
   symbols,
@@ -52,7 +52,7 @@ export function defineResource<
   TDeps extends DependencyMapType = {},
   THooks = any
 >(
-  constConfig: IResourceDefinintion<TConfig, TValue, TDeps, THooks>
+  constConfig: IResourceDefinition<TConfig, TValue, TDeps, THooks>
 ): IResource<TConfig, TValue, TDeps> {
   return {
     [symbols.resource]: true,

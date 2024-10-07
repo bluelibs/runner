@@ -2,7 +2,7 @@ import { TaskRunner } from "./models/TaskRunner";
 import {
   DependencyMapType,
   ITaskDefinition,
-  IResourceDefinintion,
+  IResourceDefinition,
   IEventDefinition,
   IMiddlewareDefinition,
   DependencyValuesType,
@@ -22,7 +22,7 @@ export type ResourcesStoreElementType<
   V = any,
   D extends DependencyMapType = {}
 > = {
-  resource: IResourceDefinintion<C, V, D>;
+  resource: IResourceDefinition<C, V, D>;
   computedDependencies?: DependencyValuesType<D>;
   config: C;
   value: V;
