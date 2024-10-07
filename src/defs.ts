@@ -209,8 +209,18 @@ export interface IResourceWithConfig<
 
 export interface IEvent<TPayload = any> {
   id: string;
+  /**
+   * The data that the event carries. It can be anything.
+   */
   data: TPayload;
+  /**
+   * The timestamp when the event was created.
+   */
   timestamp: Date;
+  /**
+   * The source of the event. This can be useful for debugging.
+   */
+  source: string;
 }
 
 export type EventHandlerType<T = any> = (

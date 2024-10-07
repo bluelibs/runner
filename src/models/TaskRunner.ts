@@ -53,23 +53,35 @@ export class TaskRunner {
     // begin by dispatching the event of creating it.
     // then ensure the hooks are called
     // then ensure the middleware are called
-    await this.eventManager.emit(task.events.beforeRun, { input });
-    await this.eventManager.emit(globalEvents.tasks.beforeRun, {
-      task,
-      input,
-    });
+    await this.eventManager.emit(task.events.beforeRun, { input }, task.id);
+    await this.eventManager.emit(
+      globalEvents.tasks.beforeRun,
+      {
+        task,
+        input,
+      },
+      task.id
+    );
 
     let error;
     try {
       // craft the next function starting from the first next function
       const output = await runner(input);
 
-      await this.eventManager.emit(task.events.afterRun, { input, output });
-      await this.eventManager.emit(globalEvents.tasks.afterRun, {
-        task,
-        input,
-        output,
-      });
+      await this.eventManager.emit(
+        task.events.afterRun,
+        { input, output },
+        task.id
+      );
+      await this.eventManager.emit(
+        globalEvents.tasks.afterRun,
+        {
+          task,
+          input,
+          output,
+        },
+        task.id
+      );
 
       return output;
     } catch (e) {
@@ -78,12 +90,20 @@ export class TaskRunner {
       error = e;
 
       // If you want to rewthrow the error, this should be done inside the onError event.
-      await this.eventManager.emit(task.events.onError, { error, suppress });
-      await this.eventManager.emit(globalEvents.tasks.onError, {
-        task,
-        error,
-        suppress,
-      });
+      await this.eventManager.emit(
+        task.events.onError,
+        { error, suppress },
+        task.id
+      );
+      await this.eventManager.emit(
+        globalEvents.tasks.onError,
+        {
+          task,
+          error,
+          suppress,
+        },
+        task.id
+      );
 
       if (!isSuppressed) throw e;
     }

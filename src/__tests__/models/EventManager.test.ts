@@ -15,7 +15,7 @@ describe("EventManager", () => {
     const handler = jest.fn();
     eventManager.addListener(eventDefinition, handler);
 
-    await eventManager.emit(eventDefinition, "testData");
+    await eventManager.emit(eventDefinition, "testData", "test");
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenCalledWith(
@@ -61,7 +61,7 @@ describe("EventManager", () => {
       { order: 3 }
     );
 
-    await eventManager.emit(eventDefinition, "testData");
+    await eventManager.emit(eventDefinition, "testData", "test");
 
     expect(results).toEqual([0, 1, 2, 3]);
   });
@@ -72,10 +72,10 @@ describe("EventManager", () => {
 
     eventManager.addListener(eventDefinition, handler, { filter });
 
-    await eventManager.emit(eventDefinition, "blocked");
+    await eventManager.emit(eventDefinition, "blocked", "test");
     expect(handler).not.toHaveBeenCalled();
 
-    await eventManager.emit(eventDefinition, "allowed");
+    await eventManager.emit(eventDefinition, "allowed", "test");
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -89,7 +89,7 @@ describe("EventManager", () => {
 
     eventManager.addGlobalListener(handler);
 
-    await eventManager.emit(eventDefinition, "testData");
+    await eventManager.emit(eventDefinition, "testData", "test");
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenCalledWith(
@@ -133,7 +133,7 @@ describe("EventManager", () => {
       { order: 3 }
     );
 
-    await eventManager.emit(eventDefinition, "testData");
+    await eventManager.emit(eventDefinition, "testData", "test");
 
     expect(results).toEqual([
       "globalListener1",
@@ -169,8 +169,8 @@ describe("EventManager", () => {
     eventManager.addListener(eventDef1, handler1);
     eventManager.addListener(eventDef2, handler2);
 
-    await eventManager.emit(eventDef1, "data1");
-    await eventManager.emit(eventDef2, "data2");
+    await eventManager.emit(eventDef1, "data1", "test");
+    await eventManager.emit(eventDef2, "data2", "test");
 
     expect(handler1).toHaveBeenCalledTimes(1);
     expect(handler1).toHaveBeenCalledWith(
@@ -196,7 +196,7 @@ describe("EventManager", () => {
     eventManager.addListener(eventDefinition, handler1);
     eventManager.addListener(eventDefinition, handler2);
 
-    await eventManager.emit(eventDefinition, "testData");
+    await eventManager.emit(eventDefinition, "testData", "test");
 
     expect(handler1).toHaveBeenCalledTimes(1);
     expect(handler2).toHaveBeenCalledTimes(1);
@@ -210,8 +210,8 @@ describe("EventManager", () => {
 
     eventManager.addListener([eventDef1, eventDef2], handler);
 
-    await eventManager.emit(eventDef1, "data1");
-    await eventManager.emit(eventDef2, "data2");
+    await eventManager.emit(eventDef1, "data1", "test");
+    await eventManager.emit(eventDef2, "data2", "test");
 
     expect(handler).toHaveBeenCalledTimes(2);
     expect(handler).toHaveBeenNthCalledWith(
@@ -240,7 +240,7 @@ describe("EventManager", () => {
     eventManager.addListener(eventDef1, handler1);
     eventManager.addListener(eventDef2, handler2);
 
-    await eventManager.emit(eventDef1, "data1");
+    await eventManager.emit(eventDef1, "data1", "test");
 
     expect(handler1).toHaveBeenCalledTimes(1);
     expect(handler2).not.toHaveBeenCalled();
@@ -266,7 +266,7 @@ describe("EventManager", () => {
       { order: 0 }
     );
 
-    await eventManager.emit(eventDefinition, "testData");
+    await eventManager.emit(eventDefinition, "testData", "test");
 
     expect(results).toEqual([0, 1]);
   });
@@ -279,7 +279,7 @@ describe("EventManager", () => {
     eventManager.addListener(eventDefinition, handler);
 
     await expect(
-      eventManager.emit(eventDefinition, "testData")
+      eventManager.emit(eventDefinition, "testData", "test")
     ).rejects.toThrow("Handler error");
   });
 
@@ -293,7 +293,7 @@ describe("EventManager", () => {
     eventManager.addListener(eventDefinition, handler2);
 
     await expect(
-      eventManager.emit(eventDefinition, "testData")
+      eventManager.emit(eventDefinition, "testData", "test")
     ).rejects.toThrow("Handler error");
 
     // The second handler should have been called despite the error in the first
@@ -316,7 +316,7 @@ describe("EventManager", () => {
     eventManager.lock();
 
     await expect(
-      eventManager.emit(eventDefinition, "testData")
+      eventManager.emit(eventDefinition, "testData", "test")
     ).resolves.toBeUndefined();
 
     expect(handler).toHaveBeenCalledTimes(1);
@@ -340,7 +340,7 @@ describe("EventManager", () => {
       { order: 1 }
     );
 
-    await eventManager.emit(eventDefinition, "testData");
+    await eventManager.emit(eventDefinition, "testData", "test");
 
     // According to the merge logic, event listeners come before global listeners when orders are equal
     expect(results).toEqual(["eventListener", "globalListener"]);
@@ -352,16 +352,16 @@ describe("EventManager", () => {
 
     eventManager.addGlobalListener(handler, { filter });
 
-    await eventManager.emit(eventDefinition, "blocked");
+    await eventManager.emit(eventDefinition, "blocked", "test");
     expect(handler).not.toHaveBeenCalled();
 
-    await eventManager.emit(eventDefinition, "allowed");
+    await eventManager.emit(eventDefinition, "allowed", "test");
     expect(handler).toHaveBeenCalledTimes(1);
   });
 
   it("should handle emitting with no listeners", async () => {
     await expect(
-      eventManager.emit(eventDefinition, "testData")
+      eventManager.emit(eventDefinition, "testData", "test")
     ).resolves.toBeUndefined();
   });
 
@@ -372,7 +372,7 @@ describe("EventManager", () => {
 
     eventManager.addListener(voidEventDefinition, handler);
 
-    await eventManager.emit(voidEventDefinition);
+    await eventManager.emit(voidEventDefinition, undefined, "test");
 
     expect(handler).toHaveBeenCalledTimes(1);
     expect(handler).toHaveBeenCalledWith(

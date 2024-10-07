@@ -1,12 +1,15 @@
 # BlueLibs Runner
 
 <p align="center">
+<a href="https://github.com/bluelibs/runner/actions/workflows/ci.yml"><img src="https://github.com/bluelibs/runner/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build Status" /></a>
 <a href="https://travis-ci.org/bluelibs/runner"><img src="https://github.com/bluelibs/runner/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build Status" /></a>
 <a href="https://coveralls.io/github/bluelibs/runner?branch=main"><img src="https://coveralls.io/repos/github/bluelibs/runner/badge.svg?branch=main" alt="Coverage Status" /></a>
 <a href="https://bluelibs.github.io/runner/" target="_blank"><img src="https://img.shields.io/badge/read-typedocs-blue" alt="Docs" /></a>
 </p>
 
-[View the documentation page here](https://bluelibs.github.io/runner/).
+- [View the documentation page here](https://bluelibs.github.io/runner/).
+- [Google Notebook LM Podcast](https://notebooklm.google.com/notebook/59bd49fa-346b-4cfb-bb4b-b59857c3b9b4/audio)
+- [Continue GPT Conversation](https://chatgpt.com/share/670392f8-7188-800b-9b4b-e49b437d77f7)
 
 BlueLibs Runner is a framework that provides a functional approach to building applications, whether small or large-scale. Its core concepts include Tasks, Resources, Events, and Middleware. Tasks represent the units of logic, while resources are singletons that provide shared services across the application. Events facilitate communication between different parts of the system, and Middleware allows interception and modification of task execution. The framework emphasizes an async-first philosophy, ensuring that all operations are executed asynchronously for smoother application flow.
 
@@ -218,8 +221,9 @@ The dependencies get injected as follows:
 
 ## Events
 
-You emit events when certain things in your app happen, a user registered, a comment has been added, etc.
-You listen to them through tasks and resources, and you can emit them from tasks and resources through `dependencies`.
+Events are triggered when specific actions occur in your app, like a user registration or a new comment. When you catch these events, you also receive the emitted data along with the source of the event. Knowing the source of the event without explicitly specifying it can be very helpful in large applications.
+
+You can listen for these events using tasks and resources, and similarly, emit them from tasks and resources through dependencies.
 
 ```ts
 import { task, run, event } from "@bluelibs/runner";
@@ -257,6 +261,7 @@ const helloTask = task({
   on: afterRegisterEvent,
   listenerPriority: 0, // this is the order in which the task will be executed when `on` is present
   run(event) {
+    event.source; // id which middleware, task, resource triggered it
     console.log("User has been registered!");
   },
 });
@@ -815,11 +820,31 @@ run(app);
 
 ### Inter-communication between resources
 
-By stating dependencies you often don't care about the initialisation order, but sometimes you really do, for example, let's imagine a security service that allows you to inject a custom hashing function let's say to shift from md5 to sha256.
+When registering resources with specific configuration, the initialization order usually doesn’t matter. However, there are cases where it becomes crucial. For instance, consider a security service that allows the injection of a custom hashing function to transition from MD5 to SHA-256.
 
-This means your `resource` needs to provide a way for other resources to `update` it. The most obvious way is to expose a configuration that allows you to set a custom hasher `register: [securityResource.with({ ... })]`.
+In such cases, your resource should provide a method for other resources to update it. A straightforward approach is to expose a configuration option that lets you set a custom hasher, like so:
 
-But other resources might want to do this dynamically as extensions. This is where `hooks` come in.
+```ts
+type SecurityResourceConfig = {
+  hasher: (str: string) => string;
+};
+
+const securityResource = resource({
+  id: "app.security",
+  async init(config: SecurityResourceConfig) {
+    return {
+      hash: (input: string) => config.hasher(input),
+    };
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [securityResource.with({ hasher: (input) => md5(input) })],
+});
+```
+
+However, other resources might need to modify this dynamically as extensions. This is where hooks become valuable.
 
 ```ts
 import { resource, run, event } from "@bluelibs/runner";

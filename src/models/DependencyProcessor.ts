@@ -41,7 +41,10 @@ export class DependencyProcessor {
   async computeAllDependencies() {
     for (const middleware of this.store.middlewares.values()) {
       const deps = middleware.middleware.dependencies as DependencyMapType;
-      middleware.computedDependencies = await this.extractDependencies(deps);
+      middleware.computedDependencies = await this.extractDependencies(
+        deps,
+        middleware.middleware.id
+      );
     }
 
     for (const task of this.store.tasks.values()) {
@@ -61,7 +64,10 @@ export class DependencyProcessor {
     task: TaskStoreElementType<any, any, any>
   ) {
     const deps = task.task.dependencies as DependencyMapType;
-    task.computedDependencies = await this.extractDependencies(deps);
+    task.computedDependencies = await this.extractDependencies(
+      deps,
+      task.task.id
+    );
 
     let eventDefinition = task.task.on;
     if (eventDefinition) {
@@ -117,7 +123,10 @@ export class DependencyProcessor {
     resource: ResourceStoreElementType<any, any, {}>
   ) {
     const deps = resource.resource.dependencies as DependencyMapType;
-    resource.computedDependencies = await this.extractDependencies(deps);
+    resource.computedDependencies = await this.extractDependencies(
+      deps,
+      resource.resource.id
+    );
   }
 
   public async initializeRoot() {
@@ -197,24 +206,25 @@ export class DependencyProcessor {
   }
 
   async extractDependencies<T extends DependencyMapType>(
-    map: T
+    map: T,
+    source: string
   ): Promise<DependencyValuesType<T>> {
     const object = {} as DependencyValuesType<T>;
 
     for (const key in map) {
-      object[key] = await this.extractDependency(map[key]);
+      object[key] = await this.extractDependency(map[key], source);
     }
 
     return object;
   }
 
-  async extractDependency(object) {
+  async extractDependency(object, source: string) {
     if (utils.isResource(object)) {
       return this.extractResourceDependency(object);
     } else if (utils.isTask(object)) {
       return this.extractTaskDependency(object);
     } else if (utils.isEvent(object)) {
-      return this.extractEventDependency(object);
+      return this.extractEventDependency(object, source);
     } else {
       throw Errors.unknownItemType(object);
     }
@@ -225,10 +235,17 @@ export class DependencyProcessor {
    * @param object
    * @returns
    */
-  extractEventDependency(object: IEventDefinition<Record<string, any>>) {
+  extractEventDependency(
+    object: IEventDefinition<Record<string, any>>,
+    source: string
+  ) {
     return async (input) => {
-      this.logger.debug(`Emitting event ${object.id}`);
-      return this.eventManager.emit(object, input);
+      // runs it in background.
+      this.logger.debug({
+        message: `Event ${object.id} was emitted from ${source}`,
+      });
+
+      return this.eventManager.emit(object, input, source);
     };
   }
 
@@ -245,7 +262,8 @@ export class DependencyProcessor {
       const dependencies = object.dependencies as DependencyMapType;
 
       storeTask.computedDependencies = await this.extractDependencies(
-        dependencies
+        dependencies,
+        storeTask.task.id
       );
     }
 
@@ -277,7 +295,10 @@ export class DependencyProcessor {
         storeResource.value = await this.resourceInitializer.initializeResource(
           resource,
           config,
-          await this.extractDependencies(resource.dependencies || {})
+          await this.extractDependencies(
+            resource.dependencies || {},
+            resource.id
+          )
         );
       }
     }

@@ -3,6 +3,8 @@ import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { defineResource } from "../../define";
 import { Logger } from "../../models";
+import { globalResources } from "../../globalResources";
+import { globalEvents } from "../../globalEvents";
 
 describe("ResourceInitializer", () => {
   let store: Store;
@@ -39,13 +41,30 @@ describe("ResourceInitializer", () => {
       mockConfig,
       mockDependencies
     );
-    expect(emitSpy).toHaveBeenCalledWith(mockResource.events.beforeInit, {
-      config: mockConfig,
-    });
-    expect(emitSpy).toHaveBeenCalledWith(mockResource.events.afterInit, {
-      config: mockConfig,
-      value: "initialized value",
-    });
+
+    expect(emitSpy).toHaveBeenCalledWith(
+      globalEvents.resources.beforeInit,
+      {
+        config: mockConfig,
+        resource: mockResource,
+      },
+      "testResource"
+    );
+    expect(emitSpy).toHaveBeenCalledWith(
+      mockResource.events.beforeInit,
+      {
+        config: mockConfig,
+      },
+      "testResource"
+    );
+    expect(emitSpy).toHaveBeenCalledWith(
+      mockResource.events.afterInit,
+      {
+        config: mockConfig,
+        value: "initialized value",
+      },
+      "testResource"
+    );
   });
 
   it("should handle errors and emit onError event", async () => {
@@ -74,13 +93,21 @@ describe("ResourceInitializer", () => {
       mockConfig,
       mockDependencies
     );
-    expect(emitSpy).toHaveBeenCalledWith(mockResource.events.beforeInit, {
-      config: mockConfig,
-    });
-    expect(emitSpy).toHaveBeenCalledWith(mockResource.events.onError, {
-      error: mockError,
-      suppress: expect.any(Function),
-    });
+    expect(emitSpy).toHaveBeenCalledWith(
+      mockResource.events.beforeInit,
+      {
+        config: mockConfig,
+      },
+      "testResource"
+    );
+    expect(emitSpy).toHaveBeenCalledWith(
+      mockResource.events.onError,
+      {
+        error: mockError,
+        suppress: expect.any(Function),
+      },
+      "testResource"
+    );
   });
 
   it("should handle resources without init function", async () => {
@@ -100,12 +127,20 @@ describe("ResourceInitializer", () => {
     );
 
     expect(result).toBeUndefined();
-    expect(emitSpy).toHaveBeenCalledWith(mockResource.events.beforeInit, {
-      config: mockConfig,
-    });
-    expect(emitSpy).toHaveBeenCalledWith(mockResource.events.afterInit, {
-      config: mockConfig,
-      value: undefined,
-    });
+    expect(emitSpy).toHaveBeenCalledWith(
+      mockResource.events.beforeInit,
+      {
+        config: mockConfig,
+      },
+      "testResource"
+    );
+    expect(emitSpy).toHaveBeenCalledWith(
+      mockResource.events.afterInit,
+      {
+        config: mockConfig,
+        value: undefined,
+      },
+      "testResource"
+    );
   });
 });

@@ -29,11 +29,20 @@ export class ResourceInitializer {
     config: TConfig,
     dependencies: DependencyValuesType<TDeps>
   ): Promise<TValue | undefined> {
-    await this.eventManager.emit(globalEvents.resources.beforeInit, {
-      config,
-      resource,
-    });
-    await this.eventManager.emit(resource.events.beforeInit, { config });
+    await this.eventManager.emit(
+      globalEvents.resources.beforeInit,
+      {
+        config,
+        resource,
+      },
+      resource.id
+    );
+
+    await this.eventManager.emit(
+      resource.events.beforeInit,
+      { config },
+      resource.id
+    );
 
     let error, value;
     try {
@@ -41,15 +50,23 @@ export class ResourceInitializer {
         value = await this.initWithMiddleware(resource, config, dependencies);
       }
 
-      await this.eventManager.emit(resource.events.afterInit, {
-        config,
-        value,
-      });
-      await this.eventManager.emit(globalEvents.resources.afterInit, {
-        config,
-        resource,
-        value,
-      });
+      await this.eventManager.emit(
+        resource.events.afterInit,
+        {
+          config,
+          value,
+        },
+        resource.id
+      );
+      await this.eventManager.emit(
+        globalEvents.resources.afterInit,
+        {
+          config,
+          resource,
+          value,
+        },
+        resource.id
+      );
 
       this.logger.debug(`Resource ${resource.id} initialized`);
 
@@ -60,15 +77,23 @@ export class ResourceInitializer {
       const suppress = () => (isSuppressed = true);
 
       // If you want to rewthrow the error, this should be done inside the onError event.
-      await this.eventManager.emit(resource.events.onError, {
-        error,
-        suppress,
-      });
-      await this.eventManager.emit(globalEvents.resources.onError, {
-        error,
-        resource,
-        suppress,
-      });
+      await this.eventManager.emit(
+        resource.events.onError,
+        {
+          error,
+          suppress,
+        },
+        resource.id
+      );
+      await this.eventManager.emit(
+        globalEvents.resources.onError,
+        {
+          error,
+          resource,
+          suppress,
+        },
+        resource.id
+      );
 
       if (!isSuppressed) throw e;
     }

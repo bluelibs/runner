@@ -11,7 +11,7 @@ export type LogLevels =
 
 export interface ILog {
   level: string;
-  context?: string;
+  source?: string;
   data: any;
   timestamp: Date;
 }
@@ -42,7 +42,7 @@ export class Logger {
     const log: ILog = {
       level,
       data,
-      context: source,
+      source: source,
       timestamp: new Date(),
     };
 
@@ -53,7 +53,7 @@ export class Logger {
       this.print(log);
     }
 
-    await this.eventManager.emit(globalEvents.log, log);
+    await this.eventManager.emit(globalEvents.log, log, source || "unknown");
   }
 
   /**
@@ -66,7 +66,7 @@ export class Logger {
 
   public print(log: ILog) {
     // Extract the relevant information from the log
-    const { level, context, data, timestamp } = log;
+    const { level, source: context, data, timestamp } = log;
 
     // Format the timestamp to a more readable format
     const formattedTimestamp = timestamp.toISOString();
@@ -94,27 +94,27 @@ export class Logger {
     console.log(logMessage);
   }
 
-  public async info(data: any, context?: string) {
-    await this.log("info", data, context);
+  public async info(data: any, source?: string) {
+    await this.log("info", data, source);
   }
 
-  public async error(data: any, context?: string) {
-    await this.log("error", data, context);
+  public async error(data: any, source?: string) {
+    await this.log("error", data, source);
   }
 
-  public async warn(data: any, context?: string) {
-    await this.log("warn", data, context);
+  public async warn(data: any, source?: string) {
+    await this.log("warn", data, source);
   }
 
-  public async debug(data: any, context?: string) {
-    await this.log("debug", data, context);
+  public async debug(data: any, source?: string) {
+    await this.log("debug", data, source);
   }
 
-  public async trace(data: any, context?: string) {
-    await this.log("trace", data, context);
+  public async trace(data: any, source?: string) {
+    await this.log("trace", data, source);
   }
 
-  public async critical(data: any, context?: string) {
-    await this.log("critical", data, context);
+  public async critical(data: any, source?: string) {
+    await this.log("critical", data, source);
   }
 }

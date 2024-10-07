@@ -55,9 +55,9 @@ export class EventManager {
 
   async emit<TInput>(
     eventDefinition: IEventDefinition<TInput>,
-    ...args: TInput extends void ? [] : [TInput]
+    data: TInput,
+    source: string
   ): Promise<void> {
-    const data = args[0];
     const eventListeners = this.listeners.get(eventDefinition.id) || [];
     const allListeners = this.mergeSortedListeners(
       eventListeners,
@@ -68,6 +68,7 @@ export class EventManager {
       id: eventDefinition.id,
       data,
       timestamp: new Date(),
+      source,
     };
 
     for (const listener of allListeners) {

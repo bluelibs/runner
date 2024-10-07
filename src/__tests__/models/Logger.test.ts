@@ -26,7 +26,8 @@ describe("Logger", () => {
           level: testLevel,
           data: testData,
           timestamp: expect.any(Date),
-        })
+        }),
+        "unknown"
       );
     });
 
@@ -43,7 +44,7 @@ describe("Logger", () => {
       mockEventManager.emit = jest.fn();
 
       for (const level of levels) {
-        await logger.log(level, `Test ${level} message`);
+        await logger.log(level, `Test ${level} message`, "testSource");
 
         expect(mockEventManager.emit).toHaveBeenCalledWith(
           globalEvents.log,
@@ -51,7 +52,8 @@ describe("Logger", () => {
             level,
             data: `Test ${level} message`,
             timestamp: expect.any(Date),
-          })
+          }),
+          "testSource"
         );
       }
     });
@@ -71,7 +73,7 @@ describe("Logger", () => {
     it("should print log messages correctly", async () => {
       const testLog: ILog = {
         level: "info",
-        context: "test",
+        source: "test",
         data: "Test log message",
         timestamp: new Date("2023-01-01T00:00:00Z"),
       };

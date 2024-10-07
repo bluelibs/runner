@@ -90,16 +90,17 @@ export async function run<C, V>(
   await processor.attachHooks();
   await processor.computeAllDependencies();
 
+  // After this stage, logger print policy could have been set.
   await logger.debug("All elements have been initalized..");
 
   // Now we can safely compute dependencies without being afraid of an infinite loop.
   // The hooking part is done here.
-  await eventManager.emit(globalEvents.beforeInit);
+  await eventManager.emit(globalEvents.beforeInit, null, resource.id);
 
   // Now we can initialise the root resource
   await processor.initializeRoot();
 
-  await eventManager.emit(globalEvents.afterInit);
+  await eventManager.emit(globalEvents.afterInit, null, resource.id);
   await logger.debug("System initialized and operational.");
 
   // disallow manipulation or attaching more
