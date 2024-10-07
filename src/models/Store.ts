@@ -64,6 +64,13 @@ export class Store {
     string,
     IResource | IMiddleware | ITask | IResourceWithConfig
   > = new Map();
+  /**
+   * This is because we can have multiple overrides at once, and the final override is the one that is used.
+   */
+  public overrideRequests: Set<{
+    source: string;
+    override: RegisterableItems;
+  }> = new Set();
 
   #isLocked = false;
   #isInitialized = false;
@@ -88,11 +95,6 @@ export class Store {
     }
   }
 
-  /**
-   * Store the root before beginning registration
-   * @param root
-   * @param config
-   */
   initializeStore(root: IResource<any>, config: any) {
     if (this.#isInitialized) {
       throw Errors.storeAlreadyInitialized();
@@ -165,17 +167,22 @@ export class Store {
    */
   private storeOverridesDeeply<C>(element: IResource<C, any, any>) {
     element.overrides.forEach((override) => {
+      // We go deeply for resources, because we want to store all the overrides first
       // the one on top has priority of setting the last override.
       if (utils.isResource(override)) {
         this.storeOverridesDeeply(override);
       }
 
+      let id: string;
       if (utils.isResourceWithConfig(override)) {
         this.storeOverridesDeeply(override.resource);
-        this.overrides.set(override.resource.id, override);
+        id = override.resource.id;
       } else {
-        this.overrides.set(override.id, override);
+        id = override.id;
       }
+
+      this.overrideRequests.add({ source: element.id, override });
+      this.overrides.set(id, override);
     });
   }
 
