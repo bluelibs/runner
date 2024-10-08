@@ -156,6 +156,9 @@ export class Store {
         ? element.register(config as C)
         : element.register;
 
+    // if it was a computed function ensure the registered terms are stored, not the function.
+    element.register = items;
+
     for (const item of items) {
       // will call registration if it detects another resource.
       this.storeGenericItem<C>(item);
