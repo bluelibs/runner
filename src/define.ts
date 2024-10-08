@@ -12,6 +12,8 @@ import {
   IMiddleware,
   IHookDefinition,
   IEvent,
+  IEventDefinitionConfig,
+  symbolEvent,
 } from "./defs";
 import { Errors } from "./errors";
 
@@ -66,6 +68,7 @@ export function defineResource<
     with: function (config: TConfig) {
       return {
         [symbols.resourceWithConfig]: true,
+        id: this.id,
         resource: this,
         config,
       };
@@ -88,10 +91,10 @@ export function defineResource<
 }
 
 export function defineEvent<TPayload = any>(
-  config: IEventDefinition<TPayload>
+  config: IEventDefinitionConfig<TPayload>
 ): IEventDefinition<TPayload> {
   return {
-    [symbols.event]: true,
+    [symbolEvent]: true,
     ...config,
   };
 }

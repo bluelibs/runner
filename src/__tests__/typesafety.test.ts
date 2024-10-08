@@ -77,12 +77,15 @@ describe("typesafety", () => {
         // @ts-expect-error
         deps.task2;
       },
-      register: () => [
+      register: [
         dummyResourceNoConfig,
         // @ts-expect-error
         dummyResourceNoConfig.with("hello"),
         // @ts-expect-error
         dummyResourceNoConfig.with({ anyObject: true }),
+
+        // @ts-expect-error
+        dummyResource, // should throw
         dummyResource.with({ ok: true }),
         // @ts-expect-error
         dummyResource.with({ ok: 123 }),

@@ -440,7 +440,12 @@ describe("run", () => {
 
       const typeTest = defineResource({
         id: "typeTest",
-        register: [t2, testResource],
+        register: [
+          t2,
+          testResource.with({
+            prefix: "Hello,",
+          }),
+        ],
       });
 
       const app = defineResource({
@@ -460,7 +465,10 @@ describe("run", () => {
       const testResource = defineResource({
         id: "test.resource",
         init: async () => {
-          throw new Error("Init failed");
+          // we do this so it doesn't become a never.
+          if (true === true) {
+            throw new Error("Init failed");
+          }
         },
       });
 

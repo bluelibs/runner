@@ -1,4 +1,4 @@
-import { IEvent, IEventDefinition } from "../../defs";
+import { IEvent, IEventDefinition, symbolEvent } from "../../defs";
 import { Errors } from "../../errors";
 import { EventManager } from "../../models/EventManager";
 
@@ -8,7 +8,7 @@ describe("EventManager", () => {
 
   beforeEach(() => {
     eventManager = new EventManager();
-    eventDefinition = { id: "testEvent" };
+    eventDefinition = { id: "testEvent", [symbolEvent]: true };
   });
 
   it("should add and emit event listener", async () => {
@@ -160,8 +160,14 @@ describe("EventManager", () => {
   });
 
   it("should handle multiple events", async () => {
-    const eventDef1: IEventDefinition<string> = { id: "event1" };
-    const eventDef2: IEventDefinition<string> = { id: "event2" };
+    const eventDef1: IEventDefinition<string> = {
+      id: "event1",
+      [symbolEvent]: true,
+    };
+    const eventDef2: IEventDefinition<string> = {
+      id: "event2",
+      [symbolEvent]: true,
+    };
 
     const handler1 = jest.fn();
     const handler2 = jest.fn();
@@ -203,8 +209,14 @@ describe("EventManager", () => {
   });
 
   it("should handle listeners added to multiple events", async () => {
-    const eventDef1: IEventDefinition<string> = { id: "event1" };
-    const eventDef2: IEventDefinition<string> = { id: "event2" };
+    const eventDef1: IEventDefinition<string> = {
+      id: "event1",
+      [symbolEvent]: true,
+    };
+    const eventDef2: IEventDefinition<string> = {
+      id: "event2",
+      [symbolEvent]: true,
+    };
 
     const handler = jest.fn();
 
@@ -231,8 +243,14 @@ describe("EventManager", () => {
   });
 
   it("should not affect other events when emitting one", async () => {
-    const eventDef1: IEventDefinition<string> = { id: "event1" };
-    const eventDef2: IEventDefinition<string> = { id: "event2" };
+    const eventDef1: IEventDefinition<string> = {
+      id: "event1",
+      [symbolEvent]: true,
+    };
+    const eventDef2: IEventDefinition<string> = {
+      id: "event2",
+      [symbolEvent]: true,
+    };
 
     const handler1 = jest.fn();
     const handler2 = jest.fn();
@@ -368,7 +386,10 @@ describe("EventManager", () => {
   it("should handle listeners with no data", async () => {
     const handler = jest.fn();
 
-    const voidEventDefinition: IEventDefinition<void> = { id: "voidEvent" };
+    const voidEventDefinition: IEventDefinition<void> = {
+      id: "voidEvent",
+      [symbolEvent]: true,
+    };
 
     eventManager.addListener(voidEventDefinition, handler);
 

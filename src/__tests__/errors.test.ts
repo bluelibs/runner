@@ -119,7 +119,9 @@ describe("Errors", () => {
     const errorResource = defineResource({
       id: "error.resource",
       init: async () => {
-        throw new Error("Resource error");
+        if (true === true) {
+          throw new Error("Resource error");
+        }
       },
     });
 

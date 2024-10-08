@@ -1,10 +1,21 @@
+export const symbolTask: unique symbol = Symbol("runner.task");
+export const symbolResource: unique symbol = Symbol("runner.resource");
+export const symbolResourceWithConfig: unique symbol = Symbol(
+  "runner.resourceWithConfig"
+);
+export const symbolEvent: unique symbol = Symbol("runner.event");
+export const symbolMiddleware: unique symbol = Symbol("runner.middleware");
+export const symbolMiddlewareGlobal: unique symbol = Symbol(
+  "runner.middlewareGlobal"
+);
+
 export const symbols = {
-  task: Symbol("task"),
-  resource: Symbol("resource"),
-  resourceWithConfig: Symbol("resourceWithConfig"),
-  event: Symbol("event"),
-  middleware: Symbol("middleware"),
-  middlewareGlobal: Symbol("middlewareGlobal"),
+  task: symbolTask,
+  resource: symbolResource,
+  resourceWithConfig: symbolResourceWithConfig,
+  event: symbolEvent,
+  middleware: symbolMiddleware,
+  middlewareGlobal: symbolMiddlewareGlobal,
 };
 
 export interface IMeta {
@@ -21,7 +32,7 @@ export interface IMiddlewareMeta extends IMeta {}
 // DependencyMap types
 export type DependencyMapType = Record<
   string,
-  ITask | IResource | IEventDefinition | IResourceWithConfig<any, any>
+  ITask<any, any, any> | IResource<any, any, any> | IEventDefinition<any>
 >;
 
 // Helper Types for Extracting Generics
@@ -53,7 +64,7 @@ export type DependencyValuesType<T extends DependencyMapType> = {
 // RegisterableItems Type with Conditional Inclusion
 export type RegisterableItems =
   | IResourceWithConfig<any>
-  | IResource<any>
+  | IResource<void, any, any>
   | ITaskDefinition
   | IMiddlewareDefinition
   | IEventDefinition;
@@ -203,6 +214,7 @@ export interface IResourceWithConfig<
   TValue = any,
   TDependencies extends DependencyMapType = any
 > {
+  id: string;
   resource: IResource<TConfig, TValue, TDependencies>;
   config: TConfig;
 }
@@ -228,8 +240,17 @@ export type EventHandlerType<T = any> = (
 ) => any | Promise<any>;
 
 // Other necessary interfaces
+export interface IEventDefinitionConfig<TPayload = void> {
+  id: string;
+  meta?: IEventMeta;
+}
+
 export interface IEventDefinition<TPayload = void> {
   id: string;
+  /**
+   * We use this event to discriminate between resources with just 'id' and 'events' as they collide. This is a workaround, should be redone using classes and instanceof.
+   */
+  [symbolEvent]: true;
   meta?: IEventMeta;
 }
 
