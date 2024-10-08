@@ -50,10 +50,8 @@ export class TaskRunner {
       this.runnerStore.set(task.id, runner);
     }
 
-    // begin by dispatching the event of creating it.
-    // then ensure the hooks are called
-    // then ensure the middleware are called
     await this.eventManager.emit(task.events.beforeRun, { input }, task.id);
+
     await this.eventManager.emit(
       globalEvents.tasks.beforeRun,
       {
