@@ -50,16 +50,19 @@ export class TaskRunner {
       this.runnerStore.set(task.id, runner);
     }
 
-    await this.eventManager.emit(task.events.beforeRun, { input }, task.id);
+    // Suppress recursive triggering of beforeRun events
+    if (task.id !== "global.beforeRunListener") {
+      await this.eventManager.emit(task.events.beforeRun, { input }, task.id);
 
-    await this.eventManager.emit(
-      globalEvents.tasks.beforeRun,
-      {
-        task,
-        input,
-      },
-      task.id
-    );
+      await this.eventManager.emit(
+        globalEvents.tasks.beforeRun,
+        {
+          task,
+          input,
+        },
+        task.id
+      );
+    }
 
     let error;
     try {
