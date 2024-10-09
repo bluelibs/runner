@@ -5,12 +5,29 @@ import { ILog } from "./models/Logger";
 export const globalEvents = {
   beforeInit: defineEvent({
     id: "global.beforeInit",
+    meta: {
+      title: "Before Initialization",
+      description:
+        "Triggered before any resource or system-wide initialization occurs.",
+      tags: ["system"],
+    },
   }),
   afterInit: defineEvent({
     id: "global.afterInit",
+    meta: {
+      title: "After Initialization",
+      description:
+        "Fired after the system or resource initialization is completed.",
+      tags: ["system"],
+    },
   }),
   log: defineEvent<ILog>({
     id: "global.log",
+    meta: {
+      title: "Log Event",
+      description: "Used to log events and messages across the system.",
+      tags: ["system"],
+    },
   }),
   tasks: {
     beforeRun: defineEvent<{
@@ -18,6 +35,12 @@ export const globalEvents = {
       input: any;
     }>({
       id: "global.tasks.beforeRun",
+      meta: {
+        title: "Before Task Execution",
+        description:
+          "Triggered before a task starts running, providing access to the input data.",
+        tags: ["system"],
+      },
     }),
     afterRun: defineEvent<{
       task: ITask<any, any, any>;
@@ -25,6 +48,12 @@ export const globalEvents = {
       output: any;
     }>({
       id: "global.tasks.afterRun",
+      meta: {
+        title: "After Task Execution",
+        description:
+          "Fired after a task has completed, providing both the input and output data.",
+        tags: ["system"],
+      },
     }),
     onError: defineEvent<{
       error: any;
@@ -32,6 +61,12 @@ export const globalEvents = {
       task: ITask<any, any, any>;
     }>({
       id: "global.tasks.onError",
+      meta: {
+        title: "Task Error",
+        description:
+          "Triggered when an error occurs during task execution. Allows error suppression.",
+        tags: ["system"],
+      },
     }),
   },
   resources: {
@@ -40,6 +75,12 @@ export const globalEvents = {
       config: any;
     }>({
       id: "global.resources.beforeInit",
+      meta: {
+        title: "Before Resource Initialization",
+        description:
+          "Fired before a resource is initialized, with access to the configuration.",
+        tags: ["system"],
+      },
     }),
     afterInit: defineEvent<{
       resource: IResource<any, any, any>;
@@ -47,6 +88,12 @@ export const globalEvents = {
       value: any;
     }>({
       id: "global.resources.afterInit",
+      meta: {
+        title: "After Resource Initialization",
+        description:
+          "Fired after a resource has been initialized, providing the final value.",
+        tags: ["system"],
+      },
     }),
     onError: defineEvent<{
       error: Error;
@@ -54,6 +101,12 @@ export const globalEvents = {
       resource: IResource<any, any, any>;
     }>({
       id: "global.resources.onError",
+      meta: {
+        title: "Resource Error",
+        description:
+          "Triggered when an error occurs during resource initialization. Allows error suppression.",
+        tags: ["system"],
+      },
     }),
   },
 };
