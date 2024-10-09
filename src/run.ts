@@ -87,7 +87,7 @@ export async function run<C, V>(
 
   // a form of hooking, we create the events for all tasks and store them so they can be referenced
   await store.storeEventsForAllTasks();
-  await processor.attachHooks();
+  await processor.attachListeners();
   await processor.computeAllDependencies();
 
   // After this stage, logger print policy could have been set.

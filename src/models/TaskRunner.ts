@@ -50,10 +50,17 @@ export class TaskRunner {
       this.runnerStore.set(task.id, runner);
     }
 
-    // Suppress recursive triggering of beforeRun events
-    if (task.id !== "global.beforeRunListener") {
-      await this.eventManager.emit(task.events.beforeRun, { input }, task.id);
+    const isGlobalEventListener = task.on === "*";
 
+    if (!isGlobalEventListener) {
+      await this.eventManager.emit(task.events.beforeRun, { input }, task.id);
+    }
+
+    if (
+      !isGlobalEventListener &&
+      task.on !== globalEvents.tasks.beforeRun &&
+      task.on !== globalEvents.tasks.afterRun
+    ) {
       await this.eventManager.emit(
         globalEvents.tasks.beforeRun,
         {
@@ -69,25 +76,37 @@ export class TaskRunner {
       // craft the next function starting from the first next function
       const output = await runner(input);
 
-      await this.eventManager.emit(
-        task.events.afterRun,
-        { input, output },
-        task.id
-      );
-      await this.eventManager.emit(
-        globalEvents.tasks.afterRun,
-        {
-          task,
-          input,
-          output,
-        },
-        task.id
-      );
+      if (!isGlobalEventListener) {
+        await this.eventManager.emit(
+          task.events.afterRun,
+          { input, output },
+          task.id
+        );
+      }
+
+      if (
+        !isGlobalEventListener &&
+        task.on !== globalEvents.tasks.beforeRun &&
+        task.on !== globalEvents.tasks.afterRun
+      ) {
+        await this.eventManager.emit(
+          globalEvents.tasks.afterRun,
+          {
+            task,
+            input,
+            output,
+          },
+          task.id
+        );
+      }
 
       return output;
     } catch (e) {
       let isSuppressed = false;
-      const suppress = () => (isSuppressed = true);
+      function suppress() {
+        isSuppressed = true;
+      }
+
       error = e;
 
       // If you want to rewthrow the error, this should be done inside the onError event.
@@ -127,10 +146,13 @@ export class TaskRunner {
   ) {
     // this is the final next()
     let next = async (input) => {
-      this.logger.debug({
-        message: `Running task ${task.id}`,
-        input,
-      });
+      this.logger.debug(
+        {
+          message: `Running task ${task.id}`,
+          input,
+        },
+        task.id
+      );
 
       return task.run.call(null, input, taskDependencies as any);
     };

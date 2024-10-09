@@ -34,9 +34,10 @@ export type ResourceStoreElementType<
 export type TaskStoreElementType<
   Input = any,
   Output extends Promise<any> = any,
-  D extends DependencyMapType = any
+  D extends DependencyMapType = any,
+  TOn extends "*" | IEventDefinition | undefined = any
 > = {
-  task: ITask<Input, Output, D>;
+  task: ITask<Input, Output, D, TOn>;
   computedDependencies: DependencyValuesType<D>;
   isInitialized: boolean;
 };

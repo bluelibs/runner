@@ -7,7 +7,6 @@ import "./models/Logger.test";
 import "./tools/findCircularDependencies.test";
 
 import "./run.test";
-import "./run.hooks.test";
 import "./run.overrides.test";
 import "./run.middleware.test";
 import "./globalEvents.test";

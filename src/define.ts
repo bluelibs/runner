@@ -21,10 +21,10 @@ export function defineTask<
   Input = undefined,
   Output extends Promise<any> = any,
   Deps extends DependencyMapType = any,
-  Test = any
+  TOn extends "*" | IEventDefinition | undefined = undefined
 >(
-  taskConfig: ITaskDefinition<Input, Output, Deps, Test>
-): ITask<Input, Output, Deps, Test> {
+  taskConfig: ITaskDefinition<Input, Output, Deps, TOn>
+): ITask<Input, Output, Deps, TOn> {
   return {
     [symbols.task]: true,
     id: taskConfig.id,
@@ -60,7 +60,6 @@ export function defineResource<
     [symbols.resource]: true,
     id: constConfig.id,
     dependencies: constConfig.dependencies,
-    hooks: constConfig.hooks || [],
     dispose: constConfig.dispose,
     register: constConfig.register || [],
     overrides: constConfig.overrides || [],

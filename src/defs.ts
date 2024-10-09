@@ -32,7 +32,7 @@ export interface IMiddlewareMeta extends IMeta {}
 // DependencyMap types
 export type DependencyMapType = Record<
   string,
-  ITask<any, any, any> | IResource<any, any, any> | IEventDefinition<any>
+  ITask<any, any, any, any> | IResource<any, any, any> | IEventDefinition<any>
 >;
 
 // Helper Types for Extracting Generics
@@ -61,19 +61,39 @@ export type DependencyValuesType<T extends DependencyMapType> = {
   [K in keyof T]: DependencyValueType<T[K]>;
 };
 
+type Optional<T> = {
+  [K in keyof T]?: T[K];
+};
+
+// Utility type to check if a type is void
+type IsVoid<T> = [T] extends [void] ? true : false;
+
+// Utility type to check if a type is optional (can be undefined)
+type IsOptional<T> = undefined extends T ? true : false;
+
+// IReso
+
+// Conditional type to allow `void`, optional, or any type
+type OptionalOrVoidOrAnything<T> = IsVoid<T> extends true
+  ? void
+  : IsOptional<T> extends true
+  ? Optional<T>
+  : T;
+
 // RegisterableItems Type with Conditional Inclusion
-export type RegisterableItems =
+export type RegisterableItems<T = any> =
   | IResourceWithConfig<any>
   | IResource<void, any, any>
-  | ITaskDefinition
-  | IMiddlewareDefinition
-  | IEventDefinition;
+  | IResource<OptionalOrVoidOrAnything<T>, any, any>
+  | ITaskDefinition<any, any, any, any>
+  | IMiddlewareDefinition<any>
+  | IEventDefinition<any>;
 
 export interface ITaskDefinition<
   TInput = any,
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
-  TEventDefinitionInput = null
+  TOn extends "*" | IEventDefinition<any> | undefined = undefined // Adding a generic to track 'on' type
 > {
   id: string;
   dependencies?: TDependencies | (() => TDependencies);
@@ -81,7 +101,7 @@ export interface ITaskDefinition<
   /**
    * Listen to events in a simple way
    */
-  on?: IEventDefinition<TEventDefinitionInput>;
+  on?: TOn;
   /**
    * This makes sense only when `on` is specified to provide the order of the execution.
    * The event with the lowest order will be executed first.
@@ -89,7 +109,12 @@ export interface ITaskDefinition<
   listenerOrder?: number;
   meta?: ITaskMeta;
   run: (
-    input: TEventDefinitionInput extends null ? TInput : TEventDefinitionInput,
+    input: TOn extends undefined ? TInput : IEvent<ExtractEventParams<TOn>>,
+    // input: TOn extends "*"
+    //   ? IEvent<any>
+    //   : TEventDefinitionInput extends null | void
+    //   ? TInput
+    // : IEvent<TEventDefinitionInput>,
     dependencies: DependencyValuesType<TDependencies>
   ) => TOutput;
 }
@@ -127,13 +152,8 @@ export interface ITask<
   TInput = any,
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
-  TEventDefinitionInput = null
-> extends ITaskDefinition<
-    TInput,
-    TOutput,
-    TDependencies,
-    TEventDefinitionInput
-  > {
+  TOn extends "*" | IEventDefinition<any> | undefined = undefined
+> extends ITaskDefinition<TInput, TOutput, TDependencies, TOn> {
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
   middleware: IMiddlewareDefinition[];
@@ -156,9 +176,6 @@ export interface IResourceDefinition<
 > {
   id: string;
   dependencies?: TDependencies | ((config: TConfig) => TDependencies);
-  hooks?:
-    | IHookDefinition<TDependencies, THooks>[]
-    | ((config: TConfig) => IHookDefinition<TDependencies, THooks>[]);
   register?:
     | Array<RegisterableItems>
     | ((config: TConfig) => Array<RegisterableItems>);
@@ -201,10 +218,6 @@ export interface IResource<
     afterInit: IEventDefinition<AfterInitEventPayload<TConfig, TValue>>;
     onError: IEventDefinition<OnErrorEventPayload>;
   };
-  hooks:
-    | IHookDefinition<TDependencies>[]
-    | ((config: TConfig) => IHookDefinition<TDependencies>[]);
-
   overrides: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
   middleware: IMiddlewareDefinition[];
 }

@@ -68,13 +68,15 @@ export class ResourceInitializer {
         resource.id
       );
 
-      this.logger.debug(`Resource ${resource.id} initialized`);
+      this.logger.debug(`Resource ${resource.id} initialized`, resource.id);
 
       return value;
     } catch (e) {
       error = e;
       let isSuppressed = false;
-      const suppress = () => (isSuppressed = true);
+      function suppress() {
+        isSuppressed = true;
+      }
 
       // If you want to rewthrow the error, this should be done inside the onError event.
       await this.eventManager.emit(

@@ -78,16 +78,18 @@ describe("Benchmarks", () => {
     const testEvent = defineEvent<{ message: string }>({ id: "test.event" });
     const eventHandler = jest.fn();
 
+    const handlerTask = defineTask({
+      id: "handler.task",
+      on: testEvent,
+      run: async ({ data }) => {
+        eventHandler(data.message);
+      },
+    });
+
     const app = defineResource({
       id: "app",
-      register: [testEvent],
+      register: [testEvent, handlerTask],
       dependencies: { testEvent },
-      hooks: [
-        {
-          event: testEvent,
-          run: eventHandler,
-        },
-      ],
       async init(_, { testEvent }) {
         await testEvent({ message: "Event emitted" });
       },

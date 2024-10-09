@@ -23,30 +23,55 @@ describe("Global Events", () => {
       },
     });
 
+    const taskBeforeInit = defineTask({
+      id: "task.beforeInit",
+      on: globalEvents.beforeInit,
+      run: globalBeforeInitHandler,
+    });
+
+    const taskAfterInit = defineTask({
+      id: "task.afterInit",
+      on: globalEvents.afterInit,
+      run: globalAfterInitHandler,
+    });
+
+    const taskBeforeRun = defineTask({
+      id: "task.beforeRun",
+      on: globalEvents.tasks.beforeRun,
+      run: globalTaskBeforeRunHandler,
+    });
+
+    const taskAfterRun = defineTask({
+      id: "task.afterRun",
+      on: globalEvents.tasks.afterRun,
+      run: globalTaskAfterRunHandler,
+    });
+
+    const resourceBeforeInit = defineTask({
+      id: "resource.beforeInit",
+      on: globalEvents.resources.beforeInit,
+      run: globalResourceBeforeInitHandler,
+    });
+
+    const resourceAfterInit = defineTask({
+      id: "resource.afterInit",
+      on: globalEvents.resources.afterInit,
+      run: globalResourceAfterInitHandler,
+    });
+
     const app = defineResource({
       id: "app",
-      register: [testResource, testTask],
-      dependencies: { testResource, testTask },
-      hooks: [
-        { event: globalEvents.beforeInit, run: globalBeforeInitHandler },
-        { event: globalEvents.afterInit, run: globalAfterInitHandler },
-        {
-          event: globalEvents.tasks.beforeRun,
-          run: globalTaskBeforeRunHandler,
-        },
-        {
-          event: globalEvents.tasks.afterRun,
-          run: globalTaskAfterRunHandler,
-        },
-        {
-          event: globalEvents.resources.beforeInit,
-          run: globalResourceBeforeInitHandler,
-        },
-        {
-          event: globalEvents.resources.afterInit,
-          run: globalResourceAfterInitHandler,
-        },
+      register: [
+        testResource,
+        testTask,
+        taskBeforeInit,
+        taskAfterInit,
+        taskBeforeRun,
+        taskAfterRun,
+        resourceBeforeInit,
+        resourceAfterInit,
       ],
+      dependencies: { testResource, testTask },
       async init(_, { testResource, testTask }) {
         expect(testResource).toBe("Resource Value");
         const response = await testTask();
@@ -73,16 +98,16 @@ describe("Global Events", () => {
       },
     });
 
+    const onErrorHandler = defineTask({
+      id: "on.error.handler",
+      on: globalEvents.tasks.onError,
+      run: globalTaskOnErrorHandler,
+    });
+
     const app = defineResource({
       id: "app",
-      register: [errorTask],
+      register: [errorTask, onErrorHandler],
       dependencies: { errorTask },
-      hooks: [
-        {
-          event: globalEvents.tasks.onError,
-          run: globalTaskOnErrorHandler,
-        },
-      ],
       async init(_, { errorTask }) {
         try {
           await errorTask();

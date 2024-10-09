@@ -13,6 +13,10 @@ interface IListenerStorage {
 export interface IEventHandlerOptions<T = any> {
   order?: number;
   filter?: (event: IEvent<T>) => boolean;
+  /**
+   * Represents the listener ID. Use this to avoid a listener calling himself.
+   */
+  id?: string;
 }
 
 export class EventManager {

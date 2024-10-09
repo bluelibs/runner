@@ -22,6 +22,7 @@ describe("EventManager", () => {
       expect.objectContaining({
         id: "testEvent",
         data: "testData",
+        timestamp: expect.any(Date),
       })
     );
   });

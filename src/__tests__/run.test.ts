@@ -72,15 +72,15 @@ describe("run", () => {
         },
       });
 
+      const handlerTask = defineTask({
+        id: "handler.task",
+        on: testEvent,
+        run: eventHandler,
+      });
+
       const app = defineResource({
         id: "app",
-        register: [testEvent, testTask],
-        hooks: [
-          {
-            event: testEvent,
-            run: eventHandler,
-          },
-        ],
+        register: [testEvent, testTask, handlerTask],
         dependencies: { testTask },
         async init(_, { testTask }) {
           await testTask();
@@ -101,15 +101,28 @@ describe("run", () => {
         run: async () => "Task executed",
       });
 
+      const onBeforeRun = defineTask({
+        id: "on.before.run",
+        on: testTask.events.beforeRun,
+        run: beforeRunHandler,
+      });
+
+      const onAfterRun = defineTask({
+        id: "on.after.run",
+        on: testTask.events.afterRun,
+        run: afterRunHandler,
+      });
+
+      const onError = defineTask({
+        id: "on.error",
+        on: testTask.events.onError,
+        run: onErrorHandler,
+      });
+
       const app = defineResource({
         id: "app",
-        register: [testTask],
+        register: [testTask, onBeforeRun, onAfterRun, onError],
         dependencies: { testTask },
-        hooks: [
-          { event: testTask.events.beforeRun, run: beforeRunHandler },
-          { event: testTask.events.afterRun, run: afterRunHandler },
-          { event: testTask.events.onError, run: onErrorHandler },
-        ],
         async init(_, { testTask }) {
           await testTask();
           expect(beforeRunHandler).toHaveBeenCalled();
@@ -132,16 +145,16 @@ describe("run", () => {
       let value = false;
       const errorHook = jest.fn();
 
+      const handler = defineTask({
+        id: "handler",
+        on: testTask.events.onError,
+        run: errorHook,
+      });
+
       const app = defineResource({
         id: "app",
-        register: [testTask],
+        register: [testTask, handler],
         dependencies: { testTask },
-        hooks: [
-          {
-            event: testTask.events.onError,
-            run: errorHook,
-          },
-        ],
         async init(_, { testTask }) {
           await testTask();
         },
@@ -149,39 +162,6 @@ describe("run", () => {
 
       await expect(run(app)).rejects.toThrow("Task failed");
       expect(errorHook).toHaveBeenCalled();
-    });
-
-    it("should allow suppression of an error", async () => {
-      const supressMock = jest.fn();
-      const testTask = defineTask({
-        id: "test.task",
-        run: async () => {
-          throw new Error("Task failed");
-        },
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [testTask],
-        dependencies: { testTask },
-        hooks: [
-          {
-            event: testTask.events.onError,
-            run: async (event, deps) => {
-              supressMock();
-              event.data.suppress();
-            },
-          },
-        ],
-        async init(_, { testTask }) {
-          await testTask();
-
-          return "ok";
-        },
-      });
-
-      await expect(run(app)).resolves.toBe("ok");
-      expect(supressMock).toHaveBeenCalled();
     });
 
     it("should be able to register an task with middleware and execute it, ensuring the middleware is called in the correct order", async () => {
@@ -307,58 +287,86 @@ describe("run", () => {
 
       await expect(run(app)).rejects.toThrow(/Circular dependencies detected/);
     });
-  });
 
-  it("should be able to listen to an event through the 'on' property", async () => {
-    const testEvent = defineEvent<{ message: string }>({ id: "test.event" });
-    const eventHandler = jest.fn();
+    it("should be able to listen to an event through the 'on' property", async () => {
+      const testEvent = defineEvent<{ message: string }>({ id: "test.event" });
+      const eventHandler = jest.fn();
 
-    const task = defineTask({
-      id: "app",
-      on: testEvent,
-      async run(event) {
-        eventHandler();
-      },
-    });
-
-    const app = defineResource({
-      id: "app.resource",
-      register: [testEvent, task],
-      dependencies: { task, testEvent },
-      async init(_, deps) {
-        await deps.testEvent({ message: "Event emitted" });
-      },
-    });
-
-    await run(app);
-    expect(eventHandler).toHaveBeenCalled();
-  });
-
-  it("should be able to listen to global events", async () => {
-    const testEvent = defineEvent<{ message: string }>({ id: "test.event" });
-    const eventHandler = jest.fn();
-
-    const resource = defineResource({
-      id: "app",
-      hooks: [
-        {
-          event: "*",
-          run: eventHandler,
+      const task = defineTask({
+        id: "app",
+        on: testEvent,
+        async run(event) {
+          eventHandler();
         },
-      ],
+      });
+
+      const app = defineResource({
+        id: "app.resource",
+        register: [testEvent, task],
+        dependencies: { task, testEvent },
+        async init(_, deps) {
+          await deps.testEvent({ message: "Event emitted" });
+        },
+      });
+
+      await run(app);
+      expect(eventHandler).toHaveBeenCalled();
     });
 
-    const app = defineResource({
-      id: "app.resource",
-      register: [testEvent, resource],
-      dependencies: { resource, testEvent },
-      async init(_, deps) {
-        await deps.testEvent({ message: "Event emitted" });
-      },
+    it("should avoid infinite recursion by omitting task emissions recursively", async () => {
+      const testEvent = defineEvent<{ message: string }>({ id: "test.event" });
+      const eventHandler = jest.fn();
+
+      const task = defineTask({
+        id: "app",
+        on: testEvent,
+        dependencies: { testEvent },
+        async run(event, { testEvent }) {
+          eventHandler();
+          await testEvent({ message: "Event emitted" });
+        },
+      });
+
+      const app = defineResource({
+        id: "app.resource",
+        register: [testEvent, task],
+        dependencies: { task, testEvent },
+        async init(_, deps) {
+          await deps.testEvent({ message: "Event emitted" });
+        },
+      });
+
+      await run(app);
+      expect(eventHandler).toHaveBeenCalled();
     });
 
-    await run(app);
-    expect(eventHandler).toHaveBeenCalled();
+    it("should be able to listen to global events", async () => {
+      const testEvent = defineEvent<{ message: string }>({ id: "test.event" });
+      const eventHandler = jest.fn();
+      let isReady = false;
+
+      const task = defineTask({
+        id: "app",
+        on: "*",
+        async run(event) {
+          event.data;
+          isReady && eventHandler();
+        },
+      });
+
+      const app = defineResource({
+        id: "app.resource",
+        register: [testEvent, task],
+        dependencies: { task, testEvent },
+        async init(_, deps) {
+          isReady = true;
+          await deps.testEvent({ message: "Event emitted" });
+        },
+      });
+
+      await run(app);
+      expect(eventHandler).toHaveBeenCalled();
+    });
   });
 
   // Resources
@@ -462,8 +470,8 @@ describe("run", () => {
 
     it("should allow suppression of an error", async () => {
       const supressMock = jest.fn();
-      const testResource = defineResource({
-        id: "test.resource",
+      const erroringResource = defineResource({
+        id: "error.resource",
         init: async () => {
           // we do this so it doesn't become a never.
           if (true === true) {
@@ -471,29 +479,52 @@ describe("run", () => {
           }
         },
       });
+      const erroringTask = defineTask({
+        id: "error.task",
+        run: async (event) => {
+          if (true === true) {
+            throw new Error("Run failed");
+          }
+        },
+      });
+
+      const resourceErrorHandler = defineTask({
+        id: "resourcehandler",
+        on: erroringResource.events.onError,
+        run: async (event) => {
+          supressMock();
+          event.data.suppress();
+        },
+      });
+
+      const taskErrorHandler = defineTask({
+        id: "taskhandler",
+        on: erroringTask.events.onError,
+        run: async (event) => {
+          supressMock();
+          event.data.suppress();
+        },
+      });
 
       const app = defineResource({
         id: "app",
-        register: [testResource],
-        dependencies: { testResource },
-        hooks: [
-          {
-            event: testResource.events.onError,
-            run: async (event, deps) => {
-              supressMock();
-              event.data.suppress();
-            },
-          },
+        register: [
+          erroringResource,
+          erroringTask,
+          resourceErrorHandler,
+          taskErrorHandler,
         ],
-        async init(_, { testResource }) {
-          expect(testResource).toBeUndefined();
+        dependencies: { erroringResource, erroringTask },
+        async init(_, { erroringResource, erroringTask }) {
+          expect(erroringResource).toBeUndefined();
+          expect(await erroringTask()).toBeUndefined();
 
           return "ok";
         },
       });
 
       await expect(run(app)).resolves.toBe("ok");
-      expect(supressMock).toHaveBeenCalled();
+      expect(supressMock).toHaveBeenCalledTimes(2);
     });
   });
 

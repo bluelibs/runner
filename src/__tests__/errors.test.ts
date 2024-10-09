@@ -191,19 +191,6 @@ describe("Errors", () => {
     );
   });
 
-  it("should throw an error if a hook tries to use a non-reigstered event", async () => {
-    const hook = { event: { id: "non.existent.event" } as any, run: () => {} };
-
-    const app = defineResource({
-      id: "app",
-      hooks: [hook],
-    });
-
-    await expect(run(app)).rejects.toThrow(
-      Errors.eventNotFound("non.existent.event").message
-    );
-  });
-
   it("should throw an error when a task depends on a non-registered task", async () => {
     const offTheGrid = defineTask({
       id: "test.off.the.grid",

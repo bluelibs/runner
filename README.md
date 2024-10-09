@@ -244,7 +244,7 @@ const root = resource({
 });
 ```
 
-There are only 2 recommended ways to listen to events:
+To listen to events you have to create a task.
 
 ### `task.on` property
 
@@ -277,38 +277,7 @@ const app = resource({
 });
 ```
 
-### `resource.hooks` property
-
-This can only be applied to a `resource()`.
-
-```ts
-import { task, resource, run, event, global } from "@bluelibs/runner";
-
-const afterRegisterEvent = event<{ userId: string }>({
-  id: "app.user.registered",
-});
-
-const root = resource({
-  id: "app",
-  register: [afterRegisterEvent],
-  dependencies: {},
-  hooks: [
-    {
-      event: global.events.afterInit,
-      order: -1000, // event priority, the lower the number, the sooner it will run.
-      async run(event, deps) {
-        // both dependencies and event are properly infered through typescript
-        console.log("User has been registered!");
-      },
-    },
-  ],
-  async init(_, deps) {
-    await deps.afterRegisterEvent({ userId: "XXX" });
-  },
-});
-```
-
-#### wildcard events
+### wildcard events
 
 You can listen to all events by using the wildcard `*`.
 
@@ -319,37 +288,23 @@ const afterRegisterEvent = event<{ userId: string }>({
   id: "app.user.registered",
 });
 
+const logAllEventsTask = task({
+  id: "app.tasks.logAllEvents",
+  on: "*",
+  run(event) {
+    console.log("Event detected", event.id, event.data);
+  },
+});
+
 const root = resource({
   id: "app",
-  register: [afterRegisterEvent],
+  register: [afterRegisterEvent, logAllEventsTask],
   dependencies: {},
-  hooks: [
-    {
-      event: "*",
-      async run(event, deps) {
-        console.log(
-          "Generic event detected",
-          event.id,
-          event.data,
-          event.timestamp
-        );
-      },
-    },
-  ],
   async init(_, deps) {
     deps.afterRegisterEvent({ userId: "XXX" });
   },
 });
 ```
-
-When using hooks, inside resource() you benefit of autocompletion, in order to keep things clean, if your hooks become large and long consider switching to tasks and `on`. This is a more explicit way to listen to events, and your resource registers them.
-
-The hooks from a `resource` are mostly used for configuration, and blending in the system.
-
-### When to use either?
-
-- `hooks` are for resources to extend each other, compose functionalities, they are mostly used for configuration and blending in the system.
-- `on` is for when you want to perform a task when something happens, like send an email, begin processing something, etc.
 
 ## Middleware
 
@@ -669,41 +624,237 @@ run();
 
 ## Global Events
 
-### Task level
+You can listen to all events by using the wildcard `*`. However, keep in mind that to avoid infinite recursion, all the events coming from the same source will be ignored.
+
+At the same time, if a task is listening to all events such as `beforeRun`, since it's a task, triggering `beforeRun` will lead to infinite recursion, this is why we ignore emitting the same event from the same source.
+
+This guide outlines the key global events that can be used throughout your application to hook into resource and task lifecycle moments. These events help monitor initialization, execution, and errors, making your system more resilient and traceable.
+
+### Overview
+
+Global events are categorized into:
+
+- **Initialization events**: Before and after a resource or task is initialized.
+- **Execution events**: Before and after a task runs.
+- **Error events**: Handling errors for both tasks and resources.
+
+### Events in Tasks
+
+#### `global.tasks.beforeRun`
+
+This event is triggered just before a task is executed. It allows you to inspect or modify the input to the task.
+
+##### Example:
+
+```ts
+task({
+  id: "logBeforeRun",
+  on: globalEvents.tasks.beforeRun, // Listening to the beforeRun event
+  run(event) {
+    console.log("Task is about to run with input:", event.data.input);
+  },
+});
+```
+
+**Use Case**: You can use this event to log input data or modify it before the task execution.
+
+#### `global.tasks.afterRun`
+
+This event fires immediately after a task finishes. It provides access to both the task input and the result (output).
+
+##### Example:
+
+```ts
+task({
+  id: "logAfterRun",
+  on: globalEvents.tasks.afterRun, // Listening to the afterRun event
+  run(event) {
+    console.log(
+      "Task completed. Input:",
+      event.data.input,
+      "Output:",
+      event.data.output
+    );
+  },
+});
+```
+
+**Use Case**: Useful for logging or post-processing based on the task's output.
+
+#### `global.tasks.onError`
+
+If an error occurs during the execution of a task, this event is triggered. You can log or suppress the error.
+
+##### Example:
+
+```ts
+task({
+  id: "handleTaskError",
+  on: globalEvents.tasks.onError, // Listening to the onError event
+  run(event) {
+    console.error("Error occurred:", event.data.error);
+    event.data.suppress(); // Optionally suppress the error to prevent propagation
+  },
+});
+```
+
+**Use Case**: Error handling logic for specific tasks. For example, you may want to send alerts when a task fails.
+
+### Events in Resources
+
+#### `global.resources.beforeInit`
+
+This event is triggered before a resource starts its initialization. It allows inspection or modification of the configuration before the resource is fully initialized.
+
+##### Example:
+
+```ts
+task({
+  id: "logBeforeResourceInit",
+  on: globalEvents.resources.beforeInit, // Listening to beforeInit event for resources
+  run(event) {
+    console.log("Initializing resource with config:", event.data.config);
+  },
+});
+```
+
+**Use Case**: Logging or validating the resource's configuration before initialization.
+
+#### `global.resources.afterInit`
+
+This event fires after a resource is initialized, giving access to the initialization result.
+
+##### Example:
+
+```ts
+task({
+  id: "logAfterResourceInit",
+  on: globalEvents.resources.afterInit, // Listening to afterInit event
+  run(event) {
+    console.log("Resource initialized with value:", event.data.value);
+  },
+});
+```
+
+**Use Case**: Post-processing or logging resource initialization details.
+
+#### `global.resources.onError`
+
+If an error occurs during resource initialization, this event is triggered. You can log or handle the error.
+
+##### Example:
+
+```ts
+task({
+  id: "handleResourceError",
+  on: globalEvents.resources.onError, // Listening to resource onError event
+  run(event) {
+    console.error("Resource initialization error:", event.data.error);
+    event.data.suppress(); // Optionally suppress the error to prevent propagation
+  },
+});
+```
+
+**Use Case**: Error handling for critical resources, allowing for fallback mechanisms or error logging.
+
+#### Common Usage Pattern
+
+To make use of these events, you will typically define tasks that respond to these global events. These tasks can then be registered in your main application resource to handle events for resources and tasks alike.
+
+#### Example of registering event-handling tasks:
+
+```ts
+const app = resource({
+  id: "app",
+  register: [
+    logBeforeRun,
+    logAfterRun,
+    handleTaskError,
+    logBeforeResourceInit,
+    logAfterResourceInit,
+    handleResourceError,
+  ],
+});
+
+run(app);
+```
+
+This structure helps you create a centralized and modular approach to manage events and handle tasks and resource lifecycles in your system.
+
+### Available Global Events
+
+Here’s a summary of all the global events you can listen to:
+
+- `global.beforeInit`: Triggered before any resource is initialized.
+- `global.afterInit`: Triggered after any resource is initialized.
+- `global.log`: Used for logging across the system.
+- **Task-specific events**:
+  - `global.tasks.beforeRun`: Fired before a task begins execution.
+  - `global.tasks.afterRun`: Fired after a task completes.
+  - `global.tasks.onError`: Fired if a task encounters an error.
+- **Resource-specific events**:
+  - `global.resources.beforeInit`: Fired before a resource is initialized.
+  - `global.resources.afterInit`: Fired after a resource is initialized.
+  - `global.resources.onError`: Fired if an error occurs during resource initialization.
+
+This modular event system helps in building more reactive and error-tolerant applications.
+
+### Individual Task level
+
+When creating tasks or resources we also create lifecycle events for them stored in `events` property.
 
 ```ts
 import { task, run, event } from "@bluelibs/runner";
 
+// Define the task
 const helloWorld = task({
   id: "app.helloWorld",
+  async run() {
+    // Task logic here
+    return "Hello World!";
+  },
 });
 
-// Each task and constant have their own events
+// Define the tasks for beforeRun, afterRun, and onError using the `on` property
+const beforeHelloWorldTask = task({
+  id: "app.helloWorld.beforeRun",
+  on: helloWorld.events.beforeRun, // Listening to beforeRun event
+  async run(event) {
+    const input = event.data.input; // Handle the input before task runs
+    console.log("Before run:", input);
+  },
+});
+
+const afterHelloWorldTask = task({
+  id: "app.helloWorld.afterRun",
+  on: helloWorld.events.afterRun, // Listening to afterRun event
+  async run(event) {
+    const output = event.data.output; // Handle the output after task runs
+    console.log("After run:", output);
+  },
+});
+
+const helloWorldErrorTask = task({
+  id: "app.helloWorld.onError",
+  on: helloWorld.events.onError, // Listening to onError event
+  async run(event) {
+    const error = event.data.error; // Handle errors during task execution
+    console.error("Error:", error);
+  },
+});
+
+// Register all tasks to the app
 const app = resource({
   id: "app",
-  register: [helloWorld],
-  hooks: [
-    {
-      event: helloWorld.events.beforeRun,
-      async run(event, deps) {
-        event.data.input; // read the input
-      },
-    },
-    {
-      event: helloWorld.events.afterRun,
-      async run(event, deps) {
-        event.data.output; // you can read the input or output
-      },
-    },
-    {
-      event: helloWorld.events.onError,
-      async run(event, deps) {
-        event.data.error; // read the error that happened during execution
-      },
-    },
+  register: [
+    helloWorld,
+    beforeHelloWorldTask,
+    afterHelloWorldTask,
+    helloWorldErrorTask,
   ],
 });
 
+// Run the app
 run(app);
 ```
 
@@ -712,42 +863,56 @@ run(app);
 ```ts
 import { task, run, event } from "@bluelibs/runner";
 
-const businessData = {
-  pricePerSubscription: 9.99,
-};
-
+// Define the resource
 const businessConfig = resource({
-  id: "app.config",
-  async init() {
-    return businessData; // if you use it as a const you will have full typesafety
+  id: "app.businessConfig",
+  async init(config) {
+    // Business logic to initialize config
+    return { value: "Business Configuration Loaded" };
   },
 });
 
+// Define tasks for handling events beforeInit, afterInit, and onError
+
+const beforeInitTask = task({
+  id: "app.businessConfig.beforeInit",
+  on: businessConfig.events.beforeInit, // Listening to beforeInit event
+  async run(event) {
+    const config = event.data.config; // Handle the config input before resource initialization
+    console.log("Before init:", config);
+  },
+});
+
+const afterInitTask = task({
+  id: "app.businessConfig.afterInit",
+  on: businessConfig.events.afterInit, // Listening to afterInit event
+  async run(event) {
+    const value = event.data.value; // Handle the return value after resource initialization
+    console.log("After init:", value);
+  },
+});
+
+const businessConfigErrorTask = task({
+  id: "app.businessConfig.onError",
+  on: businessConfig.events.onError, // Listening to onError event
+  async run(event) {
+    const error = event.data.error; // Handle errors during resource initialization
+    console.error("Error during initialization:", error);
+  },
+});
+
+// Register all tasks and the businessConfig resource to the app
 const app = resource({
   id: "app",
-  register: [businessConfig],
-  hooks: [
-    {
-      event: businessConfig.events.beforeInit,
-      async run(event, deps) {
-        event.data.config; // read the input
-      },
-    },
-    {
-      event: businessConfig.events.afterInit,
-      async run(event, deps) {
-        event.data.value; // you can read the  returned value of the resource
-      },
-    },
-    {
-      event: businessConfig.events.onError,
-      async run(event, deps) {
-        event.data.error; // read the error that happened during initialization
-      },
-    },
+  register: [
+    businessConfig,
+    beforeInitTask,
+    afterInitTask,
+    businessConfigErrorTask,
   ],
 });
 
+// Run the app
 run(app);
 ```
 
@@ -843,7 +1008,7 @@ const app = resource({
 });
 ```
 
-However, other resources might need to modify this dynamically as extensions. This is where hooks become valuable.
+However, other resources might need to modify this dynamically as extensions. This is where events become valuable.
 
 ```ts
 import { resource, run, event } from "@bluelibs/runner";
@@ -853,35 +1018,27 @@ type SecurityOptions = {
 };
 
 const securityResource = resource({
-  id: "app.security",
-  async init(config: SecurityOptions) {
-    let hasher = config.hashFunction;
-    return {
-      setHasher: (hashFunction: (input: string) => string) => {
-        hasher = hashFunction;
-      },
-      hash: (input: string) => hasher(input),
-    };
+  /* Same as above, but create a setHasher method */
+});
+const afterSecurityInitTask = task({
+  id: "app.security.afterInit",
+  on: securityResource.events.afterInit, // Listening to afterInit event
+  async run(event, deps) {
+    const { config, value } = event.data;
+    const security = value;
+
+    // Custom hasher implementation
+    security.setHasher((input) => {
+      // Implement custom hashing logic here
+      console.log("Hashing input:", input);
+    });
   },
 });
 
+// Register the security resource and the afterInit task in the app
 const app = resource({
   id: "app",
-  register: [securityResource],
-  hooks: [
-    {
-      // careful when you listen on such events and need dependencies, you might not have them computed yet due to how early these events happen in the system.
-      event: securityResource.events.afterInit,
-      async run(event, deps) {
-        const { config, value } = event.data;
-        const security = value;
-
-        security.setHasher((input) => {
-          // custom implementation here.
-        });
-      },
-    },
-  ],
+  register: [securityResource, afterSecurityInitTask],
 });
 ```
 
@@ -910,18 +1067,21 @@ const securityResource = resource({
   },
 });
 
+// Define securityResource and securityConfigurationPhaseEvent as needed
+
+const securityConfigTask = task({
+  id: "app.security.config",
+  on: securityConfigurationPhaseEvent, // Listening to securityConfigurationPhaseEvent
+  async run(event, deps) {
+    const { config } = event.data; // config is SecurityOptions
+    config.setHasher(newHashFunction); // Apply the new hash function
+  },
+});
+
+// Register the security resource and configuration task in the app
 const app = resource({
   id: "app",
-  register: [securityResource],
-  hooks: [
-    {
-      event: securityConfigurationPhaseEvent,
-      async run(event, deps) {
-        const { config } = event.data; // config is SecurityOptions
-        config.setHasher(newHashFunction);
-      },
-    },
-  ],
+  register: [securityResource, securityConfigTask],
 });
 ```
 
@@ -1016,24 +1176,6 @@ const app = resource({
 });
 
 // Now your app will print all logs
-```
-
-You can also achieve this using hooks:
-
-```ts
-resource({
-  id: "root",
-  hooks: [
-    {
-      // after logger gets initialised as a resource, I'm going to set the print threshold
-      event: logger.events.afterInit,
-      async run(event) {
-        const logger = event.data; // do not depend on the logger
-        logger.setPrintThreshold("trace");
-      },
-    },
-  ],
-});
 ```
 
 The logger’s log() function is asynchronous because it handles events. If you want to prevent your system from waiting for log operations to complete, simply omit the await when calling log(). This is useful if you have listeners that send logs to external log storage systems.

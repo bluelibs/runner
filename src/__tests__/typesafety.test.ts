@@ -51,6 +51,10 @@ describe("typesafety", () => {
       id: "dummy.resource",
       init: async () => "Resource Value",
     });
+    const dummyResourceOptionalConfig = defineResource({
+      id: "dummy.resource",
+      init: async (config?: string) => "Resource Value",
+    });
 
     const testResource = defineResource({
       id: "test.resource",
@@ -91,6 +95,9 @@ describe("typesafety", () => {
         dummyResource.with({ ok: 123 }),
         // @ts-expect-error
         dummyResource.with(),
+
+        // should work
+        dummyResourceOptionalConfig.with("hello"),
       ],
     });
 
@@ -105,24 +112,18 @@ describe("typesafety", () => {
       run: async () => "Task executed",
     });
 
-    const testResource = defineResource({
+    const testResource = defineTask({
       id: "test.resource",
       dependencies: { task },
-      init: async () => "Resource Value",
-      hooks: [
-        {
-          event: hookEvent,
-          run: (event, deps) => {
-            // @ts-expect-error
-            event.data.x;
-
-            event.data.message;
-            deps.task;
-            // @ts-expect-error
-            deps.task2;
-          },
-        },
-      ],
+      on: hookEvent,
+      run: async (_, deps) => {
+        _.data.message;
+        // @ts-expect-error
+        _.data.messagex;
+        deps.task();
+        // @ts-expect-error
+        deps.task2;
+      },
     });
 
     expect(true).toBe(true);

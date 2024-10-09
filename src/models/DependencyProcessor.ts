@@ -5,6 +5,7 @@ import {
   IResource,
   IHookDefinition,
   IEventDefinition,
+  IEvent,
 } from "../defs";
 import { ResourceStoreElementType, Store, TaskStoreElementType } from "./Store";
 import * as utils from "../define";
@@ -68,32 +69,6 @@ export class DependencyProcessor {
       deps,
       task.task.id
     );
-
-    let eventDefinition = task.task.on;
-    if (eventDefinition) {
-      if (this.store.events.get(eventDefinition.id) === undefined) {
-        throw Errors.eventNotFound(eventDefinition.id);
-      }
-
-      this.eventManager.addListener(
-        eventDefinition,
-        async (receivedEvent) => {
-          this.logger.debug({
-            message: `Task ${task.task.id} listened to event: ${eventDefinition.id}`,
-            event: receivedEvent,
-          });
-
-          return this.taskRunner.run(
-            task.task,
-            receivedEvent,
-            task.computedDependencies
-          );
-        },
-        {
-          order: task.task.listenerOrder || 0,
-        }
-      );
-    }
   }
 
   // Most likely these are resources that no-one has dependencies towards
@@ -145,62 +120,49 @@ export class DependencyProcessor {
   /**
    * Processes all hooks, should run before emission of any event.
    */
-  public attachHooks() {
-    for (const resource of this.store.resources.values()) {
-      if (resource.resource.hooks) {
-        this.attachHooksToResource(resource);
-      }
-    }
-  }
+  public attachListeners() {
+    for (const task of this.store.tasks.values()) {
+      if (task.task.on) {
+        let eventDefinition = task.task.on;
 
-  /**
-   * Processes the hooks for resources
-   * @param hooks
-   * @param deps
-   */
-  public attachHooksToResource(
-    resourceStoreElement: ResourceStoreElementType<any, any, {}>
-  ) {
-    let hooks = resourceStoreElement.resource.hooks;
-    if (typeof hooks === "function") {
-      hooks = hooks(resourceStoreElement.config);
-    }
-
-    if (hooks.length === 0) {
-      return;
-    }
-
-    for (const hook of hooks) {
-      const event = hook.event;
-      const order = hook.order || 0;
-      if (event === "*") {
-        this.eventManager.addGlobalListener(
-          async (receivedEvent) => {
-            return hook.run(
-              receivedEvent,
-              resourceStoreElement.computedDependencies as DependencyValuesType<{}>
-            );
-          },
-          {
-            order,
+        const handler = async (receivedEvent: IEvent<any>) => {
+          if (receivedEvent.source === task.task.id) {
+            // we don't want to trigger the same task that emitted the event
+            // process.exit(0);
+            return;
           }
-        );
-      } else {
-        if (this.store.events.has(event.id) === false) {
-          throw Errors.eventNotFound(event.id);
+
+          this.logger.debug(
+            {
+              message:
+                eventDefinition === "*"
+                  ? `Task ${task.task.id} being triggered by all events`
+                  : `Task ${task.task.id} being triggered by event: ${eventDefinition.id}`,
+
+              event: receivedEvent,
+            },
+            task.task.id
+          );
+
+          return this.taskRunner.run(
+            task.task,
+            receivedEvent,
+            task.computedDependencies
+          );
+        };
+
+        if (eventDefinition === "*") {
+          this.eventManager.addGlobalListener(handler, {
+            order: task.task.listenerOrder || 0,
+          });
+        } else {
+          if (this.store.events.get(eventDefinition.id) === undefined) {
+            throw Errors.eventNotFound(eventDefinition.id);
+          }
+          this.eventManager.addListener(eventDefinition, handler, {
+            order: task.task.listenerOrder || 0,
+          });
         }
-        this.eventManager.addListener(
-          event,
-          async (receivedEvent) => {
-            return hook.run(
-              receivedEvent,
-              resourceStoreElement.computedDependencies as DependencyValuesType<{}>
-            );
-          },
-          {
-            order,
-          }
-        );
       }
     }
   }
@@ -241,9 +203,12 @@ export class DependencyProcessor {
   ) {
     return async (input) => {
       // runs it in background.
-      this.logger.debug({
-        message: `Event ${object.id} was emitted from ${source}`,
-      });
+      this.logger.debug(
+        {
+          message: `Event ${object.id} was emitted from ${source}`,
+        },
+        source
+      );
 
       return this.eventManager.emit(object, input, source);
     };
