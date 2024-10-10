@@ -112,7 +112,9 @@ export interface ITaskDefinition<
   listenerOrder?: number;
   meta?: ITaskMeta;
   run: (
-    input: TOn extends undefined ? TInput : IEvent<ExtractEventParams<TOn>>,
+    input: TOn extends undefined
+      ? TInput
+      : IEvent<TOn extends "*" ? any : ExtractEventParams<TOn>>,
     // input: TOn extends "*"
     //   ? IEvent<any>
     //   : TEventDefinitionInput extends null | void

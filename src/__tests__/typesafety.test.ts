@@ -126,6 +126,19 @@ describe("typesafety", () => {
       },
     });
 
+    const testResource2 = defineTask({
+      id: "test.resource",
+      dependencies: { task },
+      on: "*",
+      run: async (_, deps) => {
+        _.data.message;
+        _.data.messagex;
+        deps.task();
+        // @ts-expect-error
+        deps.task2;
+      },
+    });
+
     expect(true).toBe(true);
   });
 });
