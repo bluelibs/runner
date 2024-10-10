@@ -1,3 +1,4 @@
+import { get } from "node:http";
 import {
   ITask,
   ITaskDefinition,
@@ -28,24 +29,34 @@ export function defineTask<
 >(
   taskConfig: ITaskDefinition<Input, Output, Deps, TOn>
 ): ITask<Input, Output, Deps, TOn> {
+  const filePath = getCallerFile();
   return {
     [symbols.task]: true,
-    [symbols.filePath]: getCallerFile(),
+    [symbols.filePath]: filePath,
     id: taskConfig.id,
     dependencies: taskConfig.dependencies || ({} as Deps),
     middleware: taskConfig.middleware || [],
     run: taskConfig.run,
     on: taskConfig.on,
     events: {
-      beforeRun: defineEvent({
-        id: `${taskConfig.id}.beforeRun`,
-      }),
-      afterRun: defineEvent({
-        id: `${taskConfig.id}.afterRun`,
-      }),
-      onError: defineEvent({
-        id: `${taskConfig.id}.onError`,
-      }),
+      beforeRun: {
+        ...defineEvent({
+          id: `${taskConfig.id}.events.beforeRun`,
+        }),
+        [symbols.filePath]: getCallerFile(),
+      },
+      afterRun: {
+        ...defineEvent({
+          id: `${taskConfig.id}.events.afterRun`,
+        }),
+        [symbols.filePath]: getCallerFile(),
+      },
+      onError: {
+        ...defineEvent({
+          id: `${taskConfig.id}.events.onError`,
+        }),
+        [symbols.filePath]: getCallerFile(),
+      },
     },
     meta: taskConfig.meta || {},
     // autorun,
@@ -60,9 +71,10 @@ export function defineResource<
 >(
   constConfig: IResourceDefinition<TConfig, TValue, TDeps, THooks>
 ): IResource<TConfig, TValue, TDeps> {
+  const filePath = getCallerFile();
   return {
     [symbols.resource]: true,
-    [symbols.filePath]: getCallerFile(),
+    [symbols.filePath]: filePath,
     id: constConfig.id,
     dependencies: constConfig.dependencies,
     dispose: constConfig.dispose,
@@ -79,15 +91,24 @@ export function defineResource<
     },
 
     events: {
-      beforeInit: defineEvent({
-        id: `${constConfig.id}.beforeInit`,
-      }),
-      afterInit: defineEvent({
-        id: `${constConfig.id}.afterInit`,
-      }),
-      onError: defineEvent({
-        id: `${constConfig.id}.onError`,
-      }),
+      beforeInit: {
+        ...defineEvent({
+          id: `${constConfig.id}.events.beforeInit`,
+        }),
+        [symbols.filePath]: filePath,
+      },
+      afterInit: {
+        ...defineEvent({
+          id: `${constConfig.id}.events.afterInit`,
+        }),
+        [symbols.filePath]: filePath,
+      },
+      onError: {
+        ...defineEvent({
+          id: `${constConfig.id}.events.onError`,
+        }),
+        [symbols.filePath]: filePath,
+      },
     },
     meta: constConfig.meta || {},
     middleware: constConfig.middleware || [],

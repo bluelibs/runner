@@ -5,7 +5,7 @@ import { Store } from "./models/Store";
 import { TaskRunner } from "./models/TaskRunner";
 
 const store = defineResource({
-  id: "global.store",
+  id: "global.resources.store",
   init: async (store: Store) => store,
   meta: {
     title: "Store",
@@ -18,7 +18,7 @@ const store = defineResource({
 export const globalResources = {
   store,
   eventManager: defineResource({
-    id: "global.eventManager",
+    id: "global.resources.eventManager",
     init: async (em: EventManager) => em,
     meta: {
       title: "Event Manager",
@@ -28,7 +28,7 @@ export const globalResources = {
     },
   }),
   taskRunner: defineResource({
-    id: "global.taskRunner",
+    id: "global.resources.taskRunner",
     init: async (runner: TaskRunner) => runner,
     meta: {
       title: "Task Runner",
@@ -38,7 +38,7 @@ export const globalResources = {
     },
   }),
   logger: defineResource({
-    id: "global.logger",
+    id: "global.resources.logger",
     init: async (logger: Logger) => logger,
     meta: {
       title: "Logger",
