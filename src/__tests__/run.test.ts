@@ -344,19 +344,27 @@ describe("run", () => {
       const testEvent = defineEvent<{ message: string }>({ id: "test.event" });
       const eventHandler = jest.fn();
       let isReady = false;
+      let matched = false;
 
+      const dummyResource = defineResource({
+        id: "dummy",
+        init: async () => "dummy",
+      });
       const task = defineTask({
         id: "app",
         on: "*",
-        async run(event) {
-          event.data;
+        dependencies: { dummyResource },
+        async run(event, { dummyResource }) {
+          if (dummyResource === "dummy") {
+            matched = true;
+          }
           isReady && eventHandler();
         },
       });
 
       const app = defineResource({
         id: "app.resource",
-        register: [testEvent, task],
+        register: [testEvent, task, dummyResource],
         dependencies: { task, testEvent },
         async init(_, deps) {
           isReady = true;
@@ -366,6 +374,7 @@ describe("run", () => {
 
       await run(app);
       expect(eventHandler).toHaveBeenCalled();
+      expect(matched).toBe(true);
     });
   });
 

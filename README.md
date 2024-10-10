@@ -280,7 +280,7 @@ const app = resource({
 
 ### wildcard events
 
-You can listen to all events by using the wildcard `*`.
+You can listen to all events by using the wildcard `*`. However you need to **manually check** if your dependencies have been computed. For example we dispatch events like 'global.beforeInit' before anything is initialized.
 
 ```ts
 import { task, resource, run, event, global } from "@bluelibs/runner";

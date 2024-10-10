@@ -39,13 +39,7 @@ export class TaskRunner {
   ): Promise<TOutput | undefined> {
     let runner = this.runnerStore.get(task.id);
     if (!runner) {
-      const storeTask = this.store.tasks.get(task.id) as TaskStoreElementType;
-      const deps = taskDependencies || storeTask.computedDependencies;
-
-      runner = this.createRunnerWithMiddleware<TInput, TOutput, TDeps>(
-        task,
-        deps
-      );
+      runner = this.createRunnerWithMiddleware<TInput, TOutput, TDeps>(task);
 
       this.runnerStore.set(task.id, runner);
     }
@@ -140,10 +134,8 @@ export class TaskRunner {
     TInput,
     TOutput extends Promise<any>,
     TDeps extends DependencyMapType
-  >(
-    task: ITask<TInput, TOutput, TDeps>,
-    taskDependencies: DependencyValuesType<{}>
-  ) {
+  >(task: ITask<TInput, TOutput, TDeps>) {
+    const storeTask = this.store.tasks.get(task.id);
     // this is the final next()
     let next = async (input) => {
       this.logger.debug(
@@ -154,7 +146,7 @@ export class TaskRunner {
         task.id
       );
 
-      return task.run.call(null, input, taskDependencies as any);
+      return task.run.call(null, input, storeTask?.computedDependencies as any);
     };
 
     const existingMiddlewares = task.middleware;
