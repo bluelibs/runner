@@ -9,6 +9,8 @@ export const symbolMiddlewareGlobal: unique symbol = Symbol(
   "runner.middlewareGlobal"
 );
 
+export const symbolFilePath: unique symbol = Symbol("runner.filePath");
+
 export const symbols = {
   task: symbolTask,
   resource: symbolResource,
@@ -16,6 +18,7 @@ export const symbols = {
   event: symbolEvent,
   middleware: symbolMiddleware,
   middlewareGlobal: symbolMiddlewareGlobal,
+  filePath: symbolFilePath,
 };
 
 export interface IMeta {

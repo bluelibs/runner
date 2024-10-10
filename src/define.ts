@@ -16,6 +16,9 @@ import {
   symbolEvent,
 } from "./defs";
 import { Errors } from "./errors";
+import { getCallerFile } from "./tools/getCallerFile";
+
+// Helper function to get the caller file
 
 export function defineTask<
   Input = undefined,
@@ -27,6 +30,7 @@ export function defineTask<
 ): ITask<Input, Output, Deps, TOn> {
   return {
     [symbols.task]: true,
+    [symbols.filePath]: getCallerFile(),
     id: taskConfig.id,
     dependencies: taskConfig.dependencies || ({} as Deps),
     middleware: taskConfig.middleware || [],
@@ -58,6 +62,7 @@ export function defineResource<
 ): IResource<TConfig, TValue, TDeps> {
   return {
     [symbols.resource]: true,
+    [symbols.filePath]: getCallerFile(),
     id: constConfig.id,
     dependencies: constConfig.dependencies,
     dispose: constConfig.dispose,
@@ -93,6 +98,7 @@ export function defineEvent<TPayload = any>(
   config: IEventDefinitionConfig<TPayload>
 ): IEventDefinition<TPayload> {
   return {
+    [symbols.filePath]: getCallerFile(),
     [symbolEvent]: true,
     ...config,
   };
@@ -102,6 +108,7 @@ export function defineMiddleware<TDeps extends DependencyMapType = {}>(
   config: IMiddlewareDefinition<TDeps>
 ): IMiddleware<TDeps> {
   const object = {
+    [symbols.filePath]: getCallerFile(),
     [symbols.middleware]: true,
     ...config,
     dependencies: config.dependencies || ({} as TDeps),

@@ -7,6 +7,12 @@ import { TaskRunner } from "./models/TaskRunner";
 const store = defineResource({
   id: "global.store",
   init: async (store: Store) => store,
+  meta: {
+    title: "Store",
+    description:
+      "A global store that can be used to store and retrieve tasks, resources, events and middleware",
+    tags: ["internal"],
+  },
 });
 
 export const globalResources = {

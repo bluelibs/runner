@@ -5,6 +5,7 @@ import "./models/Store.test";
 import "./models/Logger.test";
 
 import "./tools/findCircularDependencies.test";
+import "./tools/getCallerFile.test";
 
 import "./run.test";
 import "./run.overrides.test";
