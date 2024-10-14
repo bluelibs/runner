@@ -141,4 +141,27 @@ describe("typesafety", () => {
 
     expect(true).toBe(true);
   });
+
+  it("should work with resources that register other resources and don't infer an any to them", async () => {
+    const resourceBase = defineResource({
+      id: "task",
+      init: async (_, deps) => {
+        deps.resource;
+        return "";
+      },
+      dependencies: () => ({
+        resource,
+      }),
+    });
+
+    const resource = defineResource({
+      id: "resource",
+      // register: () => [resourceBase],
+    });
+
+    // @ts-expect-error
+    resource.DOES_NOT_EXIST;
+
+    expect(true).toBe(true);
+  });
 });
