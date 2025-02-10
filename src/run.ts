@@ -16,6 +16,7 @@ import { findCircularDependencies } from "./tools/findCircularDependencies";
 import { Errors } from "./errors";
 import { globalResources } from "./globalResources";
 import { Logger } from "./models/Logger";
+import { withContext } from "./context";
 
 export type ResourcesStoreElementType<
   C = any,

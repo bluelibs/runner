@@ -1,3 +1,5 @@
+import { AsyncLocalStorage } from 'node:async_hooks';
+
 export const symbolTask: unique symbol = Symbol("runner.task");
 export const symbolResource: unique symbol = Symbol("runner.resource");
 export const symbolResourceWithConfig: unique symbol = Symbol(
@@ -326,3 +328,9 @@ export interface IHookDefinition<
     dependencies: T extends true ? void : DependencyValuesType<D>
   ) => Promise<void> | void;
 }
+
+export type IApplicationContext = {
+  user: User;
+  roles: string[];
+  isLoggedIn: boolean;
+};
