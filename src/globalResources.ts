@@ -1,4 +1,5 @@
 import { defineResource } from "./define";
+import { env } from "./env";
 import { EventManager } from "./models/EventManager";
 import { Logger } from "./models/Logger";
 import { Store } from "./models/Store";
@@ -17,6 +18,7 @@ const store = defineResource({
 
 export const globalResources = {
   store,
+  env,
   eventManager: defineResource({
     id: "global.resources.eventManager",
     init: async (em: EventManager) => em,

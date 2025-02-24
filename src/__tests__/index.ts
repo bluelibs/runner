@@ -13,3 +13,4 @@ import "./run.middleware.test";
 import "./globalEvents.test";
 import "./errors.test";
 import "./typesafety.test";
+import "./env.test";

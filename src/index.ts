@@ -4,6 +4,7 @@ import {
   defineEvent,
   defineMiddleware,
 } from "./define";
+import { env, EnvVars } from "./env";
 import { globalEvents } from "./globalEvents";
 import { globalResources } from "./globalResources";
 import { run } from "./run";
@@ -13,7 +14,7 @@ const globals = {
   resources: globalResources,
 };
 
-export { globals };
+export { globals, env, EnvVars };
 export {
   defineTask as task,
   defineResource as resource,
@@ -26,3 +27,4 @@ export * as definitions from "./defs";
 export { Store } from "./models/Store";
 export { EventManager } from "./models/EventManager";
 export { TaskRunner } from "./models/TaskRunner";
+export { EnvironmentManager } from "./models/EnvironmentManager";
