@@ -1,4 +1,4 @@
-type EnvCastType = "string" | "number" | "boolean" | "date";
+type EnvCastType = "string" | "number" | "boolean" | "date" | "json";
 
 interface IEnvOptions<T = any> {
   defaultValue?: T;
@@ -23,6 +23,7 @@ export class EnvironmentManager {
       );
     },
     date: (value) => new Date(value),
+    json: (value) => JSON.parse(value),
   };
 
   /**
@@ -33,17 +34,17 @@ export class EnvironmentManager {
    */
   public set<T = any>(key: string, options: IEnvOptions<T> = {}): T {
     const { defaultValue, cast } = options;
-    
+
     // Get from process.env first, then fall back to default
     const rawValue = process.env[key] ?? defaultValue;
-    
+
     let value = rawValue;
-    
+
     // Apply casting if specified and we have a string value
     if (cast && typeof rawValue === "string") {
       value = this.castHandlers[cast](rawValue);
     }
-    
+
     this.envStore.set(key, value);
     return value as T;
   }
@@ -58,12 +59,12 @@ export class EnvironmentManager {
     if (!this.envStore.has(key) && defaultValue !== undefined) {
       return defaultValue as T;
     }
-    
+
     if (!this.envStore.has(key) && process.env[key] !== undefined) {
       // Lazily load from process.env if not in our store
       return this.set<T>(key, { defaultValue }) as T;
     }
-    
+
     return (this.envStore.get(key) ?? defaultValue) as T;
   }
 

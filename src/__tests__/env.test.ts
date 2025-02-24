@@ -1,4 +1,5 @@
-import { defineTask, defineResource, env, run } from "../index";
+import { env, run } from "../index";
+import { defineTask, defineResource } from "../define";
 
 describe("Environment Manager", () => {
   // Save original process.env
@@ -118,7 +119,7 @@ describe("Environment Manager", () => {
       async run(_, { env }) {
         // Add custom JSON parser
         env.addCastHandler("json", (value) => JSON.parse(value));
-        
+
         // Use custom cast handler
         const jsonVar = env.set("JSON_VAR", { cast: "json" });
         expect(typeof jsonVar).toBe("object");
