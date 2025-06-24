@@ -14,12 +14,17 @@ const globals = {
 };
 
 export { globals };
+
+// Direct helpers
+const env = globalResources.env;
+
 export {
   defineTask as task,
   defineResource as resource,
   defineEvent as event,
   defineMiddleware as middleware,
   run,
+  env,
 };
 
 export * as definitions from "./defs";

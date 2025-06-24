@@ -16,6 +16,7 @@ import { findCircularDependencies } from "./tools/findCircularDependencies";
 import { Errors } from "./errors";
 import { globalResources } from "./globalResources";
 import { Logger } from "./models/Logger";
+import { Env } from "./models/Env";
 
 export type ResourcesStoreElementType<
   C = any,
@@ -61,6 +62,10 @@ export async function run<C, V>(
   // ensure for logger, that it can be used only after: computeAllDependencies() has executed
   const logger = new Logger(eventManager);
 
+  // Environment variables manager
+  // We create this early so that other resources/tasks can depend on it.
+  const envManager = new Env();
+
   const store = new Store(eventManager, logger);
   const taskRunner = new TaskRunner(store, eventManager, logger);
   const processor = new DependencyProcessor(
@@ -72,6 +77,8 @@ export async function run<C, V>(
 
   // In the registration phase we register deeply all the resources, tasks, middleware and events
   store.initializeStore(resource, config);
+  // Register global resources that the system exposes
+  store.storeGenericItem(globalResources.env.with(envManager));
   store.storeGenericItem(globalResources.logger.with(logger));
   store.storeGenericItem(globalResources.taskRunner.with(taskRunner));
 

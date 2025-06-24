@@ -3,6 +3,7 @@ import { EventManager } from "./models/EventManager";
 import { Logger } from "./models/Logger";
 import { Store } from "./models/Store";
 import { TaskRunner } from "./models/TaskRunner";
+import { Env } from "./models/Env";
 
 const store = defineResource({
   id: "global.resources.store",
@@ -44,6 +45,15 @@ export const globalResources = {
       title: "Logger",
       description:
         "Logs all events and errors. This is meant to be used internally for most use-cases. Emits a global.log event for each log.",
+    },
+  }),
+  env: defineResource<Env, Env>({
+    id: "global.resources.env",
+    init: async (env) => env,
+    meta: {
+      title: "Environment Variables Manager",
+      description: "Provides typed access to environment variables with casting and default values.",
+      tags: ["internal"],
     },
   }),
 };
