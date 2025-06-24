@@ -40,6 +40,27 @@ All tasks, resources, events, and middleware must be explicitly registered to be
 npm install @bluelibs/runner
 ```
 
+### Running the test-suite & coverage locally
+
+```bash
+# install dependencies (only once)
+npm install
+
+# compile TypeScript to JavaScript
+npm run build
+
+# run the full test-suite against the compiled artefacts
+npm test
+
+# run tests directly on the TypeScript sources and
+# generate an HTML/LCOV coverage report in ./coverage
+npm run coverage
+```
+
+The *coverage* script is what the CI pipeline uses.  Running it locally
+lets you see exactly the same numbers that are later published to
+Coveralls.
+
 ## Basic Usage
 
 ```typescript
@@ -60,7 +81,7 @@ run(minimal).then((result) => {
 
 Resources are singletons and can include constants, services, functions, and more. They can depend on other resources, tasks, and event emitters.
 
-Tasks are designed to be trackable units of logic, such as handling specific routes on your HTTP server or performing actions needed by different parts of the application. This makes it easy to monitor what’s happening in your application.
+Tasks are designed to be trackable units of logic, such as handling specific routes on your HTTP server or performing actions needed by different parts of the application. This makes it easy to monitor what's happening in your application.
 
 ```ts
 import { task, run, resource } from "@bluelibs/runner";
@@ -139,7 +160,7 @@ await value.dispose();
 
 ### Resource configuration
 
-Resources can be set up with a configuration object, which is helpful for passing in specific settings. For example, if you’re building a library and initializing a mailer service, you can provide the SMTP credentials through this configuration.
+Resources can be set up with a configuration object, which is helpful for passing in specific settings. For example, if you're building a library and initializing a mailer service, you can provide the SMTP credentials through this configuration.
 
 ```ts
 import { task, run, resource } from "@bluelibs/runner";
@@ -784,7 +805,7 @@ This structure helps you create a centralized and modular approach to manage eve
 
 ### Available Global Events
 
-Here’s a summary of all the global events you can listen to:
+Here's a summary of all the global events you can listen to:
 
 - `global.beforeInit`: Triggered before any resource is initialized.
 - `global.afterInit`: Triggered after any resource is initialized.
@@ -950,7 +971,7 @@ const app = resource({
 run(app);
 ```
 
-This demonstrates how effortlessly an external service can be encapsulated within the runner ecosystem. This ‘pattern’ of storing objects in this manner is quite unique, as it typically involves configurations with various options, rather than directly using an Express instance like this:
+This demonstrates how effortlessly an external service can be encapsulated within the runner ecosystem. This 'pattern' of storing objects in this manner is quite unique, as it typically involves configurations with various options, rather than directly using an Express instance like this:
 
 ```ts
 type Config = {
@@ -985,7 +1006,7 @@ run(app);
 
 ### Inter-communication between resources
 
-When registering resources with specific configuration, the initialization order usually doesn’t matter. However, there are cases where it becomes crucial. For instance, consider a security service that allows the injection of a custom hashing function to transition from MD5 to SHA-256.
+When registering resources with specific configuration, the initialization order usually doesn't matter. However, there are cases where it becomes crucial. For instance, consider a security service that allows the injection of a custom hashing function to transition from MD5 to SHA-256.
 
 In such cases, your resource should provide a method for other resources to update it. A straightforward approach is to expose a configuration option that lets you set a custom hasher, like so:
 
@@ -1088,7 +1109,7 @@ const app = resource({
 
 ### Overrides
 
-Previously, we discussed how to extend functionality using events. However, there are times when you need to replace an existing resource with a new one or swap out a task or middleware imported from another package that doesn’t support such changes.
+Previously, we discussed how to extend functionality using events. However, there are times when you need to replace an existing resource with a new one or swap out a task or middleware imported from another package that doesn't support such changes.
 
 ```ts
 import { resource, run, event } from "@bluelibs/runner";
@@ -1179,7 +1200,7 @@ const app = resource({
 // Now your app will print all logs
 ```
 
-The logger’s log() function is asynchronous because it handles events. If you want to prevent your system from waiting for log operations to complete, simply omit the await when calling log(). This is useful if you have listeners that send logs to external log storage systems.
+The logger's log() function is asynchronous because it handles events. If you want to prevent your system from waiting for log operations to complete, simply omit the await when calling log(). This is useful if you have listeners that send logs to external log storage systems.
 
 Additionally, there is a `global.events.log` event available. You can use this event both to emit log messages and to listen for all log activities.
 
@@ -1223,7 +1244,7 @@ const task = task({
 });
 ```
 
-Fair Warning: If you plan to use the global.events.log event, ensure you avoid creating a circular dependency. This event is emitted by the logger itself. Additionally, some logs are sent before all resources are fully initialized. Therefore, it’s important to carefully review and verify your dependencies to prevent potential issues.
+Fair Warning: If you plan to use the global.events.log event, ensure you avoid creating a circular dependency. This event is emitted by the logger itself. Additionally, some logs are sent before all resources are fully initialized. Therefore, it's important to carefully review and verify your dependencies to prevent potential issues.
 
 ## Testing
 
