@@ -52,7 +52,7 @@ const minimal = resource({
 });
 
 run(minimal).then((result) => {
-  expect(result).toBe("Hello world!");
+  expect(result.value).toBe("Hello world!");
 });
 ```
 
@@ -81,7 +81,7 @@ const app = resource({
   },
 });
 
-const result = await run(app); // "Hello World!"
+const { value, dispose } = await run(app); // "Hello World!"
 ```
 
 ### When to use each?
@@ -94,7 +94,7 @@ It is unrealistic to create a task for everything you're doing in your system, n
 
 Resources are more like services, they are singletons, they are meant to be used as a shared functionality across your application. They can be constants, services, functions, etc.
 
-## Private Context Between init() and dispose()
+## Resource Disposal & Shared Private Context
 
 For cases where you need to share variables between `init()` and `dispose()` methods, use the enhanced `resource()` function with private context:
 
@@ -133,71 +133,11 @@ const dbResource = resource({
 ```
 
 **Benefits:**
+
 - ✅ **Type safe** - full TypeScript support with `this.private` typed correctly
 - ✅ **Private state** - easily share variables between init/dispose methods
 - ✅ **Clean separation** - context is isolated per resource instance
 - ✅ **Encapsulation** - private state is not accessible outside the resource
-
-## Enhanced Disposal API
-
-The `run()` function now automatically adds a `dispose()` method to any return value from your application, eliminating the need for manual store wiring:
-
-```ts
-import { run, resource } from "@bluelibs/runner";
-
-const app = resource({
-  id: "app",
-  register: [dbResource], // resources with dispose() methods
-  dependencies: { dbResource },
-  async init(_, { dbResource }) {
-    return { api: "server", database: dbResource };
-  },
-});
-
-const result = await run(app);
-// dispose() is automatically available - calls all resource dispose() methods
-await result.dispose();
-```
-
-This works with **any return type** from your application:
-
-- **Objects**: `dispose()` method is added directly
-- **Primitives** (numbers, strings, booleans): Transparent wrapper that behaves like the original value
-- **null/undefined**: Special wrapper with `valueOf()` method to access original value
-
-```ts
-// Example: App returning a number
-const numberApp = resource({
-  id: "app",
-  register: [dbResource], // still has cleanup
-  async init() {
-    return 42; // primitive return
-  },
-});
-
-const num = await run(numberApp);
-console.log(num + 1); // 43 - works as a normal number
-await num.dispose(); // cleanup still available
-
-// Example: App returning null
-const nullApp = resource({
-  id: "app", 
-  register: [dbResource], // still has cleanup
-  async init() {
-    return null;
-  },
-});
-
-const nullResult = await run(nullApp);
-console.log(nullResult.valueOf()); // null
-await nullResult.dispose(); // cleanup available
-```
-
-**Key Benefits:**
-- ✅ **No manual store wiring** - disposal works automatically on any `run()` result
-- ✅ **Works with any return type** - primitives, objects, null, undefined
-- ✅ **Automatic cleanup** - all registered resources with `dispose()` are cleaned up
-- ✅ **Backward compatible** - existing code continues to work
 
 ### Resource configuration
 

@@ -34,7 +34,7 @@ describe("run.overrides", () => {
     });
 
     const result = await run(app);
-    expect(String(result)).toBe("Task overridden");
+    expect(result.value).toBe("Task overridden");
   });
 
   it("Should work with a deep override", async () => {
@@ -64,7 +64,7 @@ describe("run.overrides", () => {
     });
 
     const result = await run(root);
-    expect(String(result)).toBe("Task overridden");
+    expect(result.value).toBe("Task overridden");
   });
 
   it("Should work with a deep override with config", async () => {
@@ -94,7 +94,7 @@ describe("run.overrides", () => {
     });
 
     const result = await run(root);
-    expect(String(result)).toBe("Task overridden");
+    expect(result.value).toBe("Task overridden");
   });
 
   it("Should work with a override that has an override", async () => {
@@ -133,7 +133,7 @@ describe("run.overrides", () => {
     });
 
     const result = await run(root);
-    expect(String(result)).toBe("Task overridden");
+    expect(result.value).toBe("Task overridden");
   });
 
   it("Should work with a override that has an override with config", async () => {
@@ -175,7 +175,7 @@ describe("run.overrides", () => {
     });
 
     const result = await run(root);
-    expect(String(result)).toBe("Task overridden");
+    expect(result.value).toBe("Task overridden");
   });
 
   it("should work overriding a middleware", async () => {
@@ -210,7 +210,7 @@ describe("run.overrides", () => {
     });
 
     const result = await run(resource);
-    expect(String(result)).toBe("Override: Task executed");
+    expect(result.value).toBe("Override: Task executed");
   });
 
   it("should throw, when you try to override something unregistered", async () => {
@@ -301,7 +301,7 @@ describe("run.overrides", () => {
     });
 
     const result = await run(app);
-    expect(String(result)).toBe("Task super-overridden");
+    expect(result.value).toBe("Task super-overridden");
   });
 
   it("should override if I have a previously registered normal resource with a resource with config", async () => {
@@ -327,7 +327,7 @@ describe("run.overrides", () => {
     });
 
     const result = await run(app);
-    expect(String(result)).toBe("Task overriden.");
+    expect(result.value).toBe("Task overriden.");
   });
 
   it("should override if I have a previously registered normal resource with a resource with config", async () => {
@@ -353,7 +353,7 @@ describe("run.overrides", () => {
     });
 
     const result = await run(app);
-    expect(String(result)).toBe("Task overriden.");
+    expect(result.value).toBe("Task overriden.");
   });
 
   it("should override something deeply registered, with a with config", async () => {
@@ -390,6 +390,6 @@ describe("run.overrides", () => {
     });
 
     const result = await run(app);
-    expect(String(result)).toBe("Task overriden.");
+    expect(result.value).toBe("Task overriden.");
   });
 });

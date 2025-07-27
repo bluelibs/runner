@@ -7,6 +7,34 @@ import {
 import { run } from "../run";
 import { globalResources } from "../globalResources";
 
+describe("main exports", () => {
+  it("should export all public APIs correctly", async () => {
+    // Test main index exports for 100% coverage
+    const mainExports = await import("../index");
+
+    expect(typeof mainExports.task).toBe("function");
+    expect(typeof mainExports.resource).toBe("function");
+    expect(typeof mainExports.event).toBe("function");
+    expect(typeof mainExports.middleware).toBe("function");
+    expect(typeof mainExports.run).toBe("function");
+    expect(typeof mainExports.globals).toBe("object");
+    expect(typeof mainExports.definitions).toBe("object");
+    expect(typeof mainExports.Store).toBe("function");
+    expect(typeof mainExports.EventManager).toBe("function");
+    expect(typeof mainExports.TaskRunner).toBe("function");
+
+    // Test that aliases work the same as direct imports
+    const directTask = defineTask({ id: "test", run: async () => "direct" });
+    const aliasTask = mainExports.task({
+      id: "test2",
+      run: async () => "alias",
+    });
+
+    expect(directTask.id).toBe("test");
+    expect(aliasTask.id).toBe("test2");
+  });
+});
+
 describe("run", () => {
   // Tasks
   describe("Tasks", () => {
@@ -533,7 +561,7 @@ describe("run", () => {
       });
 
       const result = await run(app);
-      expect(String(result)).toBe("ok");
+      expect(result.value).toBe("ok");
       expect(supressMock).toHaveBeenCalledTimes(2);
     });
   });
@@ -662,7 +690,7 @@ describe("run", () => {
       });
 
       const result = await run(app);
-      expect(String(result)).toBe("Resource Value");
+      expect(result.value).toBe("Resource Value");
       await result.dispose();
       expect(disposeFn).toHaveBeenCalledWith("Resource Value", {}, {});
     });
@@ -685,8 +713,8 @@ describe("run", () => {
       });
 
       const result = await run(app);
-      expect(result + 1).toBe(43); // should work as number
-      expect(Number(result)).toBe(42);
+      expect(result.value + 1).toBe(43); // should work as number
+      expect(result.value).toBe(42);
       await result.dispose();
       expect(disposeFn).toHaveBeenCalled();
     });
@@ -709,8 +737,8 @@ describe("run", () => {
       });
 
       const result = await run(app);
-      expect(result.api).toBe("server");
-      expect(result.value).toBe(42);
+      expect(result.value.api).toBe("server");
+      expect(result.value.value).toBe(42);
       await result.dispose();
       expect(disposeFn).toHaveBeenCalled();
     });
@@ -733,8 +761,7 @@ describe("run", () => {
       });
 
       const result = await run(app);
-      expect(result.valueOf()).toBe(null);
-      expect(String(result)).toBe("null");
+      expect(result.value).toBe(null);
       await result.dispose();
       expect(disposeFn).toHaveBeenCalled();
     });
@@ -757,8 +784,102 @@ describe("run", () => {
       });
 
       const result = await run(app);
-      expect(result.valueOf()).toBe(undefined);
-      expect(String(result)).toBe("undefined");
+      expect(result.value).toBe(undefined);
+      await result.dispose();
+      expect(disposeFn).toHaveBeenCalled();
+    });
+
+    it("should work with boolean return values", async () => {
+      const disposeFn = jest.fn();
+      const testResource = defineResource({
+        id: "test.resource",
+        dispose: disposeFn,
+        init: async () => "Resource Value",
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [testResource],
+        dependencies: { testResource },
+        async init(_, { testResource }) {
+          return true; // boolean return value
+        },
+      });
+
+      const result = await run(app);
+      expect(result.value).toBe(true);
+      await result.dispose();
+      expect(disposeFn).toHaveBeenCalled();
+    });
+
+    it("should forward string methods correctly", async () => {
+      const disposeFn = jest.fn();
+      const testResource = defineResource({
+        id: "test.resource",
+        dispose: disposeFn,
+        init: async () => "Resource Value",
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [testResource],
+        dependencies: { testResource },
+        async init(_, { testResource }) {
+          return "hello world test"; // string return value
+        },
+      });
+
+      const result = await run(app);
+      expect(result.value).toBe("hello world test");
+      await result.dispose();
+      expect(disposeFn).toHaveBeenCalled();
+    });
+
+    it("should work with symbol return values", async () => {
+      const disposeFn = jest.fn();
+      const testResource = defineResource({
+        id: "test.resource",
+        dispose: disposeFn,
+        init: async () => "Resource Value",
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [testResource],
+        dependencies: { testResource },
+        async init(_, { testResource }) {
+          return Symbol("test"); // symbol return value
+        },
+      });
+
+      const result = await run(app);
+      expect(typeof result.value).toBe("symbol");
+      expect(result.value.toString()).toBe("Symbol(test)");
+      await result.dispose();
+      expect(disposeFn).toHaveBeenCalled();
+    });
+
+    it("should work with bigint return values", async () => {
+      const disposeFn = jest.fn();
+      const testResource = defineResource({
+        id: "test.resource",
+        dispose: disposeFn,
+        init: async () => "Resource Value",
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [testResource],
+        dependencies: { testResource },
+        async init(_, { testResource }) {
+          return BigInt(123); // bigint return value
+        },
+      });
+
+      const result = await run(app);
+      expect(typeof result.value).toBe("bigint");
+      expect(result.value).toBe(BigInt(123));
+      expect(result.value.toString()).toBe("123");
       await result.dispose();
       expect(disposeFn).toHaveBeenCalled();
     });
@@ -820,13 +941,46 @@ describe("run", () => {
       });
 
       const result = await run(app);
-      expect(String(result)).toBe("simple value");
+      expect(result.value).toBe("simple value");
       await result.dispose();
+    });
+
+    it("should work with private context and dispose only", async () => {
+      const { resource } = await import("../define");
+      const disposeFn = jest.fn();
+
+      // Test dispose function with private context but no init
+      const contextOnlyResource = resource({
+        id: "context.only",
+        private: () => ({ cleanupTasks: ["task1", "task2"] }),
+        // This resource only has dispose, testing the private context in dispose scenario
+        dispose: async function (value, config, deps) {
+          // When there's no init, dispose still gets called but private context should be available
+          // Note: This won't have private context since init wasn't called
+          disposeFn();
+        },
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [contextOnlyResource],
+        dependencies: { contextOnlyResource },
+        async init(_, { contextOnlyResource }) {
+          // Resource without init should be undefined
+          expect(contextOnlyResource).toBeUndefined();
+          return "app started";
+        },
+      });
+
+      const result = await run(app);
+      expect(result.value).toBe("app started");
+      await result.dispose();
+      expect(disposeFn).toHaveBeenCalled();
     });
 
     it("should handle resources without init method and proper disposal types", async () => {
       const disposeFn = jest.fn();
-      
+
       // Resource without init - just registers other resources
       const registrationOnlyResource = defineResource({
         id: "registration.only",
@@ -847,9 +1001,9 @@ describe("run", () => {
       });
 
       const result = await run(app);
-      expect(Number(result)).toBe(42);
+      expect(result.value).toBe(42);
       await result.dispose();
-      
+
       // dispose should be called with undefined value since no init
       expect(disposeFn).toHaveBeenCalledWith(undefined, {}, {});
     });

@@ -52,14 +52,10 @@ export type RunnerState = {
   middleware: Record<string, MiddlewareStoreElementType>;
 };
 
-type DisposableWrapper<V> = V extends null | undefined 
-  ? { dispose(): Promise<void> } & { valueOf(): V; toString(): string }
-  : V & { dispose(): Promise<void> };
-
 export async function run<C, V>(
   resource: IResource<C, V>,
   config?: C
-): Promise<DisposableWrapper<V>> {
+): Promise<{ value: V; dispose: () => Promise<void> }> {
   const eventManager = new EventManager();
 
   // ensure for logger, that it can be used only after: computeAllDependencies() has executed
@@ -110,71 +106,8 @@ export async function run<C, V>(
   // disallow manipulation or attaching more
   store.lock();
 
-  return createDisposableWrapper(store.root.value, store);
-}
-
-function createDisposableWrapper<V>(value: V, store: Store): DisposableWrapper<V> {
-  // Handle null and undefined specially
-  if (value === null || value === undefined) {
-    const wrapper = Object.create(Object.prototype);
-    wrapper.valueOf = () => value;
-    wrapper.toString = () => String(value);
-    wrapper.dispose = () => store.dispose();
-    // Make it behave like the original value
-    wrapper[Symbol.toPrimitive] = () => value;
-    return wrapper as DisposableWrapper<V>;
-  }
-
-  // For objects, add dispose method directly
-  if (typeof value === "object" && value !== null) {
-    Object.defineProperty(value, "dispose", {
-      value: () => store.dispose(),
-      enumerable: false,
-      configurable: false,
-      writable: false,
-    });
-    return value as DisposableWrapper<V>;
-  }
-
-  // For primitives, we need to create a more sophisticated wrapper
-  // that inherits from the appropriate primitive wrapper type
-  let wrapper: any;
-  
-  if (typeof value === "string") {
-    wrapper = Object.create(String.prototype);
-    wrapper.valueOf = () => value;
-    wrapper.toString = () => value;
-    wrapper[Symbol.toPrimitive] = () => value;
-    // Copy all string properties and methods
-    Object.getOwnPropertyNames(String.prototype).forEach(prop => {
-      if (prop !== "constructor" && typeof String.prototype[prop as keyof String] === "function") {
-        wrapper[prop] = function(...args: any[]) {
-          return (String.prototype[prop as keyof String] as any).apply(value, args);
-        };
-      }
-    });
-  } else if (typeof value === "number") {
-    wrapper = Object.create(Number.prototype);
-    wrapper.valueOf = () => value;
-    wrapper.toString = () => String(value);
-    wrapper[Symbol.toPrimitive] = (hint?: string) => {
-      if (hint === "number") return Number(value);
-      if (hint === "string") return String(value);
-      return value;
-    };
-  } else if (typeof value === "boolean") {
-    wrapper = Object.create(Boolean.prototype);
-    wrapper.valueOf = () => value;
-    wrapper.toString = () => String(value);
-    wrapper[Symbol.toPrimitive] = () => value;
-  } else {
-    // For other primitive types (null, undefined, etc.)
-    wrapper = Object.create(Object.prototype);
-    wrapper.valueOf = () => value;
-    wrapper.toString = () => String(value);
-  }
-
-  wrapper.dispose = () => store.dispose();
-
-  return wrapper as DisposableWrapper<V>;
+  return {
+    value: store.root.value,
+    dispose: () => store.dispose(),
+  };
 }
