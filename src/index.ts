@@ -5,6 +5,12 @@ import {
   defineMiddleware,
   defineIndex,
 } from "./define";
+import {
+  context as contextUtils,
+  createContext,
+  use as useContext,
+  provide as provideContext,
+} from "./context";
 import { globalEvents } from "./globalEvents";
 import { globalResources } from "./globalResources";
 import { run } from "./run";
@@ -22,6 +28,9 @@ export {
   defineMiddleware as middleware,
   defineIndex as index,
   run,
+  createContext,
+  useContext,
+  provideContext,
 };
 
 export * as definitions from "./defs";

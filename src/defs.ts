@@ -329,7 +329,7 @@ export interface IMiddlewareExecutionInput<TConfig = any> {
     definition: IResource<any>;
     config: any;
   };
-  config?: TConfig;
+  config: TConfig;
   next: (taskInputOrResourceConfig?: any) => Promise<any>;
 }
 

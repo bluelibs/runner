@@ -362,4 +362,41 @@ describe("Configurable Middleware (.with)", () => {
     // @ts-expect-error
     validate.with({ schema: 123 });
   });
+
+  it("should modify task outputs independently based on middleware configs", async () => {
+    const prefixMiddleware = defineMiddleware<{ prefix: string }>({
+      id: "prefixer",
+      run: async ({ config, next }) => {
+        const result = await next();
+        return `${config.prefix}: ${result}`;
+      },
+    });
+
+    const taskA = defineTask({
+      id: "taskA",
+      middleware: [prefixMiddleware.with({ prefix: "Alpha" })],
+      run: async () => "Result",
+    });
+
+    const taskB = defineTask({
+      id: "taskB",
+      middleware: [prefixMiddleware.with({ prefix: "Beta" })],
+      run: async () => "Result",
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [prefixMiddleware, taskA, taskB],
+      dependencies: { taskA, taskB },
+      async init(_, deps) {
+        const resultA = await deps.taskA();
+        const resultB = await deps.taskB();
+
+        expect(resultA).toBe("Alpha: Result");
+        expect(resultB).toBe("Beta: Result");
+      },
+    });
+
+    await run(app);
+  });
 });

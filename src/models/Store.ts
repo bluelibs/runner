@@ -18,6 +18,7 @@ import { globalResources } from "../globalResources";
 import { EventManager } from "./EventManager";
 import { TaskRunner } from "./TaskRunner";
 import { Logger } from "./Logger";
+import { requireContextMiddleware } from "../context";
 
 export type ResourceStoreElementType<
   C = any,
@@ -127,6 +128,12 @@ export class Store {
 
     this.computeRegistrationDeeply(root, config);
     this.resources.set(root.id, this.root);
+
+    // If this evolves, split into a separate method
+    this.middlewares.set(requireContextMiddleware.id, {
+      middleware: requireContextMiddleware,
+      computedDependencies: {},
+    });
 
     this.runSanityChecks();
 

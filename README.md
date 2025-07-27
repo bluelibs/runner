@@ -94,50 +94,53 @@ It is unrealistic to create a task for everything you're doing in your system, n
 
 Resources are more like services, they are singletons, they are meant to be used as a shared functionality across your application. They can be constants, services, functions, etc.
 
-## Resource Disposal & Shared Private Context
+## Resource Disposal & Shared Context
 
-For cases where you need to share variables between `init()` and `dispose()` methods, use the enhanced `resource()` function with private context:
+For cases where you need to share variables between `init()` and `dispose()` methods, use the enhanced `resource()` function with context:
 
 ```ts
 import { resource, run } from "@bluelibs/runner";
 
 const dbResource = resource({
   id: "db.service",
-  private: () => ({
+  context: () => ({
     connections: new Map(),
     pools: [],
   }),
-  async init(config, deps) {
+  async init(config, deps, ctx) {
+    // Context as third parameter
     const db = await connectToDatabase();
 
-    // Access private context via 'this.private'
-    this.private.connections.set("main", db);
-    this.private.pools.push(createPool(db));
+    // Access context via 'ctx' parameter
+    ctx.connections.set("main", db);
+    ctx.pools.push(createPool(db));
 
     return db;
   },
-  async dispose(db, config, deps) {
-    // Same private context is available in dispose()
-    for (const pool of this.private.pools) {
+  async dispose(db, config, deps, ctx) {
+    // Context as fourth parameter
+    // Same context available in dispose()
+    for (const pool of ctx.pools) {
       await pool.drain();
     }
 
-    for (const [name, conn] of this.private.connections) {
+    for (const [name, conn] of ctx.connections) {
       await conn.close();
     }
 
-    this.private.connections.clear();
-    this.private.pools.length = 0;
+    ctx.connections.clear();
+    ctx.pools.length = 0;
   },
 });
 ```
 
 **Benefits:**
 
-- ✅ **Type safe** - full TypeScript support with `this.private` typed correctly
-- ✅ **Private state** - easily share variables between init/dispose methods
-- ✅ **Clean separation** - context is isolated per resource instance
-- ✅ **Encapsulation** - private state is not accessible outside the resource
+- ✅ **Explicit injection** - context is passed as clear function parameter
+- ✅ **Type safety** - full TypeScript support for context type
+- ✅ **Isolated state** - context instance per resource initialization
+- ✅ **Clean disposal** - same context available in dispose method
+- ✅ **No magic** - clear parameter order: (config, deps, ctx) in init
 
 ### Resource configuration
 
@@ -363,40 +366,123 @@ const root = resource({
 
 Middleware intercepts the execution of tasks or the initialization of resources, providing a powerful means to enhance functionality. The order in which middleware is registered dictates its execution priority: the first middleware registered is the first to run, while the last middleware in the middleware array at the task level is the closest to the task itself, executing just before the task completes. (Imagine an onion if you will, with the task at the core.)
 
+## Resource Context Management
+
+Resources can maintain private state between initialization and disposal using the context pattern:
+
 ```ts
-import { task, resource, run, event } from "@bluelibs/runner";
+import { resource } from "@bluelibs/runner";
 
-const logMiddleware = middleware({
-  id: "app.middleware.log",
-  dependencies: {
-    // inject tasks, resources, eventCallers here.
+const databaseResource = resource({
+  id: "db.service",
+  // Context factory creates isolated instance state
+  context: () => ({
+    connections: new Map(),
+    connectionPool: [],
+  }),
+  async init(config, deps, ctx) {
+    // Context as 3rd parameter
+    const db = await connect(config);
+    ctx.connections.set("main", db);
+    return db;
   },
-  async run(data, deps) {
-    const { taskDefinition, resourceDefinition, config, next, input } = data;
-
-    // The middleware can be for a task or a resource, depending on which you get the right elements.
-    if (taskDefinition) {
-      console.log("Before task", taskDefinition.id);
-      const result = await next(input); // pass the input to the next middleware or task
-      console.log("After task", taskDefinition.id);
-    } else {
-      console.log("Before resource", resourceDefinition.id);
-      const result = await next(config); // pass the input to the next middleware or task
-      console.log("After resource", resourceDefinition.id);
-    }
-
-    return result;
-  },
-});
-
-const helloTask = task({
-  id: "app.hello",
-  middleware: [logMiddleware],
-  run(event) {
-    console.log("User has been registered!");
+  async dispose(db, config, deps, ctx) {
+    // Context as 4th parameter
+    await ctx.connections.get("main").close();
   },
 });
 ```
+
+**Key Characteristics:**
+
+- 🧩 **Isolated Instances** - Each resource instance gets its own context
+- 🔒 **Type Safety** - Context type inferred from factory function
+- ♻️ **Lifecycle Alignment** - Same context available in init/dispose
+- 🚫 **No External Access** - Context never exposed outside resource
+
+## Middleware Configuration
+
+Middleware can be dynamically configured using a type-safe pattern:
+
+```ts
+import { middleware } from "@bluelibs/runner";
+
+type AuthConfig = {
+  requiredRole: string;
+};
+
+// An example middleware for tasks which require input.user as argument
+const authMiddleware = middleware<AuthConfig>({
+  id: "app.security.auth",
+  async run({ config, task, next }) {
+    // Access config from execution input
+    const requiredRole = data.config?.requiredRole;
+
+    if (!userHasRole(task.input.user, requiredRole)) {
+      throw new Error("Unauthorized");
+    }
+
+    return next(task.input);
+  },
+});
+
+// Apply with specific configuration
+task({
+  id: "app.admin.panel",
+  middleware: [authMiddleware.with({ requiredRole: "ADMIN" })],
+  run: async () => {
+    // Admin-only logic
+  },
+});
+```
+
+### Configuration Patterns
+
+**Global Defaults:**
+
+```ts
+// Apply to all tasks with default config
+authMiddleware.with({ requiredRole: "USER" }).global();
+```
+
+**Task-Specific:**
+
+```ts
+// Conditionally apply based on environment
+task({
+  // ...
+  middleware: [authMiddleware.with({ requiredRole: "USER" })],
+});
+```
+
+**Validation Middleware:**
+
+```ts
+const validationMiddleware = middleware<{ schema: ZodSchema }>({
+  id: "app.validation",
+  async run({ config, next }) {
+    config?.schema.parse(data.input);
+
+    return next(data.input);
+  },
+});
+
+// Usage with JSON schema validation
+task({
+  middleware: [
+    validationMiddleware.with({
+      schema: z.object({ email: z.string().email() }),
+    }),
+  ],
+});
+```
+
+**Architecture Benefits:**
+
+- 🛡️ **Consistent Security** - Centralize auth checks with reusable configs
+- 📊 **Observability** - Add performance tracking to critical paths
+- 🔄 **Environment Parity** - Maintain identical codebase with config variations
+- 🧪 **Testability** - Easily mock middleware in test environments
 
 ### Global
 
