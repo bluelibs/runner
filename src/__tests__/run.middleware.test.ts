@@ -190,7 +190,8 @@ describe("Middleware", () => {
       },
     });
 
-    expect(await run(app)).toBe("Middleware: App initialized");
+    const result = await run(app);
+    expect(String(result)).toBe("Middleware: App initialized");
   });
 
   it("Should work with global middleware", async () => {
@@ -218,7 +219,8 @@ describe("Middleware", () => {
       },
     });
 
-    expect(await run(app)).toBe("Middleware: Middleware: Sub initialized");
+    const result = await run(app);
+    expect(String(result)).toBe("Middleware: Middleware: Sub initialized");
   });
 
   it("Should prevent circular dependencies when middleware depends on the same task", async () => {

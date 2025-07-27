@@ -115,6 +115,48 @@ export function defineResource<
   };
 }
 
+// Interface for private context resource definition
+interface IPrivateContextResourceDefinition<
+  TConfig,
+  TValue,
+  TDeps extends DependencyMapType,
+  TPrivate
+> extends Omit<IResourceDefinition<TConfig, TValue, TDeps>, 'init' | 'dispose'> {
+  private?: () => TPrivate;
+  init?: (this: { private: TPrivate }, config: TConfig, deps: DependencyValuesType<TDeps>) => Promise<TValue>;
+  dispose?: (this: { private: TPrivate }, value: TValue, config: TConfig, deps: DependencyValuesType<TDeps>) => Promise<void>;
+}
+
+// Enhanced resource function with private context support
+export function resource<
+  TConfig = void,
+  TValue = any,
+  TDeps extends DependencyMapType = {},
+  TPrivate = {}
+>(
+  definition: IPrivateContextResourceDefinition<TConfig, TValue, TDeps, TPrivate>
+): IResource<TConfig, TValue, TDeps> {
+  // Create a closure to hold private state
+  let privateState: TPrivate;
+  
+  return defineResource({
+    ...definition,
+    init: definition.init ? async (config: TConfig, deps: DependencyValuesType<TDeps>) => {
+      // Reset private state for each initialization
+      privateState = definition.private?.() || ({} as TPrivate);
+      
+      // Bind init function with private context
+      const boundInit = definition.init!.bind({ private: privateState });
+      return await boundInit(config, deps);
+    } : undefined as any,
+    dispose: definition.dispose ? async (value: TValue, config: TConfig, deps: DependencyValuesType<TDeps>) => {
+      // Bind dispose function with same private context
+      const boundDispose = definition.dispose!.bind({ private: privateState });
+      await boundDispose(value, config, deps);
+    } : undefined,
+  } as IResourceDefinition<TConfig, TValue, TDeps>);
+}
+
 export function defineEvent<TPayload = any>(
   config: IEventDefinitionConfig<TPayload>
 ): IEventDefinition<TPayload> {

@@ -94,48 +94,110 @@ It is unrealistic to create a task for everything you're doing in your system, n
 
 Resources are more like services, they are singletons, they are meant to be used as a shared functionality across your application. They can be constants, services, functions, etc.
 
-### Resource dispose()
+## Private Context Between init() and dispose()
 
-Resources can include a `dispose()` method for cleanup tasks. This is useful for actions like closing database connections. You should use `dispose()` when you have open connections or need to perform cleanup during a graceful shutdown.
+For cases where you need to share variables between `init()` and `dispose()` methods, use the enhanced `resource()` function with private context:
 
 ```ts
-import { task, run, resource } from "@bluelibs/runner";
+import { resource, run } from "@bluelibs/runner";
 
 const dbResource = resource({
+  id: "db.service",
+  private: () => ({
+    connections: new Map(),
+    pools: [],
+  }),
   async init(config, deps) {
     const db = await connectToDatabase();
+
+    // Access private context via 'this.private'
+    this.private.connections.set("main", db);
+    this.private.pools.push(createPool(db));
+
     return db;
   },
-  // the value returned from init() will be passed to dispose()
   async dispose(db, config, deps) {
-    return db.close();
+    // Same private context is available in dispose()
+    for (const pool of this.private.pools) {
+      await pool.drain();
+    }
+
+    for (const [name, conn] of this.private.connections) {
+      await conn.close();
+    }
+
+    this.private.connections.clear();
+    this.private.pools.length = 0;
   },
 });
 ```
 
-To call dispose(), you need to use the global resource called store, since everything is encapsulated. This allows you to access the internal parts of the system to start the disposal process.
+**Benefits:**
+- ✅ **Type safe** - full TypeScript support with `this.private` typed correctly
+- ✅ **Private state** - easily share variables between init/dispose methods
+- ✅ **Clean separation** - context is isolated per resource instance
+- ✅ **Encapsulation** - private state is not accessible outside the resource
+
+## Enhanced Disposal API
+
+The `run()` function now automatically adds a `dispose()` method to any return value from your application, eliminating the need for manual store wiring:
 
 ```ts
-import { task, run, resource, globals } from "@bluelibs/runner";
+import { run, resource } from "@bluelibs/runner";
 
 const app = resource({
   id: "app",
-  register: [dbResource],
-  dependencies: {
-    store: globals.resources.store,
-  },
-  async init(_, deps) {
-    // We use the fact that we can reuse the value we got from here
-    return {
-      dispose: async () => deps.store.dispose(),
-    };
+  register: [dbResource], // resources with dispose() methods
+  dependencies: { dbResource },
+  async init(_, { dbResource }) {
+    return { api: "server", database: dbResource };
   },
 });
 
-const value = await run(app);
-// To begin the disposal process.
-await value.dispose();
+const result = await run(app);
+// dispose() is automatically available - calls all resource dispose() methods
+await result.dispose();
 ```
+
+This works with **any return type** from your application:
+
+- **Objects**: `dispose()` method is added directly
+- **Primitives** (numbers, strings, booleans): Transparent wrapper that behaves like the original value
+- **null/undefined**: Special wrapper with `valueOf()` method to access original value
+
+```ts
+// Example: App returning a number
+const numberApp = resource({
+  id: "app",
+  register: [dbResource], // still has cleanup
+  async init() {
+    return 42; // primitive return
+  },
+});
+
+const num = await run(numberApp);
+console.log(num + 1); // 43 - works as a normal number
+await num.dispose(); // cleanup still available
+
+// Example: App returning null
+const nullApp = resource({
+  id: "app", 
+  register: [dbResource], // still has cleanup
+  async init() {
+    return null;
+  },
+});
+
+const nullResult = await run(nullApp);
+console.log(nullResult.valueOf()); // null
+await nullResult.dispose(); // cleanup available
+```
+
+**Key Benefits:**
+- ✅ **No manual store wiring** - disposal works automatically on any `run()` result
+- ✅ **Works with any return type** - primitives, objects, null, undefined
+- ✅ **Automatic cleanup** - all registered resources with `dispose()` are cleaned up
+- ✅ **Backward compatible** - existing code continues to work
 
 ### Resource configuration
 

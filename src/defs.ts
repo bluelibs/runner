@@ -10,6 +10,8 @@ export const symbolMiddlewareGlobal: unique symbol = Symbol(
 );
 
 export const symbolFilePath: unique symbol = Symbol("runner.filePath");
+export const symbolDispose: unique symbol = Symbol("runner.dispose");
+export const symbolStore: unique symbol = Symbol("runner.store");
 
 export const symbols = {
   task: symbolTask,
@@ -19,6 +21,8 @@ export const symbols = {
   middleware: symbolMiddleware,
   middlewareGlobal: symbolMiddlewareGlobal,
   filePath: symbolFilePath,
+  dispose: symbolDispose,
+  store: symbolStore,
 };
 
 export interface IMeta {
@@ -172,6 +176,11 @@ export interface ITask<
   };
 }
 // Resource interfaces
+// Conditional type to determine the value type based on whether init is present
+type ResourceValueType<T> = T extends { init: any } ? 
+  T['init'] extends (...args: any[]) => Promise<infer R> ? R : unknown :
+  undefined;
+
 export interface IResourceDefinition<
   TConfig = any,
   TValue = unknown,
@@ -185,22 +194,24 @@ export interface IResourceDefinition<
     | Array<RegisterableItems>
     | ((config: TConfig) => Array<RegisterableItems>);
   init?: (
+    this: any,
     config: TConfig,
     dependencies: DependencyValuesType<TDependencies>
   ) => Promise<TValue>;
   /**
    * Clean-up function for the resource. This is called when the resource is no longer needed.
    *
-   * @param value The value of the resource
+   * @param value The value of the resource (undefined if no init method)
    * @param config The configuration it received
    * @param dependencies The dependencies it needed
-   * @returns
+   * @returns Promise<void>
    */
   dispose?: (
+    this: any,
     value: TValue,
     config: TConfig,
     dependencies: DependencyValuesType<TDependencies>
-  ) => Promise<TValue>;
+  ) => Promise<void>;
   meta?: IResourceMeta;
   overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
   middleware?: IMiddlewareDefinition[];

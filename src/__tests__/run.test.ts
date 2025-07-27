@@ -532,7 +532,8 @@ describe("run", () => {
         },
       });
 
-      await expect(run(app)).resolves.toBe("ok");
+      const result = await run(app);
+      expect(String(result)).toBe("ok");
       expect(supressMock).toHaveBeenCalledTimes(2);
     });
   });
@@ -653,18 +654,204 @@ describe("run", () => {
       const app = defineResource({
         id: "app",
         register: [testResource],
-        dependencies: { testResource, store: globalResources.store },
-        async init(_, { testResource, store }) {
+        dependencies: { testResource },
+        async init(_, { testResource }) {
           expect(testResource).toBe("Resource Value");
+          return testResource;
+        },
+      });
 
-          return {
-            dispose: () => store.dispose(),
-          };
+      const result = await run(app);
+      expect(String(result)).toBe("Resource Value");
+      await result.dispose();
+      expect(disposeFn).toHaveBeenCalledWith("Resource Value", {}, {});
+    });
+
+    it("should work with primitive return values", async () => {
+      const disposeFn = jest.fn();
+      const testResource = defineResource({
+        id: "test.resource",
+        dispose: disposeFn,
+        init: async () => "Resource Value",
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [testResource],
+        dependencies: { testResource },
+        async init(_, { testResource }) {
+          return 42; // primitive number
+        },
+      });
+
+      const result = await run(app);
+      expect(result + 1).toBe(43); // should work as number
+      expect(Number(result)).toBe(42);
+      await result.dispose();
+      expect(disposeFn).toHaveBeenCalled();
+    });
+
+    it("should work with object return values", async () => {
+      const disposeFn = jest.fn();
+      const testResource = defineResource({
+        id: "test.resource",
+        dispose: disposeFn,
+        init: async () => "Resource Value",
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [testResource],
+        dependencies: { testResource },
+        async init(_, { testResource }) {
+          return { api: "server", value: 42 };
+        },
+      });
+
+      const result = await run(app);
+      expect(result.api).toBe("server");
+      expect(result.value).toBe(42);
+      await result.dispose();
+      expect(disposeFn).toHaveBeenCalled();
+    });
+
+    it("should work with null return values", async () => {
+      const disposeFn = jest.fn();
+      const testResource = defineResource({
+        id: "test.resource",
+        dispose: disposeFn,
+        init: async () => "Resource Value",
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [testResource],
+        dependencies: { testResource },
+        async init(_, { testResource }) {
+          return null; // null return value
+        },
+      });
+
+      const result = await run(app);
+      expect(result.valueOf()).toBe(null);
+      expect(String(result)).toBe("null");
+      await result.dispose();
+      expect(disposeFn).toHaveBeenCalled();
+    });
+
+    it("should work with undefined return values", async () => {
+      const disposeFn = jest.fn();
+      const testResource = defineResource({
+        id: "test.resource",
+        dispose: disposeFn,
+        init: async () => "Resource Value",
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [testResource],
+        dependencies: { testResource },
+        async init(_, { testResource }) {
+          return undefined; // undefined return value
+        },
+      });
+
+      const result = await run(app);
+      expect(result.valueOf()).toBe(undefined);
+      expect(String(result)).toBe("undefined");
+      await result.dispose();
+      expect(disposeFn).toHaveBeenCalled();
+    });
+  });
+
+  describe("private context resources", () => {
+    it("should share private context between init and dispose", async () => {
+      const { resource } = await import("../define");
+
+      const dbResource = resource({
+        id: "db.resource",
+        private: () => ({ connections: [] as string[] }),
+        async init(config, deps) {
+          this.private.connections.push("main-db");
+          // @ts-expect-error - should not allow access to non-existent properties
+          this.private.nonExistentProperty;
+          // @ts-expect-error - should not allow writing to non-existent properties
+          this.private.anotherProperty = "test";
+          return "connected";
+        },
+        async dispose(value, config, deps) {
+          expect(this.private.connections).toEqual(["main-db"]);
+          this.private.connections.length = 0; // cleanup
+          // @ts-expect-error - should not allow access to non-existent properties in dispose
+          this.private.undefinedProperty;
+        },
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [dbResource],
+        dependencies: { dbResource },
+        async init(_, { dbResource }) {
+          return dbResource;
         },
       });
 
       const result = await run(app);
       await result.dispose();
+    });
+
+    it("should work without context", async () => {
+      const { resource } = await import("../define");
+
+      const simpleResource = resource({
+        id: "simple.resource",
+        async init(config, deps) {
+          return "simple value";
+        },
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [simpleResource],
+        dependencies: { simpleResource },
+        async init(_, { simpleResource }) {
+          return simpleResource;
+        },
+      });
+
+      const result = await run(app);
+      expect(String(result)).toBe("simple value");
+      await result.dispose();
+    });
+
+    it("should handle resources without init method and proper disposal types", async () => {
+      const disposeFn = jest.fn();
+      
+      // Resource without init - just registers other resources
+      const registrationOnlyResource = defineResource({
+        id: "registration.only",
+        // No init method
+        dispose: disposeFn,
+        register: [],
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [registrationOnlyResource],
+        dependencies: { registrationOnlyResource },
+        async init(_, { registrationOnlyResource }) {
+          // registrationOnlyResource should be undefined since no init
+          expect(registrationOnlyResource).toBeUndefined();
+          return 42;
+        },
+      });
+
+      const result = await run(app);
+      expect(Number(result)).toBe(42);
+      await result.dispose();
+      
+      // dispose should be called with undefined value since no init
+      expect(disposeFn).toHaveBeenCalledWith(undefined, {}, {});
     });
   });
 });
