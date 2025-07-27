@@ -81,11 +81,14 @@ export class DependencyProcessor {
         resource.resource.id !== this.store.root.resource.id
       ) {
         await this.processResourceDependencies(resource);
-        resource.value = await this.resourceInitializer.initializeResource(
-          resource.resource,
-          resource.config,
-          resource.computedDependencies as DependencyValuesType<{}>
-        );
+        const { value, context } =
+          await this.resourceInitializer.initializeResource(
+            resource.resource,
+            resource.config,
+            resource.computedDependencies as DependencyValuesType<{}>
+          );
+        resource.context = context;
+        resource.value = value;
       }
     }
   }
@@ -107,13 +110,16 @@ export class DependencyProcessor {
   public async initializeRoot() {
     const storeResource = this.store.root;
 
-    storeResource.value = await this.resourceInitializer.initializeResource(
-      storeResource.resource,
-      storeResource.config,
-      // They are already computed
-      storeResource.computedDependencies as DependencyValuesType<{}>
-    );
+    const { value, context } =
+      await this.resourceInitializer.initializeResource(
+        storeResource.resource,
+        storeResource.config,
+        // They are already computed
+        storeResource.computedDependencies as DependencyValuesType<{}>
+      );
 
+    storeResource.context = context;
+    storeResource.value = value;
     storeResource.isInitialized = true;
   }
 
@@ -257,14 +263,18 @@ export class DependencyProcessor {
 
       // check if it has an initialisation function that provides the value
       if (resource.init) {
-        storeResource.value = await this.resourceInitializer.initializeResource(
-          resource,
-          config,
-          await this.extractDependencies(
-            resource.dependencies || {},
-            resource.id
-          )
-        );
+        const { value, context } =
+          await this.resourceInitializer.initializeResource(
+            resource,
+            config,
+            await this.extractDependencies(
+              resource.dependencies || {},
+              resource.id
+            )
+          );
+
+        storeResource.context = context;
+        storeResource.value = value;
       }
     }
 

@@ -22,12 +22,14 @@ import { Logger } from "./Logger";
 export type ResourceStoreElementType<
   C = any,
   V = any,
-  D extends DependencyMapType = {}
+  D extends DependencyMapType = {},
+  TContext = any
 > = {
   resource: IResource<C, V, D>;
   computedDependencies?: DependencyValuesType<D>;
   config: C;
   value: V;
+  context: TContext;
   isInitialized?: boolean;
 };
 
@@ -115,6 +117,7 @@ export class Store {
       config,
       value: undefined,
       isInitialized: false,
+      context: {},
     };
 
     // register global events
@@ -218,7 +221,8 @@ export class Store {
         await resource.resource.dispose(
           resource.value,
           resource.config,
-          resource.computedDependencies as DependencyMapType
+          resource.computedDependencies as DependencyMapType,
+          resource.context
         );
       }
     }
@@ -324,6 +328,7 @@ export class Store {
       config: item.config,
       value: undefined,
       isInitialized: false,
+      context: {},
     });
 
     this.computeRegistrationDeeply(item.resource, item.config);
@@ -343,6 +348,7 @@ export class Store {
       config: {},
       value: undefined,
       isInitialized: false,
+      context: item.context?.() || {},
     });
 
     this.computeRegistrationDeeply(item, {});

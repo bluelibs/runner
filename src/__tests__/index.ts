@@ -10,8 +10,6 @@ import "./tools/getCallerFile.test";
 import "./run.test";
 import "./run.overrides.test";
 import "./run.middleware.test";
-import "./configurable-middleware.test";
-import "./reusable-middleware.test";
 import "./globalEvents.test";
 import "./errors.test";
 import "./typesafety.test";

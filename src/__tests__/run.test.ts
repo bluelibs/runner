@@ -692,7 +692,12 @@ describe("run", () => {
       const result = await run(app);
       expect(result.value).toBe("Resource Value");
       await result.dispose();
-      expect(disposeFn).toHaveBeenCalledWith("Resource Value", {}, {});
+      expect(disposeFn).toHaveBeenCalledWith(
+        "Resource Value",
+        {},
+        {},
+        undefined
+      );
     });
 
     it("should work with primitive return values", async () => {
@@ -887,24 +892,25 @@ describe("run", () => {
 
   describe("private context resources", () => {
     it("should share private context between init and dispose", async () => {
-      const { resource } = await import("../define");
-
-      const dbResource = resource({
+      const disposeFn = jest.fn();
+      const dbResource = defineResource({
         id: "db.resource",
-        private: () => ({ connections: [] as string[] }),
-        async init(config, deps) {
-          this.private.connections.push("main-db");
+        context: () => ({ connections: [] as string[] }),
+        async init(config, deps, context) {
+          context.connections.push("main-db");
           // @ts-expect-error - should not allow access to non-existent properties
-          this.private.nonExistentProperty;
+          context.nonExistentProperty;
           // @ts-expect-error - should not allow writing to non-existent properties
-          this.private.anotherProperty = "test";
+          context.anotherProperty = "test";
           return "connected";
         },
-        async dispose(value, config, deps) {
-          expect(this.private.connections).toEqual(["main-db"]);
-          this.private.connections.length = 0; // cleanup
+        async dispose(value, config, deps, context) {
+          expect(context.connections).toEqual(["main-db"]);
+          disposeFn();
+
+          context.connections.length = 0; // cleanup
           // @ts-expect-error - should not allow access to non-existent properties in dispose
-          this.private.undefinedProperty;
+          context.undefinedProperty;
         },
       });
 
@@ -919,12 +925,12 @@ describe("run", () => {
 
       const result = await run(app);
       await result.dispose();
+
+      expect(disposeFn).toHaveBeenCalled();
     });
 
     it("should work without context", async () => {
-      const { resource } = await import("../define");
-
-      const simpleResource = resource({
+      const simpleResource = defineResource({
         id: "simple.resource",
         async init(config, deps) {
           return "simple value";
@@ -946,15 +952,14 @@ describe("run", () => {
     });
 
     it("should work with private context and dispose only", async () => {
-      const { resource } = await import("../define");
       const disposeFn = jest.fn();
 
       // Test dispose function with private context but no init
-      const contextOnlyResource = resource({
+      const contextOnlyResource = defineResource({
         id: "context.only",
-        private: () => ({ cleanupTasks: ["task1", "task2"] }),
+        context: () => ({ cleanupTasks: ["task1", "task2"] }),
         // This resource only has dispose, testing the private context in dispose scenario
-        dispose: async function (value, config, deps) {
+        dispose: async function (value, config, deps, context) {
           // When there's no init, dispose still gets called but private context should be available
           // Note: This won't have private context since init wasn't called
           disposeFn();
@@ -1005,7 +1010,7 @@ describe("run", () => {
       await result.dispose();
 
       // dispose should be called with undefined value since no init
-      expect(disposeFn).toHaveBeenCalledWith(undefined, {}, {});
+      expect(disposeFn).toHaveBeenCalledWith(undefined, {}, {}, {});
     });
   });
 });

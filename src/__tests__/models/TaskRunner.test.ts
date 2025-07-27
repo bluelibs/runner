@@ -42,16 +42,16 @@ describe("TaskRunner", () => {
   it("should run an task with middleware", async () => {
     const middleware1 = defineMiddleware({
       id: "middleware1",
-      run: async ({ next, input }) => {
-        const result = await next(input);
+      run: async ({ next, task }) => {
+        const result = await next(task?.input);
         return result + 1;
       },
     });
 
     const middleware2 = defineMiddleware({
       id: "middleware2",
-      run: async ({ input, next }) => {
-        const result = await next(input);
+      run: async ({ task, next, config }) => {
+        const result = await next(task?.input);
         return result * 2;
       },
     });

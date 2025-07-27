@@ -23,12 +23,14 @@ export class ResourceInitializer {
   public async initializeResource<
     TConfig = null,
     TValue = any,
-    TDeps extends DependencyMapType = {}
+    TDeps extends DependencyMapType = {},
+    TContext = any
   >(
     resource: IResource<TConfig, TValue, TDeps>,
     config: TConfig,
     dependencies: DependencyValuesType<TDeps>
-  ): Promise<TValue | undefined> {
+  ): Promise<{ value: TValue; context: TContext }> {
+    const context = resource.context?.();
     await this.eventManager.emit(
       globalEvents.resources.beforeInit,
       {
@@ -47,7 +49,12 @@ export class ResourceInitializer {
     let error, value;
     try {
       if (resource.init) {
-        value = await this.initWithMiddleware(resource, config, dependencies);
+        value = await this.initWithMiddleware(
+          resource,
+          config,
+          dependencies,
+          context
+        );
       }
 
       await this.eventManager.emit(
@@ -70,7 +77,7 @@ export class ResourceInitializer {
 
       this.logger.debug(`Resource ${resource.id} initialized`, resource.id);
 
-      return value;
+      return { value, context };
     } catch (e) {
       error = e;
       let isSuppressed = false;
@@ -98,17 +105,20 @@ export class ResourceInitializer {
       );
 
       if (!isSuppressed) throw e;
+
+      return { value: undefined as TValue, context: {} as TContext };
     }
   }
 
-  public async initWithMiddleware<C, V, D extends DependencyMapType>(
-    resource: IResource<C, V>,
+  public async initWithMiddleware<C, V, D extends DependencyMapType, TContext>(
+    resource: IResource<C, V, D, TContext>,
     config: C,
-    dependencies: D
+    dependencies: DependencyValuesType<D>,
+    context: TContext
   ) {
     let next = async (config: C): Promise<V | undefined> => {
       if (resource.init) {
-        return resource.init.call(null, config, dependencies);
+        return resource.init.call(null, config, dependencies, context);
       }
     };
 
@@ -128,9 +138,12 @@ export class ResourceInitializer {
       next = async (config: C) => {
         return storeMiddleware.middleware.run(
           {
-            resourceDefinition: resource as any,
-            config: config,
+            resource: {
+              definition: resource,
+              config,
+            },
             next: nextFunction,
+            config: storeMiddleware.middleware.config,
           },
           storeMiddleware.computedDependencies
         );

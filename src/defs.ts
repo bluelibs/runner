@@ -104,7 +104,7 @@ export interface ITaskDefinition<
 > {
   id: string;
   dependencies?: TDependencies | (() => TDependencies);
-  middleware?: IMiddlewareDefinition[];
+  middleware?: IMiddleware[];
   /**
    * Listen to events in a simple way
    */
@@ -165,7 +165,7 @@ export interface ITask<
 > extends ITaskDefinition<TInput, TOutput, TDependencies, TOn> {
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
-  middleware: IMiddlewareDefinition[];
+  middleware: IMiddleware[];
   /**
    * These events are automatically populated after the task has been defined.
    */
@@ -187,6 +187,7 @@ export interface IResourceDefinition<
   TConfig = any,
   TValue = unknown,
   TDependencies extends DependencyMapType = {},
+  TContext = any,
   THooks = any,
   TRegisterableItems = any
 > {
@@ -198,7 +199,8 @@ export interface IResourceDefinition<
   init?: (
     this: any,
     config: TConfig,
-    dependencies: DependencyValuesType<TDependencies>
+    dependencies: DependencyValuesType<TDependencies>,
+    context: TContext
   ) => Promise<TValue>;
   /**
    * Clean-up function for the resource. This is called when the resource is no longer needed.
@@ -212,18 +214,21 @@ export interface IResourceDefinition<
     this: any,
     value: TValue,
     config: TConfig,
-    dependencies: DependencyValuesType<TDependencies>
+    dependencies: DependencyValuesType<TDependencies>,
+    context: TContext
   ) => Promise<void>;
   meta?: IResourceMeta;
   overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
   middleware?: IMiddlewareDefinition[];
+  context?: () => TContext;
 }
 
 export interface IResource<
   TConfig = void,
   TValue = any,
-  TDependencies extends DependencyMapType = any
-> extends IResourceDefinition<TConfig, TValue, TDependencies> {
+  TDependencies extends DependencyMapType = any,
+  TContext = any
+> extends IResourceDefinition<TConfig, TValue, TDependencies, TContext> {
   with(config: TConfig): IResourceWithConfig<TConfig, TValue, TDependencies>;
   register:
     | Array<RegisterableItems>
@@ -286,21 +291,26 @@ export interface IEventDefinition<TPayload = void> {
 }
 
 export interface IMiddlewareDefinition<
+  TConfig = any,
   TDependencies extends DependencyMapType = any
 > {
   id: string;
   dependencies?: TDependencies | (() => TDependencies);
   run: (
-    input: IMiddlewareExecutionInput,
+    input: IMiddlewareExecutionInput<TConfig>,
     dependencies: DependencyValuesType<TDependencies>
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
 }
 
-export interface IMiddleware<TDependencies extends DependencyMapType = any>
-  extends IMiddlewareDefinition<TDependencies> {
+export interface IMiddleware<
+  TConfig = any,
+  TDependencies extends DependencyMapType = any
+> extends IMiddlewareDefinition<TConfig, TDependencies> {
   dependencies: TDependencies | (() => TDependencies);
-  global(): IMiddleware<TDependencies>;
+  global(): IMiddleware<TConfig, TDependencies>;
+  config: TConfig;
+  with: (config: TConfig) => IMiddleware<TConfig, TDependencies>;
 }
 
 export interface IMiddlewareDefinitionConfigured<
@@ -310,11 +320,16 @@ export interface IMiddlewareDefinitionConfigured<
   config?: C;
 }
 
-export interface IMiddlewareExecutionInput {
-  taskDefinition?: ITask;
-  resourceDefinition?: IResource;
-  config?: any;
-  input?: any;
+export interface IMiddlewareExecutionInput<TConfig = any> {
+  task?: {
+    definition: ITask;
+    input: any;
+  };
+  resource?: {
+    definition: IResource<any>;
+    config: any;
+  };
+  config?: TConfig;
   next: (taskInputOrResourceConfig?: any) => Promise<any>;
 }
 

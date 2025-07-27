@@ -176,7 +176,7 @@ describe("Middleware", () => {
   it("Should work with resources", async () => {
     const middleware = defineMiddleware({
       id: "middleware",
-      run: async ({ resourceDefinition, config: resourceConfig, next }) => {
+      run: async ({ resource, next }) => {
         const result = await next();
         return `Middleware: ${result}`;
       },
@@ -197,7 +197,7 @@ describe("Middleware", () => {
   it("Should work with global middleware", async () => {
     const middleware = defineMiddleware({
       id: "middleware",
-      run: async ({ resourceDefinition, config: resourceConfig, next }) => {
+      run: async ({ resource, next }) => {
         const result = await next();
         return `Middleware: ${result}`;
       },
@@ -249,5 +249,117 @@ describe("Middleware", () => {
     });
 
     expect(run(app)).rejects.toThrowError(/Circular dependencies detected/);
+  });
+});
+
+describe("Configurable Middleware (.with)", () => {
+  it("should allow using middleware usage in a task and pass config to run", async () => {
+    let receivedConfig;
+    const validate = defineMiddleware({
+      id: "validate",
+      run: async ({ config, next }) => {
+        receivedConfig = config;
+        return next();
+      },
+    });
+    const usage = validate.with({ schema: "user" });
+    const task = defineTask({
+      id: "task",
+      middleware: [usage],
+      run: async () => "ok",
+    });
+    const app = defineResource({
+      id: "app",
+      register: [validate, task],
+      dependencies: { task },
+      async init(_, { task }) {
+        const result = await task();
+        expect(result).toBe("ok");
+        expect(receivedConfig).toEqual({ schema: "user" });
+      },
+    });
+    await run(app);
+  });
+
+  it("should allow multiple usages of the same middleware definition with different configs", async () => {
+    const calls: (string | undefined)[] = [];
+    const validate = defineMiddleware({
+      id: "validate",
+      run: async ({ config, next }) => {
+        calls.push(config.schema);
+        return next();
+      },
+    });
+    const usage1 = validate.with({ schema: "user" });
+    const usage2 = validate.with({ schema: "admin" });
+    const task1 = defineTask({
+      id: "task1",
+      middleware: [usage1],
+      run: async () => "ok1",
+    });
+    const task2 = defineTask({
+      id: "task2",
+      middleware: [usage2],
+      run: async () => "ok2",
+    });
+    const app = defineResource({
+      id: "app",
+      register: [validate, task1, task2],
+      dependencies: { task1, task2 },
+      async init(_, { task1, task2 }) {
+        await task1();
+        await task2();
+        expect(calls).toEqual(["user", "admin"]);
+      },
+    });
+    await run(app);
+  });
+
+  it("should work in an integration scenario with global and per-task middleware", async () => {
+    const calls: string[] = [];
+    const log = defineMiddleware({
+      id: "log",
+      run: async ({ next }) => {
+        calls.push("global");
+        return next();
+      },
+    });
+    const validate = defineMiddleware<{ schema: string }>({
+      id: "validate",
+      run: async ({ config, next }) => {
+        expect(config).toBeDefined();
+        calls.push(config!.schema);
+        return next();
+      },
+    });
+    const usage = validate.with({ schema: "user" });
+    const task = defineTask({
+      id: "task",
+      middleware: [usage],
+      run: async () => "ok",
+    });
+    const app = defineResource({
+      id: "app",
+      register: [log.global(), validate, task],
+      dependencies: { task },
+      async init(_, { task }) {
+        const result = await task();
+        expect(result).toBe("ok");
+        expect(calls).toContain("global");
+        expect(calls).toContain("user");
+      },
+    });
+    await run(app);
+  });
+
+  it("should enforce type safety for config in .with()", () => {
+    const validate = defineMiddleware<{ schema: string }>({
+      id: "validate",
+      run: async ({ config, next }) => next(),
+    });
+
+    // Should error if config type is not correct
+    // @ts-expect-error
+    validate.with({ schema: 123 });
   });
 });

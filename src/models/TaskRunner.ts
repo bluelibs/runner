@@ -168,8 +168,11 @@ export class TaskRunner {
         next = async (input) => {
           return storeMiddleware.middleware.run(
             {
-              taskDefinition: task as any,
-              input,
+              task: {
+                definition: task as any,
+                input,
+              },
+              config: middleware.config,
               next: nextFunction,
             },
             storeMiddleware.computedDependencies
