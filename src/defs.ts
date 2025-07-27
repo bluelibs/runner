@@ -177,9 +177,11 @@ export interface ITask<
 }
 // Resource interfaces
 // Conditional type to determine the value type based on whether init is present
-type ResourceValueType<T> = T extends { init: any } ? 
-  T['init'] extends (...args: any[]) => Promise<infer R> ? R : unknown :
-  undefined;
+type ResourceValueType<T> = T extends { init: any }
+  ? T["init"] extends (...args: any[]) => Promise<infer R>
+    ? R
+    : unknown
+  : undefined;
 
 export interface IResourceDefinition<
   TConfig = any,

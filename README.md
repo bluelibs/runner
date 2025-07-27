@@ -221,6 +221,56 @@ The dependencies get injected as follows:
 | `events`     | Injected as functions with their payload argument         |
 | `middleware` | Not typically injected; used via a `middleware: []` array |
 
+### Grouping dependencies with `index()`
+
+When codebases grow, you will notice that resources sometimes just register other stuff. And there are situations when you need values from these resources, to avoid duplicating code, we created a new concept called an 'index' resource that simply registers
+
+1. Registers every item you give it.
+2. Declares dependencies on those same items.
+3. Returns the fully-resolved dependency map from its `init()`.
+
+```ts
+import { task, resource, index, run } from "@bluelibs/runner";
+
+const userService = resource({
+  id: "app.userService",
+  async init() {
+    return {
+      getUser: async (id: string) => ({ id, name: "Jon" }),
+    };
+  },
+});
+
+const sendWelcomeEmail = task({
+  id: "app.tasks.sendWelcomeEmail",
+  dependencies: { userService },
+  async run({ userId }, { userService }) {
+    const user = await userService.getUser(userId);
+    // send email...
+    return user;
+  },
+});
+
+// Aggregate under one dependency. Register once use this everywhere simplifying large codebases.
+const services = index({
+  userService, // the actual resources
+  sendWelcomeEmail,
+  configurableResource: configurableResource.with({ config }),
+});
+
+const app = resource({
+  id: "app",
+  register: [services],
+  dependencies: { services },
+  async init(_, { services }) {
+    const user = await services.sendWelcomeEmail({ userId: "42" });
+    console.log(user.name); // "Jon"
+  },
+});
+
+run(app);
+```
+
 ## Events
 
 Events are triggered when specific actions occur in your app, like a user registration or a new comment. When you catch these events, you also receive the emitted data along with the source of the event. Knowing the source of the event without explicitly specifying it can be very helpful in large applications.

@@ -3,6 +3,7 @@ import {
   defineResource,
   defineEvent,
   defineMiddleware,
+  defineIndex,
 } from "./define";
 import { globalEvents } from "./globalEvents";
 import { globalResources } from "./globalResources";
@@ -19,6 +20,7 @@ export {
   defineResource as resource,
   defineEvent as event,
   defineMiddleware as middleware,
+  defineIndex as index,
   run,
 };
 

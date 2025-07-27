@@ -15,6 +15,7 @@ import {
   IEvent,
   IEventDefinitionConfig,
   symbolEvent,
+  RegisterableItems,
 } from "./defs";
 import { Errors } from "./errors";
 import { getCallerFile } from "./tools/getCallerFile";
@@ -121,10 +122,22 @@ interface IPrivateContextResourceDefinition<
   TValue,
   TDeps extends DependencyMapType,
   TPrivate
-> extends Omit<IResourceDefinition<TConfig, TValue, TDeps>, 'init' | 'dispose'> {
+> extends Omit<
+    IResourceDefinition<TConfig, TValue, TDeps>,
+    "init" | "dispose"
+  > {
   private?: () => TPrivate;
-  init?: (this: { private: TPrivate }, config: TConfig, deps: DependencyValuesType<TDeps>) => Promise<TValue>;
-  dispose?: (this: { private: TPrivate }, value: TValue, config: TConfig, deps: DependencyValuesType<TDeps>) => Promise<void>;
+  init?: (
+    this: { private: TPrivate },
+    config: TConfig,
+    deps: DependencyValuesType<TDeps>
+  ) => Promise<TValue>;
+  dispose?: (
+    this: { private: TPrivate },
+    value: TValue,
+    config: TConfig,
+    deps: DependencyValuesType<TDeps>
+  ) => Promise<void>;
 }
 
 // Enhanced resource function with private context support
@@ -134,27 +147,80 @@ export function resource<
   TDeps extends DependencyMapType = {},
   TPrivate = {}
 >(
-  definition: IPrivateContextResourceDefinition<TConfig, TValue, TDeps, TPrivate>
+  definition: IPrivateContextResourceDefinition<
+    TConfig,
+    TValue,
+    TDeps,
+    TPrivate
+  >
 ): IResource<TConfig, TValue, TDeps> {
   // Create a closure to hold private state
   let privateState: TPrivate;
-  
+
   return defineResource({
     ...definition,
-    init: definition.init ? async (config: TConfig, deps: DependencyValuesType<TDeps>) => {
-      // Reset private state for each initialization
-      privateState = definition.private?.() || ({} as TPrivate);
-      
-      // Bind init function with private context
-      const boundInit = definition.init!.bind({ private: privateState });
-      return await boundInit(config, deps);
-    } : undefined as any,
-    dispose: definition.dispose ? async (value: TValue, config: TConfig, deps: DependencyValuesType<TDeps>) => {
-      // Bind dispose function with same private context
-      const boundDispose = definition.dispose!.bind({ private: privateState });
-      await boundDispose(value, config, deps);
-    } : undefined,
+    init: definition.init
+      ? async (config: TConfig, deps: DependencyValuesType<TDeps>) => {
+          // Reset private state for each initialization
+          privateState = definition.private?.() || ({} as TPrivate);
+
+          // Bind init function with private context
+          const boundInit = definition.init!.bind({ private: privateState });
+          return await boundInit(config, deps);
+        }
+      : (undefined as any),
+    dispose: definition.dispose
+      ? async (
+          value: TValue,
+          config: TConfig,
+          deps: DependencyValuesType<TDeps>
+        ) => {
+          // Bind dispose function with same private context
+          const boundDispose = definition.dispose!.bind({
+            private: privateState,
+          });
+          await boundDispose(value, config, deps);
+        }
+      : undefined,
   } as IResourceDefinition<TConfig, TValue, TDeps>);
+}
+
+/**
+ * Creates an "index" resource which groups multiple registerable items under
+ * a single dependency. The resulting resource registers every item, depends
+ * on the same items, and returns the resolved dependency map so users can
+ * access them naturally: `deps.services.myTask()` or `deps.services.myResource`.
+ */
+export function defineIndex<
+  T extends Record<string, RegisterableItems>,
+  D extends {
+    [K in keyof T]: T[K] extends IResourceWithConfig<any, any, any>
+      ? T[K]["resource"]
+      : T[K];
+  } & DependencyMapType
+>(items: T): IResource<void, DependencyValuesType<D>, D> {
+  const dependencies = {} as D;
+  const register: RegisterableItems[] = [];
+
+  for (const key of Object.keys(items) as (keyof T)[]) {
+    const item = items[key];
+    register.push(item);
+
+    if (isResourceWithConfig(item)) {
+      (dependencies as any)[key] = item.resource;
+    } else {
+      (dependencies as any)[key] = item as any;
+    }
+  }
+
+  return defineResource({
+    id: `index.${Math.random().toString(36).slice(2)}`,
+    register,
+    dependencies,
+    async init(_, deps) {
+      return deps as any;
+    },
+  });
 }
 
 export function defineEvent<TPayload = any>(
