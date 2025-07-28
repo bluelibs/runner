@@ -5,7 +5,7 @@ import {
   IResource,
 } from "../defs";
 import { EventManager } from "./EventManager";
-import { globalEvents } from "../globalEvents";
+import { globalEvents } from "../globals/globalEvents";
 import { MiddlewareStoreElementType, Store } from "./Store";
 import { Logger } from "./Logger";
 
@@ -143,9 +143,9 @@ export class ResourceInitializer {
               config,
             },
             next: nextFunction,
-            config: storeMiddleware.middleware.config,
           },
-          storeMiddleware.computedDependencies
+          storeMiddleware.computedDependencies,
+          middleware.config
         );
       };
     }

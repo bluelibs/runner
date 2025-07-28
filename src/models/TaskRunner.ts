@@ -1,12 +1,8 @@
 import { DependencyMapType, DependencyValuesType, ITask } from "../defs";
 import { Errors } from "../errors";
 import { EventManager } from "./EventManager";
-import { globalEvents } from "../globalEvents";
-import {
-  MiddlewareStoreElementType,
-  Store,
-  TaskStoreElementType,
-} from "./Store";
+import { globalEvents } from "../globals/globalEvents";
+import { MiddlewareStoreElementType, Store } from "./Store";
 import { Logger } from "./Logger";
 
 export class TaskRunner {
@@ -136,6 +132,7 @@ export class TaskRunner {
     TDeps extends DependencyMapType
   >(task: ITask<TInput, TOutput, TDeps>) {
     const storeTask = this.store.tasks.get(task.id);
+
     // this is the final next()
     let next = async (input) => {
       this.logger.debug(
@@ -155,30 +152,32 @@ export class TaskRunner {
       ...existingMiddlewares,
     ];
 
-    if (createdMiddlewares.length > 0) {
-      // we need to run the middleware in reverse order
-      // so we can chain the next function
-      for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
-        const middleware = createdMiddlewares[i];
-        const storeMiddleware = this.store.middlewares.get(
-          middleware.id
-        ) as MiddlewareStoreElementType; // we know it exists because at this stage all sanity checks have been done.
+    if (createdMiddlewares.length === 0) {
+      return next;
+    }
 
-        const nextFunction = next;
-        next = async (input) => {
-          return storeMiddleware.middleware.run(
-            {
-              task: {
-                definition: task as any,
-                input,
-              },
-              config: middleware.config,
-              next: nextFunction,
+    // we need to run the middleware in reverse order
+    // so we can chain the next function
+    for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
+      const middleware = createdMiddlewares[i];
+      const storeMiddleware = this.store.middlewares.get(
+        middleware.id
+      ) as MiddlewareStoreElementType; // we know it exists because at this stage all sanity checks have been done.
+
+      const nextFunction = next;
+      next = async (input) => {
+        return storeMiddleware.middleware.run(
+          {
+            task: {
+              definition: task as any,
+              input,
             },
-            storeMiddleware.computedDependencies
-          );
-        };
-      }
+            next: nextFunction,
+          },
+          storeMiddleware.computedDependencies,
+          middleware.config
+        );
+      };
     }
 
     return next;

@@ -1,4 +1,4 @@
-import { createContext, task, run, provideContext, resource } from "../index";
+import { createContext, task, run, resource } from "../index";
 import { ContextError } from "../context";
 
 describe("Context System", () => {
@@ -12,7 +12,7 @@ describe("Context System", () => {
 
     await expect(run(r)).rejects.toThrow(ContextError);
 
-    await provideContext(TestContext, { id: "1" }, async () => {
+    await TestContext.provide({ id: "1" }, async () => {
       await expect(run(r)).resolves.toEqual({
         value: { id: "1" },
         dispose: expect.any(Function),
@@ -35,7 +35,7 @@ describe("Context System", () => {
     });
     await expect(run(r)).rejects.toThrow(ContextError);
 
-    await provideContext(TestContext, { id: "1" }, async () => {
+    await TestContext.provide({ id: "1" }, async () => {
       await expect(run(r)).resolves.toEqual({
         value: "ok",
         dispose: expect.any(Function),

@@ -87,13 +87,20 @@ type OptionalOrVoidOrAnything<T> = IsVoid<T> extends true
   ? Optional<T>
   : T;
 
+type OnlyOptionalFields<T> = keyof T extends never
+  ? false // Empty object is not "optional fields"
+  : T extends Required<T>
+  ? false // If T equals Required<T>, then it has required fields
+  : true;
+
 // RegisterableItems Type with Conditional Inclusion
 export type RegisterableItems<T = any> =
   | IResourceWithConfig<any>
-  | IResource<void, any, any>
-  | IResource<OptionalOrVoidOrAnything<T>, any, any>
+  | IResource<void, any, any> // No config
+  | IResource<OnlyOptionalFields<T> extends true ? void : never, any, any> // With config but all optional
   | ITaskDefinition<any, any, any, any>
-  | IMiddlewareDefinition<any>
+  | IMiddlewareDefinition<T>
+  | IMiddlewareDefinition<void, any> // No config middleware
   | IEventDefinition<any>;
 
 export interface ITaskDefinition<
@@ -119,11 +126,6 @@ export interface ITaskDefinition<
     input: TOn extends undefined
       ? TInput
       : IEvent<TOn extends "*" ? any : ExtractEventParams<TOn>>,
-    // input: TOn extends "*"
-    //   ? IEvent<any>
-    //   : TEventDefinitionInput extends null | void
-    //   ? TInput
-    // : IEvent<TEventDefinitionInput>,
     dependencies: DependencyValuesType<TDependencies>
   ) => TOutput;
 }
@@ -219,7 +221,7 @@ export interface IResourceDefinition<
   ) => Promise<void>;
   meta?: IResourceMeta;
   overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
-  middleware?: IMiddlewareDefinition[];
+  middleware?: IMiddleware[];
   context?: () => TContext;
 }
 
@@ -242,7 +244,7 @@ export interface IResource<
     onError: IEventDefinition<OnErrorEventPayload>;
   };
   overrides: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
-  middleware: IMiddlewareDefinition[];
+  middleware: IMiddleware[];
 }
 
 export interface IResourceWithConfig<
@@ -297,8 +299,9 @@ export interface IMiddlewareDefinition<
   id: string;
   dependencies?: TDependencies | (() => TDependencies);
   run: (
-    input: IMiddlewareExecutionInput<TConfig>,
-    dependencies: DependencyValuesType<TDependencies>
+    input: IMiddlewareExecutionInput,
+    dependencies: DependencyValuesType<TDependencies>,
+    config: TConfig
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
 }
@@ -320,17 +323,21 @@ export interface IMiddlewareDefinitionConfigured<
   config?: C;
 }
 
-export interface IMiddlewareExecutionInput<TConfig = any> {
+export interface IMiddlewareExecutionInput<
+  TTaskInput = any,
+  TResourceConfig = any
+> {
   task?: {
-    definition: ITask;
-    input: any;
+    definition: ITask<TTaskInput>;
+    input: TTaskInput;
   };
   resource?: {
-    definition: IResource<any>;
-    config: any;
+    definition: IResource<TResourceConfig>;
+    config: TResourceConfig;
   };
-  config: TConfig;
-  next: (taskInputOrResourceConfig?: any) => Promise<any>;
+  next: (
+    taskInputOrResourceConfig?: TTaskInput | TResourceConfig
+  ) => Promise<any>;
 }
 
 export interface IHookDefinition<

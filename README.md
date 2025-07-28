@@ -362,13 +362,235 @@ const root = resource({
 });
 ```
 
-## Middleware
+## Context System
 
-Middleware intercepts the execution of tasks or the initialization of resources, providing a powerful means to enhance functionality. The order in which middleware is registered dictates its execution priority: the first middleware registered is the first to run, while the last middleware in the middleware array at the task level is the closest to the task itself, executing just before the task completes. (Imagine an onion if you will, with the task at the core.)
+Runner provides a powerful context system for sharing data across async boundaries, similar to React's Context API but designed for server-side async operations. The context system uses Node.js's `AsyncLocalStorage` internally to maintain context isolation across async calls.
 
-## Resource Context Management
+### Creating and Using Context
 
-Resources can maintain private state between initialization and disposal using the context pattern:
+```ts
+import { createContext, resource, task, run } from "@bluelibs/runner";
+
+// Create a typed context for user information
+interface UserContext {
+  userId: string;
+  role: "admin" | "user";
+  permissions: string[];
+}
+
+const UserContext = createContext<UserContext>("app.userContext");
+
+// Task that uses context
+const getCurrentUser = task({
+  id: "app.getCurrentUser",
+  middleware: [UserContext.require()], // Specify that you must have this context provided otherwise it throws
+  run: async () => {
+    // Access current context value
+    const user = UserContext.use();
+    return `Current user: ${user.userId} (${user.role})`;
+  },
+});
+
+// Resource that provides context
+const userService = resource({
+  id: "app.userService",
+  register: [getCurrentUser],
+  dependencies: { getCurrentUser },
+  async init(_, deps) {
+    // Most likely you would have a middleware running in your express server to attach this.
+    return await UserContext.provide(
+      {
+        userId: "user123",
+        role: "admin",
+        permissions: ["read", "write", "delete"],
+      },
+      async () => {
+        // All async operations within this scope have access to the context
+        const result = await deps.getCurrentUser();
+        console.log(result); // "Current user: user123 (admin)"
+        return "User service initialized";
+      }
+    );
+  },
+});
+```
+
+### Context with Middleware
+
+Context is especially powerful when combined with middleware for request-scoped data:
+
+```ts
+import { createContext, middleware, task } from "@bluelibs/runner";
+
+// Request context for web applications
+interface RequestContext {
+  requestId: string;
+  startTime: number;
+  userAgent?: string;
+}
+
+const RequestContext = createContext<RequestContext>("app.requestContext");
+
+// Task that processes requests
+const handleRequest = task({
+  id: "app.handleRequest",
+  middleware: [requireRequestContext],
+  run: async (input: { path: string }) => {
+    const request = RequestContext.use();
+    console.log(`Processing ${input.path} (Request ID: ${request.requestId})`);
+
+    // Context is automatically available in all nested async calls
+    await processUserData();
+    return { success: true, requestId: request.requestId };
+  },
+});
+
+async function processUserData() {
+  // Context is still available here!
+  const request = RequestContext.use();
+  console.log(`Processing user data for request ${request.requestId}`);
+}
+```
+
+### Context Error Handling
+
+The context system throws `ContextError` when context is not available:
+
+```ts
+import { createContext, ContextError } from "@bluelibs/runner";
+
+const AuthContext = createContext<{ token: string }>("app.auth");
+
+const protectedTask = task({
+  id: "app.protected",
+  run: async () => {
+    try {
+      const auth = AuthContext.use();
+      return `Authenticated with token: ${auth.token}`;
+    } catch (error) {
+      if (error instanceof ContextError) {
+        throw new Error("Authentication required");
+      }
+      throw error;
+    }
+  },
+});
+```
+
+### Advanced Context Patterns
+
+#### Nested Context Providers
+
+```ts
+const ThemeContext = createContext<{ theme: "light" | "dark" }>("app.theme");
+const LanguageContext = createContext<{ lang: string }>("app.language");
+
+const app = resource({
+  id: "app",
+  async init() {
+    // Contexts can be nested
+    return await ThemeContext.provide({ theme: "dark" }, async () => {
+      return await LanguageContext.provide({ lang: "en" }, async () => {
+        // Both contexts are available here
+        const theme = ThemeContext.use();
+        const language = LanguageContext.use();
+        return `Theme: ${theme.theme}, Language: ${language.lang}`;
+      });
+    });
+  },
+});
+```
+
+#### Context with Resource Dependencies
+
+```ts
+const DatabaseContext = createContext<{ connectionId: string }>("app.db");
+
+const userRepository = resource({
+  id: "app.userRepository",
+  async init() {
+    return {
+      async findUser(id: string) {
+        const db = DatabaseContext.use();
+        console.log(`Finding user ${id} on connection ${db.connectionId}`);
+        return { id, name: "John Doe" };
+      },
+    };
+  },
+});
+
+const userService = resource({
+  id: "app.userService",
+  register: [userRepository],
+  dependencies: { userRepository },
+  async init(_, deps) {
+    // Provide database context
+    return await DatabaseContext.provide(
+      { connectionId: "main-db-connection" },
+      async () => {
+        const repo = deps.userRepository;
+        // Repository methods will have access to database context
+        const user = await repo.findUser("123");
+        return { getUser: () => user };
+      }
+    );
+  },
+});
+```
+
+### Built-in Execution Context
+
+Runner includes a built-in `ExecutionContext` that tracks execution metadata:
+
+```ts
+import { ExecutionContext, task, run } from "@bluelibs/runner";
+
+const trackingTask = task({
+  id: "app.tracking",
+  run: async () => {
+    const execution = ExecutionContext.use();
+    console.log(`Execution ID: ${execution.executionId}`);
+    console.log(`Started at: ${new Date(execution.timestamp)}`);
+    console.log(`Parent ID: ${execution.parentId || "none"}`);
+    return "Task completed";
+  },
+});
+```
+
+### Convenience Functions
+
+For cleaner code, Runner provides convenience functions that mirror React's patterns:
+
+```ts
+import { createContext, use, provide, provideContext } from "@bluelibs/runner";
+
+const UserContext = createContext<{ id: string }>("app.user");
+
+// These are equivalent:
+const user1 = UserContext.use();
+const user2 = use(UserContext);
+
+// These are also equivalent:
+await UserContext.provide({ id: "123" }, async () => {
+  // context operations
+});
+
+await provideContext(UserContext, { id: "123" }, async () => {
+  // context operations
+});
+```
+
+### Context Best Practices
+
+1. **Type Safety**: Always use TypeScript interfaces for context types
+2. **Error Handling**: Handle `ContextError` appropriately when context might not be available
+3. **Scope Management**: Keep context scope as narrow as possible
+4. **Naming**: Use descriptive names for context variables (e.g., `UserContext`, not `ctx`)
+5. **Testing**: Use `provide()` or `provideContext()` in tests to set up context for isolated testing
+
+### Resource Context Management
+
+Resources can also maintain private state between initialization and disposal using the context pattern:
 
 ```ts
 import { resource } from "@bluelibs/runner";
@@ -393,12 +615,9 @@ const databaseResource = resource({
 });
 ```
 
-**Key Characteristics:**
+## Middleware
 
-- 🧩 **Isolated Instances** - Each resource instance gets its own context
-- 🔒 **Type Safety** - Context type inferred from factory function
-- ♻️ **Lifecycle Alignment** - Same context available in init/dispose
-- 🚫 **No External Access** - Context never exposed outside resource
+Middleware intercepts the execution of tasks or the initialization of resources, providing a powerful means to enhance functionality. The order in which middleware is registered dictates its execution priority: the first middleware registered is the first to run, while the last middleware in the middleware array at the task level is the closest to the task itself, executing just before the task completes. (Imagine an onion if you will, with the task at the core.)
 
 ## Middleware Configuration
 
@@ -477,13 +696,6 @@ task({
 });
 ```
 
-**Architecture Benefits:**
-
-- 🛡️ **Consistent Security** - Centralize auth checks with reusable configs
-- 📊 **Observability** - Add performance tracking to critical paths
-- 🔄 **Environment Parity** - Maintain identical codebase with config variations
-- 🧪 **Testability** - Easily mock middleware in test environments
-
 ### Global
 
 If you want to register a middleware for all tasks and resources, here's how you can do it:
@@ -498,7 +710,9 @@ const logMiddleware = middleware({
 
 const root = resource({
   id: "app",
-  register: [logMiddleware.global() /* this will apply to all tasks */],
+  register: [
+    logMiddleware.global() /* this will apply to all tasks and resources */,
+  ],
 });
 ```
 

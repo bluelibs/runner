@@ -1,6 +1,6 @@
-import { defineEvent } from "./define";
-import { ITask, IResource, IEvent } from "./defs";
-import { ILog } from "./models/Logger";
+import { defineEvent } from "../define";
+import { ITask, IResource, IEvent } from "../defs";
+import { ILog } from "../models/Logger";
 
 export const globalEvents = {
   beforeInit: defineEvent({

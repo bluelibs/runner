@@ -5,19 +5,16 @@ import {
   defineMiddleware,
   defineIndex,
 } from "./define";
-import {
-  context as contextUtils,
-  createContext,
-  use as useContext,
-  provide as provideContext,
-} from "./context";
-import { globalEvents } from "./globalEvents";
-import { globalResources } from "./globalResources";
+import { createContext } from "./context";
+import { globalEvents } from "./globals/globalEvents";
+import { globalResources } from "./globals/globalResources";
+import { globalMiddlewares } from "./globals/globalMiddleware";
 import { run } from "./run";
 
 const globals = {
   events: globalEvents,
   resources: globalResources,
+  middlewares: globalMiddlewares,
 };
 
 export { globals };
@@ -29,8 +26,6 @@ export {
   defineIndex as index,
   run,
   createContext,
-  useContext,
-  provideContext,
 };
 
 export * as definitions from "./defs";

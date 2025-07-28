@@ -1,7 +1,6 @@
 import { Logger, ILog, LogLevels } from "../../models/Logger";
 import { EventManager } from "../../models/EventManager";
-import { globalEvents } from "../../globalEvents";
-import { mock } from "node:test";
+import { globalEvents } from "../../globals/globalEvents";
 
 describe("Logger", () => {
   let logger: Logger;

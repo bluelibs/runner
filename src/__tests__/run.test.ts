@@ -5,7 +5,7 @@ import {
   defineMiddleware,
 } from "../define";
 import { run } from "../run";
-import { globalResources } from "../globalResources";
+import { globalResources } from "../globals/globalResources";
 
 describe("main exports", () => {
   it("should export all public APIs correctly", async () => {

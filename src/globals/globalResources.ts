@@ -1,8 +1,8 @@
-import { defineResource } from "./define";
-import { EventManager } from "./models/EventManager";
-import { Logger } from "./models/Logger";
-import { Store } from "./models/Store";
-import { TaskRunner } from "./models/TaskRunner";
+import { defineResource } from "../define";
+import { EventManager } from "../models/EventManager";
+import { Logger } from "../models/Logger";
+import { Store } from "../models/Store";
+import { TaskRunner } from "../models/TaskRunner";
 
 const store = defineResource({
   id: "global.resources.store",

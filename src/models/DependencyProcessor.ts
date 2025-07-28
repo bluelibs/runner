@@ -14,7 +14,6 @@ import { ResourceInitializer } from "./ResourceInitializer";
 import { TaskRunner } from "./TaskRunner";
 import { Errors } from "../errors";
 import { Logger } from "./Logger";
-import { requireContextMiddleware } from "../context";
 
 /**
  * This class is responsible of setting up dependencies with their respective computedValues.

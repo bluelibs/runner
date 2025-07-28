@@ -1,4 +1,4 @@
-import { globalEvents } from "../globalEvents";
+import { globalEvents } from "../globals/globalEvents";
 import { defineTask, defineResource } from "../define";
 import { run } from "../run";
 

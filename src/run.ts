@@ -10,13 +10,12 @@ import {
 } from "./defs";
 import { DependencyProcessor } from "./models/DependencyProcessor";
 import { EventManager } from "./models/EventManager";
-import { globalEvents } from "./globalEvents";
+import { globalEvents } from "./globals/globalEvents";
 import { Store } from "./models/Store";
 import { findCircularDependencies } from "./tools/findCircularDependencies";
 import { Errors } from "./errors";
-import { globalResources } from "./globalResources";
+import { globalResources } from "./globals/globalResources";
 import { Logger } from "./models/Logger";
-import { requireContextMiddleware } from "./context";
 
 export type ResourcesStoreElementType<
   C = any,

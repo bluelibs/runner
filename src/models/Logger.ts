@@ -1,4 +1,4 @@
-import { globalEvents } from "../globalEvents";
+import { globalEvents } from "../globals/globalEvents";
 import { EventManager } from "./EventManager";
 
 export type LogLevels =

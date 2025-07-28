@@ -3,8 +3,8 @@ import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { defineResource } from "../../define";
 import { Logger } from "../../models";
-import { globalResources } from "../../globalResources";
-import { globalEvents } from "../../globalEvents";
+import { globalResources } from "../../globals/globalResources";
+import { globalEvents } from "../../globals/globalEvents";
 
 describe("ResourceInitializer", () => {
   let store: Store;

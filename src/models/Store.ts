@@ -12,13 +12,14 @@ import {
 } from "../defs";
 import * as utils from "../define";
 import { IDependentNode } from "../tools/findCircularDependencies";
-import { globalEventsArray } from "../globalEvents";
+import { globalEventsArray } from "../globals/globalEvents";
 import { Errors } from "../errors";
-import { globalResources } from "../globalResources";
+import { globalResources } from "../globals/globalResources";
 import { EventManager } from "./EventManager";
 import { TaskRunner } from "./TaskRunner";
 import { Logger } from "./Logger";
-import { requireContextMiddleware } from "../context";
+import { requireContextMiddleware } from "../globals/middleware/requireContext.middleware";
+import { retryMiddleware } from "../globals/middleware/retry.middleware";
 
 export type ResourceStoreElementType<
   C = any,
@@ -132,6 +133,10 @@ export class Store {
     // If this evolves, split into a separate method
     this.middlewares.set(requireContextMiddleware.id, {
       middleware: requireContextMiddleware,
+      computedDependencies: {},
+    });
+    this.middlewares.set(retryMiddleware.id, {
+      middleware: retryMiddleware,
       computedDependencies: {},
     });
 

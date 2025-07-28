@@ -1,6 +1,7 @@
 import { AsyncLocalStorage } from "async_hooks";
 import { defineMiddleware } from "./define";
 import { IMiddleware } from "./defs";
+import { requireContextMiddleware } from "./globals/middleware/requireContext.middleware";
 
 /**
  * Error thrown whenever a requested context is not available.
@@ -46,26 +47,6 @@ function cloneStore(base?: Map<symbol, unknown>): Map<symbol, unknown> {
   return new Map(base ? Array.from(base.entries()) : []);
 }
 
-export const requireContextMiddleware = defineMiddleware<{
-  context: Context<any>;
-}>({
-  id: "global.middleware.requireContext",
-  async run({ task, resource, next, config }) {
-    const ctx = config.context.use();
-    if (!ctx) {
-      throw new ContextError("Context not available");
-    }
-    if (task) {
-      return next(task.input);
-    }
-    if (resource) {
-      return next(resource.config);
-    }
-
-    return next();
-  },
-});
-
 /**
  * Create a new typed Context. The result contains helpers similar to React’s
  * Context API but adapted for async usage in Runner.
@@ -91,6 +72,10 @@ export function createContext<T>(name: string = "runner.context"): Context<T> {
     return storage.run(child, fn as any);
   }
 
+  /**
+   * Generates a middleware that guarantees the context exists (and optionally
+   * enforces that certain keys are present on the context object).
+   */
   function require(): IMiddleware {
     return requireContextMiddleware.with({ context: this as Context<T> });
   }
@@ -102,41 +87,3 @@ export function createContext<T>(name: string = "runner.context"): Context<T> {
     require,
   };
 }
-
-/**
- * Convenience helper mirroring React’s `useContext` but for Runner.
- */
-export function use<T>(context: Context<T>): T {
-  return context.use();
-}
-
-/**
- * Convenience helper mirroring React’s context provider pattern.
- */
-export function provide<T, R>(
-  context: Context<T>,
-  value: T,
-  fn: () => Promise<R> | R
-): Promise<R> | R {
-  return context.provide(value, fn);
-}
-
-// ---------------------------------------------------------------------------
-// Default execution context tracking
-// ---------------------------------------------------------------------------
-
-export interface ExecutionContextValue {
-  executionId: string;
-  timestamp: number;
-  parentId?: string;
-}
-
-export const ExecutionContext = createContext<ExecutionContextValue>();
-
-// Convenience exports for external usage
-export const context = {
-  create: createContext,
-  use,
-  provide,
-  ExecutionContext,
-};

@@ -166,8 +166,8 @@ export function defineEvent<TPayload = any>(
 }
 
 export function defineMiddleware<
-  TConfig = any,
-  TDependencies extends DependencyMapType = {}
+  TConfig extends Record<string, any>,
+  TDependencies extends DependencyMapType
 >(
   middlewareDef: IMiddlewareDefinition<TConfig, TDependencies>
 ): IMiddleware<TConfig, TDependencies> {
