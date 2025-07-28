@@ -19,7 +19,7 @@ type CacheResourceConfig = {
 
 type CacheMiddlewareConfig = {
   keyBuilder?: (taskId: string, input: any) => string;
-} & LRUCache.Options<any, any, any>;
+} & Partial<LRUCache.Options<any, any, any>>;
 
 // Singleton cache resource
 export const cacheResource = defineResource({

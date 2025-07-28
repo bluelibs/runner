@@ -5,6 +5,9 @@ export const symbolResourceWithConfig: unique symbol = Symbol(
 );
 export const symbolEvent: unique symbol = Symbol("runner.event");
 export const symbolMiddleware: unique symbol = Symbol("runner.middleware");
+export const symbolMiddlewareConfigured: unique symbol = Symbol(
+  "runner.middlewareConfigured"
+);
 export const symbolMiddlewareGlobal: unique symbol = Symbol(
   "runner.middlewareGlobal"
 );
@@ -87,22 +90,34 @@ type OptionalOrVoidOrAnything<T> = IsVoid<T> extends true
   ? Optional<T>
   : T;
 
-type OnlyOptionalFields<T> = keyof T extends never
-  ? false // Empty object is not "optional fields"
-  : T extends Required<T>
-  ? false // If T equals Required<T>, then it has required fields
-  : true;
+type OnlyOptionalFields<T> = {} extends T ? true : false;
+
+type r1 = OnlyOptionalFields<{ ok: boolean }>;
+type r2 = OnlyOptionalFields<{ ok?: boolean }>;
+type r3 = OnlyOptionalFields<void>;
 
 // RegisterableItems Type with Conditional Inclusion
 export type RegisterableItems<T = any> =
   | IResourceWithConfig<any>
-  | IResource<void, any, any> // No config
-  | IResource<OnlyOptionalFields<T> extends true ? void : never, any, any> // With config but all optional
+  | IResource<void, any, any, any> // For void configs
+  | IResource<{ [K in any]?: any }, any, any, any> // For optional config
   | ITaskDefinition<any, any, any, any>
-  | IMiddlewareDefinition<T>
-  | IMiddlewareDefinition<void, any> // No config middleware
+  | IMiddlewareDefinition<any>
   | IEventDefinition<any>;
 
+export type MiddlewareAttachments =
+  | IMiddleware<void>
+  | IMiddleware<{ [K in any]?: any }>
+  | IMiddlewareConfigured<any>;
+
+// Then create a wrapper that validates:
+type ValidateRegisterable<T> = T extends IResource<infer Config, any, any, any>
+  ? IsVoid<Config> extends true
+    ? T
+    : OnlyOptionalFields<Config> extends true
+    ? T
+    : never
+  : T;
 export interface ITaskDefinition<
   TInput = any,
   TOutput extends Promise<any> = any,
@@ -111,7 +126,7 @@ export interface ITaskDefinition<
 > {
   id: string;
   dependencies?: TDependencies | (() => TDependencies);
-  middleware?: IMiddleware[];
+  middleware?: MiddlewareAttachments[];
   /**
    * Listen to events in a simple way
    */
@@ -167,7 +182,7 @@ export interface ITask<
 > extends ITaskDefinition<TInput, TOutput, TDependencies, TOn> {
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
-  middleware: IMiddleware[];
+  middleware: MiddlewareAttachments[];
   /**
    * These events are automatically populated after the task has been defined.
    */
@@ -221,7 +236,7 @@ export interface IResourceDefinition<
   ) => Promise<void>;
   meta?: IResourceMeta;
   overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
-  middleware?: IMiddleware[];
+  middleware?: MiddlewareAttachments[];
   context?: () => TContext;
 }
 
@@ -244,7 +259,7 @@ export interface IResource<
     onError: IEventDefinition<OnErrorEventPayload>;
   };
   overrides: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
-  middleware: IMiddleware[];
+  middleware: MiddlewareAttachments[];
 }
 
 export interface IResourceWithConfig<
@@ -313,7 +328,14 @@ export interface IMiddleware<
   dependencies: TDependencies | (() => TDependencies);
   global(): IMiddleware<TConfig, TDependencies>;
   config: TConfig;
-  with: (config: TConfig) => IMiddleware<TConfig, TDependencies>;
+  with: (config: TConfig) => IMiddlewareConfigured<TConfig, TDependencies>;
+}
+
+export interface IMiddlewareConfigured<
+  TConfig = any,
+  TDependencies extends DependencyMapType = any
+> extends IMiddleware<TConfig, TDependencies> {
+  [symbolMiddlewareConfigured]: true;
 }
 
 export interface IMiddlewareDefinitionConfigured<

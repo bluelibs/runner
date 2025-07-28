@@ -93,10 +93,10 @@ describe("Caching System", () => {
         async init(_, { testTask }) {
           const firstRun = await testTask();
           const secondRun = await testTask(); // Should be cached
-          
+
           // Wait for TTL to expire
-          await new Promise(resolve => setTimeout(resolve, 150));
-          
+          await new Promise((resolve) => setTimeout(resolve, 150));
+
           const thirdRun = await testTask(); // Should be a new result
 
           expect(firstRun).toBe(secondRun); // Both should be cached
@@ -261,25 +261,27 @@ describe("Caching System", () => {
         },
       });
 
-      const result = await run(defineResource({
-        id: "app",
-        register: [cacheResource, cacheMiddleware, testTask],
-        dependencies: { testTask, cache: cacheResource },
-        async init(_, { testTask, cache }) {
-          const firstRun = await testTask();
-          const secondRun = await testTask(); // Should be cached
-          
-          expect(firstRun).toBe(secondRun);
-          expect(executionCount).toBe(1);
-          expect(cache.map.size).toBe(1);
-          
-          return cache;
-        },
-      }));
-      
+      const result = await run(
+        defineResource({
+          id: "app",
+          register: [cacheResource, cacheMiddleware, testTask],
+          dependencies: { testTask, cache: cacheResource },
+          async init(_, { testTask, cache }) {
+            const firstRun = await testTask();
+            const secondRun = await testTask(); // Should be cached
+
+            expect(firstRun).toBe(secondRun);
+            expect(executionCount).toBe(1);
+            expect(cache.map.size).toBe(1);
+
+            return cache;
+          },
+        })
+      );
+
       // Dispose the resource - this should clear all cache instances
       await result.dispose();
-      
+
       // Verify cache instances were cleared during disposal
       expect(result.value.map.size).toBe(1); // Map still exists but instances are cleared
     });
@@ -498,7 +500,7 @@ describe("Caching System", () => {
           // Test basic caching behavior instead of race conditions
           const result1 = await slowTask(10);
           const result2 = await slowTask(10);
-          
+
           expect(result1).toBe(20);
           expect(result2).toBe(20);
           expect(result1).toBe(result2); // Should be cached
@@ -567,7 +569,7 @@ describe("Caching System", () => {
 
       // Manually dispose to trigger cleanup
       await result.dispose();
-      
+
       // Verify cache was disposed
       const cacheInstance = result.value.map.get("disposal.test.task");
       expect(cacheInstance?.disposed).toBe(true);
@@ -595,7 +597,7 @@ describe("Caching System", () => {
         async init(_, { testTask }) {
           const result1 = await testTask("test");
           const result2 = await testTask("test");
-          
+
           expect(result1).toBe("result-test");
           expect(result2).toBe(result1); // Should be cached
         },

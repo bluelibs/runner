@@ -16,6 +16,7 @@ import {
   IEventDefinitionConfig,
   symbolEvent,
   RegisterableItems,
+  symbolMiddlewareConfigured,
 } from "./defs";
 import { Errors } from "./errors";
 import { getCallerFile } from "./tools/getCallerFile";
@@ -183,6 +184,7 @@ export function defineMiddleware<
     with: (config: TConfig) => {
       return {
         ...object,
+        [symbolMiddlewareConfigured]: true,
         config: {
           ...(object.config || {}),
           ...config,
