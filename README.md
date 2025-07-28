@@ -11,7 +11,7 @@
 - [Google Notebook LM Podcast](https://notebooklm.google.com/notebook/59bd49fa-346b-4cfb-bb4b-b59857c3b9b4/audio)
 - [Continue GPT Conversation](https://chatgpt.com/share/670392f8-7188-800b-9b4b-e49b437d77f7)
 
-BlueLibs Runner is a framework that provides a functional approach to building applications, whether small or large-scale. Its core concepts include Tasks, Resources, Events, and Middleware. Tasks represent the units of logic, while resources are singletons that provide shared services across the application. Events facilitate communication between different parts of the system, and Middleware allows interception and modification of task execution. The framework emphasizes an async-first philosophy, ensuring that all operations are executed asynchronously for smoother application flow.
+BlueLibs Runner is a framework that provides a functional approach to building applications, whether small or large-scale. Its core concepts include Tasks, Resources, Events, and Middleware. Tasks represent the units of logic, while resources are singletons that provide shared services across the application. Events facilitate communication between different parts of the system, and Middleware allows interception and modification of task execution and resource initialization. The framework emphasizes an async-first philosophy, ensuring that all operations are executed asynchronously for smoother application flow.
 
 ## Building Blocks
 
@@ -19,14 +19,6 @@ BlueLibs Runner is a framework that provides a functional approach to building a
 - **Resources**: Singleton objects providing shared functionality. They can be constants, services, functions. They can depend on other resources, tasks, and event emitters.
 - **Events**: Facilitate asynchronous communication between different parts of your application. All tasks and resources emit events, allowing you to easily hook. Events can be listened to by tasks, resources, and middleware.
 - **Middleware**: Intercept and modify the execution of tasks or initialisation of your resources. They can be used to add additional functionality to your tasks. Middleware can be global or task-specific.
-
-These are the concepts and philosophy:
-
-- **Async**: Everything is async, no more sync code for this framework. Sync-code can be done via resource services or within tasks, but the high-level flow needs to run async.
-- **Type safety**: Built with TypeScript for enhanced developer experience and type-safety everywhere, no more type mistakes.
-- **Functional**: We use functions and objects instead of classes for DI. This is a functional approach to building applications.
-- **Explicit Registration**: All tasks, resources, events, and middleware have to be explicitly registered to be used.
-- **Dependencies**: Tasks, resources, and middleware can have access to each other by depending on one another and event emitters. This is a powerful way to explicitly declare the dependencies.
 
 Resources return their value to the container using the async `init()` function, making them available throughout the application.
 
@@ -43,46 +35,96 @@ npm install @bluelibs/runner
 ## Basic Usage
 
 ```typescript
-import { run, resource } from "@bluelibs/runner";
-
-const minimal = resource({
-  async init() {
-    return "Hello world!";
-  },
-});
-
-run(minimal).then((result) => {
-  expect(result.value).toBe("Hello world!");
-});
-```
-
-## Resources and Tasks
-
-Resources are singletons and can include constants, services, functions, and more. They can depend on other resources, tasks, and event emitters.
-
-Tasks are designed to be trackable units of logic, such as handling specific routes on your HTTP server or performing actions needed by different parts of the application. This makes it easy to monitor what’s happening in your application.
-
-```ts
-import { task, run, resource } from "@bluelibs/runner";
-
-const helloTask = task({
-  id: "app.hello",
-  run: async () => "Hello World!",
-});
+import express from "express";
+import { resource, run } from "@bluelibs/runner";
 
 const app = resource({
   id: "app",
-  register: [helloTask],
-  dependencies: {
-    hello: helloTask,
+  init: async (config: { port: number }, deps) => {
+    const app = express();
+    const port = 3000;
+
+    const server = app.listen(3000);
+
+    return server;
   },
-  async init(_, deps) {
-    return await deps.hello();
+  dispose: async (server, deps) => {
+    server.dispose();
   },
 });
 
-const { value, dispose } = await run(app); // "Hello World!"
+run(app, { port: 3000 }).then((result) => {
+  console.log("Server started");
+});
 ```
+
+Resources can initialise and can dispose. They can accept configs. Let's continue by adding a database service and hook-up environment variables.
+
+```ts
+dotenv(); // To read from .env files.
+const envData = {
+  port: parseInt(process.env.PORT),
+  databaseUrl: process.env.DATABASE_URL,
+};
+
+const env = resource({
+  id: "app.env",
+  init: async () => envData,
+});
+
+const db = resource({
+  id: "app.db",
+  dependencies: { env }, // Note we use [key]: resource
+  init: async (_, { env }) => new MongoClient(env.databaseUrl),
+});
+
+const express = resource({
+  id: "app.server",
+  register: [env, db],
+  dependencies: { env },
+  init: async (_, { env }) => {
+    const app = express();
+    app.listen(env.port);
+
+    return app;
+  },
+});
+
+run(express).then(() => {
+  console.log("Ready!");
+});
+```
+
+Now we've setup an almost done application layer. Note that we need to register elements to use them. Now let's hook up some routes and a service layer. The service layer is a set of tasks.
+
+```ts
+const createUser = task({
+  id: "app.tasks.createUser",
+  dependencies: { db },
+  run: async (name: string, { db }) => {
+    const users = db.collection("users");
+    const result = await users.insertOne({ name });
+
+    return result.insertedId;
+  },
+});
+
+const router = resource({
+  id: "app.router",
+  dependencies: { express, createUser },
+  init: async (_, { express }) => {
+    express.post("/users/create", async (req, res) => {
+      const result = await createUser(req.data.name);
+
+      res.json({ id: result });
+    });
+  },
+});
+
+// Don't forget to register the router
+```
+
+And that's how you evolve your application, from simple points, service layer is now part of tasks. This is only the beginning, as this framework enables you to do lots of fun stuff, from middleware, error supression to overrides, while keeping everything typesafe.
 
 ### When to use each?
 
