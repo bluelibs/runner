@@ -4,7 +4,7 @@ import {
   cacheResource,
   cacheMiddleware,
   ICacheInstance,
-} from "./cache.middleware";
+} from "../../globals/middleware/cache.middleware";
 import { LRUCache } from "lru-cache";
 
 describe("Caching System", () => {
@@ -15,7 +15,7 @@ describe("Caching System", () => {
         register: [cacheResource, cacheMiddleware],
         dependencies: { cache: cacheResource },
         async init(_, { cache }) {
-          expect(cache.cacheHandler).toBe(LRUCache);
+          expect(cache.cacheFactory).toBe(LRUCache);
           expect(cache.async).toBeUndefined();
           expect(cache.defaultOptions).toEqual({ ttl: 10000 });
         },
@@ -216,7 +216,7 @@ describe("Caching System", () => {
       id: "global.resources.cache",
       init: async () => ({
         map: new Map<string, MockCache>(),
-        cacheHandler: MockCache,
+        cacheFactory: MockCache,
         defaultOptions: {},
       }),
       dispose: async (cache) => {
@@ -305,7 +305,7 @@ describe("Caching System", () => {
       id: "global.resources.cache",
       init: async () => ({
         map: new Map<string, AsyncMockCache>(),
-        cacheHandler: AsyncMockCache,
+        cacheFactory: AsyncMockCache,
         async: true,
         defaultOptions: {},
       }),
@@ -538,7 +538,7 @@ describe("Caching System", () => {
         id: "global.resources.cache",
         init: async () => ({
           map: new Map<string, AsyncDisposableCache>(),
-          cacheHandler: AsyncDisposableCache,
+          cacheFactory: AsyncDisposableCache,
           async: true,
           defaultOptions: {},
         }),
@@ -616,7 +616,7 @@ describe("Caching System", () => {
         id: "invalid.cache.handler",
         init: async () => ({
           map: new Map(),
-          cacheHandler: InvalidCache as any,
+          cacheFactory: InvalidCache as any,
           defaultOptions: {},
         }),
         dispose: async () => {},

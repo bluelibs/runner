@@ -9,10 +9,11 @@ export interface ICacheInstance {
 }
 
 type CacheResourceConfig = {
-  cacheHandler?: new (...args: any[]) => ICacheInstance;
+  cacheFactory?: new (...args: any[]) => ICacheInstance;
   defaultOptions?: LRUCache.Options<any, any, any>;
   /**
    * This specifies whether the cache handler is async or not (get, set, clear)
+   * This is for speed purposes.
    */
   async?: boolean;
 };
@@ -21,15 +22,15 @@ type CacheMiddlewareConfig = {
   keyBuilder?: (taskId: string, input: any) => string;
 } & Partial<LRUCache.Options<any, any, any>>;
 
-// Singleton cache resource
 export const cacheResource = defineResource({
   id: "global.resources.cache",
   init: async (config: CacheResourceConfig) => {
-    const cacheHandler = config.cacheHandler || LRUCache;
+    config = config || {};
+    const cacheFactory = config.cacheFactory || LRUCache;
 
     return {
       map: new Map<string, ICacheInstance>(),
-      cacheHandler,
+      cacheFactory,
       async: config.async,
       defaultOptions: {
         ttl: 10 * 1000,
@@ -66,7 +67,7 @@ export const cacheMiddleware = defineMiddleware({
     const isAsync = cache.async;
     let cacheHolderForTask = cache.map.get(taskId);
     if (!cacheHolderForTask) {
-      cacheHolderForTask = new cache.cacheHandler({
+      cacheHolderForTask = new cache.cacheFactory({
         ...cache.defaultOptions,
         ...config,
       });

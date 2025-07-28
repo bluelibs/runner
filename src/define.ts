@@ -166,6 +166,17 @@ export function defineEvent<TPayload = any>(
   };
 }
 
+export type MiddlewareEverywhereOptions = {
+  /**
+   * Enable this for tasks. Default is true.
+   */
+  tasks?: boolean;
+  /**
+   * Enable this for resources. Default is true.
+   */
+  resources?: boolean;
+};
+
 export function defineMiddleware<
   TConfig extends Record<string, any>,
   TDependencies extends DependencyMapType
@@ -175,6 +186,7 @@ export function defineMiddleware<
   const object = {
     [symbols.filePath]: getCallerFile(),
     [symbols.middleware]: true,
+    config: {} as TConfig,
     ...middlewareDef,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
   } as IMiddleware<TConfig, TDependencies>;
@@ -186,16 +198,19 @@ export function defineMiddleware<
         ...object,
         [symbolMiddlewareConfigured]: true,
         config: {
-          ...(object.config || {}),
+          ...object.config,
           ...config,
         },
       };
     },
-    global() {
+    everywhere(options: MiddlewareEverywhereOptions = {}) {
+      const { tasks = true, resources = true } = options;
+
       return {
         ...object,
-        [symbols.middlewareGlobal]: true,
-        global() {
+        [symbols.middlewareEverywhereTasks]: tasks,
+        [symbols.middlewareEverywhereResources]: resources,
+        everywhere() {
           throw Errors.middlewareAlreadyGlobal(middlewareDef.id);
         },
       };

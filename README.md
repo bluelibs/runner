@@ -661,7 +661,10 @@ task({
 
 ```ts
 // Apply to all tasks with default config
-authMiddleware.with({ requiredRole: "USER" }).global();
+authMiddleware.with({ requiredRole: "USER" }).everywhere({
+  tasks: true,
+  resources: false,
+});
 ```
 
 **Task-Specific:**
@@ -711,7 +714,8 @@ const logMiddleware = middleware({
 const root = resource({
   id: "app",
   register: [
-    logMiddleware.global() /* this will apply to all tasks and resources */,
+    logMiddleware.everywhere() /* this will apply to all tasks and resources */,
+    // you can specify tasks: boolean or resources: boolean if you want only for some.
   ],
 });
 ```
@@ -1269,6 +1273,74 @@ const app = resource({
 run(app);
 ```
 
+## Caching
+
+The framework provides a built-in caching middleware and resource with the following features:
+
+```ts
+import { globals } from "@bluelibs/runner";
+
+// Basic usage with default LRU cache
+task({
+  id: "app.data.fetch",
+  middleware: [
+    globals.middleware.cache.with({
+      ttl: 60 * 1000, // 1 minute cache
+      keyBuilder: (taskId, input) => `${taskId}-${input.userId}`, // optional, the key is constructed from task_id + inputs
+    }),
+  ],
+  dependencies: { db },
+  run: async ({ userId }, { db }) => {
+    // Expensive data fetch operation
+    return db.query(`SELECT * FROM users WHERE id = ${userId}`);
+  },
+});
+
+// Global cache configuration
+import { globals } from "@bluelibs/runner";
+resource({
+  id: "app.cache",
+  register: [
+    globals.resources.cache.with({
+      defaultOptions: {
+        max: 1000, // Maximum items in cache
+        ttl: 30 * 1000, // Default TTL
+      },
+      async: true, // Enable async cache operations if supported by cacheFactory instance, default is false.
+    }),
+  ],
+});
+```
+
+**Key Features:**
+
+1. **LRU Eviction**: Default cache implementation using [`lru-cache`](https://github.com/isaacs/node-lru-cache)
+2. **Async Support**: Configurable async/sync cache operations
+3. **Custom Cache Implementations**: Bring your own cache implementation:
+
+   ```ts
+   class RedisCache implements ICacheInstance {
+     // implement interface methods
+   }
+
+   globals.resources.cache.with({
+     cacheFactory: RedisCache,
+   });
+   ```
+
+4. **TTL Configuration**: Per-task or global time-to-live settings
+5. **Cache Disposal**: Automatic cache clearing when resources are disposed
+
+**Configuration Options:**
+
+| Option         | Description                             | Default                     |
+| -------------- | --------------------------------------- | --------------------------- |
+| `keyBuilder`   | Function to generate cache keys         | `(taskId, input) => string` |
+| `ttl`          | Milliseconds until cache entry expires  | 10 seconds                  |
+| `max`          | Maximum number of items in cache        | Infinity                    |
+| `cacheFactory` | Custom cache implementation constructor | `LRUCache` from `lru-cache` |
+| `async`        | Enable async cache operations           | `false`                     |
+
 ## Advanced Usage
 
 This is just a "language" of developing applications. It simplifies dependency injection to the barebones, it forces you to think more functional and use classes less.
@@ -1454,6 +1526,7 @@ const securityResource = resource({
 });
 
 const override = resource({
+  // You can copy the other values, retaining middleware logic, etc.
   ...securityResource,
   init: async () => {
     // a new and custom service
@@ -1469,7 +1542,7 @@ const app = resource({
 
 The new securityResource will replace the existing one, ensuring all future references point to the updated version.
 
-Overrides work if the resource being overridden is already registered. If multiple resources attempt to override the same one, no error will be thrown. This is a common scenario, where the root resource typically contains the most authoritative overrides. But it's also to be mindful about.
+If multiple resources attempt to override the same one, no error will be thrown. This is a common scenario, where the root resource typically contains the most authoritative overrides.
 
 ## Logging
 

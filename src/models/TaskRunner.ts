@@ -148,7 +148,9 @@ export class TaskRunner {
 
     const existingMiddlewares = task.middleware;
     const createdMiddlewares = [
-      ...this.store.getGlobalMiddlewares(existingMiddlewares.map((x) => x.id)),
+      ...this.store.getEverywhereMiddlewareForTasks(
+        existingMiddlewares.map((x) => x.id)
+      ),
       ...existingMiddlewares,
     ];
 

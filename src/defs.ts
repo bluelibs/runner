@@ -11,6 +11,12 @@ export const symbolMiddlewareConfigured: unique symbol = Symbol(
 export const symbolMiddlewareGlobal: unique symbol = Symbol(
   "runner.middlewareGlobal"
 );
+export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol(
+  "runner.middlewareGlobalTasks"
+);
+export const symbolMiddlewareEverywhereResources: unique symbol = Symbol(
+  "runner.middlewareGlobalResources"
+);
 
 export const symbolFilePath: unique symbol = Symbol("runner.filePath");
 export const symbolDispose: unique symbol = Symbol("runner.dispose");
@@ -22,7 +28,8 @@ export const symbols = {
   resourceWithConfig: symbolResourceWithConfig,
   event: symbolEvent,
   middleware: symbolMiddleware,
-  middlewareGlobal: symbolMiddlewareGlobal,
+  middlewareEverywhereTasks: symbolMiddlewareEverywhereTasks,
+  middlewareEverywhereResources: symbolMiddlewareEverywhereResources,
   filePath: symbolFilePath,
   dispose: symbolDispose,
   store: symbolStore,
@@ -326,7 +333,7 @@ export interface IMiddleware<
   TDependencies extends DependencyMapType = any
 > extends IMiddlewareDefinition<TConfig, TDependencies> {
   dependencies: TDependencies | (() => TDependencies);
-  global(): IMiddleware<TConfig, TDependencies>;
+  everywhere(): IMiddleware<TConfig, TDependencies>;
   config: TConfig;
   with: (config: TConfig) => IMiddlewareConfigured<TConfig, TDependencies>;
 }

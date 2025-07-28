@@ -249,8 +249,11 @@ describe("Errors", () => {
   });
 
   it("should throw error, when a double global() is used on a middleware", async () => {
-    const first = defineMiddleware({ id: "x", run: async () => {} }).global();
-    expect(() => first.global()).toThrow(
+    const first = defineMiddleware({
+      id: "x",
+      run: async () => {},
+    }).everywhere();
+    expect(() => first.everywhere()).toThrow(
       Errors.middlewareAlreadyGlobal("x").message
     );
   });

@@ -42,11 +42,6 @@ function getCurrentStore(): Map<symbol, unknown> | undefined {
   return storage.getStore();
 }
 
-/** Creates a shallow clone of a store. */
-function cloneStore(base?: Map<symbol, unknown>): Map<symbol, unknown> {
-  return new Map(base ? Array.from(base.entries()) : []);
-}
-
 /**
  * Create a new typed Context. The result contains helpers similar to React’s
  * Context API but adapted for async usage in Runner.
@@ -65,11 +60,10 @@ export function createContext<T>(name: string = "runner.context"): Context<T> {
   }
 
   function provide<R>(value: T, fn: () => Promise<R> | R): Promise<R> | R {
-    const parent = getCurrentStore();
-    const child = cloneStore(parent);
-    child.set(ctxId, value);
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-    return storage.run(child, fn as any);
+    const map = getCurrentStore() || new Map<symbol, unknown>();
+    map.set(ctxId, value);
+
+    return storage.run(map, fn as any);
   }
 
   /**

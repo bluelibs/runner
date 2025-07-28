@@ -107,6 +107,7 @@ export class Store {
 
     this.storeGenericItem(globalResources.eventManager.with(this.eventManager));
     this.storeGenericItem(globalResources.store.with(this));
+    this.storeGenericItem(globalResources.queue);
 
     root.dependencies =
       typeof root.dependencies === "function"
@@ -279,9 +280,20 @@ export class Store {
     }
   }
 
-  public getGlobalMiddlewares(excludingIds: string[]): IMiddleware[] {
+  public getEverywhereMiddlewareForTasks(
+    excludingIds: string[]
+  ): IMiddleware[] {
     return Array.from(this.middlewares.values())
-      .filter((x) => x.middleware[symbols.middlewareGlobal])
+      .filter((x) => x.middleware[symbols.middlewareEverywhereTasks])
+      .filter((x) => !excludingIds.includes(x.middleware.id))
+      .map((x) => x.middleware);
+  }
+
+  public getEverywhereMiddlewareForResources(
+    excludingIds: string[]
+  ): IMiddleware[] {
+    return Array.from(this.middlewares.values())
+      .filter((x) => x.middleware[symbols.middlewareEverywhereResources])
       .filter((x) => !excludingIds.includes(x.middleware.id))
       .map((x) => x.middleware);
   }
