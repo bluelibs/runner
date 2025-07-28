@@ -842,7 +842,7 @@ const helloWorld = task({
 });
 ```
 
-This is particularly helpful to use in conjunction with global middlewares, or global events, they can read some meta tag definition and act accordingly, decorate them or log them.
+This is particularly helpful to use in conjunction with everywhere middlewares, or global events, they can read some meta tag definition and act accordingly, decorate them or log them.
 
 The interfaces look like this:
 

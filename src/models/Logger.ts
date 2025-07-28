@@ -19,7 +19,7 @@ export interface ILog {
 export class Logger {
   printThreshold: LogLevels | null = null;
 
-  public severity = {
+  public static Severity = {
     trace: 0,
     debug: 1,
     info: 2,
@@ -48,7 +48,7 @@ export class Logger {
 
     if (
       this.printThreshold &&
-      this.severity[level] >= this.severity[this.printThreshold]
+      Logger.Severity[level] >= Logger.Severity[this.printThreshold]
     ) {
       this.print(log);
     }
