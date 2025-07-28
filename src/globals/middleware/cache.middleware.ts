@@ -25,7 +25,6 @@ type CacheMiddlewareConfig = {
 export const cacheResource = defineResource({
   id: "global.resources.cache",
   init: async (config: CacheResourceConfig) => {
-    config = config || {};
     const cacheFactory = config.cacheFactory || LRUCache;
 
     return {

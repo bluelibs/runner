@@ -107,4 +107,83 @@ describe("Queue", () => {
 
     jest.useRealTimers();
   });
+
+  it("dispose() is idempotent - multiple calls should be safe", async () => {
+    const q = new Queue();
+
+    const task = async () => {
+      await delay(1);
+      return "ok";
+    };
+
+    const p = q.run(task);
+
+    // First dispose call
+    const dispose1 = q.dispose();
+    // Second dispose call should return immediately (if (this.disposed) return;)
+    const dispose2 = q.dispose();
+    // Third dispose call should also return immediately
+    const dispose3 = q.dispose();
+
+    await expect(dispose1).resolves.toBeUndefined();
+    await expect(dispose2).resolves.toBeUndefined();
+    await expect(dispose3).resolves.toBeUndefined();
+    await expect(p).resolves.toBe("ok");
+
+    // Further dispose calls after everything is settled should also be safe
+    const dispose4 = q.dispose();
+    await expect(dispose4).resolves.toBeUndefined();
+  });
+
+  it("dispose() properly handles rejected tail promises", async () => {
+    const q = new Queue();
+
+    // Run a task first to establish the normal tail chain
+    await q.run(async () => "setup");
+
+    // Directly set the tail to a promise that will reject
+    // This simulates an internal error scenario where the tail becomes rejected
+    const rejectingPromise = Promise.reject(
+      new Error("Simulated tail rejection")
+    );
+    (q as any).tail = rejectingPromise;
+
+    // Spy on the rejecting promise to verify the catch is called
+    const catchSpy = jest.spyOn(rejectingPromise, "catch");
+
+    // The dispose method should handle this rejection with: await this.tail.catch(() => {})
+    // This specifically tests the line: await this.tail.catch(() => {});
+    await expect(q.dispose()).resolves.toBeUndefined();
+
+    // Verify that the catch method was called (meaning the tail.catch() line was executed)
+    expect(catchSpy).toHaveBeenCalledWith(expect.any(Function));
+
+    // Verify the queue is properly disposed
+    await expect(q.run(async () => "test")).rejects.toThrow(/disposed/);
+  });
+
+  it("should propagate task exceptions to the caller", async () => {
+    const q = new Queue();
+
+    // Test that exceptions are propagated, not swallowed
+    const errorTask = async () => {
+      await delay(1);
+      throw new Error("Task exception");
+    };
+
+    const successTask = async () => {
+      await delay(1);
+      return "success";
+    };
+
+    // Exception should be catchable by the caller
+    await expect(q.run(errorTask)).rejects.toThrow("Task exception");
+
+    // Queue should still work for subsequent tasks
+    await expect(q.run(successTask)).resolves.toBe("success");
+
+    // Multiple exceptions should all be catchable
+    await expect(q.run(errorTask)).rejects.toThrow("Task exception");
+    await expect(q.run(errorTask)).rejects.toThrow("Task exception");
+  });
 });
