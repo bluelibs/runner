@@ -57,6 +57,16 @@ describe("Logger", () => {
       // Check all calls were made
       expect(mockEventManager.emit).toHaveBeenCalledTimes(levels.length);
     });
+
+    it("should not emit events when there are no listeners", () => {
+      mockEventManager.emit = jest.fn().mockResolvedValue(undefined);
+      mockEventManager.hasListeners = jest.fn().mockReturnValue(false);
+
+      logger.log("info", "Test message");
+
+      // Should not emit events when no listeners
+      expect(mockEventManager.emit).not.toHaveBeenCalled();
+    });
   });
 
   describe("print method", () => {
@@ -85,7 +95,7 @@ describe("Logger", () => {
       );
     });
 
-    it("should handle Error objects in log data", async () => {
+    it("should handle Error objects in log data", () => {
       const testError = new Error("Test error");
       const testLog: ILog = {
         level: "error",
@@ -98,13 +108,40 @@ describe("Logger", () => {
         timestamp: new Date("2023-01-01T00:00:00Z"),
       };
 
-      await logger.print(testLog);
+      logger.print(testLog);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringContaining("ERROR")
       );
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Error Details")
+        expect.stringContaining("Error: Error")
+      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Test error")
+      );
+    });
+
+    it("should handle error objects without stack trace", () => {
+      const testLog: ILog = {
+        level: "error",
+        message: "Operation failed",
+        error: {
+          name: "CustomError",
+          message: "Something went wrong",
+        },
+        timestamp: new Date("2023-01-01T00:00:00Z"),
+      };
+
+      logger.print(testLog);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("ERROR")
+      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Error: CustomError")
+      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Something went wrong")
       );
     });
 
@@ -160,10 +197,52 @@ describe("Logger", () => {
         expect.stringContaining("WARN")
       );
       expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('"userId": "123"')
+      );
+    });
+
+    it("should print context from context field", () => {
+      const context = { userId: "456", feature: "login", source: "auth" };
+      const testLog: ILog = {
+        level: "info",
+        message: "User action",
+        context: context,
+        timestamp: new Date("2023-01-01T00:00:00Z"),
+      };
+
+      logger.print(testLog);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("INFO")
+      );
+      // Should show context but filter out 'source' since it's shown separately
+      expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringContaining("Context:")
       );
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining('"userId": "123"')
+        expect.stringContaining('"userId": "456"')
+      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('"feature": "login"')
+      );
+    });
+
+    it("should handle empty context gracefully", () => {
+      const testLog: ILog = {
+        level: "debug",
+        message: "Debug message",
+        context: {},
+        timestamp: new Date("2023-01-01T00:00:00Z"),
+      };
+
+      logger.print(testLog);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("DEBUG")
+      );
+      // Should not print context section for empty context
+      expect(consoleLogSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining("Context:")
       );
     });
 
@@ -235,6 +314,27 @@ describe("Logger", () => {
       // The new logger should have the overridden context
       expect(newLogger).toBeInstanceOf(Logger);
     });
+
+    it("should use bound context in log calls", async () => {
+      const boundContext = { source: "testSource", userId: "123" };
+      const loggerWithContext = new Logger(mockEventManager, boundContext);
+      
+      mockEventManager.emit = jest.fn().mockResolvedValue(undefined);
+      mockEventManager.hasListeners = jest.fn().mockReturnValue(true);
+
+      loggerWithContext.log("info", "Test message");
+
+      await new Promise(setImmediate);
+
+      expect(mockEventManager.emit).toHaveBeenCalledWith(
+        globalEvents.log,
+        expect.objectContaining({
+          source: "testSource",
+          context: boundContext,
+        }),
+        "testSource"
+      );
+    });
   });
 
   describe("error handling", () => {
@@ -288,7 +388,7 @@ describe("Logger", () => {
     });
   });
 
-  it("should auto-print logs based on autoPrintLogsAfter option", async () => {
+  it("should auto-print logs based on autoPrintLogsAfter option", () => {
     const autoPrintLevel: LogLevels = "warn";
     logger.setPrintThreshold(autoPrintLevel);
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
@@ -304,7 +404,7 @@ describe("Logger", () => {
 
     for (const level of levels) {
       logger.setPrintThreshold(level);
-      await logger.log(level, `Test ${level} message`);
+      logger.log(level, `Test ${level} message`);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
         expect.stringContaining(`Test ${level} message`)
@@ -313,8 +413,8 @@ describe("Logger", () => {
 
     // ensure events with a higher level thatn auto print level are printed, and lower levels are not
     logger.setPrintThreshold("error");
-    await logger.log("info", "xx Test info message");
-    await logger.log("error", "xx Test error message");
+    logger.log("info", "xx Test info message");
+    logger.log("error", "xx Test error message");
 
     expect(consoleLogSpy).toHaveBeenCalledWith(
       expect.stringContaining("xx Test error message")
@@ -324,6 +424,19 @@ describe("Logger", () => {
       expect.stringContaining("xx Test info message")
     );
 
+    consoleLogSpy.mockRestore();
+  });
+
+  it("should disable auto-printing when setPrintThreshold is set to null", () => {
+    const consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
+    
+    // Set to null to disable auto-printing
+    logger.setPrintThreshold(null);
+    
+    logger.log("error", "Should not be printed");
+    
+    expect(consoleLogSpy).not.toHaveBeenCalled();
+    
     consoleLogSpy.mockRestore();
   });
 });

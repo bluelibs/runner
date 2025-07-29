@@ -404,4 +404,148 @@ describe("EventManager", () => {
       })
     );
   });
+
+  describe("Performance Optimizations", () => {
+    it("should cache merged listeners for repeated emits", async () => {
+      const handler1 = jest.fn();
+      const handler2 = jest.fn();
+      
+      eventManager.addListener(eventDefinition, handler1, { order: 1 });
+      eventManager.addGlobalListener(handler2, { order: 2 });
+      
+      // First emit should build cache
+      await eventManager.emit(eventDefinition, "test1", "source");
+      // Second emit should use cache
+      await eventManager.emit(eventDefinition, "test2", "source");
+      
+      expect(handler1).toHaveBeenCalledTimes(2);
+      expect(handler2).toHaveBeenCalledTimes(2);
+    });
+
+    it("should invalidate cache when adding event listeners", async () => {
+      const handler1 = jest.fn();
+      const handler2 = jest.fn();
+      const handler3 = jest.fn();
+      
+      eventManager.addListener(eventDefinition, handler1, { order: 2 });
+      await eventManager.emit(eventDefinition, "test1", "source");
+      
+      // Add new listener - should invalidate cache for this event
+      eventManager.addListener(eventDefinition, handler2, { order: 1 });
+      eventManager.addGlobalListener(handler3, { order: 3 });
+      
+      await eventManager.emit(eventDefinition, "test2", "source");
+      
+      expect(handler1).toHaveBeenCalledTimes(2);
+      expect(handler2).toHaveBeenCalledTimes(1);
+      expect(handler3).toHaveBeenCalledTimes(1);
+    });
+
+    it("should invalidate all caches when adding global listeners", async () => {
+      const event1: IEventDefinition<string> = { id: "event1", [symbolEvent]: true };
+      const event2: IEventDefinition<string> = { id: "event2", [symbolEvent]: true };
+      
+      const handler1 = jest.fn();
+      const handler2 = jest.fn();
+      const globalHandler = jest.fn();
+      
+      eventManager.addListener(event1, handler1);
+      eventManager.addListener(event2, handler2);
+      
+      // Emit to build caches
+      await eventManager.emit(event1, "test1", "source");
+      await eventManager.emit(event2, "test2", "source");
+      
+      // Add global listener - should invalidate all caches
+      eventManager.addGlobalListener(globalHandler);
+      
+      // Emit again - global handler should be called
+      await eventManager.emit(event1, "test3", "source");
+      await eventManager.emit(event2, "test4", "source");
+      
+      expect(globalHandler).toHaveBeenCalledTimes(2);
+    });
+
+    it("should optimize for empty listener scenarios", async () => {
+      const emptyEventDef: IEventDefinition<string> = {
+        id: "emptyEvent",
+        [symbolEvent]: true,
+      };
+      
+      // Should return immediately without creating event object
+      await eventManager.emit(emptyEventDef, "test", "source");
+      
+      // No errors should occur
+      expect(true).toBe(true);
+    });
+
+    it("should handle high-frequency emissions efficiently", async () => {
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+      eventManager.addGlobalListener(jest.fn());
+      
+      const emitCount = 1000;
+      const startTime = Date.now();
+      
+      for (let i = 0; i < emitCount; i++) {
+        await eventManager.emit(eventDefinition, `test${i}`, "source");
+      }
+      
+      const endTime = Date.now();
+      const duration = endTime - startTime;
+      
+      expect(handler).toHaveBeenCalledTimes(emitCount);
+      // Should complete reasonably fast (adjust threshold as needed)
+      expect(duration).toBeLessThan(5000); // 5 seconds max for 1000 emissions
+    });
+
+    it("should efficiently handle mixed event and global listeners", async () => {
+      const results: string[] = [];
+      
+      // Add many listeners with different orders
+      for (let i = 0; i < 10; i++) {
+        eventManager.addListener(
+          eventDefinition,
+          () => results.push(`event${i}`),
+          { order: i * 2 }
+        );
+        eventManager.addGlobalListener(
+          () => results.push(`global${i}`),
+          { order: i * 2 + 1 }
+        );
+      }
+      
+      await eventManager.emit(eventDefinition, "test", "source");
+      
+      // Should maintain correct order and call all listeners
+      expect(results).toHaveLength(20);
+      expect(results[0]).toBe("event0");
+      expect(results[1]).toBe("global0");
+      expect(results[18]).toBe("event9");
+      expect(results[19]).toBe("global9");
+    });
+
+    it("should reuse cached results across different event types", async () => {
+      const event1: IEventDefinition<string> = { id: "event1", [symbolEvent]: true };
+      const event2: IEventDefinition<string> = { id: "event2", [symbolEvent]: true };
+      
+      const handler1 = jest.fn();
+      const handler2 = jest.fn();
+      const globalHandler = jest.fn();
+      
+      eventManager.addListener(event1, handler1);
+      eventManager.addListener(event2, handler2);
+      eventManager.addGlobalListener(globalHandler);
+      
+      // Multiple emits should use cached merged listeners
+      await eventManager.emit(event1, "test1", "source");
+      await eventManager.emit(event2, "test2", "source");
+      await eventManager.emit(event1, "test3", "source");
+      await eventManager.emit(event2, "test4", "source");
+      
+      expect(handler1).toHaveBeenCalledTimes(2);
+      expect(handler2).toHaveBeenCalledTimes(2);
+      expect(globalHandler).toHaveBeenCalledTimes(4);
+    });
+  });
 });
