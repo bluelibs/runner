@@ -4,7 +4,10 @@
       "Bash(npm run build:*)",
       "Bash(npm test)",
       "Bash(npx tsc:*)",
-      "Bash(npm run test:*)"
+      "Bash(npm run test:*)",
+      "Bash(npm test -- --testPathPattern=\"factory.test.ts\" --verbose)",
+      "Bash(npm test:*)",
+      "Bash(npm run coverage:*)"
     ],
     "deny": []
   }

@@ -75,7 +75,7 @@ export class ResourceInitializer {
         resource.id
       );
 
-      this.logger.debug(`Resource ${resource.id} initialized`, {}, resource.id);
+      this.logger.debug(`Resource ${resource.id} initialized`, { source: resource.id });
 
       return { value, context };
     } catch (e) {

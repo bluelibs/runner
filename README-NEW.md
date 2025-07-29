@@ -527,9 +527,13 @@ const app = resource({
 });
 ```
 
-## Loggsing: Because Console.log Isn't Professional
+## Logging: Because Console.log Isn't Professional
 
-We provide a proper logging system that emits events, so you can handle logs however you want:
+_The structured logging system that actually makes debugging enjoyable_
+
+BlueLibs Runner comes with a built-in logging system that's event-driven, structured, and doesn't make you hate your life when you're trying to debug at 2 AM. It emits events for everything, so you can handle logs however you want - ship them to your favorite log warehouse, pretty-print them to console, or ignore them entirely (we won't judge).
+
+### Quick Start: Basic Logging
 
 ```typescript
 import { globals } from "@bluelibs/runner";
@@ -538,35 +542,398 @@ const businessTask = task({
   id: "app.tasks.business",
   dependencies: { logger: globals.resources.logger },
   run: async (_, { logger }) => {
-    await logger.info("Starting business process");
-    await logger.warn("This might take a while");
-    await logger.error("Oops, something went wrong");
-    await logger.critical("System is on fire");
+    logger.info("Starting business process");
+    logger.warn("This might take a while");
+    logger.error("Oops, something went wrong", {
+      error: new Error("Database connection failed"),
+    });
+    logger.critical("System is on fire", {
+      data: { temperature: "9000°C" },
+    });
   },
 });
+```
 
+### Log Levels: From Whispers to Screams
+
+The logger supports six log levels with increasing severity:
+
+| Level      | Severity | When to Use                                 | Color   |
+| ---------- | -------- | ------------------------------------------- | ------- |
+| `trace`    | 0        | Ultra-detailed debugging info               | Gray    |
+| `debug`    | 1        | Development and debugging information       | Cyan    |
+| `info`     | 2        | General information about normal operations | Green   |
+| `warn`     | 3        | Something's not right, but still working    | Yellow  |
+| `error`    | 4        | Errors that need attention                  | Red     |
+| `critical` | 5        | System-threatening issues                   | Magenta |
+
+```typescript
+// All log levels are available as methods
+logger.trace("Ultra-detailed debugging info");
+logger.debug("Development debugging");
+logger.info("Normal operation");
+logger.warn("Something's fishy");
+logger.error("Houston, we have a problem");
+logger.critical("DEFCON 1: Everything is broken");
+```
+
+### Structured Logging: More Than Just Strings
+
+The logger accepts rich, structured data that makes debugging actually useful:
+
+```typescript
+const userTask = task({
+  id: "app.tasks.user.create",
+  dependencies: { logger: globals.resources.logger },
+  run: async (userData, { logger }) => {
+    // Basic message
+    logger.info("Creating new user");
+
+    // With structured data
+    logger.info("User creation attempt", {
+      data: {
+        email: userData.email,
+        registrationSource: "web",
+        timestamp: new Date().toISOString(),
+      },
+    });
+
+    // With error information
+    try {
+      const user = await createUser(userData);
+      logger.info("User created successfully", {
+        data: { userId: user.id, email: user.email },
+      });
+    } catch (error) {
+      logger.error("User creation failed", {
+        error,
+        data: {
+          attemptedEmail: userData.email,
+          validationErrors: error.validationErrors,
+        },
+      });
+    }
+  },
+});
+```
+
+### Context-Aware Logging: The with() Method
+
+Create logger instances with bound context for consistent metadata across related operations:
+
+```typescript
+const RequestContext = createContext<{ requestId: string; userId: string }>(
+  "app.requestContext"
+);
+
+const requestHandler = task({
+  id: "app.tasks.handleRequest",
+  dependencies: { logger: globals.resources.logger },
+  run: async (requestData, { logger }) => {
+    const request = RequestContext.use();
+
+    // Create a contextual logger with bound metadata
+    const requestLogger = logger.with({
+      requestId: request.requestId,
+      userId: request.userId,
+      source: "api.handler",
+    });
+
+    // All logs from this logger will include the bound context
+    requestLogger.info("Processing request", {
+      data: { endpoint: requestData.path },
+    });
+
+    requestLogger.debug("Validating input", {
+      data: { inputSize: JSON.stringify(requestData).length },
+    });
+
+    // Context is automatically included in all log events
+    requestLogger.error("Request processing failed", {
+      error: new Error("Invalid input"),
+      data: { stage: "validation" },
+    });
+  },
+});
+```
+
+### Print Threshold: Control What Shows Up
+
+By default, logs are just events - they don't print to console unless you tell them to. Set a print threshold to automatically output logs at or above a certain level:
+
+```typescript
 // Set up log printing (they don't print by default)
 const setupLogging = task({
   id: "app.logging.setup",
   on: globals.resources.logger.events.afterInit,
   run: async (event) => {
     const logger = event.data.value;
-    logger.setPrintThreshold("info"); // Print info and above
-  },
-});
 
-// Ship logs to your favorite log warehouse
-const logShipper = task({
-  id: "app.logging.shipper",
-  on: globals.events.log,
-  run: async (event) => {
-    const log = event.data;
-    if (log.level === "error" || log.level === "critical") {
-      await shipToLogWarehouse(log);
-    },
+    // Print info level and above (info, warn, error, critical)
+    logger.setPrintThreshold("info");
+
+    // Print only errors and critical issues
+    logger.setPrintThreshold("error");
+
+    // Disable auto-printing entirely
+    logger.setPrintThreshold(null);
   },
 });
 ```
+
+### Event-Driven Log Handling: Ship Logs Anywhere
+
+Every log generates an event that you can listen to. This is where the real power comes in:
+
+```typescript
+// Ship logs to your favorite log warehouse
+const logShipper = task({
+  id: "app.logging.shipper", // or pretty printer, or winston, pino bridge, etc.
+  on: globals.events.log,
+  run: async (event) => {
+    const log = event.data;
+
+    // Ship critical errors to PagerDuty
+    if (log.level === "critical") {
+      await pagerDuty.alert({
+        message: log.message,
+        details: log.data,
+        source: log.source,
+      });
+    }
+
+    // Ship all errors to error tracking
+    if (log.level === "error" || log.level === "critical") {
+      await sentry.captureException(log.error || new Error(log.message), {
+        tags: { source: log.source },
+        extra: log.data,
+        level: log.level,
+      });
+    }
+
+    // Ship everything to your log warehouse
+    await logWarehouse.ship({
+      timestamp: log.timestamp,
+      level: log.level,
+      message: log.message,
+      source: log.source,
+      data: log.data,
+      context: log.context,
+    });
+  },
+});
+
+// Filter logs by source
+const databaseLogHandler = task({
+  id: "app.logging.database",
+  on: globals.events.log,
+  run: async (event) => {
+    const log = event.data;
+
+    // Only handle database-related logs
+    if (log.source?.includes("database")) {
+      await databaseMonitoring.recordMetric({
+        operation: log.data?.operation,
+        duration: log.data?.duration,
+        level: log.level,
+      });
+    }
+  },
+});
+```
+
+### Integration with Winston: Best of Both Worlds
+
+Want to use Winston as your transport? No problem - integrate it seamlessly:
+
+```typescript
+import winston from "winston";
+
+// Create Winston logger, put it in a resource if used from various places.
+const winstonLogger = winston.createLogger({
+  level: "info",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: "error.log", level: "error" }),
+    new winston.transports.File({ filename: "combined.log" }),
+    new winston.transports.Console({
+      format: winston.format.simple(),
+    }),
+  ],
+});
+
+// Bridge BlueLibs logs to Winston
+const winstonBridge = task({
+  id: "app.logging.winston",
+  on: globals.events.log,
+  run: async (event) => {
+    const log = event.data;
+
+    // Convert BlueLibs log to Winston format
+    const winstonMeta = {
+      source: log.source,
+      timestamp: log.timestamp,
+      data: log.data,
+      context: log.context,
+      ...(log.error && { error: log.error }),
+    };
+
+    // Map log levels (BlueLibs -> Winston)
+    const levelMapping = {
+      trace: "silly",
+      debug: "debug",
+      info: "info",
+      warn: "warn",
+      error: "error",
+      critical: "error", // Winston doesn't have critical, use error
+    };
+
+    const winstonLevel = levelMapping[log.level] || "info";
+    winstonLogger.log(winstonLevel, log.message, winstonMeta);
+  },
+});
+```
+
+### Advanced: Custom Log Formatters
+
+Want to customize how logs are printed? You can override the print behavior:
+
+```typescript
+// Custom logger with JSON output
+class JSONLogger extends Logger {
+  print(log: ILog) {
+    console.log(
+      JSON.stringify(
+        {
+          timestamp: log.timestamp.toISOString(),
+          level: log.level.toUpperCase(),
+          source: log.source,
+          message: log.message,
+          data: log.data,
+          context: log.context,
+          error: log.error,
+        },
+        null,
+        2
+      )
+    );
+  }
+}
+
+// Custom logger resource
+const customLogger = resource({
+  id: "app.logger.custom",
+  dependencies: { eventManager: globals.resources.eventManager },
+  init: async (_, { eventManager }) => {
+    return new JSONLogger(eventManager);
+  },
+});
+
+// Or you could simply add it as "globals.resources.logger" and override the default logger
+```
+
+### Log Structure: What You Get
+
+Every log event contains:
+
+```typescript
+interface ILog {
+  level: string; // The log level (trace, debug, info, etc.)
+  source?: string; // Where the log came from
+  message: any; // The main log message (can be object or string)
+  timestamp: Date; // When the log was created
+  error?: {
+    // Structured error information
+    name: string;
+    message: string;
+    stack?: string;
+  };
+  data?: Record<string, any>; // Additional structured data, it's about the log itself
+  context?: Record<string, any>; // Bound context from logger.with(), it's about the context in which the log was created
+}
+```
+
+### Debugging Tips & Best Practices
+
+#### 1. Use Structured Data Liberally
+
+```typescript
+// Bad - hard to search and filter
+await logger.error(`Failed to process user ${userId} order ${orderId}`);
+
+// Good - searchable and filterable
+await logger.error("Order processing failed", {
+  data: {
+    userId,
+    orderId,
+    step: "payment",
+    paymentMethod: "credit_card",
+  },
+});
+```
+
+#### 2. Include Context in Errors
+
+```typescript
+// Include relevant context with errors
+try {
+  await processPayment(order);
+} catch (error) {
+  await logger.error("Payment processing failed", {
+    error,
+    data: {
+      orderId: order.id,
+      amount: order.total,
+      currency: order.currency,
+      paymentMethod: order.paymentMethod,
+      attemptNumber: order.paymentAttempts,
+    },
+  });
+}
+```
+
+#### 3. Use Different Log Levels Appropriately
+
+```typescript
+// Good level usage
+await logger.debug("Cache hit", { data: { key, ttl: remainingTTL } });
+await logger.info("User logged in", { data: { userId, loginMethod } });
+await logger.warn("Rate limit approaching", {
+  data: { current: 95, limit: 100 },
+});
+await logger.error("Database connection failed", {
+  error,
+  data: { attempt: 3 },
+});
+await logger.critical("System out of memory", { data: { available: "0MB" } });
+```
+
+#### 4. Create Domain-Specific Loggers
+
+```typescript
+// Create loggers with domain context
+const paymentLogger = logger.with({ source: "payment.processor" });
+const authLogger = logger.with({ source: "auth.service" });
+const emailLogger = logger.with({ source: "email.service" });
+
+// Use throughout your domain
+await paymentLogger.info("Processing payment", { data: paymentData });
+await authLogger.warn("Failed login attempt", { data: { email, ip } });
+```
+
+### Common Pitfalls
+
+1. **Logging sensitive data**: Never log passwords, tokens, or PII
+2. **Over-logging in hot paths**: Check print thresholds for expensive operations
+3. **Forgetting error objects**: Always include the original error when logging failures
+4. **Poor log levels**: Don't use `error` for expected conditions
+5. **Missing context**: Include relevant identifiers (user ID, request ID, etc.)
+
+The Logger system is designed to be fast, flexible, and non-intrusive. Use it liberally - good logging is the difference between debugging hell and debugging heaven.
 
 ## Meta: Tagging Your Components
 

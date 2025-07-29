@@ -32,6 +32,11 @@ describe("main exports", () => {
 
     expect(directTask.id).toBe("test");
     expect(aliasTask.id).toBe("test2");
+
+    // Test globals sub-properties for complete coverage
+    expect(typeof mainExports.globals.events).toBe("object");
+    expect(typeof mainExports.globals.resources).toBe("object");
+    expect(typeof mainExports.globals.middlewares).toBe("object");
   });
 });
 

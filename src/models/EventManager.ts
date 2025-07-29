@@ -136,4 +136,9 @@ export class EventManager {
     };
     this.insertListener(this.globalListeners, newListener);
   }
+
+  hasListeners<T>(eventDefinition: IEventDefinition<T>): boolean {
+    const eventListeners = this.listeners.get(eventDefinition.id) || [];
+    return eventListeners.length > 0 || this.globalListeners.length > 0;
+  }
 }

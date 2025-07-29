@@ -1,4 +1,4 @@
-import { Semaphore } from "../../models/Semaphore";
+import { Semaphore } from "../..";
 
 describe("Semaphore", () => {
   let semaphore: Semaphore;
@@ -284,6 +284,45 @@ describe("Semaphore", () => {
       expect(semaphore.getAvailablePermits()).toBe(2);
     });
 
+    it("should clean up abort listeners when queued operation resolves", async () => {
+      // Fill all permits
+      await semaphore.acquire();
+      await semaphore.acquire();
+
+      const controller = new AbortController();
+
+      // Start operation that will wait in queue
+      const queuedOperation = semaphore.acquire({ signal: controller.signal });
+      expect(semaphore.getWaitingCount()).toBe(1);
+
+      // Release permit - should trigger the resolve path with cleanup
+      semaphore.release();
+      await queuedOperation;
+
+      expect(semaphore.getWaitingCount()).toBe(0);
+      expect(semaphore.getAvailablePermits()).toBe(0);
+    });
+
+    it("should clean up abort listeners when queued operation rejects due to timeout", async () => {
+      // Fill all permits
+      await semaphore.acquire();
+      await semaphore.acquire();
+
+      const controller = new AbortController();
+
+      // Start operation with both timeout and abort signal
+      const queuedOperation = semaphore.acquire({
+        timeout: 50,
+        signal: controller.signal,
+      });
+      expect(semaphore.getWaitingCount()).toBe(1);
+
+      // Let timeout occur - should trigger reject path with cleanup
+      await expect(queuedOperation).rejects.toThrow("timeout");
+
+      expect(semaphore.getWaitingCount()).toBe(0);
+    });
+
     it("should handle both timeout and cancellation", async () => {
       // Fill all permits
       await semaphore.acquire();
@@ -368,6 +407,27 @@ describe("Semaphore", () => {
       await expect(operationPromise).rejects.toThrow(
         "Semaphore has been disposed"
       );
+    });
+
+    it("should clean up abort listeners when operation is disposed", async () => {
+      // Fill all permits
+      await semaphore.acquire();
+      await semaphore.acquire();
+
+      const controller = new AbortController();
+
+      // Start operation with abort signal that will wait in queue
+      const queuedOperation = semaphore.acquire({ signal: controller.signal });
+      expect(semaphore.getWaitingCount()).toBe(1);
+
+      // Dispose semaphore - should trigger reject path with abort listener cleanup
+      semaphore.dispose();
+
+      await expect(queuedOperation).rejects.toThrow(
+        "Semaphore has been disposed"
+      );
+
+      expect(semaphore.getWaitingCount()).toBe(0);
     });
   });
 
@@ -592,12 +652,20 @@ describe("Semaphore", () => {
       expect(users).toHaveLength(4);
       expect(activeCalls).toBe(0);
 
-      // Test with cancellation
+      // Test with cancellation - start long-running operations to fill semaphore
+      const longRunningOp1 = apiClient.fetchUser(10);
+      const longRunningOp2 = apiClient.fetchUser(11);
+
+      // Now semaphore should be full, so next operation will wait
       const controller = new AbortController();
       const cancelledCall = apiClient.fetchUser(5, controller.signal);
       controller.abort();
 
       await expect(cancelledCall).rejects.toThrow("Operation was aborted");
+
+      // Wait for the long-running operations to complete
+      await longRunningOp1;
+      await longRunningOp2;
 
       rateLimiter.dispose();
     });
@@ -611,7 +679,7 @@ describe("Semaphore", () => {
       const processed: any[] = [];
 
       const processBatch = async () => {
-        const promises = items.map((item, index) =>
+        const promises = items.map((item) =>
           batchSemaphore.withPermit(async () => {
             // Simulate processing time
             await new Promise((resolve) => setTimeout(resolve, 5));

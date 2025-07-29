@@ -9,16 +9,30 @@ export type LogLevels =
   | "error"
   | "critical";
 
+export interface LogInfo {
+  source?: string;
+  error?: Error;
+  data?: Record<string, any>;
+  [key: string]: any;
+}
+
 export interface ILog {
   level: string;
   source?: string;
-  data: any;
+  message: any;
   timestamp: Date;
-  additionalData?: Record<string, any>;
+  error?: {
+    name: string;
+    message: string;
+    stack?: string;
+  };
+  data?: Record<string, any>;
+  context?: Record<string, any>;
 }
 
 export class Logger {
   printThreshold: LogLevels | null = null;
+  private boundContext: Record<string, any> = {};
 
   public static Severity = {
     trace: 0,
@@ -29,24 +43,49 @@ export class Logger {
     critical: 5,
   };
 
-  constructor(protected eventManager: EventManager) {}
+  constructor(
+    protected eventManager: EventManager,
+    boundContext: Record<string, any> = {}
+  ) {
+    this.boundContext = { ...boundContext };
+  }
 
   /**
-   * @param level
-   * @param message
+   * Creates a new logger instance with additional bound context
    */
-  public async log(
-    level: LogLevels,
-    data: any,
-    additionalData?: Record<string, any>,
-    source?: string
-  ): Promise<void> {
+  public with(context: Record<string, any>): Logger {
+    return new Logger(this.eventManager, {
+      ...this.boundContext,
+      ...context,
+    });
+  }
+
+  private extractErrorInfo(error: Error): {
+    name: string;
+    message: string;
+    stack?: string;
+  } {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  /**
+   * Core logging method with structured LogInfo
+   */
+  public log(level: LogLevels, message: any, logInfo: LogInfo = {}): void {
+    const { source, error, data, ...context } = logInfo;
+
     const log: ILog = {
       level,
-      data,
-      source: source,
-      additionalData,
+      message,
+      source: source || this.boundContext.source,
       timestamp: new Date(),
+      error: error ? this.extractErrorInfo(error) : undefined,
+      data: data || undefined,
+      context: { ...this.boundContext, ...context },
     };
 
     if (
@@ -56,7 +95,19 @@ export class Logger {
       this.print(log);
     }
 
-    await this.eventManager.emit(globalEvents.log, log, source || "unknown");
+    if (this.eventManager.hasListeners(globalEvents.log)) {
+      setImmediate(() => {
+        this.eventManager
+          .emit(
+            globalEvents.log,
+            log,
+            source || this.boundContext.source || "unknown"
+          )
+          .catch((err) => {
+            console.error("Logger event emission failed:", err);
+          });
+      });
+    }
   }
 
   /**
@@ -68,95 +119,71 @@ export class Logger {
   }
 
   public print(log: ILog) {
-    // Extract the relevant information from the log
-    const { level, source: context, data, timestamp } = log;
+    const { level, source, message, timestamp, error, data, context } = log;
 
-    // Format the timestamp to a more readable format
-    const formattedTimestamp = timestamp.toISOString();
+    const formattedTimestampWithMs =
+      timestamp.toISOString() +
+      "." +
+      timestamp.getMilliseconds().toString().padStart(3, "0");
+    const formattedTimestamp = `[${formattedTimestampWithMs}]`;
 
-    // Format the log level for better visibility
     const levelStr = `[${level.toUpperCase()}]`;
+    const sourceStr = source ? `(${source})` : "";
 
-    // Format the context, if provided
-    const contextStr = context ? `(${context})` : "";
-
-    // Handle different data types, especially if it's an error
-    let dataStr: string;
-    if (data instanceof Error) {
-      dataStr = `Error: ${data.name} - ${data.message}\nStack Trace:\n${data.stack}`;
-    } else if (typeof data === "object") {
-      dataStr = JSON.stringify(data, null, 2); // Pretty-print JSON objects
+    // Format the main message
+    let messageStr: string;
+    if (typeof message === "object") {
+      messageStr = JSON.stringify(message, null, 2);
     } else {
-      dataStr = String(data); // Convert any other type to string
+      messageStr = String(message);
     }
 
-    // Construct the final log message
-    const logMessage = `${formattedTimestamp} ${levelStr} ${contextStr} - ${dataStr}`;
+    // Add error information if present
+    let errorStr = "";
+    if (error && error instanceof Error) {
+      errorStr = `\nError: ${error.name} - ${error.message}`;
+      if (error.stack) {
+        errorStr += `\nStack Trace:\n${error.stack}`;
+      }
+    }
 
-    // Print the log message
+    // Add structured data if present
+    let dataStr = "";
+    if (data && Object.keys(data).length > 0) {
+      dataStr = `\nData: ${JSON.stringify(data, null, 2)}`;
+    }
+
+    // Add context if present
+    let contextStr = "";
+    if (context && Object.keys(context).length > 0) {
+      contextStr = `\nContext: ${JSON.stringify(context, null, 2)}`;
+    }
+
+    const logMessage = `${formattedTimestamp} ${levelStr} ${sourceStr} - ${messageStr}${errorStr}${dataStr}${contextStr}`;
     console.log(logMessage);
   }
 
-  /**
-   * Autocompletes the source name for the logger.
-   * @param sourceName
-   * @returns
-   */
-  public source(sourceName: string) {
-    const levels = ["info", "error", "warn", "debug", "trace", "critical"];
-
-    return levels.reduce((acc, level) => {
-      acc[level] = (data: any, additionalData?: Record<string, any>) =>
-        this.log(level as LogLevels, data, additionalData, sourceName);
-      return acc;
-    }, {} as Record<LogLevels, (data: any, additionalData?: Record<string, any>) => Promise<void>>);
+  public info(message: any, logInfo: LogInfo = {}) {
+    this.log("info", message, logInfo);
   }
 
-  public async info(
-    data: any,
-    additionalData: Record<string, any> = {},
-    source?: string
-  ) {
-    await this.log("info", data, additionalData, source);
+  public error(message: any, logInfo: LogInfo = {}) {
+    this.log("error", message, logInfo);
   }
 
-  public async error(
-    data: any,
-    additionalData: Record<string, any> = {},
-    source?: string
-  ) {
-    await this.log("error", data, additionalData, source);
+  public warn(message: any, logInfo: LogInfo = {}) {
+    this.log("warn", message, logInfo);
   }
 
-  public async warn(
-    data: any,
-    additionalData: Record<string, any> = {},
-    source?: string
-  ) {
-    await this.log("warn", data, additionalData, source);
+  public debug(message: any, logInfo: LogInfo = {}) {
+    this.log("debug", message, logInfo);
   }
 
-  public async debug(
-    data: any,
-    additionalData: Record<string, any> = {},
-    source?: string
-  ) {
-    await this.log("debug", data, additionalData, source);
+  public trace(message: any, logInfo: LogInfo = {}) {
+    this.log("trace", message, logInfo);
   }
 
-  public async trace(
-    data: any,
-    additionalData: Record<string, any> = {},
-    source?: string
-  ) {
-    await this.log("trace", data, additionalData, source);
-  }
-
-  public async critical(
-    data: any,
-    additionalData: Record<string, any> = {},
-    source?: string
-  ) {
-    await this.log("critical", data, additionalData, source);
+  public critical(message: any, logInfo: LogInfo = {}) {
+    this.log("critical", message, logInfo);
   }
 }

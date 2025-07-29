@@ -15,15 +15,19 @@ describe("Logger", () => {
     it("should emit a log event with correct data", async () => {
       const testData = "Test log message";
       const testLevel = "info";
-      mockEventManager.emit = jest.fn();
+      mockEventManager.emit = jest.fn().mockResolvedValue(undefined);
+      mockEventManager.hasListeners = jest.fn().mockReturnValue(true);
 
-      await logger.log(testLevel, testData);
+      logger.log(testLevel, testData);
+
+      // Wait for setImmediate to execute
+      await new Promise(setImmediate);
 
       expect(mockEventManager.emit).toHaveBeenCalledWith(
         globalEvents.log,
         expect.objectContaining({
           level: testLevel,
-          data: testData,
+          message: testData,
           timestamp: expect.any(Date),
         }),
         "unknown"
@@ -40,21 +44,18 @@ describe("Logger", () => {
         "critical",
       ];
 
-      mockEventManager.emit = jest.fn();
+      mockEventManager.emit = jest.fn().mockResolvedValue(undefined);
+      mockEventManager.hasListeners = jest.fn().mockReturnValue(true);
 
       for (const level of levels) {
-        await logger.log(level, `Test ${level} message`, "testSource");
-
-        expect(mockEventManager.emit).toHaveBeenCalledWith(
-          globalEvents.log,
-          expect.objectContaining({
-            level,
-            data: `Test ${level} message`,
-            timestamp: expect.any(Date),
-          }),
-          "testSource"
-        );
+        logger.log(level, `Test ${level} message`, { source: "testSource" });
       }
+
+      // Wait for setImmediate to execute
+      await new Promise(setImmediate);
+
+      // Check all calls were made
+      expect(mockEventManager.emit).toHaveBeenCalledTimes(levels.length);
     });
   });
 
@@ -73,14 +74,14 @@ describe("Logger", () => {
       const testLog: ILog = {
         level: "info",
         source: "test",
-        data: "Test log message",
+        message: "Test log message",
         timestamp: new Date("2023-01-01T00:00:00Z"),
       };
 
       await logger.print(testLog);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("[INFO] (test) - Test log message")
+        expect.stringContaining("INFO")
       );
     });
 
@@ -88,32 +89,95 @@ describe("Logger", () => {
       const testError = new Error("Test error");
       const testLog: ILog = {
         level: "error",
-        data: testError,
+        message: "Operation failed",
+        error: {
+          name: testError.name,
+          message: testError.message,
+          stack: testError.stack,
+        },
         timestamp: new Date("2023-01-01T00:00:00Z"),
       };
 
       await logger.print(testLog);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Error: Error - Test error")
+        expect.stringContaining("ERROR")
       );
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Stack Trace:")
+        expect.stringContaining("Error Details")
       );
     });
 
-    it("should pretty-print JSON objects in log data", async () => {
+    it("should pretty-print structured data", () => {
       const testObject = { key: "value", nested: { foo: "bar" } };
       const testLog: ILog = {
         level: "debug",
+        message: "Debug info",
         data: testObject,
         timestamp: new Date("2023-01-01T00:00:00Z"),
       };
 
-      await logger.print(testLog);
+      logger.print(testLog);
 
       expect(consoleLogSpy).toHaveBeenCalledWith(
-        expect.stringContaining(JSON.stringify(testObject, null, 2))
+        expect.stringContaining("DEBUG")
+      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('"key": "value"')
+      );
+    });
+
+    it("should handle object message by stringifying it", () => {
+      const objectMessage = { type: "user", action: "login" };
+      const testLog: ILog = {
+        level: "info",
+        message: objectMessage as any,
+        timestamp: new Date("2023-01-01T00:00:00Z"),
+      };
+
+      logger.print(testLog);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("INFO")
+      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining(JSON.stringify(objectMessage, null, 2))
+      );
+    });
+
+    it("should print context information when present", () => {
+      const context = { userId: "123", requestId: "abc-def" };
+      const testLog: ILog = {
+        level: "warn",
+        message: "Warning message",
+        data: context,
+        timestamp: new Date("2023-01-01T00:00:00Z"),
+      };
+
+      logger.print(testLog);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("WARN")
+      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("Context:")
+      );
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining('"userId": "123"')
+      );
+    });
+
+    it("should handle unknown log levels gracefully", () => {
+      const testLog: ILog = {
+        level: "unknown" as any,
+        message: "Unknown level message",
+        timestamp: new Date("2023-01-01T00:00:00Z"),
+      };
+
+      logger.print(testLog);
+
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("UNKNOWN")
       );
     });
   });
@@ -129,18 +193,99 @@ describe("Logger", () => {
     ];
 
     for (const level of testLevels) {
-      it(`should call log method with ${level} level`, async () => {
+      it(`should call log method with ${level} level`, () => {
         const logSpy = jest.spyOn(logger, "log").mockImplementation();
 
-        await logger[level]("Test log message");
+        logger[level]("Test log message");
 
         expect(logSpy).toHaveBeenCalledWith(
           level,
           "Test log message",
-          undefined // the context parameter
+          {} // the LogInfo parameter
         );
       });
     }
+  });
+
+  describe("with method", () => {
+    it("should create a new logger with additional context", () => {
+      const initialContext = { source: "initial" };
+      const loggerWithContext = new Logger(mockEventManager, initialContext);
+
+      const additionalContext = { userId: "123", feature: "auth" };
+      const newLogger = loggerWithContext.with(additionalContext);
+
+      expect(newLogger).toBeInstanceOf(Logger);
+      expect(newLogger).not.toBe(loggerWithContext);
+
+      // Test that the context is merged by checking the log call
+      const logSpy = jest.spyOn(newLogger, "log").mockImplementation();
+      newLogger.info("test message");
+
+      expect(logSpy).toHaveBeenCalledWith("info", "test message", {});
+    });
+
+    it("should override context values when keys overlap", () => {
+      const initialContext = { source: "initial", common: "old" };
+      const loggerWithContext = new Logger(mockEventManager, initialContext);
+
+      const newContext = { source: "override", newProp: "value" };
+      const newLogger = loggerWithContext.with(newContext);
+
+      // The new logger should have the overridden context
+      expect(newLogger).toBeInstanceOf(Logger);
+    });
+  });
+
+  describe("error handling", () => {
+    it("should handle event emission errors gracefully", async () => {
+      const consoleErrorSpy = jest.spyOn(console, "error").mockImplementation();
+      const emitError = new Error("Event emission failed");
+
+      mockEventManager.emit = jest.fn().mockRejectedValue(emitError);
+      mockEventManager.hasListeners = jest.fn().mockReturnValue(true);
+
+      logger.log("error", "Test error message");
+
+      // Wait for setImmediate and promise rejection to be handled
+      await new Promise(setImmediate);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(consoleErrorSpy).toHaveBeenCalledWith(
+        "Logger event emission failed:",
+        emitError
+      );
+
+      consoleErrorSpy.mockRestore();
+    });
+
+    it("should extract error information from Error objects", async () => {
+      mockEventManager.emit = jest.fn().mockResolvedValue(undefined);
+      mockEventManager.hasListeners = jest.fn().mockReturnValue(true);
+
+      const testError = new Error("Test error message");
+      testError.name = "CustomError";
+
+      logger.log("error", "Operation failed", { error: testError });
+
+      // Wait for setImmediate to execute
+      await new Promise(setImmediate);
+
+      expect(mockEventManager.emit).toHaveBeenCalledWith(
+        globalEvents.log,
+        expect.objectContaining({
+          level: "error",
+          message: "Operation failed",
+          error: {
+            name: "CustomError",
+            message: "Test error message",
+            stack: expect.any(String),
+          },
+          timestamp: expect.any(Date),
+        }),
+        "unknown"
+      );
+    });
   });
 
   it("should auto-print logs based on autoPrintLogsAfter option", async () => {

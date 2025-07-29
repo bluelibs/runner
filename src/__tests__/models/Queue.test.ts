@@ -1,5 +1,5 @@
 // queue.test.ts
-import { Queue } from "../../models/Queue"; // <-- adjust path if needed
+import { Queue } from "../.."; // <-- adjust path if needed
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                            */
