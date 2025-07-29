@@ -6,7 +6,8 @@ import {
 } from "../defs";
 import { EventManager } from "./EventManager";
 import { globalEvents } from "../globals/globalEvents";
-import { MiddlewareStoreElementType, Store } from "./Store";
+import { Store } from "./Store";
+import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
 
 export class ResourceInitializer {
@@ -46,7 +47,7 @@ export class ResourceInitializer {
       resource.id
     );
 
-    let error, value;
+    let error: any, value: TValue | undefined;
     try {
       if (resource.init) {
         value = await this.initWithMiddleware(
@@ -61,7 +62,7 @@ export class ResourceInitializer {
         resource.events.afterInit,
         {
           config,
-          value,
+          value: value as TValue,
         },
         resource.id
       );
@@ -70,14 +71,14 @@ export class ResourceInitializer {
         {
           config,
           resource,
-          value,
+          value: value as TValue,
         },
         resource.id
       );
 
       this.logger.debug(`Resource ${resource.id} initialized`, { source: resource.id });
 
-      return { value, context };
+      return { value: value as TValue, context };
     } catch (e) {
       error = e;
       let isSuppressed = false;
@@ -89,7 +90,7 @@ export class ResourceInitializer {
       await this.eventManager.emit(
         resource.events.onError,
         {
-          error,
+          error: error as Error,
           suppress,
         },
         resource.id
@@ -97,7 +98,7 @@ export class ResourceInitializer {
       await this.eventManager.emit(
         globalEvents.resources.onError,
         {
-          error,
+          error: error as Error,
           resource,
           suppress,
         },

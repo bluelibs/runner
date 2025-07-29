@@ -335,6 +335,11 @@ export interface IMiddleware<
   TConfig = any,
   TDependencies extends DependencyMapType = any
 > extends IMiddlewareDefinition<TConfig, TDependencies> {
+  [symbolMiddleware]: true;
+  [symbolMiddlewareConfigured]?: boolean;
+  [symbolMiddlewareEverywhereTasks]?: boolean;
+  [symbolMiddlewareEverywhereResources]?: boolean;
+
   dependencies: TDependencies | (() => TDependencies);
   everywhere(): IMiddleware<TConfig, TDependencies>;
   config: TConfig;

@@ -18,7 +18,11 @@ describe("Caching System", () => {
         async init(_, { cache }) {
           expect(cache.cacheFactoryTask).toBeDefined();
           expect(cache.async).toBeUndefined();
-          expect(cache.defaultOptions).toEqual({ ttl: 10000 });
+          expect(cache.defaultOptions).toEqual({
+            ttl: 10000,
+            max: 100,
+            ttlAutopurge: true,
+          });
         },
       });
 
@@ -70,7 +74,7 @@ describe("Caching System", () => {
       }
 
       const customCacheFactoryTask = defineTask({
-        id: "global.tasks.cacheFactory",
+        id: "globals.tasks.cacheFactory",
         run: async (options: any) => {
           return new CustomCache();
         },
@@ -133,7 +137,7 @@ describe("Caching System", () => {
       }
 
       const redisCacheFactoryTask = defineTask({
-        id: "global.tasks.cacheFactory",
+        id: "globals.tasks.cacheFactory",
         run: async (options: any) => {
           return new RedisLikeCache();
         },
@@ -235,7 +239,7 @@ describe("Caching System", () => {
 
     it("should handle custom key builders", async () => {
       const customMiddleware = cacheMiddleware.with({
-        keyBuilder: (taskId, input) => `${taskId}-${input.id}`,
+        keyBuilder: (taskId: string, input: any) => `${taskId}-${input.id}`,
         ttl: 1000,
         ttlAutopurge: true,
       });
@@ -376,7 +380,7 @@ describe("Caching System", () => {
     }
 
     const asyncCacheFactoryTask = defineTask({
-      id: "global.tasks.cacheFactory",
+      id: "globals.tasks.cacheFactory",
       run: async (options: any) => {
         return new AsyncMockCache();
       },
@@ -390,7 +394,7 @@ describe("Caching System", () => {
       });
 
       const asyncCacheResource = defineResource({
-        id: "global.resources.cache",
+        id: "globals.resources.cache",
         register: [asyncCacheFactoryTask],
         dependencies: { cacheFactoryTask: asyncCacheFactoryTask },
         init: async (config: any, { cacheFactoryTask }) => ({
@@ -618,14 +622,14 @@ describe("Caching System", () => {
       }
 
       const disposableCacheFactoryTask = defineTask({
-        id: "global.tasks.cacheFactory",
+        id: "globals.tasks.cacheFactory",
         run: async (options: any) => {
           return new AsyncDisposableCache();
         },
       });
 
       const disposableCacheResource = defineResource({
-        id: "global.resources.cache",
+        id: "globals.resources.cache",
         register: [disposableCacheFactoryTask],
         dependencies: { cacheFactoryTask: disposableCacheFactoryTask },
         init: async (config: any, { cacheFactoryTask }) => ({
@@ -705,14 +709,14 @@ describe("Caching System", () => {
       }
 
       const invalidCacheFactoryTask = defineTask({
-        id: "global.tasks.cacheFactory",
+        id: "globals.tasks.cacheFactory",
         run: async (options: any) => {
           return new InvalidCache() as any;
         },
       });
 
       const invalidCacheResource = defineResource({
-        id: "global.resources.cache",
+        id: "globals.resources.cache",
         register: [invalidCacheFactoryTask],
         dependencies: { cacheFactoryTask: invalidCacheFactoryTask },
         init: async (config: any, { cacheFactoryTask }) => ({

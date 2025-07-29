@@ -2,7 +2,7 @@ import { defineResource } from "../../define";
 import { Queue } from "../../models/Queue";
 
 export const queueResource = defineResource({
-  id: "global.resources.queue",
+  id: "globals.resources.queue",
   context: () => ({
     map: new Map<string, Queue>(),
   }),

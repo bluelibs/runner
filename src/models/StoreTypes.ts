@@ -1,0 +1,46 @@
+import {
+  DependencyMapType,
+  DependencyValuesType,
+  IMiddlewareDefinition,
+  IEventDefinition,
+  IResource,
+  ITask,
+  IResourceWithConfig,
+  RegisterableItems,
+  IMiddleware,
+} from "../defs";
+
+export type ResourceStoreElementType<
+  C = any,
+  V = any,
+  D extends DependencyMapType = {},
+  TContext = any
+> = {
+  resource: IResource<C, V, D>;
+  computedDependencies?: DependencyValuesType<D>;
+  config: C;
+  value: V;
+  context: TContext;
+  isInitialized?: boolean;
+};
+
+export type TaskStoreElementType<
+  Input = any,
+  Output extends Promise<any> = any,
+  D extends DependencyMapType = any,
+  TOn extends "*" | IEventDefinition | undefined = any
+> = {
+  task: ITask<Input, Output, D, TOn>;
+  computedDependencies: DependencyValuesType<D>;
+  isInitialized: boolean;
+};
+
+export type MiddlewareStoreElementType<TDeps extends DependencyMapType = any> =
+  {
+    middleware: IMiddleware<TDeps>;
+    computedDependencies: DependencyValuesType<TDeps>;
+  };
+
+export type EventStoreElementType = {
+  event: IEventDefinition;
+};

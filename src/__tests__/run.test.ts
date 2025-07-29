@@ -284,22 +284,22 @@ describe("run", () => {
     });
 
     it("should throw an error if there's an infinite dependency", async () => {
-      const task1 = defineTask({
+      const task1: any = defineTask({
         id: "task1",
-        dependencies: () => ({ task2 }), // Corrected line
+        dependencies: (): any => ({ task2 }), // Corrected line
         run: async () => "Task 1",
       });
 
-      const task2 = defineTask({
+      const task2: any = defineTask({
         id: "task2",
         dependencies: { task1 },
         run: async () => "Task 2",
       });
 
       // define circular dependency resources
-      const resource1 = defineResource({
+      const resource1: any = defineResource({
         id: "resource1",
-        dependencies: () => ({
+        dependencies: (): any => ({
           resource2,
         }),
         init: async () => "Resource 1",

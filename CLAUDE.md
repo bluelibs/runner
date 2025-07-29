@@ -309,7 +309,7 @@ const testApp = resource({
 - `index()` helper for grouping dependencies
 - Context system for request-scoped data using `createContext()`
 - Built-in caching middleware with `globals.middleware.cache`
-- Global events for lifecycle hooks (`global.tasks.beforeRun`, etc.)
+- Global events for lifecycle hooks (`globals.tasks.beforeRun`, etc.)
 - Error handling with suppression capability via `event.data.suppress()`
 - Override system for replacing components
 - Built-in logging with levels (trace/debug/info/warn/error/critical)

@@ -21,7 +21,7 @@ export interface RetryMiddlewareConfig {
 }
 
 export const retryMiddleware = defineMiddleware({
-  id: "global.middleware.retry",
+  id: "globals.middleware.retry",
   async run({ task, resource, next }, deps, config: RetryMiddlewareConfig) {
     const input = task ? task.input : resource?.config;
     let attempts = 0;

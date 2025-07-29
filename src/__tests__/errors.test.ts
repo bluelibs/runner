@@ -56,13 +56,13 @@ describe("Errors", () => {
   });
 
   it("should throw circularDependencies error", async () => {
-    const task1 = defineTask({
+    const task1: any = defineTask({
       id: "task1",
-      dependencies: () => ({ task2 }),
+      dependencies: (): any => ({ task2 }),
       run: async () => {},
     });
 
-    const task2 = defineTask({
+    const task2: any = defineTask({
       id: "task2",
       dependencies: { task1 },
       run: async () => {},

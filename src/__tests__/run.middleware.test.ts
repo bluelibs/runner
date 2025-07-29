@@ -227,15 +227,15 @@ describe("Middleware", () => {
   });
 
   it("Should prevent circular dependencies when middleware depends on the same task", async () => {
-    const middleware = defineMiddleware({
+    const middleware: any = defineMiddleware({
       id: "middleware",
-      dependencies: () => ({ task }),
-      run: async (_, { task }) => {
+      dependencies: (): any => ({ task }),
+      run: async (_: any, { task }: any) => {
         // example
       },
     });
 
-    const task = defineTask({
+    const task: any = defineTask({
       id: "task",
       middleware: [middleware],
       run: async () => "Task executed",
@@ -255,7 +255,7 @@ describe("Middleware", () => {
 
 describe("Configurable Middleware (.with)", () => {
   it("should allow using middleware usage in a task and pass config to run", async () => {
-    let receivedConfig;
+    let receivedConfig: any;
     const validate = defineMiddleware({
       id: "validate",
       run: async ({ next }, deps, config: { schema: string }) => {

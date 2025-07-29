@@ -2,7 +2,8 @@ import { DependencyMapType, DependencyValuesType, ITask } from "../defs";
 import { Errors } from "../errors";
 import { EventManager } from "./EventManager";
 import { globalEvents } from "../globals/globalEvents";
-import { MiddlewareStoreElementType, Store } from "./Store";
+import { Store } from "./Store";
+import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
 
 export class TaskRunner {
@@ -150,7 +151,7 @@ export class TaskRunner {
     const storeTask = this.store.tasks.get(task.id);
 
     // this is the final next()
-    let next = async (input) => {
+    let next = async (input: any) => {
       return task.run.call(null, input, storeTask?.computedDependencies as any);
     };
 

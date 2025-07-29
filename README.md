@@ -277,12 +277,12 @@ Each event has its own utilities and functions.
 
 The framework comes with its own set of events that fire during the lifecycle. Think of them as the system's way of keeping you informed:
 
-- `global.tasks.beforeRun` - "Hey, I'm about to run this task"
-- `global.tasks.afterRun` - "Task completed, here's what happened"
-- `global.tasks.onError` - "Oops, something went wrong"
-- `global.resources.beforeInit` - "Initializing a resource"
-- `global.resources.afterInit` - "Resource is ready"
-- `global.resources.onError` - "Resource initialization failed"
+- `globals.tasks.beforeRun` - "Hey, I'm about to run this task"
+- `globals.tasks.afterRun` - "Task completed, here's what happened"
+- `globals.tasks.onError` - "Oops, something went wrong"
+- `globals.resources.beforeInit` - "Initializing a resource"
+- `globals.resources.afterInit` - "Resource is ready"
+- `globals.resources.onError` - "Resource initialization failed"
 
 ```typescript
 const taskLogger = task({
@@ -512,7 +512,7 @@ Want Redis instead of the default LRU cache? No problem, just override the cache
 import { task } from "@bluelibs/runner";
 
 const redisCacheFactory = task({
-  id: "global.tasks.cacheFactory", // Same ID as the default task
+  id: "globals.tasks.cacheFactory", // Same ID as the default task
   run: async (options: any) => {
     return new RedisCache(options); // Make sure to turn async on in the cacher.
   },
@@ -1009,6 +1009,30 @@ function namespaced(id: string) {
 const userTask = task({
   id: namespaced("tasks.user.create"),
   // ...
+});
+```
+
+### Factory Pattern: For When You Need Instances
+
+To keep things dead simple, we avoided poluting the D.I. with this concept. Therefore, we recommend using a resource with a factory function to create instances of your classes:
+
+```typescript
+const myFactory = resource({
+  id: "app.factories.myFactory",
+  init: async (config: { someOption: string }) => {
+    return (input: any) => {
+      return new MyClass(input, config.someOption);
+    };
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [myFactory],
+  dependencies: { myFactory },
+  init: async (_, { myFactory }) => {
+    const instance = myFactory({ someOption: "value" });
+  },
 });
 ```
 

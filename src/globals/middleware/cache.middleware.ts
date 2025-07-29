@@ -10,7 +10,7 @@ export interface ICacheInstance {
 
 // Default cache factory task that can be overridden
 export const cacheFactoryTask = defineTask({
-  id: "global.tasks.cacheFactory",
+  id: "globals.tasks.cacheFactory",
   run: async (options: any) => {
     return new LRUCache(options) as ICacheInstance;
   },
@@ -30,7 +30,7 @@ type CacheMiddlewareConfig = {
 } & any;
 
 export const cacheResource = defineResource({
-  id: "global.resources.cache",
+  id: "globals.resources.cache",
   register: [cacheFactoryTask],
   dependencies: {
     cacheFactoryTask,
@@ -42,6 +42,8 @@ export const cacheResource = defineResource({
       async: config.async,
       defaultOptions: {
         ttl: 10 * 1000,
+        max: 100, // Maximum number of items in cache
+        ttlAutopurge: true, // Automatically purge expired items
         ...config.defaultOptions,
       },
     };
@@ -57,13 +59,15 @@ const defaultKeyBuilder = (taskId: string, input: any) =>
   `${taskId}-${JSON.stringify(input)}`;
 
 export const cacheMiddleware = defineMiddleware({
-  id: "global.middleware.cache",
+  id: "globals.middleware.cache",
   dependencies: { cache: cacheResource },
   async run({ task, resource, next }, deps, config: CacheMiddlewareConfig) {
     const { cache } = deps;
     config = {
       keyBuilder: defaultKeyBuilder,
       ttl: 10 * 1000,
+      max: 100, // Maximum number of items in cache
+      ttlAutopurge: true, // Automatically purge expired items
       ...config,
     };
 

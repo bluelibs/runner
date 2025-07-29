@@ -7,7 +7,8 @@ import {
   IEventDefinition,
   IEvent,
 } from "../defs";
-import { ResourceStoreElementType, Store, TaskStoreElementType } from "./Store";
+import { Store } from "./Store";
+import { ResourceStoreElementType, TaskStoreElementType } from "./StoreTypes";
 import * as utils from "../define";
 import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";
@@ -174,7 +175,7 @@ export class DependencyProcessor {
     return object;
   }
 
-  async extractDependency(object, source: string) {
+  async extractDependency(object: any, source: string) {
     if (utils.isResource(object)) {
       return this.extractResourceDependency(object);
     } else if (utils.isTask(object)) {
@@ -195,7 +196,7 @@ export class DependencyProcessor {
     object: IEventDefinition<Record<string, any>>,
     source: string
   ) {
-    return async (input) => {
+    return async (input: any) => {
       return this.eventManager.emit(object, input, source);
     };
   }
@@ -218,7 +219,7 @@ export class DependencyProcessor {
       );
     }
 
-    return (input) => {
+    return (input: any) => {
       return this.taskRunner.run(
         storeTask.task,
         input,

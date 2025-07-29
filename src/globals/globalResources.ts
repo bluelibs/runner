@@ -7,7 +7,7 @@ import { cacheResource } from "./middleware/cache.middleware";
 import { queueResource } from "./resources/queue.resource";
 
 const store = defineResource({
-  id: "global.resources.store",
+  id: "globals.resources.store",
   init: async (store: Store) => store,
   meta: {
     title: "Store",
@@ -20,7 +20,7 @@ const store = defineResource({
 export const globalResources = {
   store,
   eventManager: defineResource({
-    id: "global.resources.eventManager",
+    id: "globals.resources.eventManager",
     init: async (em: EventManager) => em,
     meta: {
       title: "Event Manager",
@@ -30,7 +30,7 @@ export const globalResources = {
     },
   }),
   taskRunner: defineResource({
-    id: "global.resources.taskRunner",
+    id: "globals.resources.taskRunner",
     init: async (runner: TaskRunner) => runner,
     meta: {
       title: "Task Runner",
@@ -40,12 +40,12 @@ export const globalResources = {
     },
   }),
   logger: defineResource({
-    id: "global.resources.logger",
+    id: "globals.resources.logger",
     init: async (logger: Logger) => logger,
     meta: {
       title: "Logger",
       description:
-        "Logs all events and errors. This is meant to be used internally for most use-cases. Emits a global.log event for each log.",
+        "Logs all events and errors. This is meant to be used internally for most use-cases. Emits a globals.log event for each log.",
     },
   }),
   cache: cacheResource,
