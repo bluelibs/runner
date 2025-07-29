@@ -151,14 +151,6 @@ export class TaskRunner {
 
     // this is the final next()
     let next = async (input) => {
-      this.logger.debug(
-        {
-          message: `Running task ${task.id}`,
-          input,
-        },
-        task.id
-      );
-
       return task.run.call(null, input, storeTask?.computedDependencies as any);
     };
 

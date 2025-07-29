@@ -42,4 +42,50 @@ describe("Context System", () => {
       });
     });
   });
+
+  test("concurrent provide calls are isolated", async () => {
+    const results: string[] = [];
+
+    const promises = [
+      TestContext.provide({ id: "user-1" }, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10)); // small delay
+        const context = TestContext.use();
+        results.push(context.id);
+        return context.id;
+      }),
+      TestContext.provide({ id: "user-2" }, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5)); // smaller delay
+        const context = TestContext.use();
+        results.push(context.id);
+        return context.id;
+      }),
+    ];
+
+    const values = await Promise.all(promises);
+
+    // Each context should maintain its own value
+    expect(values).toEqual(["user-1", "user-2"]);
+    expect(results).toEqual(["user-2", "user-1"]); // user-2 finishes first due to shorter delay
+  });
+
+  test("nested provide calls work correctly", async () => {
+    const result = await TestContext.provide({ id: "outer" }, async () => {
+      const outer = TestContext.use();
+
+      const inner = await TestContext.provide({ id: "inner" }, async () => {
+        return TestContext.use();
+      });
+
+      const afterInner = TestContext.use();
+
+      return { outer: outer.id, inner: inner.id, afterInner: afterInner.id };
+    });
+
+    // Outer context should be restored after inner provide completes
+    expect(result).toEqual({
+      outer: "outer",
+      inner: "inner",
+      afterInner: "outer", // This should be restored!
+    });
+  });
 });

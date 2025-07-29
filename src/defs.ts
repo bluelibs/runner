@@ -1,3 +1,5 @@
+export { ICacheInstance } from "./globals/middleware/cache.middleware";
+
 export const symbolTask: unique symbol = Symbol("runner.task");
 export const symbolResource: unique symbol = Symbol("runner.resource");
 export const symbolResourceWithConfig: unique symbol = Symbol(

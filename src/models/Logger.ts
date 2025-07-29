@@ -14,6 +14,7 @@ export interface ILog {
   source?: string;
   data: any;
   timestamp: Date;
+  additionalData?: Record<string, any>;
 }
 
 export class Logger {
@@ -37,12 +38,14 @@ export class Logger {
   public async log(
     level: LogLevels,
     data: any,
+    additionalData?: Record<string, any>,
     source?: string
   ): Promise<void> {
     const log: ILog = {
       level,
       data,
       source: source,
+      additionalData,
       timestamp: new Date(),
     };
 
@@ -94,27 +97,66 @@ export class Logger {
     console.log(logMessage);
   }
 
-  public async info(data: any, source?: string) {
-    await this.log("info", data, source);
+  /**
+   * Autocompletes the source name for the logger.
+   * @param sourceName
+   * @returns
+   */
+  public source(sourceName: string) {
+    const levels = ["info", "error", "warn", "debug", "trace", "critical"];
+
+    return levels.reduce((acc, level) => {
+      acc[level] = (data: any, additionalData?: Record<string, any>) =>
+        this.log(level as LogLevels, data, additionalData, sourceName);
+      return acc;
+    }, {} as Record<LogLevels, (data: any, additionalData?: Record<string, any>) => Promise<void>>);
   }
 
-  public async error(data: any, source?: string) {
-    await this.log("error", data, source);
+  public async info(
+    data: any,
+    additionalData: Record<string, any> = {},
+    source?: string
+  ) {
+    await this.log("info", data, additionalData, source);
   }
 
-  public async warn(data: any, source?: string) {
-    await this.log("warn", data, source);
+  public async error(
+    data: any,
+    additionalData: Record<string, any> = {},
+    source?: string
+  ) {
+    await this.log("error", data, additionalData, source);
   }
 
-  public async debug(data: any, source?: string) {
-    await this.log("debug", data, source);
+  public async warn(
+    data: any,
+    additionalData: Record<string, any> = {},
+    source?: string
+  ) {
+    await this.log("warn", data, additionalData, source);
   }
 
-  public async trace(data: any, source?: string) {
-    await this.log("trace", data, source);
+  public async debug(
+    data: any,
+    additionalData: Record<string, any> = {},
+    source?: string
+  ) {
+    await this.log("debug", data, additionalData, source);
   }
 
-  public async critical(data: any, source?: string) {
-    await this.log("critical", data, source);
+  public async trace(
+    data: any,
+    additionalData: Record<string, any> = {},
+    source?: string
+  ) {
+    await this.log("trace", data, additionalData, source);
+  }
+
+  public async critical(
+    data: any,
+    additionalData: Record<string, any> = {},
+    source?: string
+  ) {
+    await this.log("critical", data, additionalData, source);
   }
 }

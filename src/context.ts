@@ -60,7 +60,10 @@ export function createContext<T>(name: string = "runner.context"): Context<T> {
   }
 
   function provide<R>(value: T, fn: () => Promise<R> | R): Promise<R> | R {
-    const map = getCurrentStore() || new Map<symbol, unknown>();
+    const currentStore = getCurrentStore();
+    const map = currentStore
+      ? new Map(currentStore)
+      : new Map<symbol, unknown>();
     map.set(ctxId, value);
 
     return storage.run(map, fn as any);

@@ -138,18 +138,6 @@ export class DependencyProcessor {
             return;
           }
 
-          this.logger.debug(
-            {
-              message:
-                eventDefinition === "*"
-                  ? `Task ${task.task.id} being triggered by all events`
-                  : `Task ${task.task.id} being triggered by event: ${eventDefinition.id}`,
-
-              event: receivedEvent,
-            },
-            task.task.id
-          );
-
           return this.taskRunner.run(
             task.task,
             receivedEvent,
@@ -208,14 +196,6 @@ export class DependencyProcessor {
     source: string
   ) {
     return async (input) => {
-      // runs it in background.
-      this.logger.debug(
-        {
-          message: `Event ${object.id} was emitted from ${source}`,
-        },
-        source
-      );
-
       return this.eventManager.emit(object, input, source);
     };
   }

@@ -10,8 +10,6 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 </p>
 
 - [View the documentation page here](https://bluelibs.github.io/runner/)
-- [Google Notebook LM Podcast](https://notebooklm.google.com/notebook/59bd49fa-346b-4cfb-bb4b-b59857c3b9b4/audio)
-- [Continue GPT Conversation](https://chatgpt.com/share/670392f8-7188-800b-9b4b-e49b437d77f7)
 
 Welcome to BlueLibs Runner, where we've taken the chaos of modern application architecture and turned it into something that won't make you question your life choices at 3am. This isn't just another framework – it's your new best friend who actually understands that code should be readable, testable, and not require a PhD in abstract nonsense to maintain.
 
@@ -115,7 +113,7 @@ Look, we get it. You could turn every function into a task, but that's like usin
 **Don't make it a task when:**
 
 - It's a simple utility function
-- It's used in only one place
+- It's used in only one place or to help other tasks
 - It's performance-critical and doesn't need DI overhead
 
 Think of tasks as the "main characters" in your application story, not every single line of dialogue.
@@ -154,9 +152,14 @@ const userService = resource({
 Resources can be configured with type-safe options. No more "config object of unknown shape" nonsense.
 
 ```typescript
+type SMTPConfig = {
+  smtpUrl: string;
+  from: string;
+};
+
 const emailer = resource({
   id: "app.emailer",
-  init: async (config: { smtpUrl: string; from: string }) => ({
+  init: async (config: SMTPConfig) => ({
     send: async (to: string, subject: string, body: string) => {
       // Use config.smtpUrl and config.from
     },
@@ -229,7 +232,7 @@ const registerUser = task({
 // Someone else handles the welcome email
 const sendWelcomeEmail = task({
   id: "app.tasks.sendWelcomeEmail",
-  on: userRegistered, // Listen to the event
+  on: userRegistered, // Listen to the event, notice the "on"
   run: async (eventData) => {
     // Everything is type-safe, automatically inferred from the 'on' property
     console.log(`Welcome email sent to ${eventData.data.email}`);
@@ -251,6 +254,24 @@ const logAllEventsTask = task({
   },
 });
 ```
+
+#### Tasks and Resources built-in events
+
+Tasks and resources have their own lifecycle events that you can hook into:
+
+```typescript
+const myTask = task({ ... });
+const myResource = resource({ ... });
+```
+
+- `myTask.events.beforeRun` - Fires before the task runs
+- `myTask.events.afterRun` - Fires after the task completes
+- `myTask.events.onError` - Fires when the task fails
+- `myResource.events.beforeInit` - Fires before the resource initializes
+- `myResource.events.afterInit` - Fires after the resource initializes
+- `myResource.events.onError` - Fires when the resource initialization fails
+
+Each event has its own utilities and functions.
 
 #### Global Events: The System's Built-in Gossip Network
 
@@ -278,9 +299,15 @@ const taskLogger = task({
 Middleware wraps around your tasks and resources, adding cross-cutting concerns without polluting your business logic.
 
 ```typescript
-const authMiddleware = middleware<{ requiredRole: string }>({
+// This is a middleware that accepts a config
+const authMiddleware = middleware({
   id: "app.middleware.auth",
-  run: async ({ task, next }, dependencies, config) => {
+  // You can also add dependencies, no problem.
+  run: async (
+    { task, next },
+    dependencies,
+    config: { requiredRole: string }
+  ) => {
     const user = task.input.user;
     if (!user || user.role !== config.requiredRole) {
       throw new Error("Unauthorized");
@@ -332,6 +359,7 @@ const UserContext = createContext<{ userId: string; role: string }>(
 
 const getUserData = task({
   id: "app.tasks.getUserData",
+  middleware: [UserContext.require()], // This is a middleware that ensures the context is available before task runs, throws if not.
   run: async () => {
     const user = UserContext.use(); // Available anywhere in the async chain
     return `Current user: ${user.userId} (${user.role})`;
@@ -364,6 +392,7 @@ const RequestContext = createContext<{
 const requestMiddleware = middleware({
   id: "app.middleware.request",
   run: async ({ task, next }) => {
+    // This works even in express middleware if needed.
     return RequestContext.provide(
       {
         requestId: crypto.randomUUID(),
@@ -451,7 +480,7 @@ const expensiveTask = task({
     globals.middleware.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
-      keyBuilder: (taskId, input) => `${taskId}-${input.userId}`,
+      keyBuilder: (taskId, input) => `${taskId}-${input.userId}`, // optional key builder
     }),
   ],
   run: async ({ userId }) => {
@@ -470,14 +499,14 @@ const app = resource({
         max: 1000, // Maximum items in cache
         ttl: 30 * 1000, // Default TTL
       },
-      async: false, // in-memory bypasses Promise wrap focusing on speed
+      async: false, // in-memory is sync by default
       // When using redis or others mark this as true to await response.
     }),
   ],
 });
 ```
 
-Want Redis instead of the default LRU cache? No problem - just override the cache factory task:
+Want Redis instead of the default LRU cache? No problem, just override the cache factory task:
 
 ```typescript
 import { task } from "@bluelibs/runner";
@@ -498,14 +527,7 @@ const app = resource({
 });
 ```
 
-This approach is powerful because:
-
-- ✅ **Testable**: You can easily mock the cache factory in tests
-- ✅ **Configurable**: Different cache implementations for different environments
-- ✅ **Discoverable**: The cache factory is a regular task, not hidden configuration
-- ✅ **Type-safe**: Full TypeScript support for your custom cache implementation
-
-## Logging: Because Console.log Isn't Professional
+## Loggsing: Because Console.log Isn't Professional
 
 We provide a proper logging system that emits events, so you can handle logs however you want:
 
@@ -596,42 +618,6 @@ const app = resource({
   id: "app",
   register: [productionEmailer],
   overrides: [testEmailer], // This replaces the production version
-});
-```
-
-### Inter-resource Communication: Resources Talking to Each Other
-
-Sometimes resources need to modify each other. Events are perfect for this:
-
-```typescript
-const securityConfigEvent = event<{ setHasher: (fn: Function) => void }>({
-  id: "app.security.config",
-});
-
-const securityResource = resource({
-  id: "app.security",
-  dependencies: { securityConfigEvent },
-  init: async (_, { securityConfigEvent }) => {
-    const security = {
-      hasher: defaultHasher,
-      setHasher: (fn) => {
-        security.hasher = fn;
-      },
-    };
-
-    // Let other resources modify the security config
-    await securityConfigEvent({ setHasher: security.setHasher });
-
-    return security;
-  },
-});
-
-const customHasherExtension = task({
-  id: "app.security.customHasher",
-  on: securityConfigEvent,
-  run: async (event) => {
-    event.data.setHasher(customSHA256Hasher);
-  },
 });
 ```
 
@@ -895,6 +881,400 @@ describe("Full application", () => {
   });
 });
 ```
+
+## Semaphore
+
+Ever had too many database connections competing for resources? Your connection pool under pressure? The `Semaphore` is here to manage concurrent operations like a professional traffic controller.
+
+Think of it as a VIP rope at an exclusive venue. Only a limited number of operations can proceed at once. The rest wait in an orderly queue like well-behaved async functions.
+
+### Quick Start
+
+```typescript
+import { Semaphore } from "@bluelibs/runner";
+
+// Create a semaphore that allows max 5 concurrent operations
+const dbSemaphore = new Semaphore(5);
+
+// Basic usage - acquire and release manually
+await dbSemaphore.acquire();
+try {
+  // Do your database magic here
+  const result = await db.query("SELECT * FROM users");
+  console.log(result);
+} finally {
+  dbSemaphore.release(); // Critical: always release to prevent bottlenecks
+}
+```
+
+### The Elegant Approach: withPermit()
+
+Why manage permits manually when you can let the semaphore do the heavy lifting?
+
+```typescript
+// The elegant approach - automatic cleanup guaranteed!
+const users = await dbSemaphore.withPermit(async () => {
+  return await db.query("SELECT * FROM users WHERE active = true");
+});
+```
+
+### Timeout Support
+
+Prevent operations from hanging indefinitely with configurable timeouts:
+
+```typescript
+try {
+  // Wait max 5 seconds, then throw timeout error
+  await dbSemaphore.acquire({ timeout: 5000 });
+  // Your code here
+} catch (error) {
+  console.log("Operation timed out waiting for permit");
+}
+
+// Or with withPermit
+const result = await dbSemaphore.withPermit(
+  async () => await slowDatabaseOperation(),
+  { timeout: 10000 } // 10 second timeout
+);
+```
+
+### Cancellation Support
+
+Operations can be cancelled using AbortSignal:
+
+```typescript
+const controller = new AbortController();
+
+// Start an operation
+const operationPromise = dbSemaphore.withPermit(
+  async () => await veryLongOperation(),
+  { signal: controller.signal }
+);
+
+// Cancel the operation after 3 seconds
+setTimeout(() => {
+  controller.abort();
+}, 3000);
+
+try {
+  await operationPromise;
+} catch (error) {
+  console.log("Operation was cancelled");
+}
+```
+
+### Monitoring: Metrics & Debugging
+
+Want to know what's happening under the hood?
+
+```typescript
+// Get comprehensive metrics
+const metrics = dbSemaphore.getMetrics();
+console.log(`
+Semaphore Status Report:
+  Available permits: ${metrics.availablePermits}/${metrics.maxPermits}
+  Operations waiting: ${metrics.waitingCount}
+  Utilization: ${(metrics.utilization * 100).toFixed(1)}%
+  Disposed: ${metrics.disposed ? "Yes" : "No"}
+`);
+
+// Quick checks
+console.log(`Available permits: ${dbSemaphore.getAvailablePermits()}`);
+console.log(`Queue length: ${dbSemaphore.getWaitingCount()}`);
+console.log(`Is disposed: ${dbSemaphore.isDisposed()}`);
+```
+
+### Resource Cleanup
+
+Properly dispose of semaphores when finished:
+
+```typescript
+// Reject all waiting operations and prevent new ones
+dbSemaphore.dispose();
+
+// All waiting operations will be rejected with:
+// Error: "Semaphore has been disposed"
+```
+
+## Queue
+
+_The orderly guardian of chaos, the diplomatic bouncer of async operations._
+
+The `Queue` class is your friendly neighborhood task coordinator. Think of it as a very polite but firm British queue-master who ensures everyone waits their turn, prevents cutting in line, and gracefully handles when it's time to close shop.
+
+### **FIFO Ordering**
+
+Tasks execute one after another in first-in, first-out order. No cutting, no exceptions, no drama.
+
+### **Deadlock Detective**
+
+Using the clever `AsyncLocalStorage`, our Queue can detect when a task tries to queue another task (the async equivalent of "yo dawg, I heard you like queues..."). When caught red-handed, it politely but firmly rejects with a deadlock error.
+
+### **Graceful Disposal & Cancellation**
+
+The Queue provides cooperative cancellation through the Web Standard `AbortController`:
+
+- **Patient mode** (default): Waits for all queued tasks to complete naturally
+- **Cancel mode**: Signals running tasks to abort via `AbortSignal`, enabling early termination
+
+### Basic Example
+
+```typescript
+import { Queue } from "@bluelibs/runner";
+
+const queue = new Queue();
+
+// Queue up some work
+const result = await queue.run(async (signal) => {
+  // Your async task here
+  return "Task completed";
+});
+
+// Graceful shutdown
+await queue.dispose();
+```
+
+### AbortController Integration
+
+The Queue provides each task with an `AbortSignal` for cooperative cancellation. Tasks should periodically check this signal to enable early termination.
+
+#### Example: Long-running Task with Cancellation Support
+
+```typescript
+const queue = new Queue();
+
+// Task that respects cancellation
+const processLargeDataset = queue.run(async (signal) => {
+  const items = await fetchLargeDataset();
+
+  for (const item of items) {
+    // Check for cancellation before processing each item
+    if (signal.aborted) {
+      throw new Error("Operation was cancelled");
+    }
+
+    await processItem(item);
+  }
+
+  return "Dataset processed successfully";
+});
+
+// Cancel all running tasks
+await queue.dispose({ cancel: true });
+```
+
+#### Example: Network Request with Timeout
+
+```typescript
+const queue = new Queue();
+
+const fetchWithCancellation = queue.run(async (signal) => {
+  try {
+    // Pass the signal to fetch for automatic cancellation
+    const response = await fetch("https://api.example.com/data", { signal });
+    return await response.json();
+  } catch (error) {
+    if (error.name === "AbortError") {
+      console.log("Request was cancelled");
+      throw error;
+    }
+    throw error;
+  }
+});
+
+// This will cancel the fetch request if still pending
+await queue.dispose({ cancel: true });
+```
+
+#### Example: File Processing with Progress Tracking
+
+```typescript
+const queue = new Queue();
+
+const processFiles = queue.run(async (signal) => {
+  const files = await getFileList();
+  const results = [];
+
+  for (let i = 0; i < files.length; i++) {
+    // Respect cancellation
+    signal.throwIfAborted();
+
+    const result = await processFile(files[i]);
+    results.push(result);
+
+    // Optional: Report progress
+    console.log(`Processed ${i + 1}/${files.length} files`);
+  }
+
+  return results;
+});
+```
+
+## The Magic Behind the Curtain
+
+### Internal State
+
+- `tail`: The promise chain that maintains FIFO execution order
+- `disposed`: Boolean flag indicating whether the queue accepts new tasks
+- `abortController`: Centralized cancellation controller that provides `AbortSignal` to all tasks
+- `executionContext`: AsyncLocalStorage-based deadlock detection mechanism
+
+### Error Handling
+
+- **"Queue has been disposed"**: You tried to add work after closing time
+- **"Dead-lock detected"**: A task tried to queue another task (infinite recursion prevention)
+
+### Best Practices
+
+#### 1. Always Dispose Resources
+
+```typescript
+const queue = new Queue();
+try {
+  await queue.run(task);
+} finally {
+  await queue.dispose();
+}
+```
+
+#### 2. Implement Cooperative Cancellation
+
+Tasks should regularly check the `AbortSignal` and respond appropriately:
+
+```typescript
+// Preferred: Use signal.throwIfAborted() for immediate termination
+signal.throwIfAborted();
+
+// Alternative: Check signal.aborted for custom handling
+if (signal.aborted) {
+  cleanup();
+  throw new Error("Operation cancelled");
+}
+```
+
+#### 3. Integrate with Native APIs
+
+Many Web APIs accept `AbortSignal`:
+
+- `fetch(url, { signal })`
+- `setTimeout(callback, delay, { signal })`
+- Custom async operations
+
+### 4. Avoid Nested Queuing
+
+The Queue prevents deadlocks by rejecting attempts to queue tasks from within running tasks. Structure your code to avoid this pattern.
+
+### 5. Handle AbortError Gracefully
+
+```typescript
+try {
+  await queue.run(task);
+} catch (error) {
+  if (error.name === "AbortError") {
+    // Expected cancellation, handle appropriately
+    return;
+  }
+  throw error; // Re-throw unexpected errors
+}
+```
+
+---
+
+_Cooperative task scheduling with professional-grade cancellation support_
+
+## Real-World Examples
+
+### Database Connection Pool Manager
+
+```typescript
+class DatabaseManager {
+  private semaphore = new Semaphore(10); // Max 10 concurrent queries
+
+  async query(sql: string, params?: any[]) {
+    return this.semaphore.withPermit(
+      async () => {
+        const connection = await this.pool.getConnection();
+        try {
+          return await connection.query(sql, params);
+        } finally {
+          connection.release();
+        }
+      },
+      { timeout: 30000 } // 30 second timeout
+    );
+  }
+
+  async shutdown() {
+    this.semaphore.dispose();
+    await this.pool.close();
+  }
+}
+```
+
+### Rate-Limited API Client
+
+```typescript
+class APIClient {
+  private rateLimiter = new Semaphore(5); // Max 5 concurrent requests
+
+  async fetchUser(id: string, signal?: AbortSignal) {
+    return this.rateLimiter.withPermit(
+      async () => {
+        const response = await fetch(`/api/users/${id}`, { signal });
+        return response.json();
+      },
+      { signal, timeout: 10000 }
+    );
+  }
+}
+```
+
+### Batch Processing with Progress
+
+```typescript
+async function processBatch(items: any[]) {
+  const semaphore = new Semaphore(3); // Max 3 concurrent items
+  const results = [];
+
+  console.log("Starting batch processing...");
+
+  for (const [index, item] of items.entries()) {
+    const result = await semaphore.withPermit(async () => {
+      console.log(`Processing item ${index + 1}/${items.length}`);
+      return await processItem(item);
+    });
+
+    results.push(result);
+
+    // Show progress
+    const metrics = semaphore.getMetrics();
+    console.log(
+      `Active: ${metrics.maxPermits - metrics.availablePermits}, Waiting: ${
+        metrics.waitingCount
+      }`
+    );
+  }
+
+  semaphore.dispose();
+  console.log("Batch processing complete!");
+  return results;
+}
+```
+
+## Best Practices
+
+1. **Always dispose**: Clean up your semaphores when finished to prevent memory leaks
+2. **Use withPermit()**: It's cleaner and prevents resource leaks
+3. **Set timeouts**: Don't let operations hang forever
+4. **Monitor metrics**: Keep an eye on utilization to tune your permit count
+5. **Handle errors**: Timeouts and cancellations throw errors - catch them!
+
+## Common Pitfalls
+
+- **Forgetting to release**: Manual acquire/release is error-prone - prefer `withPermit()`
+- **No timeout**: Operations can hang forever without timeouts
+- **Ignoring disposal**: Always dispose semaphores to prevent memory leaks
+- **Wrong permit count**: Too few = slow, too many = defeats the purpose
 
 ## Why Choose BlueLibs Runner?
 
