@@ -64,12 +64,24 @@ export class TaskRunner {
     let error;
     try {
       // craft the next function starting from the first next function
-      const output = await runner(input);
+      const result = {
+        output: await runner(input),
+      };
+      const setOutput = (newOutput: any) => {
+        result.output = newOutput;
+      };
 
+      // If it's a global event listener, we stop emitting so we don't get into an infinite loop.
       if (!isGlobalEventListener) {
         await this.eventManager.emit(
           task.events.afterRun,
-          { input, output },
+          {
+            input,
+            get output() {
+              return result.output;
+            },
+            setOutput,
+          },
           task.id
         );
       }
@@ -79,18 +91,22 @@ export class TaskRunner {
         task.on !== globalEvents.tasks.beforeRun &&
         task.on !== globalEvents.tasks.afterRun
       ) {
+        // If it's a lifecycle listener we prevent from emitting further events.
         await this.eventManager.emit(
           globalEvents.tasks.afterRun,
           {
             task,
             input,
-            output,
+            get output() {
+              return result.output;
+            },
+            setOutput,
           },
           task.id
         );
       }
 
-      return output;
+      return result.output;
     } catch (e) {
       let isSuppressed = false;
       function suppress() {

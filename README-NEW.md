@@ -464,27 +464,46 @@ const expensiveTask = task({
 const app = resource({
   id: "app.cache",
   register: [
+    // You have to register it, cache resource is not enabled by default.
     globals.resources.cache.with({
       defaultOptions: {
         max: 1000, // Maximum items in cache
         ttl: 30 * 1000, // Default TTL
       },
+      async: false, // in-memory bypasses Promise wrap focusing on speed
+      // When using redis or others mark this as true to await response.
     }),
   ],
 });
 ```
 
-Want Redis instead of the default LRU cache? No problem:
+Want Redis instead of the default LRU cache? No problem - just override the cache factory task:
 
 ```typescript
-class RedisCache implements ICacheInstance {
-  // implement interface methods
-}
+import { task } from "@bluelibs/runner";
 
-globals.resources.cache.with({
-  cacheFactory: RedisCache,
+const redisCacheFactory = task({
+  id: "global.tasks.cacheFactory", // Same ID as the default task
+  run: async (options: any) => {
+    return new RedisCache(options); // Make sure to turn async on in the cacher.
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [
+    // Your other stuff
+  ],
+  overrides: [redisCacheFactory], // Override the default cache factory
 });
 ```
+
+This approach is powerful because:
+
+- ✅ **Testable**: You can easily mock the cache factory in tests
+- ✅ **Configurable**: Different cache implementations for different environments
+- ✅ **Discoverable**: The cache factory is a regular task, not hidden configuration
+- ✅ **Type-safe**: Full TypeScript support for your custom cache implementation
 
 ## Logging: Because Console.log Isn't Professional
 

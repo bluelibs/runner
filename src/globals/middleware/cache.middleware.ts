@@ -1,6 +1,6 @@
-import { defineMiddleware, defineResource } from "../../define";
+import { defineMiddleware, defineResource, defineTask } from "../../define";
 import { LRUCache } from "lru-cache";
-import { IResource } from "../../defs";
+import { IResource, ITask } from "../../defs";
 
 export interface ICacheInstance {
   set(key: string, value: any): void;
@@ -8,9 +8,16 @@ export interface ICacheInstance {
   clear(): void;
 }
 
+// Default cache factory task that can be overridden
+export const cacheFactoryTask = defineTask({
+  id: "global.tasks.cacheFactory",
+  run: async (options: any) => {
+    return new LRUCache(options) as ICacheInstance;
+  },
+});
+
 type CacheResourceConfig = {
-  cacheFactory?: new (...args: any[]) => ICacheInstance;
-  defaultOptions?: LRUCache.Options<any, any, any>;
+  defaultOptions?: any;
   /**
    * This specifies whether the cache handler is async or not (get, set, clear)
    * This is for speed purposes.
@@ -20,16 +27,18 @@ type CacheResourceConfig = {
 
 type CacheMiddlewareConfig = {
   keyBuilder?: (taskId: string, input: any) => string;
-} & Partial<LRUCache.Options<any, any, any>>;
+} & any;
 
 export const cacheResource = defineResource({
   id: "global.resources.cache",
-  init: async (config: CacheResourceConfig) => {
-    const cacheFactory = config.cacheFactory || LRUCache;
-
+  register: [cacheFactoryTask],
+  dependencies: {
+    cacheFactoryTask,
+  },
+  init: async (config: CacheResourceConfig, { cacheFactoryTask }) => {
     return {
       map: new Map<string, ICacheInstance>(),
-      cacheFactory,
+      cacheFactoryTask,
       async: config.async,
       defaultOptions: {
         ttl: 10 * 1000,
@@ -66,10 +75,15 @@ export const cacheMiddleware = defineMiddleware({
     const isAsync = cache.async;
     let cacheHolderForTask = cache.map.get(taskId);
     if (!cacheHolderForTask) {
-      cacheHolderForTask = new cache.cacheFactory({
+      // Extract only LRUCache options, excluding keyBuilder
+      const { keyBuilder, ...lruOptions } = config;
+      const cacheOptions = {
         ...cache.defaultOptions,
-        ...config,
-      });
+        ...lruOptions,
+      };
+
+      // Use the factory task to create the cache instance
+      cacheHolderForTask = await cache.cacheFactoryTask(cacheOptions);
 
       cache.map.set(taskId, cacheHolderForTask);
     }

@@ -104,7 +104,13 @@ describe("TaskRunner", () => {
       expect.objectContaining({ data: { input: 5 } })
     );
     expect(afterRunSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ data: { input: 5, output: 10 } })
+      expect.objectContaining({ 
+        data: expect.objectContaining({ 
+          input: 5, 
+          output: 10,
+          setOutput: expect.any(Function)
+        }) 
+      })
     );
   });
 

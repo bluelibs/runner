@@ -3,19 +3,20 @@ import { run } from "../../run";
 import {
   cacheResource,
   cacheMiddleware,
+  cacheFactoryTask,
   ICacheInstance,
 } from "../../globals/middleware/cache.middleware";
 import { LRUCache } from "lru-cache";
 
 describe("Caching System", () => {
   describe("Cache Resource", () => {
-    it("should initialize with default LRU cache handler", async () => {
+    it("should initialize with default cache factory task", async () => {
       const app = defineResource({
         id: "app",
         register: [cacheResource, cacheMiddleware],
         dependencies: { cache: cacheResource },
         async init(_, { cache }) {
-          expect(cache.cacheFactory).toBe(LRUCache);
+          expect(cache.cacheFactoryTask).toBeDefined();
           expect(cache.async).toBeUndefined();
           expect(cache.defaultOptions).toEqual({ ttl: 10000 });
         },
@@ -42,6 +43,130 @@ describe("Caching System", () => {
           expect(firstRun).toBe(secondRun);
           expect(cache.map.size).toBe(1);
           expect(cache.map.has("test.task")).toBe(true);
+        },
+      });
+
+      await run(app);
+    });
+  });
+
+  describe("Cache Factory Task Override", () => {
+    it("should allow overriding the cache factory task", async () => {
+      class CustomCache implements ICacheInstance {
+        store = new Map<string, any>();
+        customFlag = true;
+
+        get(key: string) {
+          return this.store.get(key);
+        }
+
+        set(key: string, value: any) {
+          this.store.set(key, value);
+        }
+
+        clear() {
+          this.store.clear();
+        }
+      }
+
+      const customCacheFactoryTask = defineTask({
+        id: "global.tasks.cacheFactory",
+        run: async (options: any) => {
+          return new CustomCache();
+        },
+      });
+
+      const testTask = defineTask({
+        id: "custom.factory.task",
+        middleware: [cacheMiddleware],
+        run: async (input: string) => input.toUpperCase(),
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [cacheResource, cacheMiddleware, testTask],
+        overrides: [customCacheFactoryTask],
+        dependencies: { testTask, cache: cacheResource },
+        async init(_, { testTask, cache }) {
+          const result1 = await testTask("test");
+          const result2 = await testTask("test");
+
+          expect(result1).toBe("TEST");
+          expect(result2).toBe("TEST");
+
+          const cacheInstance = cache.map.get("custom.factory.task") as any;
+          expect(cacheInstance.customFlag).toBe(true);
+        },
+      });
+
+      await run(app);
+    });
+
+    it("should allow Redis-like cache factory task", async () => {
+      class RedisLikeCache implements ICacheInstance {
+        private store = new Map<string, { value: any; expiry?: number }>();
+
+        get(key: string) {
+          const entry = this.store.get(key);
+          if (!entry) return undefined;
+
+          if (entry.expiry && Date.now() > entry.expiry) {
+            this.store.delete(key);
+            return undefined;
+          }
+
+          return entry.value;
+        }
+
+        set(key: string, value: any) {
+          // Simulate Redis with TTL
+          const ttl = 1000; // 1 second TTL
+          this.store.set(key, {
+            value,
+            expiry: Date.now() + ttl,
+          });
+        }
+
+        clear() {
+          this.store.clear();
+        }
+      }
+
+      const redisCacheFactoryTask = defineTask({
+        id: "global.tasks.cacheFactory",
+        run: async (options: any) => {
+          return new RedisLikeCache();
+        },
+      });
+
+      let callCount = 0;
+      const testTask = defineTask({
+        id: "redis.cache.task",
+        middleware: [cacheMiddleware],
+        run: async () => {
+          callCount++;
+          return `result-${callCount}`;
+        },
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [cacheResource, cacheMiddleware, testTask],
+        overrides: [redisCacheFactoryTask],
+        dependencies: { testTask },
+        async init(_, { testTask }) {
+          const result1 = await testTask();
+          const result2 = await testTask(); // Should be cached
+
+          expect(result1).toBe(result2);
+          expect(callCount).toBe(1);
+
+          // Wait for Redis-like TTL to expire
+          await new Promise((resolve) => setTimeout(resolve, 1100));
+
+          const result3 = await testTask(); // Should be new result
+          expect(result3).not.toBe(result1);
+          expect(callCount).toBe(2);
         },
       });
 
@@ -198,57 +323,6 @@ describe("Caching System", () => {
     });
   });
 
-  describe("Custom Cache Handlers", () => {
-    class MockCache implements ICacheInstance {
-      store = new Map<string, any>();
-      get(key: string) {
-        return this.store.get(key);
-      }
-      set(key: string, value: any) {
-        this.store.set(key, value);
-      }
-      clear() {
-        this.store.clear();
-      }
-    }
-
-    const customCacheResource = defineResource({
-      id: "global.resources.cache",
-      init: async () => ({
-        map: new Map<string, MockCache>(),
-        cacheFactory: MockCache,
-        defaultOptions: {},
-      }),
-      dispose: async (cache) => {
-        cache.map.forEach((instance) => instance.clear());
-      },
-    });
-
-    it("should use custom cache implementation", async () => {
-      const testTask = defineTask({
-        id: "custom.cache.task",
-        middleware: [cacheMiddleware],
-        run: async (input: string) => input.toUpperCase(),
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [customCacheResource, cacheMiddleware, testTask],
-        dependencies: { testTask, cache: customCacheResource },
-        async init(_, { testTask, cache }) {
-          const result1 = await testTask("test");
-          const result2 = await testTask("test");
-
-          expect(result1).toBe("TEST");
-          expect(result2).toBe("TEST");
-          expect(cache.map.get("custom.cache.task")).toBeInstanceOf(MockCache);
-        },
-      });
-
-      await run(app);
-    });
-  });
-
   describe("Cache Invalidation", () => {
     it("should clear cache instances when resource is disposed", async () => {
       let executionCount = 0;
@@ -301,18 +375,10 @@ describe("Caching System", () => {
       }
     }
 
-    const asyncCacheResource = defineResource({
-      id: "global.resources.cache",
-      init: async () => ({
-        map: new Map<string, AsyncMockCache>(),
-        cacheFactory: AsyncMockCache,
-        async: true,
-        defaultOptions: {},
-      }),
-      dispose: async (cache) => {
-        await Promise.all(
-          [...cache.map.values()].map((instance) => instance.clear())
-        );
+    const asyncCacheFactoryTask = defineTask({
+      id: "global.tasks.cacheFactory",
+      run: async (options: any) => {
+        return new AsyncMockCache();
       },
     });
 
@@ -321,6 +387,23 @@ describe("Caching System", () => {
         id: "task",
         middleware: [cacheMiddleware],
         run: async (input: number) => input * 2,
+      });
+
+      const asyncCacheResource = defineResource({
+        id: "global.resources.cache",
+        register: [asyncCacheFactoryTask],
+        dependencies: { cacheFactoryTask: asyncCacheFactoryTask },
+        init: async (config: any, { cacheFactoryTask }) => ({
+          map: new Map<string, AsyncMockCache>(),
+          cacheFactoryTask,
+          async: true,
+          defaultOptions: { ttl: 10 * 1000, ...config?.defaultOptions },
+        }),
+        dispose: async (cache) => {
+          await Promise.all(
+            [...cache.map.values()].map((instance) => instance.clear())
+          );
+        },
       });
 
       const app = defineResource({
@@ -534,13 +617,22 @@ describe("Caching System", () => {
         }
       }
 
+      const disposableCacheFactoryTask = defineTask({
+        id: "global.tasks.cacheFactory",
+        run: async (options: any) => {
+          return new AsyncDisposableCache();
+        },
+      });
+
       const disposableCacheResource = defineResource({
         id: "global.resources.cache",
-        init: async () => ({
+        register: [disposableCacheFactoryTask],
+        dependencies: { cacheFactoryTask: disposableCacheFactoryTask },
+        init: async (config: any, { cacheFactoryTask }) => ({
           map: new Map<string, AsyncDisposableCache>(),
-          cacheFactory: AsyncDisposableCache,
+          cacheFactoryTask,
           async: true,
-          defaultOptions: {},
+          defaultOptions: { ttl: 10 * 1000, ...config?.defaultOptions },
         }),
         dispose: async (cache) => {
           await Promise.all(
@@ -571,7 +663,7 @@ describe("Caching System", () => {
       await result.dispose();
 
       // Verify cache was disposed
-      const cacheInstance = result.value.map.get("disposal.test.task");
+      const cacheInstance = result.value.map.get("disposal.test.task") as any;
       expect(cacheInstance?.disposed).toBe(true);
     });
   });
@@ -612,12 +704,21 @@ describe("Caching System", () => {
         store = new Map();
       }
 
+      const invalidCacheFactoryTask = defineTask({
+        id: "global.tasks.cacheFactory",
+        run: async (options: any) => {
+          return new InvalidCache() as any;
+        },
+      });
+
       const invalidCacheResource = defineResource({
-        id: "invalid.cache.handler",
-        init: async () => ({
+        id: "global.resources.cache",
+        register: [invalidCacheFactoryTask],
+        dependencies: { cacheFactoryTask: invalidCacheFactoryTask },
+        init: async (config: any, { cacheFactoryTask }) => ({
           map: new Map(),
-          cacheFactory: InvalidCache as any,
-          defaultOptions: {},
+          cacheFactoryTask,
+          defaultOptions: { ttl: 10 * 1000, ...config?.defaultOptions },
         }),
         dispose: async () => {},
       });
@@ -634,6 +735,7 @@ describe("Caching System", () => {
         dependencies: { testTask },
         async init(_, { testTask }) {
           // Should fail when trying to use invalid cache handler
+          await testTask(); // This should trigger the error
         },
       });
 

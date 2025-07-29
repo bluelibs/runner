@@ -158,7 +158,8 @@ export type BeforeRunEventPayload<TInput> = {
 
 export type AfterRunEventPayload<TInput, TOutput> = {
   input: TInput;
-  output: TOutput;
+  output: TOutput extends Promise<infer U> ? U : TOutput;
+  setOutput(newOutput: TOutput extends Promise<infer U> ? U : TOutput): void;
 };
 
 export type OnErrorEventPayload = {

@@ -40,6 +40,7 @@ export function defineTask<
     middleware: taskConfig.middleware || [],
     run: taskConfig.run,
     on: taskConfig.on,
+    listenerOrder: taskConfig.listenerOrder,
     events: {
       beforeRun: {
         ...defineEvent({

@@ -46,6 +46,7 @@ export const globalEvents = {
       task: ITask<any, any, any>;
       input: any;
       output: any;
+      setOutput: (newOutput: any) => void;
     }>({
       id: "global.events.tasks.afterRun",
       meta: {
