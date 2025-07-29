@@ -71,9 +71,7 @@ describe("setOutput functionality", () => {
       on: originalTask.events.afterRun,
       listenerOrder: 1,
       run: async (event) => {
-        console.log("First transform - input output:", event.data.output);
         event.data.setOutput(event.data.output + 10);
-        console.log("First transform - after setOutput:", event.data.output);
       },
     });
 
@@ -82,9 +80,7 @@ describe("setOutput functionality", () => {
       on: originalTask.events.afterRun,
       listenerOrder: 2,
       run: async (event) => {
-        console.log("Second transform - input output:", event.data.output);
         event.data.setOutput(event.data.output * 3);
-        console.log("Second transform - after setOutput:", event.data.output);
       },
     });
 
