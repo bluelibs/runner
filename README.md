@@ -63,7 +63,7 @@ const createUser = task({
 const app = resource({
   id: "app",
   // Here you make the system aware of resources, tasks, middleware, and events.
-  register: [server, createUser],
+  register: [server.with({ port: 3000 }), createUser],
   dependencies: { server, createUser },
   init: async (_, { server, createUser }) => {
     server.app.post("/users", async (req, res) => {
@@ -74,7 +74,7 @@ const app = resource({
 });
 
 // That's it. No webpack configs, no decorators, no XML.
-const { dispose } = await run(app, { port: 3000 });
+const { dispose } = await run(app);
 ```
 
 ## The Big Four: Your New Building Blocks
