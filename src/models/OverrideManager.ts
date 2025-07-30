@@ -7,28 +7,25 @@ import {
 } from "../defs";
 import * as utils from "../define";
 import { Errors } from "../errors";
-import { TaskStoreElementType, MiddlewareStoreElementType, ResourceStoreElementType } from "./StoreTypes";
+import {
+  TaskStoreElementType,
+  MiddlewareStoreElementType,
+  ResourceStoreElementType,
+} from "./StoreTypes";
+import { StoreRegistry } from "./StoreRegistry";
 
 export class OverrideManager {
   public overrides: Map<
     string,
     IResource | IMiddleware | ITask | IResourceWithConfig
   > = new Map();
-  
+
   public overrideRequests: Set<{
     source: string;
     override: RegisterableItems;
   }> = new Set();
 
-  constructor(
-    private tasks: Map<string, TaskStoreElementType>,
-    private resources: Map<string, ResourceStoreElementType>,
-    private middlewares: Map<string, MiddlewareStoreElementType>,
-    private storeTask: (item: ITask<any, any, {}>, check?: boolean) => void,
-    private storeResource: (item: IResource<any, any, any>, check?: boolean) => void,
-    private storeMiddleware: (item: IMiddleware<any>, check?: boolean) => void,
-    private storeResourceWithConfig: (item: IResourceWithConfig<any, any, any>, check?: boolean) => void
-  ) {}
+  constructor(private readonly registry: StoreRegistry) {}
 
   storeOverridesDeeply<C>(element: IResource<C, any, any>) {
     element.overrides.forEach((override) => {
@@ -54,13 +51,13 @@ export class OverrideManager {
     for (const override of this.overrides.values()) {
       let hasAnyItem = false;
       if (utils.isTask(override)) {
-        hasAnyItem = this.tasks.has(override.id);
+        hasAnyItem = this.registry.tasks.has(override.id);
       } else if (utils.isResource(override)) {
-        hasAnyItem = this.resources.has(override.id);
+        hasAnyItem = this.registry.resources.has(override.id);
       } else if (utils.isMiddleware(override)) {
-        hasAnyItem = this.middlewares.has(override.id);
+        hasAnyItem = this.registry.middlewares.has(override.id);
       } else if (utils.isResourceWithConfig(override)) {
-        hasAnyItem = this.resources.has(override.resource.id);
+        hasAnyItem = this.registry.resources.has(override.resource.id);
       }
 
       if (!hasAnyItem) {
@@ -74,13 +71,13 @@ export class OverrideManager {
 
     for (const override of this.overrides.values()) {
       if (utils.isTask(override)) {
-        this.storeTask(override, false);
+        this.registry.storeTask(override, false);
       } else if (utils.isResource(override)) {
-        this.storeResource(override, false);
+        this.registry.storeResource(override, false);
       } else if (utils.isMiddleware(override)) {
-        this.storeMiddleware(override, false);
+        this.registry.storeMiddleware(override, false);
       } else if (utils.isResourceWithConfig(override)) {
-        this.storeResourceWithConfig(override, false);
+        this.registry.storeResourceWithConfig(override, false);
       }
     }
   }

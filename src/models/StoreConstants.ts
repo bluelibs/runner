@@ -1,8 +1,10 @@
 import { globalResources } from "../globals/globalResources";
 import { requireContextMiddleware } from "../globals/middleware/requireContext.middleware";
 import { retryMiddleware } from "../globals/middleware/retry.middleware";
+import { EventManager } from "./EventManager";
+import { Store } from "./Store";
 
-export function getBuiltInResources(eventManager: any, store: any) {
+export function getBuiltInResources(eventManager: EventManager, store: Store) {
   return [
     globalResources.eventManager.with(eventManager),
     globalResources.store.with(store),
@@ -11,8 +13,5 @@ export function getBuiltInResources(eventManager: any, store: any) {
 }
 
 export function getBuiltInMiddlewares() {
-  return [
-    { id: requireContextMiddleware.id, middleware: requireContextMiddleware },
-    { id: retryMiddleware.id, middleware: retryMiddleware },
-  ];
+  return [requireContextMiddleware, retryMiddleware];
 }

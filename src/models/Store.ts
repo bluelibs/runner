@@ -12,12 +12,21 @@ import { Logger } from "./Logger";
 import { StoreRegistry } from "./StoreRegistry";
 import { OverrideManager } from "./OverrideManager";
 import { StoreValidator } from "./StoreValidator";
-import { ResourceStoreElementType, TaskStoreElementType, MiddlewareStoreElementType, EventStoreElementType } from "./StoreTypes";
+import {
+  ResourceStoreElementType,
+  TaskStoreElementType,
+  MiddlewareStoreElementType,
+  EventStoreElementType,
+} from "./StoreTypes";
 import { getBuiltInResources, getBuiltInMiddlewares } from "./StoreConstants";
 
 // Re-export types for backward compatibility
-export { ResourceStoreElementType, TaskStoreElementType, MiddlewareStoreElementType, EventStoreElementType };
-
+export {
+  ResourceStoreElementType,
+  TaskStoreElementType,
+  MiddlewareStoreElementType,
+  EventStoreElementType,
+};
 
 /**
  * Store class which is used to store all the resources, tasks, middleware and events.
@@ -37,24 +46,28 @@ export class Store {
   ) {
     this.registry = new StoreRegistry();
     this.validator = this.registry.getValidator();
-    this.overrideManager = new OverrideManager(
-      this.registry.tasks,
-      this.registry.resources,
-      this.registry.middlewares,
-      this.registry.storeTask.bind(this.registry),
-      this.registry.storeResource.bind(this.registry),
-      this.registry.storeMiddleware.bind(this.registry),
-      this.registry.storeResourceWithConfig.bind(this.registry)
-    );
+    this.overrideManager = new OverrideManager(this.registry);
   }
 
   // Delegate properties to registry
-  get tasks() { return this.registry.tasks; }
-  get resources() { return this.registry.resources; }
-  get events() { return this.registry.events; }
-  get middlewares() { return this.registry.middlewares; }
-  get overrides() { return this.overrideManager.overrides; }
-  get overrideRequests() { return this.overrideManager.overrideRequests; }
+  get tasks() {
+    return this.registry.tasks;
+  }
+  get resources() {
+    return this.registry.resources;
+  }
+  get events() {
+    return this.registry.events;
+  }
+  get middlewares() {
+    return this.registry.middlewares;
+  }
+  get overrides() {
+    return this.overrideManager.overrides;
+  }
+  get overrideRequests() {
+    return this.overrideManager.overrideRequests;
+  }
 
   get isLocked() {
     return this.#isLocked;
@@ -74,7 +87,7 @@ export class Store {
   private registerGlobalComponents() {
     // Register built-in resources
     const builtInResources = getBuiltInResources(this.eventManager, this);
-    builtInResources.forEach(resource => {
+    builtInResources.forEach((resource) => {
       this.registry.storeGenericItem(resource);
     });
 
@@ -85,7 +98,7 @@ export class Store {
 
     // Register built-in middlewares
     const builtInMiddlewares = getBuiltInMiddlewares();
-    builtInMiddlewares.forEach(({ middleware }) => {
+    builtInMiddlewares.forEach((middleware) => {
       this.registry.middlewares.set(middleware.id, {
         middleware,
         computedDependencies: {},
@@ -128,10 +141,6 @@ export class Store {
     this.#isInitialized = true;
   }
 
-
-
-
-
   public async dispose() {
     for (const resource of this.resources.values()) {
       if (resource.resource.dispose) {
@@ -149,11 +158,15 @@ export class Store {
     this.overrideManager.processOverrides();
   }
 
-  public getEverywhereMiddlewareForTasks(excludingIds: string[]): IMiddleware[] {
+  public getEverywhereMiddlewareForTasks(
+    excludingIds: string[]
+  ): IMiddleware[] {
     return this.registry.getEverywhereMiddlewareForTasks(excludingIds);
   }
 
-  public getEverywhereMiddlewareForResources(excludingIds: string[]): IMiddleware[] {
+  public getEverywhereMiddlewareForResources(
+    excludingIds: string[]
+  ): IMiddleware[] {
     return this.registry.getEverywhereMiddlewareForResources(excludingIds);
   }
 
