@@ -2,6 +2,10 @@
 
 name: CI
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 # Controls when the workflow will run
 on:
   # all branches
