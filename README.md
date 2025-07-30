@@ -62,6 +62,7 @@ const createUser = task({
 // Wire everything together
 const app = resource({
   id: "app",
+  // Here you make the system aware of resources, tasks, middleware, and events.
   register: [server, createUser],
   dependencies: { server, createUser },
   init: async (_, { server, createUser }) => {
@@ -120,14 +121,15 @@ Think of tasks as the "main characters" in your application story, not every sin
 
 ### 2. Resources: Your Singletons That Don't Suck
 
-Resources are the services, configs, and connections that live throughout your app's lifecycle. They initialize once and stick around until cleanup time.
+Resources are the services, configs, and connections that live throughout your app's lifecycle. They initialize once and stick around until cleanup time. They have to be registered (via `register: []`) only once before they can be used.
 
 ```typescript
 const database = resource({
   id: "app.db",
-  init: async (config: { url: string }) => {
-    const client = new MongoClient(config.url);
+  init: async () => {
+    const client = new MongoClient(process.env.DATABASE_URL as string);
     await client.connect();
+
     return client;
   },
   dispose: async (client) => await client.close(),
@@ -318,6 +320,7 @@ const authMiddleware = middleware({
 
 const adminTask = task({
   id: "app.tasks.adminOnly",
+  // If the configuration accepts {} or is empty, .with() becomes optional, otherwise it becomes enforced.
   middleware: [authMiddleware.with({ requiredRole: "admin" })],
   run: async (input: { user: User }) => {
     return "Secret admin data";
@@ -333,9 +336,9 @@ Want to add logging to everything? Authentication to all tasks? Global middlewar
 const logMiddleware = middleware({
   id: "app.middleware.log",
   run: async ({ task, next }) => {
-    console.log(`Executing: ${task.id}`);
+    console.log(`Executing: ${task.definition.id}`);
     const result = await next(task.input);
-    console.log(`Completed: ${task.id}`);
+    console.log(`Completed: ${task.definition.id}`);
     return result;
   },
 });
