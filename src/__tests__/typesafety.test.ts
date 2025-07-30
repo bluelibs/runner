@@ -1,4 +1,9 @@
-import { defineEvent, defineTask, defineResource } from "../define";
+import {
+  defineEvent,
+  defineTask,
+  defineResource,
+  defineMiddleware,
+} from "../define";
 import { RegisterableItems } from "../defs";
 
 describe("typesafety", () => {
@@ -6,6 +11,35 @@ describe("typesafety", () => {
     type InputTask = {
       message: string;
     };
+
+    const middleware = defineMiddleware({
+      id: "middleware",
+      run: async (input, deps) => {
+        return input;
+      },
+    });
+
+    type MiddlewareConfig = {
+      message: string;
+    };
+
+    type MiddlewareOptionalConfig = {
+      message?: string;
+    };
+
+    const middlewareWithConfig = defineMiddleware({
+      id: "middleware.config",
+      run: async (input, deps, config: MiddlewareConfig) => {
+        return input;
+      },
+    });
+
+    const middlewareWithOptionalConfig = defineMiddleware({
+      id: "middleware.optional.config",
+      run: async (input, deps, config: MiddlewareOptionalConfig) => {
+        return input;
+      },
+    });
 
     const event = defineEvent<{ message: string }>({
       id: "event",
@@ -58,6 +92,18 @@ describe("typesafety", () => {
 
     const testResource = defineResource({
       id: "test.resource",
+      middleware: [
+        middleware,
+        // @ts-expect-error
+        middlewareWithConfig,
+        middlewareWithConfig.with({ message: "Hello, World!" }),
+        // @ts-expect-error
+        middlewareWithConfig.with({ message: 123 }),
+        middlewareWithOptionalConfig,
+        middlewareWithOptionalConfig.with({ message: "Hello, World!" }),
+        // @ts-expect-error
+        middlewareWithOptionalConfig.with({ message: 123 }),
+      ],
       dependencies: { task, dummyResource, event },
       init: async (_, deps) => {
         const result = await deps.task({
@@ -82,6 +128,13 @@ describe("typesafety", () => {
         deps.task2;
       },
       register: [
+        middleware,
+        middlewareWithConfig,
+        middlewareWithOptionalConfig,
+        middlewareWithOptionalConfig.with({ message: "Hello, World!" }),
+        middlewareWithConfig.with({ message: "Hello, World!" }),
+        // @ts-expect-error
+        middlewareWithConfig.with({ message: 123 }),
         dummyResourceNoConfig,
         // @ts-expect-error
         dummyResourceNoConfig.with("hello"),

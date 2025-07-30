@@ -3,3 +3,6 @@ export * from "./EventManager";
 export * from "./Logger";
 export * from "./Store";
 export * from "./TaskRunner";
+export * from "./ResourceInitializer";
+export * from "./Semaphore";
+export * from "./Queue";

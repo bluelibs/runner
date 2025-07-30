@@ -22,6 +22,8 @@ export interface IEventHandlerOptions<T = any> {
 export class EventManager {
   private listeners: Map<string, IListenerStorage[]> = new Map();
   private globalListeners: IListenerStorage[] = [];
+  private cachedMergedListeners: Map<string, IListenerStorage[]> = new Map();
+  private globalListenersCacheValid = true;
   #isLocked = false;
 
   get isLocked() {
@@ -57,16 +59,47 @@ export class EventManager {
     return result;
   }
 
+  private getCachedMergedListeners(eventId: string): IListenerStorage[] {
+    if (!this.globalListenersCacheValid) {
+      this.cachedMergedListeners.clear();
+      this.globalListenersCacheValid = true;
+    }
+
+    let cached = this.cachedMergedListeners.get(eventId);
+    if (!cached) {
+      const eventListeners = this.listeners.get(eventId) || [];
+      if (eventListeners.length === 0 && this.globalListeners.length === 0) {
+        cached = [];
+      } else if (eventListeners.length === 0) {
+        cached = this.globalListeners;
+      } else if (this.globalListeners.length === 0) {
+        cached = eventListeners;
+      } else {
+        cached = this.mergeSortedListeners(eventListeners, this.globalListeners);
+      }
+      this.cachedMergedListeners.set(eventId, cached);
+    }
+    return cached;
+  }
+
+  private invalidateCache(eventId?: string): void {
+    if (eventId) {
+      this.cachedMergedListeners.delete(eventId);
+    } else {
+      this.globalListenersCacheValid = false;
+    }
+  }
+
   async emit<TInput>(
     eventDefinition: IEventDefinition<TInput>,
     data: TInput,
     source: string
   ): Promise<void> {
-    const eventListeners = this.listeners.get(eventDefinition.id) || [];
-    const allListeners = this.mergeSortedListeners(
-      eventListeners,
-      this.globalListeners
-    );
+    const allListeners = this.getCachedMergedListeners(eventDefinition.id);
+    
+    if (allListeners.length === 0) {
+      return;
+    }
 
     const event: IEvent = {
       id: eventDefinition.id,
@@ -121,6 +154,7 @@ export class EventManager {
       } else {
         this.listeners.set(eventId, [newListener]);
       }
+      this.invalidateCache(eventId);
     }
   }
 
@@ -135,5 +169,11 @@ export class EventManager {
       filter: options.filter,
     };
     this.insertListener(this.globalListeners, newListener);
+    this.invalidateCache();
+  }
+
+  hasListeners<T>(eventDefinition: IEventDefinition<T>): boolean {
+    const eventListeners = this.listeners.get(eventDefinition.id) || [];
+    return eventListeners.length > 0 || this.globalListeners.length > 0;
   }
 }

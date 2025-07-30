@@ -5,8 +5,9 @@ import {
   IResource,
 } from "../defs";
 import { EventManager } from "./EventManager";
-import { globalEvents } from "../globalEvents";
-import { MiddlewareStoreElementType, Store } from "./Store";
+import { globalEvents } from "../globals/globalEvents";
+import { Store } from "./Store";
+import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
 
 export class ResourceInitializer {
@@ -23,12 +24,14 @@ export class ResourceInitializer {
   public async initializeResource<
     TConfig = null,
     TValue = any,
-    TDeps extends DependencyMapType = {}
+    TDeps extends DependencyMapType = {},
+    TContext = any
   >(
     resource: IResource<TConfig, TValue, TDeps>,
     config: TConfig,
     dependencies: DependencyValuesType<TDeps>
-  ): Promise<TValue | undefined> {
+  ): Promise<{ value: TValue; context: TContext }> {
+    const context = resource.context?.();
     await this.eventManager.emit(
       globalEvents.resources.beforeInit,
       {
@@ -44,17 +47,22 @@ export class ResourceInitializer {
       resource.id
     );
 
-    let error, value;
+    let error: any, value: TValue | undefined;
     try {
       if (resource.init) {
-        value = await this.initWithMiddleware(resource, config, dependencies);
+        value = await this.initWithMiddleware(
+          resource,
+          config,
+          dependencies,
+          context
+        );
       }
 
       await this.eventManager.emit(
         resource.events.afterInit,
         {
           config,
-          value,
+          value: value as TValue,
         },
         resource.id
       );
@@ -63,14 +71,14 @@ export class ResourceInitializer {
         {
           config,
           resource,
-          value,
+          value: value as TValue,
         },
         resource.id
       );
 
-      this.logger.debug(`Resource ${resource.id} initialized`, resource.id);
+      this.logger.debug(`Resource ${resource.id} initialized`, { source: resource.id });
 
-      return value;
+      return { value: value as TValue, context };
     } catch (e) {
       error = e;
       let isSuppressed = false;
@@ -82,7 +90,7 @@ export class ResourceInitializer {
       await this.eventManager.emit(
         resource.events.onError,
         {
-          error,
+          error: error as Error,
           suppress,
         },
         resource.id
@@ -90,7 +98,7 @@ export class ResourceInitializer {
       await this.eventManager.emit(
         globalEvents.resources.onError,
         {
-          error,
+          error: error as Error,
           resource,
           suppress,
         },
@@ -98,23 +106,28 @@ export class ResourceInitializer {
       );
 
       if (!isSuppressed) throw e;
+
+      return { value: undefined as TValue, context: {} as TContext };
     }
   }
 
-  public async initWithMiddleware<C, V, D extends DependencyMapType>(
-    resource: IResource<C, V>,
+  public async initWithMiddleware<C, V, D extends DependencyMapType, TContext>(
+    resource: IResource<C, V, D, TContext>,
     config: C,
-    dependencies: D
+    dependencies: DependencyValuesType<D>,
+    context: TContext
   ) {
     let next = async (config: C): Promise<V | undefined> => {
       if (resource.init) {
-        return resource.init.call(null, config, dependencies);
+        return resource.init.call(null, config, dependencies, context);
       }
     };
 
     const existingMiddlewares = resource.middleware;
     const createdMiddlewares = [
-      ...this.store.getGlobalMiddlewares(existingMiddlewares.map((x) => x.id)),
+      ...this.store.getEverywhereMiddlewareForResources(
+        existingMiddlewares.map((x) => x.id)
+      ),
       ...existingMiddlewares,
     ];
 
@@ -128,11 +141,14 @@ export class ResourceInitializer {
       next = async (config: C) => {
         return storeMiddleware.middleware.run(
           {
-            resourceDefinition: resource as any,
-            config: config,
+            resource: {
+              definition: resource,
+              config,
+            },
             next: nextFunction,
           },
-          storeMiddleware.computedDependencies
+          storeMiddleware.computedDependencies,
+          middleware.config
         );
       };
     }

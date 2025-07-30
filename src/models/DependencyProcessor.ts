@@ -7,7 +7,8 @@ import {
   IEventDefinition,
   IEvent,
 } from "../defs";
-import { ResourceStoreElementType, Store, TaskStoreElementType } from "./Store";
+import { Store } from "./Store";
+import { ResourceStoreElementType, TaskStoreElementType } from "./StoreTypes";
 import * as utils from "../define";
 import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";
@@ -81,11 +82,14 @@ export class DependencyProcessor {
         resource.resource.id !== this.store.root.resource.id
       ) {
         await this.processResourceDependencies(resource);
-        resource.value = await this.resourceInitializer.initializeResource(
-          resource.resource,
-          resource.config,
-          resource.computedDependencies as DependencyValuesType<{}>
-        );
+        const { value, context } =
+          await this.resourceInitializer.initializeResource(
+            resource.resource,
+            resource.config,
+            resource.computedDependencies as DependencyValuesType<{}>
+          );
+        resource.context = context;
+        resource.value = value;
       }
     }
   }
@@ -107,13 +111,16 @@ export class DependencyProcessor {
   public async initializeRoot() {
     const storeResource = this.store.root;
 
-    storeResource.value = await this.resourceInitializer.initializeResource(
-      storeResource.resource,
-      storeResource.config,
-      // They are already computed
-      storeResource.computedDependencies as DependencyValuesType<{}>
-    );
+    const { value, context } =
+      await this.resourceInitializer.initializeResource(
+        storeResource.resource,
+        storeResource.config,
+        // They are already computed
+        storeResource.computedDependencies as DependencyValuesType<{}>
+      );
 
+    storeResource.context = context;
+    storeResource.value = value;
     storeResource.isInitialized = true;
   }
 
@@ -131,18 +138,6 @@ export class DependencyProcessor {
             // process.exit(0);
             return;
           }
-
-          this.logger.debug(
-            {
-              message:
-                eventDefinition === "*"
-                  ? `Task ${task.task.id} being triggered by all events`
-                  : `Task ${task.task.id} being triggered by event: ${eventDefinition.id}`,
-
-              event: receivedEvent,
-            },
-            task.task.id
-          );
 
           return this.taskRunner.run(
             task.task,
@@ -180,7 +175,7 @@ export class DependencyProcessor {
     return object;
   }
 
-  async extractDependency(object, source: string) {
+  async extractDependency(object: any, source: string) {
     if (utils.isResource(object)) {
       return this.extractResourceDependency(object);
     } else if (utils.isTask(object)) {
@@ -201,15 +196,7 @@ export class DependencyProcessor {
     object: IEventDefinition<Record<string, any>>,
     source: string
   ) {
-    return async (input) => {
-      // runs it in background.
-      this.logger.debug(
-        {
-          message: `Event ${object.id} was emitted from ${source}`,
-        },
-        source
-      );
-
+    return async (input: any) => {
       return this.eventManager.emit(object, input, source);
     };
   }
@@ -232,7 +219,7 @@ export class DependencyProcessor {
       );
     }
 
-    return (input) => {
+    return (input: any) => {
       return this.taskRunner.run(
         storeTask.task,
         input,
@@ -257,14 +244,18 @@ export class DependencyProcessor {
 
       // check if it has an initialisation function that provides the value
       if (resource.init) {
-        storeResource.value = await this.resourceInitializer.initializeResource(
-          resource,
-          config,
-          await this.extractDependencies(
-            resource.dependencies || {},
-            resource.id
-          )
-        );
+        const { value, context } =
+          await this.resourceInitializer.initializeResource(
+            resource,
+            config,
+            await this.extractDependencies(
+              resource.dependencies || {},
+              resource.id
+            )
+          );
+
+        storeResource.context = context;
+        storeResource.value = value;
       }
     }
 

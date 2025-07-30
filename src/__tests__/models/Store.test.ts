@@ -127,4 +127,44 @@ describe("Store", () => {
       /Store already initialized/i
     );
   });
+
+  it("should access overrides and overrideRequests getters", () => {
+    // Test the overrides getter (line 56)
+    const overrides = store.overrides;
+    expect(overrides).toBeDefined();
+    expect(overrides instanceof Map).toBe(true);
+
+    // Test the overrideRequests getter (line 57)
+    const overrideRequests = store.overrideRequests;
+    expect(overrideRequests).toBeDefined();
+    expect(overrideRequests instanceof Set).toBe(true);
+  });
+
+  it("should call processOverrides method", () => {
+    // Test processOverrides method (line 149)
+    expect(() => store.processOverrides()).not.toThrow();
+  });
+
+  it("should call getEverywhereMiddlewareForTasks method", () => {
+    // Test getEverywhereMiddlewareForTasks method (lines 152-153)
+    const result = store.getEverywhereMiddlewareForTasks([]);
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("should call getEverywhereMiddlewareForResources method", () => {
+    // Test getEverywhereMiddlewareForResources method (lines 156-157)
+    const result = store.getEverywhereMiddlewareForResources([]);
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("should call storeEventsForAllTasks method", () => {
+    // Test storeEventsForAllTasks method (line 165)
+    expect(() => store.storeEventsForAllTasks()).not.toThrow();
+  });
+
+  it("should call getDependentNodes method", () => {
+    // Test getDependentNodes method (line 169)
+    const result = store.getDependentNodes();
+    expect(Array.isArray(result)).toBe(true);
+  });
 });

@@ -1,3 +1,5 @@
+export { ICacheInstance } from "./globals/middleware/cache.middleware";
+
 export const symbolTask: unique symbol = Symbol("runner.task");
 export const symbolResource: unique symbol = Symbol("runner.resource");
 export const symbolResourceWithConfig: unique symbol = Symbol(
@@ -5,11 +7,22 @@ export const symbolResourceWithConfig: unique symbol = Symbol(
 );
 export const symbolEvent: unique symbol = Symbol("runner.event");
 export const symbolMiddleware: unique symbol = Symbol("runner.middleware");
+export const symbolMiddlewareConfigured: unique symbol = Symbol(
+  "runner.middlewareConfigured"
+);
 export const symbolMiddlewareGlobal: unique symbol = Symbol(
   "runner.middlewareGlobal"
 );
+export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol(
+  "runner.middlewareGlobalTasks"
+);
+export const symbolMiddlewareEverywhereResources: unique symbol = Symbol(
+  "runner.middlewareGlobalResources"
+);
 
 export const symbolFilePath: unique symbol = Symbol("runner.filePath");
+export const symbolDispose: unique symbol = Symbol("runner.dispose");
+export const symbolStore: unique symbol = Symbol("runner.store");
 
 export const symbols = {
   task: symbolTask,
@@ -17,8 +30,11 @@ export const symbols = {
   resourceWithConfig: symbolResourceWithConfig,
   event: symbolEvent,
   middleware: symbolMiddleware,
-  middlewareGlobal: symbolMiddlewareGlobal,
+  middlewareEverywhereTasks: symbolMiddlewareEverywhereTasks,
+  middlewareEverywhereResources: symbolMiddlewareEverywhereResources,
   filePath: symbolFilePath,
+  dispose: symbolDispose,
+  store: symbolStore,
 };
 
 export interface IMeta {
@@ -83,14 +99,21 @@ type OptionalOrVoidOrAnything<T> = IsVoid<T> extends true
   ? Optional<T>
   : T;
 
+type OnlyOptionalFields<T> = {} extends T ? true : false;
+
 // RegisterableItems Type with Conditional Inclusion
 export type RegisterableItems<T = any> =
   | IResourceWithConfig<any>
-  | IResource<void, any, any>
-  | IResource<OptionalOrVoidOrAnything<T>, any, any>
+  | IResource<void, any, any, any> // For void configs
+  | IResource<{ [K in any]?: any }, any, any, any> // For optional config
   | ITaskDefinition<any, any, any, any>
   | IMiddlewareDefinition<any>
   | IEventDefinition<any>;
+
+export type MiddlewareAttachments =
+  | IMiddleware<void>
+  | IMiddleware<{ [K in any]?: any }>
+  | IMiddlewareConfigured<any>;
 
 export interface ITaskDefinition<
   TInput = any,
@@ -100,7 +123,7 @@ export interface ITaskDefinition<
 > {
   id: string;
   dependencies?: TDependencies | (() => TDependencies);
-  middleware?: IMiddlewareDefinition[];
+  middleware?: MiddlewareAttachments[];
   /**
    * Listen to events in a simple way
    */
@@ -115,11 +138,6 @@ export interface ITaskDefinition<
     input: TOn extends undefined
       ? TInput
       : IEvent<TOn extends "*" ? any : ExtractEventParams<TOn>>,
-    // input: TOn extends "*"
-    //   ? IEvent<any>
-    //   : TEventDefinitionInput extends null | void
-    //   ? TInput
-    // : IEvent<TEventDefinitionInput>,
     dependencies: DependencyValuesType<TDependencies>
   ) => TOutput;
 }
@@ -130,7 +148,8 @@ export type BeforeRunEventPayload<TInput> = {
 
 export type AfterRunEventPayload<TInput, TOutput> = {
   input: TInput;
-  output: TOutput;
+  output: TOutput extends Promise<infer U> ? U : TOutput;
+  setOutput(newOutput: TOutput extends Promise<infer U> ? U : TOutput): void;
 };
 
 export type OnErrorEventPayload = {
@@ -161,7 +180,7 @@ export interface ITask<
 > extends ITaskDefinition<TInput, TOutput, TDependencies, TOn> {
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
-  middleware: IMiddlewareDefinition[];
+  middleware: MiddlewareAttachments[];
   /**
    * These events are automatically populated after the task has been defined.
    */
@@ -172,10 +191,18 @@ export interface ITask<
   };
 }
 // Resource interfaces
+// Conditional type to determine the value type based on whether init is present
+type ResourceValueType<T> = T extends { init: any }
+  ? T["init"] extends (...args: any[]) => Promise<infer R>
+    ? R
+    : unknown
+  : undefined;
+
 export interface IResourceDefinition<
   TConfig = any,
   TValue = unknown,
   TDependencies extends DependencyMapType = {},
+  TContext = any,
   THooks = any,
   TRegisterableItems = any
 > {
@@ -185,32 +212,38 @@ export interface IResourceDefinition<
     | Array<RegisterableItems>
     | ((config: TConfig) => Array<RegisterableItems>);
   init?: (
+    this: any,
     config: TConfig,
-    dependencies: DependencyValuesType<TDependencies>
+    dependencies: DependencyValuesType<TDependencies>,
+    context: TContext
   ) => Promise<TValue>;
   /**
    * Clean-up function for the resource. This is called when the resource is no longer needed.
    *
-   * @param value The value of the resource
+   * @param value The value of the resource (undefined if no init method)
    * @param config The configuration it received
    * @param dependencies The dependencies it needed
-   * @returns
+   * @returns Promise<void>
    */
   dispose?: (
+    this: any,
     value: TValue,
     config: TConfig,
-    dependencies: DependencyValuesType<TDependencies>
-  ) => Promise<TValue>;
+    dependencies: DependencyValuesType<TDependencies>,
+    context: TContext
+  ) => Promise<void>;
   meta?: IResourceMeta;
   overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
-  middleware?: IMiddlewareDefinition[];
+  middleware?: MiddlewareAttachments[];
+  context?: () => TContext;
 }
 
 export interface IResource<
   TConfig = void,
   TValue = any,
-  TDependencies extends DependencyMapType = any
-> extends IResourceDefinition<TConfig, TValue, TDependencies> {
+  TDependencies extends DependencyMapType = any,
+  TContext = any
+> extends IResourceDefinition<TConfig, TValue, TDependencies, TContext> {
   with(config: TConfig): IResourceWithConfig<TConfig, TValue, TDependencies>;
   register:
     | Array<RegisterableItems>
@@ -224,7 +257,7 @@ export interface IResource<
     onError: IEventDefinition<OnErrorEventPayload>;
   };
   overrides: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
-  middleware: IMiddlewareDefinition[];
+  middleware: MiddlewareAttachments[];
 }
 
 export interface IResourceWithConfig<
@@ -273,21 +306,39 @@ export interface IEventDefinition<TPayload = void> {
 }
 
 export interface IMiddlewareDefinition<
+  TConfig = any,
   TDependencies extends DependencyMapType = any
 > {
   id: string;
   dependencies?: TDependencies | (() => TDependencies);
   run: (
     input: IMiddlewareExecutionInput,
-    dependencies: DependencyValuesType<TDependencies>
+    dependencies: DependencyValuesType<TDependencies>,
+    config: TConfig
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
 }
 
-export interface IMiddleware<TDependencies extends DependencyMapType = any>
-  extends IMiddlewareDefinition<TDependencies> {
+export interface IMiddleware<
+  TConfig = any,
+  TDependencies extends DependencyMapType = any
+> extends IMiddlewareDefinition<TConfig, TDependencies> {
+  [symbolMiddleware]: true;
+  [symbolMiddlewareConfigured]?: boolean;
+  [symbolMiddlewareEverywhereTasks]?: boolean;
+  [symbolMiddlewareEverywhereResources]?: boolean;
+
   dependencies: TDependencies | (() => TDependencies);
-  global(): IMiddleware<TDependencies>;
+  everywhere(): IMiddleware<TConfig, TDependencies>;
+  config: TConfig;
+  with: (config: TConfig) => IMiddlewareConfigured<TConfig, TDependencies>;
+}
+
+export interface IMiddlewareConfigured<
+  TConfig = any,
+  TDependencies extends DependencyMapType = any
+> extends IMiddleware<TConfig, TDependencies> {
+  [symbolMiddlewareConfigured]: true;
 }
 
 export interface IMiddlewareDefinitionConfigured<
@@ -297,12 +348,21 @@ export interface IMiddlewareDefinitionConfigured<
   config?: C;
 }
 
-export interface IMiddlewareExecutionInput {
-  taskDefinition?: ITask;
-  resourceDefinition?: IResource;
-  config?: any;
-  input?: any;
-  next: (taskInputOrResourceConfig?: any) => Promise<any>;
+export interface IMiddlewareExecutionInput<
+  TTaskInput = any,
+  TResourceConfig = any
+> {
+  task?: {
+    definition: ITask<TTaskInput>;
+    input: TTaskInput;
+  };
+  resource?: {
+    definition: IResource<TResourceConfig>;
+    config: TResourceConfig;
+  };
+  next: (
+    taskInputOrResourceConfig?: TTaskInput | TResourceConfig
+  ) => Promise<any>;
 }
 
 export interface IHookDefinition<

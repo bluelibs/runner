@@ -10,11 +10,11 @@ import {
 } from "./defs";
 import { DependencyProcessor } from "./models/DependencyProcessor";
 import { EventManager } from "./models/EventManager";
-import { globalEvents } from "./globalEvents";
+import { globalEvents } from "./globals/globalEvents";
 import { Store } from "./models/Store";
 import { findCircularDependencies } from "./tools/findCircularDependencies";
 import { Errors } from "./errors";
-import { globalResources } from "./globalResources";
+import { globalResources } from "./globals/globalResources";
 import { Logger } from "./models/Logger";
 
 export type ResourcesStoreElementType<
@@ -55,7 +55,7 @@ export type RunnerState = {
 export async function run<C, V>(
   resource: IResource<C, V>,
   config?: C
-): Promise<V> {
+): Promise<{ value: V; dispose: () => Promise<void> }> {
   const eventManager = new EventManager();
 
   // ensure for logger, that it can be used only after: computeAllDependencies() has executed
@@ -106,5 +106,8 @@ export async function run<C, V>(
   // disallow manipulation or attaching more
   store.lock();
 
-  return store.root.value;
+  return {
+    value: store.root.value,
+    dispose: () => store.dispose(),
+  };
 }

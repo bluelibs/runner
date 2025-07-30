@@ -1,5 +1,6 @@
 import { defineMiddleware, defineTask, defineResource } from "../define";
 import { run } from "../run";
+import { retryMiddleware } from "../globals/middleware/retry.middleware";
 
 // Middleware
 describe("Middleware", () => {
@@ -56,7 +57,7 @@ describe("Middleware", () => {
 
     const app = defineResource({
       id: "app",
-      register: [globalMiddleware.global(), testMiddleware, testTask],
+      register: [globalMiddleware.everywhere(), testMiddleware, testTask],
       dependencies: { testTask },
       async init(_, { testTask }) {
         const result = await testTask();
@@ -94,7 +95,7 @@ describe("Middleware", () => {
 
     const app = defineResource({
       id: "app",
-      register: [globalMiddleware.global(), testMiddleware, testTask],
+      register: [globalMiddleware.everywhere(), testMiddleware, testTask],
       dependencies: { testTask },
       async init(_, { testTask }) {
         const result = await testTask();
@@ -176,7 +177,7 @@ describe("Middleware", () => {
   it("Should work with resources", async () => {
     const middleware = defineMiddleware({
       id: "middleware",
-      run: async ({ resourceDefinition, config: resourceConfig, next }) => {
+      run: async ({ resource, next }) => {
         const result = await next();
         return `Middleware: ${result}`;
       },
@@ -190,14 +191,15 @@ describe("Middleware", () => {
       },
     });
 
-    expect(await run(app)).toBe("Middleware: App initialized");
+    const result = await run(app);
+    expect(result.value).toBe("Middleware: App initialized");
   });
 
   it("Should work with global middleware", async () => {
     const middleware = defineMiddleware({
       id: "middleware",
-      run: async ({ resourceDefinition, config: resourceConfig, next }) => {
-        const result = await next();
+      run: async ({ resource, next }) => {
+        const result = await next({});
         return `Middleware: ${result}`;
       },
     });
@@ -211,26 +213,29 @@ describe("Middleware", () => {
 
     const app = defineResource({
       id: "app",
-      register: [middleware.global(), sub],
+      register: [middleware.everywhere(), sub],
       dependencies: { sub },
       async init(_, { sub }) {
         return sub;
       },
     });
 
-    expect(await run(app)).toBe("Middleware: Middleware: Sub initialized");
+    const result = await run(app);
+    expect(String(result.value)).toBe(
+      "Middleware: Middleware: Sub initialized"
+    );
   });
 
   it("Should prevent circular dependencies when middleware depends on the same task", async () => {
-    const middleware = defineMiddleware({
+    const middleware: any = defineMiddleware({
       id: "middleware",
-      dependencies: () => ({ task }),
-      run: async (_, { task }) => {
+      dependencies: (): any => ({ task }),
+      run: async (_: any, { task }: any) => {
         // example
       },
     });
 
-    const task = defineTask({
+    const task: any = defineTask({
       id: "task",
       middleware: [middleware],
       run: async () => "Task executed",
@@ -245,5 +250,154 @@ describe("Middleware", () => {
     });
 
     expect(run(app)).rejects.toThrowError(/Circular dependencies detected/);
+  });
+});
+
+describe("Configurable Middleware (.with)", () => {
+  it("should allow using middleware usage in a task and pass config to run", async () => {
+    let receivedConfig: any;
+    const validate = defineMiddleware({
+      id: "validate",
+      run: async ({ next }, deps, config: { schema: string }) => {
+        receivedConfig = config;
+        return next();
+      },
+    });
+    const usage = validate.with({ schema: "user" });
+    const task = defineTask({
+      id: "task",
+      middleware: [usage],
+      run: async () => "ok",
+    });
+    const app = defineResource({
+      id: "app",
+      register: [validate, task],
+      dependencies: { task },
+      async init(_, { task }) {
+        const result = await task();
+        expect(result).toBe("ok");
+        expect(receivedConfig).toEqual({ schema: "user" });
+      },
+    });
+    await run(app);
+  });
+
+  it("should allow multiple usages of the same middleware definition with different configs", async () => {
+    const calls: (string | undefined)[] = [];
+    const validate = defineMiddleware({
+      id: "validate",
+      run: async ({ next }, deps, config: { schema: string }) => {
+        calls.push(config.schema);
+        return next();
+      },
+    });
+    const usage1 = validate.with({ schema: "user" });
+    const usage2 = validate.with({ schema: "admin" });
+    const task1 = defineTask({
+      id: "task1",
+      middleware: [usage1],
+      run: async () => "ok1",
+    });
+    const task2 = defineTask({
+      id: "task2",
+      middleware: [usage2],
+      run: async () => "ok2",
+    });
+    const app = defineResource({
+      id: "app",
+      register: [validate, task1, task2],
+      dependencies: { task1, task2 },
+      async init(_, { task1, task2 }) {
+        await task1();
+        await task2();
+        expect(calls).toEqual(["user", "admin"]);
+      },
+    });
+    await run(app);
+  });
+
+  it("should work in an integration scenario with global and per-task middleware", async () => {
+    const calls: string[] = [];
+    const log = defineMiddleware({
+      id: "log",
+      run: async ({ next }) => {
+        calls.push("global");
+        return next();
+      },
+    });
+    const validate = defineMiddleware({
+      id: "validate",
+      run: async ({ next }, deps, config: { schema: string }) => {
+        expect(config).toBeDefined();
+        calls.push(config!.schema);
+        return next();
+      },
+    });
+    const usage = validate.with({ schema: "user" });
+    const task = defineTask({
+      id: "task",
+      middleware: [usage],
+      run: async () => "ok",
+    });
+    const app = defineResource({
+      id: "app",
+      register: [log.everywhere(), validate, task],
+      dependencies: { task },
+      async init(_, { task }) {
+        const result = await task();
+        expect(result).toBe("ok");
+        expect(calls).toContain("global");
+        expect(calls).toContain("user");
+      },
+    });
+    await run(app);
+  });
+
+  it("should enforce type safety for config in .with()", () => {
+    const validate = defineMiddleware({
+      id: "validate",
+      run: async ({ next }, deps, config: { schema: string }) => next(),
+    });
+
+    // Should error if config type is not correct
+    // @ts-expect-error
+    validate.with({ schema: 123 });
+  });
+
+  it("should modify task outputs independently based on middleware configs", async () => {
+    const prefixMiddleware = defineMiddleware({
+      id: "prefixer",
+      run: async ({ next }, deps, config: { prefix: string }) => {
+        const result = await next();
+        return `${config.prefix}: ${result}`;
+      },
+    });
+
+    const taskA = defineTask({
+      id: "taskA",
+      middleware: [prefixMiddleware.with({ prefix: "Alpha" })],
+      run: async () => "Result",
+    });
+
+    const taskB = defineTask({
+      id: "taskB",
+      middleware: [prefixMiddleware.with({ prefix: "Beta" })],
+      run: async () => "Result",
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [prefixMiddleware, taskA, taskB],
+      dependencies: { taskA, taskB },
+      async init(_, deps) {
+        const resultA = await deps.taskA();
+        const resultB = await deps.taskB();
+
+        expect(resultA).toBe("Alpha: Result");
+        expect(resultB).toBe("Beta: Result");
+      },
+    });
+
+    await run(app);
   });
 });

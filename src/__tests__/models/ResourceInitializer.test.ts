@@ -3,8 +3,8 @@ import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { defineResource } from "../../define";
 import { Logger } from "../../models";
-import { globalResources } from "../../globalResources";
-import { globalEvents } from "../../globalEvents";
+import { globalResources } from "../../globals/globalResources";
+import { globalEvents } from "../../globals/globalEvents";
 
 describe("ResourceInitializer", () => {
   let store: Store;
@@ -36,10 +36,11 @@ describe("ResourceInitializer", () => {
       mockDependencies
     );
 
-    expect(result).toBe("initialized value");
+    expect(result).toEqual({ value: "initialized value", context: undefined });
     expect(mockResource.init).toHaveBeenCalledWith(
       mockConfig,
-      mockDependencies
+      mockDependencies,
+      undefined
     );
 
     expect(emitSpy).toHaveBeenCalledWith(
@@ -91,7 +92,8 @@ describe("ResourceInitializer", () => {
     expect(result).toBeUndefined();
     expect(mockResource.init).toHaveBeenCalledWith(
       mockConfig,
-      mockDependencies
+      mockDependencies,
+      undefined
     );
     expect(emitSpy).toHaveBeenCalledWith(
       mockResource.events.beforeInit,
@@ -126,7 +128,7 @@ describe("ResourceInitializer", () => {
       mockDependencies
     );
 
-    expect(result).toBeUndefined();
+    expect(result).toEqual({ value: undefined, context: undefined });
     expect(emitSpy).toHaveBeenCalledWith(
       mockResource.events.beforeInit,
       {

@@ -1,12 +1,9 @@
 import { DependencyMapType, DependencyValuesType, ITask } from "../defs";
 import { Errors } from "../errors";
 import { EventManager } from "./EventManager";
-import { globalEvents } from "../globalEvents";
-import {
-  MiddlewareStoreElementType,
-  Store,
-  TaskStoreElementType,
-} from "./Store";
+import { globalEvents } from "../globals/globalEvents";
+import { Store } from "./Store";
+import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
 
 export class TaskRunner {
@@ -68,12 +65,24 @@ export class TaskRunner {
     let error;
     try {
       // craft the next function starting from the first next function
-      const output = await runner(input);
+      const result = {
+        output: await runner(input),
+      };
+      const setOutput = (newOutput: any) => {
+        result.output = newOutput;
+      };
 
+      // If it's a global event listener, we stop emitting so we don't get into an infinite loop.
       if (!isGlobalEventListener) {
         await this.eventManager.emit(
           task.events.afterRun,
-          { input, output },
+          {
+            input,
+            get output() {
+              return result.output;
+            },
+            setOutput,
+          },
           task.id
         );
       }
@@ -83,18 +92,22 @@ export class TaskRunner {
         task.on !== globalEvents.tasks.beforeRun &&
         task.on !== globalEvents.tasks.afterRun
       ) {
+        // If it's a lifecycle listener we prevent from emitting further events.
         await this.eventManager.emit(
           globalEvents.tasks.afterRun,
           {
             task,
             input,
-            output,
+            get output() {
+              return result.output;
+            },
+            setOutput,
           },
           task.id
         );
       }
 
-      return output;
+      return result.output;
     } catch (e) {
       let isSuppressed = false;
       function suppress() {
@@ -136,46 +149,46 @@ export class TaskRunner {
     TDeps extends DependencyMapType
   >(task: ITask<TInput, TOutput, TDeps>) {
     const storeTask = this.store.tasks.get(task.id);
-    // this is the final next()
-    let next = async (input) => {
-      this.logger.debug(
-        {
-          message: `Running task ${task.id}`,
-          input,
-        },
-        task.id
-      );
 
+    // this is the final next()
+    let next = async (input: any) => {
       return task.run.call(null, input, storeTask?.computedDependencies as any);
     };
 
     const existingMiddlewares = task.middleware;
     const createdMiddlewares = [
-      ...this.store.getGlobalMiddlewares(existingMiddlewares.map((x) => x.id)),
+      ...this.store.getEverywhereMiddlewareForTasks(
+        existingMiddlewares.map((x) => x.id)
+      ),
       ...existingMiddlewares,
     ];
 
-    if (createdMiddlewares.length > 0) {
-      // we need to run the middleware in reverse order
-      // so we can chain the next function
-      for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
-        const middleware = createdMiddlewares[i];
-        const storeMiddleware = this.store.middlewares.get(
-          middleware.id
-        ) as MiddlewareStoreElementType; // we know it exists because at this stage all sanity checks have been done.
+    if (createdMiddlewares.length === 0) {
+      return next;
+    }
 
-        const nextFunction = next;
-        next = async (input) => {
-          return storeMiddleware.middleware.run(
-            {
-              taskDefinition: task as any,
+    // we need to run the middleware in reverse order
+    // so we can chain the next function
+    for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
+      const middleware = createdMiddlewares[i];
+      const storeMiddleware = this.store.middlewares.get(
+        middleware.id
+      ) as MiddlewareStoreElementType; // we know it exists because at this stage all sanity checks have been done.
+
+      const nextFunction = next;
+      next = async (input) => {
+        return storeMiddleware.middleware.run(
+          {
+            task: {
+              definition: task as any,
               input,
-              next: nextFunction,
             },
-            storeMiddleware.computedDependencies
-          );
-        };
-      }
+            next: nextFunction,
+          },
+          storeMiddleware.computedDependencies,
+          middleware.config
+        );
+      };
     }
 
     return next;

@@ -38,14 +38,14 @@ describe("getCallerFile", () => {
       id: "event",
     });
 
-    expect(task[symbols.filePath]).toBeDefined();
-    expect(resource[symbols.filePath]).toBeDefined();
-    expect(middleware[symbols.filePath]).toBeDefined();
-    expect(event[symbols.filePath]).toBeDefined();
+    expect((task as any)[symbols.filePath]).toBeDefined();
+    expect((resource as any)[symbols.filePath]).toBeDefined();
+    expect((middleware as any)[symbols.filePath]).toBeDefined();
+    expect((event as any)[symbols.filePath]).toBeDefined();
 
-    expect(task[symbols.filePath]).toContain("getCallerFile.test");
-    expect(resource[symbols.filePath]).toContain("getCallerFile.test");
-    expect(middleware[symbols.filePath]).toContain("getCallerFile.test");
-    expect(event[symbols.filePath]).toContain("getCallerFile.test");
+    expect((task as any)[symbols.filePath]).toContain("getCallerFile.test");
+    expect((resource as any)[symbols.filePath]).toContain("getCallerFile.test");
+    expect((middleware as any)[symbols.filePath]).toContain("getCallerFile.test");
+    expect((event as any)[symbols.filePath]).toContain("getCallerFile.test");
   });
 });

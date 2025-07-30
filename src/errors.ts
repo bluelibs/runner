@@ -18,7 +18,9 @@ export const Errors = {
     new Error(`Event "${id}" not found. Did you forget to register it?`),
 
   middlewareAlreadyGlobal: (id: string) =>
-    new Error("Cannot call global on a global middleware: " + id),
+    new Error(
+      "Cannot call .everywhere() on an already global middleware: " + id
+    ),
 
   locked: (what: string) =>
     new Error(`Cannot modify the ${what} when it is locked.`),

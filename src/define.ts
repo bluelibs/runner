@@ -15,6 +15,8 @@ import {
   IEvent,
   IEventDefinitionConfig,
   symbolEvent,
+  RegisterableItems,
+  symbolMiddlewareConfigured,
 } from "./defs";
 import { Errors } from "./errors";
 import { getCallerFile } from "./tools/getCallerFile";
@@ -38,6 +40,7 @@ export function defineTask<
     middleware: taskConfig.middleware || [],
     run: taskConfig.run,
     on: taskConfig.on,
+    listenerOrder: taskConfig.listenerOrder,
     events: {
       beforeRun: {
         ...defineEvent({
@@ -67,10 +70,10 @@ export function defineResource<
   TConfig = void,
   TValue = any,
   TDeps extends DependencyMapType = {},
-  THooks = any
+  TPrivate = any
 >(
-  constConfig: IResourceDefinition<TConfig, TValue, TDeps, THooks>
-): IResource<TConfig, TValue, TDeps> {
+  constConfig: IResourceDefinition<TConfig, TValue, TDeps, TPrivate>
+): IResource<TConfig, TValue, TDeps, TPrivate> {
   const filePath = getCallerFile();
   return {
     [symbols.resource]: true,
@@ -81,6 +84,7 @@ export function defineResource<
     register: constConfig.register || [],
     overrides: constConfig.overrides || [],
     init: constConfig.init,
+    context: constConfig.context,
     with: function (config: TConfig) {
       return {
         [symbols.resourceWithConfig]: true,
@@ -115,6 +119,44 @@ export function defineResource<
   };
 }
 
+/**
+ * Creates an "index" resource which groups multiple registerable items under
+ * a single dependency. The resulting resource registers every item, depends
+ * on the same items, and returns the resolved dependency map so users can
+ * access them naturally: `deps.services.myTask()` or `deps.services.myResource`.
+ */
+export function defineIndex<
+  T extends Record<string, RegisterableItems>,
+  D extends {
+    [K in keyof T]: T[K] extends IResourceWithConfig<any, any, any>
+      ? T[K]["resource"]
+      : T[K];
+  } & DependencyMapType
+>(items: T): IResource<void, DependencyValuesType<D>, D> {
+  const dependencies = {} as D;
+  const register: RegisterableItems[] = [];
+
+  for (const key of Object.keys(items) as (keyof T)[]) {
+    const item = items[key];
+    register.push(item);
+
+    if (isResourceWithConfig(item)) {
+      (dependencies as any)[key] = item.resource;
+    } else {
+      (dependencies as any)[key] = item as any;
+    }
+  }
+
+  return defineResource({
+    id: `index.${Math.random().toString(36).slice(2)}`,
+    register,
+    dependencies,
+    async init(_, deps) {
+      return deps as any;
+    },
+  });
+}
+
 export function defineEvent<TPayload = any>(
   config: IEventDefinitionConfig<TPayload>
 ): IEventDefinition<TPayload> {
@@ -125,24 +167,52 @@ export function defineEvent<TPayload = any>(
   };
 }
 
-export function defineMiddleware<TDeps extends DependencyMapType = {}>(
-  config: IMiddlewareDefinition<TDeps>
-): IMiddleware<TDeps> {
+export type MiddlewareEverywhereOptions = {
+  /**
+   * Enable this for tasks. Default is true.
+   */
+  tasks?: boolean;
+  /**
+   * Enable this for resources. Default is true.
+   */
+  resources?: boolean;
+};
+
+export function defineMiddleware<
+  TConfig extends Record<string, any>,
+  TDependencies extends DependencyMapType
+>(
+  middlewareDef: IMiddlewareDefinition<TConfig, TDependencies>
+): IMiddleware<TConfig, TDependencies> {
   const object = {
     [symbols.filePath]: getCallerFile(),
     [symbols.middleware]: true,
-    ...config,
-    dependencies: config.dependencies || ({} as TDeps),
-  };
+    config: {} as TConfig,
+    ...middlewareDef,
+    dependencies: middlewareDef.dependencies || ({} as TDependencies),
+  } as IMiddleware<TConfig, TDependencies>;
 
   return {
     ...object,
-    global() {
+    with: (config: TConfig) => {
       return {
         ...object,
-        [symbols.middlewareGlobal]: true,
-        global() {
-          throw Errors.middlewareAlreadyGlobal(config.id);
+        [symbolMiddlewareConfigured]: true,
+        config: {
+          ...object.config,
+          ...config,
+        },
+      };
+    },
+    everywhere(options: MiddlewareEverywhereOptions = {}) {
+      const { tasks = true, resources = true } = options;
+
+      return {
+        ...object,
+        [symbols.middlewareEverywhereTasks]: tasks,
+        [symbols.middlewareEverywhereResources]: resources,
+        everywhere() {
+          throw Errors.middlewareAlreadyGlobal(middlewareDef.id);
         },
       };
     },

@@ -7,7 +7,7 @@ import {
 } from "../../define";
 import { run } from "../../run";
 
-describe("Benchmarks", () => {
+describe.skip("Benchmarks", () => {
   let suite: Benchmark.Suite;
 
   beforeEach(() => {

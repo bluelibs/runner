@@ -1,10 +1,10 @@
-import { defineEvent } from "./define";
-import { ITask, IResource, IEvent } from "./defs";
-import { ILog } from "./models/Logger";
+import { defineEvent } from "../define";
+import { ITask, IResource, IEvent } from "../defs";
+import { ILog } from "../models/Logger";
 
 export const globalEvents = {
   beforeInit: defineEvent({
-    id: "global.events.beforeInit",
+    id: "globals.events.beforeInit",
     meta: {
       title: "Before Initialization",
       description:
@@ -13,7 +13,7 @@ export const globalEvents = {
     },
   }),
   afterInit: defineEvent({
-    id: "global.events.afterInit",
+    id: "globals.events.afterInit",
     meta: {
       title: "After Initialization",
       description:
@@ -22,7 +22,7 @@ export const globalEvents = {
     },
   }),
   log: defineEvent<ILog>({
-    id: "global.events.log",
+    id: "globals.events.log",
     meta: {
       title: "Log Event",
       description: "Used to log events and messages across the system.",
@@ -34,7 +34,7 @@ export const globalEvents = {
       task: ITask<any, any, any>;
       input: any;
     }>({
-      id: "global.events.tasks.beforeRun",
+      id: "globals.events.tasks.beforeRun",
       meta: {
         title: "Before Task Execution",
         description:
@@ -46,8 +46,9 @@ export const globalEvents = {
       task: ITask<any, any, any>;
       input: any;
       output: any;
+      setOutput: (newOutput: any) => void;
     }>({
-      id: "global.events.tasks.afterRun",
+      id: "globals.events.tasks.afterRun",
       meta: {
         title: "After Task Execution",
         description:
@@ -60,7 +61,7 @@ export const globalEvents = {
       suppress: () => void;
       task: ITask<any, any, any>;
     }>({
-      id: "global.events.tasks.onError",
+      id: "globals.events.tasks.onError",
       meta: {
         title: "Task Error",
         description:
@@ -74,7 +75,7 @@ export const globalEvents = {
       resource: IResource<any, any, any>;
       config: any;
     }>({
-      id: "global.events.resources.beforeInit",
+      id: "globals.events.resources.beforeInit",
       meta: {
         title: "Before Resource Initialization",
         description:
@@ -87,7 +88,7 @@ export const globalEvents = {
       config: any;
       value: any;
     }>({
-      id: "global.events.resources.afterInit",
+      id: "globals.events.resources.afterInit",
       meta: {
         title: "After Resource Initialization",
         description:
@@ -100,7 +101,7 @@ export const globalEvents = {
       suppress: () => void;
       resource: IResource<any, any, any>;
     }>({
-      id: "global.events.resources.onError",
+      id: "globals.events.resources.onError",
       meta: {
         title: "Resource Error",
         description:
