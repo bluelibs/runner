@@ -101,10 +101,6 @@ type OptionalOrVoidOrAnything<T> = IsVoid<T> extends true
 
 type OnlyOptionalFields<T> = {} extends T ? true : false;
 
-type r1 = OnlyOptionalFields<{ ok: boolean }>;
-type r2 = OnlyOptionalFields<{ ok?: boolean }>;
-type r3 = OnlyOptionalFields<void>;
-
 // RegisterableItems Type with Conditional Inclusion
 export type RegisterableItems<T = any> =
   | IResourceWithConfig<any>
@@ -119,14 +115,6 @@ export type MiddlewareAttachments =
   | IMiddleware<{ [K in any]?: any }>
   | IMiddlewareConfigured<any>;
 
-// Then create a wrapper that validates:
-type ValidateRegisterable<T> = T extends IResource<infer Config, any, any, any>
-  ? IsVoid<Config> extends true
-    ? T
-    : OnlyOptionalFields<Config> extends true
-    ? T
-    : never
-  : T;
 export interface ITaskDefinition<
   TInput = any,
   TOutput extends Promise<any> = any,
