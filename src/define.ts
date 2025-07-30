@@ -11,9 +11,7 @@ import {
   DependencyMapType,
   DependencyValuesType,
   IMiddleware,
-  IHookDefinition,
   IEvent,
-  IEventDefinitionConfig,
   symbolEvent,
   RegisterableItems,
   symbolMiddlewareConfigured,
@@ -32,10 +30,12 @@ export function defineTask<
   taskConfig: ITaskDefinition<Input, Output, Deps, TOn>
 ): ITask<Input, Output, Deps, TOn> {
   const filePath = getCallerFile();
+  const isAnonymous = !Boolean(taskConfig.id);
+  const id = taskConfig.id || Symbol("anonymous-task");
   return {
     [symbols.task]: true,
     [symbols.filePath]: filePath,
-    id: taskConfig.id,
+    id,
     dependencies: taskConfig.dependencies || ({} as Deps),
     middleware: taskConfig.middleware || [],
     run: taskConfig.run,
@@ -44,19 +44,25 @@ export function defineTask<
     events: {
       beforeRun: {
         ...defineEvent({
-          id: `${taskConfig.id}.events.beforeRun`,
+          id: isAnonymous
+            ? Symbol(`anonymous-task.events.beforeRun`)
+            : `${id as string}.events.beforeRun`,
         }),
         [symbols.filePath]: getCallerFile(),
       },
       afterRun: {
         ...defineEvent({
-          id: `${taskConfig.id}.events.afterRun`,
+          id: isAnonymous
+            ? Symbol(`anonymous-task.events.afterRun`)
+            : `${id as string}.events.afterRun`,
         }),
         [symbols.filePath]: getCallerFile(),
       },
       onError: {
         ...defineEvent({
-          id: `${taskConfig.id}.events.onError`,
+          id: isAnonymous
+            ? Symbol(`anonymous-task.events.onError`)
+            : `${id as string}.events.onError`,
         }),
         [symbols.filePath]: getCallerFile(),
       },
@@ -75,10 +81,12 @@ export function defineResource<
   constConfig: IResourceDefinition<TConfig, TValue, TDeps, TPrivate>
 ): IResource<TConfig, TValue, TDeps, TPrivate> {
   const filePath = getCallerFile();
+  const isAnonymous = !Boolean(constConfig.id);
+  const id = constConfig.id || Symbol("anonymous-resource");
   return {
     [symbols.resource]: true,
     [symbols.filePath]: filePath,
-    id: constConfig.id,
+    id,
     dependencies: constConfig.dependencies,
     dispose: constConfig.dispose,
     register: constConfig.register || [],
@@ -97,19 +105,25 @@ export function defineResource<
     events: {
       beforeInit: {
         ...defineEvent({
-          id: `${constConfig.id}.events.beforeInit`,
+          id: isAnonymous
+            ? Symbol(`anonymous-resource.events.beforeInit`)
+            : `${id as string}.events.beforeInit`,
         }),
         [symbols.filePath]: filePath,
       },
       afterInit: {
         ...defineEvent({
-          id: `${constConfig.id}.events.afterInit`,
+          id: isAnonymous
+            ? Symbol(`anonymous-resource.events.afterInit`)
+            : `${id as string}.events.afterInit`,
         }),
         [symbols.filePath]: filePath,
       },
       onError: {
         ...defineEvent({
-          id: `${constConfig.id}.events.onError`,
+          id: isAnonymous
+            ? Symbol(`anonymous-resource.events.onError`)
+            : `${id as string}.events.onError`,
         }),
         [symbols.filePath]: filePath,
       },
@@ -158,12 +172,13 @@ export function defineIndex<
 }
 
 export function defineEvent<TPayload = any>(
-  config: IEventDefinitionConfig<TPayload>
-): IEventDefinition<TPayload> {
+  config: IEventDefinition<TPayload>
+): IEvent<TPayload> {
   return {
-    [symbols.filePath]: getCallerFile(),
-    [symbolEvent]: true,
     ...config,
+    id: config.id || Symbol("anonymous-event"),
+    [symbols.filePath]: getCallerFile(),
+    [symbolEvent]: true, // This is a workaround
   };
 }
 
@@ -188,6 +203,7 @@ export function defineMiddleware<
     [symbols.filePath]: getCallerFile(),
     [symbols.middleware]: true,
     config: {} as TConfig,
+    id: middlewareDef.id || Symbol("anonymous-middleware"),
     ...middlewareDef,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
   } as IMiddleware<TConfig, TDependencies>;
@@ -212,7 +228,7 @@ export function defineMiddleware<
         [symbols.middlewareEverywhereTasks]: tasks,
         [symbols.middlewareEverywhereResources]: resources,
         everywhere() {
-          throw Errors.middlewareAlreadyGlobal(middlewareDef.id);
+          throw Errors.middlewareAlreadyGlobal(object.id);
         },
       };
     },
@@ -233,7 +249,7 @@ export function isResourceWithConfig(
   return definition && definition[symbols.resourceWithConfig];
 }
 
-export function isEvent(definition: any): definition is IEventDefinition {
+export function isEvent(definition: any): definition is IEvent {
   return definition && definition[symbols.event];
 }
 

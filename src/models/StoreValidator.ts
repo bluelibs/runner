@@ -1,15 +1,20 @@
 import { Errors } from "../errors";
-import { TaskStoreElementType, MiddlewareStoreElementType, ResourceStoreElementType, EventStoreElementType } from "./StoreTypes";
+import {
+  TaskStoreElementType,
+  MiddlewareStoreElementType,
+  ResourceStoreElementType,
+  EventStoreElementType,
+} from "./StoreTypes";
 
 export class StoreValidator {
   constructor(
-    private tasks: Map<string, TaskStoreElementType>,
-    private resources: Map<string, ResourceStoreElementType>,
-    private events: Map<string, EventStoreElementType>,
-    private middlewares: Map<string, MiddlewareStoreElementType>
+    private tasks: Map<string | symbol, TaskStoreElementType>,
+    private resources: Map<string | symbol, ResourceStoreElementType>,
+    private events: Map<string | symbol, EventStoreElementType>,
+    private middlewares: Map<string | symbol, MiddlewareStoreElementType>
   ) {}
 
-  checkIfIDExists(id: string): void | never {
+  checkIfIDExists(id: string | symbol): void | never {
     if (this.tasks.has(id)) {
       throw Errors.duplicateRegistration("Task", id);
     }
@@ -29,7 +34,7 @@ export class StoreValidator {
       task.task.middleware.forEach((middleware) => {
         if (!this.middlewares.has(middleware.id)) {
           throw Errors.dependencyNotFound(
-            `Middleware ${middleware.id} in Task ${task.task.id}`
+            `Middleware ${middleware.id.toString()} in Task ${task.task.id.toString()}`
           );
         }
       });

@@ -60,7 +60,8 @@ type ExtractTaskOutput<T> = T extends ITask<any, infer O, infer D> ? O : never;
 type ExtractResourceValue<T> = T extends IResource<any, infer V, infer D>
   ? V
   : never;
-type ExtractEventParams<T> = T extends IEventDefinition<infer P> ? P : never;
+
+type ExtractEventParams<T> = T extends IEvent<infer P> ? P : never;
 
 // Helper Types for Dependency Value Construction
 type TaskDependency<I, O> = (...args: I extends null | void ? [] : [I]) => O;
@@ -121,7 +122,7 @@ export interface ITaskDefinition<
   TDependencies extends DependencyMapType = {},
   TOn extends "*" | IEventDefinition<any> | undefined = undefined // Adding a generic to track 'on' type
 > {
-  id: string;
+  id?: string | symbol;
   dependencies?: TDependencies | (() => TDependencies);
   middleware?: MiddlewareAttachments[];
   /**
@@ -137,7 +138,7 @@ export interface ITaskDefinition<
   run: (
     input: TOn extends undefined
       ? TInput
-      : IEvent<TOn extends "*" ? any : ExtractEventParams<TOn>>,
+      : IEventEmission<TOn extends "*" ? any : ExtractEventParams<TOn>>,
     dependencies: DependencyValuesType<TDependencies>
   ) => TOutput;
 }
@@ -178,6 +179,7 @@ export interface ITask<
   TDependencies extends DependencyMapType = {},
   TOn extends "*" | IEventDefinition<any> | undefined = undefined
 > extends ITaskDefinition<TInput, TOutput, TDependencies, TOn> {
+  id: string | symbol;
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
   middleware: MiddlewareAttachments[];
@@ -185,9 +187,9 @@ export interface ITask<
    * These events are automatically populated after the task has been defined.
    */
   events: {
-    beforeRun: IEventDefinition<BeforeRunEventPayload<TInput>>;
-    afterRun: IEventDefinition<AfterRunEventPayload<TInput, TOutput>>;
-    onError: IEventDefinition<OnErrorEventPayload>;
+    beforeRun: IEvent<BeforeRunEventPayload<TInput>>;
+    afterRun: IEvent<AfterRunEventPayload<TInput, TOutput>>;
+    onError: IEvent<OnErrorEventPayload>;
   };
 }
 // Resource interfaces
@@ -206,7 +208,7 @@ export interface IResourceDefinition<
   THooks = any,
   TRegisterableItems = any
 > {
-  id: string;
+  id?: string | symbol;
   dependencies?: TDependencies | ((config: TConfig) => TDependencies);
   register?:
     | Array<RegisterableItems>
@@ -244,6 +246,7 @@ export interface IResource<
   TDependencies extends DependencyMapType = any,
   TContext = any
 > extends IResourceDefinition<TConfig, TValue, TDependencies, TContext> {
+  id: string | symbol;
   with(config: TConfig): IResourceWithConfig<TConfig, TValue, TDependencies>;
   register:
     | Array<RegisterableItems>
@@ -252,9 +255,9 @@ export interface IResource<
    * These events are automatically populated after the task has been defined.
    */
   events: {
-    beforeInit: IEventDefinition<BeforeInitEventPayload<TConfig>>;
-    afterInit: IEventDefinition<AfterInitEventPayload<TConfig, TValue>>;
-    onError: IEventDefinition<OnErrorEventPayload>;
+    beforeInit: IEvent<BeforeInitEventPayload<TConfig>>;
+    afterInit: IEvent<AfterInitEventPayload<TConfig, TValue>>;
+    onError: IEvent<OnErrorEventPayload>;
   };
   overrides: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
   middleware: MiddlewareAttachments[];
@@ -270,8 +273,24 @@ export interface IResourceWithConfig<
   config: TConfig;
 }
 
-export interface IEvent<TPayload = any> {
-  id: string;
+export type EventHandlerType<T = any> = (
+  event: IEventEmission<T>
+) => any | Promise<any>;
+
+export interface IEventDefinition<TPayload = void> {
+  id?: string | symbol;
+  meta?: IEventMeta;
+}
+
+export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
+  id: string | symbol;
+  /**
+   * We use this event to discriminate between resources with just 'id' and 'events' as they collide. This is a workaround, should be redone using classes and instanceof.
+   */
+  [symbolEvent]: true;
+}
+
+export interface IEventEmission<TPayload = any> {
   /**
    * The data that the event carries. It can be anything.
    */
@@ -283,33 +302,14 @@ export interface IEvent<TPayload = any> {
   /**
    * The source of the event. This can be useful for debugging.
    */
-  source: string;
-}
-
-export type EventHandlerType<T = any> = (
-  event: IEvent<T>
-) => any | Promise<any>;
-
-// Other necessary interfaces
-export interface IEventDefinitionConfig<TPayload = void> {
-  id: string;
-  meta?: IEventMeta;
-}
-
-export interface IEventDefinition<TPayload = void> {
-  id: string;
-  /**
-   * We use this event to discriminate between resources with just 'id' and 'events' as they collide. This is a workaround, should be redone using classes and instanceof.
-   */
-  [symbolEvent]: true;
-  meta?: IEventMeta;
+  source: string | symbol;
 }
 
 export interface IMiddlewareDefinition<
   TConfig = any,
   TDependencies extends DependencyMapType = any
 > {
-  id: string;
+  id?: string | symbol;
   dependencies?: TDependencies | (() => TDependencies);
   run: (
     input: IMiddlewareExecutionInput,
@@ -328,6 +328,7 @@ export interface IMiddleware<
   [symbolMiddlewareEverywhereTasks]?: boolean;
   [symbolMiddlewareEverywhereResources]?: boolean;
 
+  id: string | symbol;
   dependencies: TDependencies | (() => TDependencies);
   everywhere(): IMiddleware<TConfig, TDependencies>;
   config: TConfig;
@@ -363,26 +364,4 @@ export interface IMiddlewareExecutionInput<
   next: (
     taskInputOrResourceConfig?: TTaskInput | TResourceConfig
   ) => Promise<any>;
-}
-
-export interface IHookDefinition<
-  D extends DependencyMapType = {},
-  T = any,
-  B extends boolean = false
-> {
-  event: "*" | IEventDefinition<T>;
-  /**
-   * The higher the number, the higher the priority.
-   * We recommend using numbers between -1000 and 1000.
-   */
-  order?: number;
-  /**
-   * These are hooks that run before any resource instantiation.
-   * @param event
-   */
-  early?: B;
-  run: (
-    event: IEvent<T>,
-    dependencies: T extends true ? void : DependencyValuesType<D>
-  ) => Promise<void> | void;
 }
