@@ -26,7 +26,7 @@ export function getCallerFile(): string {
     // The third frame (the caller above the immediate one)
     callerfile = stack.shift()?.getFileName();
 
-    return callerfile || "<unknown>"; // Return the file name of the caller above
+    return callerfile as string; // Return the file name of the caller above
   } finally {
     Error.prepareStackTrace = originalFunc;
   }

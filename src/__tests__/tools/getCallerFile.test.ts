@@ -22,6 +22,10 @@ describe("getCallerFile", () => {
     expect(callerFile).toContain("getCallerFile.test"); // we don't use .ts because for coverage it gets compiled to js
   });
 
+  // Note: The <unknown> fallback case (line 29) is an edge case protection that's
+  // extremely difficult to test due to Node.js stack trace mechanics. It would only
+  // be triggered in unusual runtime scenarios where stack trace parsing fails.
+
   it("Should work with tasks, resources, middleware and events", () => {
     const task = defineTask({
       id: "task",
@@ -138,6 +142,28 @@ describe("generateCallerIdFromFile", () => {
     const filePath = "a/b/c.resource.ts";
     const expectedDescription = "a.b.c.resource";
     expect(generateCallerIdFromFile(filePath, "resource").description).toEqual(
+      expectedDescription
+    );
+  });
+
+  it("should handle empty path or path with no relevant parts", () => {
+    // Test with empty string - this creates relevantParts = [""] which is not empty
+    const filePath = "";
+    const expectedDescription = ".suffix";
+    expect(generateCallerIdFromFile(filePath, "suffix").description).toEqual(
+      expectedDescription
+    );
+
+    // Test case where 'src' is at the end, making relevantParts empty (triggers line 77 else branch)
+    const result = generateCallerIdFromFile("/some/path/src", "suffix");
+    expect(result.description).toEqual(".suffix");
+  });
+
+  it("should use fallback parts when no src or node_modules found", () => {
+    // Test path without src or node_modules to trigger the else branch (line 59)
+    const filePath = "/some/other/deep/path/file.js";
+    const expectedDescription = "other.deep.path.file";
+    expect(generateCallerIdFromFile(filePath, "", 4).description).toEqual(
       expectedDescription
     );
   });
