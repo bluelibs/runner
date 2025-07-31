@@ -15,7 +15,7 @@ describe("Anonymous Components", () => {
 
       // ID should be a symbol
       expect(typeof anonymousTask.id).toBe("symbol");
-      expect(anonymousTask.id.toString()).toContain("anonymous-task");
+      expect(anonymousTask.id.toString()).toContain("anonymous.test.task");
 
       const app = defineResource({
         id: "app",
@@ -72,7 +72,9 @@ describe("Anonymous Components", () => {
       });
 
       expect(typeof anonymousTask.events.afterRun.id).toBe("symbol");
-      expect(anonymousTask.events.afterRun.id.toString()).toContain("anonymous-task.events.afterRun");
+      expect(anonymousTask.events.afterRun.id.toString()).toContain(
+        "anonymous-task.events.afterRun"
+      );
 
       const app = defineResource({
         id: "app",
@@ -122,11 +124,7 @@ describe("Anonymous Components", () => {
 
       await run(app);
 
-      expect(order).toEqual([
-        "middleware before",
-        "task",
-        "middleware after",
-      ]);
+      expect(order).toEqual(["middleware before", "task", "middleware after"]);
     });
 
     it("should listen to anonymous events", async () => {
@@ -148,7 +146,7 @@ describe("Anonymous Components", () => {
       });
 
       expect(typeof anonymousEvent.id).toBe("symbol");
-      expect(anonymousEvent.id.toString()).toContain("anonymous-event");
+      expect(anonymousEvent.id.toString()).toContain("anonymous.test.event");
 
       const app = defineResource({
         id: "app",
@@ -171,7 +169,9 @@ describe("Anonymous Components", () => {
       });
 
       expect(typeof anonymousResource.id).toBe("symbol");
-      expect(anonymousResource.id.toString()).toContain("anonymous-resource");
+      expect(anonymousResource.id.toString()).toContain(
+        "anonymous.test.resource"
+      );
 
       const app = defineResource({
         id: "app",
@@ -214,7 +214,8 @@ describe("Anonymous Components", () => {
 
     it("should create anonymous resource with configuration", async () => {
       const anonymousResource = defineResource({
-        init: async (config: { prefix: string }) => `${config.prefix} configured!`,
+        init: async (config: { prefix: string }) =>
+          `${config.prefix} configured!`,
       });
 
       expect(typeof anonymousResource.id).toBe("symbol");
@@ -245,7 +246,9 @@ describe("Anonymous Components", () => {
       });
 
       expect(typeof anonymousResource.events.afterInit.id).toBe("symbol");
-      expect(anonymousResource.events.afterInit.id.toString()).toContain("anonymous-resource.events.afterInit");
+      expect(anonymousResource.events.afterInit.id.toString()).toContain(
+        "anonymous-resource.events.afterInit"
+      );
 
       const app = defineResource({
         id: "app",
@@ -332,7 +335,7 @@ describe("Anonymous Components", () => {
       });
 
       expect(typeof anonymousEvent.id).toBe("symbol");
-      expect(anonymousEvent.id.toString()).toContain("anonymous-event");
+      expect(anonymousEvent.id.toString()).toContain("anonymous.test.event");
 
       const app = defineResource({
         id: "app",
@@ -382,7 +385,13 @@ describe("Anonymous Components", () => {
 
       const app = defineResource({
         id: "app",
-        register: [anonymousEvent1, anonymousEvent2, emitter, listener1, listener2],
+        register: [
+          anonymousEvent1,
+          anonymousEvent2,
+          emitter,
+          listener1,
+          listener2,
+        ],
         dependencies: { emitter },
         async init(_, { emitter }) {
           await emitter();
@@ -416,7 +425,9 @@ describe("Anonymous Components", () => {
       });
 
       expect(typeof anonymousMiddleware.id).toBe("symbol");
-      expect(anonymousMiddleware.id.toString()).toContain("anonymous-middleware");
+      expect(anonymousMiddleware.id.toString()).toContain(
+        "anonymous.test.middleware"
+      );
 
       const app = defineResource({
         id: "app",
@@ -430,10 +441,7 @@ describe("Anonymous Components", () => {
 
       await run(app);
 
-      expect(order).toEqual([
-        "anonymous middleware",
-        "task execution",
-      ]);
+      expect(order).toEqual(["anonymous middleware", "task execution"]);
     });
 
     it("should create anonymous middleware with dependencies", async () => {
@@ -618,7 +626,7 @@ describe("Anonymous Components", () => {
           const result = await anonymousEmitter();
           expect(result).toBe("Emitter done");
           // Wait a bit for event processing to complete
-          await new Promise(resolve => setTimeout(resolve, 10));
+          await new Promise((resolve) => setTimeout(resolve, 10));
         },
       });
 

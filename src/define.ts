@@ -33,7 +33,7 @@ export function defineTask<
 ): ITask<Input, Output, Deps, TOn> {
   const filePath = getCallerFile();
   const isAnonymous = !Boolean(taskConfig.id);
-  const id = taskConfig.id || generateCallerIdFromFile(filePath);
+  const id = taskConfig.id || generateCallerIdFromFile(filePath, "task");
   return {
     [symbols.task]: true,
     [symbols.filePath]: filePath,
@@ -184,7 +184,7 @@ export function defineEvent<TPayload = void>(
   const callerFilePath = getCallerFile();
   return {
     ...config,
-    id: config.id || generateCallerIdFromFile(callerFilePath),
+    id: config.id || generateCallerIdFromFile(callerFilePath, "event"),
     [symbols.filePath]: callerFilePath,
     [symbolEvent]: true, // This is a workaround
   };
