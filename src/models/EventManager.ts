@@ -113,6 +113,7 @@ export class EventManager {
     }
 
     const event: IEventEmission = {
+      id: eventDefinition.id,
       data,
       timestamp: new Date(),
       source,

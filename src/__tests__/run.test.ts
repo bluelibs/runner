@@ -93,7 +93,7 @@ describe("run", () => {
     });
 
     it("should be able to register an task that emits an event", async () => {
-      const testEvent = defineEvent({ id: "test.event" });
+      const testEvent = defineEvent<{ message: string }>({ id: "test.event" });
       const eventHandler = jest.fn();
 
       const testTask = defineTask({

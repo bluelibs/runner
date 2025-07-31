@@ -63,10 +63,20 @@ type ExtractResourceValue<T> = T extends IResource<any, infer V, infer D>
 
 type ExtractEventParams<T> = T extends IEvent<infer P> ? P : never;
 
-// Helper Types for Dependency Value Construction
+/**
+ * This represents a task dependency function that can be called with or without parameters.
+ */
 type TaskDependency<I, O> = (...args: I extends null | void ? [] : [I]) => O;
+/**
+ * This represents the resource's value type.
+ */
 type ResourceDependency<V> = V;
-type EventDependency<P> = (input: P) => Promise<void>;
+/**
+ * This represents an event emission function that can be called with or without parameters.
+ */
+type EventDependency<P> = P extends void
+  ? (() => Promise<void>) & ((input?: Record<string, never>) => Promise<void>)
+  : (input: P) => Promise<void>;
 
 // Main DependencyValueType Definition
 export type DependencyValueType<T> = T extends ITask<any, any, any>
@@ -81,35 +91,14 @@ export type DependencyValuesType<T extends DependencyMapType> = {
   [K in keyof T]: DependencyValueType<T[K]>;
 };
 
-type Optional<T> = {
-  [K in keyof T]?: T[K];
-};
-
-// Utility type to check if a type is void
-type IsVoid<T> = [T] extends [void] ? true : false;
-
-// Utility type to check if a type is optional (can be undefined)
-type IsOptional<T> = undefined extends T ? true : false;
-
-// IReso
-
-// Conditional type to allow `void`, optional, or any type
-type OptionalOrVoidOrAnything<T> = IsVoid<T> extends true
-  ? void
-  : IsOptional<T> extends true
-  ? Optional<T>
-  : T;
-
-type OnlyOptionalFields<T> = {} extends T ? true : false;
-
 // RegisterableItems Type with Conditional Inclusion
 export type RegisterableItems<T = any> =
   | IResourceWithConfig<any>
   | IResource<void, any, any, any> // For void configs
   | IResource<{ [K in any]?: any }, any, any, any> // For optional config
-  | ITaskDefinition<any, any, any, any>
-  | IMiddlewareDefinition<any>
-  | IEventDefinition<any>;
+  | ITask<any, any, any, any>
+  | IMiddleware<any>
+  | IEvent<any>;
 
 export type MiddlewareAttachments =
   | IMiddleware<void>
@@ -192,13 +181,6 @@ export interface ITask<
     onError: IEvent<OnErrorEventPayload>;
   };
 }
-// Resource interfaces
-// Conditional type to determine the value type based on whether init is present
-type ResourceValueType<T> = T extends { init: any }
-  ? T["init"] extends (...args: any[]) => Promise<infer R>
-    ? R
-    : unknown
-  : undefined;
 
 export interface IResourceDefinition<
   TConfig = any,
@@ -290,7 +272,15 @@ export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
   [symbolEvent]: true;
 }
 
+/**
+ * This represents the object that is passed to event handlers
+ */
 export interface IEventEmission<TPayload = any> {
+  /**
+   * The ID of the event. This is the same as the event's ID.
+   * This is useful for global event listeners.
+   */
+  id: string | symbol;
   /**
    * The data that the event carries. It can be anything.
    */

@@ -97,6 +97,7 @@ describe("EventManager", () => {
       expect.objectContaining({
         id: "testEvent",
         data: "testData",
+        timestamp: expect.any(Date),
       })
     );
   });
@@ -184,6 +185,7 @@ describe("EventManager", () => {
       expect.objectContaining({
         id: "event1",
         data: "data1",
+        timestamp: expect.any(Date),
       })
     );
 
@@ -401,6 +403,7 @@ describe("EventManager", () => {
       expect.objectContaining({
         id: "voidEvent",
         data: undefined,
+        timestamp: expect.any(Date),
       })
     );
   });

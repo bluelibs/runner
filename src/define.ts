@@ -171,7 +171,7 @@ export function defineIndex<
   });
 }
 
-export function defineEvent<TPayload = any>(
+export function defineEvent<TPayload = void>(
   config: IEventDefinition<TPayload>
 ): IEvent<TPayload> {
   return {
