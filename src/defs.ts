@@ -1,3 +1,5 @@
+import { index } from ".";
+
 export { ICacheInstance } from "./globals/middleware/cache.middleware";
 
 export const symbolTask: unique symbol = Symbol("runner.task");
@@ -24,10 +26,15 @@ export const symbolFilePath: unique symbol = Symbol("runner.filePath");
 export const symbolDispose: unique symbol = Symbol("runner.dispose");
 export const symbolStore: unique symbol = Symbol("runner.store");
 
+export const symbolIndexResource: unique symbol = Symbol(
+  "runner.indexResource"
+);
+
 export const symbols = {
   task: symbolTask,
   resource: symbolResource,
   resourceWithConfig: symbolResourceWithConfig,
+  indexResource: symbolIndexResource,
   event: symbolEvent,
   middleware: symbolMiddleware,
   middlewareEverywhereTasks: symbolMiddlewareEverywhereTasks,
@@ -220,6 +227,14 @@ export interface IResourceDefinition<
   overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
   middleware?: MiddlewareAttachments[];
   context?: () => TContext;
+  /**
+   * This is optional and used from an index resource to get the correct caller.
+   */
+  [symbolFilePath]?: string;
+  /**
+   * This is used internally when creating index resources.
+   */
+  [symbolIndexResource]?: boolean;
 }
 
 export interface IResource<

@@ -15,9 +15,11 @@ import {
   symbolEvent,
   RegisterableItems,
   symbolMiddlewareConfigured,
+  symbolFilePath,
+  symbolIndexResource,
 } from "./defs";
 import { Errors } from "./errors";
-import { getCallerFile } from "./tools/getCallerFile";
+import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
 
 // Helper function to get the caller file
 
@@ -31,7 +33,7 @@ export function defineTask<
 ): ITask<Input, Output, Deps, TOn> {
   const filePath = getCallerFile();
   const isAnonymous = !Boolean(taskConfig.id);
-  const id = taskConfig.id || Symbol("anonymous-task");
+  const id = taskConfig.id || generateCallerIdFromFile(filePath);
   return {
     [symbols.task]: true,
     [symbols.filePath]: filePath,
@@ -80,9 +82,12 @@ export function defineResource<
 >(
   constConfig: IResourceDefinition<TConfig, TValue, TDeps, TPrivate>
 ): IResource<TConfig, TValue, TDeps, TPrivate> {
-  const filePath = getCallerFile();
+  const filePath: string = constConfig[symbolFilePath] || getCallerFile();
+  const isIndexResource = constConfig[symbolIndexResource] || false;
   const isAnonymous = !Boolean(constConfig.id);
-  const id = constConfig.id || Symbol("anonymous-resource");
+  const id =
+    constConfig.id ||
+    generateCallerIdFromFile(filePath, isIndexResource ? "index" : "resource");
   return {
     [symbols.resource]: true,
     [symbols.filePath]: filePath,
@@ -160,24 +165,27 @@ export function defineIndex<
       (dependencies as any)[key] = item as any;
     }
   }
+  const callerFilePath = getCallerFile();
 
   return defineResource({
-    id: `index.${Math.random().toString(36).slice(2)}`,
     register,
     dependencies,
     async init(_, deps) {
       return deps as any;
     },
+    [symbols.filePath]: callerFilePath,
+    [symbols.indexResource]: true,
   });
 }
 
 export function defineEvent<TPayload = void>(
   config: IEventDefinition<TPayload>
 ): IEvent<TPayload> {
+  const callerFilePath = getCallerFile();
   return {
     ...config,
-    id: config.id || Symbol("anonymous-event"),
-    [symbols.filePath]: getCallerFile(),
+    id: config.id || generateCallerIdFromFile(callerFilePath),
+    [symbols.filePath]: callerFilePath,
     [symbolEvent]: true, // This is a workaround
   };
 }
@@ -199,11 +207,12 @@ export function defineMiddleware<
 >(
   middlewareDef: IMiddlewareDefinition<TConfig, TDependencies>
 ): IMiddleware<TConfig, TDependencies> {
+  const filePath = getCallerFile();
   const object = {
-    [symbols.filePath]: getCallerFile(),
+    [symbols.filePath]: filePath,
     [symbols.middleware]: true,
     config: {} as TConfig,
-    id: middlewareDef.id || Symbol("anonymous-middleware"),
+    id: middlewareDef.id || generateCallerIdFromFile(filePath, "middleware"),
     ...middlewareDef,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
   } as IMiddleware<TConfig, TDependencies>;
