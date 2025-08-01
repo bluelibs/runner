@@ -1102,13 +1102,16 @@ const userService = resource({
 const advancedService = resource({
   id: "app.services.advanced",
   // A function gives you the chance
-  dependencies: () => ({
+  dependencies: (config) => ({
+    // Config is what you receive when you register tise resource with .with()
+    // So you can have conditional dependencies based on resource configuration as well.
     database,
     logger,
     conditionalService:
       process.env.NODE_ENV === "production" ? serviceA : serviceB,
   }), // Function - evaluated when needed
-  register: () => [
+  register: (config) => [
+    // Config is what you receive when you register the resource with .with()
     // Register dependencies dynamically
     process.env.NODE_ENV === "production"
       ? serviceA.with({ config: "value" })
@@ -1175,7 +1178,7 @@ export const cResource = defineResource({
   async init(_, { a }) {
     return `C depends on ${a}`;
   },
-}) as IResource<void, string>; // void because it has no config and that is our default (_), string because it returns a string
+}) as IResource<void, string>; // void because it has no config, string because it returns a string
 ```
 
 #### Why This Works
