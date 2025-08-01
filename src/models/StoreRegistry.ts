@@ -64,7 +64,7 @@ export class StoreRegistry {
 
     item.dependencies =
       typeof item.dependencies === "function"
-        ? item.dependencies()
+        ? item.dependencies(item.config)
         : item.dependencies;
 
     this.middlewares.set(item.id, {

@@ -316,7 +316,7 @@ export interface IMiddlewareDefinition<
   TDependencies extends DependencyMapType = any
 > {
   id?: string | symbol;
-  dependencies?: TDependencies | (() => TDependencies);
+  dependencies?: TDependencies | ((config: TConfig) => TDependencies);
   run: (
     input: IMiddlewareExecutionInput,
     dependencies: DependencyValuesType<TDependencies>,
