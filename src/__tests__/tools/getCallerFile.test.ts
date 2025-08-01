@@ -22,10 +22,6 @@ describe("getCallerFile", () => {
     expect(callerFile).toContain("getCallerFile.test"); // we don't use .ts because for coverage it gets compiled to js
   });
 
-  // Note: The <unknown> fallback case (line 29) is an edge case protection that's
-  // extremely difficult to test due to Node.js stack trace mechanics. It would only
-  // be triggered in unusual runtime scenarios where stack trace parsing fails.
-
   it("Should work with tasks, resources, middleware and events", () => {
     const task = defineTask({
       id: "task",

@@ -1,4 +1,5 @@
 import { index } from ".";
+import { MiddlewareEverywhereOptions } from "./define";
 
 export { ICacheInstance } from "./globals/middleware/cache.middleware";
 
@@ -335,7 +336,9 @@ export interface IMiddleware<
 
   id: string | symbol;
   dependencies: TDependencies | (() => TDependencies);
-  everywhere(): IMiddleware<TConfig, TDependencies>;
+  everywhere(
+    config?: MiddlewareEverywhereOptions
+  ): IMiddleware<TConfig, TDependencies>;
   config: TConfig;
   with: (config: TConfig) => IMiddlewareConfigured<TConfig, TDependencies>;
 }

@@ -82,6 +82,7 @@ export function defineResource<
 >(
   constConfig: IResourceDefinition<TConfig, TValue, TDeps, TPrivate>
 ): IResource<TConfig, TValue, TDeps, TPrivate> {
+  // The symbolFilePath might already come from defineIndex() for example
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const isIndexResource = constConfig[symbolIndexResource] || false;
   const isAnonymous = !Boolean(constConfig.id);

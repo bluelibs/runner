@@ -400,4 +400,52 @@ describe("Configurable Middleware (.with)", () => {
 
     await run(app);
   });
+
+  it("should work with everywhere({ tasks: true, resources: true })", async () => {
+    const calls: string[] = [];
+    const everywhereMiddleware = defineMiddleware({
+      id: "everywhere.middleware",
+      run: async ({ next, task, resource }) => {
+        if (task) {
+          calls.push(`task:${String(task.definition.id)}`);
+        }
+        if (resource) {
+          calls.push(`resource:${String(resource.definition.id)}`);
+        }
+        return next();
+      },
+    });
+
+    const testTask = defineTask({
+      id: "test.task",
+      run: async () => "Task executed",
+    });
+
+    const testResource = defineResource({
+      id: "test.resource",
+      async init() {
+        return "Resource initialized";
+      },
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [
+        everywhereMiddleware.everywhere({ tasks: true, resources: true }),
+        testTask,
+        testResource,
+      ],
+      dependencies: { testTask, testResource },
+      async init(_, { testTask, testResource }) {
+        await testTask();
+        expect(testResource).toBe("Resource initialized");
+      },
+    });
+
+    await run(app);
+
+    expect(calls).toContain("resource:app");
+    expect(calls).toContain("resource:test.resource");
+    expect(calls).toContain("task:test.task");
+  });
 });
