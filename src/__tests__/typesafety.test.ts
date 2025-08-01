@@ -4,7 +4,14 @@ import {
   defineResource,
   defineMiddleware,
 } from "../define";
-import { RegisterableItems } from "../defs";
+import {
+  IEventDefinition,
+  IMiddlewareDefinition,
+  IResource,
+  IResourceWithConfig,
+  ITaskDefinition,
+  RegisterableItems,
+} from "../defs";
 
 describe("typesafety", () => {
   it("tasks, resources: should have propper type safety for dependeices", async () => {
@@ -42,6 +49,10 @@ describe("typesafety", () => {
     });
 
     const event = defineEvent<{ message: string }>({
+      id: "event",
+    });
+
+    const eventWithoutArguments = defineEvent({
       id: "event",
     });
 
@@ -104,7 +115,7 @@ describe("typesafety", () => {
         // @ts-expect-error
         middlewareWithOptionalConfig.with({ message: 123 }),
       ],
-      dependencies: { task, dummyResource, event },
+      dependencies: { task, dummyResource, event, eventWithoutArguments },
       init: async (_, deps) => {
         const result = await deps.task({
           message: "Hello, World!",
@@ -115,6 +126,10 @@ describe("typesafety", () => {
         deps.event();
         // @ts-expect-error
         deps.event({ messagex: "Hello, World!" });
+        deps.eventWithoutArguments();
+        deps.eventWithoutArguments({});
+        // @ts-expect-error
+        deps.eventWithoutArguments({ something: false });
 
         // @ts-expect-error
         deps.dummyResource as number;

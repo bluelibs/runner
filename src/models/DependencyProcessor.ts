@@ -3,9 +3,9 @@ import {
   DependencyValuesType,
   ITask,
   IResource,
-  IHookDefinition,
   IEventDefinition,
   IEvent,
+  IEventEmission,
 } from "../defs";
 import { Store } from "./Store";
 import { ResourceStoreElementType, TaskStoreElementType } from "./StoreTypes";
@@ -132,7 +132,7 @@ export class DependencyProcessor {
       if (task.task.on) {
         let eventDefinition = task.task.on;
 
-        const handler = async (receivedEvent: IEvent<any>) => {
+        const handler = async (receivedEvent: IEventEmission<any>) => {
           if (receivedEvent.source === task.task.id) {
             // we don't want to trigger the same task that emitted the event
             // process.exit(0);
@@ -164,7 +164,7 @@ export class DependencyProcessor {
 
   async extractDependencies<T extends DependencyMapType>(
     map: T,
-    source: string
+    source: string | symbol
   ): Promise<DependencyValuesType<T>> {
     const object = {} as DependencyValuesType<T>;
 
@@ -175,7 +175,7 @@ export class DependencyProcessor {
     return object;
   }
 
-  async extractDependency(object: any, source: string) {
+  async extractDependency(object: any, source: string | symbol) {
     if (utils.isResource(object)) {
       return this.extractResourceDependency(object);
     } else if (utils.isTask(object)) {
@@ -192,10 +192,7 @@ export class DependencyProcessor {
    * @param object
    * @returns
    */
-  extractEventDependency(
-    object: IEventDefinition<Record<string, any>>,
-    source: string
-  ) {
+  extractEventDependency(object: IEvent<any>, source: string | symbol) {
     return async (input: any) => {
       return this.eventManager.emit(object, input, source);
     };
@@ -204,7 +201,7 @@ export class DependencyProcessor {
   async extractTaskDependency(object: ITask<any, any, {}>) {
     const storeTask = this.store.tasks.get(object.id);
     if (storeTask === undefined) {
-      throw Errors.dependencyNotFound(`Task ${object.id}`);
+      throw Errors.dependencyNotFound(`Task ${object.id.toString()}`);
     }
 
     if (!storeTask.isInitialized) {
@@ -232,7 +229,7 @@ export class DependencyProcessor {
     // check if it exists in the store with the value
     const storeResource = this.store.resources.get(object.id);
     if (storeResource === undefined) {
-      throw Errors.dependencyNotFound(`Resource ${object.id}`);
+      throw Errors.dependencyNotFound(`Resource ${object.id.toString()}`);
     }
 
     const { resource, config } = storeResource;

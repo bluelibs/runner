@@ -8,7 +8,7 @@ import { Logger } from "./Logger";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
-    string,
+    string | symbol,
     (input: any) => Promise<any>
   >();
 

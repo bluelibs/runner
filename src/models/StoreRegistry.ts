@@ -9,27 +9,34 @@ import {
   IMiddleware,
   symbolMiddlewareEverywhereResources,
   symbolMiddlewareEverywhereTasks,
+  IEvent,
 } from "../defs";
 import * as utils from "../define";
 import { Errors } from "../errors";
-import { 
-  TaskStoreElementType, 
-  MiddlewareStoreElementType, 
-  ResourceStoreElementType, 
-  EventStoreElementType 
+import {
+  TaskStoreElementType,
+  MiddlewareStoreElementType,
+  ResourceStoreElementType,
+  EventStoreElementType,
 } from "./StoreTypes";
 import { StoreValidator } from "./StoreValidator";
 
 export class StoreRegistry {
-  public tasks: Map<string, TaskStoreElementType> = new Map();
-  public resources: Map<string, ResourceStoreElementType> = new Map();
-  public events: Map<string, EventStoreElementType> = new Map();
-  public middlewares: Map<string, MiddlewareStoreElementType> = new Map();
+  public tasks: Map<string | symbol, TaskStoreElementType> = new Map();
+  public resources: Map<string | symbol, ResourceStoreElementType> = new Map();
+  public events: Map<string | symbol, EventStoreElementType> = new Map();
+  public middlewares: Map<string | symbol, MiddlewareStoreElementType> =
+    new Map();
 
   private validator: StoreValidator;
 
   constructor() {
-    this.validator = new StoreValidator(this.tasks, this.resources, this.events, this.middlewares);
+    this.validator = new StoreValidator(
+      this.tasks,
+      this.resources,
+      this.events,
+      this.middlewares
+    );
   }
 
   getValidator(): StoreValidator {
@@ -66,7 +73,7 @@ export class StoreRegistry {
     });
   }
 
-  storeEvent<C>(item: IEventDefinition<void>) {
+  storeEvent<C>(item: IEvent<void>) {
     this.validator.checkIfIDExists(item.id);
     this.events.set(item.id, { event: item });
   }
@@ -152,14 +159,18 @@ export class StoreRegistry {
     }
   }
 
-  getEverywhereMiddlewareForTasks(excludingIds: string[]): IMiddleware[] {
+  getEverywhereMiddlewareForTasks(
+    excludingIds: Array<string | symbol>
+  ): IMiddleware[] {
     return Array.from(this.middlewares.values())
       .filter((x) => x.middleware[symbolMiddlewareEverywhereTasks])
       .filter((x) => !excludingIds.includes(x.middleware.id))
       .map((x) => x.middleware);
   }
 
-  getEverywhereMiddlewareForResources(excludingIds: string[]): IMiddleware[] {
+  getEverywhereMiddlewareForResources(
+    excludingIds: Array<string | symbol>
+  ): IMiddleware[] {
     return Array.from(this.middlewares.values())
       .filter((x) => x.middleware[symbolMiddlewareEverywhereResources])
       .filter((x) => !excludingIds.includes(x.middleware.id))
@@ -178,11 +189,11 @@ export class StoreRegistry {
     return item;
   }
 
-  private middlewareAsMap(middleware: IMiddlewareDefinition[]) {
+  private middlewareAsMap(middleware: IMiddleware[]) {
     return middleware.reduce((acc, item) => {
       acc[item.id] = item;
       return acc;
-    }, {} as Record<string, IMiddlewareDefinition>);
+    }, {} as Record<string | symbol, IMiddleware>);
   }
 
   getDependentNodes() {

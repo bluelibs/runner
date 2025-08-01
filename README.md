@@ -1670,6 +1670,107 @@ async function processBatch(items: any[]) {
 - **Ignoring disposal**: Always dispose semaphores to prevent memory leaks
 - **Wrong permit count**: Too few = slow, too many = defeats the purpose
 
+## Anonymous IDs: Because Naming Things Is Hard
+
+One of our favorite quality-of-life features: **anonymous IDs**. Instead of manually naming every component, the framework can generate unique symbol-based identifiers based on your file path and variable name. It's like having a really good naming assistant who never gets tired.
+
+### How Anonymous IDs Work
+
+When you omit the `id` property, the framework generates a unique symbol based on file path. Takes up until first 'src' or 'node_modules' and generates based on the paths.
+
+```typescript
+// In src/services/email.ts
+const emailService = resource({
+  // Generated ID: Symbol('services.email.resource')
+  init: async () => new EmailService(),
+});
+
+// In src/tasks/user.ts
+const createUser = task({
+  // Generated ID: Symbol('tasks.user.task')
+  dependencies: { emailService },
+  run: async (userData, { emailService }) => {
+    // Business logic
+  },
+});
+```
+
+### Benefits of Anonymous IDs
+
+1. **Less Bikeshedding**: No more debates about naming conventions
+2. **Automatic Uniqueness**: Guaranteed collision-free identifiers
+3. **Faster Prototyping**: Just write code, framework handles the rest
+4. **Refactor-Friendly**: Rename files/variables and IDs update automatically
+5. **Stack Trace Integration**: Error messages include helpful file locations
+
+### When to Use Manual vs Anonymous IDs
+
+| Use Case                | Recommendation | Reason                                  |
+| ----------------------- | -------------- | --------------------------------------- |
+| Internal tasks          | Anonymous      | No external references needed           |
+| Event definitions       | Manual         | Need predictable names for listeners    |
+| Public APIs             | Manual         | External modules need stable references |
+| Middleware              | Manual         | Often reused across projects            |
+| Configuration resources | Anonymous      | Usually internal infrastructure         |
+| Test doubles/mocks      | Anonymous      | One-off usage in tests                  |
+| Cross-module services   | Manual         | Multiple files depend on them           |
+
+### Anonymous ID Examples by Pattern
+
+```typescript
+// ✅ Great for anonymous IDs
+const database = resource({
+  init: async () => new Database(),
+  dispose: async (db) => db.close(),
+});
+
+const processPayment = task({
+  dependencies: { database },
+  run: async (payment, { database }) => {
+    // Internal business logic
+  },
+});
+
+// ✅ Better with manual IDs
+const paymentProcessed = event<{ paymentId: string }>({
+  id: "app.events.paymentProcessed", // Other modules listen to this
+});
+
+const authMiddleware = middleware({
+  id: "app.middleware.auth", // Reused across multiple tasks
+  run: async ({ task, next }) => {
+    // Auth logic
+  },
+});
+
+// ✅ Mixed approach - totally fine!
+const app = resource({
+  id: "app", // Main entry point gets manual ID
+  register: [
+    database, // Anonymous
+    processPayment, // Anonymous
+    paymentProcessed, // Manual
+    authMiddleware, // Manual
+  ],
+});
+```
+
+### Debugging with Anonymous IDs
+
+Anonymous IDs show up clearly in error messages and logs:
+
+```typescript
+// Error message example:
+// TaskRunError: Task failed at Symbol('tasks.payment.task')
+//   at file:///project/src/tasks/payment.ts:15:23
+
+// Logging with context:
+logger.info("Processing payment", {
+  taskId: processPayment.definition.id, // Symbol('tasks.payment.task')
+  file: "src/tasks/payment.ts",
+});
+```
+
 ## Why Choose BlueLibs Runner?
 
 ### What You Get

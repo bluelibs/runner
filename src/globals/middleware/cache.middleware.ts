@@ -37,7 +37,7 @@ export const cacheResource = defineResource({
   },
   init: async (config: CacheResourceConfig, { cacheFactoryTask }) => {
     return {
-      map: new Map<string, ICacheInstance>(),
+      map: new Map<string | symbol, ICacheInstance>(),
       cacheFactoryTask,
       async: config.async,
       defaultOptions: {

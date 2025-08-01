@@ -159,13 +159,13 @@ export class Store {
   }
 
   public getEverywhereMiddlewareForTasks(
-    excludingIds: string[]
+    excludingIds: Array<string | symbol>
   ): IMiddleware[] {
     return this.registry.getEverywhereMiddlewareForTasks(excludingIds);
   }
 
   public getEverywhereMiddlewareForResources(
-    excludingIds: string[]
+    excludingIds: Array<string | symbol>
   ): IMiddleware[] {
     return this.registry.getEverywhereMiddlewareForResources(excludingIds);
   }

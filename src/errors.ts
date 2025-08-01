@@ -1,12 +1,12 @@
 import { ITask, IResource } from "./defs";
 
 export const Errors = {
-  duplicateRegistration: (type: string, id: string) =>
-    new Error(`${type} "${id}" already registered`),
+  duplicateRegistration: (type: string, id: string | symbol) =>
+    new Error(`${type} "${id.toString()}" already registered`),
 
-  dependencyNotFound: (key: string) =>
+  dependencyNotFound: (key: string | symbol) =>
     new Error(
-      `Dependency ${key} not found. Did you forget to register it through a resource?`
+      `Dependency ${key.toString()} not found. Did you forget to register it through a resource?`
     ),
 
   unknownItemType: (item: any) => new Error(`Unknown item type: ${item}`),
@@ -14,16 +14,19 @@ export const Errors = {
   circularDependencies: (cycles: string[]) =>
     new Error(`Circular dependencies detected: ${cycles.join(", ")}`),
 
-  eventNotFound: (id: string) =>
-    new Error(`Event "${id}" not found. Did you forget to register it?`),
-
-  middlewareAlreadyGlobal: (id: string) =>
+  eventNotFound: (id: string | symbol) =>
     new Error(
-      "Cannot call .everywhere() on an already global middleware: " + id
+      `Event "${id.toString()}" not found. Did you forget to register it?`
     ),
 
-  locked: (what: string) =>
-    new Error(`Cannot modify the ${what} when it is locked.`),
+  middlewareAlreadyGlobal: (id: string | symbol) =>
+    new Error(
+      "Cannot call .everywhere() on an already global middleware: " +
+        id.toString
+    ),
+
+  locked: (what: string | symbol) =>
+    new Error(`Cannot modify the ${what.toString()} when it is locked.`),
 
   storeAlreadyInitialized: () =>
     new Error("Store already initialized. Cannot reinitialize."),

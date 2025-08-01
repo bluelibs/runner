@@ -1,30 +1,7 @@
 # BlueLibs Runner - Project Summary for Claude
 
-## Core Concepts
-
-- **Tasks**: Units of logic with `run()` function - like functions that can depend on resources/other tasks
-- **Resources**: Singletons with `init()` function - services, configs, database connections, etc.
-- **Events**: Async communication between components - all tasks/resources can emit/listen
-- **Middleware**: Intercept task execution or resource initialization
-
-## Key Patterns
-
-- Everything must be explicitly registered to be used (registration only in resources)
-- Async-first philosophy - all operations are async
-- Functional approach - prefer tasks over classes for business logic
-- Circular dependency detection with helpful error messages
-
-## Dependency Injection
-
-- Tasks: injected as functions `deps.myTask(input)`
-- Resources: injected as their return value `deps.myResource.someMethod()`
-- Events: injected as functions `deps.myEvent(payload)`
-- Context: shared across async boundaries using `createContext()`
-
-## Basic Architecture Example
-
 ```typescript
-import { resource, task, run } from "@bluelibs/runner";
+import { resource, task, middleware, event, run } from "@bluelibs/runner";
 
 // Database resource
 const db = resource({
