@@ -530,6 +530,40 @@ const app = resource({
 });
 ```
 
+## Retrying Failed Operations
+
+For when things go wrong, but you know they'll probably work if you just try again. The built-in retry middleware makes your tasks and resources more resilient to transient failures.
+
+```typescript
+import { globals } from "@bluelibs/runner";
+
+const flakyApiCall = task({
+  id: "app.tasks.flakyApiCall",
+  middleware: [
+    globals.middleware.retry.with({
+      retries: 5, // Try up to 5 times
+      delayStrategy: (attempt) => 100 * Math.pow(2, attempt), // Exponential backoff
+      stopRetryIf: (error) => error.message === "Invalid credentials", // Don't retry auth errors
+    }),
+  ],
+  run: async () => {
+    // This might fail due to network issues, rate limiting, etc.
+    return await fetchFromUnreliableService();
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [flakyApiCall],
+});
+```
+
+The retry middleware can be configured with:
+
+- `retries`: The maximum number of retry attempts (default: 3).
+- `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
+- `stopRetryIf`: A function to prevent retries for certain types of errors.
+
 ## Logging: Because Console.log Isn't Professional
 
 _The structured logging system that actually makes debugging enjoyable_
@@ -928,16 +962,6 @@ await paymentLogger.info("Processing payment", { data: paymentData });
 await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
-### Common Pitfalls
-
-1. **Logging sensitive data**: Never log passwords, tokens, or PII
-2. **Over-logging in hot paths**: Check print thresholds for expensive operations
-3. **Forgetting error objects**: Always include the original error when logging failures
-4. **Poor log levels**: Don't use `error` for expected conditions
-5. **Missing context**: Include relevant identifiers (user ID, request ID, etc.)
-
-The Logger system is designed to be fast, flexible, and non-intrusive. Use it liberally - good logging is the difference between debugging hell and debugging heaven.
-
 ## Meta: Tagging Your Components
 
 Sometimes you want to attach metadata to your tasks and resources for documentation, filtering, or middleware logic:
@@ -1059,6 +1083,137 @@ const advancedTask = task({
   },
 });
 ```
+
+### Dependency Patterns: Static vs Dynamic
+
+Dependencies can be defined in two ways - as a static object or as a function that returns an object. Each approach has its use cases:
+
+```typescript
+// Static dependencies (most common)
+const userService = resource({
+  id: "app.services.user",
+  dependencies: { database, logger }, // Object - evaluated immediately
+  init: async (_, { database, logger }) => {
+    // Dependencies are available here
+  },
+});
+
+// Dynamic dependencies (for circular references or conditional dependencies)
+const advancedService = resource({
+  id: "app.services.advanced",
+  // A function gives you the chance
+  dependencies: () => ({
+    database,
+    logger,
+    conditionalService:
+      process.env.NODE_ENV === "production" ? serviceA : serviceB,
+  }), // Function - evaluated when needed
+  register: () => [
+    // Register dependencies dynamically
+    process.env.NODE_ENV === "production"
+      ? serviceA.with({ config: "value" })
+      : serviceB.with({ config: "value" }),
+  ],
+  init: async (_, { database, logger, conditionalService }) => {
+    // Same interface, different evaluation timing
+  },
+});
+```
+
+The function pattern essentially gives you "just-in-time" dependency resolution instead of "eager" dependency resolution, which provides more flexibility and better handles complex dependency scenarios that arise in real-world applications.
+
+**Performance note**: Function-based dependencies have minimal overhead - they're only called once during dependency resolution.
+
+### Handling Circular "Type" Dependencies: Breaking the Chain
+
+Sometimes you'll run into circular type dependencies because of your file structure not necessarily because of a real circular dependency. TypeScript struggles with these, but there's a way to handle it gracefully.
+
+#### The Problem: Self-Referencing Types
+
+Consider these resources that create a circular dependency:
+
+```typescript
+// FILE: a.ts
+export const aResource = defineResource({
+  dependencies: { b: bResource },
+  // ... depends on B resource.
+});
+// For whatever reason, you decide to put the task in the same file.
+export const aTask = defineTask({
+  dependencies: { a: aResource },
+});
+
+// FILE: b.ts
+export const bResource = defineResource({
+  id: "b.resource",
+  dependencies: { c: cResource },
+});
+
+// FILE: c.ts
+export const cResource = defineResource({
+  id: "c.resource",
+  dependencies: { aTask }, // Creates circular **type** dependency! Cannot infer types properly, even if the runner boots because there's no circular dependency.
+  async init(_, { aTask }) {
+    return `C depends on aTask`;
+  },
+});
+```
+
+A depends B depends C depends ATask. No circular dependency, yet Typescript struggles with these, but there's a way to handle it gracefully.
+
+#### The Solution: Type Annotations
+
+The fix is to explicitly type the resource that completes the circle using a simple assertion `IResource<Config, ReturnType>`. This breaks the TypeScript inference chain while maintaining runtime functionality:
+
+```typescript
+// c.resource.ts - The key change
+import { IResource } from "../../defs";
+
+export const cResource = defineResource({
+  id: "c.resource",
+  dependencies: { a: aResource },
+  async init(_, { a }) {
+    return `C depends on ${a}`;
+  },
+}) as IResource<void, string>; // void because it has no config and that is our default (_), string because it returns a string
+```
+
+#### Why This Works
+
+- **Runtime**: The circular dependency still works at runtime because the framework resolves dependencies dynamically
+- **TypeScript**: The explicit type annotation prevents TypeScript from trying to infer the return type based on the circular chain
+- **Type Safety**: You still get full type safety by explicitly declaring the return type (`string` in this example)
+
+#### Best Practices
+
+1. **Identify the "leaf" resource**: Choose the resource that logically should break the chain (often the one that doesn't need complex type inference)
+2. **Use explicit typing**: Add the `IResource<Dependencies, ReturnType>` type annotation
+3. **Document the decision**: Add a comment explaining why the explicit typing is needed
+4. **Consider refactoring**: If you have many circular dependencies, consider if your architecture could be simplified
+
+#### Example with Dependencies
+
+If your resource has dependencies, include them in the type:
+
+```typescript
+type MyDependencies = {
+  someService: SomeServiceType;
+  anotherResource: AnotherResourceType;
+};
+
+export const problematicResource = defineResource({
+  id: "problematic.resource",
+  dependencies: {
+    /* ... */
+  },
+  async init(config, deps) {
+    // Your logic here
+    return someComplexObject;
+  },
+}) as IResource<MyDependencies, ComplexReturnType>;
+```
+
+This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 ## Real-World Example: The Complete Package
 
@@ -1259,6 +1414,7 @@ const testDatabase = resource({
   init: async () => new MemoryDatabase(), // In-memory test database
 });
 
+// Just like a shaworma wrap!
 const testApp = resource({
   id: "test.app",
   register: [productionApp],
