@@ -112,14 +112,25 @@ export class EventManager {
       return;
     }
 
+    let propagationStopped = false;
+
     const event: IEventEmission = {
       id: eventDefinition.id,
       data,
       timestamp: new Date(),
       source,
+      meta: eventDefinition.meta || {},
+      stopPropagation: () => {
+        propagationStopped = true;
+      },
+      isPropagationStopped: () => propagationStopped,
     };
 
     for (const listener of allListeners) {
+      if (propagationStopped) {
+        break;
+      }
+      
       if (!listener.filter || listener.filter(event)) {
         await listener.handler(event);
       }

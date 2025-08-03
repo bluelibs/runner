@@ -179,12 +179,13 @@ export function defineIndex<
 }
 
 export function defineEvent<TPayload = void>(
-  config: IEventDefinition<TPayload>
+  config?: IEventDefinition<TPayload>
 ): IEvent<TPayload> {
   const callerFilePath = getCallerFile();
+  const eventConfig = config || {};
   return {
-    ...config,
-    id: config.id || generateCallerIdFromFile(callerFilePath, "event"),
+    ...eventConfig,
+    id: eventConfig.id || generateCallerIdFromFile(callerFilePath, "event"),
     [symbols.filePath]: callerFilePath,
     [symbolEvent]: true, // This is a workaround
   };

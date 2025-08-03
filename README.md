@@ -296,6 +296,43 @@ const taskLogger = task({
 });
 ```
 
+#### Event Propagation Control with stopPropagation()
+
+Sometimes you need to prevent other event listeners from processing an event. The `stopPropagation()` method gives you fine-grained control over event flow:
+
+```typescript
+const criticalAlert = event<{
+  severity: "low" | "medium" | "high" | "critical";
+}>({
+  id: "app.events.alert",
+  meta: {
+    title: "System Alert Event",
+    description: "Emitted when system issues are detected",
+    tags: ["monitoring", "alerts"],
+  },
+});
+
+// High-priority handler that can stop propagation
+const emergencyHandler = task({
+  id: "app.tasks.emergencyHandler",
+  on: criticalAlert, // Works with global events too
+  listenerOrder: -100, // Higher priority (lower numbers run first)
+  run: async (event) => {
+    console.log(`Alert received: ${event.data.severity}`);
+
+    if (event.data.severity === "critical") {
+      console.log("🚨 CRITICAL ALERT - Activating emergency protocols");
+
+      // Stop other handlers from running
+      event.stopPropagation();
+      // Notify the on-call team, escalate, etc.
+
+      console.log("🛑 Event propagation stopped - emergency protocols active");
+    }
+  },
+});
+```
+
 ### 4. Middleware: The Interceptor Pattern Done Right
 
 Middleware wraps around your tasks and resources, adding cross-cutting concerns without polluting your business logic.
