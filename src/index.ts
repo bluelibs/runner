@@ -4,6 +4,7 @@ import {
   defineEvent,
   defineMiddleware,
   defineIndex,
+  defineTag,
   defineOverride,
 } from "./define";
 import { createContext } from "./context";
@@ -25,6 +26,8 @@ export {
   defineEvent as event,
   defineMiddleware as middleware,
   defineIndex as index,
+  defineTag,
+  defineTag as tag,
   defineOverride as override,
   run,
   createContext,

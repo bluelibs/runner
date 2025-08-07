@@ -75,6 +75,37 @@ export const symbols = {
   dispose: symbolDispose,
   store: symbolStore,
 };
+export interface ITagDefinition<TConfig = void> {
+  id: string | symbol;
+}
+
+/**
+ * A configured instance of a tag as produced by `ITag.with()`.
+ */
+export interface ITagWithConfig<TConfig = void> {
+  id: string | symbol;
+  /** The tag definition used to produce this configured instance. */
+  tag: ITag<TConfig>;
+  /** The configuration captured for this tag instance. */
+  config: TConfig;
+}
+
+/**
+ * A tag definition (builder). Use `.with(config)` to obtain configured instances,
+ * and `.extract(tags)` to find either a configured instance or the bare tag in a list.
+ */
+export interface ITag<TConfig = void> extends ITagDefinition<TConfig> {
+  /**
+   * Creates a configured instance of the tag.
+   */
+  with(config: TConfig): ITagWithConfig<TConfig>;
+  /**
+   * Extracts either a configured instance or the bare tag from a list of tags.
+   */
+  extract(tags: TagType[]): { id: string | symbol; config?: TConfig } | null;
+}
+
+export type TagType = string | ITagDefinition<any> | ITagWithConfig<any>;
 
 /**
  * Common metadata you can attach to tasks/resources/events/middleware.
@@ -83,7 +114,7 @@ export const symbols = {
 export interface IMeta {
   title?: string;
   description?: string;
-  tags?: string[];
+  tags?: TagType[];
 }
 
 export interface ITaskMeta extends IMeta {}
