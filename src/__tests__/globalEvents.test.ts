@@ -1,5 +1,10 @@
 import { globalEvents } from "../globals/globalEvents";
-import { defineTask, defineResource, defineMiddleware, defineEvent } from "../define";
+import {
+  defineTask,
+  defineResource,
+  defineMiddleware,
+  defineEvent,
+} from "../define";
 import { run } from "../run";
 
 describe("Global Events", () => {
@@ -174,7 +179,9 @@ describe("Global Events", () => {
       middleware: [testMiddleware],
       run: async (event) => {
         if (event && event.id) {
-          eventHandlerExecutions.push(`specific-handler:${event.id.toString()}`);
+          eventHandlerExecutions.push(
+            `specific-handler:${event.id.toString()}`
+          );
           expect(event.meta.title).toBe("Test Event");
           expect(event.data.message).toBe("Hello from custom event");
         }
@@ -209,21 +216,34 @@ describe("Global Events", () => {
     await run(app);
 
     // Verify middleware was called for global event listener
-    expect(middlewareExecutions).toContain("middleware-before:global.event.handler");
-    expect(middlewareExecutions).toContain("middleware-after:global.event.handler");
+    expect(middlewareExecutions).toContain(
+      "middleware-before:global.event.handler"
+    );
+    expect(middlewareExecutions).toContain(
+      "middleware-after:global.event.handler"
+    );
 
     // Verify middleware was called for specific event listener
-    expect(middlewareExecutions).toContain("middleware-before:specific.event.handler");
-    expect(middlewareExecutions).toContain("middleware-after:specific.event.handler");
+    expect(middlewareExecutions).toContain(
+      "middleware-before:specific.event.handler"
+    );
+    expect(middlewareExecutions).toContain(
+      "middleware-after:specific.event.handler"
+    );
 
     // Verify event handlers were executed
     expect(eventHandlerExecutions).toContain("global-handler:test.customEvent");
-    expect(eventHandlerExecutions).toContain("specific-handler:test.customEvent");
+    expect(eventHandlerExecutions).toContain(
+      "specific-handler:test.customEvent"
+    );
 
     // Verify global listeners also handle other events (like global events themselves)
-    expect(eventHandlerExecutions.some(exec => 
-      exec.includes("global-handler:") && exec.includes("beforeInit")
-    )).toBe(true);
+    expect(
+      eventHandlerExecutions.some(
+        (exec) =>
+          exec.includes("global-handler:") && exec.includes("beforeInit")
+      )
+    ).toBe(true);
   });
 
   it("should support stopPropagation in event listeners", async () => {
@@ -244,9 +264,11 @@ describe("Global Events", () => {
       listenerOrder: -100, // Higher priority (runs first)
       run: async (event) => {
         eventHandlerExecutions.push("high-priority-executed");
-        
+
         if (event && event.data && event.data.value > 10) {
+          expect(event.isPropagationStopped()).toBe(false);
           event.stopPropagation();
+          expect(event.isPropagationStopped()).toBe(true);
           eventHandlerExecutions.push("propagation-stopped");
         }
       },
@@ -283,7 +305,7 @@ describe("Global Events", () => {
       async init(_, { eventEmitter }) {
         // Test with value <= 10 (no propagation stop)
         await eventEmitter(5);
-        
+
         // Test with value > 10 (propagation stop)
         await eventEmitter(15);
       },
@@ -292,12 +314,18 @@ describe("Global Events", () => {
     await run(app);
 
     // Verify both handlers executed for first event (value=5)
-    expect(eventHandlerExecutions.filter(e => e === "high-priority-executed")).toHaveLength(2);
-    expect(eventHandlerExecutions.filter(e => e === "low-priority-executed")).toHaveLength(1);
-    
+    expect(
+      eventHandlerExecutions.filter((e) => e === "high-priority-executed")
+    ).toHaveLength(2);
+    expect(
+      eventHandlerExecutions.filter((e) => e === "low-priority-executed")
+    ).toHaveLength(1);
+
     // Verify propagation was stopped for second event (value=15)
-    expect(eventHandlerExecutions.filter(e => e === "propagation-stopped")).toHaveLength(1);
-    
+    expect(
+      eventHandlerExecutions.filter((e) => e === "propagation-stopped")
+    ).toHaveLength(1);
+
     // The low priority handler should NOT have run for the second event due to stopped propagation
     // So it should only appear once (from the first event where propagation was not stopped)
   });
@@ -363,7 +391,9 @@ describe("Global Events", () => {
       middleware: [localMiddleware], // Local middleware
       run: async (event) => {
         if (event && event.id) {
-          eventHandlerExecutions.push(`specific-handler:${event.id.toString()}`);
+          eventHandlerExecutions.push(
+            `specific-handler:${event.id.toString()}`
+          );
           expect(event.meta.title).toBe("Global Middleware Test Event");
           expect(event.data.message).toBe("Hello from middleware test");
         }
@@ -400,36 +430,67 @@ describe("Global Events", () => {
     await run(app);
 
     // Verify global middleware was called for global event listener
-    expect(middlewareExecutions).toContain("global-middleware-before:global.middleware.event.handler");
-    expect(middlewareExecutions).toContain("global-middleware-after:global.middleware.event.handler");
+    expect(middlewareExecutions).toContain(
+      "global-middleware-before:global.middleware.event.handler"
+    );
+    expect(middlewareExecutions).toContain(
+      "global-middleware-after:global.middleware.event.handler"
+    );
 
     // Verify local middleware was called for global event listener
-    expect(middlewareExecutions).toContain("local-middleware-before:global.middleware.event.handler");
-    expect(middlewareExecutions).toContain("local-middleware-after:global.middleware.event.handler");
+    expect(middlewareExecutions).toContain(
+      "local-middleware-before:global.middleware.event.handler"
+    );
+    expect(middlewareExecutions).toContain(
+      "local-middleware-after:global.middleware.event.handler"
+    );
 
     // Verify global middleware was called for specific event listener
-    expect(middlewareExecutions).toContain("global-middleware-before:specific.middleware.event.handler");
-    expect(middlewareExecutions).toContain("global-middleware-after:specific.middleware.event.handler");
+    expect(middlewareExecutions).toContain(
+      "global-middleware-before:specific.middleware.event.handler"
+    );
+    expect(middlewareExecutions).toContain(
+      "global-middleware-after:specific.middleware.event.handler"
+    );
 
     // Verify local middleware was called for specific event listener
-    expect(middlewareExecutions).toContain("local-middleware-before:specific.middleware.event.handler");
-    expect(middlewareExecutions).toContain("local-middleware-after:specific.middleware.event.handler");
+    expect(middlewareExecutions).toContain(
+      "local-middleware-before:specific.middleware.event.handler"
+    );
+    expect(middlewareExecutions).toContain(
+      "local-middleware-after:specific.middleware.event.handler"
+    );
 
     // Verify global middleware was called for event emitter task
-    expect(middlewareExecutions).toContain("global-middleware-before:middleware.event.emitter");
-    expect(middlewareExecutions).toContain("global-middleware-after:middleware.event.emitter");
+    expect(middlewareExecutions).toContain(
+      "global-middleware-before:middleware.event.emitter"
+    );
+    expect(middlewareExecutions).toContain(
+      "global-middleware-after:middleware.event.emitter"
+    );
 
     // Verify local middleware was called for event emitter task
-    expect(middlewareExecutions).toContain("local-middleware-before:middleware.event.emitter");
-    expect(middlewareExecutions).toContain("local-middleware-after:middleware.event.emitter");
+    expect(middlewareExecutions).toContain(
+      "local-middleware-before:middleware.event.emitter"
+    );
+    expect(middlewareExecutions).toContain(
+      "local-middleware-after:middleware.event.emitter"
+    );
 
     // Verify event handlers were executed
-    expect(eventHandlerExecutions).toContain("global-handler:test.globalMiddlewareEvent");
-    expect(eventHandlerExecutions).toContain("specific-handler:test.globalMiddlewareEvent");
+    expect(eventHandlerExecutions).toContain(
+      "global-handler:test.globalMiddlewareEvent"
+    );
+    expect(eventHandlerExecutions).toContain(
+      "specific-handler:test.globalMiddlewareEvent"
+    );
 
     // Verify global listeners also handle other events (like global events themselves)
-    expect(eventHandlerExecutions.some(exec => 
-      exec.includes("global-handler:") && exec.includes("beforeInit")
-    )).toBe(true);
+    expect(
+      eventHandlerExecutions.some(
+        (exec) =>
+          exec.includes("global-handler:") && exec.includes("beforeInit")
+      )
+    ).toBe(true);
   });
 });
