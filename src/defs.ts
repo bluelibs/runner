@@ -309,6 +309,18 @@ export interface IEventEmission<TPayload = any> {
    * The source of the event. This can be useful for debugging.
    */
   source: string | symbol;
+  /**
+   * Metadata associated with the event definition.
+   */
+  meta: IEventMeta;
+  /**
+   * Stops propagation to remaining event listeners.
+   */
+  stopPropagation(): void;
+  /**
+   * Returns true if propagation has been stopped.
+   */
+  isPropagationStopped(): boolean;
 }
 
 export interface IMiddlewareDefinition<
