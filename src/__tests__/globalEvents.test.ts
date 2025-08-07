@@ -493,4 +493,50 @@ describe("Global Events", () => {
       )
     ).toBe(true);
   });
+
+  it("should support defineEvent without any config", async () => {
+    const eventHandlerExecutions: string[] = [];
+
+    // Define event with minimal config (just id)
+    const simpleEvent = defineEvent();
+
+    // Event listener for the simple event
+    const simpleEventHandler = defineTask({
+      id: "simple.event.handler",
+      on: simpleEvent,
+      run: async (event) => {
+        if (event && event.id) {
+          eventHandlerExecutions.push(`simple-handler:${event.id.toString()}`);
+          // Event should exist but meta might be minimal/undefined
+          expect(event.id).toBe(simpleEvent.id);
+        }
+      },
+    });
+
+    // Task that emits the simple event
+    const eventEmitter = defineTask({
+      id: "simple.event.emitter",
+      dependencies: { simpleEvent },
+      run: async (_, { simpleEvent }) => {
+        await simpleEvent();
+        return "Simple event emitted";
+      },
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [simpleEvent, simpleEventHandler, eventEmitter],
+      dependencies: { eventEmitter },
+      async init(_, { eventEmitter }) {
+        await eventEmitter();
+      },
+    });
+
+    await run(app);
+
+    // Verify the simple event handler was executed
+    expect(eventHandlerExecutions).toContain(
+      "simple-handler:Symbol(__tests__.globalEvents.test.event)"
+    );
+  });
 });
