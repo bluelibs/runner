@@ -5,6 +5,7 @@ import { globalEvents } from "../globals/globalEvents";
 import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
+import { executeFunction } from "../tools/executeFunction";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
@@ -152,7 +153,7 @@ export class TaskRunner {
 
     // this is the final next()
     let next = async (input: any) => {
-      return task.run.call(null, input, storeTask?.computedDependencies as any);
+      return executeFunction(task.run, input, storeTask?.computedDependencies as any);
     };
 
     const existingMiddlewares = task.middleware;
@@ -177,7 +178,8 @@ export class TaskRunner {
 
       const nextFunction = next;
       next = async (input) => {
-        return storeMiddleware.middleware.run(
+        return executeFunction(
+          storeMiddleware.middleware.run,
           {
             task: {
               definition: task as any,

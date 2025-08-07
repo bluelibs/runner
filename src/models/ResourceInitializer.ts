@@ -9,6 +9,7 @@ import { globalEvents } from "../globals/globalEvents";
 import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
+import { executeFunction } from "../tools/executeFunction";
 
 export class ResourceInitializer {
   constructor(
@@ -121,7 +122,7 @@ export class ResourceInitializer {
   ) {
     let next = async (config: C): Promise<V | undefined> => {
       if (resource.init) {
-        return resource.init.call(null, config, dependencies, context);
+        return executeFunction(resource.init, config, dependencies, context);
       }
     };
 
@@ -141,7 +142,8 @@ export class ResourceInitializer {
 
       const nextFunction = next;
       next = async (config: C) => {
-        return storeMiddleware.middleware.run(
+        return executeFunction(
+          storeMiddleware.middleware.run,
           {
             resource: {
               definition: resource,

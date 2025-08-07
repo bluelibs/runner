@@ -6,6 +6,7 @@ import {
 } from "../defs";
 import { Errors } from "../errors";
 import { Logger } from "./Logger";
+import { executeFunction } from "../tools/executeFunction";
 
 const HandlerOptionsDefaults = { order: 0 };
 
@@ -132,7 +133,7 @@ export class EventManager {
       }
       
       if (!listener.filter || listener.filter(event)) {
-        await listener.handler(event);
+        await executeFunction(listener.handler, event);
       }
     }
   }
