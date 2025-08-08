@@ -3,6 +3,7 @@ import {
   defineTask,
   defineResource,
   defineMiddleware,
+  defineOverride,
 } from "../define";
 import {
   IEventDefinition,
@@ -13,7 +14,8 @@ import {
   RegisterableItems,
 } from "../defs";
 
-describe("typesafety", () => {
+// This is skipped because we mostly check typesafety.
+describe.skip("typesafety", () => {
   it("tasks, resources: should have propper type safety for dependeices", async () => {
     type InputTask = {
       message: string;
@@ -205,6 +207,34 @@ describe("typesafety", () => {
         // @ts-expect-error
         deps.task2;
       },
+    });
+
+    expect(true).toBe(true);
+  });
+
+  it("should have propper type safety for overrides", async () => {
+    const task = defineTask({
+      id: "task",
+      run: async () => "Task executed",
+    });
+
+    // @ts-expect-error
+    const overrideTask = defineOverride(task, {
+      run: async () => 234,
+    });
+
+    const resource = defineResource({
+      id: "resource",
+      register: [task],
+      init: async () => "Resource executed",
+    });
+
+    const overrideResource = defineOverride(resource, {
+      init: async () => "Resource overridden",
+    });
+    // @ts-expect-error
+    defineOverride(resource, {
+      init: async () => 123, // bad type
     });
 
     expect(true).toBe(true);

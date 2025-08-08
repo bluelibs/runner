@@ -271,19 +271,19 @@ export function isMiddleware(definition: any): definition is IMiddleware {
  * Override helper that preserves the original `id` and returns the same type.
  * You can override any property except `id`.
  */
-export function override<T extends ITask<any, any, any, any>>(
+export function defineOverride<T extends ITask<any, any, any, any>>(
   base: T,
   patch: Omit<Partial<T>, "id">
 ): T;
-export function override<T extends IResource<any, any, any, any>>(
+export function defineOverride<T extends IResource<any, any, any, any>>(
   base: T,
   patch: Omit<Partial<T>, "id">
 ): T;
-export function override<T extends IMiddleware<any, any>>(
+export function defineOverride<T extends IMiddleware<any, any>>(
   base: T,
   patch: Omit<Partial<T>, "id">
 ): T;
-export function override(
+export function defineOverride(
   base: ITask | IResource,
   patch: Record<string | symbol, unknown>
 ): ITask | IResource {

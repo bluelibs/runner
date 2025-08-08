@@ -4,7 +4,7 @@ import {
   defineEvent,
   defineMiddleware,
   defineIndex,
-  override,
+  defineOverride,
 } from "./define";
 import { createContext } from "./context";
 import { globalEvents } from "./globals/globalEvents";
@@ -25,7 +25,7 @@ export {
   defineEvent as event,
   defineMiddleware as middleware,
   defineIndex as index,
-  override,
+  defineOverride as override,
   run,
   createContext,
 };

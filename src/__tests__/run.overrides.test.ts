@@ -4,7 +4,7 @@ import {
   defineResource,
   defineEvent,
   defineMiddleware,
-  override,
+  defineOverride,
 } from "../define";
 import { Errors } from "../errors";
 import { run } from "../run";
@@ -17,7 +17,7 @@ describe("run.overrides", () => {
       run: async () => "Task executed",
     });
 
-    const overrideTask = override(task, {
+    const overrideTask = defineOverride(task, {
       run: async () => "Task overridden",
     });
 
@@ -43,7 +43,7 @@ describe("run.overrides", () => {
       run: async () => "Task executed",
     });
 
-    const overrideTask = override(task, {
+    const overrideTask = defineOverride(task, {
       run: async () => "Task overridden",
     });
 
@@ -72,7 +72,7 @@ describe("run.overrides", () => {
       run: async () => "Task executed",
     });
 
-    const overrideTask = override(task, {
+    const overrideTask = defineOverride(task, {
       run: async () => "Task overridden",
     });
 
@@ -101,7 +101,7 @@ describe("run.overrides", () => {
       run: async () => "Task executed",
     });
 
-    const overrideTask = override(task, {
+    const overrideTask = defineOverride(task, {
       run: async () => "Task overridden",
     });
 
@@ -109,7 +109,7 @@ describe("run.overrides", () => {
       id: "resource",
     });
 
-    const resourceOverride = override(resource, {
+    const resourceOverride = defineOverride(resource, {
       overrides: [overrideTask],
     });
 
@@ -138,7 +138,7 @@ describe("run.overrides", () => {
       run: async () => "Task executed",
     });
 
-    const overrideTask = override(task, {
+    const overrideTask = defineOverride(task, {
       run: async () => "Task overridden",
     });
 
@@ -181,7 +181,7 @@ describe("run.overrides", () => {
       },
     });
 
-    const middlewareOverride = override(middleware, {
+    const middlewareOverride = defineOverride(middleware, {
       run: async ({ next }) => {
         return `Override: ${await next()}`;
       },
