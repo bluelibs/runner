@@ -23,7 +23,6 @@ export class TaskRunner {
    * This function can throw only if any of the event listeners or run function throws
    * @param task the task to be run
    * @param input the input to be passed to the task
-   * @param taskDependencies optional dependencies to be passed to the task, if not provided, the dependencies will be the ones already computed from the store.
    */
   public async run<
     TInput,
@@ -31,8 +30,7 @@ export class TaskRunner {
     TDeps extends DependencyMapType
   >(
     task: ITask<TInput, TOutput, TDeps>,
-    input: TInput,
-    taskDependencies?: DependencyValuesType<TDeps>
+    input: TInput
   ): Promise<TOutput | undefined> {
     let runner = this.runnerStore.get(task.id);
     if (!runner) {

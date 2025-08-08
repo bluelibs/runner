@@ -75,6 +75,67 @@ export const symbols = {
   dispose: symbolDispose,
   store: symbolStore,
 };
+export interface ITagDefinition<TConfig = void> {
+  id: string | symbol;
+}
+
+/**
+ * A configured instance of a tag as produced by `ITag.with()`.
+ */
+export interface ITagWithConfig<TConfig = void> {
+  id: string | symbol;
+  /** The tag definition used to produce this configured instance. */
+  tag: ITag<TConfig>;
+  /** The configuration captured for this tag instance. */
+  config: TConfig;
+}
+
+/**
+ * A tag definition (builder). Use `.with(config)` to obtain configured instances,
+ * and `.extract(tags)` to find either a configured instance or the bare tag in a list.
+ */
+export interface ITag<TConfig = void> extends ITagDefinition<TConfig> {
+  /**
+   * Creates a configured instance of the tag.
+   */
+  with(config: TConfig): ITagWithConfig<TConfig>;
+  /**
+   * Extracts either a configured instance or the bare tag from a list of tags
+   * or from a taggable object (`{ meta: { tags?: [] } }`).
+   */
+  extract(target: TagType[] | ITaggable): ExtractedTagResult<TConfig> | null;
+}
+
+/**
+ * Restrict bare tags to those whose config can be omitted (void or optional object),
+ * mirroring the same principle used for resources in `RegisterableItems`.
+ * Required-config tags must appear as configured instances.
+ */
+export type TagType =
+  | string
+  | ITag<void>
+  | ITag<{ [K in any]?: any }>
+  | ITagWithConfig<any>;
+
+/**
+ * Conditional result type for `ITag.extract`:
+ * - For void config → just the identifier
+ * - For optional object config → identifier with optional config
+ * - For required config → identifier with required config
+ */
+export type ExtractedTagResult<TConfig> = {} extends TConfig
+  ? { id: string | symbol; config?: TConfig }
+  : { id: string | symbol; config: TConfig };
+
+/**
+ * Any object that can carry tags via metadata. This mirrors how tasks,
+ * resources, events, and middleware expose `meta.tags`.
+ */
+export interface ITaggable {
+  meta?: {
+    tags?: TagType[];
+  };
+}
 
 /**
  * Common metadata you can attach to tasks/resources/events/middleware.
@@ -83,7 +144,7 @@ export const symbols = {
 export interface IMeta {
   title?: string;
   description?: string;
-  tags?: string[];
+  tags?: TagType[];
 }
 
 export interface ITaskMeta extends IMeta {}

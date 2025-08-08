@@ -999,34 +999,410 @@ await paymentLogger.info("Processing payment", { data: paymentData });
 await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
-## Meta: Tagging Your Components
+## Meta: Documenting and Organizing Your Components
 
-Sometimes you want to attach metadata to your tasks and resources for documentation, filtering, or middleware logic:
+_The structured way to describe what your components do and control their behavior_
+
+Metadata in BlueLibs Runner provides a systematic way to document, categorize, and control the behavior of your tasks, resources, events, and middleware. Think of it as your component's passport - it tells you and your tools everything they need to know about what this component does and how it should be treated.
+
+### Basic Metadata Properties
+
+Every component can have these basic metadata properties:
 
 ```typescript
-const apiTask = task({
-  id: "app.tasks.api.createUser",
+interface IMeta {
+  title?: string; // Human-readable name
+  description?: string; // What this component does
+  tags?: TagType[]; // Categories and behavioral flags
+}
+```
+
+### Simple Documentation Example
+
+```typescript
+const userService = resource({
+  id: "app.services.user",
   meta: {
-    title: "Create User API",
-    description: "Creates a new user account",
-    tags: ["api", "user", "public"],
+    title: "User Management Service",
+    description:
+      "Handles user creation, authentication, and profile management",
+    tags: ["service", "user", "core"],
   },
-  run: async (userData) => {
-    // Business logic
+  dependencies: { database },
+  init: async (_, { database }) => ({
+    createUser: async (userData) => {
+      /* ... */
+    },
+    authenticateUser: async (credentials) => {
+      /* ... */
+    },
+  }),
+});
+
+const sendWelcomeEmail = task({
+  id: "app.tasks.sendWelcomeEmail",
+  meta: {
+    title: "Send Welcome Email",
+    description: "Sends a welcome email to newly registered users",
+    tags: ["email", "automation", "user-onboarding"],
+  },
+  dependencies: { emailService },
+  run: async (userData, { emailService }) => {
+    // Email sending logic
+  },
+});
+```
+
+### Tags: The Powerful Classification System
+
+Tags are the most powerful part of the metadata system. They can be simple strings or sophisticated configuration objects that control component behavior.
+
+#### String Tags for Simple Classification
+
+```typescript
+const adminTask = task({
+  id: "app.tasks.admin.deleteUser",
+  meta: {
+    title: "Delete User Account",
+    description: "Permanently removes a user account and all associated data",
+    tags: [
+      "admin", // Access level
+      "destructive", // Behavioral flag
+      "user", // Domain
+      "gdpr-compliant", // Compliance flag
+    ],
+  },
+  run: async (userId) => {
+    // Deletion logic
   },
 });
 
-// Middleware that only applies to API tasks
-const apiMiddleware = middleware({
-  id: "app.middleware.api",
+// Middleware that adds extra logging for destructive operations
+const auditMiddleware = middleware({
+  id: "app.middleware.audit",
   run: async ({ task, next }) => {
-    if (task.meta?.tags?.includes("api")) {
-      // Apply API-specific logic
+    const isDestructive = task.definition.meta?.tags?.includes("destructive");
+
+    if (isDestructive) {
+      console.log(`🔥 DESTRUCTIVE OPERATION: ${task.definition.id}`);
+      await auditLogger.log({
+        operation: task.definition.id,
+        user: getCurrentUser(),
+        timestamp: new Date(),
+      });
     }
+
     return next(task.input);
   },
 });
 ```
+
+#### Advanced Tags with Configuration
+
+For more sophisticated control, you can create structured tags that carry configuration:
+
+```typescript
+import { tag } from "@bluelibs/runner";
+
+// Define a reusable tag with configuration
+const performanceTag = tag<{ alertAboveMs: number; criticalAboveMs: number }>({
+  id: "performance.monitoring",
+});
+
+const rateLimitTag = tag<{ maxRequestsPerMinute: number; burstLimit?: number }>(
+  {
+    id: "rate.limit",
+  }
+);
+
+const cacheTag = tag<{ ttl: number; keyPattern?: string }>({
+  id: "cache.strategy",
+});
+
+// Use structured tags in your components
+const expensiveTask = task({
+  id: "app.tasks.expensiveCalculation",
+  meta: {
+    title: "Complex Data Processing",
+    description: "Performs heavy computational analysis on large datasets",
+    tags: [
+      "computation",
+      "background",
+      performanceTag.with({
+        alertAboveMs: 5000,
+        criticalAboveMs: 15000,
+      }),
+      cacheTag.with({
+        ttl: 300000, // 5 minutes
+        keyPattern: "calc-{userId}-{datasetId}",
+      }),
+    ],
+  },
+  run: async (input) => {
+    // Heavy computation here
+  },
+});
+
+const apiEndpoint = task({
+  id: "app.tasks.api.getUserProfile",
+  meta: {
+    title: "Get User Profile",
+    description: "Returns user profile information with privacy filtering",
+    tags: [
+      "api",
+      "public",
+      rateLimitTag.with({
+        maxRequestsPerMinute: 100,
+        burstLimit: 20,
+      }),
+      cacheTag.with({ ttl: 60000 }), // 1 minute cache
+    ],
+  },
+  run: async (userId) => {
+    // API logic
+  },
+});
+```
+
+#### Smart Middleware Using Structured Tags
+
+```typescript
+const performanceMiddleware = middleware({
+  id: "app.middleware.performance",
+  run: async ({ task, next }) => {
+    const tags = task.definition.meta?.tags || [];
+    const perfConfig = performanceTag.extract(tags);
+
+    if (perfConfig) {
+      const startTime = Date.now();
+
+      try {
+        const result = await next(task.input);
+        const duration = Date.now() - startTime;
+
+        if (duration > perfConfig.config.criticalAboveMs) {
+          await alerting.critical(
+            `Task ${task.definition.id} took ${duration}ms`
+          );
+        } else if (duration > perfConfig.config.alertAboveMs) {
+          await alerting.warn(`Task ${task.definition.id} took ${duration}ms`);
+        }
+
+        return result;
+      } catch (error) {
+        const duration = Date.now() - startTime;
+        await alerting.error(
+          `Task ${task.definition.id} failed after ${duration}ms`,
+          error
+        );
+        throw error;
+      }
+    }
+
+    return next(task.input);
+  },
+});
+
+const rateLimitMiddleware = middleware({
+  id: "app.middleware.rateLimit",
+  dependencies: { redis },
+  run: async ({ task, next }, { redis }) => {
+    // Extraction can be done at task.definition level or at task.definition.meta.tags
+    const rateLimitCurrentTag = rateLimitTag.extract(task.definition);
+
+    // Alternative way
+    const tags = task.definition.meta?.tags;
+    const rateLimitCurrentTag = rateLimitTag.extract(tags);
+
+    if (rateLimitCurrentTag) {
+      const key = `rateLimit:${task.definition.id}`;
+      const current = await redis.incr(key);
+
+      if (current === 1) {
+        await redis.expire(key, 60); // 1 minute window
+      }
+
+      if (current > rateLimitCurrentTag.config.maxRequestsPerMinute) {
+        throw new Error("Rate limit exceeded");
+      }
+    }
+
+    return next(task.input);
+  },
+});
+```
+
+### When to Use Metadata
+
+#### ✅ Great Use Cases
+
+**Documentation & Discovery**
+
+```typescript
+const paymentProcessor = resource({
+  meta: {
+    title: "Payment Processing Service",
+    description:
+      "Handles credit card payments via Stripe API with fraud detection",
+    tags: ["payment", "stripe", "pci-compliant", "critical"],
+  },
+  // ... implementation
+});
+```
+
+**Conditional Behavior**
+
+```typescript
+const backgroundTask = task({
+  meta: {
+    tags: ["background", "low-priority", retryTag.with({ maxAttempts: 5 })],
+  },
+  // ... implementation
+});
+```
+
+**Cross-Cutting Concerns**
+
+```typescript
+// All tasks tagged with "audit" get automatic logging
+const sensitiveOperation = task({
+  meta: {
+    tags: ["audit", "sensitive", "admin-only"],
+  },
+  // ... implementation
+});
+```
+
+**Environment-Specific Behavior**
+
+```typescript
+const developmentTask = task({
+  meta: {
+    tags: ["development-only", debugTag.with({ verbose: true })],
+  },
+  // ... implementation
+});
+```
+
+#### ❌ When NOT to Use Metadata
+
+**Simple Internal Logic** - Don't overcomplicate straightforward code:
+
+```typescript
+// ❌ Overkill
+const simple = task({
+  meta: { tags: ["internal", "utility"] },
+  run: () => Math.random(),
+});
+
+// ✅ Better
+const generateId = () => Math.random().toString(36);
+```
+
+**One-Off Tasks** - If it's used once, metadata won't help:
+
+```typescript
+// ❌ Unnecessary
+const oneTimeScript = task({
+  meta: { title: "Migration Script", tags: ["migration"] },
+  run: () => {
+    /* run once and forget */
+  },
+});
+```
+
+### Extending Metadata: Custom Properties
+
+For advanced use cases, you can extend the metadata interfaces to add your own properties:
+
+```typescript
+// In your types file
+declare module "@bluelibs/runner" {
+  interface ITaskMeta {
+    author?: string;
+    version?: string;
+    deprecated?: boolean;
+    apiVersion?: "v1" | "v2" | "v3";
+    costLevel?: "low" | "medium" | "high";
+  }
+
+  interface IResourceMeta {
+    healthCheck?: string; // URL for health checking
+    dependencies?: string[]; // External service dependencies
+    scalingPolicy?: "auto" | "manual";
+  }
+}
+
+// Now use your custom properties
+const expensiveApiTask = task({
+  id: "app.tasks.ai.generateImage",
+  meta: {
+    title: "AI Image Generation",
+    description: "Uses OpenAI DALL-E to generate images from text prompts",
+    tags: ["ai", "expensive", "external-api"],
+    author: "AI Team",
+    version: "2.1.0",
+    apiVersion: "v2",
+    costLevel: "high", // Custom property!
+  },
+  run: async (prompt) => {
+    // AI generation logic
+  },
+});
+
+const database = resource({
+  id: "app.database.primary",
+  meta: {
+    title: "Primary PostgreSQL Database",
+    tags: ["database", "critical", "persistent"],
+    healthCheck: "/health/db", // Custom property!
+    dependencies: ["postgresql", "connection-pool"],
+    scalingPolicy: "auto",
+  },
+  // ... implementation
+});
+```
+
+### Advanced Patterns
+
+#### Tag-Based Component Selection
+
+```typescript
+// Find all API endpoints
+function getApiTasks(store: Store) {
+  return store.getAllTasks().filter((task) => task.meta?.tags?.includes("api"));
+}
+
+// Find all tasks with specific performance requirements
+function getPerformanceCriticalTasks(store: Store) {
+  return store.getAllTasks().filter((task) => {
+    const tags = task.meta?.tags || [];
+    return performanceTag.extract(tags) !== null;
+  });
+}
+```
+
+#### Dynamic Middleware Application
+
+```typescript
+const app = resource({
+  id: "app",
+  register: [
+    // Apply performance middleware globally but only to tagged tasks
+    performanceMiddleware.everywhere({
+      tasks: true,
+      resources: false,
+    }),
+    // Apply rate limiting only to API tasks
+    rateLimitMiddleware.everywhere({
+      tasks: true,
+      resources: false,
+    }),
+  ],
+});
+```
+
+Metadata transforms your components from anonymous functions into self-documenting, discoverable, and controllable building blocks. Use it wisely, and your future self (and your team) will thank you.
 
 ## Advanced Usage: When You Need More Power
 
@@ -1480,33 +1856,69 @@ describe("registerUser task", () => {
 });
 ```
 
-### Integration Testing: The Real Deal
+### Integration Testing: The Real Deal (But Actually Fun)
 
-Integration testing with overrides lets you test the whole system with controlled components:
+Spin up your whole app, keep all the middleware/events, and still test like a human. The trick: a tiny test harness.
 
 ```typescript
-const testDatabase = resource({
+import {
+  run,
+  createTestResource,
+  resource,
+  task,
+  override,
+} from "@bluelibs/runner";
+
+// Your real app
+const app = resource({
+  id: "app",
+  register: [
+    /* tasks, resources, middleware */
+  ],
+});
+
+// Optional: overrides for infra (hello, fast tests!)
+const testDb = resource({
   id: "app.database",
-  init: async () => new MemoryDatabase(), // In-memory test database
+  init: async () => new InMemoryDb(),
 });
+const mockMailer = override(realMailer, { init: async () => fakeMailer });
 
-// Just like a shaworma wrap!
-const testApp = resource({
-  id: "test.app",
-  register: [productionApp],
-  overrides: [testDatabase], // Replace real database with test one
-});
+// Create the test harness
+const harness = createTestResource(app, { overrides: [testDb, mockMailer] });
 
-describe("Full application", () => {
-  it("should handle user registration flow", async () => {
-    const { dispose } = await run(testApp);
+// A task you want to drive in your tests
+const registerUser = task({ id: "app.tasks.registerUser" /* ... */ });
 
-    // Test your application end-to-end
-
-    await dispose(); // Clean up
-  });
-});
+// Boom: full ecosystem run (middleware, events, overrides) with a tiny driver
+const { value: t, dispose } = await run(harness);
+const result = await t.runTask(registerUser, { email: "x@y.z" });
+expect(result).toMatchObject({ success: true });
+await dispose();
 ```
+
+Prefer scenario tests? Return whatever you want from the harness and assert outside:
+
+```typescript
+const flowHarness = createTestResource(
+  resource({
+    id: "app",
+    register: [db, createUser, issueToken],
+  })
+);
+
+const { value: t, dispose } = await run(flowHarness);
+const user = await t.runTask(createUser, { email: "a@b.c" });
+const token = await t.runTask(issueToken, { userId: user.id });
+expect(token).toBeTruthy();
+await dispose();
+```
+
+Why this rocks:
+
+- Minimal ceremony, no API pollution
+- Real wiring (middleware/events/overrides) – what runs in prod runs in tests
+- You choose: drive tasks directly or build domain-y flows
 
 ## Semaphore
 

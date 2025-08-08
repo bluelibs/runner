@@ -23,6 +23,11 @@ import {
   symbolMiddlewareConfigured,
   symbolFilePath,
   symbolIndexResource,
+  ITag,
+  ITagDefinition,
+  ITagWithConfig,
+  TagType,
+  ITaggable,
 } from "./defs";
 import { Errors } from "./errors";
 import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
@@ -324,4 +329,37 @@ export function defineOverride(
     ...rest,
     id: (base as any).id,
   } as any;
+}
+
+/**
+ * Creates a tag definition.
+ * - `.with(config)` to create configured instances
+ * - `.extract(tags)` to extract this tag from a list of tags
+ */
+export function defineTag<TConfig = void>(
+  definition: ITagDefinition<TConfig>
+): ITag<TConfig> {
+  const id = definition.id;
+
+  return {
+    id,
+    with(tagConfig: TConfig) {
+      return {
+        id,
+        tag: this,
+        config: tagConfig as any,
+      } as ITagWithConfig<TConfig>;
+    },
+    extract(target: TagType[] | ITaggable) {
+      const tags = Array.isArray(target) ? target : target?.meta?.tags || [];
+      for (const candidate of tags) {
+        if (typeof candidate === "string") continue;
+        // Configured instance
+        if (candidate.id === id) {
+          return candidate as ITagWithConfig<TConfig>;
+        }
+      }
+      return null;
+    },
+  } as ITag<TConfig>;
 }

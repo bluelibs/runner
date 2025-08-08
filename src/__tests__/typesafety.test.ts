@@ -4,6 +4,7 @@ import {
   defineResource,
   defineMiddleware,
   defineOverride,
+  defineTag,
 } from "../define";
 import {
   IEventDefinition,
@@ -13,6 +14,7 @@ import {
   ITaskDefinition,
   RegisterableItems,
 } from "../defs";
+import { createTestResource } from "..";
 
 // This is skipped because we mostly check typesafety.
 describe.skip("typesafety", () => {
@@ -212,6 +214,51 @@ describe.skip("typesafety", () => {
     expect(true).toBe(true);
   });
 
+  it("createTestResource.runTask: should be type-safe", async () => {
+    type Input = { x: number };
+    type Output = Promise<number>;
+
+    const add = defineTask<Input, Output>({
+      id: "types.add",
+      run: async (i) => i.x + 1,
+    });
+
+    const depTask = defineTask<{ v: string }, Promise<string>>({
+      id: "types.dep",
+      run: async (i) => i.v.toUpperCase(),
+    });
+
+    const main = defineTask<Input, Output, { depTask: typeof depTask }>({
+      id: "types.main",
+      dependencies: { depTask },
+      run: async (i, d) => {
+        const v = await d.depTask({ v: String(i.x) });
+        return Number(v) + 1;
+      },
+    });
+
+    const app = defineResource({
+      id: "types.app",
+      register: [add, depTask, main],
+    });
+    const harness = createTestResource(app);
+
+    // Types: input must match, override deps must match, output is awaited number
+    const { value: t } = await (await import("../run")).run(harness);
+    const r1: number | undefined = await t.runTask(add, { x: 1 });
+    // @ts-expect-error wrong input type
+    await t.runTask(add, { z: 1 });
+    // @ts-expect-error missing input
+    await t.runTask(add);
+
+    const r2: number | undefined = await t.runTask(main, { x: 2 });
+
+    // @ts-expect-error wrong deps override type
+    await t.runTask(main, { x: 2 }, { depTask: async (i: number) => "x" });
+
+    expect(true).toBe(true);
+  });
+
   it("should have propper type safety for overrides", async () => {
     const task = defineTask({
       id: "task",
@@ -240,6 +287,32 @@ describe.skip("typesafety", () => {
     const middleware = defineMiddleware({
       id: "middleware",
       run: async () => "Middleware executed",
+    });
+
+    expect(true).toBe(true);
+  });
+
+  it("should have propper type safety for tags", async () => {
+    const tag = defineTag({ id: "tag" });
+    const tag2 = defineTag<{ value: number }>({ id: "tag2" });
+    const tag2optional = defineTag<{ value?: number }>({ id: "tag2" });
+
+    const tag3 = tag2.with({ value: 123 });
+    // @ts-expect-error
+    const tag4 = tag.with({ value: 123 });
+
+    const task = defineTask({
+      id: "task",
+      meta: {
+        tags: [
+          tag,
+          // @ts-expect-error
+          tag2,
+          tag2optional,
+          tag2.with({ value: 123 }),
+          tag3,
+        ],
+      },
     });
 
     expect(true).toBe(true);

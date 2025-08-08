@@ -139,11 +139,7 @@ export class DependencyProcessor {
             return;
           }
 
-          return this.taskRunner.run(
-            task.task,
-            receivedEvent,
-            task.computedDependencies
-          );
+          return this.taskRunner.run(task.task, receivedEvent);
         };
 
         if (eventDefinition === "*") {
@@ -217,11 +213,7 @@ export class DependencyProcessor {
     }
 
     return (input: any) => {
-      return this.taskRunner.run(
-        storeTask.task,
-        input,
-        storeTask.computedDependencies
-      );
+      return this.taskRunner.run(storeTask.task, input);
     };
   }
 
