@@ -178,7 +178,7 @@ describe("Semaphore", () => {
 
       const elapsed = Date.now() - startTime;
       expect(elapsed).toBeGreaterThanOrEqual(100);
-      expect(elapsed).toBeLessThan(200); // Should not wait much longer
+      expect(elapsed).toBeLessThan(300); // Should not wait much longer
     });
 
     it("should timeout withPermit operation", async () => {

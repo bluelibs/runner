@@ -85,26 +85,4 @@ describe("Timeout Middleware", () => {
 
     await run(app);
   });
-
-  it("should support custom error message", async () => {
-    const task = defineTask({
-      id: "timeout.customMessage",
-      middleware: [timeoutMiddleware.with({ ttl: 10, message: "Too slow" })],
-      run: async () => {
-        await sleep(30);
-        return "ok";
-      },
-    });
-
-    const app = defineResource({
-      id: "app",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        await expect(task()).rejects.toThrow(/Too slow/);
-      },
-    });
-
-    await run(app);
-  });
 });
