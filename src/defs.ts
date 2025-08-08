@@ -100,12 +100,25 @@ export interface ITag<TConfig = void> extends ITagDefinition<TConfig> {
    */
   with(config: TConfig): ITagWithConfig<TConfig>;
   /**
-   * Extracts either a configured instance or the bare tag from a list of tags.
+   * Extracts either a configured instance or the bare tag from a list of tags
+   * or from a taggable object (`{ meta: { tags?: [] } }`).
    */
-  extract(tags: TagType[]): { id: string | symbol; config?: TConfig } | null;
+  extract(
+    target: TagType[] | ITaggable
+  ): { id: string | symbol; config?: TConfig } | null;
 }
 
 export type TagType = string | ITagDefinition<any> | ITagWithConfig<any>;
+
+/**
+ * Any object that can carry tags via metadata. This mirrors how tasks,
+ * resources, events, and middleware expose `meta.tags`.
+ */
+export interface ITaggable {
+  meta?: {
+    tags?: TagType[];
+  };
+}
 
 /**
  * Common metadata you can attach to tasks/resources/events/middleware.

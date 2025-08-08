@@ -27,6 +27,7 @@ import {
   ITagDefinition,
   ITagWithConfig,
   TagType,
+  ITaggable,
 } from "./defs";
 import { Errors } from "./errors";
 import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
@@ -349,7 +350,8 @@ export function defineTag<TConfig = void>(
         config: tagConfig as any,
       } as ITagWithConfig<TConfig>;
     },
-    extract(tags: TagType[]) {
+    extract(target: TagType[] | ITaggable) {
+      const tags = Array.isArray(target) ? target : target?.meta?.tags || [];
       for (const candidate of tags) {
         if (typeof candidate === "string") continue;
         // Configured instance

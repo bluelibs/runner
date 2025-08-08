@@ -1011,9 +1011,9 @@ Every component can have these basic metadata properties:
 
 ```typescript
 interface IMeta {
-  title?: string;        // Human-readable name
-  description?: string;  // What this component does
-  tags?: TagType[];     // Categories and behavioral flags
+  title?: string; // Human-readable name
+  description?: string; // What this component does
+  tags?: TagType[]; // Categories and behavioral flags
 }
 ```
 
@@ -1024,13 +1024,18 @@ const userService = resource({
   id: "app.services.user",
   meta: {
     title: "User Management Service",
-    description: "Handles user creation, authentication, and profile management",
+    description:
+      "Handles user creation, authentication, and profile management",
     tags: ["service", "user", "core"],
   },
   dependencies: { database },
   init: async (_, { database }) => ({
-    createUser: async (userData) => { /* ... */ },
-    authenticateUser: async (credentials) => { /* ... */ },
+    createUser: async (userData) => {
+      /* ... */
+    },
+    authenticateUser: async (credentials) => {
+      /* ... */
+    },
   }),
 });
 
@@ -1061,10 +1066,10 @@ const adminTask = task({
     title: "Delete User Account",
     description: "Permanently removes a user account and all associated data",
     tags: [
-      "admin",           // Access level
-      "destructive",     // Behavioral flag
-      "user",            // Domain
-      "gdpr-compliant",  // Compliance flag
+      "admin", // Access level
+      "destructive", // Behavioral flag
+      "user", // Domain
+      "gdpr-compliant", // Compliance flag
     ],
   },
   run: async (userId) => {
@@ -1077,7 +1082,7 @@ const auditMiddleware = middleware({
   id: "app.middleware.audit",
   run: async ({ task, next }) => {
     const isDestructive = task.definition.meta?.tags?.includes("destructive");
-    
+
     if (isDestructive) {
       console.log(`🔥 DESTRUCTIVE OPERATION: ${task.definition.id}`);
       await auditLogger.log({
@@ -1086,7 +1091,7 @@ const auditMiddleware = middleware({
         timestamp: new Date(),
       });
     }
-    
+
     return next(task.input);
   },
 });
@@ -1104,9 +1109,11 @@ const performanceTag = tag<{ alertAboveMs: number; criticalAboveMs: number }>({
   id: "performance.monitoring",
 });
 
-const rateLimitTag = tag<{ maxRequestsPerMinute: number; burstLimit?: number }>({
-  id: "rate.limit",
-});
+const rateLimitTag = tag<{ maxRequestsPerMinute: number; burstLimit?: number }>(
+  {
+    id: "rate.limit",
+  }
+);
 
 const cacheTag = tag<{ ttl: number; keyPattern?: string }>({
   id: "cache.strategy",
@@ -1121,13 +1128,13 @@ const expensiveTask = task({
     tags: [
       "computation",
       "background",
-      performanceTag.with({ 
-        alertAboveMs: 5000, 
-        criticalAboveMs: 15000 
+      performanceTag.with({
+        alertAboveMs: 5000,
+        criticalAboveMs: 15000,
       }),
-      cacheTag.with({ 
+      cacheTag.with({
         ttl: 300000, // 5 minutes
-        keyPattern: "calc-{userId}-{datasetId}" 
+        keyPattern: "calc-{userId}-{datasetId}",
       }),
     ],
   },
@@ -1144,9 +1151,9 @@ const apiEndpoint = task({
     tags: [
       "api",
       "public",
-      rateLimitTag.with({ 
-        maxRequestsPerMinute: 100, 
-        burstLimit: 20 
+      rateLimitTag.with({
+        maxRequestsPerMinute: 100,
+        burstLimit: 20,
       }),
       cacheTag.with({ ttl: 60000 }), // 1 minute cache
     ],
@@ -1165,28 +1172,33 @@ const performanceMiddleware = middleware({
   run: async ({ task, next }) => {
     const tags = task.definition.meta?.tags || [];
     const perfConfig = performanceTag.extract(tags);
-    
+
     if (perfConfig) {
       const startTime = Date.now();
-      
+
       try {
         const result = await next(task.input);
         const duration = Date.now() - startTime;
-        
+
         if (duration > perfConfig.config.criticalAboveMs) {
-          await alerting.critical(`Task ${task.definition.id} took ${duration}ms`);
+          await alerting.critical(
+            `Task ${task.definition.id} took ${duration}ms`
+          );
         } else if (duration > perfConfig.config.alertAboveMs) {
           await alerting.warn(`Task ${task.definition.id} took ${duration}ms`);
         }
-        
+
         return result;
       } catch (error) {
         const duration = Date.now() - startTime;
-        await alerting.error(`Task ${task.definition.id} failed after ${duration}ms`, error);
+        await alerting.error(
+          `Task ${task.definition.id} failed after ${duration}ms`,
+          error
+        );
         throw error;
       }
     }
-    
+
     return next(task.input);
   },
 });
@@ -1195,22 +1207,26 @@ const rateLimitMiddleware = middleware({
   id: "app.middleware.rateLimit",
   dependencies: { redis },
   run: async ({ task, next }, { redis }) => {
-    const tags = task.definition.meta?.tags || [];
-    const rateLimitConfig = rateLimitTag.extract(tags);
-    
-    if (rateLimitConfig) {
+    // Extraction can be done at task.definition level or at task.definition.meta.tags
+    const rateLimitCurrentTag = rateLimitTag.extract(task.definition);
+
+    // Alternative way
+    const tags = task.definition.meta?.tags;
+    const rateLimitCurrentTag = rateLimitTag.extract(tags);
+
+    if (rateLimitCurrentTag) {
       const key = `rateLimit:${task.definition.id}`;
       const current = await redis.incr(key);
-      
+
       if (current === 1) {
         await redis.expire(key, 60); // 1 minute window
       }
-      
-      if (current > rateLimitConfig.config.maxRequestsPerMinute) {
+
+      if (current > rateLimitCurrentTag.config.maxRequestsPerMinute) {
         throw new Error("Rate limit exceeded");
       }
     }
-    
+
     return next(task.input);
   },
 });
@@ -1221,11 +1237,13 @@ const rateLimitMiddleware = middleware({
 #### ✅ Great Use Cases
 
 **Documentation & Discovery**
+
 ```typescript
 const paymentProcessor = resource({
   meta: {
     title: "Payment Processing Service",
-    description: "Handles credit card payments via Stripe API with fraud detection",
+    description:
+      "Handles credit card payments via Stripe API with fraud detection",
     tags: ["payment", "stripe", "pci-compliant", "critical"],
   },
   // ... implementation
@@ -1233,6 +1251,7 @@ const paymentProcessor = resource({
 ```
 
 **Conditional Behavior**
+
 ```typescript
 const backgroundTask = task({
   meta: {
@@ -1243,6 +1262,7 @@ const backgroundTask = task({
 ```
 
 **Cross-Cutting Concerns**
+
 ```typescript
 // All tasks tagged with "audit" get automatic logging
 const sensitiveOperation = task({
@@ -1254,6 +1274,7 @@ const sensitiveOperation = task({
 ```
 
 **Environment-Specific Behavior**
+
 ```typescript
 const developmentTask = task({
   meta: {
@@ -1266,6 +1287,7 @@ const developmentTask = task({
 #### ❌ When NOT to Use Metadata
 
 **Simple Internal Logic** - Don't overcomplicate straightforward code:
+
 ```typescript
 // ❌ Overkill
 const simple = task({
@@ -1278,11 +1300,14 @@ const generateId = () => Math.random().toString(36);
 ```
 
 **One-Off Tasks** - If it's used once, metadata won't help:
+
 ```typescript
 // ❌ Unnecessary
 const oneTimeScript = task({
   meta: { title: "Migration Script", tags: ["migration"] },
-  run: () => { /* run once and forget */ },
+  run: () => {
+    /* run once and forget */
+  },
 });
 ```
 
@@ -1300,7 +1325,7 @@ declare module "@bluelibs/runner" {
     apiVersion?: "v1" | "v2" | "v3";
     costLevel?: "low" | "medium" | "high";
   }
-  
+
   interface IResourceMeta {
     healthCheck?: string; // URL for health checking
     dependencies?: string[]; // External service dependencies
@@ -1345,17 +1370,15 @@ const database = resource({
 ```typescript
 // Find all API endpoints
 function getApiTasks(store: Store) {
-  return store.getAllTasks()
-    .filter(task => task.meta?.tags?.includes("api"));
+  return store.getAllTasks().filter((task) => task.meta?.tags?.includes("api"));
 }
 
 // Find all tasks with specific performance requirements
 function getPerformanceCriticalTasks(store: Store) {
-  return store.getAllTasks()
-    .filter(task => {
-      const tags = task.meta?.tags || [];
-      return performanceTag.extract(tags) !== null;
-    });
+  return store.getAllTasks().filter((task) => {
+    const tags = task.meta?.tags || [];
+    return performanceTag.extract(tags) !== null;
+  });
 }
 ```
 
@@ -1384,18 +1407,18 @@ const app = resource({
 ```typescript
 // Test generator based on metadata
 describe("API Tasks", () => {
-  const apiTasks = getAllTasks().filter(task => 
+  const apiTasks = getAllTasks().filter((task) =>
     task.meta?.tags?.includes("api")
   );
-  
-  apiTasks.forEach(task => {
+
+  apiTasks.forEach((task) => {
     it(`should handle errors gracefully: ${task.meta?.title}`, async () => {
       // Generate tests based on metadata
       const rateLimitConfig = rateLimitTag.extract(task.meta?.tags || []);
       if (rateLimitConfig) {
         // Test rate limiting
       }
-      
+
       const cacheConfig = cacheTag.extract(task.meta?.tags || []);
       if (cacheConfig) {
         // Test caching behavior

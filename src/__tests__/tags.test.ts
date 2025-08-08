@@ -132,6 +132,37 @@ describe("Configurable Tags", () => {
       expect(extracted?.id).toBe(symbolId);
       expect(extracted?.config).toEqual({ data: "test" });
     });
+
+    it("should extract configured tag from a taggable object (task.definition)", () => {
+      const performanceTag = defineTag<{ alertAboveMs: number }>({
+        id: "performance.track",
+      });
+
+      const task = defineTask({
+        id: "task.with.tags",
+        meta: {
+          tags: [performanceTag.with({ alertAboveMs: 123 })],
+        },
+        run: async () => "ok",
+      });
+
+      const extracted = performanceTag.extract(task);
+      expect(extracted).not.toBeNull();
+      expect(extracted?.config).toEqual({ alertAboveMs: 123 });
+    });
+
+    it("should return null when taggable has no tags", () => {
+      const t = defineTag({ id: "x" });
+      const task = defineTask({ id: "no.tags", run: async () => "ok" });
+      expect(t.extract(task)).toBeNull();
+    });
+
+    it("should work with a simple taggable carrying meta.tags directly", () => {
+      const t = defineTag<{ p: number }>({ id: "pp" });
+      const taggable = { meta: { tags: [t.with({ p: 9 })] } } as any;
+      const extracted = t.extract(taggable);
+      expect(extracted?.config).toEqual({ p: 9 });
+    });
   });
 
   describe("Integration with Tasks", () => {
