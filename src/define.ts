@@ -356,7 +356,7 @@ export function defineTag<TConfig = void>(
         if (typeof candidate === "string") continue;
         // Configured instance
         if (candidate.id === id) {
-          return candidate as ITagDefinition<TConfig>;
+          return candidate as ITagWithConfig<TConfig>;
         }
       }
       return null;

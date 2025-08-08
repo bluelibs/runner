@@ -103,12 +103,29 @@ export interface ITag<TConfig = void> extends ITagDefinition<TConfig> {
    * Extracts either a configured instance or the bare tag from a list of tags
    * or from a taggable object (`{ meta: { tags?: [] } }`).
    */
-  extract(
-    target: TagType[] | ITaggable
-  ): { id: string | symbol; config?: TConfig } | null;
+  extract(target: TagType[] | ITaggable): ExtractedTagResult<TConfig> | null;
 }
 
-export type TagType = string | ITagDefinition<any> | ITagWithConfig<any>;
+/**
+ * Restrict bare tags to those whose config can be omitted (void or optional object),
+ * mirroring the same principle used for resources in `RegisterableItems`.
+ * Required-config tags must appear as configured instances.
+ */
+export type TagType =
+  | string
+  | ITag<void>
+  | ITag<{ [K in any]?: any }>
+  | ITagWithConfig<any>;
+
+/**
+ * Conditional result type for `ITag.extract`:
+ * - For void config → just the identifier
+ * - For optional object config → identifier with optional config
+ * - For required config → identifier with required config
+ */
+export type ExtractedTagResult<TConfig> = {} extends TConfig
+  ? { id: string | symbol; config?: TConfig }
+  : { id: string | symbol; config: TConfig };
 
 /**
  * Any object that can carry tags via metadata. This mirrors how tasks,
