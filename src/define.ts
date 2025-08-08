@@ -266,3 +266,32 @@ export function isEvent(definition: any): definition is IEvent {
 export function isMiddleware(definition: any): definition is IMiddleware {
   return definition && definition[symbols.middleware];
 }
+
+/**
+ * Override helper that preserves the original `id` and returns the same type.
+ * You can override any property except `id`.
+ */
+export function override<T extends ITask<any, any, any, any>>(
+  base: T,
+  patch: Omit<Partial<T>, "id">
+): T;
+export function override<T extends IResource<any, any, any, any>>(
+  base: T,
+  patch: Omit<Partial<T>, "id">
+): T;
+export function override<T extends IMiddleware<any, any>>(
+  base: T,
+  patch: Omit<Partial<T>, "id">
+): T;
+export function override(
+  base: ITask | IResource,
+  patch: Record<string | symbol, unknown>
+): ITask | IResource {
+  const { id: _ignored, ...rest } = (patch || {}) as any;
+  // Ensure we never change the id, and merge overrides last
+  return {
+    ...(base as any),
+    ...rest,
+    id: (base as any).id,
+  } as any;
+}

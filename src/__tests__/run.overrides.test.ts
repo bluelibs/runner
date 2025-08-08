@@ -4,6 +4,7 @@ import {
   defineResource,
   defineEvent,
   defineMiddleware,
+  override,
 } from "../define";
 import { Errors } from "../errors";
 import { run } from "../run";
@@ -16,8 +17,7 @@ describe("run.overrides", () => {
       run: async () => "Task executed",
     });
 
-    const override = defineTask({
-      id: "task",
+    const overrideTask = override(task, {
       run: async () => "Task overridden",
     });
 
@@ -27,7 +27,7 @@ describe("run.overrides", () => {
       dependencies: {
         task,
       },
-      overrides: [override],
+      overrides: [overrideTask],
       async init(_, deps) {
         return await deps.task();
       },
@@ -43,15 +43,14 @@ describe("run.overrides", () => {
       run: async () => "Task executed",
     });
 
-    const override = defineTask({
-      id: "task",
+    const overrideTask = override(task, {
       run: async () => "Task overridden",
     });
 
     const middle = defineResource({
       id: "app",
       register: [task],
-      overrides: [override],
+      overrides: [overrideTask],
     });
 
     const root = defineResource({
@@ -73,15 +72,14 @@ describe("run.overrides", () => {
       run: async () => "Task executed",
     });
 
-    const override = defineTask({
-      id: "task",
+    const overrideTask = override(task, {
       run: async () => "Task overridden",
     });
 
     const middle = defineResource<{ test: string }>({
       id: "app",
       register: [task],
-      overrides: [override],
+      overrides: [overrideTask],
     });
 
     const root = defineResource({
@@ -103,8 +101,7 @@ describe("run.overrides", () => {
       run: async () => "Task executed",
     });
 
-    const override = defineTask({
-      id: "task",
+    const overrideTask = override(task, {
       run: async () => "Task overridden",
     });
 
@@ -112,10 +109,9 @@ describe("run.overrides", () => {
       id: "resource",
     });
 
-    const resourceOverride = {
-      ...resource,
-      overrides: [override],
-    };
+    const resourceOverride = override(resource, {
+      overrides: [overrideTask],
+    });
 
     const middle = defineResource({
       id: "app",
@@ -142,8 +138,7 @@ describe("run.overrides", () => {
       run: async () => "Task executed",
     });
 
-    const override = defineTask({
-      id: "task",
+    const overrideTask = override(task, {
       run: async () => "Task overridden",
     });
 
@@ -153,7 +148,7 @@ describe("run.overrides", () => {
 
     const resourceOverride: definitions.IResource<any> = {
       ...resource,
-      overrides: [override],
+      overrides: [overrideTask],
       async init(config: { test: string }) {
         return "Resource init";
       },
@@ -186,8 +181,7 @@ describe("run.overrides", () => {
       },
     });
 
-    const override = defineMiddleware({
-      id: "middleware",
+    const middlewareOverride = override(middleware, {
       run: async ({ next }) => {
         return `Override: ${await next()}`;
       },
@@ -203,7 +197,7 @@ describe("run.overrides", () => {
       id: "resource",
       register: [middleware, task],
       dependencies: { task },
-      overrides: [override],
+      overrides: [middlewareOverride],
       async init(_, deps) {
         return deps.task();
       },
