@@ -1402,41 +1402,6 @@ const app = resource({
 });
 ```
 
-#### Metadata-Driven Testing
-
-```typescript
-// Test generator based on metadata
-describe("API Tasks", () => {
-  const apiTasks = getAllTasks().filter((task) =>
-    task.meta?.tags?.includes("api")
-  );
-
-  apiTasks.forEach((task) => {
-    it(`should handle errors gracefully: ${task.meta?.title}`, async () => {
-      // Generate tests based on metadata
-      const rateLimitConfig = rateLimitTag.extract(task.meta?.tags || []);
-      if (rateLimitConfig) {
-        // Test rate limiting
-      }
-
-      const cacheConfig = cacheTag.extract(task.meta?.tags || []);
-      if (cacheConfig) {
-        // Test caching behavior
-      }
-    });
-  });
-});
-```
-
-### Best Practices for Metadata
-
-1. **Be Descriptive**: Write metadata for humans, not just computers
-2. **Use Consistent Tags**: Establish team conventions for tag names
-3. **Don't Over-Tag**: Only add tags that actually control behavior or aid discovery
-4. **Document Custom Tags**: If you create structured tags, document their purpose
-5. **Version Your Tags**: Consider versioning for complex tag configurations
-6. **Test Tag Extraction**: Write tests for middleware that depends on tags
-
 Metadata transforms your components from anonymous functions into self-documenting, discoverable, and controllable building blocks. Use it wisely, and your future self (and your team) will thank you.
 
 ## Advanced Usage: When You Need More Power
@@ -1947,14 +1912,6 @@ const user = await t.runTask(createUser, { email: "a@b.c" });
 const token = await t.runTask(issueToken, { userId: user.id });
 expect(token).toBeTruthy();
 await dispose();
-```
-
-Need to peek inside? You can (it’s a test, we won’t tell):
-
-```typescript
-const { value: t } = await run(createTestResource(app));
-const dbConn = t.getResource("app.database");
-// t.on(globals.events.log, (e) => seenLogs.push(e)); // subscribe to events if you want
 ```
 
 Why this rocks:
