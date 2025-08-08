@@ -52,15 +52,11 @@ function buildTestFacade(deps: {
     // Run a task within the fully initialized ecosystem
     runTask: <I, O extends Promise<any>, D extends DependencyMapType>(
       task: ITask<I, O, D>,
-      input: I,
-      depsOverride?: DependencyValuesType<D>
+      input: I
     ): Promise<Awaited<O> | undefined> =>
-      deps.taskRunner.run(task, input, depsOverride as any) as any,
+      deps.taskRunner.run(task, input) as any,
     // Access a resource value by id (string or symbol)
     getResource: (id: string | symbol) => deps.store.resources.get(id)?.value,
-    // Subscribe to events for assertions
-    on: <T>(event: IEvent<T>, handler: (e: IEventEmission<T>) => any) =>
-      deps.eventManager.addListener(event, handler as any),
     // Expose internals when needed in tests (not recommended for app usage)
     taskRunner: deps.taskRunner,
     store: deps.store,

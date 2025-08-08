@@ -1,4 +1,12 @@
-import { task, resource, override, run, createTestResource, globals } from "..";
+import {
+  task,
+  resource,
+  override,
+  run,
+  createTestResource,
+  globals,
+  event,
+} from "..";
 
 describe("createTestResource", () => {
   it("runs tasks within the full ecosystem and returns results", async () => {
@@ -122,21 +130,9 @@ describe("createTestResource", () => {
     };
     void typeOnly;
 
-    const ok2: number | undefined = await t.runTask(
-      usesUpper,
-      { n: 3 } as const,
-      {
-        upper: async ({ v }) => v.length.toString(),
-      }
-    );
-    // Type-only check for bad deps override (do not execute)
-    const typeOnlyDeps = () => {
-      // @ts-expect-error bad deps override
-      t.runTask(usesUpper, { n: 3 } as const, {
-        upper: async (i: number) => "x",
-      });
-    };
-    void typeOnlyDeps;
+    const ok2: number | undefined = await t.runTask(usesUpper, {
+      n: 3,
+    } as const);
 
     await dispose();
   });

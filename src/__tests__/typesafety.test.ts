@@ -251,14 +251,7 @@ describe.skip("typesafety", () => {
     // @ts-expect-error missing input
     await t.runTask(add);
 
-    const r2: number | undefined = await t.runTask(
-      main,
-      { x: 2 },
-      {
-        // OK: provide correct dependency override
-        depTask: async (i: { v: string }) => i.v.length.toString(),
-      }
-    );
+    const r2: number | undefined = await t.runTask(main, { x: 2 });
 
     // @ts-expect-error wrong deps override type
     await t.runTask(main, { x: 2 }, { depTask: async (i: number) => "x" });
