@@ -1032,7 +1032,9 @@ const apiMiddleware = middleware({
 
 ### Overrides: Swapping Components at Runtime
 
-Sometimes you need to replace a component entirely. Maybe you're testing, maybe you're A/B testing, maybe you just changed your mind:
+Sometimes you need to replace a component entirely. Maybe you're doing integration testing or you want to override a library from an external package.
+
+You can now use a dedicated helper `override()` to safely override any property on tasks, resources, or middleware — except `id`. This ensures the identity is preserved, while allowing behavior changes.
 
 ```typescript
 const productionEmailer = resource({
@@ -1040,9 +1042,15 @@ const productionEmailer = resource({
   init: async () => new SMTPEmailer(),
 });
 
+// Option 1: Using override() to change behavior while preserving id (Recommended)
+const testEmailer = override(productionEmailer, {
+  init: async () => new MockEmailer(),
+});
+
+// Option 2: Using spread operator, does not provide type-safety
 const testEmailer = resource({
-  ...productionEmailer, // Copy everything else
-  init: async () => new MockEmailer(), // But use a different implementation
+  ...productionEmailer,
+  init: async () => {},
 });
 
 const app = resource({
@@ -1050,7 +1058,35 @@ const app = resource({
   register: [productionEmailer],
   overrides: [testEmailer], // This replaces the production version
 });
+
+import { override } from "@bluelibs/runner";
+
+// Tasks
+const originalTask = task({ id: "app.tasks.compute", run: async () => 1 });
+const overriddenTask = override(originalTask, {
+  run: async () => 2,
+});
+
+// Resources
+const originalResource = resource({ id: "app.db", init: async () => "conn" });
+const overriddenResource = override(originalResource, {
+  init: async () => "mock-conn",
+});
+
+// Middleware
+const originalMiddleware = middleware({
+  id: "app.middleware.log",
+  run: async ({ next }) => next(),
+});
+const overriddenMiddleware = override(originalMiddleware, {
+  run: async ({ task, next }) => {
+    const result = await next(task?.input as any);
+    return { wrapped: result } as any;
+  },
+});
 ```
+
+Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the root) wins, because it’s applied last. Conflicting overrides are allowed; overriding something that wasn’t registered throws. Use override() to change behavior safely while preserving the original id.
 
 ### Namespacing: Keeping Things Organized
 
