@@ -237,6 +237,11 @@ describe.skip("typesafety", () => {
       init: async () => 123, // bad type
     });
 
+    const middleware = defineMiddleware({
+      id: "middleware",
+      run: async () => "Middleware executed",
+    });
+
     expect(true).toBe(true);
   });
 });

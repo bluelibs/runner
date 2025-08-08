@@ -386,4 +386,39 @@ describe("run.overrides", () => {
     const result = await run(app);
     expect(result.value).toBe("Task overriden.");
   });
+
+  it("should choose precedence when two overrides target the same id", async () => {
+    const baseTask = defineTask({
+      id: "task.same",
+      run: async () => "Original",
+    });
+
+    const middleOverride = defineOverride(baseTask, {
+      run: async () => "Middle",
+    });
+
+    const rootOverride = defineOverride(baseTask, {
+      run: async () => "Root",
+    });
+
+    const middle = defineResource({
+      id: "middle",
+      register: [baseTask],
+      overrides: [middleOverride],
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [middle],
+      dependencies: { t: baseTask },
+      overrides: [rootOverride],
+      async init(_, deps) {
+        return await deps.t();
+      },
+    });
+
+    const result = await run(app);
+    // Since root is visited after middle, its override takes precedence.
+    expect(result.value).toBe("Root");
+  });
 });
