@@ -12,6 +12,7 @@ import { globalEvents } from "./globals/globalEvents";
 import { globalResources } from "./globals/globalResources";
 import { globalMiddlewares } from "./globals/globalMiddleware";
 import { run } from "./run";
+import { createTestResource } from "./testing";
 
 const globals = {
   events: globalEvents,
@@ -30,6 +31,7 @@ export {
   defineOverride as override,
   run,
   createContext,
+  createTestResource,
 };
 
 export * as definitions from "./defs";

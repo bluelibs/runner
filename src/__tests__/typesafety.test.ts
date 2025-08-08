@@ -14,6 +14,7 @@ import {
   ITaskDefinition,
   RegisterableItems,
 } from "../defs";
+import { createTestResource } from "..";
 
 // This is skipped because we mostly check typesafety.
 describe.skip("typesafety", () => {
@@ -209,6 +210,58 @@ describe.skip("typesafety", () => {
         deps.task2;
       },
     });
+
+    expect(true).toBe(true);
+  });
+
+  it("createTestResource.runTask: should be type-safe", async () => {
+    type Input = { x: number };
+    type Output = Promise<number>;
+
+    const add = defineTask<Input, Output>({
+      id: "types.add",
+      run: async (i) => i.x + 1,
+    });
+
+    const depTask = defineTask<{ v: string }, Promise<string>>({
+      id: "types.dep",
+      run: async (i) => i.v.toUpperCase(),
+    });
+
+    const main = defineTask<Input, Output, { depTask: typeof depTask }>({
+      id: "types.main",
+      dependencies: { depTask },
+      run: async (i, d) => {
+        const v = await d.depTask({ v: String(i.x) });
+        return Number(v) + 1;
+      },
+    });
+
+    const app = defineResource({
+      id: "types.app",
+      register: [add, depTask, main],
+    });
+    const harness = createTestResource(app);
+
+    // Types: input must match, override deps must match, output is awaited number
+    const { value: t } = await (await import("../run")).run(harness);
+    const r1: number | undefined = await t.runTask(add, { x: 1 });
+    // @ts-expect-error wrong input type
+    await t.runTask(add, { z: 1 });
+    // @ts-expect-error missing input
+    await t.runTask(add);
+
+    const r2: number | undefined = await t.runTask(
+      main,
+      { x: 2 },
+      {
+        // OK: provide correct dependency override
+        depTask: async (i: { v: string }) => i.v.length.toString(),
+      }
+    );
+
+    // @ts-expect-error wrong deps override type
+    await t.runTask(main, { x: 2 }, { depTask: async (i: number) => "x" });
 
     expect(true).toBe(true);
   });

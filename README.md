@@ -1891,33 +1891,77 @@ describe("registerUser task", () => {
 });
 ```
 
-### Integration Testing: The Real Deal
+### Integration Testing: The Real Deal (But Actually Fun)
 
-Integration testing with overrides lets you test the whole system with controlled components:
+Spin up your whole app, keep all the middleware/events, and still test like a human. The trick: a tiny test harness.
 
 ```typescript
-const testDatabase = resource({
+import {
+  run,
+  createTestResource,
+  resource,
+  task,
+  override,
+} from "@bluelibs/runner";
+
+// Your real app
+const app = resource({
+  id: "app",
+  register: [
+    /* tasks, resources, middleware */
+  ],
+});
+
+// Optional: overrides for infra (hello, fast tests!)
+const testDb = resource({
   id: "app.database",
-  init: async () => new MemoryDatabase(), // In-memory test database
+  init: async () => new InMemoryDb(),
 });
+const mockMailer = override(realMailer, { init: async () => fakeMailer });
 
-// Just like a shaworma wrap!
-const testApp = resource({
-  id: "test.app",
-  register: [productionApp],
-  overrides: [testDatabase], // Replace real database with test one
-});
+// Create the test harness
+const harness = createTestResource(app, { overrides: [testDb, mockMailer] });
 
-describe("Full application", () => {
-  it("should handle user registration flow", async () => {
-    const { dispose } = await run(testApp);
+// A task you want to drive in your tests
+const registerUser = task({ id: "app.tasks.registerUser" /* ... */ });
 
-    // Test your application end-to-end
-
-    await dispose(); // Clean up
-  });
-});
+// Boom: full ecosystem run (middleware, events, overrides) with a tiny driver
+const { value: t, dispose } = await run(harness);
+const result = await t.runTask(registerUser, { email: "x@y.z" });
+expect(result).toMatchObject({ success: true });
+await dispose();
 ```
+
+Prefer scenario tests? Return whatever you want from the harness and assert outside:
+
+```typescript
+const flowHarness = createTestResource(
+  resource({
+    id: "app",
+    register: [db, createUser, issueToken],
+  })
+);
+
+const { value: t, dispose } = await run(flowHarness);
+const user = await t.runTask(createUser, { email: "a@b.c" });
+const token = await t.runTask(issueToken, { userId: user.id });
+expect(token).toBeTruthy();
+await dispose();
+```
+
+Need to peek inside? You can (it’s a test, we won’t tell):
+
+```typescript
+const { value: t } = await run(createTestResource(app));
+const dbConn = t.getResource("app.database");
+// t.on(globals.events.log, (e) => seenLogs.push(e)); // subscribe to events if you want
+```
+
+Why this rocks:
+
+- Minimal ceremony, no API pollution
+- Real wiring (middleware/events/overrides) – what runs in prod runs in tests
+- You choose: drive tasks directly or build domain-y flows
 
 ## Semaphore
 
