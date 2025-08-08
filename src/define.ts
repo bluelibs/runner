@@ -1,3 +1,10 @@
+/**
+ * Factory functions for defining tasks, resources, events and middleware.
+ *
+ * These helpers create strongly-typed definitions while also wiring internal
+ * metadata: anonymous IDs, file path tags (for better debugging), lifecycle
+ * events, and global middleware flags. See README for high-level concepts.
+ */
 import {
   ITask,
   ITaskDefinition,
@@ -30,6 +37,12 @@ export function defineTask<
 >(
   taskConfig: ITaskDefinition<Input, Output, Deps, TOn>
 ): ITask<Input, Output, Deps, TOn> {
+  /**
+   * Creates a task definition.
+   * - Generates an anonymous id based on file path when `id` is omitted
+   * - Wires lifecycle events: beforeRun, afterRun, onError
+   * - Carries through dependencies and middleware as declared
+   */
   const filePath = getCallerFile();
   const isAnonymous = !Boolean(taskConfig.id);
   const id = taskConfig.id || generateCallerIdFromFile(filePath, "task");
@@ -81,6 +94,12 @@ export function defineResource<
 >(
   constConfig: IResourceDefinition<TConfig, TValue, TDeps, TPrivate>
 ): IResource<TConfig, TValue, TDeps, TPrivate> {
+  /**
+   * Creates a resource definition.
+   * - Generates anonymous id when omitted (resource or index flavor)
+   * - Wires lifecycle events: beforeInit, afterInit, onError
+   * - Exposes `.with(config)` for config‑bound registration
+   */
   // The symbolFilePath might already come from defineIndex() for example
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const isIndexResource = constConfig[symbolIndexResource] || false;
@@ -152,6 +171,7 @@ export function defineIndex<
       : T[K];
   } & DependencyMapType
 >(items: T): IResource<void, DependencyValuesType<D>, D> {
+  // Build dependency map from given items; unwrap `.with()` to the base resource
   const dependencies = {} as D;
   const register: RegisterableItems[] = [];
 
@@ -181,6 +201,10 @@ export function defineIndex<
 export function defineEvent<TPayload = void>(
   config?: IEventDefinition<TPayload>
 ): IEvent<TPayload> {
+  /**
+   * Creates an event definition. Anonymous ids are generated from file path
+   * when omitted. The returned object is branded for runtime checks.
+   */
   const callerFilePath = getCallerFile();
   const eventConfig = config || {};
   return {
@@ -208,6 +232,12 @@ export function defineMiddleware<
 >(
   middlewareDef: IMiddlewareDefinition<TConfig, TDependencies>
 ): IMiddleware<TConfig, TDependencies> {
+  /**
+   * Creates a middleware definition with:
+   * - Anonymous id generation when omitted
+   * - `.with(config)` to create configured instances
+   * - `.everywhere()` to mark as global (optionally scoping to tasks/resources)
+   */
   const filePath = getCallerFile();
   const object = {
     [symbols.filePath]: filePath,
@@ -284,9 +314,9 @@ export function defineOverride<T extends IMiddleware<any, any>>(
   patch: Omit<Partial<T>, "id">
 ): T;
 export function defineOverride(
-  base: ITask | IResource,
+  base: ITask | IResource | IMiddleware,
   patch: Record<string | symbol, unknown>
-): ITask | IResource {
+): ITask | IResource | IMiddleware {
   const { id: _ignored, ...rest } = (patch || {}) as any;
   // Ensure we never change the id, and merge overrides last
   return {

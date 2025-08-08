@@ -1032,19 +1032,25 @@ const apiMiddleware = middleware({
 
 ### Overrides: Swapping Components at Runtime
 
-Sometimes you need to replace a component entirely. Maybe you're testing, maybe you're A/B testing, maybe you just changed your mind.
+Sometimes you need to replace a component entirely. Maybe you're doing integration testing or you want to override a library from an external package.
 
 You can now use a dedicated helper `override()` to safely override any property on tasks, resources, or middleware — except `id`. This ensures the identity is preserved, while allowing behavior changes.
 
-````typescript
+```typescript
 const productionEmailer = resource({
   id: "app.emailer",
   init: async () => new SMTPEmailer(),
 });
 
-// Option 1: Using override() to change behavior while preserving id
+// Option 1: Using override() to change behavior while preserving id (Recommended)
 const testEmailer = override(productionEmailer, {
   init: async () => new MockEmailer(),
+});
+
+// Option 2: Using spread operator, does not provide type-safety
+const testEmailer = resource({
+  ...productionEmailer,
+  init: async () => {},
 });
 
 const app = resource({
@@ -1080,12 +1086,7 @@ const overriddenMiddleware = override(originalMiddleware, {
 });
 ```
 
-Notes:
-
-- `override()` preserves `id` and returns the same type. TypeScript will error if you try to override `id`.
-- Use it for programmatic overrides. For runtime swaps in an application, continue to register overrides via `resource({ overrides: [...] })`.
--
-```
+Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the root) wins, because it’s applied last. Conflicting overrides are allowed; overriding something that wasn’t registered throws. Use override() to change behavior safely while preserving the original id.
 
 ### Namespacing: Keeping Things Organized
 
@@ -1109,7 +1110,7 @@ const userTask = task({
   id: namespaced("tasks.user.create"),
   // ...
 });
-````
+```
 
 ### Factory Pattern: For When You Need Instances
 
