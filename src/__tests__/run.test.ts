@@ -17,7 +17,6 @@ describe("main exports", () => {
     expect(typeof mainExports.event).toBe("function");
     expect(typeof mainExports.middleware).toBe("function");
     expect(typeof mainExports.index).toBe("function");
-    expect(typeof mainExports.defineTag).toBe("function");
     expect(typeof mainExports.tag).toBe("function");
     expect(typeof mainExports.run).toBe("function");
     expect(typeof mainExports.createContext).toBe("function");
@@ -41,8 +40,8 @@ describe("main exports", () => {
 
     // Test tag exports work
     const testTag = mainExports.tag<{ value: number }>({ id: "test.tag" });
-    const testTag2 = mainExports.defineTag<{ name: string }>({ id: "test.tag2" });
-    
+    const testTag2 = mainExports.tag<{ name: string }>({ id: "test.tag2" });
+
     expect(testTag.id).toBe("test.tag");
     expect(testTag2.id).toBe("test.tag2");
     expect(typeof testTag.with).toBe("function");

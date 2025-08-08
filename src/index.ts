@@ -26,7 +26,6 @@ export {
   defineEvent as event,
   defineMiddleware as middleware,
   defineIndex as index,
-  defineTag,
   defineTag as tag,
   defineOverride as override,
   run,

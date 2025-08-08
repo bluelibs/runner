@@ -353,12 +353,8 @@ export function defineTag<TConfig = void>(
       for (const candidate of tags) {
         if (typeof candidate === "string") continue;
         // Configured instance
-        if ((candidate as any).tag) {
-          const configured = candidate as ITagWithConfig<TConfig>;
-          if (configured.tag.id === id) return configured;
-        } else {
-          const def = candidate as ITagDefinition<TConfig>;
-          if (def.id === id) return def as any;
+        if (candidate.id === id) {
+          return candidate as ITagDefinition<TConfig>;
         }
       }
       return null;
