@@ -9,6 +9,8 @@ import { globalEvents } from "../globals/globalEvents";
 import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
+import { Errors } from "../errors";
+import { validateWithAdapter } from "../tools/validation";
 
 export class ResourceInitializer {
   constructor(
@@ -49,6 +51,23 @@ export class ResourceInitializer {
 
     let error: any, value: TValue | undefined;
     try {
+      // Validate config if a schema is provided
+      if ((resource as any).configSchema) {
+        try {
+          config = (await validateWithAdapter(
+            (resource as any).configSchema,
+            config
+          )) as any;
+        } catch (e: any) {
+          throw Errors.validationFailed(
+            "resource.config",
+            resource.id,
+            e?.issues ?? e?.details,
+            e
+          );
+        }
+      }
+
       if (resource.init) {
         value = await this.initWithMiddleware(
           resource,

@@ -121,6 +121,17 @@ export interface ITaggable {
 }
 
 /**
+ * Minimal validation adapter interface. This allows users to plug in Zod, Joi,
+ * Yup, Valibot, or a simple function without coupling the core to any library.
+ *
+ * - Object form: `{ parse(value) => T | Promise<T> }` (Zod‑style)
+ * - Function form: `(value) => T | Promise<T>`
+ */
+export type ValidationAdapter<T> =
+  | { parse: (value: unknown) => T | Promise<T> }
+  | ((value: unknown) => T | Promise<T>);
+
+/**
  * Common metadata you can attach to tasks/resources/events/middleware.
  * Useful for docs, filtering and middleware decisions.
  */
@@ -239,6 +250,14 @@ export interface ITaskDefinition<
   /** Optional metadata used for docs, filtering and tooling. */
   meta?: ITaskMeta;
   /**
+   * Optional runtime validation for the task input. If provided, it will be
+   * invoked right before execution (after `beforeRun` events) and the returned
+   * value will be passed to the task and `afterRun` events.
+   */
+  // Keep this `unknown` to avoid constraining generic inference for `run`.
+  // Advanced adapters can provide typed helpers in separate packages.
+  inputSchema?: ValidationAdapter<unknown>;
+  /**
    * The task body. If `on` is set, the input is an `IEventEmission`. Otherwise,
    * it's the declared input type.
    */
@@ -314,6 +333,14 @@ export interface IResourceDefinition<
   id?: string | symbol;
   /** Static or lazy dependency map. Receives `config` when provided. */
   dependencies?: TDependencies | ((config: TConfig) => TDependencies);
+  /**
+   * Optional runtime validation for the resource config. If provided, it will
+   * be invoked right before `init` (after `beforeInit` events) and the returned
+   * value will be passed to `init` and `afterInit` events.
+   */
+  // Keep this `unknown` to avoid constraining generic inference for `init`.
+  // Advanced adapters can provide typed helpers in separate packages.
+  configSchema?: ValidationAdapter<unknown>;
   /**
    * Register other registerables (resources/tasks/middleware/events). Accepts a
    * static array or a function of `config` to support dynamic wiring.

@@ -5,6 +5,7 @@ import { globalEvents } from "../globals/globalEvents";
 import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
+import { validateWithAdapter } from "../tools/validation";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
@@ -62,6 +63,24 @@ export class TaskRunner {
 
     let error;
     try {
+      // Validate input if a schema is provided
+      if ((task as any).inputSchema) {
+        try {
+          // Mutate the input to the validated value so it flows into run and afterRun
+          input = (await validateWithAdapter(
+            (task as any).inputSchema,
+            input
+          )) as any;
+        } catch (e: any) {
+          throw Errors.validationFailed(
+            "task.input",
+            task.id,
+            e?.issues ?? e?.details,
+            e
+          );
+        }
+      }
+
       // craft the next function starting from the first next function
       const result = {
         output: await runner(input),

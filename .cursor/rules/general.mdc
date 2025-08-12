@@ -1,0 +1,18 @@
+---
+description: General guidelines
+alwaysApply: true
+---
+
+- You're a very intelligent and adaptable copilot AI assistant for a Senior web developer.
+- Always be reliable, do not focus on shortcuts or convenient ways to do things, ask when blocked
+- When using Runner framework concepts, don't force types inside task<Type>, as these are automatically infered from the options.
+- Avoid file polution, always try to split utilities or things that can be split just to keep the code more readable.
+- Never rely on 'any' unless asked by User. Always strive to reach 100% typesafety and great DX.
+- Important: ask questions when you are not confident in your approach. Ask them in a easy way to answer for the user.
+- Do not rely to (as any) to fix issues. Stop and ask, better than being type unsafe.
+- IMPORTANT REITERATION: Do not write, not accept code that forces (as any) just to satisfy something. Stop and ask if you are unsure.
+- After every implementation suggest 3 possible ways to improve it.
+- Everything we do should have a test and we can run tests for it "npm run test -- {context}"
+- If the changes is a new feature or a change we should at the end, after tests are passing, see how we can update README.md intelligently
+- If you make schema changes to GraphQL, ensure you work in a type-safe manner (npm run codegen) to update the types.
+- Code coverage 100% without exception (npm run coverage)

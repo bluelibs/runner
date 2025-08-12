@@ -30,4 +30,26 @@ export const Errors = {
 
   storeAlreadyInitialized: () =>
     new Error("Store already initialized. Cannot reinitialize."),
+
+  /**
+   * Normalized validation error to surface schema failures for inputs/configs
+   * while preserving the original error as cause when provided.
+   */
+  validationFailed: (
+    kind: "task.input" | "resource.config",
+    id: string | symbol,
+    details?: unknown,
+    cause?: unknown
+  ) => {
+    const err = new Error(
+      `Validation failed for ${kind} of "${id.toString()}"` +
+        (details ? `: ${JSON.stringify(details)}` : "")
+    );
+    // Attach additional context for programmatic consumers
+    (err as any).kind = kind;
+    (err as any).targetId = id;
+    (err as any).details = details;
+    if (cause) (err as any).cause = cause;
+    return err;
+  },
 };
