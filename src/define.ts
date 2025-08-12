@@ -13,7 +13,6 @@ import {
   IResourceDefinition,
   IEventDefinition,
   IMiddlewareDefinition,
-  symbols,
   DependencyMapType,
   DependencyValuesType,
   IMiddleware,
@@ -28,6 +27,12 @@ import {
   ITagWithConfig,
   TagType,
   ITaggable,
+  symbolTask,
+  symbolMiddlewareEverywhereTasks,
+  symbolMiddlewareEverywhereResources,
+  symbolResourceWithConfig,
+  symbolResource,
+  symbolMiddleware,
 } from "./defs";
 import { Errors } from "./errors";
 import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
@@ -52,8 +57,8 @@ export function defineTask<
   const isAnonymous = !Boolean(taskConfig.id);
   const id = taskConfig.id || generateCallerIdFromFile(filePath, "task");
   return {
-    [symbols.task]: true,
-    [symbols.filePath]: filePath,
+    [symbolTask]: true,
+    [symbolFilePath]: filePath,
     id,
     dependencies: taskConfig.dependencies || ({} as Deps),
     middleware: taskConfig.middleware || [],
@@ -67,7 +72,7 @@ export function defineTask<
             ? Symbol(`anonymous-task.events.beforeRun`)
             : `${id as string}.events.beforeRun`,
         }),
-        [symbols.filePath]: getCallerFile(),
+        [symbolFilePath]: getCallerFile(),
       },
       afterRun: {
         ...defineEvent({
@@ -75,7 +80,7 @@ export function defineTask<
             ? Symbol(`anonymous-task.events.afterRun`)
             : `${id as string}.events.afterRun`,
         }),
-        [symbols.filePath]: getCallerFile(),
+        [symbolFilePath]: getCallerFile(),
       },
       onError: {
         ...defineEvent({
@@ -83,7 +88,7 @@ export function defineTask<
             ? Symbol(`anonymous-task.events.onError`)
             : `${id as string}.events.onError`,
         }),
-        [symbols.filePath]: getCallerFile(),
+        [symbolFilePath]: getCallerFile(),
       },
     },
     meta: taskConfig.meta || {},
@@ -112,9 +117,11 @@ export function defineResource<
   const id =
     constConfig.id ||
     generateCallerIdFromFile(filePath, isIndexResource ? "index" : "resource");
+
   return {
-    [symbols.resource]: true,
-    [symbols.filePath]: filePath,
+    [symbolResource]: true,
+    [symbolFilePath]: filePath,
+    [symbolIndexResource]: isIndexResource,
     id,
     dependencies: constConfig.dependencies,
     dispose: constConfig.dispose,
@@ -124,7 +131,7 @@ export function defineResource<
     context: constConfig.context,
     with: function (config: TConfig) {
       return {
-        [symbols.resourceWithConfig]: true,
+        [symbolResourceWithConfig]: true,
         id: this.id,
         resource: this,
         config,
@@ -138,7 +145,7 @@ export function defineResource<
             ? Symbol(`anonymous-resource.events.beforeInit`)
             : `${id as string}.events.beforeInit`,
         }),
-        [symbols.filePath]: filePath,
+        [symbolFilePath]: filePath,
       },
       afterInit: {
         ...defineEvent({
@@ -146,7 +153,7 @@ export function defineResource<
             ? Symbol(`anonymous-resource.events.afterInit`)
             : `${id as string}.events.afterInit`,
         }),
-        [symbols.filePath]: filePath,
+        [symbolFilePath]: filePath,
       },
       onError: {
         ...defineEvent({
@@ -154,7 +161,7 @@ export function defineResource<
             ? Symbol(`anonymous-resource.events.onError`)
             : `${id as string}.events.onError`,
         }),
-        [symbols.filePath]: filePath,
+        [symbolFilePath]: filePath,
       },
     },
     meta: constConfig.meta || {},
@@ -198,8 +205,8 @@ export function defineIndex<
     async init(_, deps) {
       return deps as any;
     },
-    [symbols.filePath]: callerFilePath,
-    [symbols.indexResource]: true,
+    [symbolFilePath]: callerFilePath,
+    [symbolIndexResource]: true,
   });
 }
 
@@ -215,7 +222,7 @@ export function defineEvent<TPayload = void>(
   return {
     ...eventConfig,
     id: eventConfig.id || generateCallerIdFromFile(callerFilePath, "event"),
-    [symbols.filePath]: callerFilePath,
+    [symbolFilePath]: callerFilePath,
     [symbolEvent]: true, // This is a workaround
   };
 }
@@ -245,8 +252,8 @@ export function defineMiddleware<
    */
   const filePath = getCallerFile();
   const object = {
-    [symbols.filePath]: filePath,
-    [symbols.middleware]: true,
+    [symbolFilePath]: filePath,
+    [symbolMiddleware]: true,
     config: {} as TConfig,
     id: middlewareDef.id || generateCallerIdFromFile(filePath, "middleware"),
     ...middlewareDef,
@@ -270,8 +277,8 @@ export function defineMiddleware<
 
       return {
         ...object,
-        [symbols.middlewareEverywhereTasks]: tasks,
-        [symbols.middlewareEverywhereResources]: resources,
+        [symbolMiddlewareEverywhereTasks]: tasks,
+        [symbolMiddlewareEverywhereResources]: resources,
         everywhere() {
           throw Errors.middlewareAlreadyGlobal(object.id);
         },
@@ -281,25 +288,25 @@ export function defineMiddleware<
 }
 
 export function isTask(definition: any): definition is ITask {
-  return definition && definition[symbols.task];
+  return definition && definition[symbolTask];
 }
 
 export function isResource(definition: any): definition is IResource {
-  return definition && definition[symbols.resource];
+  return definition && definition[symbolResource];
 }
 
 export function isResourceWithConfig(
   definition: any
 ): definition is IResourceWithConfig {
-  return definition && definition[symbols.resourceWithConfig];
+  return definition && definition[symbolResourceWithConfig];
 }
 
 export function isEvent(definition: any): definition is IEvent {
-  return definition && definition[symbols.event];
+  return definition && definition[symbolEvent];
 }
 
 export function isMiddleware(definition: any): definition is IMiddleware {
-  return definition && definition[symbols.middleware];
+  return definition && definition[symbolMiddleware];
 }
 
 /**

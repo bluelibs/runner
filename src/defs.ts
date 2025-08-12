@@ -18,7 +18,7 @@ import { MiddlewareEverywhereOptions } from "./define";
 
 // Re-export public cache type so consumers don’t import from internals.
 export { ICacheInstance } from "./globals/middleware/cache.middleware";
-
+export * from "./models/StoreTypes";
 /**
  * Internal brand symbols used to tag created objects at runtime and help with
  * type‑narrowing. Prefer the `isTask`/`isResource`/`isEvent`/`isMiddleware`
@@ -57,24 +57,6 @@ export const symbolIndexResource: unique symbol = Symbol(
   "runner.indexResource"
 );
 
-/**
- * Convenience bag of internal symbols. Intended for framework internals;
- * consumers should not rely on this shape.
- * @internal
- */
-export const symbols = {
-  task: symbolTask,
-  resource: symbolResource,
-  resourceWithConfig: symbolResourceWithConfig,
-  indexResource: symbolIndexResource,
-  event: symbolEvent,
-  middleware: symbolMiddleware,
-  middlewareEverywhereTasks: symbolMiddlewareEverywhereTasks,
-  middlewareEverywhereResources: symbolMiddlewareEverywhereResources,
-  filePath: symbolFilePath,
-  dispose: symbolDispose,
-  store: symbolStore,
-};
 export interface ITagDefinition<TConfig = void> {
   id: string | symbol;
 }
@@ -104,6 +86,7 @@ export interface ITag<TConfig = void> extends ITagDefinition<TConfig> {
    * or from a taggable object (`{ meta: { tags?: [] } }`).
    */
   extract(target: TagType[] | ITaggable): ExtractedTagResult<TConfig> | null;
+  [symbolFilePath]: string;
 }
 
 /**
@@ -315,6 +298,8 @@ export interface ITask<
     afterRun: IEvent<AfterRunEventPayload<TInput, TOutput>>;
     onError: IEvent<OnErrorEventPayload>;
   };
+  [symbolFilePath]: string;
+  [symbolTask]: true;
 }
 
 export interface IResourceDefinition<
@@ -374,6 +359,7 @@ export interface IResourceDefinition<
   context?: () => TContext;
   /**
    * This is optional and used from an index resource to get the correct caller.
+   * This is the reason we allow it here as well.
    */
   [symbolFilePath]?: string;
   /**
@@ -403,6 +389,9 @@ export interface IResource<
   };
   overrides: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
   middleware: MiddlewareAttachments[];
+  [symbolFilePath]: string;
+  [symbolIndexResource]: boolean;
+  [symbolResource]: true;
 }
 
 export interface IResourceWithConfig<
@@ -434,6 +423,7 @@ export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
    * We use this event to discriminate between resources with just 'id' and 'events' as they collide. This is a workaround, should be redone using classes and instanceof.
    */
   [symbolEvent]: true;
+  [symbolFilePath]: string;
 }
 
 /**
@@ -511,6 +501,8 @@ export interface IMiddleware<
   config: TConfig;
   /** Configure the middleware and return a marked, configured instance. */
   with: (config: TConfig) => IMiddlewareConfigured<TConfig, TDependencies>;
+  [symbolFilePath]: string;
+  [symbolMiddleware]: true;
 }
 
 export interface IMiddlewareConfigured<

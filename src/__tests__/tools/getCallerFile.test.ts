@@ -4,7 +4,7 @@ import {
   defineMiddleware,
   defineEvent,
 } from "../../define";
-import { symbols } from "../../defs";
+import { symbolFilePath } from "../../defs";
 import {
   getCallerFile,
   generateCallerIdFromFile,
@@ -41,17 +41,15 @@ describe("getCallerFile", () => {
       id: "event",
     });
 
-    expect((task as any)[symbols.filePath]).toBeDefined();
-    expect((resource as any)[symbols.filePath]).toBeDefined();
-    expect((middleware as any)[symbols.filePath]).toBeDefined();
-    expect((event as any)[symbols.filePath]).toBeDefined();
+    expect((task as any)[symbolFilePath]).toBeDefined();
+    expect((resource as any)[symbolFilePath]).toBeDefined();
+    expect((middleware as any)[symbolFilePath]).toBeDefined();
+    expect((event as any)[symbolFilePath]).toBeDefined();
 
-    expect((task as any)[symbols.filePath]).toContain("getCallerFile.test");
-    expect((resource as any)[symbols.filePath]).toContain("getCallerFile.test");
-    expect((middleware as any)[symbols.filePath]).toContain(
-      "getCallerFile.test"
-    );
-    expect((event as any)[symbols.filePath]).toContain("getCallerFile.test");
+    expect((task as any)[symbolFilePath]).toContain("getCallerFile.test");
+    expect((resource as any)[symbolFilePath]).toContain("getCallerFile.test");
+    expect((middleware as any)[symbolFilePath]).toContain("getCallerFile.test");
+    expect((event as any)[symbolFilePath]).toContain("getCallerFile.test");
   });
 });
 

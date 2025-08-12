@@ -1,4 +1,9 @@
-import { IEvent, IEventEmission, symbolEvent } from "../../defs";
+import {
+  IEvent,
+  IEventEmission,
+  symbolEvent,
+  symbolFilePath,
+} from "../../defs";
 import { Errors } from "../../errors";
 import { EventManager } from "../../models/EventManager";
 
@@ -8,7 +13,11 @@ describe("EventManager", () => {
 
   beforeEach(() => {
     eventManager = new EventManager();
-    eventDefinition = { id: "testEvent", [symbolEvent]: true };
+    eventDefinition = {
+      id: "testEvent",
+      [symbolEvent]: true,
+      [symbolFilePath]: "test.ts",
+    };
   });
 
   it("should add and emit event listener", async () => {
@@ -165,10 +174,12 @@ describe("EventManager", () => {
     const eventDef1: IEvent<string> = {
       id: "event1",
       [symbolEvent]: true,
+      [symbolFilePath]: "test.ts",
     };
     const eventDef2: IEvent<string> = {
       id: "event2",
       [symbolEvent]: true,
+      [symbolFilePath]: "test.ts",
     };
 
     const handler1 = jest.fn();
@@ -215,10 +226,12 @@ describe("EventManager", () => {
     const eventDef1: IEvent<string> = {
       id: "event1",
       [symbolEvent]: true,
+      [symbolFilePath]: "test.ts",
     };
     const eventDef2: IEvent<string> = {
       id: "event2",
       [symbolEvent]: true,
+      [symbolFilePath]: "test.ts",
     };
 
     const handler = jest.fn();
@@ -249,10 +262,12 @@ describe("EventManager", () => {
     const eventDef1: IEvent<string> = {
       id: "event1",
       [symbolEvent]: true,
+      [symbolFilePath]: "test.ts",
     };
     const eventDef2: IEvent<string> = {
       id: "event2",
       [symbolEvent]: true,
+      [symbolFilePath]: "test.ts",
     };
 
     const handler1 = jest.fn();
@@ -392,6 +407,7 @@ describe("EventManager", () => {
     const voidEventDefinition: IEvent<void> = {
       id: "voidEvent",
       [symbolEvent]: true,
+      [symbolFilePath]: "test.ts",
     };
 
     eventManager.addListener(voidEventDefinition, handler);
@@ -445,8 +461,16 @@ describe("EventManager", () => {
     });
 
     it("should invalidate all caches when adding global listeners", async () => {
-      const event1: IEvent<string> = { id: "event1", [symbolEvent]: true };
-      const event2: IEvent<string> = { id: "event2", [symbolEvent]: true };
+      const event1: IEvent<string> = {
+        id: "event1",
+        [symbolEvent]: true,
+        [symbolFilePath]: "test.ts",
+      };
+      const event2: IEvent<string> = {
+        id: "event2",
+        [symbolEvent]: true,
+        [symbolFilePath]: "test.ts",
+      };
 
       const handler1 = jest.fn();
       const handler2 = jest.fn();
@@ -473,6 +497,7 @@ describe("EventManager", () => {
       const emptyEventDef: IEvent<string> = {
         id: "emptyEvent",
         [symbolEvent]: true,
+        [symbolFilePath]: "test.ts",
       };
 
       // Should return immediately without creating event object
@@ -528,8 +553,16 @@ describe("EventManager", () => {
     });
 
     it("should reuse cached results across different event types", async () => {
-      const event1: IEvent<string> = { id: "event1", [symbolEvent]: true };
-      const event2: IEvent<string> = { id: "event2", [symbolEvent]: true };
+      const event1: IEvent<string> = {
+        id: "event1",
+        [symbolEvent]: true,
+        [symbolFilePath]: "test.ts",
+      };
+      const event2: IEvent<string> = {
+        id: "event2",
+        [symbolEvent]: true,
+        [symbolFilePath]: "test.ts",
+      };
 
       const handler1 = jest.fn();
       const handler2 = jest.fn();
