@@ -33,6 +33,7 @@ import {
   symbolResourceWithConfig,
   symbolResource,
   symbolMiddleware,
+  ITaskMeta,
 } from "./defs";
 import { Errors } from "./errors";
 import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
@@ -43,10 +44,11 @@ export function defineTask<
   Input = undefined,
   Output extends Promise<any> = any,
   Deps extends DependencyMapType = any,
-  TOn extends "*" | IEventDefinition | undefined = undefined
+  TOn extends "*" | IEventDefinition | undefined = undefined,
+  TMeta extends ITaskMeta = any
 >(
-  taskConfig: ITaskDefinition<Input, Output, Deps, TOn>
-): ITask<Input, Output, Deps, TOn> {
+  taskConfig: ITaskDefinition<Input, Output, Deps, TOn, TMeta>
+): ITask<Input, Output, Deps, TOn, TMeta> {
   /**
    * Creates a task definition.
    * - Generates an anonymous id based on file path when `id` is omitted
@@ -91,7 +93,7 @@ export function defineTask<
         [symbolFilePath]: getCallerFile(),
       },
     },
-    meta: taskConfig.meta || {},
+    meta: taskConfig.meta || ({} as TMeta),
     // autorun,
   };
 }
@@ -343,9 +345,9 @@ export function defineOverride(
  * - `.with(config)` to create configured instances
  * - `.extract(tags)` to extract this tag from a list of tags
  */
-export function defineTag<TConfig = void>(
-  definition: ITagDefinition<TConfig>
-): ITag<TConfig> {
+export function defineTag<TConfig = void, TEnforceContract = void>(
+  definition: ITagDefinition<TConfig, TEnforceContract>
+): ITag<TConfig, TEnforceContract> {
   const id = definition.id;
 
   return {

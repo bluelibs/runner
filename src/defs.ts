@@ -15,6 +15,10 @@
  */
 
 import { MiddlewareEverywhereOptions } from "./define";
+import {
+  EnsureResponseSatisfiesContracts,
+  HasContracts,
+} from "./defs.returnTag";
 
 // Re-export public cache type so consumers don’t import from internals.
 export { ICacheInstance } from "./globals/middleware/cache.middleware";
@@ -57,17 +61,17 @@ export const symbolIndexResource: unique symbol = Symbol(
   "runner.indexResource"
 );
 
-export interface ITagDefinition<TConfig = void> {
+export interface ITagDefinition<TConfig = void, TEnforceContract = void> {
   id: string | symbol;
 }
 
 /**
  * A configured instance of a tag as produced by `ITag.with()`.
  */
-export interface ITagWithConfig<TConfig = void> {
+export interface ITagWithConfig<TConfig = void, TEnforceContract = void> {
   id: string | symbol;
   /** The tag definition used to produce this configured instance. */
-  tag: ITag<TConfig>;
+  tag: ITag<TConfig, TEnforceContract>;
   /** The configuration captured for this tag instance. */
   config: TConfig;
 }
@@ -76,16 +80,19 @@ export interface ITagWithConfig<TConfig = void> {
  * A tag definition (builder). Use `.with(config)` to obtain configured instances,
  * and `.extract(tags)` to find either a configured instance or the bare tag in a list.
  */
-export interface ITag<TConfig = void> extends ITagDefinition<TConfig> {
+export interface ITag<TConfig = void, TEnforceContract = void>
+  extends ITagDefinition<TConfig, TEnforceContract> {
   /**
    * Creates a configured instance of the tag.
    */
-  with(config: TConfig): ITagWithConfig<TConfig>;
+  with(config: TConfig): ITagWithConfig<TConfig, TEnforceContract>;
   /**
    * Extracts either a configured instance or the bare tag from a list of tags
    * or from a taggable object (`{ meta: { tags?: [] } }`).
    */
-  extract(target: TagType[] | ITaggable): ExtractedTagResult<TConfig> | null;
+  extract(
+    target: TagType[] | ITaggable
+  ): ExtractedTagResult<TConfig, TEnforceContract> | null;
   [symbolFilePath]: string;
 }
 
@@ -96,9 +103,9 @@ export interface ITag<TConfig = void> extends ITagDefinition<TConfig> {
  */
 export type TagType =
   | string
-  | ITag<void>
-  | ITag<{ [K in any]?: any }>
-  | ITagWithConfig<any>;
+  | ITag<void, any>
+  | ITag<{ [K in any]?: any }, any>
+  | ITagWithConfig<any, any>;
 
 /**
  * Conditional result type for `ITag.extract`:
@@ -106,10 +113,45 @@ export type TagType =
  * - For optional object config → identifier with optional config
  * - For required config → identifier with required config
  */
-export type ExtractedTagResult<TConfig> = {} extends TConfig
+export type ExtractedTagResult<TConfig, TEnforceContract> = {} extends TConfig
   ? { id: string | symbol; config?: TConfig }
   : { id: string | symbol; config: TConfig };
+type NonVoid<T> = [T] extends [void] ? never : T;
 
+// read return contract (TReturn) from tag (bare or configured)
+type ExtractReturnFromTag<T> = T extends ITagWithConfig<any, infer R>
+  ? NonVoid<R>
+  : T extends ITag<any, infer R>
+  ? NonVoid<R>
+  : never;
+
+// tuple detection
+type IsTuple<T extends readonly unknown[]> = number extends T["length"]
+  ? false
+  : true;
+
+// filter to a tuple of contracts
+type FilterContracts<
+  TTags extends readonly unknown[],
+  Acc extends readonly unknown[] = []
+> = TTags extends readonly [infer H, ...infer R]
+  ? ExtractReturnFromTag<H> extends never
+    ? FilterContracts<R, Acc>
+    : FilterContracts<R, [...Acc, ExtractReturnFromTag<H>]>
+  : Acc;
+
+// public helpers
+export type ExtractContractsFromTags<TTags extends readonly unknown[]> =
+  IsTuple<TTags> extends true
+    ? FilterContracts<TTags>
+    : Array<ExtractReturnFromTag<TTags[number]>>;
+
+export type ExtractTagsWithNonVoidReturnTypeFromMeta<TMeta extends IMeta> =
+  TMeta extends { tags?: infer TTags }
+    ? TTags extends readonly unknown[]
+      ? ExtractContractsFromTags<TTags>
+      : []
+    : [];
 /**
  * Any object that can carry tags via metadata. This mirrors how tasks,
  * resources, events, and middleware expose `meta.tags`.
@@ -119,7 +161,6 @@ export interface ITaggable {
     tags?: TagType[];
   };
 }
-
 /**
  * Common metadata you can attach to tasks/resources/events/middleware.
  * Useful for docs, filtering and middleware decisions.
@@ -213,7 +254,8 @@ export interface ITaskDefinition<
   TInput = any,
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
-  TOn extends "*" | IEventDefinition<any> | undefined = undefined // Adding a generic to track 'on' type
+  TOn extends "*" | IEventDefinition<any> | undefined = undefined, // Adding a generic to track 'on' type,
+  TMeta extends ITaskMeta = any
 > {
   /**
    * Stable identifier. If omitted, an anonymous id is generated from file path
@@ -237,13 +279,15 @@ export interface ITaskDefinition<
    */
   listenerOrder?: number;
   /** Optional metadata used for docs, filtering and tooling. */
-  meta?: ITaskMeta;
+  meta?: TMeta;
   /**
    * The task body. If `on` is set, the input is an `IEventEmission`. Otherwise,
    * it's the declared input type.
    */
   run: (
-    input: TOn extends undefined
+    input: HasContracts<TMeta> extends true
+      ? EnsureResponseSatisfiesContracts<TMeta, TInput>
+      : TOn extends undefined
       ? TInput
       : IEventEmission<TOn extends "*" ? any : ExtractEventParams<TOn>>,
     dependencies: DependencyValuesType<TDependencies>
@@ -284,8 +328,9 @@ export interface ITask<
   TInput = any,
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
-  TOn extends "*" | IEventDefinition<any> | undefined = undefined
-> extends ITaskDefinition<TInput, TOutput, TDependencies, TOn> {
+  TOn extends "*" | IEventDefinition<any> | undefined = undefined,
+  TMeta extends ITaskMeta = any
+> extends ITaskDefinition<TInput, TOutput, TDependencies, TOn, TMeta> {
   id: string | symbol;
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
@@ -308,7 +353,8 @@ export interface IResourceDefinition<
   TDependencies extends DependencyMapType = {},
   TContext = any,
   THooks = any,
-  TRegisterableItems = any
+  TRegisterableItems = any,
+  TMeta extends IResourceMeta = any
 > {
   /** Stable identifier. Omit to get an anonymous id. */
   id?: string | symbol;

@@ -313,8 +313,34 @@ describe.skip("typesafety", () => {
           tag3,
         ],
       },
+      run: async (input) => {
+        return input;
+      },
     });
 
     expect(true).toBe(true);
+  });
+
+  it("should enforce contracts on tasks", async () => {
+    interface IUser {
+      name: string;
+    }
+
+    interface IOther {
+      age: number;
+    }
+
+    const tag = defineTag<{ value: number }, IUser>({ id: "tag" });
+    const tag2 = defineTag<void, IOther>({ id: "tag2" });
+
+    const task = defineTask({
+      id: "task",
+      meta: {
+        tags: [tag.with({ value: 123 }), tag2],
+      },
+      run: async (input) => {
+        return input;
+      },
+    });
   });
 });
