@@ -8,6 +8,7 @@ import {
   IResourceWithConfig,
   RegisterableItems,
   IMiddleware,
+  IEvent,
 } from "../defs";
 
 export type ResourceStoreElementType<
@@ -42,5 +43,5 @@ export type MiddlewareStoreElementType<TDeps extends DependencyMapType = any> =
   };
 
 export type EventStoreElementType = {
-  event: IEventDefinition;
+  event: IEvent<any>;
 };
