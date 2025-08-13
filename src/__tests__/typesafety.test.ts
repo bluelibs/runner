@@ -15,7 +15,7 @@ import {
   ITaskDefinition,
   RegisterableItems,
 } from "../defs";
-import { createTestResource } from "..";
+import { createTestResource, run } from "..";
 import {
   EnsureResponseSatisfiesContracts,
   HasContracts,
@@ -249,7 +249,7 @@ describe.skip("typesafety", () => {
     const harness = createTestResource(app);
 
     // Types: input must match, override deps must match, output is awaited number
-    const { value: t } = await (await import("../run")).run(harness);
+    const { value: t } = await run(harness);
     const r1: number | undefined = await t.runTask(add, { x: 1 });
     // @ts-expect-error wrong input type
     await t.runTask(add, { z: 1 });

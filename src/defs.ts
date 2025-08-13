@@ -355,7 +355,7 @@ export interface IResourceDefinition<
    */
   dispose?: (
     this: any,
-    value: TValue,
+    value: TValue extends Promise<infer U> ? U : TValue,
     config: TConfig,
     dependencies: DependencyValuesType<TDependencies>,
     context: TContext
@@ -554,7 +554,7 @@ export interface IMiddlewareExecutionInput<
   };
   /** Resource hook: present when wrapping init/dispose. */
   resource?: {
-    definition: IResource<TResourceConfig>;
+    definition: IResource<TResourceConfig, any, any, any, any>;
     config: TResourceConfig;
   };
   next: (

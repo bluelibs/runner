@@ -125,7 +125,7 @@ export class Store {
     this.registry.resources.set(root.id, this.root);
   }
 
-  initializeStore(root: IResource<any>, config: any) {
+  initializeStore(root: IResource<any, any, any, any, any>, config: any) {
     if (this.#isInitialized) {
       throw Errors.storeAlreadyInitialized();
     }
