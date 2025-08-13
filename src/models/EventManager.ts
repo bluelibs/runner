@@ -130,7 +130,7 @@ export class EventManager {
       if (propagationStopped) {
         break;
       }
-      
+
       if (!listener.filter || listener.filter(event)) {
         await listener.handler(event);
       }

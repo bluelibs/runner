@@ -2,6 +2,7 @@
 TODO.md
 coverage
 dist
+docs
 node_modules
 npm-debug.log
 typings
