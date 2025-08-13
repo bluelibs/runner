@@ -155,7 +155,9 @@ export type DependencyMapType = Record<
 type ExtractTaskInput<T> = T extends ITask<infer I, any, infer D> ? I : never;
 type ExtractTaskOutput<T> = T extends ITask<any, infer O, infer D> ? O : never;
 type ExtractResourceValue<T> = T extends IResource<any, infer V, infer D>
-  ? V
+  ? V extends Promise<infer U>
+    ? U
+    : V
   : never;
 
 type ExtractEventParams<T> = T extends IEvent<infer P> ? P : never;
@@ -314,7 +316,7 @@ export interface ITask<
 
 export interface IResourceDefinition<
   TConfig = any,
-  TValue = unknown,
+  TValue extends Promise<any> = Promise<any>,
   TDependencies extends DependencyMapType = {},
   TContext = any,
   THooks = any,
@@ -341,8 +343,8 @@ export interface IResourceDefinition<
     dependencies: DependencyValuesType<TDependencies>,
     context: TContext
   ) => HasContracts<TMeta> extends true
-    ? EnsureResponseSatisfiesContracts<TMeta, Promise<TValue>>
-    : Promise<TValue>;
+    ? EnsureResponseSatisfiesContracts<TMeta, TValue>
+    : TValue;
   /**
    * Clean-up function for the resource. This is called when the resource is no longer needed.
    *
@@ -383,7 +385,7 @@ export interface IResourceDefinition<
 
 export interface IResource<
   TConfig = void,
-  TValue = any,
+  TValue extends Promise<any> = Promise<any>,
   TDependencies extends DependencyMapType = any,
   TContext = any,
   TMeta extends IResourceMeta = any
@@ -418,7 +420,7 @@ export interface IResource<
 
 export interface IResourceWithConfig<
   TConfig = any,
-  TValue = any,
+  TValue extends Promise<any> = Promise<any>,
   TDependencies extends DependencyMapType = any
 > {
   /** The id of the underlying resource. */

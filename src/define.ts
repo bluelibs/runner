@@ -101,7 +101,7 @@ export function defineTask<
 
 export function defineResource<
   TConfig = void,
-  TValue = any,
+  TValue extends Promise<any> = Promise<any>,
   TDeps extends DependencyMapType = {},
   TPrivate = any,
   TMeta extends IResourceMeta = any
@@ -194,7 +194,7 @@ export function defineIndex<
       ? T[K]["resource"]
       : T[K];
   } & DependencyMapType
->(items: T): IResource<void, DependencyValuesType<D>, D> {
+>(items: T): IResource<void, Promise<DependencyValuesType<D>>, D> {
   // Build dependency map from given items; unwrap `.with()` to the base resource
   const dependencies = {} as D;
   const register: RegisterableItems[] = [];

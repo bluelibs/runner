@@ -379,4 +379,53 @@ describe.skip("typesafety", () => {
       },
     });
   });
+
+  it("should enforce contracts on resources", async () => {
+    interface IUser {
+      name: string;
+    }
+
+    interface IOther {
+      age: number;
+    }
+
+    const tag = defineTag<{ value: number }, IUser>({ id: "tag" });
+    const tag2 = defineTag<void, IOther>({ id: "tag2" });
+
+    const meta = {
+      tags: [tag.with({ value: 123 }), tag2, "string"],
+    } satisfies IMeta;
+
+    const resourceOk = defineResource({
+      id: "resource.ok",
+      meta,
+      init: async () => {
+        return {
+          age: 123,
+          name: "123",
+        };
+      },
+    });
+
+    const resourceBad1 = defineResource({
+      id: "resource.bad1",
+      meta,
+      // @ts-expect-error
+      init: async () => {
+        return {
+          age: "123",
+          name: "123",
+        };
+      },
+    });
+
+    const resourceBad2 = defineResource({
+      id: "resource.bad2",
+      meta,
+      // @ts-expect-error
+      init: async () => {
+        return {};
+      },
+    });
+  });
 });
