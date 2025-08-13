@@ -1572,6 +1572,177 @@ const app = resource({
 });
 ```
 
+### Runtime Input and Config Validation with Zod
+
+Need to validate task inputs or resource configs at runtime? BlueLibs Runner has first-class support for [Zod](https://zod.dev/) schemas that provide runtime validation with excellent TypeScript inference.
+
+#### Task Input Validation
+
+Add an `inputSchema` to any task to validate inputs before execution:
+
+```typescript
+import { z } from "zod";
+import { task, resource, run } from "@bluelibs/runner";
+
+const userSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+  age: z.number().min(0).max(150),
+});
+
+const createUserTask = task({
+  id: "app.tasks.createUser",
+  inputSchema: userSchema, // Runtime validation
+  run: async (userData) => {
+    // userData is validated and properly typed
+    return { id: "user-123", ...userData };
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [createUserTask],
+  dependencies: { createUserTask },
+  init: async (_, { createUserTask }) => {
+    // This works - valid input
+    const user = await createUserTask({
+      name: "John Doe",
+      email: "john@example.com",
+      age: 30,
+    });
+
+    // This throws a validation error at runtime
+    try {
+      await createUserTask({
+        name: "J", // Too short
+        email: "invalid-email", // Invalid format
+        age: -5, // Negative age
+      });
+    } catch (error) {
+      console.log(error.message);
+      // "Task input validation failed for app.tasks.createUser: ..."
+    }
+  },
+});
+```
+
+#### Resource Config Validation
+
+Add a `configSchema` to resources to validate configurations:
+
+```typescript
+const databaseConfigSchema = z.object({
+  host: z.string(),
+  port: z.number().min(1).max(65535),
+  database: z.string(),
+  ssl: z.boolean().default(false), // Optional with default
+});
+
+const databaseResource = resource({
+  id: "app.resources.database",
+  configSchema: databaseConfigSchema, // Runtime validation
+  init: async (config) => {
+    // config is validated and has proper types
+    return createConnection({
+      host: config.host,
+      port: config.port,
+      database: config.database,
+      ssl: config.ssl,
+    });
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [
+    databaseResource.with({
+      host: "localhost",
+      port: 5432,
+      database: "myapp",
+      // ssl defaults to false
+    }),
+  ],
+});
+```
+
+#### Advanced Validation Features
+
+Zod's full feature set is available, including transformations, refinements, and custom validations:
+
+```typescript
+const advancedSchema = z
+  .object({
+    userId: z.string().uuid(),
+    amount: z.string().transform((val) => parseFloat(val)), // Transform string to number
+    currency: z.enum(["USD", "EUR", "GBP"]),
+    metadata: z.record(z.string()).optional(),
+  })
+  .refine(
+    (data) => data.amount > 0,
+    {
+      message: "Amount must be positive",
+      path: ["amount"],
+    }
+  );
+
+const paymentTask = task({
+  id: "app.tasks.payment",
+  inputSchema: advancedSchema,
+  run: async (payment) => {
+    // payment.amount is now a number (transformed from string)
+    // All validations have passed
+    return processPayment(payment);
+  },
+});
+```
+
+#### Error Handling
+
+Validation errors are thrown with clear, descriptive messages:
+
+```typescript
+// Task validation error format:
+// "Task input validation failed for {taskId}: {zodErrorMessage}"
+
+// Resource validation error format:
+// "Resource config validation failed for {resourceId}: {zodErrorMessage}"
+```
+
+#### When to Use Validation
+
+- **API boundaries**: Validating user inputs from HTTP requests
+- **External data**: Processing data from files, databases, or APIs
+- **Configuration**: Ensuring environment variables and configs are correct
+- **Event payloads**: Validating data in event-driven architectures
+
+#### Performance Notes
+
+- Validation only runs when schemas are provided (zero overhead when not used)
+- Zod is highly optimized for runtime validation
+- Consider caching complex schemas for frequently called tasks
+
+#### TypeScript Integration
+
+While runtime validation happens with Zod, TypeScript still enforces compile-time types. For the best experience:
+
+```typescript
+// Define your type and schema together
+type UserData = z.infer<typeof userSchema>;
+
+const userSchema = z.object({
+  name: z.string(),
+  email: z.string().email(),
+});
+
+const createUser = task({
+  inputSchema: userSchema,
+  run: async (input: UserData) => {
+    // Both runtime validation AND compile-time typing
+    return { id: "user-123", ...input };
+  },
+});
+```
+
 ### Internal Services: For When You Need Direct Access
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):

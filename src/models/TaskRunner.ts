@@ -149,6 +149,15 @@ export class TaskRunner {
 
     // this is the final next()
     let next = async (input: any) => {
+      // Validate input with Zod schema if provided
+      if (task.inputSchema) {
+        try {
+          input = task.inputSchema.parse(input);
+        } catch (error) {
+          throw new Error(`Task input validation failed for ${task.id.toString()}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      
       return task.run.call(null, input, storeTask?.computedDependencies as any);
     };
 

@@ -248,6 +248,11 @@ export interface ITaskDefinition<
   /** Optional metadata used for docs, filtering and tooling. */
   meta?: TMeta;
   /**
+   * Optional Zod schema for runtime input validation.
+   * When provided, task input will be validated before execution.
+   */
+  inputSchema?: z.ZodSchema<TInput>;
+  /**
    * The task body. If `on` is set, the input is an `IEventEmission`. Otherwise,
    * it's the declared input type.
    */
@@ -361,6 +366,11 @@ export interface IResourceDefinition<
     context: TContext
   ) => Promise<void>;
   meta?: TMeta;
+  /**
+   * Optional Zod schema for runtime config validation.
+   * When provided, resource config will be validated before initialization.
+   */
+  configSchema?: z.ZodSchema<TConfig>;
   /**
    * Safe overrides to swap behavior while preserving identities. See
    * README: Overrides.

@@ -125,6 +125,15 @@ export class ResourceInitializer {
     context: TContext
   ) {
     let next = async (config: C): Promise<V | undefined> => {
+      // Validate config with Zod schema if provided
+      if (resource.configSchema) {
+        try {
+          config = resource.configSchema.parse(config);
+        } catch (error) {
+          throw new Error(`Resource config validation failed for ${resource.id.toString()}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      
       if (resource.init) {
         return resource.init.call(null, config, dependencies, context);
       }

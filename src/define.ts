@@ -68,6 +68,7 @@ export function defineTask<
     run: taskConfig.run,
     on: taskConfig.on,
     listenerOrder: taskConfig.listenerOrder,
+    inputSchema: taskConfig.inputSchema,
     events: {
       beforeRun: {
         ...defineEvent({
@@ -141,6 +142,7 @@ export function defineResource<
     overrides: constConfig.overrides || [],
     init: constConfig.init,
     context: constConfig.context,
+    configSchema: constConfig.configSchema,
     with: function (config: TConfig) {
       return {
         [symbolResourceWithConfig]: true,
