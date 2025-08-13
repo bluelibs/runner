@@ -318,7 +318,7 @@ describe("Logger", () => {
     it("should use bound context in log calls", async () => {
       const boundContext = { source: "testSource", userId: "123" };
       const loggerWithContext = new Logger(mockEventManager, boundContext);
-      
+
       mockEventManager.emit = jest.fn().mockResolvedValue(undefined);
       mockEventManager.hasListeners = jest.fn().mockReturnValue(true);
 
@@ -429,14 +429,14 @@ describe("Logger", () => {
 
   it("should disable auto-printing when setPrintThreshold is set to null", () => {
     const consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
-    
+
     // Set to null to disable auto-printing
     logger.setPrintThreshold(null);
-    
+
     logger.log("error", "Should not be printed");
-    
+
     expect(consoleLogSpy).not.toHaveBeenCalled();
-    
+
     consoleLogSpy.mockRestore();
   });
 });
