@@ -255,10 +255,7 @@ export interface ITaskDefinition<
       : IEventEmission<TOn extends "*" ? any : ExtractEventParams<TOn>>,
     dependencies: DependencyValuesType<TDependencies>
   ) => HasContracts<TMeta> extends true
-    ? EnsureResponseSatisfiesContracts<
-        TMeta,
-        TOutput extends Promise<infer U> ? U : TOutput
-      >
+    ? EnsureResponseSatisfiesContracts<TMeta, TOutput>
     : TOutput;
 }
 
@@ -343,7 +340,9 @@ export interface IResourceDefinition<
     config: TConfig,
     dependencies: DependencyValuesType<TDependencies>,
     context: TContext
-  ) => Promise<TValue>;
+  ) => HasContracts<TMeta> extends true
+    ? EnsureResponseSatisfiesContracts<TMeta, Promise<TValue>>
+    : Promise<TValue>;
   /**
    * Clean-up function for the resource. This is called when the resource is no longer needed.
    *
@@ -359,7 +358,7 @@ export interface IResourceDefinition<
     dependencies: DependencyValuesType<TDependencies>,
     context: TContext
   ) => Promise<void>;
-  meta?: IResourceMeta;
+  meta?: TMeta;
   /**
    * Safe overrides to swap behavior while preserving identities. See
    * README: Overrides.
@@ -386,8 +385,17 @@ export interface IResource<
   TConfig = void,
   TValue = any,
   TDependencies extends DependencyMapType = any,
-  TContext = any
-> extends IResourceDefinition<TConfig, TValue, TDependencies, TContext> {
+  TContext = any,
+  TMeta extends IResourceMeta = any
+> extends IResourceDefinition<
+    TConfig,
+    TValue,
+    TDependencies,
+    TContext,
+    any,
+    any,
+    TMeta
+  > {
   id: string | symbol;
   with(config: TConfig): IResourceWithConfig<TConfig, TValue, TDependencies>;
   register:

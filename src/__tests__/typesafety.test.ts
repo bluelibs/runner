@@ -339,7 +339,7 @@ describe.skip("typesafety", () => {
     const tag2 = defineTag<void, IOther>({ id: "tag2" });
 
     const meta = {
-      tags: [tag.with({ value: 123 }), tag2],
+      tags: [tag.with({ value: 123 }), tag2, "string"],
     } satisfies IMeta;
 
     const response = {
@@ -357,6 +357,25 @@ describe.skip("typesafety", () => {
           age: 123,
           name: "123",
         };
+      },
+    });
+    const task2 = defineTask({
+      id: "task",
+      meta,
+      // @ts-expect-error
+      run: async (input: { name: string }) => {
+        return {
+          age: "123",
+        };
+      },
+    });
+
+    const task3 = defineTask({
+      id: "task",
+      meta,
+      // @ts-expect-error
+      run: async (input: { name: string }) => {
+        return {};
       },
     });
   });

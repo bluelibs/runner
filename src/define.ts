@@ -34,6 +34,7 @@ import {
   symbolResource,
   symbolMiddleware,
   ITaskMeta,
+  IResourceMeta,
 } from "./defs";
 import { Errors } from "./errors";
 import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
@@ -102,10 +103,19 @@ export function defineResource<
   TConfig = void,
   TValue = any,
   TDeps extends DependencyMapType = {},
-  TPrivate = any
+  TPrivate = any,
+  TMeta extends IResourceMeta = any
 >(
-  constConfig: IResourceDefinition<TConfig, TValue, TDeps, TPrivate>
-): IResource<TConfig, TValue, TDeps, TPrivate> {
+  constConfig: IResourceDefinition<
+    TConfig,
+    TValue,
+    TDeps,
+    TPrivate,
+    any,
+    any,
+    TMeta
+  >
+): IResource<TConfig, TValue, TDeps, TPrivate, TMeta> {
   /**
    * Creates a resource definition.
    * - Generates anonymous id when omitted (resource or index flavor)
@@ -166,7 +176,7 @@ export function defineResource<
         [symbolFilePath]: filePath,
       },
     },
-    meta: constConfig.meta || {},
+    meta: (constConfig.meta || {}) as TMeta,
     middleware: constConfig.middleware || [],
   };
 }

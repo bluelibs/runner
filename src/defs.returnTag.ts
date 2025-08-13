@@ -67,19 +67,25 @@ type Simplify<T> = { [K in keyof T]: T[K] } & {};
  * Verbose compile-time error surfaced when a value does not satisfy
  * the intersection of all tag-enforced contracts.
  *
- * Intersected with `never` to preserve failing behavior while giving
- * actionable information in editor/tooling hovers.
+ * Intersected with `never` in call sites when desired to ensure assignment
+ * fails while still surfacing a readable shape in tooltips.
  */
 export type ContractViolationError<TMeta extends IMeta, TActual> = {
-  __bluelibs_runner_error: "Value does not satisfy all tag contracts";
+  message: "Value does not satisfy all tag contracts";
   expected: Simplify<ContractsIntersection<TMeta>>;
   received: TActual;
-} & never;
+};
 
 export type EnsureResponseSatisfiesContracts<TMeta extends IMeta, TResponse> = [
   ContractsUnion<TMeta>
 ] extends [never]
   ? TResponse // no contracts, allow as-is
+  : TResponse extends Promise<infer U>
+  ? Promise<
+      U extends ContractsIntersection<TMeta>
+        ? U
+        : ContractViolationError<TMeta, U>
+    >
   : TResponse extends ContractsIntersection<TMeta>
   ? TResponse
   : ContractViolationError<TMeta, TResponse>;
