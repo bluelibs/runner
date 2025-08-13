@@ -48,6 +48,34 @@ export class Logger {
     boundContext: Record<string, any> = {}
   ) {
     this.boundContext = { ...boundContext };
+    this.printThreshold = this.getDefaultPrintThreshold();
+  }
+
+  /**
+   * Determines the default print threshold based on environment variables
+   */
+  private getDefaultPrintThreshold(): LogLevels | null {
+    // Check if logging is explicitly disabled
+    const disableLogs = process.env.RUNNER_DISABLE_LOGS;
+    if (disableLogs === "true" || disableLogs === "1") {
+      return null;
+    }
+
+    // Check for specific log level override
+    const logLevel = process.env.RUNNER_LOG_LEVEL;
+    if (logLevel && this.isValidLogLevel(logLevel)) {
+      return logLevel as LogLevels;
+    }
+
+    // Default to 'info' level for better developer experience
+    return "info";
+  }
+
+  /**
+   * Validates if a string is a valid log level
+   */
+  private isValidLogLevel(level: string): boolean {
+    return Object.keys(Logger.Severity).includes(level);
   }
 
   /**

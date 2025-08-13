@@ -5,10 +5,23 @@ import { globalEvents } from "../../globals/globalEvents";
 describe("Logger", () => {
   let logger: Logger;
   let mockEventManager: jest.Mocked<EventManager>;
+  let originalEnv: any;
 
   beforeEach(() => {
+    // Save original environment
+    originalEnv = { ...process.env };
+    
+    // Clear environment variables that might affect tests
+    delete process.env.RUNNER_DISABLE_LOGS;
+    delete process.env.RUNNER_LOG_LEVEL;
+    
     mockEventManager = new EventManager() as jest.Mocked<EventManager>;
     logger = new Logger(mockEventManager);
+  });
+
+  afterEach(() => {
+    // Restore original environment
+    process.env = originalEnv;
   });
 
   describe("log method", () => {
@@ -385,6 +398,70 @@ describe("Logger", () => {
         }),
         "unknown"
       );
+    });
+  });
+
+  describe("default print threshold", () => {
+    it("should default to 'info' level when no environment variables are set", () => {
+      const logger = new Logger(mockEventManager);
+      expect(logger.printThreshold).toBe("info");
+    });
+
+    it("should respect RUNNER_DISABLE_LOGS=true to disable logging", () => {
+      process.env.RUNNER_DISABLE_LOGS = "true";
+      const logger = new Logger(mockEventManager);
+      expect(logger.printThreshold).toBeNull();
+    });
+
+    it("should respect RUNNER_DISABLE_LOGS=1 to disable logging", () => {
+      process.env.RUNNER_DISABLE_LOGS = "1";
+      const logger = new Logger(mockEventManager);
+      expect(logger.printThreshold).toBeNull();
+    });
+
+    it("should respect RUNNER_LOG_LEVEL environment variable", () => {
+      process.env.RUNNER_LOG_LEVEL = "error";
+      const logger = new Logger(mockEventManager);
+      expect(logger.printThreshold).toBe("error");
+    });
+
+    it("should ignore invalid RUNNER_LOG_LEVEL and use default", () => {
+      process.env.RUNNER_LOG_LEVEL = "invalid_level";
+      const logger = new Logger(mockEventManager);
+      expect(logger.printThreshold).toBe("info");
+    });
+
+    it("should prioritize RUNNER_DISABLE_LOGS over RUNNER_LOG_LEVEL", () => {
+      process.env.RUNNER_DISABLE_LOGS = "true";
+      process.env.RUNNER_LOG_LEVEL = "debug";
+      const logger = new Logger(mockEventManager);
+      expect(logger.printThreshold).toBeNull();
+    });
+
+    it("should print info level logs by default", () => {
+      const consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
+      
+      const logger = new Logger(mockEventManager);
+      logger.log("info", "This should be printed by default");
+      
+      expect(consoleLogSpy).toHaveBeenCalledWith(
+        expect.stringContaining("This should be printed by default")
+      );
+      
+      consoleLogSpy.mockRestore();
+    });
+
+    it("should not print debug level logs by default", () => {
+      const consoleLogSpy = jest.spyOn(console, "log").mockImplementation();
+      
+      const logger = new Logger(mockEventManager);
+      logger.log("debug", "This should not be printed by default");
+      
+      expect(consoleLogSpy).not.toHaveBeenCalledWith(
+        expect.stringContaining("This should not be printed by default")
+      );
+      
+      consoleLogSpy.mockRestore();
     });
   });
 
