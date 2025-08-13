@@ -15,4 +15,4 @@ export const cResource = defineResource({
     const result: string = await aTask(); // Still benefits of autocompletion
     return `C depends on ${result}`;
   },
-}) as IResource<void, string>; // This is the key change.
+}) as IResource<void, Promise<string>>; // This is the key change.
