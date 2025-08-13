@@ -116,42 +116,7 @@ export type TagType =
 export type ExtractedTagResult<TConfig, TEnforceContract> = {} extends TConfig
   ? { id: string | symbol; config?: TConfig }
   : { id: string | symbol; config: TConfig };
-type NonVoid<T> = [T] extends [void] ? never : T;
 
-// read return contract (TReturn) from tag (bare or configured)
-type ExtractReturnFromTag<T> = T extends ITagWithConfig<any, infer R>
-  ? NonVoid<R>
-  : T extends ITag<any, infer R>
-  ? NonVoid<R>
-  : never;
-
-// tuple detection
-type IsTuple<T extends readonly unknown[]> = number extends T["length"]
-  ? false
-  : true;
-
-// filter to a tuple of contracts
-type FilterContracts<
-  TTags extends readonly unknown[],
-  Acc extends readonly unknown[] = []
-> = TTags extends readonly [infer H, ...infer R]
-  ? ExtractReturnFromTag<H> extends never
-    ? FilterContracts<R, Acc>
-    : FilterContracts<R, [...Acc, ExtractReturnFromTag<H>]>
-  : Acc;
-
-// public helpers
-export type ExtractContractsFromTags<TTags extends readonly unknown[]> =
-  IsTuple<TTags> extends true
-    ? FilterContracts<TTags>
-    : Array<ExtractReturnFromTag<TTags[number]>>;
-
-export type ExtractTagsWithNonVoidReturnTypeFromMeta<TMeta extends IMeta> =
-  TMeta extends { tags?: infer TTags }
-    ? TTags extends readonly unknown[]
-      ? ExtractContractsFromTags<TTags>
-      : []
-    : [];
 /**
  * Any object that can carry tags via metadata. This mirrors how tasks,
  * resources, events, and middleware expose `meta.tags`.
@@ -285,13 +250,16 @@ export interface ITaskDefinition<
    * it's the declared input type.
    */
   run: (
-    input: HasContracts<TMeta> extends true
-      ? EnsureResponseSatisfiesContracts<TMeta, TInput>
-      : TOn extends undefined
+    input: TOn extends undefined
       ? TInput
       : IEventEmission<TOn extends "*" ? any : ExtractEventParams<TOn>>,
     dependencies: DependencyValuesType<TDependencies>
-  ) => TOutput;
+  ) => HasContracts<TMeta> extends true
+    ? EnsureResponseSatisfiesContracts<
+        TMeta,
+        TOutput extends Promise<infer U> ? U : TOutput
+      >
+    : TOutput;
 }
 
 export type BeforeRunEventPayload<TInput> = {

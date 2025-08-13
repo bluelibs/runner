@@ -8,6 +8,7 @@ import {
 } from "../define";
 import {
   IEventDefinition,
+  IMeta,
   IMiddlewareDefinition,
   IResource,
   IResourceWithConfig,
@@ -15,6 +16,10 @@ import {
   RegisterableItems,
 } from "../defs";
 import { createTestResource } from "..";
+import {
+  EnsureResponseSatisfiesContracts,
+  HasContracts,
+} from "../defs.returnTag";
 
 // This is skipped because we mostly check typesafety.
 describe.skip("typesafety", () => {
@@ -333,13 +338,25 @@ describe.skip("typesafety", () => {
     const tag = defineTag<{ value: number }, IUser>({ id: "tag" });
     const tag2 = defineTag<void, IOther>({ id: "tag2" });
 
+    const meta = {
+      tags: [tag.with({ value: 123 }), tag2],
+    } satisfies IMeta;
+
+    const response = {
+      age: 123,
+      name: "123", // intentional
+    };
+    type TEST = HasContracts<typeof meta>;
+    type TEST2 = EnsureResponseSatisfiesContracts<typeof meta, typeof response>;
+
     const task = defineTask({
       id: "task",
-      meta: {
-        tags: [tag.with({ value: 123 }), tag2],
-      },
-      run: async (input) => {
-        return input;
+      meta,
+      run: async (input: { name: string }) => {
+        return {
+          age: 123,
+          name: "123",
+        };
       },
     });
   });

@@ -39,12 +39,8 @@ export type ExtractTagsWithNonVoidReturnTypeFromMeta<TMeta extends IMeta> =
 
 type IsNeverTuple<T extends readonly unknown[]> = T extends [] ? true : false;
 
-export type HasContracts<TMeta extends IMeta> =
-  ExtractTagsWithNonVoidReturnTypeFromMeta<TMeta> extends readonly (infer _U)[]
-    ? IsNeverTuple<ExtractTagsWithNonVoidReturnTypeFromMeta<TMeta>> extends true
-      ? false
-      : true
-    : false;
+export type HasContracts<T extends IMeta> =
+  ExtractTagsWithNonVoidReturnTypeFromMeta<T> extends never[] ? false : true; // HasContracts and enforcement
 
 // Ensure a response type satisfies ALL contracts (intersection)
 type UnionToIntersection<U> = (
@@ -62,10 +58,28 @@ type ContractsIntersection<TMeta extends IMeta> = UnionToIntersection<
   ContractsUnion<TMeta>
 >;
 
+/**
+ * Pretty-print helper to expand intersections for better IDE display.
+ */
+type Simplify<T> = { [K in keyof T]: T[K] } & {};
+
+/**
+ * Verbose compile-time error surfaced when a value does not satisfy
+ * the intersection of all tag-enforced contracts.
+ *
+ * Intersected with `never` to preserve failing behavior while giving
+ * actionable information in editor/tooling hovers.
+ */
+export type ContractViolationError<TMeta extends IMeta, TActual> = {
+  __bluelibs_runner_error: "Value does not satisfy all tag contracts";
+  expected: Simplify<ContractsIntersection<TMeta>>;
+  received: TActual;
+} & never;
+
 export type EnsureResponseSatisfiesContracts<TMeta extends IMeta, TResponse> = [
   ContractsUnion<TMeta>
 ] extends [never]
   ? TResponse // no contracts, allow as-is
   : TResponse extends ContractsIntersection<TMeta>
   ? TResponse
-  : never;
+  : ContractViolationError<TMeta, TResponse>;
