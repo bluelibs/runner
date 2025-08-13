@@ -56,13 +56,13 @@ export class Logger {
    */
   private getDefaultPrintThreshold(): LogLevels | null {
     // Check if logging is explicitly disabled
-    const disableLogs = process.env.BLUELIBS_DISABLE_LOGS;
+    const disableLogs = process.env.RUNNER_DISABLE_LOGS;
     if (disableLogs === "true" || disableLogs === "1") {
       return null;
     }
 
     // Check for specific log level override
-    const logLevel = process.env.BLUELIBS_LOG_LEVEL;
+    const logLevel = process.env.RUNNER_LOG_LEVEL;
     if (logLevel && this.isValidLogLevel(logLevel)) {
       return logLevel as LogLevels;
     }

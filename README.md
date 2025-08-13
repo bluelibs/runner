@@ -634,10 +634,10 @@ const businessTask = task({
 
 ```bash
 # Show debug logs and framework internals
-BLUELIBS_LOG_LEVEL=debug node your-app.js
+RUNNER_LOG_LEVEL=debug node your-app.js
 
 # Hide all logs for production
-BLUELIBS_DISABLE_LOGS=true node your-app.js
+RUNNER_DISABLE_LOGS=true node your-app.js
 ```
 
 ### Log Levels: From Whispers to Screams
@@ -751,11 +751,11 @@ By default, logs at `info` level and above are automatically printed to console 
 
 ```bash
 # Disable all logging output
-BLUELIBS_DISABLE_LOGS=true node your-app.js
+RUNNER_DISABLE_LOGS=true node your-app.js
 
 # Set specific log level (trace, debug, info, warn, error, critical)
-BLUELIBS_LOG_LEVEL=debug node your-app.js
-BLUELIBS_LOG_LEVEL=error node your-app.js
+RUNNER_LOG_LEVEL=debug node your-app.js
+RUNNER_LOG_LEVEL=error node your-app.js
 ```
 
 #### Programmatic Control
