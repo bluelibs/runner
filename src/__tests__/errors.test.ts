@@ -5,7 +5,18 @@ import {
   defineMiddleware,
 } from "../define";
 import { run } from "../run";
-import { Errors } from "../errors";
+import { 
+  Errors,
+  RuntimeError,
+  DuplicateRegistrationError,
+  DependencyNotFoundError,
+  UnknownItemTypeError,
+  CircularDependenciesError,
+  EventNotFoundError,
+  MiddlewareAlreadyGlobalError,
+  LockedError,
+  StoreAlreadyInitializedError,
+} from "../errors";
 
 describe("Errors", () => {
   it("should throw duplicateRegistration error", async () => {
@@ -256,5 +267,92 @@ describe("Errors", () => {
     expect(() => first.everywhere()).toThrow(
       Errors.middlewareAlreadyGlobal("x").message
     );
+  });
+
+  describe("Error Classes", () => {
+    it("should have correct error names and inheritance", () => {
+      // Test base RuntimeError
+      const baseError = new RuntimeError("test");
+      expect(baseError.name).toBe("RuntimeError");
+      expect(baseError).toBeInstanceOf(Error);
+      expect(baseError).toBeInstanceOf(RuntimeError);
+
+      // Test DuplicateRegistrationError
+      const dupError = new DuplicateRegistrationError("Task", "test");
+      expect(dupError.name).toBe("DuplicateRegistrationError");
+      expect(dupError).toBeInstanceOf(Error);
+      expect(dupError).toBeInstanceOf(RuntimeError);
+      expect(dupError).toBeInstanceOf(DuplicateRegistrationError);
+
+      // Test DependencyNotFoundError
+      const depError = new DependencyNotFoundError("test");
+      expect(depError.name).toBe("DependencyNotFoundError");
+      expect(depError).toBeInstanceOf(RuntimeError);
+
+      // Test UnknownItemTypeError
+      const unknownError = new UnknownItemTypeError("test");
+      expect(unknownError.name).toBe("UnknownItemTypeError");
+      expect(unknownError).toBeInstanceOf(RuntimeError);
+
+      // Test CircularDependenciesError
+      const circularError = new CircularDependenciesError(["a", "b"]);
+      expect(circularError.name).toBe("CircularDependenciesError");
+      expect(circularError).toBeInstanceOf(RuntimeError);
+
+      // Test EventNotFoundError
+      const eventError = new EventNotFoundError("test");
+      expect(eventError.name).toBe("EventNotFoundError");
+      expect(eventError).toBeInstanceOf(RuntimeError);
+
+      // Test MiddlewareAlreadyGlobalError
+      const middlewareError = new MiddlewareAlreadyGlobalError("test");
+      expect(middlewareError.name).toBe("MiddlewareAlreadyGlobalError");
+      expect(middlewareError).toBeInstanceOf(RuntimeError);
+
+      // Test LockedError
+      const lockedError = new LockedError("test");
+      expect(lockedError.name).toBe("LockedError");
+      expect(lockedError).toBeInstanceOf(RuntimeError);
+
+      // Test StoreAlreadyInitializedError
+      const storeError = new StoreAlreadyInitializedError();
+      expect(storeError.name).toBe("StoreAlreadyInitializedError");
+      expect(storeError).toBeInstanceOf(RuntimeError);
+    });
+
+    it("should create correct error types via Errors object", () => {
+      // Test that Errors object creates the right instances
+      const dupError = Errors.duplicateRegistration("Task", "test");
+      expect(dupError).toBeInstanceOf(DuplicateRegistrationError);
+      expect(dupError.name).toBe("DuplicateRegistrationError");
+
+      const depError = Errors.dependencyNotFound("test");
+      expect(depError).toBeInstanceOf(DependencyNotFoundError);
+      expect(depError.name).toBe("DependencyNotFoundError");
+
+      const unknownError = Errors.unknownItemType({});
+      expect(unknownError).toBeInstanceOf(UnknownItemTypeError);
+      expect(unknownError.name).toBe("UnknownItemTypeError");
+
+      const circularError = Errors.circularDependencies(["a", "b"]);
+      expect(circularError).toBeInstanceOf(CircularDependenciesError);
+      expect(circularError.name).toBe("CircularDependenciesError");
+
+      const eventError = Errors.eventNotFound("test");
+      expect(eventError).toBeInstanceOf(EventNotFoundError);
+      expect(eventError.name).toBe("EventNotFoundError");
+
+      const middlewareError = Errors.middlewareAlreadyGlobal("test");
+      expect(middlewareError).toBeInstanceOf(MiddlewareAlreadyGlobalError);
+      expect(middlewareError.name).toBe("MiddlewareAlreadyGlobalError");
+
+      const lockedError = Errors.locked("test");
+      expect(lockedError).toBeInstanceOf(LockedError);
+      expect(lockedError.name).toBe("LockedError");
+
+      const storeError = Errors.storeAlreadyInitialized();
+      expect(storeError).toBeInstanceOf(StoreAlreadyInitializedError);
+      expect(storeError.name).toBe("StoreAlreadyInitializedError");
+    });
   });
 });
