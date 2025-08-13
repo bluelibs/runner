@@ -616,16 +616,28 @@ const businessTask = task({
   id: "app.tasks.business",
   dependencies: { logger: globals.resources.logger },
   run: async (_, { logger }) => {
-    logger.info("Starting business process");
-    logger.warn("This might take a while");
-    logger.error("Oops, something went wrong", {
+    logger.info("Starting business process");        // ✅ Visible by default
+    logger.warn("This might take a while");          // ✅ Visible by default  
+    logger.error("Oops, something went wrong", {     // ✅ Visible by default
       error: new Error("Database connection failed"),
     });
-    logger.critical("System is on fire", {
+    logger.critical("System is on fire", {           // ✅ Visible by default
       data: { temperature: "9000°C" },
     });
+    logger.debug("Debug information");               // ❌ Hidden by default
+    logger.trace("Very detailed trace");             // ❌ Hidden by default
   },
 });
+```
+
+**Good news!** Logs at `info` level and above are visible by default, so you'll see your application logs immediately without any configuration. For development and debugging, you can easily show more detailed logs:
+
+```bash
+# Show debug logs and framework internals
+BLUELIBS_LOG_LEVEL=debug node your-app.js
+
+# Hide all logs for production
+BLUELIBS_DISABLE_LOGS=true node your-app.js
 ```
 
 ### Log Levels: From Whispers to Screams
@@ -733,18 +745,31 @@ const requestHandler = task({
 
 ### Print Threshold: Control What Shows Up
 
-By default, logs are just events - they don't print to console unless you tell them to. Set a print threshold to automatically output logs at or above a certain level:
+By default, logs at `info` level and above are automatically printed to console for better developer experience. You can easily control this behavior through environment variables or by setting a print threshold programmatically:
+
+#### Environment Variable Controls
+
+```bash
+# Disable all logging output
+BLUELIBS_DISABLE_LOGS=true node your-app.js
+
+# Set specific log level (trace, debug, info, warn, error, critical)
+BLUELIBS_LOG_LEVEL=debug node your-app.js
+BLUELIBS_LOG_LEVEL=error node your-app.js
+```
+
+#### Programmatic Control
 
 ```typescript
-// Set up log printing (they don't print by default)
+// Override the default print threshold programmatically
 const setupLogging = task({
   id: "app.logging.setup",
   on: globals.resources.logger.events.afterInit,
   run: async (event) => {
     const logger = event.data.value;
 
-    // Print info level and above (info, warn, error, critical)
-    logger.setPrintThreshold("info");
+    // Print debug level and above (debug, info, warn, error, critical)
+    logger.setPrintThreshold("debug");
 
     // Print only errors and critical issues
     logger.setPrintThreshold("error");
