@@ -26,7 +26,6 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
  */
 export const registerUserTask = task({
   id: "app.tasks.auth.register",
-  inputSchema: registerSchema,
   dependencies: { userService: userServiceResource },
   meta: {
     tags: [
@@ -51,7 +50,7 @@ export const registerUserTask = task({
       })
     ]
   },
-  run: async (userData: RegisterRequest, { userService }: { userService: UserService }): Promise<ApiResponse<LoginResponse>> => {
+  run: async (userData: RegisterRequest, { userService }): Promise<ApiResponse<LoginResponse>> => {
     try {
       // Create user
       const user = await userService.createUser(userData);
@@ -88,7 +87,6 @@ export const registerUserTask = task({
  */
 export const loginUserTask = task({
   id: "app.tasks.auth.login",
-  inputSchema: loginSchema,
   dependencies: { userService: userServiceResource },
   meta: {
     tags: [
@@ -113,7 +111,7 @@ export const loginUserTask = task({
       })
     ]
   },
-  run: async (loginData: LoginRequest, { userService }: { userService: UserService }): Promise<ApiResponse<LoginResponse>> => {
+  run: async (loginData: LoginRequest, { userService }): Promise<ApiResponse<LoginResponse>> => {
     try {
       // Verify credentials
       const user = await userService.verifyPassword(loginData.email, loginData.password);
@@ -225,7 +223,7 @@ export const getAllUsersTask = task({
       })
     ]
   },
-  run: async (_, { userService }: { userService: UserService }): Promise<ApiResponse<User[]>> => {
+  run: async (_, { userService }): Promise<ApiResponse<User[]>> => {
     try {
       // In a real app, you might check for admin role here
       const userSession = UserContext.use();

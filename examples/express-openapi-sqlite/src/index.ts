@@ -3,6 +3,7 @@ import { databaseResource } from "./resources/database";
 import { userServiceResource } from "./resources/userService";
 import { expressServerResource, routeRegistrationTask, ExpressServer } from "./resources/expressServer";
 import { httpRouteBridgeResource } from "./resources/httpRouteBridge";
+import { authMiddleware } from "./middleware/auth";
 import { 
   registerUserTask,
   loginUserTask,
@@ -27,6 +28,9 @@ const app = resource({
       cors: true,
       apiPrefix: '/api'
     }),
+    
+    // Middleware
+    authMiddleware,
     
     // Route registration
     routeRegistrationTask,

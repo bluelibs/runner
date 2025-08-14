@@ -55,15 +55,11 @@ export const httpRouteBridgeResource = resource({
             return await task(taskInput);
           });
 
-          // Send response
-          if (result.success) {
-            res.json(result);
-          } else {
-            res.status(400).json(result);
-          }
+          // Always send 200 with success/error in body
+          res.status(200).json(result);
         } catch (error) {
           console.error('Route handler error:', error);
-          res.status(500).json({
+          res.status(200).json({
             success: false,
             error: error instanceof Error ? error.message : 'Internal server error'
           });
