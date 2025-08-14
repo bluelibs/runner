@@ -30,11 +30,6 @@ export class BasicPermissionChecker implements IPermissionChecker {
   async hasPermission(context: IPermissionContext): Promise<boolean> {
     const { user, resource, action } = context;
 
-    // Super admin can do anything
-    if (user.roles.includes("super_admin")) {
-      return true;
-    }
-
     // Check if user is active
     if (!user.isActive) {
       return false;
