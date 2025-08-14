@@ -314,6 +314,33 @@ describe("Anonymous Components", () => {
 
       await run(app);
     });
+
+    it("should allow two anonymous resources to co-exist and be distinct", async () => {
+      const resourceA = defineResource({
+        init: async () => "A",
+      });
+
+      const resourceB = defineResource({
+        init: async () => "B",
+      });
+
+      // Both ids should be symbols and different
+      expect(typeof resourceA.id).toBe("symbol");
+      expect(typeof resourceB.id).toBe("symbol");
+      expect(resourceA.id).not.toBe(resourceB.id);
+
+      const app = defineResource({
+        id: "app",
+        register: [resourceA, resourceB],
+        dependencies: { resourceA, resourceB },
+        async init(_, { resourceA, resourceB }) {
+          expect(resourceA).toBe("A");
+          expect(resourceB).toBe("B");
+        },
+      });
+
+      await run(app);
+    });
   });
 
   describe("Anonymous Events", () => {

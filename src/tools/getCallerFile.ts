@@ -44,18 +44,29 @@ export function generateCallerIdFromFile(
   suffix: string = "",
   fallbackParts: number = 4
 ): symbol {
-  filePath = filePath.replace(/\\/g, "/"); // Normalize path for consistency.
-  const parts = filePath.split("/");
-  const srcIndex = parts.lastIndexOf("src");
-  const nodeModulesIndex = parts.lastIndexOf("node_modules");
+  // Normalize paths for consistency across platforms
+  const normalizedPath = filePath.replace(/\\/g, "/");
+  const cwdNormalized = process.cwd().replace(/\\/g, "/");
 
-  const breakIndex = Math.max(srcIndex, nodeModulesIndex);
+  const parts = normalizedPath.split("/");
+  const nodeModulesIndex = parts.lastIndexOf("node_modules");
 
   let relevantParts: string[];
 
-  if (breakIndex !== -1) {
-    relevantParts = parts.slice(breakIndex + 1);
+  if (nodeModulesIndex !== -1) {
+    // If inside node_modules, generate id relative to the package path
+    relevantParts = parts.slice(nodeModulesIndex + 1);
+  } else if (
+    normalizedPath === cwdNormalized ||
+    normalizedPath.startsWith(cwdNormalized + "/")
+  ) {
+    // Prefer generating id relative to the workspace root (process.cwd())
+    const relativeToCwd = normalizedPath
+      .slice(cwdNormalized.length)
+      .replace(/^\//, "");
+    relevantParts = relativeToCwd.length > 0 ? relativeToCwd.split("/") : [""];
   } else {
+    // Fallback: use the last N parts if path is outside cwd and not in node_modules
     relevantParts = parts.slice(-fallbackParts);
   }
 

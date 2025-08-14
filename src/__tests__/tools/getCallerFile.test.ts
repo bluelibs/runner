@@ -57,7 +57,7 @@ describe("generateCallerIdFromFile", () => {
   it("should generate a symbol from a path containing src", () => {
     const filePath =
       "/Users/theodordiaconu/Projects/runner/src/globals/resources/queue.resource.ts";
-    const expectedDescription = "globals.resources.queue.resource";
+    const expectedDescription = "src.globals.resources.queue.resource";
     expect(generateCallerIdFromFile(filePath).description).toEqual(
       expectedDescription
     );
@@ -83,7 +83,7 @@ describe("generateCallerIdFromFile", () => {
   it("should handle paths with backslashes", () => {
     const filePath =
       "C:\\Users\\theodordiaconu\\Projects\\runner\\src\\globals\\resources\\queue.resource.ts";
-    const expectedDescription = "globals.resources.queue.resource";
+    const expectedDescription = "src.globals.resources.queue.resource";
     expect(generateCallerIdFromFile(filePath).description).toEqual(
       expectedDescription
     );
@@ -92,7 +92,7 @@ describe("generateCallerIdFromFile", () => {
   it("should handle file names without extensions", () => {
     const filePath =
       "/Users/theodordiaconu/Projects/runner/src/globals/resources/queue.resource";
-    const expectedDescription = "globals.resources.queue.resource";
+    const expectedDescription = "src.globals.resources.queue.resource";
     expect(generateCallerIdFromFile(filePath).description).toEqual(
       expectedDescription
     );
@@ -101,7 +101,7 @@ describe("generateCallerIdFromFile", () => {
   it("should handle file names with multiple dots", () => {
     const filePath =
       "/Users/theodordiaconu/Projects/runner/src/globals/resources/queue.resource.test.ts";
-    const expectedDescription = "globals.resources.queue.resource.test";
+    const expectedDescription = "src.globals.resources.queue.resource.test";
     expect(generateCallerIdFromFile(filePath).description).toEqual(
       expectedDescription
     );
@@ -150,7 +150,7 @@ describe("generateCallerIdFromFile", () => {
 
     // Test case where 'src' is at the end, making relevantParts empty (triggers line 77 else branch)
     const result = generateCallerIdFromFile("/some/path/src", "suffix");
-    expect(result.description).toEqual(".suffix");
+    expect(result.description).toEqual(".some.path.src.suffix");
   });
 
   it("should use fallback parts when no src or node_modules found", () => {
@@ -158,6 +158,21 @@ describe("generateCallerIdFromFile", () => {
     const filePath = "/some/other/deep/path/file.js";
     const expectedDescription = "other.deep.path.file";
     expect(generateCallerIdFromFile(filePath, "", 4).description).toEqual(
+      expectedDescription
+    );
+  });
+
+  it("should handle path equal to process.cwd() (relative root)", () => {
+    const expectedDescription = ".suffix";
+    expect(
+      generateCallerIdFromFile(process.cwd(), "suffix").description
+    ).toEqual(expectedDescription);
+  });
+
+  it("should handle path ending with node_modules (no relevant parts)", () => {
+    const path = `${process.cwd()}/node_modules`;
+    const expectedDescription = ".suffix";
+    expect(generateCallerIdFromFile(path, "suffix").description).toEqual(
       expectedDescription
     );
   });

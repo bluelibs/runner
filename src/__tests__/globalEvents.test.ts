@@ -536,7 +536,7 @@ describe("Global Events", () => {
 
     // Verify the simple event handler was executed
     expect(eventHandlerExecutions).toContain(
-      "simple-handler:Symbol(__tests__.globalEvents.test.event)"
+      "simple-handler:Symbol(src.__tests__.globalEvents.test.event)"
     );
   });
 });
