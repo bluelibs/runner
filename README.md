@@ -567,27 +567,31 @@ const app = resource({
 });
 ```
 
-## Performance: Built for Speed
+## Performance
 
 BlueLibs Runner is designed with performance in mind. The framework introduces minimal overhead while providing powerful features like dependency injection, middleware, and event handling.
 
+Test it yourself by cloning @bluelibs/runner and running `npm run benchmark`.
+
+You may see negative middlewareOverheadMs. This is a measurement artifact at micro-benchmark scale: JIT warm‑up, CPU scheduling, GC timing, and cache effects can make the “with middleware” run appear slightly faster than the baseline. Interpret small negatives as ≈ 0 overhead.
+
 ### Performance Benchmarks
 
-Here are real performance metrics from our comprehensive benchmark suite:
+Here are real performance metrics from our comprehensive benchmark suite on an M1 Max.
 
-#### Core Operations (operations per second)
+#### Core Operations
 
-- **Basic task execution**: ~196,000 tasks/sec
-- **Task execution with 5 middlewares**: ~185,000 tasks/sec  
-- **Resource initialization**: ~51,000 resources/sec
-- **Event emission and handling**: ~76,000 events/sec
-- **Dependency resolution (10-level chain)**: ~3,300 chains/sec
+- **Basic task execution**: ~270,000 tasks/sec to ~350,000 tasks/sec
+- **Task execution with 5 middlewares**: ~244,000 tasks/sec
+- **Resource initialization**: ~59,700 resources/sec
+- **Event emission and handling**: ~245,861 events/sec
+- **Dependency resolution (10-level chain)**: ~8,400 chains/sec
 
 #### Overhead Analysis
 
-- **Middleware overhead**: ~0.0003ms per middleware (virtually zero)
+- **Middleware overhead**: ~0.0013ms for all 5, ~0.00026ms per middleware (virtually zero)
 - **Memory overhead**: ~3.3MB for 100 components (resources + tasks)
-- **Cache middleware speedup**: 1.8x faster with cache hits
+- **Cache middleware speedup**: 3.65x faster with cache hits
 
 #### Real-World Performance
 
@@ -598,7 +602,7 @@ const userTask = task({
   middleware: [auth, logging, metrics],
   run: async (userData) => {
     return database.users.create(userData);
-  }
+  },
 });
 
 // 1000 executions = ~5ms total time
@@ -612,11 +616,13 @@ for (let i = 0; i < 1000; i++) {
 #### When Performance Matters Most
 
 **Use tasks for:**
+
 - High-level business operations that benefit from observability
 - Operations that need middleware (auth, caching, retry)
 - Functions called from multiple places
 
-**Use regular functions for:**
+**Use regular functions or service resources for:**
+
 - Simple utilities and helpers
 - Performance-critical hot paths (< 1ms requirement)
 - Single-use internal logic
@@ -624,35 +630,38 @@ for (let i = 0; i < 1000; i++) {
 #### Optimizing Your App
 
 **Middleware Ordering**: Place faster middleware first
+
 ```typescript
 const task = defineTask({
   middleware: [
-    fastAuthCheck,      // ~0.1ms
-    slowRateLimiting,   // ~2ms
-    expensiveLogging,   // ~5ms
-  ]
+    fastAuthCheck, // ~0.1ms
+    slowRateLimiting, // ~2ms
+    expensiveLogging, // ~5ms
+  ],
 });
 ```
 
 **Resource Reuse**: Resources are singletons—perfect for expensive setup
+
 ```typescript
 const database = resource({
   init: async () => {
     // Expensive connection setup happens once
     const connection = await createDbConnection();
     return connection;
-  }
+  },
 });
 ```
 
 **Cache Strategically**: Use built-in caching for expensive operations
+
 ```typescript
 const expensiveTask = task({
   middleware: [globals.middlewares.cache.with({ ttl: 60000 })],
   run: async (input) => {
     // This expensive computation is cached
     return performExpensiveCalculation(input);
-  }
+  },
 });
 ```
 
@@ -670,7 +679,7 @@ Run the framework's benchmark suite:
 # Comprehensive benchmarks
 npm run test -- --testMatch="**/comprehensive-benchmark.test.ts"
 
-# Benchmark.js based tests  
+# Benchmark.js based tests
 npm run benchmark
 ```
 
@@ -686,21 +695,23 @@ for (let i = 0; i < iterations; i++) {
 
 const duration = performance.now() - start;
 console.log(`${iterations} tasks in ${duration.toFixed(2)}ms`);
-console.log(`Average: ${(duration/iterations).toFixed(4)}ms per task`);
-console.log(`Throughput: ${Math.round(iterations/(duration/1000))} tasks/sec`);
+console.log(`Average: ${(duration / iterations).toFixed(4)}ms per task`);
+console.log(
+  `Throughput: ${Math.round(iterations / (duration / 1000))} tasks/sec`
+);
 ```
 
 ### Performance vs Features Trade-off
 
 BlueLibs Runner achieves high performance while providing enterprise features:
 
-| Feature | Overhead | Benefit |
-|---------|----------|---------|
-| Dependency Injection | ~0.001ms | Type safety, testability |
-| Event System | ~0.013ms | Loose coupling, observability |
-| Middleware Chain | ~0.0003ms/middleware | Cross-cutting concerns |
-| Resource Management | One-time init | Singleton pattern, lifecycle |
-| Built-in Caching | 1.8x speedup | Automatic optimization |
+| Feature              | Overhead             | Benefit                       |
+| -------------------- | -------------------- | ----------------------------- |
+| Dependency Injection | ~0.001ms             | Type safety, testability      |
+| Event System         | ~0.013ms             | Loose coupling, observability |
+| Middleware Chain     | ~0.0003ms/middleware | Cross-cutting concerns        |
+| Resource Management  | One-time init        | Singleton pattern, lifecycle  |
+| Built-in Caching     | 1.8x speedup         | Automatic optimization        |
 
 **Bottom line**: The framework adds minimal overhead (~0.005ms per task) while providing significant architectural benefits.
 
