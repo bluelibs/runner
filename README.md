@@ -616,16 +616,18 @@ const businessTask = task({
   id: "app.tasks.business",
   dependencies: { logger: globals.resources.logger },
   run: async (_, { logger }) => {
-    logger.info("Starting business process");        // ✅ Visible by default
-    logger.warn("This might take a while");          // ✅ Visible by default  
-    logger.error("Oops, something went wrong", {     // ✅ Visible by default
+    logger.info("Starting business process"); // ✅ Visible by default
+    logger.warn("This might take a while"); // ✅ Visible by default
+    logger.error("Oops, something went wrong", {
+      // ✅ Visible by default
       error: new Error("Database connection failed"),
     });
-    logger.critical("System is on fire", {           // ✅ Visible by default
+    logger.critical("System is on fire", {
+      // ✅ Visible by default
       data: { temperature: "9000°C" },
     });
-    logger.debug("Debug information");               // ❌ Hidden by default
-    logger.trace("Very detailed trace");             // ❌ Hidden by default
+    logger.debug("Debug information"); // ❌ Hidden by default
+    logger.trace("Very detailed trace"); // ❌ Hidden by default
   },
 });
 ```
@@ -1196,16 +1198,16 @@ const performanceMiddleware = middleware({
   id: "app.middleware.performance",
   run: async ({ task, next }) => {
     const tags = task.definition.meta?.tags || [];
-    const perfConfig = performanceTag.extract(tags);
+    const perfConfigTag = performanceTag.extract(tags); // or easier: .extract(task.definition)
 
-    if (perfConfig) {
+    if (perfConfigTag) {
       const startTime = Date.now();
 
       try {
         const result = await next(task.input);
         const duration = Date.now() - startTime;
 
-        if (duration > perfConfig.config.criticalAboveMs) {
+        if (duration > perfConfigTag.config.criticalAboveMs) {
           await alerting.critical(
             `Task ${task.definition.id} took ${duration}ms`
           );
@@ -1291,42 +1293,6 @@ const badTask = task({
 });
 ```
 
-Gotchas with empty tags:
-
-- Use a literal empty tuple to indicate “no contracts”: `meta: { tags: [] as const }`.
-- If `tags` widens to `TagType[]` (for example, a variable typed as array), the compiler cannot prove emptiness and contract checks may apply.
-
-const rateLimitMiddleware = middleware({
-id: "app.middleware.rateLimit",
-dependencies: { redis },
-run: async ({ task, next }, { redis }) => {
-// Extraction can be done at task.definition level or at task.definition.meta.tags
-const rateLimitCurrentTag = rateLimitTag.extract(task.definition);
-
-    // Alternative way
-    const tags = task.definition.meta?.tags;
-    const rateLimitCurrentTag = rateLimitTag.extract(tags);
-
-    if (rateLimitCurrentTag) {
-      const key = `rateLimit:${task.definition.id}`;
-      const current = await redis.incr(key);
-
-      if (current === 1) {
-        await redis.expire(key, 60); // 1 minute window
-      }
-
-      if (current > rateLimitCurrentTag.config.maxRequestsPerMinute) {
-        throw new Error("Rate limit exceeded");
-      }
-    }
-
-    return next(task.input);
-
-},
-});
-
-````
-
 ### When to Use Metadata
 
 #### ✅ Great Use Cases
@@ -1343,7 +1309,7 @@ const paymentProcessor = resource({
   },
   // ... implementation
 });
-````
+```
 
 **Conditional Behavior**
 
@@ -1470,9 +1436,8 @@ function getApiTasks(store: Store) {
 
 // Find all tasks with specific performance requirements
 function getPerformanceCriticalTasks(store: Store) {
-  return store.getAllTasks().filter((task) => {
-    const tags = task.meta?.tags || [];
-    return performanceTag.extract(tags) !== null;
+  return store.tasks.values().filter(({ task }) => {
+    return performanceTag.extract(task) !== null;
   });
 }
 ```
