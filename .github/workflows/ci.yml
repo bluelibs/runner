@@ -43,22 +43,6 @@ jobs:
       - name: Run tests with coverage enforcement
         run: npm run test:ci
 
-      # Generate coverage badge (only on main branch)
-      - name: Generate coverage badge
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: jaywcjlove/coverage-badges-cli@main
-        with:
-          source: coverage/lcov.info
-          output: coverage/badge.svg
-
-      # Upload coverage badge as artifact (only on main branch)
-      - name: Upload coverage badge
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        uses: actions/upload-artifact@v3
-        with:
-          name: coverage-badge
-          path: coverage/badge.svg
-
       # Generate documentation (only on main branch)
       - name: Generate documentation
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
