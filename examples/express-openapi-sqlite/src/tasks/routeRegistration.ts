@@ -18,11 +18,12 @@ export const routeRegistrationTask = task({
     store: globals.resources.store,
     taskRunner: globals.resources.taskRunner,
     expressServer: expressServerResource,
+    logger: globals.resources.logger,
   },
-  run: async (_, { store, taskRunner, expressServer }) => {
+  run: async (_, { store, taskRunner, expressServer, logger }) => {
     const { app } = expressServer;
     
-    console.log('🔗 Discovering and registering HTTP routes from task tags...');
+    logger.info('🔗 Discovering and registering HTTP routes from task tags...');
 
     // Helper to create route handler that bridges to Runner task
     const createRouteHandler = (task: any) => {
@@ -48,7 +49,7 @@ export const routeRegistrationTask = task({
           // Always send 200 with success/error in body
           res.status(200).json(result);
         } catch (error) {
-          console.error('Route handler error:', error);
+          logger.error('Route handler error:', { error, data: { path: req.path, method: req.method } });
           res.status(200).json({
             success: false,
             error: error instanceof Error ? error.message : 'Internal server error'
@@ -76,13 +77,13 @@ export const routeRegistrationTask = task({
           
           // Register the route
           (app as any)[httpMethod](path, handler);
-          console.log(`📍 ${method} ${path} -> ${String(task.id)}`);
+          logger.info(`📍 ${method} ${path} -> ${String(task.id)}`);
           routesRegistered++;
         }
       }
     });
 
-    console.log(`✅ Automatically registered ${routesRegistered} HTTP routes from task tags`);
+    logger.info(`✅ Automatically registered ${routesRegistered} HTTP routes from task tags`);
     
     return { routesRegistered };
   }
