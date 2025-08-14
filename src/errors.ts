@@ -71,7 +71,7 @@ export class MiddlewareAlreadyGlobalError extends RuntimeError {
   constructor(id: string | symbol) {
     super(
       "Cannot call .everywhere() on an already global middleware: " +
-        id.toString
+        id.toString()
     );
     this.name = "MiddlewareAlreadyGlobalError";
   }
