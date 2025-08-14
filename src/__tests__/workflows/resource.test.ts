@@ -4,8 +4,9 @@
 
 import { run } from "../../run";
 import { defineResource as resource, defineTask as task } from "../../define";
-import { workflowResource, memoryWorkflowResource } from "../../workflows/resource";
+import { workflowResource, memoryWorkflowResource } from "../../globals/resources/workflow.resource";
 import { defineWorkflow, defineWorkflowStep } from "../../workflows/define";
+import { Workflow } from "../../workflows/Workflow";
 import { WorkflowStatus } from "../../workflows/defs";
 import { MemoryWorkflowAdapter } from "../../workflows/adapters/MemoryWorkflowAdapter";
 
@@ -59,7 +60,7 @@ describe("Workflow Resource Integration", () => {
       const app = resource({
         id: "test.app",
         register: [memoryWorkflowResource],
-        dependencies: { workflows: memoryWorkflowResource.resource },
+        dependencies: { workflows: memoryWorkflowResource },
         init: async (_: any, { workflows }: any) => {
           expect(workflows).toBeDefined();
           expect(workflows.getAdapter()).toBeInstanceOf(MemoryWorkflowAdapter);
@@ -348,7 +349,7 @@ describe("Workflow Resource Integration", () => {
       const app = resource({
         id: "timer.app",
         register: [memoryWorkflowResource, timerTask],
-        dependencies: { workflows: memoryWorkflowResource.resource },
+        dependencies: { workflows: memoryWorkflowResource },
         init: async (_: any, { workflows }: any) => {
           await workflows.registerWorkflow(workflow);
           
@@ -389,7 +390,7 @@ describe("Workflow Resource Integration", () => {
       const app = resource({
         id: "adapter.test.app",
         register: [memoryWorkflowResource],
-        dependencies: { workflows: memoryWorkflowResource.resource },
+        dependencies: { workflows: memoryWorkflowResource },
         init: async (_: any, { workflows }: any) => {
           const adapter = workflows.getAdapter();
           expect(adapter).toBeInstanceOf(MemoryWorkflowAdapter);
@@ -426,7 +427,7 @@ describe("Workflow Resource Integration", () => {
       const app = resource({
         id: "lifecycle.app",
         register: [memoryWorkflowResource],
-        dependencies: { workflows: memoryWorkflowResource.resource },
+        dependencies: { workflows: memoryWorkflowResource },
         init: async (_: any, { workflows }: any) => {
           // Create a workflow with timer to verify cleanup
           const workflow = defineWorkflow({
@@ -455,6 +456,139 @@ describe("Workflow Resource Integration", () => {
       await dispose();
 
       expect(disposeSpy).toHaveBeenCalled();
+    });
+  });
+
+  describe("OOP workflow pattern", () => {
+    it("should work with Workflow classes", async () => {
+      // Test workflow using OOP pattern
+      class TestOrderWorkflow extends Workflow {
+        constructor() {
+          super({
+            id: "test.oop.order.processing",
+            initialState: "pending",
+            states: ["pending", "validated", "completed"],
+            steps: [],
+            transitions: [
+              { from: "pending", to: "validated" },
+              { from: "validated", to: "completed" },
+            ],
+            finalStates: ["completed"],
+          });
+        }
+      }
+
+      const app = resource({
+        id: "oop.test.app",
+        register: [memoryWorkflowResource],
+        dependencies: { workflows: memoryWorkflowResource },
+        init: async (_: any, { workflows }: any) => {
+          // Create and register workflow instance
+          const orderWorkflow = new TestOrderWorkflow();
+          expect(orderWorkflow.id).toBe("test.oop.order.processing");
+          expect(orderWorkflow.initialState).toBe("pending");
+          expect(orderWorkflow.states).toEqual(["pending", "validated", "completed"]);
+
+          // Register the workflow
+          await workflows.registerWorkflow(orderWorkflow);
+
+          // Create workflow instance
+          const instance = await workflows.createInstance(
+            "test.oop.order.processing",
+            { orderId: "test-123", amount: 99.99 }
+          );
+
+          expect(instance.workflowId).toBe("test.oop.order.processing");
+          expect(instance.currentState).toBe("pending");
+          expect(instance.context.orderId).toBe("test-123");
+
+          // Test state transitions
+          await workflows.transitionTo(instance.id, "validated");
+          
+          const validatedInstance = await workflows.getInstance(instance.id);
+          expect(validatedInstance?.currentState).toBe("validated");
+
+          await workflows.transitionTo(instance.id, "completed");
+          
+          const completedInstance = await workflows.getInstance(instance.id);
+          expect(completedInstance?.currentState).toBe("completed");
+          expect(completedInstance?.status).toBe(WorkflowStatus.COMPLETED);
+
+          return { workflowId: orderWorkflow.id, instanceId: instance.id };
+        },
+      });
+
+      const { value, dispose } = await run(app);
+      expect((value as any).workflowId).toBe("test.oop.order.processing");
+      await dispose();
+    });
+
+    it("should create workflow steps using helper methods", async () => {
+      const validateTask = task({
+        id: "validate.test.task",
+        run: async (data: { orderId: string }) => {
+          return { valid: true, orderId: data.orderId };
+        },
+      });
+
+      class StepTestWorkflow extends Workflow {
+        constructor() {
+          super({
+            id: "test.step.workflow", 
+            initialState: "pending",
+            states: ["pending", "validated", "completed"],
+            steps: [
+              // Use helper method to create step
+            ],
+            transitions: [
+              { from: "pending", to: "validated", steps: ["validate"] },
+              { from: "validated", to: "completed" },
+            ],
+            finalStates: ["completed"],
+          });
+
+          // Override steps to use helper method
+          this.steps.push(this.createStep({
+            id: "validate",
+            task: validateTask,
+            config: { timeout: 5000, retries: 2 },
+          }));
+        }
+      }
+
+      const app = resource({
+        id: "step.test.app",
+        register: [memoryWorkflowResource, validateTask],
+        dependencies: { workflows: memoryWorkflowResource },
+        init: async (_: any, { workflows }: any) => {
+          const workflow = new StepTestWorkflow();
+          expect(workflow.steps).toHaveLength(1);
+          expect(workflow.steps[0].id).toBe("validate");
+          expect(workflow.steps[0].config?.timeout).toBe(5000);
+          expect(workflow.steps[0].config?.retries).toBe(2);
+
+          await workflows.registerWorkflow(workflow);
+
+          const instance = await workflows.createInstance("test.step.workflow", {
+            orderId: "step-test-123",
+          });
+
+          // Execute step
+          const result = await workflows.executeStep(instance.id, "validate", {
+            orderId: "step-test-123",
+          });
+
+          expect(result.success).toBe(true);
+          expect(result.output.valid).toBe(true);
+          expect(result.output.orderId).toBe("step-test-123");
+
+          return { stepCount: workflow.steps.length };
+        },
+      });
+
+      const { value, dispose } = await run(app);
+      expect((value as any).stepCount).toBe(1);
+      await dispose();
     });
   });
 });

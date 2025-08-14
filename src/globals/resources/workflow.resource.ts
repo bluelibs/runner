@@ -3,12 +3,15 @@
  * 
  * This resource provides workflow management capabilities as a BlueLibs Runner
  * resource, integrating seamlessly with the existing framework.
+ * 
+ * Following the OOP pattern established by Queue and Semaphore resources,
+ * this provides a clean, class-based interface for workflow management.
  */
 
-import { defineResource } from "../define";
-import { globalResources } from "../globals/globalResources";
-import { WorkflowEngine } from "./WorkflowEngine";
-import { MemoryWorkflowAdapter } from "./adapters/MemoryWorkflowAdapter";
+import { defineResource } from "../../define";
+import { WorkflowEngine } from "../../workflows/WorkflowEngine";
+import { MemoryWorkflowAdapter } from "../../workflows/adapters/MemoryWorkflowAdapter";
+import { Workflow } from "../../workflows/Workflow";
 import {
   IWorkflowDefinition,
   IWorkflowInstance,
@@ -19,7 +22,7 @@ import {
   WorkflowInstanceId,
   WorkflowState,
   WorkflowContext,
-} from "./defs";
+} from "../../workflows/defs";
 
 /**
  * Configuration for the workflow resource
@@ -48,14 +51,14 @@ export interface IWorkflowResourceConfig {
  * automatic lifecycle management and dependency injection.
  */
 export const workflowResource = defineResource<IWorkflowResourceConfig>({
-  id: "bluelibs.workflows.engine",
+  id: "globals.resources.workflow",
   init: async (
     config = {} as IWorkflowResourceConfig,
     dependencies: any
   ) => {
     // Create EventManager and Logger if not provided in config
-    const eventManager = config.eventManager || new (await import("../models/EventManager")).EventManager();
-    const logger = config.logger || new (await import("../models/Logger")).Logger(eventManager);
+    const eventManager = config.eventManager || new (await import("../../models/EventManager")).EventManager();
+    const logger = config.logger || new (await import("../../models/Logger")).Logger(eventManager);
     const adapter = config.adapter || new MemoryWorkflowAdapter();
     
     const engineOptions: IWorkflowEngineOptions = {
@@ -72,9 +75,11 @@ export const workflowResource = defineResource<IWorkflowResourceConfig>({
       /** The underlying workflow engine */
       engine,
 
-      /** Register a workflow definition */
-      registerWorkflow: (definition: IWorkflowDefinition) => 
-        engine.registerWorkflow(definition),
+      /** Register a workflow definition or Workflow class instance */
+      registerWorkflow: (workflow: IWorkflowDefinition | Workflow) => {
+        const definition = workflow instanceof Workflow ? workflow.toDefinition() : workflow;
+        return engine.registerWorkflow(definition);
+      },
 
       /** Create a new workflow instance */
       createInstance: <TContext extends WorkflowContext = WorkflowContext>(
@@ -130,7 +135,7 @@ export const workflowResource = defineResource<IWorkflowResourceConfig>({
   },
   meta: {
     title: "Workflow Engine",
-    description: "Durable workflow management with state transitions, rollbacks, and time-based triggers",
+    description: "Durable workflow management with state transitions, rollbacks, and time-based triggers. Supports both OOP patterns with Workflow classes and functional patterns with workflow definitions.",
   },
 });
 
