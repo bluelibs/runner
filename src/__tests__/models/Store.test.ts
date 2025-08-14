@@ -5,6 +5,7 @@ import {
   defineTask,
   defineMiddleware,
   defineEvent,
+  defineTag,
 } from "../../define";
 import { Logger } from "../../models";
 
@@ -166,5 +167,61 @@ describe("Store", () => {
     // Test getDependentNodes method (line 169)
     const result = store.getDependentNodes();
     expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("should call getTasksWithTag method", () => {
+    const tag = defineTag({
+      id: "tags.test",
+    });
+    const taskTest = defineTask({
+      meta: {
+        tags: [tag, "test"],
+      },
+      async run() {
+        return "OK";
+      },
+    });
+    const unfindableTask = defineTask({
+      run: async () => 1,
+    });
+    const rootResource = defineResource({
+      id: "root",
+      register: [taskTest, unfindableTask],
+      init: async () => "Root Value",
+    });
+
+    store.initializeStore(rootResource, {});
+    const result = store.getTasksWithTag(tag);
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toHaveLength(1);
+    const result2 = store.getTasksWithTag("test");
+    expect(result2).toHaveLength(1);
+  });
+
+  it("should call getResourcesWithTag method", () => {
+    const tag = defineTag({
+      id: "tags.test",
+    });
+    const resourceTest = defineResource({
+      meta: {
+        tags: [tag, "test"],
+      },
+    });
+
+    const unfindableResource = defineResource({
+      init: async () => 1,
+    });
+    const rootResource = defineResource({
+      id: "root",
+      register: [resourceTest, unfindableResource],
+      init: async () => "Root Value",
+    });
+
+    store.initializeStore(rootResource, {});
+    const result = store.getResourcesWithTag(tag);
+    expect(Array.isArray(result)).toBe(true);
+    expect(result).toHaveLength(1);
+    const result2 = store.getResourcesWithTag("test");
+    expect(result2).toHaveLength(1);
   });
 });

@@ -10,6 +10,7 @@ import {
   symbolMiddlewareEverywhereResources,
   symbolMiddlewareEverywhereTasks,
   IEvent,
+  ITag,
 } from "../defs";
 import * as utils from "../define";
 import { UnknownItemTypeError } from "../errors";
@@ -224,5 +225,29 @@ export class StoreRegistry {
     }
 
     return depenedants;
+  }
+
+  getTasksWithTag(tag: string | ITag) {
+    if (typeof tag === "string") {
+      return Array.from(this.tasks.values()).filter((x) =>
+        x.task.meta?.tags?.includes(tag)
+      );
+    }
+
+    return Array.from(this.tasks.values())
+      .filter((x) => tag.extract(x.task.meta?.tags))
+      .map((x) => x.task);
+  }
+
+  getResourcesWithTag(tag: string | ITag) {
+    if (typeof tag === "string") {
+      return Array.from(this.resources.values()).filter((x) =>
+        x.resource.meta?.tags?.includes(tag)
+      );
+    }
+
+    return Array.from(this.resources.values())
+      .filter((x) => tag.extract(x.resource.meta?.tags))
+      .map((x) => x.resource);
   }
 }

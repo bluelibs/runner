@@ -601,6 +601,58 @@ The retry middleware can be configured with:
 - `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
 
+## Timeout Middleware: Never Wait Forever
+
+The built-in timeout middleware prevents operations from hanging indefinitely by racing them against a configurable
+timeout:
+
+```typescript
+import { globals } from "@bluelibs/runner";
+
+const apiTask = task({
+  id: "app.tasks.externalApi",
+  middleware: [
+    globals.middleware.timeout.with({ ttl: 5000 }), // 5 second timeout
+  ],
+  run: async () => {
+    // This operation will be aborted if it takes longer than 5 seconds
+    return await fetch("https://slow-api.example.com/data");
+  },
+});
+
+// Combine with retry for robust error handling
+const resilientTask = task({
+  id: "app.tasks.resilient",
+  middleware: [
+    // Order matters here. Imagine a big onion.
+    globals.middleware.retry.with({
+      retries: 3,
+      delayStrategy: (attempt) => 1000 * attempt, // 1s, 2s, 3s delays
+    }),
+    globals.middleware.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
+  ],
+  run: async () => {
+    // Each retry attempt gets its own 10-second timeout
+    return await unreliableOperation();
+  },
+});
+```
+
+How it works:
+
+- Uses AbortController and Promise.race() for clean cancellation
+- Throws TimeoutError when the timeout is reached
+- Works with any async operation in tasks and resources
+- Integrates seamlessly with retry middleware for layered resilience
+- Zero timeout (ttl: 0) throws immediately for testing edge cases
+
+Best practices:
+
+- Set timeouts based on expected operation duration plus buffer
+- Combine with retry middleware for transient failures
+- Use longer timeouts for resource initialization than task execution
+- Consider network conditions when setting API call timeouts
+
 ## Logging: Because Console.log Isn't Professional
 
 _The structured logging system that actually makes debugging enjoyable_
@@ -1191,6 +1243,8 @@ const apiEndpoint = task({
 });
 ```
 
+To process these tags you can hook into `globals.events.afterInit`, use the global store as dependency and use the `getTasksWithTag()` and `getResourcesWithTag()` functionality.
+
 #### Smart Middleware Using Structured Tags
 
 ```typescript
@@ -1295,6 +1349,8 @@ const badTask = task({
 
 ### When to Use Metadata
 
+Always strive to provide a title and a description.
+
 #### ✅ Great Use Cases
 
 **Documentation & Discovery**
@@ -1342,33 +1398,6 @@ const developmentTask = task({
     tags: ["development-only", debugTag.with({ verbose: true })],
   },
   // ... implementation
-});
-```
-
-#### ❌ When NOT to Use Metadata
-
-**Simple Internal Logic** - Don't overcomplicate straightforward code:
-
-```typescript
-// ❌ Overkill
-const simple = task({
-  meta: { tags: ["internal", "utility"] },
-  run: () => Math.random(),
-});
-
-// ✅ Better
-const generateId = () => Math.random().toString(36);
-```
-
-**One-Off Tasks** - If it's used once, metadata won't help:
-
-```typescript
-// ❌ Unnecessary
-const oneTimeScript = task({
-  meta: { title: "Migration Script", tags: ["migration"] },
-  run: () => {
-    /* run once and forget */
-  },
 });
 ```
 
@@ -1425,22 +1454,6 @@ const database = resource({
 ```
 
 ### Advanced Patterns
-
-#### Tag-Based Component Selection
-
-```typescript
-// Find all API endpoints
-function getApiTasks(store: Store) {
-  return store.getAllTasks().filter((task) => task.meta?.tags?.includes("api"));
-}
-
-// Find all tasks with specific performance requirements
-function getPerformanceCriticalTasks(store: Store) {
-  return store.tasks.values().filter(({ task }) => {
-    return performanceTag.extract(task) !== null;
-  });
-}
-```
 
 #### Dynamic Middleware Application
 

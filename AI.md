@@ -1,401 +1,593 @@
-# BlueLibs Runner Quick Reference
+# BlueLibs Runner: Complete Framework Guide
 
-## Core Concepts
+## Installation
 
-- Remember TERM (tasks, events, resources, middleware)
-- Tasks can be stand alone tasks or listeners (that listen to events)
-- Everything is designed to be typesafe
-- Any function you use can be imported like `import { task, resource, etc } from "@bluelibs/runner"`
+```bash
+npm install @bluelibs/runner
+```
 
-## At a Glance (API Surface)
+## Quick Start
 
-- `task`:
-  - Business logic with DI, optional `on` (listen to event) and `middleware`.
-  - Shape: `{ id?, dependencies?, on?, middleware?, run(input, deps) }`.
-- `resource`:
-  - Singleton, optional `dependencies`, `register`, `dispose`, `context` (private sharing between init/dispose).
-  - Shape: `{ id?, dependencies?, register?, init(config, deps, ctx), dispose?, context? }`.
-- `event<T>`:
-  - Emits/handles async events: `const e = event<T>({ id })` then `await e(payload)`.
-- `middleware`:
-  - Wraps tasks/resources: `run({ task|resource, next }, deps, config?)`.
-  - Use `.with(config)` and `.everywhere({ tasks?, resources? })`.
-- `index(obj)`:
-  - Groups multiple entries into one dependency that also registers them.
-- `run(resource)`:
-  - Boots the app tree: returns `{ value, dispose }`.
-- `override(original, changes)`:
-  - Safe behavior override while preserving identity (id cannot change).
-- `createContext<T>(id)`:
-  - Request-scoped data: `.provide(value, fn)`, `.use()`, `.require()`.
-- `tag<TConfig, TContract>`:
-  - Metadata (stored in meta.tags) and contracts; `.with(config)`, `.extract(def|tags)`.
-- `globals`:
-  - Built-ins: `middleware.cache`, `middleware.retry`, `resources.logger`, `events`, etc.
-- `Semaphore` / `Queue`:
-  - Concurrency primitives for limits and FIFO execution.
+```ts
+import express from "express";
+import { resource, task, run } from "@bluelibs/runner";
 
-## Runtime Order & Rules
+const server = resource({
+  id: "app.server",
+  init: async (config: { port: number }) => {
+    const app = express();
+    const server = app.listen(config.port);
+    console.log(`Server running on port ${config.port}`);
+    return { app, server };
+  },
+  dispose: async ({ server }) => server.close(),
+});
 
-- Registration → Overrides → Dependency resolution → Global middleware → Init resources → Task run → Emit events → Listeners → Dispose.
-- Middleware order: global first, then component-level; both wrap execution around `run()`.
-- Event listeners: ordered by `listenerOrder` (lower runs first, default 0). `event.stopPropagation()` prevents later listeners.
-- Error events: handlers may call `event.data.suppress()` to prevent error bubbling (task returns `undefined`).
-- Overrides: applied after registration; the override closest to the root wins.
-- Dependencies: object or factory function. Factory form delays evaluation and helps with circular type dependencies.
+const createUser = task({
+  id: "app.tasks.createUser",
+  dependencies: { server },
+  run: async (userData: { name: string }, { server }) => {
+    return { id: "user-123", ...userData };
+  },
+});
 
-## Contract Tags (Return Types)
+const app = resource({
+  register: [server.with({ port: 3000 }), createUser],
+  dependencies: { server, createUser },
+  init: async (_, { server, createUser }) => {
+    server.app.post("/users", async (req, res) => {
+      const user = await createUser(req.body);
+      res.json(user);
+    });
+  },
+});
 
-Use tag contracts to enforce returned value shapes of tasks and of resource `init()` at compile time.
+const { dispose } = await run(app);
+```
 
-```typescript
-const userContract = tag<void, { name: string }>({ id: "contract.user" });
+## Core Philosophy
 
-const getUser = task({
-  id: "app.tasks.getUser",
-  meta: { tags: [userContract] },
-  run: async () => ({ name: "Ada" }), // must satisfy contract
+TypeScript-first framework with explicit dependencies, functional programming principles, and zero magic. Everything is async, tasks are functions, resources are singletons, events enable loose coupling. All functions are imported from "@bluelibs/runner".
+
+## The Big Four (TERM)
+
+### 1. Tasks - Business Logic Functions
+
+```ts
+const createUser = task({
+  id: "app.tasks.createUser",
+  dependencies: { userService, userRegistered },
+  inputSchema: userSchema, // Optional validation
+  middleware: [authMiddleware.with({ role: "admin" })],
+  run: async (userData, { userService, userRegistered }) => {
+    const user = await userService.createUser(userData);
+    await userRegistered({ userId: user.id, email: user.email });
+    return user;
+  },
+});
+
+// Event listeners
+const emailTask = task({
+  // Same as task but
+  id: "app.tasks.sendWelcomeEmail",
+  on: userRegistered, // Listen to events
+  run: async (event, deps) => {
+    console.log(`Welcome email to ${event.data.email}`);
+  },
 });
 ```
 
-Multiple contracts intersect; use `[] as const` to indicate empty tags.
+**When to use tasks:**
 
-## Anonymous IDs (Quick Guidance)
+- High-level business actions
+- Need dependency injection
+- Want observability/tracking
+- Multiple parts of app need it
 
-- Great defaults for internal tasks/resources; IDs derive from file/var names.
-- Prefer manual IDs for events, middleware, public APIs, and cross-package references.
+**Don't make tasks for:** Simple utils, single-use functions, performance-critical code
 
-## Production Checklist
+### 2. Resources - Managed Singletons
 
-- Add global retry/timeouts around external I/O; size cache appropriately.
-- Handle signals and call `dispose()` for graceful shutdown.
-- Use `Semaphore`/`Queue` for concurrency control.
-- Add health checks and basic metrics where needed.
-
-## See Also
-
-- README: Logging, Cache, Retry, Tags & Contracts, Queue, Semaphore, Overrides, Testing Harness.
-- Typedocs: full API reference.
-
-### `resource`: Singleton for shared services (DB, configs)
-
-```typescript
-// A simple resource (e.g., config)
-const config = resource({
-  id: "app.config",
-  // The singleton value returned by init
-  init: async () => ({ port: 3000 }),
-  // Metadata for resources, tasks, events and middleware.
-  meta: {
-    title: "Title of resource",
-    description: """
-Describe what it does
-""",
-    tags: [], // later on
-  }
-});
-
-// A resource with dependencies and a dispose method for cleanup
+```ts
 const database = resource({
   id: "app.db",
-  dependencies: { config },
-  // Types are automatically infered
-  init: async (_, { config }) => {
-    // connect to db using config.port
-    const client = new DBClient();
-    return client;
+  configSchema: dbConfigSchema, // Validates on .with()
+  context: () => ({
+    connections: new Map(),
+    pools: [],
+    metrics: { queries: 0 },
+  }), // Private context shared between init/dispose
+  init: async (config, deps, ctx) => {
+    const db = await connectToDatabase(config.url);
+    ctx.connections.set("main", db);
+    ctx.pools.push(createPool(db));
+
+    // Setup query tracking using private context
+    const originalQuery = db.query;
+    db.query = (...args) => {
+      ctx.metrics.queries++;
+      return originalQuery.apply(db, args);
+    };
+
+    return db;
   },
-  dispose: async (client) => client.close(),
+  dispose: async (db, config, deps, ctx) => {
+    console.log(`Total queries executed: ${ctx.metrics.queries}`);
+
+    // Clean up all pools tracked in context
+    for (const pool of ctx.pools) {
+      await pool.drain();
+    }
+
+    // Close all connections tracked in context
+    for (const [name, conn] of ctx.connections) {
+      await conn.close();
+    }
+  },
 });
 
-// A resource that requires configuration when registered
+// Configuration with type safety
+const app = resource({
+  register: [
+    database.with({ url: "postgres://localhost" }), // .with() required if config needed
+    userService,
+  ],
+});
+```
+
+**Resource Configuration:**
+
+```ts
+// Type-safe configuration with .with()
 const emailer = resource({
   id: "app.emailer",
-  init: async (config: { apiKey: string }) => {
-    // use config.apiKey
-    return new EmailService(config.apiKey);
-  },
+  init: async (config: { smtpUrl: string; from: string }) => ({
+    send: async (to: string, subject: string, body: string) => {
+      // Use config.smtpUrl and config.from
+    },
+  }),
 });
 
-// All resources have to be registered, every element needs to be registered, and registration can only be done by a resource.
 const app = resource({
-  id: "app.root",
   register: [
-    emailer.with({ apiKey: "xxx" }), // Stuff that can be configured like resources, middleware, and later tags we do with with()
-    database,
-    config,
+    emailer.with({
+      smtpUrl: "smtp://localhost",
+      from: "noreply@myapp.com",
+    }),
   ],
-})
-```
-
-### `task`: Your business logic functions
-
-```typescript
-// A task that performs an action, with dependencies
-const createUser = task({
-  id: "app.tasks.createUser",)
-  dependencies: { db: database },
-  run: async (userData: { name: string }, { db }) => {
-    return db.collection("users").insertOne(userData);
-  },
 });
 ```
 
-### `event`: For decoupled, async communication
+**Private Context Use Cases:**
 
-```typescript
-// 1. Define an event with a specific payload shape
-const userRegistered = event<{ userId: string }>("app.events.userRegistered");
+- Connection pools and cleanup tracking
+- Metrics collection between init/dispose
+- Temporary resources that need coordinated cleanup
+- State that doesn't belong in the main return value
 
-// 2. A task that emits the event
-const registerUser = task({
-  id: "app.tasks.registerUser",
-  dependencies: { userRegistered }, // Depend on the event to emit it
-  run: async (userData, { userRegistered }) => {
-    const userId = "user-123";
-    await userRegistered({ userId }); // Emit the event
-    return { id: userId };
-  },
+### 3. Events - Decoupled Communication
+
+```ts
+const userRegistered = event<{ userId: string; email: string }>({
+  id: "app.events.userRegistered",
+  payloadSchema: userEventSchema, // Validates on emit
 });
 
-// 3. A listener task that reacts to the event
-const sendWelcomeEmail = task({
-  id: "app.tasks.sendWelcomeEmail",
-  on: userRegistered, // Listen for the event
+// Emit events
+await userRegistered({ userId: "123", email: "user@example.com" });
+
+// Stop propagation
+const emergencyHandler = task({
+  on: criticalAlert,
+  listenerOrder: -100, // Higher priority, default 0.
   run: async (event) => {
-    // event.data is typed { userId: string }
-    console.log(`Sending email to user: ${event.data.userId}`);
+    if (event.data.severity === "critical") {
+      event.stopPropagation(); // Stops other listeners
+    }
   },
+});
+
+// Global event listeners
+const taskLogger = task({
+  on: "*", // Listen to everything
+  run: (event) => console.log("Event:", event.id),
 });
 ```
 
-### `middleware`: Wrap tasks/resources for cross-cutting concerns
+### 4. Middleware - Cross-Cutting Concerns
 
-```typescript
-// A middleware to check for authentication
+```ts
 const authMiddleware = middleware({
   id: "app.middleware.auth",
-  run: async ({ task, next }, deps, config: { role: string }) => {
-    // const user = UserContext.use();
-    // if (user.role !== config.role) throw new Error("Unauthorized");
+  configSchema: authConfigSchema, // Validates on .with() in registration phase
+  run: async ({ task, next }, deps, config) => {
+    // task.definition
+    const user = task.input.user;
+    if (!user || user.role !== config.requiredRole) {
+      throw new Error("Unauthorized");
+    }
     return next(task.input);
   },
 });
 
-// A task that uses the middleware
-const adminTask = task({
-  id: "app.tasks.adminOnly",
-  middleware: [authMiddleware.with({ role: "admin" })],
-  run: async () => "Secret admin data",
+// Apply globally
+const app = resource({
+  register: [authMiddleware.everywhere({ tasks: true, resources: false })],
 });
 ```
 
-### `createContext`: For request-scoped or async-local data
+## Advanced Features
 
-```typescript
-// 1. Define a context with a specific shape
-const UserContext = createContext<{ userId: string }>("app.userContext");
+### Context & Validation & Built-in Middleware
 
-// 2. A task that requires and uses the context
-const getUserProfile = task({
-  id: "app.tasks.getUserProfile",
-  middleware: [UserContext.require()], // Ensures context is present
-  run: async () => {
-    const user = UserContext.use(); // Access context data
-    return { id: user.userId, profile: "..." };
-  },
-});
+```ts
+import { z } from "zod";
+import { globals, createContext } from "@bluelibs/runner";
 
-// 3. Provide the context at an entry point (e.g., request handler)
-// This would typically be in a resource that handles incoming requests
-async function handleApiRequest() {
-  return UserContext.provide({ userId: "user-456" }, async () => {
-    return await getUserProfile(); // This call now has access to the context
-  });
-}
-```
-
-### `index`: Group related dependencies together
-
-```typescript
-// Groups all services into a single, injectable object
-const services = index({
-  userService,
-  paymentService,
-  notificationService,
-});
-
-// Use it in another resource
-const appController = resource({
-  id: "app.controller",
-  dependencies: { services },
-  init: async (_, { services }) => {
-    // Access all services via one property
-    await services.userService.doSomething();
-  },
-});
-```
-
-### `tag`: Metadata for documentation and smart behavior
-
-```typescript
-// Define a reusable tag with configuration
-const performanceTag = tag<{ criticalAboveMs: number }>(
-  "performance.monitoring"
+// Context for request-scoped data
+const UserContext = createContext<{ userId: string; requestId: string }>(
+  "user"
 );
 
-// Use the tag in a task's metadata
-const expensiveTask = task({
-  id: "app.tasks.expensive",
-  meta: {
-    description: "A very slow task.",
-    tags: ["analytics", performanceTag.with({ criticalAboveMs: 1000 })],
-  },
-  run: async () => {
-    /* ... */
+// Validation schemas
+const userSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+});
+
+// Task with all built-in middleware + context + validation
+const processUser = task({
+  id: "app.tasks.processUser",
+  inputSchema: userSchema, // Validates input with any library implementing parse(): T
+  dependencies: { logger: globals.resources.logger },
+  middleware: [
+    UserContext.require(), // Ensures context exists
+    globals.middleware.cache.with({
+      ttl: 60000,
+      keyBuilder: (taskId, input) => `${taskId}-${input.email}`,
+    }),
+    globals.middleware.retry.with({
+      retries: 3,
+      delayStrategy: (attempt) => 100 * Math.pow(2, attempt),
+      stopRetryIf: (error) => error.message === "Invalid user", // Don't retry validation errors
+    }),
+  ],
+  run: async (userData, { logger }) => {
+    const context = UserContext.use(); // Available in async chain
+    const contextLogger = logger.with({ requestId: context.requestId });
+
+    contextLogger.info("Processing user", { data: { email: userData.email } });
+    // Expensive operation that gets cached and retried on failure
+    return await processUserData(userData);
   },
 });
 
-// A middleware that reads the tag to alter behavior
-const perfMiddleware = middleware({
-  id: "app.middleware.performance",
-  dependencies: {
-    /* ... */
+// App setup with all global resources
+const app = resource({
+  register: [
+    // Cache resource (required for cache middleware)
+    globals.resources.cache.with({
+      defaultOptions: { max: 1000, ttl: 30000 },
+      async: false, // Use Redis by overriding globals.tasks.cacheFactory
+    }),
+    // Logger resource (available by default)
+    processUser,
+  ],
+  dependencies: { processUser },
+  init: async (_, { processUser }) => {
+    // Provide context and run task
+    return UserContext.provide(
+      { userId: "123", requestId: "abc-123" },
+      async () => processUser({ name: "John", email: "john@example.com" })
+    );
   },
-  run: async ({ task, next }, deps) => {
+});
+
+// Event-driven log shipping
+const logShipper = task({
+  on: globals.events.log,
+  run: async (event) => {
+    const log = event.data;
+    if (log.level === "error") await sendToSentry(log);
+    if (log.level === "critical") await pagerDuty.alert(log);
+  },
+});
+```
+
+**Global Middleware Example:**
+
+```ts
+const apiTask = task({
+  middleware: [
+    globals.middleware.cache.with({ ttl: 300000 }),
+    globals.middleware.retry.with({ retries: 3 }),
+    globals.middleware.timeout.with({ ttl: 10000 }), // 10 second timeout
+  ],
+  run: async (input) => await expensiveApiCall(input),
+});
+```
+
+**Built-ins:** `cache` (LRU/TTL), `retry` (exponential backoff), `timeout` (AbortController-based), custom context via `createContext().require()`
+
+**Environment Controls:**
+
+```bash
+RUNNER_LOG_LEVEL=debug          # trace|debug|info|warn|error|critical
+RUNNER_DISABLE_LOGS=true        # Disable auto-printing
+```
+
+### Metadata & Tags
+
+```ts
+const performanceTag = tag<{ alertAboveMs: number }>({ id: "performance" });
+const rateLimitTag = tag<{ maxRequestsPerMin: number }>({ id: "rate.limit" });
+const userContract = tag<void, { name: string }>({ id: "contract.user" });
+
+const createUserTask = task({
+  meta: {
+    title: "Create User",
+    description: "Creates new user account with validation",
+    tags: [
+      "api",
+      "user-management",
+      performanceTag.with({ alertAboveMs: 1000 }),
+      rateLimitTag.with({ maxRequestsPerMin: 100 }),
+      userContract, // Enforces return type { name: string }
+    ],
+  },
+  run: async () => ({ name: "John" }), // Must return object with name
+});
+
+// Tag extraction and usage
+const perfMiddleware = middleware({
+  run: async ({ task, next }) => {
     const perfConfig = performanceTag.extract(task.definition);
     if (perfConfig) {
       const start = Date.now();
-      const result = await next(task.input);
+      const result = await next();
       const duration = Date.now() - start;
-      // ... other stuff ...
+      if (duration > perfConfig.config.alertAboveMs) {
+        console.warn(`Slow task: ${duration}ms`);
+      }
       return result;
     }
-    return next(task.input);
+    return next();
+  },
+});
+
+// Using store to find components by tags
+const apiSetup = task({
+  id: "app.setup.api",
+  dependencies: { store: globals.resources.store },
+  run: async (_, { store }) => {
+    // Find all API tasks
+    const apiTasks = store.getTasksWithTag("api");
+
+    // Find all performance-monitored tasks
+    const perfTasks = store.getTasksWithTag(performanceTag);
+
+    // Find all resources with specific tags
+    const cacheResources = store.getResourcesWithTag("cache");
+
+    // Setup routes/monitoring based on discovered components
+    apiTasks.forEach((taskDef) => {
+      const rateLimit = rateLimitTag.extract(taskDef);
+      if (rateLimit) {
+        setupRateLimit(taskDef.id, rateLimit.config.maxRequestsPerMin);
+      }
+    });
   },
 });
 ```
 
-## Running & Testing
+**⚠️ Tag Performance:** Avoid tag extraction in global middleware (runs on every execution). Use one-time setup listening to `globals.events.afterInit` instead.
 
-### `run`: Start the application
+### Concurrency Control
 
-```typescript
-// Define the main application resource
-const app = resource({
-  id: "app",
-  register: [
-    config,
-    database,
-    emailer.with({ apiKey: "..." }),
-    createUser,
-    sendWelcomeEmail,
-  ],
+```ts
+import { Semaphore, Queue } from "@bluelibs/runner";
+
+const dbSemaphore = new Semaphore(5); // Max 5 concurrent
+const result = await dbSemaphore.withPermit(
+  async () => await db.query("SELECT * FROM users"),
+  { timeout: 5000 }
+);
+
+const queue = new Queue();
+const result = await queue.run(async (signal) => {
+  // Cooperative cancellation
+  if (signal.aborted) throw new Error("Cancelled");
+  return await processData();
 });
-
-// Start the app and get a dispose function for graceful shutdown
-const { value, dispose } = await run(app); // Value is what the root's init() returns if present
-
-// Later, to clean up resources:
-// await dispose();
+await queue.dispose({ cancel: true }); // Cancel pending tasks
 ```
 
-### `override`: Swap components for testing or different environments
+### Organization & Overrides
 
-```typescript
-// The real resource
-const productionDb = resource({
-  id: "app.db",
-  init: async () => new RealDatabase(),
+```ts
+// Index pattern - group dependencies
+const services = index({ userService, emailService, paymentService });
+
+// Namespacing: {domain}.{type}.{name}
+const userTasks = {
+  create: task({ id: "app.tasks.user.create" /* ... */ }),
+  onRegistered: task({
+    id: "app.tasks.user.onRegistered",
+    on: userRegistered /* ... */,
+  }),
+};
+
+// Anonymous IDs - omit id for auto Symbol based on file path
+const emailService = resource({
+  // Generated: Symbol('services.email.resource')
+  init: async () => new EmailService(),
 });
-
-// The override for testing
-const testDb = override(productionDb, {
-  init: async () => new InMemoryDatabase(),
-});
-
-// In the test setup
-const testApp = resource({
-  id: "test.app",
-  register: [productionDb],
-  overrides: [testDb], // The override is applied here
-});
-
-const { dispose } = await run(testApp);
 ```
 
-### `createTestResource`: A harness for integration testing
+## Overrides
 
-```typescript
-// Your main app definition
-const app = resource({
-  id: "app",
-  register: [productionDb, createUser],
+```ts
+import { override } from "@bluelibs/runner";
+
+// Swap components for testing/environments
+const productionEmailer = resource({
+  id: "app.emailer",
+  init: async () => new SMTPEmailer(),
 });
 
-// Create a test harness, applying overrides
+const testEmailer = override(productionEmailer, {
+  init: async () => new MockEmailer(),
+});
+
+const app = resource({
+  register: [productionEmailer],
+  overrides: [testEmailer], // Replaces production version
+});
+```
+
+### Testing
+
+```ts
+// Test harness - run full app with overrides
 const harness = createTestResource(app, {
-  overrides: [testDb],
+  overrides: [mockDatabase, mockEmailService],
 });
 
-// In your test file
-test("user registration", async () => {
-  const { value: t, dispose } = await run(harness);
+const { value: testRunner, dispose } = await run(harness);
+const result = await testRunner.runTask(createUser, { name: "Test" });
+await dispose();
+```
 
-  // Run a task within the fully initialized app environment
-  const result = await t.runTask(createUser, { name: "test" });
+## Events & Error Handling
 
-  expect(result.name).toBe("test");
+```ts
+// Built-in lifecycle events
+const errorHandler = task({
+  on: myTask.events.onError, // Also: beforeRun, afterRun
+  run: async (event) => {
+    console.error("Task failed:", event.data.error);
+    event.data.suppress(); // Prevents error bubbling
+  },
+});
 
-  await dispose();
+// Global events: globals.tasks.beforeRun, globals.resources.afterInit, globals.events.log
+```
+
+## Quick Reference
+
+**API Signatures:**
+
+```ts
+task({ id, meta, dependencies, inputSchema, middleware, on, run });
+resource({
+  id,
+  meta,
+  register,
+  dependencies,
+  configSchema,
+  context,
+  init,
+  dispose,
+});
+event({ id, payloadSchema });
+middleware({ id, configSchema, run }).everywhere({ tasks, resources });
+```
+
+**Core Patterns:**
+
+- Tasks: Business logic functions with DI
+- Resources: Managed singletons with lifecycle
+- Events: Decoupled async communication
+- Middleware: Cross-cutting concerns
+- Context: Request-scoped data via `createContext()`
+- Tags: Metadata for discovery and behavior
+- Overrides: Replace components while preserving ID
+
+**Built-ins:**
+
+- `globals.middleware.cache/retry/timeout` - Caching, resilience, and timeouts
+- `globals.resources.logger` - Structured logging with events
+- `globals.resources.store` - Component discovery via tags
+- Anonymous IDs via Symbol generation from file paths
+
+**Environment:**
+
+```bash
+RUNNER_LOG_LEVEL=debug|info|warn|error|critical
+RUNNER_DISABLE_LOGS=true
+```
+
+## Validation
+
+```ts
+import { z } from "zod";
+
+const userSchema = z.object({
+  name: z.string().min(2),
+  email: z.string().email(),
+});
+
+// Task input validation
+const createUser = task({
+  inputSchema: userSchema,
+  run: async (userData) => {
+    // userData is validated and typed
+    return { id: "user-123", ...userData };
+  },
+});
+
+// Resource config validation (fail fast on .with())
+const database = resource({
+  configSchema: z.object({ url: z.string().url() }),
+  init: async (config) => connectToDb(config.url),
+});
+
+// Event payload validation
+const userEvent = event({
+  payloadSchema: z.object({ userId: z.string() }),
 });
 ```
 
-## Built-in Globals
+## Testing
 
-### `globals.middleware.cache`: Automatic caching for tasks
+```ts
+import { run, createTestResource, override } from "@bluelibs/runner";
 
-```typescript
-const expensiveQuery = task({
-  id: "app.tasks.expensiveQuery",
-  middleware: [
-    globals.middleware.cache.with({
-      ttl: 60 * 1000, // Cache for 1 minute
-    }),
-    globals.middleware.retry.with({
-      retries: 3, // Try up to 3 times
-      delayStrategy: (attempt) => 100 * attempt, // Wait longer each time
-    }),
-  ],
-  run: async (params) => {
-    /* slow db query */
-  },
+// Unit testing - mock dependencies
+describe("createUser task", () => {
+  it("should create user", async () => {
+    const mockService = { create: jest.fn().mockResolvedValue({ id: "123" }) };
+    const result = await createUser.run({ name: "John" }, { userService: mockService });
+    expect(result.id).toBe("123");
+  });
 });
+
+// Integration testing - run full app with overrides
+const testDb = override(database, { init: async () => new InMemoryDb() });
+const harness = createTestResource(app, { overrides: [testDb] });
+
+const { value: testRunner, dispose } = await run(harness);
+const result = await testRunner.runTask(createUser, { name: "Test" });
+await dispose();
 ```
 
-### `globals.resources.logger`: Structured, event-driven logging
+## Concurrency
 
-```typescript
-const someTask = task({
-  id: "app.tasks.someTask",
-  dependencies: { logger: globals.resources.logger },
-  run: async (_, { logger }) => {
-    logger.info("Task started", { data: { input: "..." } });
+```ts
+import { Semaphore, Queue } from "@bluelibs/runner";
 
-    try {
-      // ...
-    } catch (error) {
-      logger.error("Task failed", { error });
-    }
-  },
+// Semaphore - limit concurrent operations
+const dbSemaphore = new Semaphore(5);
+const result = await dbSemaphore.withPermit(
+  async () => await db.query("SELECT * FROM users"),
+  { timeout: 5000 }
+);
+
+// Queue - FIFO with cancellation support
+const queue = new Queue();
+const result = await queue.run(async (signal) => {
+  if (signal.aborted) throw new Error("Cancelled");
+  return await processData();
 });
-
-// To see logs in the console, you must set a print threshold
-const setupLogging = task({
-  id: "app.logging.setup",
-  on: globals.resources.logger.events.afterInit,
-  run: async ({ data }) => {
-    data.value.setPrintThreshold("info"); // Print info, warn, error, critical
-  },
-});
+await queue.dispose({ cancel: true });
 ```

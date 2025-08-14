@@ -3,6 +3,7 @@ import {
   IResource,
   RegisterableItems,
   IMiddleware,
+  ITag,
 } from "../defs";
 import { IDependentNode } from "../tools/findCircularDependencies";
 import { globalEventsArray } from "../globals/globalEvents";
@@ -176,6 +177,14 @@ export class Store {
 
   public storeEventsForAllTasks() {
     this.registry.storeEventsForAllTasks();
+  }
+
+  public getTasksWithTag(tag: string | ITag) {
+    return this.registry.getTasksWithTag(tag);
+  }
+
+  public getResourcesWithTag(tag: string | ITag) {
+    return this.registry.getResourcesWithTag(tag);
   }
 
   getDependentNodes(): IDependentNode[] {
