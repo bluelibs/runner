@@ -306,13 +306,13 @@ export type MiddlewareEverywhereOptions = {
  * @returns A branded middleware definition usable by the runner.
  */
 export function defineMiddleware<
-  TConfig extends Record<string, any>,
-  TDependencies extends DependencyMapType
+  TConfig extends Record<string, any> = any,
+  TDependencies extends DependencyMapType = any
 >(
   middlewareDef: IMiddlewareDefinition<TConfig, TDependencies>
 ): IMiddleware<TConfig, TDependencies> {
   const filePath = getCallerFile();
-  const object = {
+  const base = {
     [symbolFilePath]: filePath,
     [symbolMiddleware]: true,
     config: {} as TConfig,
@@ -321,44 +321,56 @@ export function defineMiddleware<
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
   } as IMiddleware<TConfig, TDependencies>;
 
-  return {
-    ...object,
-    with: (config: TConfig) => {
-      // Validate config with schema if provided (fail fast)
-      if (object.configSchema) {
-        try {
-          config = object.configSchema.parse(config);
-        } catch (error) {
-          throw new ValidationError(
-            "Middleware config",
-            object.id,
-            error instanceof Error ? error : new Error(String(error))
-          );
+  // Wrap an object to ensure we always return chainable helpers
+  const wrap = (
+    obj: IMiddleware<TConfig, TDependencies>
+  ): IMiddleware<TConfig, TDependencies> => {
+    return {
+      ...obj,
+      with: (config: TConfig) => {
+        // Validate config with schema if provided (fail fast)
+        if (obj.configSchema) {
+          try {
+            config = obj.configSchema.parse(config);
+          } catch (error) {
+            throw new ValidationError(
+              "Middleware config",
+              obj.id,
+              error instanceof Error ? error : new Error(String(error))
+            );
+          }
         }
-      }
 
-      return {
-        ...object,
-        [symbolMiddlewareConfigured]: true,
-        config: {
-          ...object.config,
-          ...config,
-        },
-      };
-    },
-    everywhere(options: MiddlewareEverywhereOptions = {}) {
-      const { tasks = true, resources = true } = options;
+        return wrap({
+          ...obj,
+          [symbolMiddlewareConfigured]: true,
+          config: {
+            ...(obj.config as TConfig),
+            ...config,
+          },
+        } as IMiddleware<TConfig, TDependencies>);
+      },
+      everywhere(options: MiddlewareEverywhereOptions = {}) {
+        const { tasks = true, resources = true } = options;
 
-      return {
-        ...object,
-        [symbolMiddlewareEverywhereTasks]: tasks,
-        [symbolMiddlewareEverywhereResources]: resources,
-        everywhere() {
-          throw new MiddlewareAlreadyGlobalError(object.id);
-        },
-      };
-    },
+        // If already global, prevent calling again
+        if (
+          obj[symbolMiddlewareEverywhereTasks] ||
+          obj[symbolMiddlewareEverywhereResources]
+        ) {
+          throw new MiddlewareAlreadyGlobalError(obj.id);
+        }
+
+        return wrap({
+          ...obj,
+          [symbolMiddlewareEverywhereTasks]: tasks,
+          [symbolMiddlewareEverywhereResources]: resources,
+        } as IMiddleware<TConfig, TDependencies>);
+      },
+    } as IMiddleware<TConfig, TDependencies>;
   };
+
+  return wrap(base);
 }
 
 /**
