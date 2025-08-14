@@ -11,7 +11,7 @@
  * 
  * @example Object-Oriented Pattern (Recommended)
  * ```typescript
- * import { Workflow } from "@bluelibs/runner/workflows";
+ * import { Workflow, workflowResource } from "@bluelibs/runner/workflows";
  * import { task, resource, run, globals } from "@bluelibs/runner";
  * 
  * // Define business logic tasks
@@ -45,11 +45,11 @@
  *   }
  * }
  * 
- * // Use in application
+ * // Use in application  
  * const app = resource({
  *   id: "app",
- *   register: [globals.resources.workflow, validateOrder],
- *   dependencies: { workflows: globals.resources.workflow },
+ *   register: [workflowResource, validateOrder], // or use globals.resources.workflow
+ *   dependencies: { workflows: workflowResource },
  *   init: async (_, { workflows }) => {
  *     const orderWorkflow = new OrderWorkflow();
  *     await workflows.registerWorkflow(orderWorkflow);
@@ -96,6 +96,9 @@ export { WorkflowEngine } from "./WorkflowEngine";
 
 // Persistence adapters
 export { MemoryWorkflowAdapter } from "./adapters/MemoryWorkflowAdapter";
+
+// Resource integration - re-export from globals for convenience
+export { workflowResource, memoryWorkflowResource } from "../globals/resources/workflow.resource";
 
 // Legacy exports for backward compatibility
 export {
