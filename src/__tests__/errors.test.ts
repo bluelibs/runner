@@ -5,7 +5,7 @@ import {
   defineMiddleware,
 } from "../define";
 import { run } from "../run";
-import { 
+import {
   Errors,
   RuntimeError,
   DuplicateRegistrationError,
@@ -16,7 +16,7 @@ import {
   MiddlewareAlreadyGlobalError,
   LockedError,
   StoreAlreadyInitializedError,
-} from "../errors";
+} from "..";
 
 describe("Errors", () => {
   it("should throw duplicateRegistration error", async () => {
