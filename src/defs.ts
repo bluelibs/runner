@@ -20,6 +20,19 @@ import {
   HasContracts,
 } from "./defs.returnTag";
 
+/**
+ * Generic validation schema interface that can be implemented by any validation library.
+ * Compatible with Zod, Yup, Joi, and other validation libraries.
+ */
+export interface IValidationSchema<T = any> {
+  /**
+   * Parse and validate the input data.
+   * Should throw an error if validation fails.
+   * Can transform the data if the schema supports transformations.
+   */
+  parse(input: unknown): T;
+}
+
 // Re-export public cache type so consumers don’t import from internals.
 export { ICacheInstance } from "./globals/middleware/cache.middleware";
 export * from "./models/StoreTypes";
@@ -248,10 +261,10 @@ export interface ITaskDefinition<
   /** Optional metadata used for docs, filtering and tooling. */
   meta?: TMeta;
   /**
-   * Optional Zod schema for runtime input validation.
+   * Optional validation schema for runtime input validation.
    * When provided, task input will be validated before execution.
    */
-  inputSchema?: z.ZodSchema<TInput>;
+  inputSchema?: IValidationSchema<TInput>;
   /**
    * The task body. If `on` is set, the input is an `IEventEmission`. Otherwise,
    * it's the declared input type.
@@ -367,10 +380,10 @@ export interface IResourceDefinition<
   ) => Promise<void>;
   meta?: TMeta;
   /**
-   * Optional Zod schema for runtime config validation.
-   * When provided, resource config will be validated before initialization.
+   * Optional validation schema for runtime config validation.
+   * When provided, resource config will be validated when .with() is called.
    */
-  configSchema?: z.ZodSchema<TConfig>;
+  configSchema?: IValidationSchema<TConfig>;
   /**
    * Safe overrides to swap behavior while preserving identities. See
    * README: Overrides.
@@ -449,6 +462,11 @@ export interface IEventDefinition<TPayload = void> {
   /** Stable identifier. Omit to get an anonymous id. */
   id?: string | symbol;
   meta?: IEventMeta;
+  /**
+   * Optional validation schema for runtime payload validation.
+   * When provided, event payload will be validated when emitted.
+   */
+  payloadSchema?: IValidationSchema<TPayload>;
 }
 
 export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
@@ -503,6 +521,11 @@ export interface IMiddlewareDefinition<
   id?: string | symbol;
   /** Static or lazy dependency map. */
   dependencies?: TDependencies | ((config: TConfig) => TDependencies);
+  /**
+   * Optional validation schema for runtime config validation.
+   * When provided, middleware config will be validated when .with() is called.
+   */
+  configSchema?: IValidationSchema<TConfig>;
   /**
    * The middleware body, called with task/resource execution input.
    */

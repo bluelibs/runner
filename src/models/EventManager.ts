@@ -106,6 +106,15 @@ export class EventManager {
     data: TInput,
     source: string | symbol
   ): Promise<void> {
+    // Validate payload with schema if provided
+    if (eventDefinition.payloadSchema) {
+      try {
+        data = eventDefinition.payloadSchema.parse(data);
+      } catch (error) {
+        throw new Error(`Event payload validation failed for ${eventDefinition.id.toString()}: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+    
     const allListeners = this.getCachedMergedListeners(eventDefinition.id);
 
     if (allListeners.length === 0) {

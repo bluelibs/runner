@@ -49,7 +49,6 @@
   },
   "license": "MIT",
   "dependencies": {
-    "lru-cache": "^11.1.0",
-    "zod": "^4.0.17"
+    "lru-cache": "^11.1.0"
   }
 }

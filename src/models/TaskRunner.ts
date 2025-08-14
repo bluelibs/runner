@@ -149,7 +149,7 @@ export class TaskRunner {
 
     // this is the final next()
     let next = async (input: any) => {
-      // Validate input with Zod schema if provided
+      // Validate input with schema if provided
       if (task.inputSchema) {
         try {
           input = task.inputSchema.parse(input);

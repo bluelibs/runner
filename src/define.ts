@@ -144,6 +144,15 @@ export function defineResource<
     context: constConfig.context,
     configSchema: constConfig.configSchema,
     with: function (config: TConfig) {
+      // Validate config with schema if provided (fail fast)
+      if (this.configSchema) {
+        try {
+          config = this.configSchema.parse(config);
+        } catch (error) {
+          throw new Error(`Resource config validation failed for ${this.id.toString()}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      
       return {
         [symbolResourceWithConfig]: true,
         id: this.id,
@@ -277,6 +286,15 @@ export function defineMiddleware<
   return {
     ...object,
     with: (config: TConfig) => {
+      // Validate config with schema if provided (fail fast)
+      if (object.configSchema) {
+        try {
+          config = object.configSchema.parse(config);
+        } catch (error) {
+          throw new Error(`Middleware config validation failed for ${object.id.toString()}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+      
       return {
         ...object,
         [symbolMiddlewareConfigured]: true,

@@ -1572,9 +1572,25 @@ const app = resource({
 });
 ```
 
-### Runtime Input and Config Validation with Zod
+### Runtime Input and Config Validation
 
-Need to validate task inputs or resource configs at runtime? BlueLibs Runner has first-class support for [Zod](https://zod.dev/) schemas that provide runtime validation with excellent TypeScript inference.
+BlueLibs Runner includes a generic validation interface that works with any validation library, including [Zod](https://zod.dev/), [Yup](https://github.com/jquense/yup), [Joi](https://joi.dev/), and others. The framework provides runtime validation with excellent TypeScript inference while remaining library-agnostic.
+
+#### The Validation Interface
+
+The framework defines a simple `IValidationSchema<T>` interface that any validation library can implement:
+
+```typescript
+interface IValidationSchema<T> {
+  parse(input: unknown): T;
+}
+```
+
+Popular validation libraries already implement this interface:
+- **Zod**: `.parse()` method works directly
+- **Yup**: Use `.validateSync()` or create a wrapper
+- **Joi**: Use `.assert()` or create a wrapper
+- **Custom validators**: Implement the interface yourself
 
 #### Task Input Validation
 
@@ -1586,13 +1602,13 @@ import { task, resource, run } from "@bluelibs/runner";
 
 const userSchema = z.object({
   name: z.string().min(2),
-  email: z.string().email(),
+  email: z.string().email(), 
   age: z.number().min(0).max(150),
 });
 
 const createUserTask = task({
   id: "app.tasks.createUser",
-  inputSchema: userSchema, // Runtime validation
+  inputSchema: userSchema, // Works directly with Zod!
   run: async (userData) => {
     // userData is validated and properly typed
     return { id: "user-123", ...userData };
@@ -1626,9 +1642,9 @@ const app = resource({
 });
 ```
 
-#### Resource Config Validation
+#### Resource Config Validation (Fail Fast)
 
-Add a `configSchema` to resources to validate configurations:
+Add a `configSchema` to resources to validate configurations. **Validation happens immediately when `.with()` is called**, ensuring configuration errors are caught early:
 
 ```typescript
 const databaseConfigSchema = z.object({
@@ -1640,9 +1656,9 @@ const databaseConfigSchema = z.object({
 
 const databaseResource = resource({
   id: "app.resources.database",
-  configSchema: databaseConfigSchema, // Runtime validation
+  configSchema: databaseConfigSchema, // Validation on .with()
   init: async (config) => {
-    // config is validated and has proper types
+    // config is already validated and has proper types
     return createConnection({
       host: config.host,
       port: config.port,
@@ -1651,6 +1667,17 @@ const databaseResource = resource({
     });
   },
 });
+
+// Validation happens here, not during init!
+try {
+  const configuredResource = databaseResource.with({
+    host: "localhost",
+    port: 99999, // Invalid: port too high
+    database: "myapp",
+  });
+} catch (error) {
+  // "Resource config validation failed for app.resources.database: ..."
+}
 
 const app = resource({
   id: "app",
@@ -1665,9 +1692,110 @@ const app = resource({
 });
 ```
 
+#### Event Payload Validation
+
+Add a `payloadSchema` to events to validate payloads every time they're emitted:
+
+```typescript
+const userActionSchema = z.object({
+  userId: z.string().uuid(),
+  action: z.enum(["created", "updated", "deleted"]),
+  timestamp: z.date().default(() => new Date()),
+});
+
+const userActionEvent = event({
+  id: "app.events.userAction",
+  payloadSchema: userActionSchema, // Validates on emit
+});
+
+const notificationTask = task({
+  id: "app.tasks.sendNotification",
+  on: userActionEvent,
+  run: async (eventData) => {
+    // eventData.data is validated and properly typed
+    console.log(`User ${eventData.data.userId} was ${eventData.data.action}`);
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [userActionEvent, notificationTask],
+  dependencies: { userActionEvent },
+  init: async (_, { userActionEvent }) => {
+    // This works - valid payload
+    await userActionEvent({
+      userId: "123e4567-e89b-12d3-a456-426614174000",
+      action: "created",
+    });
+    
+    // This throws validation error when emitted
+    try {
+      await userActionEvent({
+        userId: "invalid-uuid",
+        action: "unknown",
+      });
+    } catch (error) {
+      // "Event payload validation failed for app.events.userAction: ..."
+    }
+  },
+});
+```
+
+#### Middleware Config Validation (Fail Fast)
+
+Add a `configSchema` to middleware to validate configurations. Like resources, **validation happens immediately when `.with()` is called**:
+
+```typescript
+const timingConfigSchema = z.object({
+  timeout: z.number().positive(),
+  logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  logSuccessful: z.boolean().default(true),
+});
+
+const timingMiddleware = middleware({
+  id: "app.middleware.timing",
+  configSchema: timingConfigSchema, // Validation on .with()
+  run: async ({ next }, _, config) => {
+    const start = Date.now();
+    try {
+      const result = await next();
+      const duration = Date.now() - start;
+      if (config.logSuccessful && config.logLevel === "debug") {
+        console.log(`Operation completed in ${duration}ms`);
+      }
+      return result;
+    } catch (error) {
+      const duration = Date.now() - start;
+      console.log(`Operation failed after ${duration}ms`);
+      throw error;
+    }
+  },
+});
+
+// Validation happens here, not during execution!
+try {
+  const configuredMiddleware = timingMiddleware.with({
+    timeout: -5, // Invalid: negative timeout
+    logLevel: "invalid", // Invalid: not in enum
+  });
+} catch (error) {
+  // "Middleware config validation failed for app.middleware.timing: ..."
+}
+
+const myTask = task({
+  id: "app.tasks.example",
+  middleware: [timingMiddleware.with({
+    timeout: 5000,
+    logLevel: "debug",
+    logSuccessful: true,
+  })],
+  run: async () => "success",
+});
+```
+
 #### Advanced Validation Features
 
-Zod's full feature set is available, including transformations, refinements, and custom validations:
+Any validation library features work with the generic interface. Here's an example with transformations and refinements:
 
 ```typescript
 const advancedSchema = z
@@ -1698,35 +1826,80 @@ const paymentTask = task({
 
 #### Error Handling
 
-Validation errors are thrown with clear, descriptive messages:
+Validation errors are thrown with clear, descriptive messages that include the component ID:
 
 ```typescript
 // Task validation error format:
-// "Task input validation failed for {taskId}: {zodErrorMessage}"
+// "Task input validation failed for {taskId}: {validationErrorMessage}"
 
-// Resource validation error format:
-// "Resource config validation failed for {resourceId}: {zodErrorMessage}"
+// Resource validation error format (thrown on .with() call):
+// "Resource config validation failed for {resourceId}: {validationErrorMessage}"
+
+// Event validation error format (thrown on emit):
+// "Event payload validation failed for {eventId}: {validationErrorMessage}"
+
+// Middleware validation error format (thrown on .with() call):
+// "Middleware config validation failed for {middlewareId}: {validationErrorMessage}"
+```
+
+#### Using Different Validation Libraries
+
+The framework works with any validation library that implements the `IValidationSchema<T>` interface:
+
+```typescript
+// Zod (works directly)
+import { z } from "zod";
+const zodSchema = z.string().email();
+
+// Yup (with wrapper)
+import * as yup from "yup";
+const yupSchema = {
+  parse: (input: unknown) => yup.string().email().validateSync(input)
+};
+
+// Joi (with wrapper)
+import Joi from "joi";
+const joiSchema = {
+  parse: (input: unknown) => {
+    const { error, value } = Joi.string().email().validate(input);
+    if (error) throw error;
+    return value;
+  }
+};
+
+// Custom validation
+const customSchema = {
+  parse: (input: unknown) => {
+    if (typeof input !== "string" || !input.includes("@")) {
+      throw new Error("Must be a valid email");
+    }
+    return input;
+  }
+};
 ```
 
 #### When to Use Validation
 
 - **API boundaries**: Validating user inputs from HTTP requests
 - **External data**: Processing data from files, databases, or APIs
-- **Configuration**: Ensuring environment variables and configs are correct
+- **Configuration**: Ensuring environment variables and configs are correct (fail fast)
 - **Event payloads**: Validating data in event-driven architectures
+- **Middleware configs**: Validating middleware settings at registration time (fail fast)
 
 #### Performance Notes
 
 - Validation only runs when schemas are provided (zero overhead when not used)
-- Zod is highly optimized for runtime validation
-- Consider caching complex schemas for frequently called tasks
+- Resource and middleware validation happens once at registration time (`.with()`)
+- Task and event validation happens at runtime
+- Consider the validation library's performance characteristics for your use case
+- All major validation libraries are optimized for runtime validation
 
 #### TypeScript Integration
 
-While runtime validation happens with Zod, TypeScript still enforces compile-time types. For the best experience:
+While runtime validation happens with your chosen library, TypeScript still enforces compile-time types. For the best experience:
 
 ```typescript
-// Define your type and schema together
+// With Zod, define your type and schema together
 type UserData = z.infer<typeof userSchema>;
 
 const userSchema = z.object({
