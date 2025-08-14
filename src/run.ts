@@ -19,7 +19,7 @@ import { Logger } from "./models/Logger";
 
 export type ResourcesStoreElementType<
   C = any,
-  V = any,
+  V extends Promise<any> = any,
   D extends DependencyMapType = {}
 > = {
   resource: IResourceDefinition<C, V, D>;
@@ -53,9 +53,12 @@ export type RunnerState = {
 };
 
 export async function run<C, V>(
-  resource: IResource<C, V>,
+  resource: IResource<C, V extends Promise<any> ? V : Promise<any>>,
   config?: C
-): Promise<{ value: V; dispose: () => Promise<void> }> {
+): Promise<{
+  value: V extends Promise<infer U> ? U : V;
+  dispose: () => Promise<void>;
+}> {
   const eventManager = new EventManager();
 
   // ensure for logger, that it can be used only after: computeAllDependencies() has executed

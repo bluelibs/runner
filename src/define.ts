@@ -33,6 +33,8 @@ import {
   symbolResourceWithConfig,
   symbolResource,
   symbolMiddleware,
+  ITaskMeta,
+  IResourceMeta,
 } from "./defs";
 import { Errors } from "./errors";
 import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
@@ -43,10 +45,11 @@ export function defineTask<
   Input = undefined,
   Output extends Promise<any> = any,
   Deps extends DependencyMapType = any,
-  TOn extends "*" | IEventDefinition | undefined = undefined
+  TOn extends "*" | IEventDefinition | undefined = undefined,
+  TMeta extends ITaskMeta = any
 >(
-  taskConfig: ITaskDefinition<Input, Output, Deps, TOn>
-): ITask<Input, Output, Deps, TOn> {
+  taskConfig: ITaskDefinition<Input, Output, Deps, TOn, TMeta>
+): ITask<Input, Output, Deps, TOn, TMeta> {
   /**
    * Creates a task definition.
    * - Generates an anonymous id based on file path when `id` is omitted
@@ -91,19 +94,28 @@ export function defineTask<
         [symbolFilePath]: getCallerFile(),
       },
     },
-    meta: taskConfig.meta || {},
+    meta: taskConfig.meta || ({} as TMeta),
     // autorun,
   };
 }
 
 export function defineResource<
   TConfig = void,
-  TValue = any,
+  TValue extends Promise<any> = Promise<any>,
   TDeps extends DependencyMapType = {},
-  TPrivate = any
+  TPrivate = any,
+  TMeta extends IResourceMeta = any
 >(
-  constConfig: IResourceDefinition<TConfig, TValue, TDeps, TPrivate>
-): IResource<TConfig, TValue, TDeps, TPrivate> {
+  constConfig: IResourceDefinition<
+    TConfig,
+    TValue,
+    TDeps,
+    TPrivate,
+    any,
+    any,
+    TMeta
+  >
+): IResource<TConfig, TValue, TDeps, TPrivate, TMeta> {
   /**
    * Creates a resource definition.
    * - Generates anonymous id when omitted (resource or index flavor)
@@ -164,7 +176,7 @@ export function defineResource<
         [symbolFilePath]: filePath,
       },
     },
-    meta: constConfig.meta || {},
+    meta: (constConfig.meta || {}) as TMeta,
     middleware: constConfig.middleware || [],
   };
 }
@@ -182,7 +194,7 @@ export function defineIndex<
       ? T[K]["resource"]
       : T[K];
   } & DependencyMapType
->(items: T): IResource<void, DependencyValuesType<D>, D> {
+>(items: T): IResource<void, Promise<DependencyValuesType<D>>, D> {
   // Build dependency map from given items; unwrap `.with()` to the base resource
   const dependencies = {} as D;
   const register: RegisterableItems[] = [];
@@ -343,9 +355,9 @@ export function defineOverride(
  * - `.with(config)` to create configured instances
  * - `.extract(tags)` to extract this tag from a list of tags
  */
-export function defineTag<TConfig = void>(
-  definition: ITagDefinition<TConfig>
-): ITag<TConfig> {
+export function defineTag<TConfig = void, TEnforceContract = void>(
+  definition: ITagDefinition<TConfig, TEnforceContract>
+): ITag<TConfig, TEnforceContract> {
   const id = definition.id;
 
   return {

@@ -8,13 +8,18 @@ import {
 } from "../define";
 import {
   IEventDefinition,
+  IMeta,
   IMiddlewareDefinition,
   IResource,
   IResourceWithConfig,
   ITaskDefinition,
   RegisterableItems,
 } from "../defs";
-import { createTestResource } from "..";
+import { createTestResource, run } from "..";
+import {
+  EnsureResponseSatisfiesContracts,
+  HasContracts,
+} from "../defs.returnTag";
 
 // This is skipped because we mostly check typesafety.
 describe.skip("typesafety", () => {
@@ -244,7 +249,7 @@ describe.skip("typesafety", () => {
     const harness = createTestResource(app);
 
     // Types: input must match, override deps must match, output is awaited number
-    const { value: t } = await (await import("../run")).run(harness);
+    const { value: t } = await run(harness);
     const r1: number | undefined = await t.runTask(add, { x: 1 });
     // @ts-expect-error wrong input type
     await t.runTask(add, { z: 1 });
@@ -313,8 +318,114 @@ describe.skip("typesafety", () => {
           tag3,
         ],
       },
+      run: async (input) => {
+        return input;
+      },
     });
 
     expect(true).toBe(true);
+  });
+
+  it("should enforce contracts on tasks", async () => {
+    interface IUser {
+      name: string;
+    }
+
+    interface IOther {
+      age: number;
+    }
+
+    const tag = defineTag<{ value: number }, IUser>({ id: "tag" });
+    const tag2 = defineTag<void, IOther>({ id: "tag2" });
+
+    const meta = {
+      tags: [tag.with({ value: 123 }), tag2, "string"],
+    } satisfies IMeta;
+
+    const response = {
+      age: 123,
+      name: "123", // intentional
+    };
+    type TEST = HasContracts<typeof meta>;
+    type TEST2 = EnsureResponseSatisfiesContracts<typeof meta, typeof response>;
+
+    const task = defineTask({
+      id: "task",
+      meta,
+      run: async (input: { name: string }) => {
+        return {
+          age: 123,
+          name: "123",
+        };
+      },
+    });
+    const task2 = defineTask({
+      id: "task",
+      meta,
+      // @ts-expect-error
+      run: async (input: { name: string }) => {
+        return {
+          age: "123",
+        };
+      },
+    });
+
+    const task3 = defineTask({
+      id: "task",
+      meta,
+      // @ts-expect-error
+      run: async (input: { name: string }) => {
+        return {};
+      },
+    });
+  });
+
+  it("should enforce contracts on resources", async () => {
+    interface IUser {
+      name: string;
+    }
+
+    interface IOther {
+      age: number;
+    }
+
+    const tag = defineTag<{ value: number }, IUser>({ id: "tag" });
+    const tag2 = defineTag<void, IOther>({ id: "tag2" });
+
+    const meta = {
+      tags: [tag.with({ value: 123 }), tag2, "string"],
+    } satisfies IMeta;
+
+    const resourceOk = defineResource({
+      id: "resource.ok",
+      meta,
+      init: async () => {
+        return {
+          age: 123,
+          name: "123",
+        };
+      },
+    });
+
+    const resourceBad1 = defineResource({
+      id: "resource.bad1",
+      meta,
+      // @ts-expect-error
+      init: async () => {
+        return {
+          age: "123",
+          name: "123",
+        };
+      },
+    });
+
+    const resourceBad2 = defineResource({
+      id: "resource.bad2",
+      meta,
+      // @ts-expect-error
+      init: async () => {
+        return {};
+      },
+    });
   });
 });

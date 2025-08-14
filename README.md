@@ -1227,13 +1227,81 @@ const performanceMiddleware = middleware({
     return next(task.input);
   },
 });
+```
+
+#### Contract Tags: Enforcing Return Types
+
+You can attach contracts to tags to enforce the shape of a task's returned value and a resource's `init()` value at compile time. Contracts are specified via the second generic of `defineTag<TConfig, TContract>`.
+
+```typescript
+// A tag that enforces the returned value to include { name: string }
+const userContract = tag<void, { name: string }>({ id: "contract.user" });
+
+// Another tag that enforces { age: number }
+const ageContract = tag<void, { age: number }>({ id: "contract.age" });
+
+// Works with configured tags too
+const preferenceContract = tag<{ locale: string }, { preferredLocale: string }>(
+  { id: "contract.preferences" }
+);
+```
+
+When these tags are present in `meta.tags`, the returned value must satisfy the intersection of all contract types:
+
+```typescript
+// Task: the awaited return value must satisfy { name: string } & { age: number }
+const getProfile = task({
+  id: "app.tasks.getProfile",
+  meta: {
+    tags: [
+      userContract,
+      ageContract,
+      preferenceContract.with({ locale: "en" }),
+    ],
+  },
+  run: async () => {
+    return { name: "Ada", age: 37, preferredLocale: "en" }; // OK
+  },
+});
+
+// Resource: init() return must satisfy the same intersection
+const profileService = resource({
+  id: "app.resources.profileService",
+  meta: { tags: [userContract, ageContract] },
+  init: async () => {
+    return { name: "Ada", age: 37 }; // OK
+  },
+});
+```
+
+If the returned value does not satisfy the intersection, TypeScript surfaces a readable, verbose type error that includes what was expected and what was received.
+
+```typescript
+const badTask = task({
+  id: "app.tasks.bad",
+  meta: { tags: [userContract, ageContract] },
+  //    vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+  run: async () => ({ name: "Ada" }), // Missing { age: number }
+  // Type error includes a helpful shape similar to:
+  // ContractViolationError<
+  //   { message: "Value does not satisfy all tag contracts";
+  //     expected: { name: string } & { age: number };
+  //     received: { name: string } }
+  // >
+});
+```
+
+Gotchas with empty tags:
+
+- Use a literal empty tuple to indicate “no contracts”: `meta: { tags: [] as const }`.
+- If `tags` widens to `TagType[]` (for example, a variable typed as array), the compiler cannot prove emptiness and contract checks may apply.
 
 const rateLimitMiddleware = middleware({
-  id: "app.middleware.rateLimit",
-  dependencies: { redis },
-  run: async ({ task, next }, { redis }) => {
-    // Extraction can be done at task.definition level or at task.definition.meta.tags
-    const rateLimitCurrentTag = rateLimitTag.extract(task.definition);
+id: "app.middleware.rateLimit",
+dependencies: { redis },
+run: async ({ task, next }, { redis }) => {
+// Extraction can be done at task.definition level or at task.definition.meta.tags
+const rateLimitCurrentTag = rateLimitTag.extract(task.definition);
 
     // Alternative way
     const tags = task.definition.meta?.tags;
@@ -1253,9 +1321,11 @@ const rateLimitMiddleware = middleware({
     }
 
     return next(task.input);
-  },
+
+},
 });
-```
+
+````
 
 ### When to Use Metadata
 
@@ -1273,7 +1343,7 @@ const paymentProcessor = resource({
   },
   // ... implementation
 });
-```
+````
 
 **Conditional Behavior**
 

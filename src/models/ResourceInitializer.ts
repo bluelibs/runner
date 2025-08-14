@@ -23,7 +23,7 @@ export class ResourceInitializer {
    */
   public async initializeResource<
     TConfig = null,
-    TValue = any,
+    TValue extends Promise<any> = Promise<any>,
     TDeps extends DependencyMapType = {},
     TContext = any
   >(
@@ -109,11 +109,16 @@ export class ResourceInitializer {
 
       if (!isSuppressed) throw e;
 
-      return { value: undefined as TValue, context: {} as TContext };
+      return { value: undefined as unknown as TValue, context: {} as TContext };
     }
   }
 
-  public async initWithMiddleware<C, V, D extends DependencyMapType, TContext>(
+  public async initWithMiddleware<
+    C,
+    V extends Promise<any>,
+    D extends DependencyMapType,
+    TContext
+  >(
     resource: IResource<C, V, D, TContext>,
     config: C,
     dependencies: DependencyValuesType<D>,

@@ -25,7 +25,7 @@ export function createTestResource(
   options?: {
     overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
   }
-): IResource<void, ReturnType<typeof buildTestFacade>> {
+): IResource<void, Promise<ReturnType<typeof buildTestFacade>>> {
   return defineResource({
     id: `tests.createTestResource.${++testResourceCounter}`,
     register: [root],

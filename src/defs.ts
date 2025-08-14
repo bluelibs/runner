@@ -15,6 +15,10 @@
  */
 
 import { MiddlewareEverywhereOptions } from "./define";
+import {
+  EnsureResponseSatisfiesContracts,
+  HasContracts,
+} from "./defs.returnTag";
 
 // Re-export public cache type so consumers don’t import from internals.
 export { ICacheInstance } from "./globals/middleware/cache.middleware";
@@ -57,17 +61,17 @@ export const symbolIndexResource: unique symbol = Symbol(
   "runner.indexResource"
 );
 
-export interface ITagDefinition<TConfig = void> {
+export interface ITagDefinition<TConfig = void, TEnforceContract = void> {
   id: string | symbol;
 }
 
 /**
  * A configured instance of a tag as produced by `ITag.with()`.
  */
-export interface ITagWithConfig<TConfig = void> {
+export interface ITagWithConfig<TConfig = void, TEnforceContract = void> {
   id: string | symbol;
   /** The tag definition used to produce this configured instance. */
-  tag: ITag<TConfig>;
+  tag: ITag<TConfig, TEnforceContract>;
   /** The configuration captured for this tag instance. */
   config: TConfig;
 }
@@ -76,16 +80,19 @@ export interface ITagWithConfig<TConfig = void> {
  * A tag definition (builder). Use `.with(config)` to obtain configured instances,
  * and `.extract(tags)` to find either a configured instance or the bare tag in a list.
  */
-export interface ITag<TConfig = void> extends ITagDefinition<TConfig> {
+export interface ITag<TConfig = void, TEnforceContract = void>
+  extends ITagDefinition<TConfig, TEnforceContract> {
   /**
    * Creates a configured instance of the tag.
    */
-  with(config: TConfig): ITagWithConfig<TConfig>;
+  with(config: TConfig): ITagWithConfig<TConfig, TEnforceContract>;
   /**
    * Extracts either a configured instance or the bare tag from a list of tags
    * or from a taggable object (`{ meta: { tags?: [] } }`).
    */
-  extract(target: TagType[] | ITaggable): ExtractedTagResult<TConfig> | null;
+  extract(
+    target: TagType[] | ITaggable
+  ): ExtractedTagResult<TConfig, TEnforceContract> | null;
   [symbolFilePath]: string;
 }
 
@@ -96,9 +103,9 @@ export interface ITag<TConfig = void> extends ITagDefinition<TConfig> {
  */
 export type TagType =
   | string
-  | ITag<void>
-  | ITag<{ [K in any]?: any }>
-  | ITagWithConfig<any>;
+  | ITag<void, any>
+  | ITag<{ [K in any]?: any }, any>
+  | ITagWithConfig<any, any>;
 
 /**
  * Conditional result type for `ITag.extract`:
@@ -106,7 +113,7 @@ export type TagType =
  * - For optional object config → identifier with optional config
  * - For required config → identifier with required config
  */
-export type ExtractedTagResult<TConfig> = {} extends TConfig
+export type ExtractedTagResult<TConfig, TEnforceContract> = {} extends TConfig
   ? { id: string | symbol; config?: TConfig }
   : { id: string | symbol; config: TConfig };
 
@@ -119,7 +126,6 @@ export interface ITaggable {
     tags?: TagType[];
   };
 }
-
 /**
  * Common metadata you can attach to tasks/resources/events/middleware.
  * Useful for docs, filtering and middleware decisions.
@@ -149,7 +155,9 @@ export type DependencyMapType = Record<
 type ExtractTaskInput<T> = T extends ITask<infer I, any, infer D> ? I : never;
 type ExtractTaskOutput<T> = T extends ITask<any, infer O, infer D> ? O : never;
 type ExtractResourceValue<T> = T extends IResource<any, infer V, infer D>
-  ? V
+  ? V extends Promise<infer U>
+    ? U
+    : V
   : never;
 
 type ExtractEventParams<T> = T extends IEvent<infer P> ? P : never;
@@ -213,7 +221,8 @@ export interface ITaskDefinition<
   TInput = any,
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
-  TOn extends "*" | IEventDefinition<any> | undefined = undefined // Adding a generic to track 'on' type
+  TOn extends "*" | IEventDefinition<any> | undefined = undefined, // Adding a generic to track 'on' type,
+  TMeta extends ITaskMeta = any
 > {
   /**
    * Stable identifier. If omitted, an anonymous id is generated from file path
@@ -237,7 +246,7 @@ export interface ITaskDefinition<
    */
   listenerOrder?: number;
   /** Optional metadata used for docs, filtering and tooling. */
-  meta?: ITaskMeta;
+  meta?: TMeta;
   /**
    * The task body. If `on` is set, the input is an `IEventEmission`. Otherwise,
    * it's the declared input type.
@@ -247,7 +256,9 @@ export interface ITaskDefinition<
       ? TInput
       : IEventEmission<TOn extends "*" ? any : ExtractEventParams<TOn>>,
     dependencies: DependencyValuesType<TDependencies>
-  ) => TOutput;
+  ) => HasContracts<TMeta> extends true
+    ? EnsureResponseSatisfiesContracts<TMeta, TOutput>
+    : TOutput;
 }
 
 export type BeforeRunEventPayload<TInput> = {
@@ -284,8 +295,9 @@ export interface ITask<
   TInput = any,
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
-  TOn extends "*" | IEventDefinition<any> | undefined = undefined
-> extends ITaskDefinition<TInput, TOutput, TDependencies, TOn> {
+  TOn extends "*" | IEventDefinition<any> | undefined = undefined,
+  TMeta extends ITaskMeta = any
+> extends ITaskDefinition<TInput, TOutput, TDependencies, TOn, TMeta> {
   id: string | symbol;
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
@@ -304,11 +316,12 @@ export interface ITask<
 
 export interface IResourceDefinition<
   TConfig = any,
-  TValue = unknown,
+  TValue extends Promise<any> = Promise<any>,
   TDependencies extends DependencyMapType = {},
   TContext = any,
   THooks = any,
-  TRegisterableItems = any
+  TRegisterableItems = any,
+  TMeta extends IResourceMeta = any
 > {
   /** Stable identifier. Omit to get an anonymous id. */
   id?: string | symbol;
@@ -329,7 +342,9 @@ export interface IResourceDefinition<
     config: TConfig,
     dependencies: DependencyValuesType<TDependencies>,
     context: TContext
-  ) => Promise<TValue>;
+  ) => HasContracts<TMeta> extends true
+    ? EnsureResponseSatisfiesContracts<TMeta, TValue>
+    : TValue;
   /**
    * Clean-up function for the resource. This is called when the resource is no longer needed.
    *
@@ -340,12 +355,12 @@ export interface IResourceDefinition<
    */
   dispose?: (
     this: any,
-    value: TValue,
+    value: TValue extends Promise<infer U> ? U : TValue,
     config: TConfig,
     dependencies: DependencyValuesType<TDependencies>,
     context: TContext
   ) => Promise<void>;
-  meta?: IResourceMeta;
+  meta?: TMeta;
   /**
    * Safe overrides to swap behavior while preserving identities. See
    * README: Overrides.
@@ -370,10 +385,19 @@ export interface IResourceDefinition<
 
 export interface IResource<
   TConfig = void,
-  TValue = any,
+  TValue extends Promise<any> = Promise<any>,
   TDependencies extends DependencyMapType = any,
-  TContext = any
-> extends IResourceDefinition<TConfig, TValue, TDependencies, TContext> {
+  TContext = any,
+  TMeta extends IResourceMeta = any
+> extends IResourceDefinition<
+    TConfig,
+    TValue,
+    TDependencies,
+    TContext,
+    any,
+    any,
+    TMeta
+  > {
   id: string | symbol;
   with(config: TConfig): IResourceWithConfig<TConfig, TValue, TDependencies>;
   register:
@@ -396,7 +420,7 @@ export interface IResource<
 
 export interface IResourceWithConfig<
   TConfig = any,
-  TValue = any,
+  TValue extends Promise<any> = Promise<any>,
   TDependencies extends DependencyMapType = any
 > {
   /** The id of the underlying resource. */
@@ -530,7 +554,7 @@ export interface IMiddlewareExecutionInput<
   };
   /** Resource hook: present when wrapping init/dispose. */
   resource?: {
-    definition: IResource<TResourceConfig>;
+    definition: IResource<TResourceConfig, any, any, any, any>;
     config: TResourceConfig;
   };
   next: (

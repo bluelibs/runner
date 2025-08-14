@@ -13,7 +13,7 @@ import {
 
 export type ResourceStoreElementType<
   C = any,
-  V = any,
+  V extends Promise<any> = any,
   D extends DependencyMapType = {},
   TContext = any
 > = {
