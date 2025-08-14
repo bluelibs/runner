@@ -37,3 +37,4 @@ export {
 export * as definitions from "./defs";
 export { Semaphore, Store, EventManager, TaskRunner, Queue } from "./models";
 export * as Errors from "./errors";
+export * as workflows from "./workflows";

@@ -15,7 +15,7 @@ describe("Workflow Resource Integration", () => {
       const app = resource({
         id: "test.app",
         register: [workflowResource],
-        dependencies: { workflows: workflowResource as any },
+        dependencies: { workflows: workflowResource },
         init: async (_: any, { workflows }: any) => {
           expect(workflows).toBeDefined();
           expect(workflows.engine).toBeDefined();
@@ -44,7 +44,7 @@ describe("Workflow Resource Integration", () => {
             timerCheckInterval: 500,
           }),
         ],
-        dependencies: { workflows: workflowResource as any },
+        dependencies: { workflows: workflowResource },
         init: async (_: any, { workflows }: any) => {
           expect(workflows.getAdapter()).toBe(customAdapter);
           return {};
@@ -59,7 +59,7 @@ describe("Workflow Resource Integration", () => {
       const app = resource({
         id: "test.app",
         register: [memoryWorkflowResource],
-        dependencies: { workflows: memoryWorkflowResource as any },
+        dependencies: { workflows: memoryWorkflowResource.resource },
         init: async (_: any, { workflows }: any) => {
           expect(workflows).toBeDefined();
           expect(workflows.getAdapter()).toBeInstanceOf(MemoryWorkflowAdapter);
@@ -143,7 +143,7 @@ describe("Workflow Resource Integration", () => {
           processPaymentTask,
           rollbackPaymentTask,
         ],
-        dependencies: { workflows: memoryWorkflowResource as any },
+        dependencies: { workflows: memoryWorkflowResource.resource },
         init: async (_: any, { workflows }: any) => {
           // Register workflow
           await workflows.registerWorkflow(orderWorkflow);
@@ -225,7 +225,7 @@ describe("Workflow Resource Integration", () => {
       const app = resource({
         id: "failing.app",
         register: [memoryWorkflowResource, failingTask, rollbackTask],
-        dependencies: { workflows: memoryWorkflowResource as any },
+        dependencies: { workflows: memoryWorkflowResource.resource },
         init: async (_: any, { workflows }: any) => {
           await workflows.registerWorkflow(workflow);
           
@@ -280,7 +280,7 @@ describe("Workflow Resource Integration", () => {
       const app = resource({
         id: "concurrent.app",
         register: [memoryWorkflowResource, concurrentTask],
-        dependencies: { workflows: memoryWorkflowResource as any },
+        dependencies: { workflows: memoryWorkflowResource.resource },
         init: async (_: any, { workflows }: any) => {
           await workflows.registerWorkflow(workflow);
 
@@ -348,7 +348,7 @@ describe("Workflow Resource Integration", () => {
       const app = resource({
         id: "timer.app",
         register: [memoryWorkflowResource, timerTask],
-        dependencies: { workflows: memoryWorkflowResource as any },
+        dependencies: { workflows: memoryWorkflowResource.resource },
         init: async (_: any, { workflows }: any) => {
           await workflows.registerWorkflow(workflow);
           
@@ -389,7 +389,7 @@ describe("Workflow Resource Integration", () => {
       const app = resource({
         id: "adapter.test.app",
         register: [memoryWorkflowResource],
-        dependencies: { workflows: memoryWorkflowResource as any },
+        dependencies: { workflows: memoryWorkflowResource.resource },
         init: async (_: any, { workflows }: any) => {
           const adapter = workflows.getAdapter();
           expect(adapter).toBeInstanceOf(MemoryWorkflowAdapter);
@@ -426,7 +426,7 @@ describe("Workflow Resource Integration", () => {
       const app = resource({
         id: "lifecycle.app",
         register: [memoryWorkflowResource],
-        dependencies: { workflows: memoryWorkflowResource as any },
+        dependencies: { workflows: memoryWorkflowResource.resource },
         init: async (_: any, { workflows }: any) => {
           // Create a workflow with timer to verify cleanup
           const workflow = defineWorkflow({
