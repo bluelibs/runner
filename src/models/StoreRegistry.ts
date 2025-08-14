@@ -12,7 +12,7 @@ import {
   IEvent,
 } from "../defs";
 import * as utils from "../define";
-import { Errors } from "../errors";
+import { UnknownItemTypeError } from "../errors";
 import {
   TaskStoreElementType,
   MiddlewareStoreElementType,
@@ -55,7 +55,7 @@ export class StoreRegistry {
     } else if (utils.isResourceWithConfig(item)) {
       this.storeResourceWithConfig<C>(item);
     } else {
-      throw Errors.unknownItemType(item);
+      throw new UnknownItemTypeError(item);
     }
   }
 

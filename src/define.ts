@@ -36,7 +36,7 @@ import {
   ITaskMeta,
   IResourceMeta,
 } from "./defs";
-import { Errors } from "./errors";
+import { MiddlewareAlreadyGlobalError } from "./errors";
 import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
 
 // Helper function to get the caller file
@@ -292,7 +292,7 @@ export function defineMiddleware<
         [symbolMiddlewareEverywhereTasks]: tasks,
         [symbolMiddlewareEverywhereResources]: resources,
         everywhere() {
-          throw Errors.middlewareAlreadyGlobal(object.id);
+          throw new MiddlewareAlreadyGlobalError(object.id);
         },
       };
     },

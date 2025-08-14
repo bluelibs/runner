@@ -6,20 +6,12 @@ import {
   defineOverride,
   defineTag,
 } from "../define";
-import {
-  IEventDefinition,
-  IMeta,
-  IMiddlewareDefinition,
-  IResource,
-  IResourceWithConfig,
-  ITaskDefinition,
-  RegisterableItems,
-} from "../defs";
-import { createTestResource, run } from "..";
+import { IMeta } from "../defs";
 import {
   EnsureResponseSatisfiesContracts,
   HasContracts,
 } from "../defs.returnTag";
+import { createTestResource, run } from "..";
 
 // This is skipped because we mostly check typesafety.
 describe.skip("typesafety", () => {

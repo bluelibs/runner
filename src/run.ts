@@ -13,7 +13,7 @@ import { EventManager } from "./models/EventManager";
 import { globalEvents } from "./globals/globalEvents";
 import { Store } from "./models/Store";
 import { findCircularDependencies } from "./tools/findCircularDependencies";
-import { Errors } from "./errors";
+import { CircularDependenciesError } from "./errors";
 import { globalResources } from "./globals/globalResources";
 import { Logger } from "./models/Logger";
 
@@ -82,7 +82,7 @@ export async function run<C, V>(
   const dependentNodes = store.getDependentNodes();
   const circularDependencies = findCircularDependencies(dependentNodes);
   if (circularDependencies.cycles.length > 0) {
-    throw Errors.circularDependencies(circularDependencies.cycles);
+    throw new CircularDependenciesError(circularDependencies.cycles);
   }
 
   // the overrides that were registered now will override the other registered resources

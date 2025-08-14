@@ -5,7 +5,19 @@ import {
   defineMiddleware,
 } from "../define";
 import { run } from "../run";
-import { Errors } from "../errors";
+import { Errors } from "..";
+
+const {
+  RuntimeError,
+  DuplicateRegistrationError,
+  DependencyNotFoundError,
+  UnknownItemTypeError,
+  CircularDependenciesError,
+  EventNotFoundError,
+  MiddlewareAlreadyGlobalError,
+  LockedError,
+  StoreAlreadyInitializedError,
+} = Errors;
 
 describe("Errors", () => {
   it("should throw duplicateRegistration error", async () => {
@@ -18,7 +30,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.duplicateRegistration("Task", "test.task").message
+      new DuplicateRegistrationError("Task", "test.task").message
     );
   });
 
@@ -38,7 +50,9 @@ describe("Errors", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrow(Errors.unknownItemType({}).message);
+    await expect(run(app)).rejects.toThrow(
+      new UnknownItemTypeError({}).message
+    );
   });
 
   it("should throw unknown item type error at resource level", async () => {
@@ -52,7 +66,9 @@ describe("Errors", () => {
       async init(_, {}) {},
     });
 
-    await expect(run(app)).rejects.toThrow(Errors.unknownItemType({}).message);
+    await expect(run(app)).rejects.toThrow(
+      new UnknownItemTypeError({}).message
+    );
   });
 
   it("should throw circularDependencies error", async () => {
@@ -91,7 +107,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.eventNotFound("non.existent.event").message
+      new EventNotFoundError("non.existent.event").message
     );
   });
 
@@ -148,7 +164,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.duplicateRegistration("Resource", "res1").message
+      new DuplicateRegistrationError("Resource", "res1").message
     );
   });
 
@@ -169,7 +185,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.duplicateRegistration("Middleware", "middlewarex").message
+      new DuplicateRegistrationError("Middleware", "middlewarex").message
     );
   });
 
@@ -187,7 +203,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.duplicateRegistration("Event", "ev1").message
+      new DuplicateRegistrationError("Event", "ev1").message
     );
   });
 
@@ -216,7 +232,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.dependencyNotFound("Task test.off.the.grid").message
+      new DependencyNotFoundError("Task test.off.the.grid").message
     );
   });
 
@@ -244,7 +260,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.dependencyNotFound("Resource test.off.the.grid").message
+      new DependencyNotFoundError("Resource test.off.the.grid").message
     );
   });
 
@@ -254,7 +270,59 @@ describe("Errors", () => {
       run: async () => {},
     }).everywhere();
     expect(() => first.everywhere()).toThrow(
-      Errors.middlewareAlreadyGlobal("x").message
+      new MiddlewareAlreadyGlobalError("x").message
     );
+  });
+
+  describe("Error Classes", () => {
+    it("should have correct error names and inheritance", () => {
+      // Test base RuntimeError
+      const baseError = new RuntimeError("test");
+      expect(baseError.name).toBe("RuntimeError");
+      expect(baseError).toBeInstanceOf(Error);
+      expect(baseError).toBeInstanceOf(RuntimeError);
+
+      // Test DuplicateRegistrationError
+      const dupError = new DuplicateRegistrationError("Task", "test");
+      expect(dupError.name).toBe("DuplicateRegistrationError");
+      expect(dupError).toBeInstanceOf(Error);
+      expect(dupError).toBeInstanceOf(RuntimeError);
+      expect(dupError).toBeInstanceOf(DuplicateRegistrationError);
+
+      // Test DependencyNotFoundError
+      const depError = new DependencyNotFoundError("test");
+      expect(depError.name).toBe("DependencyNotFoundError");
+      expect(depError).toBeInstanceOf(RuntimeError);
+
+      // Test UnknownItemTypeError
+      const unknownError = new UnknownItemTypeError("test");
+      expect(unknownError.name).toBe("UnknownItemTypeError");
+      expect(unknownError).toBeInstanceOf(RuntimeError);
+
+      // Test CircularDependenciesError
+      const circularError = new CircularDependenciesError(["a", "b"]);
+      expect(circularError.name).toBe("CircularDependenciesError");
+      expect(circularError).toBeInstanceOf(RuntimeError);
+
+      // Test EventNotFoundError
+      const eventError = new EventNotFoundError("test");
+      expect(eventError.name).toBe("EventNotFoundError");
+      expect(eventError).toBeInstanceOf(RuntimeError);
+
+      // Test MiddlewareAlreadyGlobalError
+      const middlewareError = new MiddlewareAlreadyGlobalError("test");
+      expect(middlewareError.name).toBe("MiddlewareAlreadyGlobalError");
+      expect(middlewareError).toBeInstanceOf(RuntimeError);
+
+      // Test LockedError
+      const lockedError = new LockedError("test");
+      expect(lockedError.name).toBe("LockedError");
+      expect(lockedError).toBeInstanceOf(RuntimeError);
+
+      // Test StoreAlreadyInitializedError
+      const storeError = new StoreAlreadyInitializedError();
+      expect(storeError.name).toBe("StoreAlreadyInitializedError");
+      expect(storeError).toBeInstanceOf(RuntimeError);
+    });
   });
 });

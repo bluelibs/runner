@@ -1,5 +1,4 @@
 import { DependencyMapType, DependencyValuesType, ITask } from "../defs";
-import { Errors } from "../errors";
 import { EventManager } from "./EventManager";
 import { globalEvents } from "../globals/globalEvents";
 import { Store } from "./Store";
