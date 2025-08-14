@@ -4,7 +4,7 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 
 <p align="center">
 <a href="https://github.com/bluelibs/runner/actions/workflows/ci.yml"><img src="https://github.com/bluelibs/runner/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build Status" /></a>
-<a href="https://coveralls.io/github/bluelibs/runner?branch=main"><img src="https://coveralls.io/repos/github/bluelibs/runner/badge.svg?branch=main" alt="Coverage Status" /></a>
+<a href="https://github.com/bluelibs/runner"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen" alt="Coverage 100% is enforced. Code does not build without 100% on all branches, lines, etc." /></a>
 <a href="https://bluelibs.github.io/runner/" target="_blank"><img src="https://img.shields.io/badge/read-typedocs-blue" alt="Docs" /></a>
 <a href="https://github.com/bluelibs/runner" target="_blank"><img src="https://img.shields.io/badge/github-blue" alt="GitHub" /></a>
 </p>
@@ -1587,6 +1587,7 @@ interface IValidationSchema<T> {
 ```
 
 Popular validation libraries already implement this interface:
+
 - **Zod**: `.parse()` method works directly
 - **Yup**: Use `.validateSync()` or create a wrapper
 - **Joi**: Use `.assert()` or create a wrapper
@@ -1602,7 +1603,7 @@ import { task, resource, run } from "@bluelibs/runner";
 
 const userSchema = z.object({
   name: z.string().min(2),
-  email: z.string().email(), 
+  email: z.string().email(),
   age: z.number().min(0).max(150),
 });
 
@@ -1727,7 +1728,7 @@ const app = resource({
       userId: "123e4567-e89b-12d3-a456-426614174000",
       action: "created",
     });
-    
+
     // This throws validation error when emitted
     try {
       await userActionEvent({
@@ -1784,11 +1785,13 @@ try {
 
 const myTask = task({
   id: "app.tasks.example",
-  middleware: [timingMiddleware.with({
-    timeout: 5000,
-    logLevel: "debug",
-    logSuccessful: true,
-  })],
+  middleware: [
+    timingMiddleware.with({
+      timeout: 5000,
+      logLevel: "debug",
+      logSuccessful: true,
+    }),
+  ],
   run: async () => "success",
 });
 ```
@@ -1805,13 +1808,10 @@ const advancedSchema = z
     currency: z.enum(["USD", "EUR", "GBP"]),
     metadata: z.record(z.string()).optional(),
   })
-  .refine(
-    (data) => data.amount > 0,
-    {
-      message: "Amount must be positive",
-      path: ["amount"],
-    }
-  );
+  .refine((data) => data.amount > 0, {
+    message: "Amount must be positive",
+    path: ["amount"],
+  });
 
 const paymentTask = task({
   id: "app.tasks.payment",
@@ -1854,7 +1854,7 @@ const zodSchema = z.string().email();
 // Yup (with wrapper)
 import * as yup from "yup";
 const yupSchema = {
-  parse: (input: unknown) => yup.string().email().validateSync(input)
+  parse: (input: unknown) => yup.string().email().validateSync(input),
 };
 
 // Joi (with wrapper)
@@ -1864,7 +1864,7 @@ const joiSchema = {
     const { error, value } = Joi.string().email().validate(input);
     if (error) throw error;
     return value;
-  }
+  },
 };
 
 // Custom validation
@@ -1874,7 +1874,7 @@ const customSchema = {
       throw new Error("Must be a valid email");
     }
     return input;
-  }
+  },
 };
 ```
 
