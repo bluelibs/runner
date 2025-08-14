@@ -39,13 +39,9 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # Run tests
-      - name: Run tests and coverage
-        run: npm run coverage
-
-      # Upload coverage to Coveralls
-      - name: Coveralls
-        uses: coverallsapp/github-action@v2
+      # Run tests with enforced 100% coverage
+      - name: Run tests with coverage enforcement
+        run: npm run test:ci
 
       # Generate documentation
       - name: Generate documentation
