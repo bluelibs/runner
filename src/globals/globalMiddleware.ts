@@ -4,6 +4,7 @@ import { cacheMiddleware } from "./middleware/cache.middleware";
 import { requireContextMiddleware } from "./middleware/requireContext.middleware";
 import { retryMiddleware } from "./middleware/retry.middleware";
 import { timeoutMiddleware } from "./middleware/timeout.middleware";
+import { authMiddlewares } from "./auth";
 
 /**
  * Global middlewares
@@ -13,4 +14,5 @@ export const globalMiddlewares = {
   retry: retryMiddleware,
   cache: cacheMiddleware,
   timeout: timeoutMiddleware,
+  auth: authMiddlewares,
 };
