@@ -1,8 +1,9 @@
 import { resource, run, globals } from "@bluelibs/runner";
 import { databaseResource } from "./resources/database";
 import { userServiceResource } from "./resources/userService";
-import { expressServerResource, routeRegistrationTask, ExpressServer } from "./resources/expressServer";
+import { expressServerResource, ExpressServer } from "./resources/expressServer";
 import { httpRouteBridgeResource } from "./resources/httpRouteBridge";
+import { routeRegistrationTask } from "./tasks/routeRegistration";
 import { authMiddleware } from "./middleware/auth";
 import { 
   registerUserTask,
