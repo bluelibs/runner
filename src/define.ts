@@ -41,6 +41,23 @@ import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
 
 // Helper function to get the caller file
 
+/**
+ * Define a task.
+ * Generates a strongly-typed task object with id, lifecycle events, dependencies,
+ * middleware, and metadata.
+ *
+ * - If `id` is omitted, an anonymous, file-based id is generated.
+ * - Wires lifecycle events: `beforeRun`, `afterRun`, `onError`.
+ * - Carries through dependencies, middleware, input schema, and metadata.
+ *
+ * @typeParam Input - Input type accepted by the task's `run` function.
+ * @typeParam Output - Promise type returned by the `run` function.
+ * @typeParam Deps - Dependency map type this task requires.
+ * @typeParam TOn - Event type or "*" this task listens to.
+ * @typeParam TMeta - Arbitrary metadata type carried by the task.
+ * @param taskConfig - The task definition config.
+ * @returns A branded task definition usable by the runner.
+ */
 export function defineTask<
   Input = undefined,
   Output extends Promise<any> = any,
@@ -50,12 +67,6 @@ export function defineTask<
 >(
   taskConfig: ITaskDefinition<Input, Output, Deps, TOn, TMeta>
 ): ITask<Input, Output, Deps, TOn, TMeta> {
-  /**
-   * Creates a task definition.
-   * - Generates an anonymous id based on file path when `id` is omitted
-   * - Wires lifecycle events: beforeRun, afterRun, onError
-   * - Carries through dependencies and middleware as declared
-   */
   const filePath = getCallerFile();
   const isAnonymous = !Boolean(taskConfig.id);
   const id = taskConfig.id || generateCallerIdFromFile(filePath, "task");
@@ -118,10 +129,21 @@ export function defineResource<
   >
 ): IResource<TConfig, TValue, TDeps, TPrivate, TMeta> {
   /**
-   * Creates a resource definition.
-   * - Generates anonymous id when omitted (resource or index flavor)
-   * - Wires lifecycle events: beforeInit, afterInit, onError
-   * - Exposes `.with(config)` for config‑bound registration
+   * Define a resource.
+   * Produces a strongly-typed resource with id, lifecycle events, registration hooks,
+   * and optional config schema.
+   *
+   * - If `id` is omitted, an anonymous, file-based id is generated (resource or index flavored).
+   * - Wires lifecycle events: `beforeInit`, `afterInit`, `onError`.
+   * - Provides `.with(config)` for config-bound registration with optional runtime validation.
+   *
+   * @typeParam TConfig - Configuration type accepted by the resource.
+   * @typeParam TValue - Promise type resolved by the resource `init`.
+   * @typeParam TDeps - Dependency map type this resource requires.
+   * @typeParam TPrivate - Private context type exposed to middleware during init.
+   * @typeParam TMeta - Arbitrary metadata type carried by the resource.
+   * @param constConfig - The resource definition config.
+   * @returns A branded resource definition usable by the runner.
    */
   // The symbolFilePath might already come from defineIndex() for example
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
@@ -149,10 +171,14 @@ export function defineResource<
         try {
           config = this.configSchema.parse(config);
         } catch (error) {
-          throw new ValidationError("Resource config", this.id, error instanceof Error ? error : new Error(String(error)));
+          throw new ValidationError(
+            "Resource config",
+            this.id,
+            error instanceof Error ? error : new Error(String(error))
+          );
         }
       }
-      
+
       return {
         [symbolResourceWithConfig]: true,
         id: this.id,
@@ -237,8 +263,13 @@ export function defineEvent<TPayload = void>(
   config?: IEventDefinition<TPayload>
 ): IEvent<TPayload> {
   /**
-   * Creates an event definition. Anonymous ids are generated from file path
-   * when omitted. The returned object is branded for runtime checks.
+   * Define an event.
+   * Generates a branded event definition with a stable id (anonymous if omitted)
+   * and file path metadata for better debugging.
+   *
+   * @typeParam TPayload - Payload type carried by the event.
+   * @param config - Optional event definition (id, etc.).
+   * @returns A branded event definition.
    */
   const callerFilePath = getCallerFile();
   const eventConfig = config || {};
@@ -261,18 +292,25 @@ export type MiddlewareEverywhereOptions = {
   resources?: boolean;
 };
 
+/**
+ * Define a middleware.
+ * Creates a middleware definition with anonymous id generation, `.with(config)`,
+ * and `.everywhere()` helpers.
+ *
+ * - `.with(config)` merges config (optionally validated via `configSchema`).
+ * - `.everywhere()` marks the middleware global (optionally scoping to tasks/resources).
+ *
+ * @typeParam TConfig - Configuration type accepted by the middleware.
+ * @typeParam TDependencies - Dependency map type required by the middleware.
+ * @param middlewareDef - The middleware definition config.
+ * @returns A branded middleware definition usable by the runner.
+ */
 export function defineMiddleware<
   TConfig extends Record<string, any>,
   TDependencies extends DependencyMapType
 >(
   middlewareDef: IMiddlewareDefinition<TConfig, TDependencies>
 ): IMiddleware<TConfig, TDependencies> {
-  /**
-   * Creates a middleware definition with:
-   * - Anonymous id generation when omitted
-   * - `.with(config)` to create configured instances
-   * - `.everywhere()` to mark as global (optionally scoping to tasks/resources)
-   */
   const filePath = getCallerFile();
   const object = {
     [symbolFilePath]: filePath,
@@ -291,10 +329,14 @@ export function defineMiddleware<
         try {
           config = object.configSchema.parse(config);
         } catch (error) {
-          throw new ValidationError("Middleware config", object.id, error instanceof Error ? error : new Error(String(error)));
+          throw new ValidationError(
+            "Middleware config",
+            object.id,
+            error instanceof Error ? error : new Error(String(error))
+          );
         }
       }
-      
+
       return {
         ...object,
         [symbolMiddlewareConfigured]: true,
@@ -319,31 +361,60 @@ export function defineMiddleware<
   };
 }
 
+/**
+ * Type guard: checks if a definition is a Task.
+ * @param definition - Any value to test.
+ * @returns True when `definition` is a branded Task.
+ */
 export function isTask(definition: any): definition is ITask {
   return definition && definition[symbolTask];
 }
 
+/**
+ * Type guard: checks if a definition is a Resource.
+ * @param definition - Any value to test.
+ * @returns True when `definition` is a branded Resource.
+ */
 export function isResource(definition: any): definition is IResource {
   return definition && definition[symbolResource];
 }
 
+/**
+ * Type guard: checks if a definition is a Resource that carries config via `.with()`.
+ * @param definition - Any value to test.
+ * @returns True when `definition` is a branded ResourceWithConfig.
+ */
 export function isResourceWithConfig(
   definition: any
 ): definition is IResourceWithConfig {
   return definition && definition[symbolResourceWithConfig];
 }
 
+/**
+ * Type guard: checks if a definition is an Event.
+ * @param definition - Any value to test.
+ * @returns True when `definition` is a branded Event.
+ */
 export function isEvent(definition: any): definition is IEvent {
   return definition && definition[symbolEvent];
 }
 
+/**
+ * Type guard: checks if a definition is a Middleware.
+ * @param definition - Any value to test.
+ * @returns True when `definition` is a branded Middleware.
+ */
 export function isMiddleware(definition: any): definition is IMiddleware {
   return definition && definition[symbolMiddleware];
 }
 
 /**
  * Override helper that preserves the original `id` and returns the same type.
- * You can override any property except `id`.
+ * You can override any property except `id`. The override is shallow-merged over the base.
+ *
+ * @param base - The base definition to override.
+ * @param patch - Properties to override (except `id`).
+ * @returns A definition of the same kind with overrides applied.
  */
 export function defineOverride<T extends ITask<any, any, any, any>>(
   base: T,
@@ -371,9 +442,14 @@ export function defineOverride(
 }
 
 /**
- * Creates a tag definition.
+ * Create a tag definition.
  * - `.with(config)` to create configured instances
- * - `.extract(tags)` to extract this tag from a list of tags
+ * - `.extract(tags)` to extract this tag from a list of tags or a taggable's meta
+ *
+ * @typeParam TConfig - Configuration type carried by configured tags.
+ * @typeParam TEnforceContract - Optional helper type to enforce a contract when tags are used.
+ * @param definition - The tag definition (id).
+ * @returns A tag object with helpers to configure and extract.
  */
 export function defineTag<TConfig = void, TEnforceContract = void>(
   definition: ITagDefinition<TConfig, TEnforceContract>

@@ -1,0 +1,14 @@
+.page-menu .tsd-navigation a,
+.page-menu .tsd-navigation summary > span,
+.page-menu .tsd-page-navigation a {
+  padding: 0.22rem;
+  border-radius: 6px;
+}
+
+.page-menu .tsd-page-navigation ul {
+  padding-left: 0.88rem;
+}
+
+.site-menu .tsd-small-nested-navigation > li > details {
+  margin-left: 0;
+}

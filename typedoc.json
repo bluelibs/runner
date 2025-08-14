@@ -4,6 +4,7 @@
   "exclude": ["**/__tests__/**/*"],
   "includeVersion": true,
   "plugin": ["typedoc-material-theme"],
-  "themeColor": "#4A6D7C",
-  "readme": "README.md"
+  "themeColor": "#cb9820",
+  "readme": "README.md",
+  "customCss": "typedoc.custom.css"
 }

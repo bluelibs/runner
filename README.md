@@ -1,4 +1,4 @@
-# BlueLibs Runner: The Framework That Actually Makes Sense
+# BlueLibs Runner
 
 _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 
@@ -17,7 +17,7 @@ Welcome to BlueLibs Runner, where we've taken the chaos of modern application ar
 
 BlueLibs Runner is a TypeScript-first framework that embraces functional programming principles while keeping dependency injection simple enough that you won't need a flowchart to understand your own code. Think of it as the anti-framework framework – it gets out of your way and lets you build stuff that actually works.
 
-### The Core Philosophy (AKA Why We Built This)
+### The Core
 
 - **Tasks are functions** - Not classes with 47 methods you'll never use
 - **Resources are singletons** - Database connections, configs, services - the usual suspects
@@ -25,7 +25,7 @@ BlueLibs Runner is a TypeScript-first framework that embraces functional program
 - **Everything is async** - Because it's 2025 and blocking code is so 2005
 - **Explicit beats implicit** - No magic, no surprises, no "how the hell does this work?"
 
-## Quick Start (The "Just Show Me Code" Section)
+## Quick Start
 
 ```bash
 npm install @bluelibs/runner
@@ -77,9 +77,11 @@ const app = resource({
 const { dispose } = await run(app);
 ```
 
-## The Big Four: Your New Building Blocks
+## The Big Four
 
-### 1. Tasks: The Heart of Your Business Logic
+Another term to define them would be TERM. (tasks, events, resources, middleware)
+
+### Tasks
 
 Tasks are functions with superpowers. They're pure-ish, testable, and composable. Unlike classes that accumulate methods like a hoarder accumulates stuff, tasks do one thing well.
 
@@ -100,8 +102,6 @@ const result = await sendEmail.run(
 );
 ```
 
-#### When to Task and When Not to Task
-
 Look, we get it. You could turn every function into a task, but that's like using a sledgehammer to crack nuts. Here's the deal:
 
 **Make it a task when:**
@@ -119,9 +119,9 @@ Look, we get it. You could turn every function into a task, but that's like usin
 
 Think of tasks as the "main characters" in your application story, not every single line of dialogue.
 
-### 2. Resources: Your Singletons That Don't Suck
+### Resources
 
-Resources are the services, configs, and connections that live throughout your app's lifecycle. They initialize once and stick around until cleanup time. They have to be registered (via `register: []`) only once before they can be used.
+Resources are the singletons, the services, configs, and connections that live throughout your app's lifecycle. They initialize once and stick around until cleanup time. They have to be registered (via `register: []`) only once before they can be used.
 
 ```typescript
 const database = resource({
@@ -149,7 +149,7 @@ const userService = resource({
 });
 ```
 
-#### Resource Configuration: Because Hardcoding Is for Amateurs
+#### Resource Configuration
 
 Resources can be configured with type-safe options. No more "config object of unknown shape" nonsense.
 
@@ -181,7 +181,7 @@ const app = resource({
 });
 ```
 
-#### Shared Context Between Init and Dispose
+#### Private Context
 
 For cases where you need to share variables between `init()` and `dispose()` methods (because sometimes cleanup is complicated), use the enhanced context pattern:
 
@@ -210,7 +210,7 @@ const dbResource = resource({
 });
 ```
 
-### 3. Events: Async Communication That Actually Works
+### Events
 
 Events let different parts of your app talk to each other without tight coupling. It's like having a really good office messenger who never forgets anything.
 
@@ -242,7 +242,7 @@ const sendWelcomeEmail = task({
 });
 ```
 
-#### Wildcard Events: For When You Want to Know Everything
+#### Wildcard Events
 
 Sometimes you need to be the nosy neighbor of your application:
 
@@ -257,7 +257,7 @@ const logAllEventsTask = task({
 });
 ```
 
-#### Tasks and Resources built-in events
+#### Built-in Events
 
 Tasks and resources have their own lifecycle events that you can hook into:
 
@@ -275,7 +275,7 @@ const myResource = resource({ ... });
 
 Each event has its own utilities and functions.
 
-#### Global Events: The System's Built-in Gossip Network
+#### Global Events
 
 The framework comes with its own set of events that fire during the lifecycle. Think of them as the system's way of keeping you informed:
 
@@ -296,7 +296,7 @@ const taskLogger = task({
 });
 ```
 
-#### Event Propagation Control with stopPropagation()
+#### stopPropagation()
 
 Sometimes you need to prevent other event listeners from processing an event. The `stopPropagation()` method gives you fine-grained control over event flow:
 
@@ -333,7 +333,7 @@ const emergencyHandler = task({
 });
 ```
 
-### 4. Middleware: The Interceptor Pattern Done Right
+### Middleware
 
 Middleware wraps around your tasks and resources, adding cross-cutting concerns without polluting your business logic.
 
@@ -365,7 +365,7 @@ const adminTask = task({
 });
 ```
 
-#### Global Middleware: Apply Everywhere, Configure Once
+#### Global Middleware
 
 Want to add logging to everything? Authentication to all tasks? Global middleware has your back:
 
@@ -388,9 +388,9 @@ const app = resource({
 });
 ```
 
-## Context: Request-Scoped Data That Doesn't Drive You Insane
+## Context
 
-Ever tried to pass user data through 15 function calls? Yeah, we've been there. Context fixes that without turning your code into a game of telephone.
+Ever tried to pass user data through 15 function calls? Yeah, we've been there. Context fixes that without turning your code into a game of telephone. This is very different from the Private Context from resources.
 
 ```typescript
 const UserContext = createContext<{ userId: string; role: string }>(
@@ -418,7 +418,7 @@ const handleRequest = resource({
 });
 ```
 
-### Context with Middleware: The Power Couple
+### Context with Middleware
 
 Context shines when combined with middleware for request-scoped data:
 
@@ -457,7 +457,7 @@ const handleRequest = task({
 });
 ```
 
-## Dependency Management: The Index Pattern
+## The Index Pattern
 
 When your app grows beyond "hello world", you'll want to group related dependencies. The `index()` helper is your friend - it's basically a 3-in-1 resource that registers, depends on, and returns everything you give it.
 
@@ -482,7 +482,7 @@ const app = resource({
 });
 ```
 
-## Error Handling: Graceful Failures
+## Error Handling
 
 Errors happen. When they do, you can listen for them and decide what to do. No more unhandled promise rejections ruining your day.
 
@@ -507,7 +507,7 @@ const errorHandler = task({
 });
 ```
 
-## Caching: Built-in Performance
+## Caching
 
 Because nobody likes waiting for the same expensive operation twice:
 
@@ -601,10 +601,10 @@ The retry middleware can be configured with:
 - `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
 
-## Timeout Middleware: Never Wait Forever
+## Timeouts
 
 The built-in timeout middleware prevents operations from hanging indefinitely by racing them against a configurable
-timeout:
+timeout. Works for resources and tasks.
 
 ```typescript
 import { globals } from "@bluelibs/runner";
@@ -653,13 +653,13 @@ Best practices:
 - Use longer timeouts for resource initialization than task execution
 - Consider network conditions when setting API call timeouts
 
-## Logging: Because Console.log Isn't Professional
+## Logging
 
 _The structured logging system that actually makes debugging enjoyable_
 
 BlueLibs Runner comes with a built-in logging system that's event-driven, structured, and doesn't make you hate your life when you're trying to debug at 2 AM. It emits events for everything, so you can handle logs however you want - ship them to your favorite log warehouse, pretty-print them to console, or ignore them entirely (we won't judge).
 
-### Quick Start: Basic Logging
+### Basic Logging
 
 ```typescript
 import { globals } from "@bluelibs/runner";
@@ -694,7 +694,7 @@ RUNNER_LOG_LEVEL=debug node your-app.js
 RUNNER_DISABLE_LOGS=true node your-app.js
 ```
 
-### Log Levels: From Whispers to Screams
+### Log Levels
 
 The logger supports six log levels with increasing severity:
 
@@ -717,7 +717,7 @@ logger.error("Houston, we have a problem");
 logger.critical("DEFCON 1: Everything is broken");
 ```
 
-### Structured Logging: More Than Just Strings
+### Structured Logging
 
 The logger accepts rich, structured data that makes debugging actually useful:
 
@@ -757,7 +757,7 @@ const userTask = task({
 });
 ```
 
-### Context-Aware Logging: The with() Method
+### Context-Aware Logging
 
 Create logger instances with bound context for consistent metadata across related operations:
 
@@ -797,11 +797,11 @@ const requestHandler = task({
 });
 ```
 
-### Print Threshold: Control What Shows Up
+### Print Threshold
 
 By default, logs at `info` level and above are automatically printed to console for better developer experience. You can easily control this behavior through environment variables or by setting a print threshold programmatically:
 
-#### Environment Variable Controls
+### Environment Variables
 
 ```bash
 # Disable all logging output
@@ -812,7 +812,7 @@ RUNNER_LOG_LEVEL=debug node your-app.js
 RUNNER_LOG_LEVEL=error node your-app.js
 ```
 
-#### Programmatic Control
+### Programmatic Control
 
 ```typescript
 // Override the default print threshold programmatically
@@ -834,7 +834,7 @@ const setupLogging = task({
 });
 ```
 
-### Event-Driven Log Handling: Ship Logs Anywhere
+### Event-Driven Log Handling
 
 Every log generates an event that you can listen to. This is where the real power comes in:
 
@@ -895,7 +895,7 @@ const databaseLogHandler = task({
 });
 ```
 
-### Integration with Winston: Best of Both Worlds
+### Integration with Winston
 
 Want to use Winston as your transport? No problem - integrate it seamlessly:
 
@@ -951,7 +951,7 @@ const winstonBridge = task({
 });
 ```
 
-### Advanced: Custom Log Formatters
+### Custom Log Formatters
 
 Want to customize how logs are printed? You can override the print behavior:
 
@@ -989,7 +989,7 @@ const customLogger = resource({
 // Or you could simply add it as "globals.resources.logger" and override the default logger
 ```
 
-### Log Structure: What You Get
+### Log Structure
 
 Every log event contains:
 
@@ -1012,7 +1012,7 @@ interface ILog {
 
 ### Debugging Tips & Best Practices
 
-#### 1. Use Structured Data Liberally
+Use Structured Data Liberally
 
 ```typescript
 // Bad - hard to search and filter
@@ -1029,7 +1029,7 @@ await logger.error("Order processing failed", {
 });
 ```
 
-#### 2. Include Context in Errors
+Include Context in Errors
 
 ```typescript
 // Include relevant context with errors
@@ -1049,7 +1049,7 @@ try {
 }
 ```
 
-#### 3. Use Different Log Levels Appropriately
+Use Different Log Levels Appropriately
 
 ```typescript
 // Good level usage
@@ -1065,7 +1065,7 @@ await logger.error("Database connection failed", {
 await logger.critical("System out of memory", { data: { available: "0MB" } });
 ```
 
-#### 4. Create Domain-Specific Loggers
+Create Domain-Specific Loggers
 
 ```typescript
 // Create loggers with domain context
@@ -1078,13 +1078,13 @@ await paymentLogger.info("Processing payment", { data: paymentData });
 await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
-## Meta: Documenting and Organizing Your Components
+## Meta
 
 _The structured way to describe what your components do and control their behavior_
 
 Metadata in BlueLibs Runner provides a systematic way to document, categorize, and control the behavior of your tasks, resources, events, and middleware. Think of it as your component's passport - it tells you and your tools everything they need to know about what this component does and how it should be treated.
 
-### Basic Metadata Properties
+### Metadata Properties
 
 Every component can have these basic metadata properties:
 
@@ -1132,9 +1132,9 @@ const sendWelcomeEmail = task({
 });
 ```
 
-### Tags: The Powerful Classification System
+### Tags
 
-Tags are the most powerful part of the metadata system. They can be simple strings or sophisticated configuration objects that control component behavior.
+Tags are the most powerful part of the metadata system used for classification. They can be simple strings or sophisticated configuration objects that control component behavior.
 
 #### String Tags for Simple Classification
 
@@ -1245,7 +1245,7 @@ const apiEndpoint = task({
 
 To process these tags you can hook into `globals.events.afterInit`, use the global store as dependency and use the `getTasksWithTag()` and `getResourcesWithTag()` functionality.
 
-#### Smart Middleware Using Structured Tags
+#### Structured Tags
 
 ```typescript
 const performanceMiddleware = middleware({
@@ -1285,7 +1285,7 @@ const performanceMiddleware = middleware({
 });
 ```
 
-#### Contract Tags: Enforcing Return Types
+#### Contract Tags
 
 You can attach contracts to tags to enforce the shape of a task's returned value and a resource's `init()` value at compile time. Contracts are specified via the second generic of `defineTag<TConfig, TContract>`.
 
@@ -1347,60 +1347,6 @@ const badTask = task({
 });
 ```
 
-### When to Use Metadata
-
-Always strive to provide a title and a description.
-
-#### ✅ Great Use Cases
-
-**Documentation & Discovery**
-
-```typescript
-const paymentProcessor = resource({
-  meta: {
-    title: "Payment Processing Service",
-    description:
-      "Handles credit card payments via Stripe API with fraud detection",
-    tags: ["payment", "stripe", "pci-compliant", "critical"],
-  },
-  // ... implementation
-});
-```
-
-**Conditional Behavior**
-
-```typescript
-const backgroundTask = task({
-  meta: {
-    tags: ["background", "low-priority", retryTag.with({ maxAttempts: 5 })],
-  },
-  // ... implementation
-});
-```
-
-**Cross-Cutting Concerns**
-
-```typescript
-// All tasks tagged with "audit" get automatic logging
-const sensitiveOperation = task({
-  meta: {
-    tags: ["audit", "sensitive", "admin-only"],
-  },
-  // ... implementation
-});
-```
-
-**Environment-Specific Behavior**
-
-```typescript
-const developmentTask = task({
-  meta: {
-    tags: ["development-only", debugTag.with({ verbose: true })],
-  },
-  // ... implementation
-});
-```
-
 ### Extending Metadata: Custom Properties
 
 For advanced use cases, you can extend the metadata interfaces to add your own properties:
@@ -1453,9 +1399,7 @@ const database = resource({
 });
 ```
 
-### Advanced Patterns
-
-#### Dynamic Middleware Application
+#### Global Middleware Application
 
 ```typescript
 const app = resource({
@@ -1479,7 +1423,7 @@ Metadata transforms your components from anonymous functions into self-documenti
 
 ## Advanced Usage: When You Need More Power
 
-### Overrides: Swapping Components at Runtime
+## Overrides
 
 Sometimes you need to replace a component entirely. Maybe you're doing integration testing or you want to override a library from an external package.
 
@@ -1537,7 +1481,7 @@ const overriddenMiddleware = override(originalMiddleware, {
 
 Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the root) wins, because it’s applied last. Conflicting overrides are allowed; overriding something that wasn’t registered throws. Use override() to change behavior safely while preserving the original id.
 
-### Namespacing: Keeping Things Organized
+## Namespacing
 
 As your app grows, you'll want consistent naming. Here's the convention that won't drive you crazy:
 
@@ -1561,7 +1505,7 @@ const userTask = task({
 });
 ```
 
-### Factory Pattern: For When You Need Instances
+## Factory Pattern
 
 To keep things dead simple, we avoided poluting the D.I. with this concept. Therefore, we recommend using a resource with a factory function to create instances of your classes:
 
@@ -1585,11 +1529,9 @@ const app = resource({
 });
 ```
 
-### Runtime Input and Config Validation
+## Runtime Validation
 
 BlueLibs Runner includes a generic validation interface that works with any validation library, including [Zod](https://zod.dev/), [Yup](https://github.com/jquense/yup), [Joi](https://joi.dev/), and others. The framework provides runtime validation with excellent TypeScript inference while remaining library-agnostic.
-
-#### The Validation Interface
 
 The framework defines a simple `IValidationSchema<T>` interface that any validation library can implement:
 
@@ -1606,7 +1548,7 @@ Popular validation libraries already implement this interface:
 - **Joi**: Use `.assert()` or create a wrapper
 - **Custom validators**: Implement the interface yourself
 
-#### Task Input Validation
+### Task Input Validation
 
 Add an `inputSchema` to any task to validate inputs before execution:
 
@@ -1656,7 +1598,7 @@ const app = resource({
 });
 ```
 
-#### Resource Config Validation (Fail Fast)
+### Resource Config Validation
 
 Add a `configSchema` to resources to validate configurations. **Validation happens immediately when `.with()` is called**, ensuring configuration errors are caught early:
 
@@ -1706,7 +1648,7 @@ const app = resource({
 });
 ```
 
-#### Event Payload Validation
+### Event Payload Validation
 
 Add a `payloadSchema` to events to validate payloads every time they're emitted:
 
@@ -1755,7 +1697,7 @@ const app = resource({
 });
 ```
 
-#### Middleware Config Validation (Fail Fast)
+### Middleware Config Validation
 
 Add a `configSchema` to middleware to validate configurations. Like resources, **validation happens immediately when `.with()` is called**:
 
@@ -1837,7 +1779,7 @@ const paymentTask = task({
 });
 ```
 
-#### Error Handling
+### Error Handling
 
 Validation errors are thrown with clear, descriptive messages that include the component ID:
 
@@ -1855,7 +1797,7 @@ Validation errors are thrown with clear, descriptive messages that include the c
 // "Middleware config validation failed for {middlewareId}: {validationErrorMessage}"
 ```
 
-#### Using Different Validation Libraries
+#### Other Libraries
 
 The framework works with any validation library that implements the `IValidationSchema<T>` interface:
 
@@ -1913,12 +1855,13 @@ While runtime validation happens with your chosen library, TypeScript still enfo
 
 ```typescript
 // With Zod, define your type and schema together
-type UserData = z.infer<typeof userSchema>;
 
 const userSchema = z.object({
   name: z.string(),
   email: z.string().email(),
 });
+
+type UserData = z.infer<typeof userSchema>;
 
 const createUser = task({
   inputSchema: userSchema,
@@ -1929,7 +1872,7 @@ const createUser = task({
 });
 ```
 
-### Internal Services: For When You Need Direct Access
+## Internal Services
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):
 
@@ -1950,7 +1893,7 @@ const advancedTask = task({
 });
 ```
 
-### Dependency Patterns: Static vs Dynamic
+### Dynamic Dependencies
 
 Dependencies can be defined in two ways - as a static object or as a function that returns an object. Each approach has its use cases:
 
@@ -1976,7 +1919,7 @@ const advancedService = resource({
     conditionalService:
       process.env.NODE_ENV === "production" ? serviceA : serviceB,
   }), // Function - evaluated when needed
-  register: (config) => [
+  register: (config: ConfigType) => [
     // Config is what you receive when you register the resource with .with()
     // Register dependencies dynamically
     process.env.NODE_ENV === "production"
@@ -1993,11 +1936,11 @@ The function pattern essentially gives you "just-in-time" dependency resolution 
 
 **Performance note**: Function-based dependencies have minimal overhead - they're only called once during dependency resolution.
 
-### Handling Circular "Type" Dependencies: Breaking the Chain
+## Handling Circular Dependencies
 
 Sometimes you'll run into circular type dependencies because of your file structure not necessarily because of a real circular dependency. TypeScript struggles with these, but there's a way to handle it gracefully.
 
-#### The Problem: Self-Referencing Types
+### The Problem
 
 Consider these resources that create a circular dependency:
 
@@ -2030,7 +1973,7 @@ export const cResource = defineResource({
 
 A depends B depends C depends ATask. No circular dependency, yet Typescript struggles with these, but there's a way to handle it gracefully.
 
-#### The Solution: Type Annotations
+### The Solution
 
 The fix is to explicitly type the resource that completes the circle using a simple assertion `IResource<Config, ReturnType>`. This breaks the TypeScript inference chain while maintaining runtime functionality:
 
@@ -2245,7 +2188,7 @@ process.on("SIGTERM", async () => {
 });
 ```
 
-## Testing: Actually Enjoyable
+## Testing
 
 ### Unit Testing: Mock Everything, Test Everything
 
@@ -2343,8 +2286,6 @@ Ever had too many database connections competing for resources? Your connection 
 
 Think of it as a VIP rope at an exclusive venue. Only a limited number of operations can proceed at once. The rest wait in an orderly queue like well-behaved async functions.
 
-### Quick Start
-
 ```typescript
 import { Semaphore } from "@bluelibs/runner";
 
@@ -2362,8 +2303,6 @@ try {
 }
 ```
 
-### The Elegant Approach: withPermit()
-
 Why manage permits manually when you can let the semaphore do the heavy lifting?
 
 ```typescript
@@ -2372,8 +2311,6 @@ const users = await dbSemaphore.withPermit(async () => {
   return await db.query("SELECT * FROM users WHERE active = true");
 });
 ```
-
-### Timeout Support
 
 Prevent operations from hanging indefinitely with configurable timeouts:
 
@@ -2392,8 +2329,6 @@ const result = await dbSemaphore.withPermit(
   { timeout: 10000 } // 10 second timeout
 );
 ```
-
-### Cancellation Support
 
 Operations can be cancelled using AbortSignal:
 
@@ -2418,8 +2353,6 @@ try {
 }
 ```
 
-### Monitoring: Metrics & Debugging
-
 Want to know what's happening under the hood?
 
 ```typescript
@@ -2439,8 +2372,6 @@ console.log(`Queue length: ${dbSemaphore.getWaitingCount()}`);
 console.log(`Is disposed: ${dbSemaphore.isDisposed()}`);
 ```
 
-### Resource Cleanup
-
 Properly dispose of semaphores when finished:
 
 ```typescript
@@ -2457,22 +2388,14 @@ _The orderly guardian of chaos, the diplomatic bouncer of async operations._
 
 The `Queue` class is your friendly neighborhood task coordinator. Think of it as a very polite but firm British queue-master who ensures everyone waits their turn, prevents cutting in line, and gracefully handles when it's time to close shop.
 
-### **FIFO Ordering**
-
 Tasks execute one after another in first-in, first-out order. No cutting, no exceptions, no drama.
 
-### **Deadlock Detective**
-
 Using the clever `AsyncLocalStorage`, our Queue can detect when a task tries to queue another task (the async equivalent of "yo dawg, I heard you like queues..."). When caught red-handed, it politely but firmly rejects with a deadlock error.
-
-### **Graceful Disposal & Cancellation**
 
 The Queue provides cooperative cancellation through the Web Standard `AbortController`:
 
 - **Patient mode** (default): Waits for all queued tasks to complete naturally
 - **Cancel mode**: Signals running tasks to abort via `AbortSignal`, enabling early termination
-
-### Basic Example
 
 ```typescript
 import { Queue } from "@bluelibs/runner";
@@ -2493,7 +2416,7 @@ await queue.dispose();
 
 The Queue provides each task with an `AbortSignal` for cooperative cancellation. Tasks should periodically check this signal to enable early termination.
 
-#### Example: Long-running Task with Cancellation Support
+#### Example: Long-running Task
 
 ```typescript
 const queue = new Queue();
@@ -2565,34 +2488,14 @@ const processFiles = queue.run(async (signal) => {
 });
 ```
 
-## The Magic Behind the Curtain
-
-### Internal State
+#### The Magic Behind the Curtain
 
 - `tail`: The promise chain that maintains FIFO execution order
 - `disposed`: Boolean flag indicating whether the queue accepts new tasks
 - `abortController`: Centralized cancellation controller that provides `AbortSignal` to all tasks
 - `executionContext`: AsyncLocalStorage-based deadlock detection mechanism
 
-### Error Handling
-
-- **"Queue has been disposed"**: You tried to add work after closing time
-- **"Dead-lock detected"**: A task tried to queue another task (infinite recursion prevention)
-
-### Best Practices
-
-#### 1. Always Dispose Resources
-
-```typescript
-const queue = new Queue();
-try {
-  await queue.run(task);
-} finally {
-  await queue.dispose();
-}
-```
-
-#### 2. Implement Cooperative Cancellation
+#### Implement Cooperative Cancellation
 
 Tasks should regularly check the `AbortSignal` and respond appropriately:
 
@@ -2607,7 +2510,7 @@ if (signal.aborted) {
 }
 ```
 
-#### 3. Integrate with Native APIs
+##### Integrate with Native APIs
 
 Many Web APIs accept `AbortSignal`:
 
@@ -2615,11 +2518,11 @@ Many Web APIs accept `AbortSignal`:
 - `setTimeout(callback, delay, { signal })`
 - Custom async operations
 
-### 4. Avoid Nested Queuing
+##### Avoid Nested Queuing
 
 The Queue prevents deadlocks by rejecting attempts to queue tasks from within running tasks. Structure your code to avoid this pattern.
 
-### 5. Handle AbortError Gracefully
+##### Handle AbortError Gracefully
 
 ```typescript
 try {
@@ -2637,7 +2540,7 @@ try {
 
 _Cooperative task scheduling with professional-grade cancellation support_
 
-## Real-World Examples
+### Real-World Examples
 
 ### Database Connection Pool Manager
 
@@ -2684,54 +2587,7 @@ class APIClient {
 }
 ```
 
-### Batch Processing with Progress
-
-```typescript
-async function processBatch(items: any[]) {
-  const semaphore = new Semaphore(3); // Max 3 concurrent items
-  const results = [];
-
-  console.log("Starting batch processing...");
-
-  for (const [index, item] of items.entries()) {
-    const result = await semaphore.withPermit(async () => {
-      console.log(`Processing item ${index + 1}/${items.length}`);
-      return await processItem(item);
-    });
-
-    results.push(result);
-
-    // Show progress
-    const metrics = semaphore.getMetrics();
-    console.log(
-      `Active: ${metrics.maxPermits - metrics.availablePermits}, Waiting: ${
-        metrics.waitingCount
-      }`
-    );
-  }
-
-  semaphore.dispose();
-  console.log("Batch processing complete!");
-  return results;
-}
-```
-
-## Best Practices
-
-1. **Always dispose**: Clean up your semaphores when finished to prevent memory leaks
-2. **Use withPermit()**: It's cleaner and prevents resource leaks
-3. **Set timeouts**: Don't let operations hang forever
-4. **Monitor metrics**: Keep an eye on utilization to tune your permit count
-5. **Handle errors**: Timeouts and cancellations throw errors - catch them!
-
-## Common Pitfalls
-
-- **Forgetting to release**: Manual acquire/release is error-prone - prefer `withPermit()`
-- **No timeout**: Operations can hang forever without timeouts
-- **Ignoring disposal**: Always dispose semaphores to prevent memory leaks
-- **Wrong permit count**: Too few = slow, too many = defeats the purpose
-
-## Anonymous IDs: Because Naming Things Is Hard
+## Anonymous IDs
 
 One of our favorite quality-of-life features: **anonymous IDs**. Instead of manually naming every component, the framework can generate unique symbol-based identifiers based on your file path and variable name. It's like having a really good naming assistant who never gets tired.
 
@@ -2759,62 +2615,10 @@ const createUser = task({
 ### Benefits of Anonymous IDs
 
 1. **Less Bikeshedding**: No more debates about naming conventions
-2. **Automatic Uniqueness**: Guaranteed collision-free identifiers
+2. **Automatic Uniqueness**: Guaranteed collision-free identifiers folder based
 3. **Faster Prototyping**: Just write code, framework handles the rest
 4. **Refactor-Friendly**: Rename files/variables and IDs update automatically
 5. **Stack Trace Integration**: Error messages include helpful file locations
-
-### When to Use Manual vs Anonymous IDs
-
-| Use Case                | Recommendation | Reason                                  |
-| ----------------------- | -------------- | --------------------------------------- |
-| Internal tasks          | Anonymous      | No external references needed           |
-| Event definitions       | Manual         | Need predictable names for listeners    |
-| Public APIs             | Manual         | External modules need stable references |
-| Middleware              | Manual         | Often reused across projects            |
-| Configuration resources | Anonymous      | Usually internal infrastructure         |
-| Test doubles/mocks      | Anonymous      | One-off usage in tests                  |
-| Cross-module services   | Manual         | Multiple files depend on them           |
-
-### Anonymous ID Examples by Pattern
-
-```typescript
-// ✅ Great for anonymous IDs
-const database = resource({
-  init: async () => new Database(),
-  dispose: async (db) => db.close(),
-});
-
-const processPayment = task({
-  dependencies: { database },
-  run: async (payment, { database }) => {
-    // Internal business logic
-  },
-});
-
-// ✅ Better with manual IDs
-const paymentProcessed = event<{ paymentId: string }>({
-  id: "app.events.paymentProcessed", // Other modules listen to this
-});
-
-const authMiddleware = middleware({
-  id: "app.middleware.auth", // Reused across multiple tasks
-  run: async ({ task, next }) => {
-    // Auth logic
-  },
-});
-
-// ✅ Mixed approach - totally fine!
-const app = resource({
-  id: "app", // Main entry point gets manual ID
-  register: [
-    database, // Anonymous
-    processPayment, // Anonymous
-    paymentProcessed, // Manual
-    authMiddleware, // Manual
-  ],
-});
-```
 
 ### Debugging with Anonymous IDs
 
@@ -2842,14 +2646,6 @@ logger.info("Processing payment", {
 - **Performance**: Built-in caching and optimization
 - **Clarity**: Explicit dependencies, no hidden magic
 - **Developer Experience**: Helpful error messages and clear patterns
-
-### What You Don't Get
-
-- Complex configuration files that require a PhD to understand
-- Decorator hell that makes your code look like a Christmas tree
-- Hidden dependencies that break when you least expect it
-- Framework lock-in that makes you feel trapped
-- Mysterious behavior at runtime that makes you question reality
 
 ## The Migration Path
 
