@@ -36,7 +36,7 @@ import {
   ITaskMeta,
   IResourceMeta,
 } from "./defs";
-import { MiddlewareAlreadyGlobalError } from "./errors";
+import { MiddlewareAlreadyGlobalError, ValidationError } from "./errors";
 import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
 
 // Helper function to get the caller file
@@ -149,7 +149,7 @@ export function defineResource<
         try {
           config = this.configSchema.parse(config);
         } catch (error) {
-          throw new Error(`Resource config validation failed for ${this.id.toString()}: ${error instanceof Error ? error.message : String(error)}`);
+          throw new ValidationError("Resource config", this.id, error instanceof Error ? error : new Error(String(error)));
         }
       }
       
@@ -291,7 +291,7 @@ export function defineMiddleware<
         try {
           config = object.configSchema.parse(config);
         } catch (error) {
-          throw new Error(`Middleware config validation failed for ${object.id.toString()}: ${error instanceof Error ? error.message : String(error)}`);
+          throw new ValidationError("Middleware config", object.id, error instanceof Error ? error : new Error(String(error)));
         }
       }
       

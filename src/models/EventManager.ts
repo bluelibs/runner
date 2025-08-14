@@ -4,7 +4,7 @@ import {
   IEventDefinition,
   IEventEmission,
 } from "../defs";
-import { LockedError } from "../errors";
+import { LockedError, ValidationError } from "../errors";
 import { Logger } from "./Logger";
 
 const HandlerOptionsDefaults = { order: 0 };
@@ -111,7 +111,7 @@ export class EventManager {
       try {
         data = eventDefinition.payloadSchema.parse(data);
       } catch (error) {
-        throw new Error(`Event payload validation failed for ${eventDefinition.id.toString()}: ${error instanceof Error ? error.message : String(error)}`);
+        throw new ValidationError("Event payload", eventDefinition.id, error instanceof Error ? error : new Error(String(error)));
       }
     }
     

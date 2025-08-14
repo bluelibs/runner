@@ -4,6 +4,7 @@ import { globalEvents } from "../globals/globalEvents";
 import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
+import { ValidationError } from "../errors";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
@@ -154,7 +155,7 @@ export class TaskRunner {
         try {
           input = task.inputSchema.parse(input);
         } catch (error) {
-          throw new Error(`Task input validation failed for ${task.id.toString()}: ${error instanceof Error ? error.message : String(error)}`);
+          throw new ValidationError("Task input", task.id, error instanceof Error ? error : new Error(String(error)));
         }
       }
       

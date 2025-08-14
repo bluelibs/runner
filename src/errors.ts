@@ -92,3 +92,14 @@ export class StoreAlreadyInitializedError extends RuntimeError {
     this.name = "StoreAlreadyInitializedError";
   }
 }
+
+/**
+ * Error thrown when validation fails for task input, resource config, middleware config, or event payload
+ */
+export class ValidationError extends RuntimeError {
+  constructor(type: string, id: string | symbol, originalError: Error | string) {
+    const errorMessage = originalError instanceof Error ? originalError.message : String(originalError);
+    super(`${type} validation failed for ${id.toString()}: ${errorMessage}`);
+    this.name = "ValidationError";
+  }
+}
