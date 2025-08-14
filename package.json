@@ -18,7 +18,8 @@
     "test:ci": "jest --verbose --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
     "prepublishOnly": "npm run build",
     "typedoc": "typedoc --options typedoc.json",
-    "benchmark": "jest --testMatch=\"**/__tests__/benchmark/benchmark.test.ts\" --testTimeout 10000"
+    "benchmark": "jest --testMatch=\"**/__tests__/benchmark/benchmark.test.ts\" --testTimeout 10000",
+    "benchmark:comprehensive": "jest --testMatch=\"**/__tests__/benchmark/comprehensive-benchmark.test.ts\" --testTimeout 30000"
   },
   "devDependencies": {
     "@types/benchmark": "^2.1.5",
