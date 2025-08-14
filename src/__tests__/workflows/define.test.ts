@@ -90,7 +90,7 @@ describe("Workflow Definition Helpers", () => {
   describe("defineWorkflowStep", () => {
     it("should create a step with all properties", () => {
       const mockTask = task({ id: "validate.order", run: async (input: any) => ({ valid: true }) });
-      const rollbackTask = task({ id: "rollback.validation", run: async () => undefined });
+      const rollbackTask = task({ id: "rollback.validation", run: async (input: any) => {} });
 
       const step = defineWorkflowStep({
         id: "validate",

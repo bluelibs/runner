@@ -179,7 +179,7 @@ describe("WorkflowEngine", () => {
       await engine.registerWorkflow(workflowWithEvents);
 
       const eventSpy = jest.fn();
-      eventManager.addEventListener(stateChangedEvent, eventSpy);
+      eventManager.addListener(stateChangedEvent, eventSpy);
 
       await engine.createInstance("event.workflow", { test: true });
 

@@ -3,7 +3,7 @@
  */
 
 import * as workflows from "../../workflows";
-import { defineTask as task, defineResource as resource, run } from "../../index";
+import { task, resource, run } from "../../index";
 import { WorkflowStatus } from "../../workflows/defs";
 
 describe("Workflows Module Integration", () => {
@@ -255,9 +255,9 @@ describe("Workflows Module Integration", () => {
           refundPaymentTask,
         ],
         dependencies: { 
-          workflows: workflows.memoryWorkflowResource,
+          workflows: workflows.memoryWorkflowResource as any,
         },
-        init: async (_, { workflows: workflowService }) => {
+        init: async (_: any, { workflows: workflowService }: any) => {
           // Register the workflow
           await workflowService.registerWorkflow(orderWorkflow);
 
@@ -286,7 +286,7 @@ describe("Workflows Module Integration", () => {
           expect(success).toBe(true);
           
           let history = await workflowService.getExecutionHistory(instance.id);
-          results.validation = history.find(h => h.stepId === "validate")?.output;
+          results.validation = history.find((h: any) => h.stepId === "validate")?.output;
           expect(results.validation.valid).toBe(true);
           expect(results.validation.total).toBe(109.97); // 2*29.99 + 1*49.99
 
@@ -295,7 +295,7 @@ describe("Workflows Module Integration", () => {
           expect(success).toBe(true);
           
           history = await workflowService.getExecutionHistory(instance.id);
-          results.inventory = history.find(h => h.stepId === "inventory")?.output;
+          results.inventory = history.find((h: any) => h.stepId === "inventory")?.output;
           expect(results.inventory.inventoryChecked).toBe(true);
           expect(results.inventory.reservedItems).toHaveLength(2);
 
@@ -306,7 +306,7 @@ describe("Workflows Module Integration", () => {
           expect(success).toBe(true);
           
           history = await workflowService.getExecutionHistory(instance.id);
-          results.payment = history.find(h => h.stepId === "payment")?.output;
+          results.payment = history.find((h: any) => h.stepId === "payment")?.output;
           expect(results.payment.status).toBe("completed");
           expect(results.payment.amount).toBe(109.97);
 
@@ -315,7 +315,7 @@ describe("Workflows Module Integration", () => {
           expect(success).toBe(true);
           
           history = await workflowService.getExecutionHistory(instance.id);
-          results.notification = history.find(h => h.stepId === "notification")?.output;
+          results.notification = history.find((h: any) => h.stepId === "notification")?.output;
           expect(results.notification.sent).toBe(true);
           expect(results.notification.type).toBe("confirmation");
 
@@ -332,7 +332,7 @@ describe("Workflows Module Integration", () => {
           // Verify execution history
           const finalHistory = await workflowService.getExecutionHistory(instance.id);
           expect(finalHistory).toHaveLength(4); // All steps executed
-          expect(finalHistory.every(h => h.status === "completed")).toBe(true);
+          expect(finalHistory.every((h: any) => h.status === "completed")).toBe(true);
 
           return {
             orderId: orderData.orderId,
@@ -347,12 +347,12 @@ describe("Workflows Module Integration", () => {
       // Run the application
       const { value, dispose } = await run(app);
 
-      expect(value.orderId).toBe("order_12345");
-      expect(value.finalState).toBe("completed");
-      expect(value.executionCount).toBe(4);
-      expect(value.results.validation.total).toBe(109.97);
-      expect(value.results.payment.status).toBe("completed");
-      expect(value.results.notification.sent).toBe(true);
+      expect((value as any).orderId).toBe("order_12345");
+      expect((value as any).finalState).toBe("completed");
+      expect((value as any).executionCount).toBe(4);
+      expect((value as any).results.validation.total).toBe(109.97);
+      expect((value as any).results.payment.status).toBe("completed");
+      expect((value as any).results.notification.sent).toBe(true);
 
       await dispose();
     });
@@ -365,19 +365,23 @@ describe("Workflows Module Integration", () => {
 
       const failingTask = task({
         id: "failing.task",
-        run: async () => {
+        run: async (): Promise<any> => {
           throw new Error("Simulated failure");
         },
       });
 
       const rollbackTask1 = task({
         id: "rollback.task1",
-        run: async (output: any) => ({ rolledBack: true, originalData: output }),
+        run: async (output: any) => {
+          console.log("Rolling back task 1:", output);
+        },
       });
 
       const rollbackTask2 = task({
         id: "rollback.task2", 
-        run: async (output: any) => ({ rolledBack: true, originalData: output }),
+        run: async (output: any) => {
+          console.log("Rolling back task 2:", output);
+        },
       });
 
       const step1 = workflows.workflowStep({
@@ -420,8 +424,8 @@ describe("Workflows Module Integration", () => {
           rollbackTask1,
           rollbackTask2,
         ],
-        dependencies: { workflows: workflows.memoryWorkflowResource },
-        init: async (_, { workflows: workflowService }) => {
+        dependencies: { workflows: workflows.memoryWorkflowResource as any },
+        init: async (_: any, { workflows: workflowService }: any) => {
           await workflowService.registerWorkflow(rollbackWorkflow);
 
           const instance = await workflowService.createInstance("rollback.test", {
@@ -451,7 +455,7 @@ describe("Workflows Module Integration", () => {
 
           // Verify rollback executions were recorded
           const history = await workflowService.getExecutionHistory(instance.id);
-          const rollbackExecutions = history.filter(h => h.isRollback);
+          const rollbackExecutions = history.filter((h: any) => h.isRollback);
           expect(rollbackExecutions).toHaveLength(2); // step2 and step1 rollbacks
 
           return {
@@ -464,8 +468,8 @@ describe("Workflows Module Integration", () => {
 
       const { value, dispose } = await run(app);
 
-      expect(value.rollbackExecutions).toBe(2);
-      expect(value.finalState).toBe("start");
+      expect((value as any).rollbackExecutions).toBe(2);
+      expect((value as any).finalState).toBe("start");
 
       await dispose();
     });

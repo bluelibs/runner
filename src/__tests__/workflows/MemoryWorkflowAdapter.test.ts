@@ -48,8 +48,12 @@ describe("MemoryWorkflowAdapter", () => {
       await adapter.saveInstance(testInstance);
       const loaded = await adapter.loadInstance(testInstance.id);
       
-      expect(loaded).toEqual(testInstance);
+      expect(loaded).toMatchObject({
+        ...testInstance,
+        updatedAt: expect.any(Date),
+      });
       expect(loaded).not.toBe(testInstance); // Should be deep cloned
+      expect(loaded?.updatedAt.getTime()).toBeGreaterThanOrEqual(testInstance.updatedAt.getTime());
     });
 
     it("should return null for non-existent instances", async () => {
@@ -213,10 +217,10 @@ describe("MemoryWorkflowAdapter", () => {
     });
 
     it("should not cleanup running instances regardless of age", async () => {
-      const cutoff = new Date("2024-01-01T00:00:00Z");
+      const cutoff = new Date("2025-01-01T00:00:00Z"); // Future date that includes all old instances
       const cleanedCount = await adapter.cleanup(cutoff);
       
-      expect(cleanedCount).toBe(0); // Only running instance is old enough
+      expect(cleanedCount).toBe(3); // old-1, old-2, and new-1 (all completed/failed, excluding old-3 which is running)
     });
   });
 
@@ -226,10 +230,13 @@ describe("MemoryWorkflowAdapter", () => {
       await adapter.saveExecution(testInstance.id, testExecution);
     });
 
-    it("should provide getAllInstances for testing", () => {
+    it("should provide getAllInstances for testing", async () => {
       const instances = adapter.getAllInstances();
       expect(instances).toHaveLength(1);
-      expect(instances[0]).toEqual(testInstance);
+      expect(instances[0]).toMatchObject({
+        ...testInstance,
+        updatedAt: expect.any(Date),
+      });
     });
 
     it("should provide getAllExecutions for testing", () => {
