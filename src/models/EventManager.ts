@@ -4,7 +4,7 @@ import {
   IEventDefinition,
   IEventEmission,
 } from "../defs";
-import { Errors } from "../errors";
+import { LockedError } from "../errors";
 import { Logger } from "./Logger";
 
 const HandlerOptionsDefaults = { order: 0 };
@@ -42,7 +42,7 @@ export class EventManager {
 
   checkLock() {
     if (this.#isLocked) {
-      throw Errors.locked("EventManager");
+      throw new LockedError("EventManager");
     }
   }
 

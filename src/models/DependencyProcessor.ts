@@ -13,7 +13,11 @@ import * as utils from "../define";
 import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";
 import { TaskRunner } from "./TaskRunner";
-import { Errors } from "../errors";
+import {
+  DependencyNotFoundError,
+  EventNotFoundError,
+  UnknownItemTypeError,
+} from "../errors";
 import { Logger } from "./Logger";
 
 /**
@@ -148,7 +152,7 @@ export class DependencyProcessor {
           });
         } else {
           if (this.store.events.get(eventDefinition.id) === undefined) {
-            throw Errors.eventNotFound(eventDefinition.id);
+            throw new EventNotFoundError(eventDefinition.id);
           }
           this.eventManager.addListener(eventDefinition, handler, {
             order: task.task.listenerOrder || 0,
@@ -179,7 +183,7 @@ export class DependencyProcessor {
     } else if (utils.isEvent(object)) {
       return this.extractEventDependency(object, source);
     } else {
-      throw Errors.unknownItemType(object);
+      throw new UnknownItemTypeError(object);
     }
   }
 
@@ -197,7 +201,7 @@ export class DependencyProcessor {
   async extractTaskDependency(object: ITask<any, any, {}>) {
     const storeTask = this.store.tasks.get(object.id);
     if (storeTask === undefined) {
-      throw Errors.dependencyNotFound(`Task ${object.id.toString()}`);
+      throw new DependencyNotFoundError(`Task ${object.id.toString()}`);
     }
 
     if (!storeTask.isInitialized) {
@@ -221,7 +225,7 @@ export class DependencyProcessor {
     // check if it exists in the store with the value
     const storeResource = this.store.resources.get(object.id);
     if (storeResource === undefined) {
-      throw Errors.dependencyNotFound(`Resource ${object.id.toString()}`);
+      throw new DependencyNotFoundError(`Resource ${object.id.toString()}`);
     }
 
     const { resource, config } = storeResource;

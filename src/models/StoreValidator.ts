@@ -1,4 +1,4 @@
-import { Errors } from "../errors";
+import { DependencyNotFoundError, DuplicateRegistrationError } from "../errors";
 import {
   TaskStoreElementType,
   MiddlewareStoreElementType,
@@ -16,16 +16,16 @@ export class StoreValidator {
 
   checkIfIDExists(id: string | symbol): void | never {
     if (this.tasks.has(id)) {
-      throw Errors.duplicateRegistration("Task", id);
+      throw new DuplicateRegistrationError("Task", id);
     }
     if (this.resources.has(id)) {
-      throw Errors.duplicateRegistration("Resource", id);
+      throw new DuplicateRegistrationError("Resource", id);
     }
     if (this.events.has(id)) {
-      throw Errors.duplicateRegistration("Event", id);
+      throw new DuplicateRegistrationError("Event", id);
     }
     if (this.middlewares.has(id)) {
-      throw Errors.duplicateRegistration("Middleware", id);
+      throw new DuplicateRegistrationError("Middleware", id);
     }
   }
 
@@ -33,7 +33,7 @@ export class StoreValidator {
     for (const task of this.tasks.values()) {
       task.task.middleware.forEach((middleware) => {
         if (!this.middlewares.has(middleware.id)) {
-          throw Errors.dependencyNotFound(
+          throw new DependencyNotFoundError(
             `Middleware ${middleware.id.toString()} in Task ${task.task.id.toString()}`
           );
         }

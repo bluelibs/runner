@@ -1,5 +1,3 @@
-import { ITask, IResource } from "./defs";
-
 /**
  * Base error class for all BlueLibs Runner errors
  */
@@ -57,9 +55,7 @@ export class CircularDependenciesError extends RuntimeError {
  */
 export class EventNotFoundError extends RuntimeError {
   constructor(id: string | symbol) {
-    super(
-      `Event "${id.toString()}" not found. Did you forget to register it?`
-    );
+    super(`Event "${id.toString()}" not found. Did you forget to register it?`);
     this.name = "EventNotFoundError";
   }
 }
@@ -96,28 +92,3 @@ export class StoreAlreadyInitializedError extends RuntimeError {
     this.name = "StoreAlreadyInitializedError";
   }
 }
-
-export const Errors = {
-  duplicateRegistration: (type: string, id: string | symbol) =>
-    new DuplicateRegistrationError(type, id),
-
-  dependencyNotFound: (key: string | symbol) =>
-    new DependencyNotFoundError(key),
-
-  unknownItemType: (item: any) => new UnknownItemTypeError(item),
-
-  circularDependencies: (cycles: string[]) =>
-    new CircularDependenciesError(cycles),
-
-  eventNotFound: (id: string | symbol) =>
-    new EventNotFoundError(id),
-
-  middlewareAlreadyGlobal: (id: string | symbol) =>
-    new MiddlewareAlreadyGlobalError(id),
-
-  locked: (what: string | symbol) =>
-    new LockedError(what),
-
-  storeAlreadyInitialized: () =>
-    new StoreAlreadyInitializedError(),
-};

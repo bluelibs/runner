@@ -6,7 +6,7 @@ import {
 } from "../defs";
 import { IDependentNode } from "../tools/findCircularDependencies";
 import { globalEventsArray } from "../globals/globalEvents";
-import { Errors } from "../errors";
+import { StoreAlreadyInitializedError } from "../errors";
 import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
 import { StoreRegistry } from "./StoreRegistry";
@@ -127,7 +127,7 @@ export class Store {
 
   initializeStore(root: IResource<any, any, any, any, any>, config: any) {
     if (this.#isInitialized) {
-      throw Errors.storeAlreadyInitialized();
+      throw new StoreAlreadyInitializedError();
     }
 
     this.registerGlobalComponents();

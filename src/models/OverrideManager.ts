@@ -6,12 +6,7 @@ import {
   RegisterableItems,
 } from "../defs";
 import * as utils from "../define";
-import { Errors } from "../errors";
-import {
-  TaskStoreElementType,
-  MiddlewareStoreElementType,
-  ResourceStoreElementType,
-} from "./StoreTypes";
+import { DependencyNotFoundError } from "../errors";
 import { StoreRegistry } from "./StoreRegistry";
 
 export class OverrideManager {
@@ -65,7 +60,7 @@ export class OverrideManager {
           ? override.resource.id
           : override.id;
 
-        throw Errors.dependencyNotFound(id);
+        throw new DependencyNotFoundError(id);
       }
     }
 

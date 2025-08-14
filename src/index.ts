@@ -36,15 +36,4 @@ export {
 
 export * as definitions from "./defs";
 export { Semaphore, Store, EventManager, TaskRunner, Queue } from "./models";
-export {
-  RuntimeError,
-  DuplicateRegistrationError,
-  DependencyNotFoundError,
-  UnknownItemTypeError,
-  CircularDependenciesError,
-  EventNotFoundError,
-  MiddlewareAlreadyGlobalError,
-  LockedError,
-  StoreAlreadyInitializedError,
-  Errors,
-} from "./errors";
+export * as Errors from "./errors";

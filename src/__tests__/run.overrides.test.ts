@@ -6,7 +6,7 @@ import {
   defineMiddleware,
   defineOverride,
 } from "../define";
-import { Errors } from "../errors";
+import { DependencyNotFoundError } from "../errors";
 import { run } from "../run";
 
 describe("run.overrides", () => {
@@ -230,7 +230,7 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrowError(
-      Errors.dependencyNotFound("task2").message
+      new DependencyNotFoundError("task2").message
     );
   });
 
@@ -256,7 +256,7 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrowError(
-      Errors.dependencyNotFound("override2").message
+      new DependencyNotFoundError("override2").message
     );
   });
 

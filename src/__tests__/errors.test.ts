@@ -5,8 +5,9 @@ import {
   defineMiddleware,
 } from "../define";
 import { run } from "../run";
-import {
-  Errors,
+import { Errors } from "..";
+
+const {
   RuntimeError,
   DuplicateRegistrationError,
   DependencyNotFoundError,
@@ -16,7 +17,7 @@ import {
   MiddlewareAlreadyGlobalError,
   LockedError,
   StoreAlreadyInitializedError,
-} from "..";
+} = Errors;
 
 describe("Errors", () => {
   it("should throw duplicateRegistration error", async () => {
@@ -29,7 +30,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.duplicateRegistration("Task", "test.task").message
+      new DuplicateRegistrationError("Task", "test.task").message
     );
   });
 
@@ -49,7 +50,9 @@ describe("Errors", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrow(Errors.unknownItemType({}).message);
+    await expect(run(app)).rejects.toThrow(
+      new UnknownItemTypeError({}).message
+    );
   });
 
   it("should throw unknown item type error at resource level", async () => {
@@ -63,7 +66,9 @@ describe("Errors", () => {
       async init(_, {}) {},
     });
 
-    await expect(run(app)).rejects.toThrow(Errors.unknownItemType({}).message);
+    await expect(run(app)).rejects.toThrow(
+      new UnknownItemTypeError({}).message
+    );
   });
 
   it("should throw circularDependencies error", async () => {
@@ -102,7 +107,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.eventNotFound("non.existent.event").message
+      new EventNotFoundError("non.existent.event").message
     );
   });
 
@@ -159,7 +164,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.duplicateRegistration("Resource", "res1").message
+      new DuplicateRegistrationError("Resource", "res1").message
     );
   });
 
@@ -180,7 +185,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.duplicateRegistration("Middleware", "middlewarex").message
+      new DuplicateRegistrationError("Middleware", "middlewarex").message
     );
   });
 
@@ -198,7 +203,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.duplicateRegistration("Event", "ev1").message
+      new DuplicateRegistrationError("Event", "ev1").message
     );
   });
 
@@ -227,7 +232,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.dependencyNotFound("Task test.off.the.grid").message
+      new DependencyNotFoundError("Task test.off.the.grid").message
     );
   });
 
@@ -255,7 +260,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      Errors.dependencyNotFound("Resource test.off.the.grid").message
+      new DependencyNotFoundError("Resource test.off.the.grid").message
     );
   });
 
@@ -265,7 +270,7 @@ describe("Errors", () => {
       run: async () => {},
     }).everywhere();
     expect(() => first.everywhere()).toThrow(
-      Errors.middlewareAlreadyGlobal("x").message
+      new MiddlewareAlreadyGlobalError("x").message
     );
   });
 
@@ -318,41 +323,6 @@ describe("Errors", () => {
       const storeError = new StoreAlreadyInitializedError();
       expect(storeError.name).toBe("StoreAlreadyInitializedError");
       expect(storeError).toBeInstanceOf(RuntimeError);
-    });
-
-    it("should create correct error types via Errors object", () => {
-      // Test that Errors object creates the right instances
-      const dupError = Errors.duplicateRegistration("Task", "test");
-      expect(dupError).toBeInstanceOf(DuplicateRegistrationError);
-      expect(dupError.name).toBe("DuplicateRegistrationError");
-
-      const depError = Errors.dependencyNotFound("test");
-      expect(depError).toBeInstanceOf(DependencyNotFoundError);
-      expect(depError.name).toBe("DependencyNotFoundError");
-
-      const unknownError = Errors.unknownItemType({});
-      expect(unknownError).toBeInstanceOf(UnknownItemTypeError);
-      expect(unknownError.name).toBe("UnknownItemTypeError");
-
-      const circularError = Errors.circularDependencies(["a", "b"]);
-      expect(circularError).toBeInstanceOf(CircularDependenciesError);
-      expect(circularError.name).toBe("CircularDependenciesError");
-
-      const eventError = Errors.eventNotFound("test");
-      expect(eventError).toBeInstanceOf(EventNotFoundError);
-      expect(eventError.name).toBe("EventNotFoundError");
-
-      const middlewareError = Errors.middlewareAlreadyGlobal("test");
-      expect(middlewareError).toBeInstanceOf(MiddlewareAlreadyGlobalError);
-      expect(middlewareError.name).toBe("MiddlewareAlreadyGlobalError");
-
-      const lockedError = Errors.locked("test");
-      expect(lockedError).toBeInstanceOf(LockedError);
-      expect(lockedError.name).toBe("LockedError");
-
-      const storeError = Errors.storeAlreadyInitialized();
-      expect(storeError).toBeInstanceOf(StoreAlreadyInitializedError);
-      expect(storeError.name).toBe("StoreAlreadyInitializedError");
     });
   });
 });
