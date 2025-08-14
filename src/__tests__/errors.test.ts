@@ -17,6 +17,7 @@ const {
   MiddlewareAlreadyGlobalError,
   LockedError,
   StoreAlreadyInitializedError,
+  ValidationError,
 } = Errors;
 
 describe("Errors", () => {
@@ -323,6 +324,18 @@ describe("Errors", () => {
       const storeError = new StoreAlreadyInitializedError();
       expect(storeError.name).toBe("StoreAlreadyInitializedError");
       expect(storeError).toBeInstanceOf(RuntimeError);
+
+      // Test ValidationError with Error object
+      const validationErrorWithError = new ValidationError("Task input", "test-task", new Error("Required field missing"));
+      expect(validationErrorWithError.name).toBe("ValidationError");
+      expect(validationErrorWithError.message).toBe("Task input validation failed for test-task: Required field missing");
+      expect(validationErrorWithError).toBeInstanceOf(RuntimeError);
+
+      // Test ValidationError with string
+      const validationErrorWithString = new ValidationError("Resource config", Symbol("test-resource"), "Invalid configuration");
+      expect(validationErrorWithString.name).toBe("ValidationError");
+      expect(validationErrorWithString.message).toBe("Resource config validation failed for Symbol(test-resource): Invalid configuration");
+      expect(validationErrorWithString).toBeInstanceOf(RuntimeError);
     });
   });
 });

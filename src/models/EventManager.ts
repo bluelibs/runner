@@ -4,7 +4,7 @@ import {
   IEventDefinition,
   IEventEmission,
 } from "../defs";
-import { LockedError } from "../errors";
+import { LockedError, ValidationError } from "../errors";
 import { Logger } from "./Logger";
 
 const HandlerOptionsDefaults = { order: 0 };
@@ -106,6 +106,15 @@ export class EventManager {
     data: TInput,
     source: string | symbol
   ): Promise<void> {
+    // Validate payload with schema if provided
+    if (eventDefinition.payloadSchema) {
+      try {
+        data = eventDefinition.payloadSchema.parse(data);
+      } catch (error) {
+        throw new ValidationError("Event payload", eventDefinition.id, error instanceof Error ? error : new Error(String(error)));
+      }
+    }
+    
     const allListeners = this.getCachedMergedListeners(eventDefinition.id);
 
     if (allListeners.length === 0) {

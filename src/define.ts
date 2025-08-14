@@ -36,7 +36,7 @@ import {
   ITaskMeta,
   IResourceMeta,
 } from "./defs";
-import { MiddlewareAlreadyGlobalError } from "./errors";
+import { MiddlewareAlreadyGlobalError, ValidationError } from "./errors";
 import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
 
 // Helper function to get the caller file
@@ -68,6 +68,7 @@ export function defineTask<
     run: taskConfig.run,
     on: taskConfig.on,
     listenerOrder: taskConfig.listenerOrder,
+    inputSchema: taskConfig.inputSchema,
     events: {
       beforeRun: {
         ...defineEvent({
@@ -141,7 +142,17 @@ export function defineResource<
     overrides: constConfig.overrides || [],
     init: constConfig.init,
     context: constConfig.context,
+    configSchema: constConfig.configSchema,
     with: function (config: TConfig) {
+      // Validate config with schema if provided (fail fast)
+      if (this.configSchema) {
+        try {
+          config = this.configSchema.parse(config);
+        } catch (error) {
+          throw new ValidationError("Resource config", this.id, error instanceof Error ? error : new Error(String(error)));
+        }
+      }
+      
       return {
         [symbolResourceWithConfig]: true,
         id: this.id,
@@ -275,6 +286,15 @@ export function defineMiddleware<
   return {
     ...object,
     with: (config: TConfig) => {
+      // Validate config with schema if provided (fail fast)
+      if (object.configSchema) {
+        try {
+          config = object.configSchema.parse(config);
+        } catch (error) {
+          throw new ValidationError("Middleware config", object.id, error instanceof Error ? error : new Error(String(error)));
+        }
+      }
+      
       return {
         ...object,
         [symbolMiddlewareConfigured]: true,

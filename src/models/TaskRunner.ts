@@ -4,6 +4,7 @@ import { globalEvents } from "../globals/globalEvents";
 import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
+import { ValidationError } from "../errors";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
@@ -149,6 +150,15 @@ export class TaskRunner {
 
     // this is the final next()
     let next = async (input: any) => {
+      // Validate input with schema if provided
+      if (task.inputSchema) {
+        try {
+          input = task.inputSchema.parse(input);
+        } catch (error) {
+          throw new ValidationError("Task input", task.id, error instanceof Error ? error : new Error(String(error)));
+        }
+      }
+      
       return task.run.call(null, input, storeTask?.computedDependencies as any);
     };
 

@@ -13,7 +13,7 @@
   - Business logic with DI, optional `on` (listen to event) and `middleware`.
   - Shape: `{ id?, dependencies?, on?, middleware?, run(input, deps) }`.
 - `resource`:
-  - Singleton, optional `dependencies`, `register`, `dispose`, `context`.
+  - Singleton, optional `dependencies`, `register`, `dispose`, `context` (private sharing between init/dispose).
   - Shape: `{ id?, dependencies?, register?, init(config, deps, ctx), dispose?, context? }`.
 - `event<T>`:
   - Emits/handles async events: `const e = event<T>({ id })` then `await e(payload)`.
