@@ -405,7 +405,7 @@ const app = resource({
 
 Middleware can have dependencies on resources and other middleware, but certain patterns can create circular dependencies. For detailed information about middleware dependency limitations, best practices, and troubleshooting circular dependencies, see:
 
-**📖 [Middleware Dependencies: Limitations and Best Practices](./docs/middleware-dependencies.md)**
+**📖 [Middleware Dependencies: Limitations and Best Practices](./MIDDLEWARE-DEPENDENCIES.md)**
 
 Key points:
 - Global middleware (`.everywhere()`) dependencies are automatically included in circular dependency analysis
