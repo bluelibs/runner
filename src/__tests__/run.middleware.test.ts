@@ -400,6 +400,77 @@ describe("Configurable Middleware (.with)", () => {
 
     await run(app);
   });
+
+  it("should allow configured middleware to be global for tasks", async () => {
+    const calls: string[] = [];
+    const validate = defineMiddleware<{ schema: string }>({
+      id: "validate.global.tasks",
+      run: async ({ next }, _deps, config) => {
+        calls.push(`global:${config.schema}`);
+        return next();
+      },
+    });
+
+    const task = defineTask({
+      id: "task.global",
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app.global.tasks",
+      register: [
+        validate
+          .with({ schema: "user" })
+          .everywhere({ tasks: true, resources: false }),
+        task,
+      ],
+      dependencies: { task },
+      async init(_, { task }) {
+        const result = await task();
+        expect(result).toBe("ok");
+      },
+    });
+
+    await run(app);
+    expect(calls).toContain("global:user");
+  });
+
+  it("should allow configured middleware to be global for resources", async () => {
+    const calls: string[] = [];
+    const m = defineMiddleware<{ flag: string }>({
+      id: "validate.global.resources",
+      run: async ({ next, resource }, _deps, config) => {
+        if (resource) {
+          calls.push(`${String(resource.definition.id)}:${config.flag}`);
+        }
+        return next();
+      },
+    });
+
+    const sub = defineResource({
+      id: "res.sub",
+      async init() {
+        return "Sub";
+      },
+    });
+
+    const app = defineResource({
+      id: "res.app",
+      register: [
+        m.with({ flag: "X" }).everywhere({ tasks: false, resources: true }),
+        sub,
+      ],
+      dependencies: { sub },
+      async init(_, { sub }) {
+        return sub;
+      },
+    });
+
+    const result = await run(app);
+    expect(String(result.value)).toBe("Sub");
+    expect(calls).toContain("res.app:X");
+    expect(calls).toContain("res.sub:X");
+  });
 });
 
 describe("Middleware.everywhere()", () => {
