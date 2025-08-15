@@ -14,7 +14,7 @@ This document outlines the limitations and best practices for using dependencies
 ## Overview
 
 BlueLibs Runner's dependency system supports complex middleware scenarios, including:
-- Middleware with dependencies on resources and other middleware
+- Middleware with dependencies on resources, tasks, and events
 - Global middleware that applies to all tasks or resources (`.everywhere()`)
 - Dynamic function-based dependencies for handling forward references
 - Configured middleware with conditional dependencies
@@ -179,23 +179,36 @@ const authMiddleware = middleware({
 // Cycle: database -> authMiddleware -> database
 ```
 
-### 2. Nested Middleware Dependencies
+### 2. Multiple Middleware Dependencies on Same Resource
 
 ```typescript
 // ❌ Circular dependency:
-const middlewareA = middleware({
-  id: 'middleware.a',
-  dependencies: () => ({ middlewareB }), // Forward reference
-  run: async ({ next }, { middlewareB }) => next(),
+const database = resource({
+  id: 'database',
+  middleware: [authMiddleware, loggingMiddleware], // Uses both middleware
+  init: async () => new Database(),
 });
 
-const middlewareB = middleware({
-  id: 'middleware.b',
-  dependencies: () => ({ middlewareA }), // Circular reference
-  run: async ({ next }, { middlewareA }) => next(),
+const authMiddleware = middleware({
+  id: 'auth',
+  dependencies: { database }, // Depends on database
+  run: async ({ next }, { database }) => {
+    // Check auth in database
+    return next();
+  },
 });
 
-// Cycle: middlewareA -> middlewareB -> middlewareA
+const loggingMiddleware = middleware({
+  id: 'logging',
+  dependencies: { database }, // Also depends on database
+  run: async ({ next }, { database }) => {
+    // Log to database
+    return next();
+  },
+});
+
+// Cycle: database -> authMiddleware -> database
+// Cycle: database -> loggingMiddleware -> database
 ```
 
 ### 3. Function-Based Dependencies with Forward References
