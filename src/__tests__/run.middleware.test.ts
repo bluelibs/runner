@@ -1,9 +1,6 @@
-import { cached } from "./../../examples/express-openapi-sqlite/node_modules/@types/sqlite3/index.d";
 import { defineMiddleware, defineTask, defineResource } from "../define";
 import { run } from "../run";
-import { retryMiddleware } from "../globals/middleware/retry.middleware";
 
-// Middleware
 describe("Middleware", () => {
   it("should be able to register the middleware and execute it", async () => {
     const testMiddleware = defineMiddleware({
