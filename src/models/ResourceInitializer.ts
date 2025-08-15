@@ -132,7 +132,6 @@ export class ResourceInitializer {
 
     const existingMiddlewares = resource.middleware;
     const globalMiddlewares = this.store.getEverywhereMiddlewareForResources();
-    // Is it possible to filter globalMiddlewares by existingMiddlewares?
     const createdMiddlewares = [...globalMiddlewares, ...existingMiddlewares];
 
     for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
