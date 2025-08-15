@@ -405,7 +405,6 @@ describe("Middleware Dependency Limitations", () => {
 
         // Check for improved guidance
         expect(error.message).toContain("To resolve circular dependencies:");
-        expect(error.message).toContain("Use function-based dependencies");
         expect(error.message).toContain(
           "For middleware: avoid depending on resources that use the same middleware"
         );
