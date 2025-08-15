@@ -1,4 +1,6 @@
 import { defineTag } from "../define";
+import { DebugConfig } from "./resources/debug";
+import { debugTag } from "./resources/debug/debug.tag";
 
 export const globalTags = {
   system: defineTag<{
@@ -11,4 +13,5 @@ export const globalTags = {
         "System-wide tags. Used for filtering out noise when you're focusing on your application.",
     },
   }),
+  debug: debugTag,
 };

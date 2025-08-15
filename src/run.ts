@@ -18,10 +18,7 @@ import { CircularDependenciesError } from "./errors";
 import { globalResources } from "./globals/globalResources";
 import { Logger } from "./models/Logger";
 import { isResourceWithConfig } from "./define";
-import {
-  DebugFriendlyConfig,
-  debugResource,
-} from "./globals/resources/debug.resource";
+import { debugResource, DebugFriendlyConfig } from "./globals/resources/debug";
 
 export type ResourcesStoreElementType<
   C = any,

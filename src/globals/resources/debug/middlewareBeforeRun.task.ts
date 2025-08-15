@@ -1,12 +1,13 @@
 import { defineTask } from "../../../define";
 import { globalEvents } from "../../../globals/globalEvents";
-import { globals } from "../../..";
+import { globalResources } from "../../globalResources";
+import { globalTags } from "../../globalTags";
 
 export const middlewareBeforeRunListener = defineTask({
   id: "globals.debug.tasks.middlewareBeforeRunListener",
   on: globalEvents.middlewares.beforeRun,
   dependencies: {
-    logger: globals.resources.logger,
+    logger: globalResources.logger,
   },
   run: async (event, { logger }) => {
     const data = event.data;
@@ -23,6 +24,6 @@ export const middlewareBeforeRunListener = defineTask({
     );
   },
   meta: {
-    tags: [globals.tags.system],
+    tags: [globalTags.system],
   },
 });

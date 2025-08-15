@@ -1,11 +1,14 @@
 import { defineTask } from "../../../define";
 import { globals } from "../../..";
+import { globalEvents } from "../../globalEvents";
+import { globalResources } from "../../globalResources";
+import { globalTags } from "../../globalTags";
 
 export const taskOnErrorListener = defineTask({
   id: "globals.debug.tasks.taskOnErrorListener",
-  on: globals.events.tasks.onError,
+  on: globalEvents.tasks.onError,
   dependencies: {
-    logger: globals.resources.logger,
+    logger: globalResources.logger,
   },
   run: async (event, { logger }) => {
     logger.error(
@@ -15,15 +18,15 @@ export const taskOnErrorListener = defineTask({
   meta: {
     title: "Task On Error Listener",
     description: "Logs all task on error events.",
-    tags: [globals.tags.system],
+    tags: [globalTags.system],
   },
 });
 
 export const resourceOnErrorListener = defineTask({
   id: "globals.debug.tasks.resourceOnErrorListener",
-  on: globals.events.resources.onError,
+  on: globalEvents.resources.onError,
   dependencies: {
-    logger: globals.resources.logger,
+    logger: globalResources.logger,
   },
   run: async (event, { logger }) => {
     logger.error(
@@ -35,6 +38,6 @@ export const resourceOnErrorListener = defineTask({
   meta: {
     title: "Resource On Error Listener",
     description: "Logs all resource on error events.",
-    tags: [globals.tags.system],
+    tags: [globalTags.system],
   },
 });

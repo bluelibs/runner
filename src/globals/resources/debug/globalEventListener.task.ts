@@ -1,15 +1,16 @@
 import { defineTask } from "../../../define";
-import { globals } from "../../../";
+import { globalResources } from "../../globalResources";
+import { globalTags } from "../../globalTags";
 import { safeStringify } from "./utils";
 
 export const globalEventListener = defineTask({
   id: "globals.debug.tasks.globalEventListener",
   on: "*",
   dependencies: {
-    logger: globals.resources.logger,
+    logger: globalResources.logger,
   },
   run: async (event, { logger }) => {
-    const systemTag = globals.tags.system.extract(event);
+    const systemTag = globalTags.system.extract(event);
     if (systemTag) {
       return;
     }
@@ -21,6 +22,6 @@ export const globalEventListener = defineTask({
   meta: {
     title: "Non-system Event Logger",
     description: "Logs all non-system events.",
-    tags: [globals.tags.system],
+    tags: [globalTags.system],
   },
 });

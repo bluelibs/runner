@@ -2,45 +2,58 @@ import { defineMiddleware } from "../../../define";
 import { globals } from "../../..";
 import { safeStringify } from "./utils";
 import { debugConfig } from "./debugConfig.resource";
+import { globalResources } from "../../globalResources";
+import { globalTags } from "../../globalTags";
 
 export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
   id: "globals.debug.middlewares.tasksAndResourcesTracker",
   dependencies: {
-    logger: globals.resources.logger,
+    logger: globalResources.logger,
     debugConfig,
   },
-  run: async ({ task, resource, next }, { logger }) => {
+  run: async ({ task, resource, next }, { logger, debugConfig }) => {
     const start = Date.now();
+
+    // Task handling
     if (task) {
-      logger.info(
-        `[task] ${String(task.definition.id)} with input: \n${safeStringify(
-          task.input
-        )}`
-      );
+      let logString = `[task] ${String(task.definition.id)} starting to run`;
+      if (debugConfig.logTaskInput) {
+        logString += ` with input: \n${safeStringify(task.input)}`;
+      }
+      logger.info(logString);
       const result = await next(task.input);
       const duration = Date.now() - start;
-      logger.info(
-        `[task] ${String(
-          task.definition.id
-        )} completed with result:\n ${safeStringify(result)} in ${duration}ms`
-      );
+
+      logString = `[task] ${String(
+        task.definition.id
+      )} completed in ${duration}ms`;
+      if (debugConfig.logTaskResult) {
+        logString += ` with result: ${safeStringify(result)}`;
+      }
+      logger.info(logString);
     }
+
+    // Resource handling
     if (resource) {
-      logger.info(
-        `[resource] ${String(
-          resource.definition.id
-        )} with config: ${safeStringify(resource.config)}`
-      );
+      let logString = `[resource] ${String(
+        resource.definition.id
+      )} starting to run`;
+      if (debugConfig.logResourceConfig) {
+        logString += ` with config: ${safeStringify(resource.config)}`;
+      }
+      logger.info(logString);
       const result = await next();
       const duration = Date.now() - start;
-      logger.info(
-        `[resource] ${String(
-          resource.definition.id
-        )} initialized with result: ${safeStringify(result)} in ${duration}ms`
-      );
+      logString = `[resource] ${String(
+        resource.definition.id
+      )} initialized in ${duration}ms`;
+      if (debugConfig.logResourceResult) {
+        logString += ` with result: ${safeStringify(result)}`;
+      }
+      logger.info(logString);
     }
   },
   meta: {
-    tags: [globals.tags.system],
+    tags: [globalTags.system],
   },
 });
