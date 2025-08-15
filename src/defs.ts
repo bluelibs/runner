@@ -76,6 +76,8 @@ export const symbolIndexResource: unique symbol = Symbol(
 
 export interface ITagDefinition<TConfig = void, TEnforceContract = void> {
   id: string | symbol;
+  meta?: ITagMeta;
+  configSchema?: IValidationSchema<TConfig>;
 }
 
 /**
@@ -153,6 +155,7 @@ export interface ITaskMeta extends IMeta {}
 export interface IResourceMeta extends IMeta {}
 export interface IEventMeta extends IMeta {}
 export interface IMiddlewareMeta extends IMeta {}
+export interface ITagMeta extends Omit<IMeta, "tags"> {}
 
 /**
  * A mapping of dependency keys to Runner definitions. Used in `dependencies`

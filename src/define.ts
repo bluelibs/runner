@@ -470,9 +470,18 @@ export function defineTag<TConfig = void, TEnforceContract = void>(
 
   return {
     id,
+    meta: definition.meta,
     with(tagConfig: TConfig) {
+      if (this.configSchema) {
+        try {
+          tagConfig = this.configSchema.parse(tagConfig);
+        } catch (error) {
+          throw new ValidationError("Tag config", this.id, error as Error);
+        }
+      }
       return {
         id,
+        meta: definition.meta,
         tag: this,
         config: tagConfig as any,
       } as ITagWithConfig<TConfig>;

@@ -11,6 +11,7 @@ import { createContext } from "./context";
 import { globalEvents } from "./globals/globalEvents";
 import { globalResources } from "./globals/globalResources";
 import { globalMiddlewares } from "./globals/globalMiddleware";
+import { globalTags } from "./globals/globalTags";
 import { run } from "./run";
 import { createTestResource } from "./testing";
 
@@ -18,6 +19,7 @@ const globals = {
   events: globalEvents,
   resources: globalResources,
   middlewares: globalMiddlewares,
+  tags: globalTags,
 };
 
 export { globals };
