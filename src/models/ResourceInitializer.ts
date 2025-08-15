@@ -131,12 +131,8 @@ export class ResourceInitializer {
     };
 
     const existingMiddlewares = resource.middleware;
-    const createdMiddlewares = [
-      ...this.store.getEverywhereMiddlewareForResources(
-        existingMiddlewares.map((x) => x.id)
-      ),
-      ...existingMiddlewares,
-    ];
+    const globalMiddlewares = this.store.getEverywhereMiddlewareForResources();
+    const createdMiddlewares = [...globalMiddlewares, ...existingMiddlewares];
 
     for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
       const middleware = createdMiddlewares[i];

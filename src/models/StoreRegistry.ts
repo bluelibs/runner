@@ -161,20 +161,25 @@ export class StoreRegistry {
   }
 
   getEverywhereMiddlewareForTasks(
-    excludingIds: Array<string | symbol>
+    task: ITask<any, any, any, any>
   ): IMiddleware[] {
     return Array.from(this.middlewares.values())
-      .filter((x) => x.middleware[symbolMiddlewareEverywhereTasks])
-      .filter((x) => !excludingIds.includes(x.middleware.id))
+      .filter((x) => {
+        const flag = x.middleware[symbolMiddlewareEverywhereTasks];
+        if (!flag) return false;
+        if (typeof flag === "function") {
+          return flag(task);
+        }
+        return Boolean(flag);
+      })
       .map((x) => x.middleware);
   }
 
-  getEverywhereMiddlewareForResources(
-    excludingIds: Array<string | symbol>
-  ): IMiddleware[] {
+  getEverywhereMiddlewareForResources(): IMiddleware[] {
     return Array.from(this.middlewares.values())
-      .filter((x) => x.middleware[symbolMiddlewareEverywhereResources])
-      .filter((x) => !excludingIds.includes(x.middleware.id))
+      .filter((x) => {
+        return x.middleware[symbolMiddlewareEverywhereResources];
+      })
       .map((x) => x.middleware);
   }
 

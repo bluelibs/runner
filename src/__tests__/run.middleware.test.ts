@@ -617,4 +617,49 @@ describe("Middleware.everywhere()", () => {
     expect(calls).toContain("resource:test.resource");
     expect(calls).not.toContain("task:test.task");
   });
+
+  it("should work with filterable task middleware", async () => {
+    const calls: string[] = [];
+    const everywhereMiddleware = defineMiddleware({
+      id: "everywhere.middleware",
+      run: async ({ next, task, resource }) => {
+        if (task) {
+          calls.push(`task:${String(task.definition.id)}`);
+        }
+        return next();
+      },
+    });
+
+    const testTask = defineTask({
+      id: "test.task",
+      run: async () => "Task executed",
+    });
+
+    const testTask2 = defineTask({
+      id: "test.task2",
+      run: async () => "Task executed",
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [
+        everywhereMiddleware.everywhere({
+          tasks: (task) => task.id === "test.task",
+          resources: false,
+        }),
+        testTask,
+        testTask2,
+      ],
+      dependencies: { testTask, testTask2 },
+      async init(_, { testTask, testTask2 }) {
+        await testTask();
+        await testTask2();
+      },
+    });
+
+    await run(app);
+
+    expect(calls).toContain("task:test.task");
+    expect(calls).not.toContain("task:test.task2");
+  });
 });

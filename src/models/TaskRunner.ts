@@ -155,20 +155,20 @@ export class TaskRunner {
         try {
           input = task.inputSchema.parse(input);
         } catch (error) {
-          throw new ValidationError("Task input", task.id, error instanceof Error ? error : new Error(String(error)));
+          throw new ValidationError(
+            "Task input",
+            task.id,
+            error instanceof Error ? error : new Error(String(error))
+          );
         }
       }
-      
+
       return task.run.call(null, input, storeTask?.computedDependencies as any);
     };
 
     const existingMiddlewares = task.middleware;
-    const createdMiddlewares = [
-      ...this.store.getEverywhereMiddlewareForTasks(
-        existingMiddlewares.map((x) => x.id)
-      ),
-      ...existingMiddlewares,
-    ];
+    const globalMiddlewares = this.store.getEverywhereMiddlewareForTasks(task);
+    const createdMiddlewares = [...globalMiddlewares, ...existingMiddlewares];
 
     if (createdMiddlewares.length === 0) {
       return next;

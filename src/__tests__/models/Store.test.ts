@@ -148,13 +148,13 @@ describe("Store", () => {
 
   it("should call getEverywhereMiddlewareForTasks method", () => {
     // Test getEverywhereMiddlewareForTasks method (lines 152-153)
-    const result = store.getEverywhereMiddlewareForTasks([]);
+    const result = store.getEverywhereMiddlewareForTasks({} as any);
     expect(Array.isArray(result)).toBe(true);
   });
 
   it("should call getEverywhereMiddlewareForResources method", () => {
     // Test getEverywhereMiddlewareForResources method (lines 156-157)
-    const result = store.getEverywhereMiddlewareForResources([]);
+    const result = store.getEverywhereMiddlewareForResources();
     expect(Array.isArray(result)).toBe(true);
   });
 
