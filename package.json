@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsc",
+    "clean": "rm -rf dist",
     "watch": "tsc -w",
     "test": "jest --verbose --runInBand",
     "test:dev": "jest --verbose --watch",
@@ -16,7 +17,7 @@
     "test:clean": "jest --clearCache",
     "testonly": "npm test",
     "test:ci": "jest --verbose --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
-    "prepublishOnly": "npm run build",
+    "prepublishOnly": "npm run clean && npm run build",
     "typedoc": "typedoc --options typedoc.json",
     "benchmark": "jest --testMatch=\"**/__tests__/benchmark/benchmark.test.ts\" --testTimeout 10000"
   },
@@ -47,6 +48,12 @@
   "typescript": {
     "definition": "dist/index.d.ts"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "AI.md",
+    "LICENSE.md"
+  ],
   "license": "MIT",
   "dependencies": {
     "lru-cache": "^11.1.0"

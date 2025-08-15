@@ -12,25 +12,32 @@ A complete Express.js application demonstrating the full power of BlueLibs Runne
 
 ## Features Demonstrated
 
+The full power and simplicity of Runner.
+
 ### 1. Custom Tags System
+
 ```typescript
 // HTTP tag for marking tasks as endpoints
 const registerUserTask = defineTask({
   id: "app.tasks.auth.register",
   meta: {
     tags: [
-      httpRoute.post('/api/auth/register', {
-        summary: 'Register a new user',
+      httpRoute.post("/api/auth/register", {
+        summary: "Register a new user",
         requiresAuth: false,
-        requestBodySchema: registerSchema
-      })
-    ]
+        requestBodySchema: registerSchema,
+      }),
+    ],
   },
-  run: async (userData) => { /* ... */ }
+  run: async (userData) => {
+    // Enforces API response because of the presence of the tag
+    /* ... */
+  },
 });
 ```
 
 ### 2. Event-Driven Route Registration
+
 ```typescript
 // Listens to afterInit event to scan and register routes
 export const routeRegistrationTask = defineTask({
@@ -39,11 +46,12 @@ export const routeRegistrationTask = defineTask({
   run: async () => {
     // Automatically discovers tasks with HTTP tags
     // and registers them as Express routes
-  }
+  },
 });
 ```
 
 ### 3. Context System
+
 ```typescript
 // User context for request-scoped data
 export const UserContext = createContext<UserSession>("user.session");
@@ -53,54 +61,44 @@ const userSession = UserContext.use();
 ```
 
 ### 4. Middleware Integration
+
 ```typescript
 export const authMiddleware = defineMiddleware<AuthConfig>({
   id: "app.middleware.auth",
   run: async ({ task, next }, deps, config) => {
     // JWT verification and user context setup
     return UserContext.provide(userSession, () => next(task.input));
-  }
+  },
 });
-```
-
-## Project Structure
-
-```
-src/
-├── contexts/           # Request and user contexts
-├── middleware/         # Authentication middleware
-├── resources/          # Database, Express server, services
-├── tags/              # HTTP route tags
-├── tasks/             # Business logic tasks
-├── types/             # TypeScript interfaces
-├── __tests__/         # Integration tests
-└── index.ts           # Main application
 ```
 
 ## Quick Start
 
 1. **Install dependencies:**
+
    ```bash
    npm install
    ```
 
 2. **Start the development server:**
+
    ```bash
    npm run dev
    ```
 
 3. **Test the API:**
+
    ```bash
    # Register a user
    curl -X POST http://localhost:3000/api/auth/register \
      -H "Content-Type: application/json" \
      -d '{"email":"test@example.com","password":"password123","name":"Test User"}'
-   
+
    # Login
    curl -X POST http://localhost:3000/api/auth/login \
      -H "Content-Type: application/json" \
      -d '{"email":"test@example.com","password":"password123"}'
-   
+
    # Access protected route
    curl -X GET http://localhost:3000/api/auth/profile \
      -H "Authorization: Bearer YOUR_JWT_TOKEN"
@@ -116,32 +114,36 @@ src/
 
 ## API Endpoints
 
-| Method | Endpoint | Description | Auth Required |
-|--------|----------|-------------|---------------|
-| GET | `/health` | Health check | No |
-| POST | `/api/auth/register` | Register new user | No |
-| POST | `/api/auth/login` | User login | No |
-| GET | `/api/auth/profile` | Get user profile | Yes |
-| GET | `/api/users` | Get all users | Yes |
+| Method | Endpoint             | Description       | Auth Required |
+| ------ | -------------------- | ----------------- | ------------- |
+| GET    | `/health`            | Health check      | No            |
+| POST   | `/api/auth/register` | Register new user | No            |
+| POST   | `/api/auth/login`    | User login        | No            |
+| GET    | `/api/auth/profile`  | Get user profile  | Yes           |
+| GET    | `/api/users`         | Get all users     | Yes           |
 
 ## Key Components
 
 ### Resources
+
 - **Database Resource**: SQLite database with user table
 - **User Service Resource**: User CRUD operations
 - **Express Server Resource**: HTTP server lifecycle management
 - **HTTP Route Bridge Resource**: Connects Express routes to Runner tasks
 
 ### Tasks
+
 - **Register User Task**: User registration with validation
 - **Login User Task**: Authentication with JWT
 - **Get User Profile Task**: Protected user data retrieval
 - **Get All Users Task**: Admin endpoint for user listing
 
 ### Middleware
+
 - **Auth Middleware**: JWT verification and user context setup
 
 ### Tags
+
 - **HTTP Tag**: Route decoration with method, path, OpenAPI specs
 
 ## Framework Features Showcased
@@ -158,16 +160,19 @@ src/
 ## Environment Variables
 
 - `JWT_SECRET`: Secret key for JWT tokens (defaults to 'your-secret-key')
+- `PORT` The port used by express to open the HTTP Server
 
 ## Database
 
 The application uses SQLite with a simple user table:
+
 - In-memory database for tests
 - File-based database (`data.db`) for development
 
 ## Testing
 
 The integration tests demonstrate the complete authentication flow:
+
 - User registration
 - User login
 - Protected route access
@@ -175,6 +180,7 @@ The integration tests demonstrate the complete authentication flow:
 - Error handling
 
 Run tests with:
+
 ```bash
 npm test
 ```
