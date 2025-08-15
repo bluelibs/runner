@@ -167,7 +167,13 @@ export class TaskRunner {
     };
 
     const existingMiddlewares = task.middleware;
-    const globalMiddlewares = this.store.getEverywhereMiddlewareForTasks(task);
+    const existingMiddlewareIds = existingMiddlewares.map((x) => x.id);
+    // The logic here is that we want to attach the middleware only once, so we filter out the ones that are already attached at the task level.
+    // This allows a very flexible approach, you can have a global middleware that has a specific config for the rest, but for a specific task, you can override it.
+    // This enables a very powerful approach to middleware.
+    const globalMiddlewares = this.store
+      .getEverywhereMiddlewareForTasks(task)
+      .filter((x) => !existingMiddlewareIds.includes(x.id));
     const createdMiddlewares = [...globalMiddlewares, ...existingMiddlewares];
 
     if (createdMiddlewares.length === 0) {

@@ -131,7 +131,12 @@ export class ResourceInitializer {
     };
 
     const existingMiddlewares = resource.middleware;
-    const globalMiddlewares = this.store.getEverywhereMiddlewareForResources();
+    const existingMiddlewareIds = existingMiddlewares.map((x) => x.id);
+    // Same logic as with tasks, the local middleware has priority over the global middleware, as they might have different configs.
+    const globalMiddlewares = this.store
+      .getEverywhereMiddlewareForResources()
+      .filter((x) => !existingMiddlewareIds.includes(x.id));
+
     const createdMiddlewares = [...globalMiddlewares, ...existingMiddlewares];
 
     for (let i = createdMiddlewares.length - 1; i >= 0; i--) {

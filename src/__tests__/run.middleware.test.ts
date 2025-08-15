@@ -1,3 +1,4 @@
+import { cached } from "./../../examples/express-openapi-sqlite/node_modules/@types/sqlite3/index.d";
 import { defineMiddleware, defineTask, defineResource } from "../define";
 import { run } from "../run";
 import { retryMiddleware } from "../globals/middleware/retry.middleware";
@@ -661,5 +662,56 @@ describe("Middleware.everywhere()", () => {
 
     expect(calls).toContain("task:test.task");
     expect(calls).not.toContain("task:test.task2");
+  });
+
+  it("should ensure that the local middleware has priority over the global middleware in terms of configuration", async () => {
+    const calls: string[] = [];
+    const middleware = defineMiddleware<{ flag: string }>({
+      id: "everywhere.middleware",
+      run: async ({ task, resource, next }, deps, config) => {
+        if (task) {
+          calls.push(`task:${String(task.definition.id)}:${config.flag}`);
+        }
+        if (resource) {
+          calls.push(
+            `resource:${String(resource.definition.id)}:${config.flag}`
+          );
+        }
+        return next();
+      },
+    });
+
+    const resource1 = defineResource({
+      id: "resource1",
+      middleware: [middleware.with({ flag: "local-resource" })],
+      async init() {
+        return "Resource1";
+      },
+    });
+
+    const task1 = defineTask({
+      id: "task1",
+      middleware: [middleware.with({ flag: "local-task" })],
+      run: async () => "Task1",
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [
+        middleware.with({ flag: "global" }).everywhere(),
+        resource1,
+        task1,
+      ],
+      dependencies: { resource1, task1 },
+      async init(_, { task1 }) {
+        await task1();
+      },
+    });
+
+    const result = await run(app);
+    expect(calls).toContain("resource:resource1:local-resource");
+    expect(calls).not.toContain("resource:resource1:global");
+    expect(calls).toContain("task:task1:local-task");
+    expect(calls).not.toContain("task:task1:global");
   });
 });
