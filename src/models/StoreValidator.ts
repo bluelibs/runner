@@ -1,3 +1,4 @@
+import { symbolMiddlewareEverywhereResources } from "../defs";
 import { DependencyNotFoundError, DuplicateRegistrationError } from "../errors";
 import {
   TaskStoreElementType,
@@ -31,10 +32,10 @@ export class StoreValidator {
 
   runSanityChecks() {
     for (const task of this.tasks.values()) {
-      task.task.middleware.forEach((middleware) => {
-        if (!this.middlewares.has(middleware.id)) {
+      task.task.middleware.forEach((middlewareAttachment) => {
+        if (!this.middlewares.has(middlewareAttachment.id)) {
           throw new DependencyNotFoundError(
-            `Middleware ${middleware.id.toString()} in Task ${task.task.id.toString()}`
+            `Middleware ${middlewareAttachment.id.toString()} in Task ${task.task.id.toString()}`
           );
         }
       });

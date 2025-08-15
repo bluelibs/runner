@@ -13,7 +13,9 @@ export class RuntimeError extends Error {
  */
 export class DuplicateRegistrationError extends RuntimeError {
   constructor(type: string, id: string | symbol) {
-    super(`${type} "${id.toString()}" already registered`);
+    super(
+      `${type} "${id.toString()}" already registered. Did you use the same 'id' in two different components? Keep in mind, that all TERM elements need unique ids.`
+    );
     this.name = "DuplicateRegistrationError";
   }
 }
@@ -45,19 +47,22 @@ export class UnknownItemTypeError extends RuntimeError {
  */
 export class CircularDependenciesError extends RuntimeError {
   constructor(cycles: string[]) {
-    const cycleDetails = cycles.map(cycle => `  • ${cycle}`).join('\n');
-    const hasMiddleware = cycles.some(cycle => cycle.includes('middleware'));
-    
-    let guidance = '\n\nTo resolve circular dependencies:';
-    guidance += '\n  • Use function-based dependencies: () => ({ dependency })';
-    guidance += '\n  • Consider refactoring to reduce coupling between components';
-    guidance += '\n  • Extract shared dependencies into separate resources';
-    
+    const cycleDetails = cycles.map((cycle) => `  • ${cycle}`).join("\n");
+    const hasMiddleware = cycles.some((cycle) => cycle.includes("middleware"));
+
+    let guidance = "\n\nTo resolve circular dependencies:";
+    guidance += "\n  • Use function-based dependencies: () => ({ dependency })";
+    guidance +=
+      "\n  • Consider refactoring to reduce coupling between components";
+    guidance += "\n  • Extract shared dependencies into separate resources";
+
     if (hasMiddleware) {
-      guidance += '\n  • For middleware: avoid depending on resources that use the same middleware';
-      guidance += '\n  • Consider using events for communication instead of direct dependencies';
+      guidance +=
+        "\n  • For middleware: avoid depending on resources that use the same middleware";
+      guidance +=
+        "\n  • Consider using events for communication instead of direct dependencies";
     }
-    
+
     super(`Circular dependencies detected:\n${cycleDetails}${guidance}`);
     this.name = "CircularDependenciesError";
   }
@@ -79,8 +84,7 @@ export class EventNotFoundError extends RuntimeError {
 export class MiddlewareAlreadyGlobalError extends RuntimeError {
   constructor(id: string | symbol) {
     super(
-      "Cannot call .everywhere() on an already global middleware: " +
-        id.toString()
+      `Cannot call .everywhere() on an already global middleware. It's enough to call everywhere() only once: ${id.toString()}`
     );
     this.name = "MiddlewareAlreadyGlobalError";
   }
@@ -110,8 +114,15 @@ export class StoreAlreadyInitializedError extends RuntimeError {
  * Error thrown when validation fails for task input, resource config, middleware config, or event payload
  */
 export class ValidationError extends RuntimeError {
-  constructor(type: string, id: string | symbol, originalError: Error | string) {
-    const errorMessage = originalError instanceof Error ? originalError.message : String(originalError);
+  constructor(
+    type: string,
+    id: string | symbol,
+    originalError: Error | string
+  ) {
+    const errorMessage =
+      originalError instanceof Error
+        ? originalError.message
+        : String(originalError);
     super(`${type} validation failed for ${id.toString()}: ${errorMessage}`);
     this.name = "ValidationError";
   }

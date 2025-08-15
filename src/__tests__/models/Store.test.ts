@@ -154,7 +154,7 @@ describe("Store", () => {
 
   it("should call getEverywhereMiddlewareForResources method", () => {
     // Test getEverywhereMiddlewareForResources method (lines 156-157)
-    const result = store.getEverywhereMiddlewareForResources();
+    const result = store.getEverywhereMiddlewareForResources({} as any);
     expect(Array.isArray(result)).toBe(true);
   });
 
