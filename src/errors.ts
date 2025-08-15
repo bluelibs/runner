@@ -45,7 +45,20 @@ export class UnknownItemTypeError extends RuntimeError {
  */
 export class CircularDependenciesError extends RuntimeError {
   constructor(cycles: string[]) {
-    super(`Circular dependencies detected: ${cycles.join(", ")}`);
+    const cycleDetails = cycles.map(cycle => `  • ${cycle}`).join('\n');
+    const hasMiddleware = cycles.some(cycle => cycle.includes('middleware'));
+    
+    let guidance = '\n\nTo resolve circular dependencies:';
+    guidance += '\n  • Use function-based dependencies: () => ({ dependency })';
+    guidance += '\n  • Consider refactoring to reduce coupling between components';
+    guidance += '\n  • Extract shared dependencies into separate resources';
+    
+    if (hasMiddleware) {
+      guidance += '\n  • For middleware: avoid depending on resources that use the same middleware';
+      guidance += '\n  • Consider using events for communication instead of direct dependencies';
+    }
+    
+    super(`Circular dependencies detected:\n${cycleDetails}${guidance}`);
     this.name = "CircularDependenciesError";
   }
 }

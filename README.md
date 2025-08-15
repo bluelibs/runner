@@ -401,6 +401,18 @@ const app = resource({
 });
 ```
 
+#### Middleware Dependencies and Limitations
+
+Middleware can have dependencies on resources and other middleware, but certain patterns can create circular dependencies. For detailed information about middleware dependency limitations, best practices, and troubleshooting circular dependencies, see:
+
+**📖 [Middleware Dependencies: Limitations and Best Practices](./docs/middleware-dependencies.md)**
+
+Key points:
+- Global middleware (`.everywhere()`) dependencies are automatically included in circular dependency analysis
+- Avoid middleware depending on resources that use the same middleware
+- Use events or extract shared dependencies to resolve circular dependencies
+- Function-based dependencies can help with forward references
+
 ## Context
 
 Ever tried to pass user data through 15 function calls? Yeah, we've been there. Context fixes that without turning your code into a game of telephone. This is very different from the Private Context from resources.
