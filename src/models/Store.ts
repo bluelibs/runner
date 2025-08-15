@@ -1,6 +1,7 @@
 import {
   DependencyMapType,
   IResource,
+  ITask,
   RegisterableItems,
   IMiddleware,
   ITag,
@@ -160,15 +161,13 @@ export class Store {
   }
 
   public getEverywhereMiddlewareForTasks(
-    excludingIds: Array<string | symbol>
+    task: ITask<any, any, any, any>
   ): IMiddleware[] {
-    return this.registry.getEverywhereMiddlewareForTasks(excludingIds);
+    return this.registry.getEverywhereMiddlewareForTasks(task);
   }
 
-  public getEverywhereMiddlewareForResources(
-    excludingIds: Array<string | symbol>
-  ): IMiddleware[] {
-    return this.registry.getEverywhereMiddlewareForResources(excludingIds);
+  public getEverywhereMiddlewareForResources(): IMiddleware[] {
+    return this.registry.getEverywhereMiddlewareForResources();
   }
 
   public storeGenericItem<C>(item: RegisterableItems) {

@@ -283,11 +283,11 @@ export function defineEvent<TPayload = void>(
 
 export type MiddlewareEverywhereOptions = {
   /**
-   * Enable this for tasks. Default is true.
+   * Attach to tasks. Default is true. Can be a boolean or a predicate that receives the task.
    */
-  tasks?: boolean;
+  tasks?: boolean | ((task: ITask<any, any, any, any>) => boolean);
   /**
-   * Enable this for resources. Default is true.
+   * Attach to resources. Default is true. Can be a boolean or a predicate that receives the resource.
    */
   resources?: boolean;
 };

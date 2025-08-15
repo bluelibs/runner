@@ -385,6 +385,18 @@ const app = resource({
   id: "app",
   register: [
     logMiddleware.everywhere({ tasks: true, resources: false }), // Only tasks get logged
+
+    // For task only, we allow a dynamic filter
+    logMiddleware.everywhere({
+      tasks(task) {
+        // ITask
+        // check for tags or etc
+        return task?.meta?.tags.includes("test"); // apply it only to tasks that have a tag called 'test'
+      },
+      // For resources, you do not need such functionality as resources are initiated once when the server boots
+      // You can add this logic into your global middleware.
+      resources: false,
+    }),
   ],
 });
 ```

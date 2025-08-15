@@ -543,7 +543,9 @@ export interface IMiddleware<
 > extends IMiddlewareDefinition<TConfig, TDependencies> {
   [symbolMiddleware]: true;
   [symbolMiddlewareConfigured]?: boolean;
-  [symbolMiddlewareEverywhereTasks]?: boolean;
+  [symbolMiddlewareEverywhereTasks]?:
+    | boolean
+    | ((task: ITask<any, any, any, any>) => boolean);
   [symbolMiddlewareEverywhereResources]?: boolean;
 
   id: string | symbol;
