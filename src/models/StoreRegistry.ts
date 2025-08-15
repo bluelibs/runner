@@ -147,7 +147,10 @@ export class StoreRegistry {
     });
   }
 
-  storeEventsForAllTasks() {
+  /**
+   * TRM = tasks, resources and middlewares
+   */
+  storeEventsForAllTRM() {
     for (const task of this.tasks.values()) {
       this.storeEvent(task.task.events.beforeRun);
       this.storeEvent(task.task.events.afterRun);

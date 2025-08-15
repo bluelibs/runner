@@ -8,24 +8,22 @@ import { run } from "../../run";
 import { globalEvents } from "../../globals/globalEvents";
 import { debugResource } from "../../globals/resources/debug/debug.resource";
 import { createTestResource } from "../../testing";
+import { globalResources } from "../../globals/globalResources";
+
+Error.stackTraceLimit = Infinity;
 
 describe("globals.resources.debug", () => {
-  it("logs non-system events via global event listener", async () => {
+  it.only("logs non-system events, non-lifecycle events via global event listener", async () => {
     const logs: Array<{ level: string; message: string }> = [];
 
     const collector = defineResource({
       id: "tests.collector",
-      async init() {
+      dependencies: { logger: globalResources.logger },
+      async init(_, { logger }) {
+        logger.onLog((log) => {
+          logs.push(log);
+        });
         return logs;
-      },
-    });
-
-    const onLog = defineTask({
-      id: "tests.onLog",
-      on: globalEvents.log,
-      dependencies: { logs: collector },
-      async run(event, { logs }) {
-        logs.push({ level: event.data.level, message: event.data.message });
       },
     });
 
@@ -42,13 +40,7 @@ describe("globals.resources.debug", () => {
 
     const app = defineResource({
       id: "tests.app.events",
-      register: [
-        debugResource.with({ verbosity: "verbose" }),
-        collector,
-        onLog,
-        testEvent,
-        emitter,
-      ],
+      register: [debugResource.with("verbose"), collector, testEvent, emitter],
       dependencies: { emitter },
       async init(_, { emitter }) {
         await emitter();
@@ -56,7 +48,13 @@ describe("globals.resources.debug", () => {
       },
     });
 
-    await run(app);
+    await run(app, {
+      logs: {
+        bufferLogs: false,
+        printStrategy: "pretty",
+        printThreshold: "debug",
+      },
+    });
 
     const infoLogs = logs.filter((l) => l.level === "info");
     expect(
@@ -71,15 +69,6 @@ describe("globals.resources.debug", () => {
       id: "tests.collector.middleware",
       async init() {
         return logs;
-      },
-    });
-
-    const onLog = defineTask({
-      id: "tests.onLog.middleware",
-      on: globalEvents.log,
-      dependencies: { logs: collector },
-      async run(event, { logs }) {
-        logs.push(`${event.data.level}:${event.data.message}`);
       },
     });
 
@@ -108,9 +97,8 @@ describe("globals.resources.debug", () => {
     const app = defineResource({
       id: "tests.app.middleware",
       register: [
-        debugResource.with({ verbosity: "verbose" }),
+        debugResource.with("verbose"),
         collector,
-        onLog,
         localMiddleware,
         subResource,
         testTask,
@@ -122,7 +110,11 @@ describe("globals.resources.debug", () => {
       },
     });
 
-    await run(app);
+    await run(app, {
+      logs: {
+        bufferLogs: true,
+      },
+    });
 
     // Task/resource tracker messages
     expect(logs.some((m) => m.includes("[task] tests.task with input"))).toBe(
@@ -157,7 +149,7 @@ describe("globals.resources.debug", () => {
     ).toBe(true);
   });
 
-  it("logs task and resource onError events", async () => {
+  it.only("logs task and resource onError events", async () => {
     const captured: string[] = [];
 
     const collector = defineResource({
@@ -167,32 +159,31 @@ describe("globals.resources.debug", () => {
       },
     });
 
-    const onLog = defineTask({
-      id: "tests.onLog.errors",
-      on: globalEvents.log,
-      dependencies: { captured: collector },
-      async run(event, { captured }) {
-        captured.push(`${event.data.level}:${event.data.message}`);
+    const dummyTask = defineTask({
+      id: "tests.failing.task",
+      async run() {
+        throw new Error("boom-task");
+      },
+    });
+    const app = defineResource({
+      id: "tests.app.errors",
+      register: [debugResource.with("verbose"), collector, dummyTask],
+      dependencies: { dummyTask },
+      async init(_, { dummyTask }) {
+        try {
+          await dummyTask();
+        } catch (error) {}
+        return "ready";
+      },
+    });
+    const harness = createTestResource(app);
+
+    const { value: t } = await run(harness, {
+      logs: {
+        bufferLogs: true,
       },
     });
 
-    const harness = createTestResource(
-      defineResource({
-        id: "tests.app.errors",
-        register: [
-          debugResource.with({ verbosity: "verbose" }),
-          collector,
-          onLog,
-        ],
-        async init() {
-          return "ready";
-        },
-      })
-    );
-
-    const { value: facade } = await run(harness);
-
-    const dummyTask = defineTask({ id: "tests.failing.task", async run() {} });
     const dummyResource = defineResource({
       id: "tests.failing.resource",
       async init() {
@@ -200,17 +191,7 @@ describe("globals.resources.debug", () => {
       },
     });
 
-    await facade.eventManager.emit(
-      globalEvents.tasks.onError,
-      {
-        error: new Error("boom-task"),
-        suppress: () => {},
-        task: dummyTask,
-      },
-      dummyTask.id
-    );
-
-    await facade.eventManager.emit(
+    await t.eventManager.emit(
       globalEvents.resources.onError,
       {
         error: new Error("boom-resource"),

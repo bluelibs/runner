@@ -111,10 +111,14 @@ export class EventManager {
       try {
         data = eventDefinition.payloadSchema.parse(data);
       } catch (error) {
-        throw new ValidationError("Event payload", eventDefinition.id, error instanceof Error ? error : new Error(String(error)));
+        throw new ValidationError(
+          "Event payload",
+          eventDefinition.id,
+          error instanceof Error ? error : new Error(String(error))
+        );
       }
     }
-    
+
     const allListeners = this.getCachedMergedListeners(eventDefinition.id);
 
     if (allListeners.length === 0) {

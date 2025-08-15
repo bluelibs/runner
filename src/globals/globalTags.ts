@@ -13,5 +13,15 @@ export const globalTags = {
         "System-wide tags. Used for filtering out noise when you're focusing on your application.",
     },
   }),
+  lifecycle: defineTag<{
+    metadata?: Record<string, any>;
+  }>({
+    id: "globals.tags.lifecycle",
+    meta: {
+      title: "Lifecycle",
+      description:
+        "Lifecycle tags. This relates to before initialization, before running, on error and after elements.",
+    },
+  }),
   debug: debugTag,
 };

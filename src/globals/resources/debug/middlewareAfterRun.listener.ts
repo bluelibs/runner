@@ -3,14 +3,18 @@ import { defineTask } from "../../../define";
 import { globalEvents } from "../../globalEvents";
 import { globalResources } from "../../globalResources";
 import { globalTags } from "../../globalTags";
+import { debugConfig } from "./debugConfig.resource";
+import { getConfig } from "./types";
+import { safeStringify } from "./utils";
 
 export const middlewareAfterRunListener = defineTask({
   id: "globals.debug.tasks.middlewareAfterRunListener",
   on: globalEvents.middlewares.afterRun,
   dependencies: {
     logger: globalResources.logger,
+    debugConfig: debugConfig,
   },
-  run: async (event, { logger }) => {
+  run: async (event, { logger, debugConfig }) => {
     const data = event.data;
     const context = data.task ? "task" : "resource";
     const id = data.task
@@ -18,11 +22,14 @@ export const middlewareAfterRunListener = defineTask({
       : data.resource.definition.id;
     const middlewareId = event.data.middleware.id;
 
-    logger.info(
-      `[middleware][${context}] ${String(
-        middlewareId
-      )} finished wrapping ${String(id)}`
-    );
+    debugConfig = getConfig(debugConfig, event.data.middleware);
+
+    if (debugConfig.logMiddlewareAfterRun) {
+      let logString = `[middleware] ${String(middlewareId)} finished wrapping`;
+      logString += ` ${context}: ${String(id)}`;
+
+      await logger.info(logString);
+    }
   },
   meta: {
     tags: [globalTags.system],

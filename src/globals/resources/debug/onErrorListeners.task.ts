@@ -11,7 +11,7 @@ export const taskOnErrorListener = defineTask({
     logger: globalResources.logger,
   },
   run: async (event, { logger }) => {
-    logger.error(
+    await logger.error(
       `[task] ${String(event.id)} errored out: ${event.data.error.toString()}`
     );
   },
@@ -29,7 +29,7 @@ export const resourceOnErrorListener = defineTask({
     logger: globalResources.logger,
   },
   run: async (event, { logger }) => {
-    logger.error(
+    await logger.error(
       `[resource] ${String(
         event.id
       )} errored out: ${event.data.error.toString()}`
@@ -38,6 +38,26 @@ export const resourceOnErrorListener = defineTask({
   meta: {
     title: "Resource On Error Listener",
     description: "Logs all resource on error events.",
+    tags: [globalTags.system],
+  },
+});
+
+export const middlewareOnErrorListener = defineTask({
+  id: "globals.debug.tasks.middlewareOnErrorListener",
+  on: globalEvents.middlewares.onError,
+  dependencies: {
+    logger: globalResources.logger,
+  },
+  run: async (event, { logger }) => {
+    await logger.error(
+      `[middleware] ${String(
+        event.id
+      )} errored out: ${event.data.error.toString()}`
+    );
+  },
+  meta: {
+    title: "Middleware On Error Listener",
+    description: "Logs all middleware on error events.",
     tags: [globalTags.system],
   },
 });

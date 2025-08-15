@@ -1,5 +1,5 @@
 import { defineResource } from "../../../define";
-import { DebugConfig, DebugFriendlyConfig, defaultDebugConfig } from "./types";
+import { DebugFriendlyConfig, getConfig } from "./types";
 import { globalTags } from "../../../globals/globalTags";
 
 export const debugConfig = defineResource({
@@ -10,13 +10,8 @@ export const debugConfig = defineResource({
     tags: [globalTags.system],
   },
   init: async (config: DebugFriendlyConfig) => {
-    let finalConfig: DebugConfig = defaultDebugConfig;
-    if (typeof config === "object") {
-      finalConfig = {
-        ...defaultDebugConfig,
-        ...config,
-      };
-    }
-    return finalConfig;
+    const myConfig = getConfig(config);
+
+    return myConfig;
   },
 });

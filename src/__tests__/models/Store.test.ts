@@ -7,7 +7,7 @@ import {
   defineEvent,
   defineTag,
 } from "../../define";
-import { Logger } from "../../models";
+import { Logger, PrintStrategy } from "../../models";
 
 describe("Store", () => {
   let eventManager: EventManager;
@@ -16,7 +16,11 @@ describe("Store", () => {
 
   beforeEach(() => {
     eventManager = new EventManager();
-    logger = new Logger(eventManager);
+    logger = new Logger({
+      printThreshold: "info",
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
     store = new Store(eventManager, logger);
   });
 
@@ -160,7 +164,7 @@ describe("Store", () => {
 
   it("should call storeEventsForAllTasks method", () => {
     // Test storeEventsForAllTasks method (line 165)
-    expect(() => store.storeEventsForAllTasks()).not.toThrow();
+    expect(() => store.storeEventsForAllTRM()).not.toThrow();
   });
 
   it("should call getDependentNodes method", () => {

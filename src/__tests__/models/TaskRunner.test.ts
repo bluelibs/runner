@@ -14,7 +14,11 @@ describe("TaskRunner", () => {
 
   beforeEach(() => {
     eventManager = new EventManager();
-    logger = new Logger(eventManager);
+    logger = new Logger({
+      printThreshold: "info",
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
     store = new Store(eventManager, logger);
     taskRunner = new TaskRunner(store, eventManager, logger);
   });

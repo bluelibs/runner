@@ -54,10 +54,6 @@ export class ResourceInitializer {
         value
       );
 
-      this.logger.debug(`Resource ${resource.id.toString()} initialized`, {
-        source: resource.id,
-      });
-
       return { value: value as TValue, context };
     } catch (error) {
       let isSuppressed = await this.emitResourceOnErrorEvents<

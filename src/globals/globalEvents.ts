@@ -33,14 +33,6 @@ export const globalEvents = {
       tags: [systemTag],
     },
   }),
-  log: defineEvent<ILog>({
-    id: "globals.events.log",
-    meta: {
-      title: "Log Event",
-      description: "Used to log events and messages across the system.",
-      tags: [systemTag],
-    },
-  }),
   tasks: {
     beforeRun: defineEvent<{
       task: ITask<any, any, any>;
@@ -164,7 +156,6 @@ export const globalEvents = {
 };
 
 export const globalEventsArray = [
-  globalEvents.log,
   globalEvents.beforeInit,
   globalEvents.afterInit,
   globalEvents.tasks.beforeRun,

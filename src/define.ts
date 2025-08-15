@@ -41,6 +41,7 @@ import {
 } from "./defs";
 import { MiddlewareAlreadyGlobalError, ValidationError } from "./errors";
 import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
+import { globalTags } from "./globals/globalTags";
 
 // Helper function to get the caller file
 
@@ -105,18 +106,30 @@ export function defineTask<
       beforeRun: {
         ...defineEvent({
           id: generateId(isAnonymous, id, "events.beforeRun"),
+          meta: {
+            title: "Before Run",
+            tags: [globalTags.lifecycle],
+          },
         }),
         [symbolFilePath]: getCallerFile(),
       },
       afterRun: {
         ...defineEvent({
           id: generateId(isAnonymous, id, "events.afterRun"),
+          meta: {
+            title: "After Run",
+            tags: [globalTags.lifecycle],
+          },
         }),
         [symbolFilePath]: getCallerFile(),
       },
       onError: {
         ...defineEvent({
           id: generateId(isAnonymous, id, "events.onError"),
+          meta: {
+            title: "On Error",
+            tags: [globalTags.lifecycle],
+          },
         }),
         [symbolFilePath]: getCallerFile(),
       },
@@ -206,18 +219,34 @@ export function defineResource<
       beforeInit: {
         ...defineEvent({
           id: generateId(isAnonymous, id, "events.beforeInit"),
+          meta: {
+            title: "Before Init",
+            tags: [globalTags.lifecycle],
+          },
         }),
         [symbolFilePath]: filePath,
       },
       afterInit: {
         ...defineEvent({
           id: generateId(isAnonymous, id, "events.afterInit"),
+          meta: {
+            title: "After Init",
+            tags: [globalTags.lifecycle],
+          },
         }),
         [symbolFilePath]: filePath,
+        meta: {
+          title: "After Init",
+          tags: [globalTags.lifecycle],
+        },
       },
       onError: {
         ...defineEvent({
           id: generateId(isAnonymous, id, "events.onError"),
+          meta: {
+            title: "On Error",
+            tags: [globalTags.lifecycle],
+          },
         }),
         [symbolFilePath]: filePath,
       },
@@ -332,15 +361,36 @@ export function defineMiddleware<
     ...middlewareDef,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
     events: {
-      beforeRun: defineEvent<MiddlewareBeforeRunEventPayload>({
-        id: generateId(isAnonymous, id, "events.beforeRun"),
-      }),
-      afterRun: defineEvent<MiddlewareAfterRunEventPayload>({
-        id: generateId(isAnonymous, id, "events.afterRun"),
-      }),
-      onError: defineEvent<OnErrorEventPayload>({
-        id: generateId(isAnonymous, id, "events.onError"),
-      }),
+      beforeRun: {
+        ...defineEvent<MiddlewareBeforeRunEventPayload>({
+          id: generateId(isAnonymous, id, "events.beforeRun"),
+          meta: {
+            title: "Before Run",
+            tags: [globalTags.lifecycle],
+          },
+        }),
+        [symbolFilePath]: filePath,
+      },
+      afterRun: {
+        ...defineEvent<MiddlewareAfterRunEventPayload>({
+          id: generateId(isAnonymous, id, "events.afterRun"),
+          meta: {
+            title: "After Run",
+            tags: [globalTags.lifecycle],
+          },
+        }),
+        [symbolFilePath]: filePath,
+      },
+      onError: {
+        ...defineEvent<OnErrorEventPayload>({
+          id: generateId(isAnonymous, id, "events.onError"),
+          meta: {
+            title: "On Error",
+            tags: [globalTags.lifecycle],
+          },
+        }),
+        [symbolFilePath]: filePath,
+      },
     },
   } as IMiddleware<TConfig, TDependencies>;
 

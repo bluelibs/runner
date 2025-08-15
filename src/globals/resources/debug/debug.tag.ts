@@ -1,14 +1,7 @@
 import { defineTag } from "../../../define";
-import { DebugConfig } from "./types";
+import { DebugFriendlyConfig } from "./types";
 
-export type DebugTag = {
-  logInput: boolean;
-  logOutput: boolean;
-};
-
-export const debugTag = defineTag<{
-  config?: Partial<DebugConfig>;
-}>({
+export const debugTag = defineTag<DebugFriendlyConfig>({
   id: "globals.tags.debug",
   meta: {
     title: "Debug",

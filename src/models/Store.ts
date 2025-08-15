@@ -176,8 +176,8 @@ export class Store {
     return this.registry.storeGenericItem<C>(item);
   }
 
-  public storeEventsForAllTasks() {
-    this.registry.storeEventsForAllTasks();
+  public storeEventsForAllTRM() {
+    this.registry.storeEventsForAllTRM();
   }
 
   public getTasksWithTag(tag: string | ITag) {

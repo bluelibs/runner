@@ -16,7 +16,7 @@ import { Store } from "./models/Store";
 import { findCircularDependencies } from "./tools/findCircularDependencies";
 import { CircularDependenciesError } from "./errors";
 import { globalResources } from "./globals/globalResources";
-import { Logger } from "./models/Logger";
+import { Logger, LogLevels, PrintStrategy } from "./models/Logger";
 import { isResourceWithConfig } from "./define";
 import { debugResource, DebugFriendlyConfig } from "./globals/resources/debug";
 
@@ -60,6 +60,21 @@ export type RunOptions = {
    * Defaults to false. If true, we introduce logging to the console.
    */
   debug?: DebugFriendlyConfig;
+  logs?: {
+    /**
+     * Defaults to info.
+     */
+    printThreshold?: LogLevels;
+    /**
+     * Defaults to PRETTY. How to print the logs.
+     */
+    printStrategy?: PrintStrategy;
+    /**
+     * Defaults to false. If true, we buffer logs until the root resource is ready.
+     * This provides you with the chance to see the logs before the root resource is ready.
+     */
+    bufferLogs?: boolean;
+  };
 };
 
 export async function run<C, V extends Promise<any>>(
@@ -73,14 +88,24 @@ export async function run<C, V extends Promise<any>>(
   store: Store;
   dispose: () => Promise<void>;
 }> {
-  const { debug = false } = options || {};
+  const { debug = false, logs = {} } = options || {};
+  const {
+    printThreshold = "info",
+    printStrategy = "pretty",
+    bufferLogs = false,
+  } = logs;
+
   const eventManager = new EventManager();
   let { resource, config } = extractResourceAndConfig(
     resourceOrResourceWithConfig
   );
 
   // ensure for logger, that it can be used only after: computeAllDependencies() has executed
-  const logger = new Logger(eventManager);
+  const logger = new Logger({
+    printThreshold,
+    printStrategy,
+    bufferLogs,
+  });
 
   const store = new Store(eventManager, logger);
   const taskRunner = new TaskRunner(store, eventManager, logger);
@@ -111,7 +136,7 @@ export async function run<C, V extends Promise<any>>(
   await store.processOverrides();
 
   // a form of hooking, we create the events for all tasks and store them so they can be referenced
-  await store.storeEventsForAllTasks();
+  await store.storeEventsForAllTRM();
   await processor.attachListeners();
   await processor.computeAllDependencies();
 
@@ -130,6 +155,7 @@ export async function run<C, V extends Promise<any>>(
 
   // disallow manipulation or attaching more
   store.lock();
+  await logger.markAsReady();
 
   return {
     value: store.root.value,
