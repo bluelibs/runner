@@ -332,7 +332,7 @@ export class StoreRegistry {
       }
 
       // Add local middleware dependencies
-      for (const middleware of resource.resource.middleware || []) {
+      for (const middleware of resource.resource.middleware) {
         const middlewareNode = nodeMap.get(middleware.id);
         if (middlewareNode) {
           node.dependencies[middleware.id.toString()] = middlewareNode;
