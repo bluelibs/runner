@@ -309,6 +309,11 @@ export type AfterInitEventPayload<TConfig, TValue> = {
   value: TValue;
 };
 
+export type MiddlewareBeforeRunEventPayload =
+  MiddlewareInputMaybeTaskOrResource;
+
+export type MiddlewareAfterRunEventPayload = MiddlewareInputMaybeTaskOrResource;
+
 /**
  * This is the response after the definition has been prepared. TODO: better naming?
  */
@@ -531,6 +536,7 @@ export interface IMiddlewareDefinition<
   configSchema?: IValidationSchema<TConfig>;
   /**
    * The middleware body, called with task/resource execution input.
+   * The response of the middleware should be void, but we allow any to be returned for convenience.
    */
   run: (
     input: IMiddlewareExecutionInput,
@@ -539,6 +545,22 @@ export interface IMiddlewareDefinition<
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
 }
+
+export type MiddlewareInputMaybeTaskOrResource =
+  | {
+      task: {
+        definition: ITask<any, any, any, any>;
+        input: any;
+      };
+      resource?: never;
+    }
+  | {
+      resource: {
+        definition: IResource<any, any, any, any, any>;
+        config: any;
+      };
+      task?: never;
+    };
 
 export interface IMiddleware<
   TConfig = any,
@@ -566,6 +588,11 @@ export interface IMiddleware<
   with: (config: TConfig) => IMiddlewareConfigured<TConfig, TDependencies>;
   [symbolFilePath]: string;
   [symbolMiddleware]: true;
+  events: {
+    beforeRun: IEvent<MiddlewareBeforeRunEventPayload>;
+    afterRun: IEvent<MiddlewareAfterRunEventPayload>;
+    onError: IEvent<OnErrorEventPayload & MiddlewareInputMaybeTaskOrResource>;
+  };
 }
 
 export interface IMiddlewareConfigured<

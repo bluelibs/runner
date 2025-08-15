@@ -7,6 +7,7 @@ import {
   IMiddlewareDefinition,
   DependencyValuesType,
   IResource,
+  IResourceWithConfig,
 } from "./defs";
 import { DependencyProcessor } from "./models/DependencyProcessor";
 import { EventManager } from "./models/EventManager";
@@ -16,6 +17,11 @@ import { findCircularDependencies } from "./tools/findCircularDependencies";
 import { CircularDependenciesError } from "./errors";
 import { globalResources } from "./globals/globalResources";
 import { Logger } from "./models/Logger";
+import { isResourceWithConfig } from "./define";
+import {
+  DebugFriendlyConfig,
+  debugResource,
+} from "./globals/resources/debug.resource";
 
 export type ResourcesStoreElementType<
   C = any,
@@ -52,14 +58,29 @@ export type RunnerState = {
   middleware: Record<string, MiddlewareStoreElementType>;
 };
 
-export async function run<C, V>(
-  resource: IResource<C, V extends Promise<any> ? V : Promise<any>>,
-  config?: C
+export type RunOptions = {
+  /**
+   * Defaults to false. If true, we introduce logging to the console.
+   */
+  debug?: DebugFriendlyConfig;
+};
+
+export async function run<C, V extends Promise<any>>(
+  resourceOrResourceWithConfig:
+    | IResourceWithConfig<C, V>
+    | IResource<void, V, any, any> // For void configs
+    | IResource<{ [K in any]?: any }, V, any, any>, // For optional config
+  options?: RunOptions
 ): Promise<{
   value: V extends Promise<infer U> ? U : V;
+  store: Store;
   dispose: () => Promise<void>;
 }> {
+  const { debug = false } = options || {};
   const eventManager = new EventManager();
+  let { resource, config } = extractResourceAndConfig(
+    resourceOrResourceWithConfig
+  );
 
   // ensure for logger, that it can be used only after: computeAllDependencies() has executed
   const logger = new Logger(eventManager);
@@ -77,6 +98,10 @@ export async function run<C, V>(
   store.initializeStore(resource, config);
   store.storeGenericItem(globalResources.logger.with(logger));
   store.storeGenericItem(globalResources.taskRunner.with(taskRunner));
+
+  if (debug) {
+    store.storeGenericItem(debugResource.with(debug));
+  }
 
   // We verify that there isn't any circular dependencies before we begin computing the dependencies
   const dependentNodes = store.getDependentNodes();
@@ -112,5 +137,23 @@ export async function run<C, V>(
   return {
     value: store.root.value,
     dispose: () => store.dispose(),
+    store,
   };
+}
+function extractResourceAndConfig<C, V extends Promise<any>>(
+  resourceOrResourceWithConfig:
+    | IResourceWithConfig<C, V>
+    | IResource<void, V, any, any> // For void configs
+    | IResource<{ [K in any]?: any }, V, any, any> // For optional config
+) {
+  let resource: IResource<any, any, any, any>;
+  let config: any;
+  if (isResourceWithConfig(resourceOrResourceWithConfig)) {
+    resource = resourceOrResourceWithConfig.resource;
+    config = resourceOrResourceWithConfig.config;
+  } else {
+    resource = resourceOrResourceWithConfig as IResource<any, any, any, any>;
+    config = {} as any;
+  }
+  return { resource, config };
 }

@@ -159,6 +159,12 @@ export class StoreRegistry {
       this.storeEvent(resource.resource.events.afterInit);
       this.storeEvent(resource.resource.events.onError);
     }
+
+    for (const middleware of this.middlewares.values()) {
+      this.storeEvent(middleware.middleware.events.beforeRun);
+      this.storeEvent(middleware.middleware.events.afterRun);
+      this.storeEvent(middleware.middleware.events.onError);
+    }
   }
 
   getEverywhereMiddlewareForTasks(

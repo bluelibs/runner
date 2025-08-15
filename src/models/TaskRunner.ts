@@ -1,4 +1,9 @@
-import { DependencyMapType, DependencyValuesType, ITask } from "../defs";
+import {
+  DependencyMapType,
+  DependencyValuesType,
+  IMiddleware,
+  ITask,
+} from "../defs";
 import { EventManager } from "./EventManager";
 import { globalEvents } from "../globals/globalEvents";
 import { Store } from "./Store";
@@ -41,6 +46,124 @@ export class TaskRunner {
 
     const isGlobalEventListener = task.on === "*";
 
+    await this.emitTaskEventsBeforeRun<TInput, TOutput, TDeps>(
+      isGlobalEventListener,
+      task,
+      input
+    );
+
+    try {
+      // craft the next function starting from the first next function
+      const result = {
+        output: await runner(input),
+      };
+      // If it's a global event listener, we stop emitting so we don't get into an infinite loop.
+      await this.emitTaskEventsAfterRun<TInput, TOutput, TDeps>(
+        isGlobalEventListener,
+        task,
+        input,
+        result
+      );
+
+      return result.output;
+    } catch (error) {
+      let isSuppressed = await this.emitTaskOnErrorEvents<
+        TInput,
+        TOutput,
+        TDeps
+      >(task, error);
+
+      if (!isSuppressed) throw error;
+    }
+  }
+
+  private async emitTaskOnErrorEvents<
+    TInput,
+    TOutput extends Promise<any>,
+    TDeps extends DependencyMapType
+  >(task: ITask<TInput, TOutput, TDeps, undefined, any>, error: unknown) {
+    let isSuppressed = false;
+    function suppress() {
+      isSuppressed = true;
+    }
+
+    // If you want to rewthrow the error, this should be done inside the onError event.
+    await this.eventManager.emit(
+      task.events.onError,
+      { error, suppress },
+      task.id
+    );
+    await this.eventManager.emit(
+      globalEvents.tasks.onError,
+      {
+        task,
+        error,
+        suppress,
+      },
+      task.id
+    );
+
+    return isSuppressed;
+  }
+
+  private async emitTaskEventsAfterRun<
+    TInput,
+    TOutput extends Promise<any>,
+    TDeps extends DependencyMapType
+  >(
+    isGlobalEventListener: boolean,
+    task: ITask<TInput, TOutput, TDeps, undefined, any>,
+    input: TInput,
+    result: { output: any }
+  ) {
+    const setOutput = (newOutput: any) => {
+      result.output = newOutput;
+    };
+
+    if (!isGlobalEventListener) {
+      await this.eventManager.emit(
+        task.events.afterRun,
+        {
+          input,
+          get output() {
+            return result.output;
+          },
+          setOutput,
+        },
+        task.id
+      );
+    }
+
+    if (
+      !isGlobalEventListener &&
+      task.on !== globalEvents.tasks.beforeRun &&
+      task.on !== globalEvents.tasks.afterRun
+    ) {
+      // If it's a lifecycle listener we prevent from emitting further events.
+      await this.eventManager.emit(
+        globalEvents.tasks.afterRun,
+        {
+          task,
+          input,
+          get output() {
+            return result.output;
+          },
+          setOutput,
+        },
+        task.id
+      );
+    }
+  }
+
+  private async emitTaskEventsBeforeRun<
+    TInput,
+    TOutput extends Promise<any>,
+    TDeps extends DependencyMapType
+  >(
+    isGlobalEventListener: boolean,
+    task: ITask<TInput, TOutput, TDeps, undefined, any>,
+    input: TInput
+  ) {
     if (!isGlobalEventListener) {
       await this.eventManager.emit(task.events.beforeRun, { input }, task.id);
     }
@@ -59,79 +182,6 @@ export class TaskRunner {
         task.id
       );
     }
-
-    let error;
-    try {
-      // craft the next function starting from the first next function
-      const result = {
-        output: await runner(input),
-      };
-      const setOutput = (newOutput: any) => {
-        result.output = newOutput;
-      };
-
-      // If it's a global event listener, we stop emitting so we don't get into an infinite loop.
-      if (!isGlobalEventListener) {
-        await this.eventManager.emit(
-          task.events.afterRun,
-          {
-            input,
-            get output() {
-              return result.output;
-            },
-            setOutput,
-          },
-          task.id
-        );
-      }
-
-      if (
-        !isGlobalEventListener &&
-        task.on !== globalEvents.tasks.beforeRun &&
-        task.on !== globalEvents.tasks.afterRun
-      ) {
-        // If it's a lifecycle listener we prevent from emitting further events.
-        await this.eventManager.emit(
-          globalEvents.tasks.afterRun,
-          {
-            task,
-            input,
-            get output() {
-              return result.output;
-            },
-            setOutput,
-          },
-          task.id
-        );
-      }
-
-      return result.output;
-    } catch (e) {
-      let isSuppressed = false;
-      function suppress() {
-        isSuppressed = true;
-      }
-
-      error = e;
-
-      // If you want to rewthrow the error, this should be done inside the onError event.
-      await this.eventManager.emit(
-        task.events.onError,
-        { error, suppress },
-        task.id
-      );
-      await this.eventManager.emit(
-        globalEvents.tasks.onError,
-        {
-          task,
-          error,
-          suppress,
-        },
-        task.id
-      );
-
-      if (!isSuppressed) throw e;
-    }
   }
 
   /**
@@ -147,6 +197,7 @@ export class TaskRunner {
     TDeps extends DependencyMapType
   >(task: ITask<TInput, TOutput, TDeps>) {
     const storeTask = this.store.tasks.get(task.id);
+    const isGlobalEventListener = task.on === "*";
 
     // this is the final next()
     let next = async (input: any) => {
@@ -190,20 +241,126 @@ export class TaskRunner {
 
       const nextFunction = next;
       next = async (input) => {
-        return storeMiddleware.middleware.run(
-          {
-            task: {
-              definition: task as any,
-              input,
+        // Do not launch anymore events if the task at hand is a global event listener.
+        if (!isGlobalEventListener) {
+          await this.emitMiddlewareEventsBeforeRun<TInput, TOutput, TDeps>(
+            middleware,
+            task,
+            input
+          );
+        }
+
+        let result: any;
+        try {
+          result = await storeMiddleware.middleware.run(
+            {
+              task: {
+                definition: task as any,
+                input,
+              },
+              next: nextFunction,
             },
-            next: nextFunction,
-          },
-          storeMiddleware.computedDependencies,
-          middleware.config
-        );
+            storeMiddleware.computedDependencies,
+            middleware.config
+          );
+          if (!isGlobalEventListener) {
+            await this.emitMiddlewareEventsAfterRun<TInput, TOutput, TDeps>(
+              middleware,
+              task,
+              input
+            );
+          }
+
+          return result;
+        } catch (error) {
+          if (!isGlobalEventListener) {
+            let isSuppressed = await this.emitMiddlewareEventsOnError<
+              TInput,
+              TOutput,
+              TDeps
+            >(middleware, error, task, input);
+
+            if (!isSuppressed) throw error;
+          } else {
+            throw error;
+          }
+        }
       };
     }
 
     return next;
+  }
+
+  private async emitMiddlewareEventsOnError<
+    TInput,
+    TOutput extends Promise<any>,
+    TDeps extends DependencyMapType
+  >(
+    middleware: IMiddleware<any, any>,
+    error: unknown,
+    task: ITask<TInput, TOutput, TDeps, undefined, any>,
+    input: any
+  ) {
+    let isSuppressed = false;
+    function suppress() {
+      isSuppressed = true;
+    }
+    await this.eventManager.emit(
+      middleware.events.onError,
+      { error, suppress, task: { definition: task, input } },
+      task.id
+    );
+    await this.eventManager.emit(
+      globalEvents.middlewares.onError,
+      { middleware, task: { definition: task, input }, error, suppress },
+      task.id
+    );
+    return isSuppressed;
+  }
+
+  private async emitMiddlewareEventsAfterRun<
+    TInput,
+    TOutput extends Promise<any>,
+    TDeps extends DependencyMapType
+  >(
+    middleware: IMiddleware<any, any>,
+    task: ITask<TInput, TOutput, TDeps, undefined, any>,
+    input: any
+  ) {
+    await this.eventManager.emit(
+      middleware.events.afterRun,
+      {
+        task: { definition: task, input },
+      },
+      task.id
+    );
+    await this.eventManager.emit(
+      globalEvents.middlewares.afterRun,
+      { middleware, task: { definition: task, input } },
+      middleware.id
+    );
+  }
+
+  private async emitMiddlewareEventsBeforeRun<
+    TInput,
+    TOutput extends Promise<any>,
+    TDeps extends DependencyMapType
+  >(
+    middleware: IMiddleware<any, any>,
+    task: ITask<TInput, TOutput, TDeps, undefined, any>,
+    input: any
+  ) {
+    await this.eventManager.emit(
+      middleware.events.beforeRun,
+      {
+        task: { definition: task, input },
+      },
+      middleware.id
+    );
+    await this.eventManager.emit(
+      globalEvents.middlewares.beforeRun,
+      { middleware, task: { definition: task, input } },
+      middleware.id
+    );
   }
 }

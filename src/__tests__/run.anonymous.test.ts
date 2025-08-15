@@ -73,7 +73,7 @@ describe("Anonymous Components", () => {
 
       expect(typeof anonymousTask.events.afterRun.id).toBe("symbol");
       expect(anonymousTask.events.afterRun.id.toString()).toContain(
-        "anonymous-task.events.afterRun"
+        "anonymous.test.task.events.afterRun"
       );
 
       const app = defineResource({
@@ -247,7 +247,7 @@ describe("Anonymous Components", () => {
 
       expect(typeof anonymousResource.events.afterInit.id).toBe("symbol");
       expect(anonymousResource.events.afterInit.id.toString()).toContain(
-        "anonymous-resource.events.afterInit"
+        "anonymous.test.resource.events.afterInit"
       );
 
       const app = defineResource({

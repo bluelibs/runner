@@ -33,6 +33,21 @@ describe("Configurable Tags", () => {
       expect(typeof simpleTag.with).toBe("function");
       expect(typeof simpleTag.extract).toBe("function");
     });
+
+    it("should work with validation schema", () => {
+      const simpleTag = defineTag<{ value: string }>({
+        id: "simple.tag",
+        configSchema: {
+          parse: (input) => {
+            throw new Error("Validation Error");
+          },
+        },
+      });
+
+      expect(() => simpleTag.with({ value: 123 as unknown as string })).toThrow(
+        "Validation Error"
+      );
+    });
   });
 
   describe("Tag Configuration with .with()", () => {

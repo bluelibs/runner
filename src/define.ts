@@ -35,11 +35,32 @@ import {
   symbolMiddleware,
   ITaskMeta,
   IResourceMeta,
+  MiddlewareBeforeRunEventPayload,
+  MiddlewareAfterRunEventPayload,
+  OnErrorEventPayload,
 } from "./defs";
 import { MiddlewareAlreadyGlobalError, ValidationError } from "./errors";
 import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
 
 // Helper function to get the caller file
+
+/**
+ * Generate an id for an event.
+ * @param isAnonymous - Whether the id is anonymous.
+ * @param id - The id of the event.
+ * @param suffix - The suffix of the id.
+ * @returns The id of the event.
+ */
+function generateId(isAnonymous: boolean, id: string | symbol, suffix: string) {
+  if (typeof id === "symbol") {
+    // Strip Symbol() from the id
+    id = id.toString().slice(7).slice(0, -1);
+  }
+
+  return isAnonymous
+    ? Symbol(`${String(id)}.${suffix}`)
+    : `${String(id)}.${suffix}`;
+}
 
 /**
  * Define a task.
@@ -83,25 +104,19 @@ export function defineTask<
     events: {
       beforeRun: {
         ...defineEvent({
-          id: isAnonymous
-            ? Symbol(`anonymous-task.events.beforeRun`)
-            : `${id as string}.events.beforeRun`,
+          id: generateId(isAnonymous, id, "events.beforeRun"),
         }),
         [symbolFilePath]: getCallerFile(),
       },
       afterRun: {
         ...defineEvent({
-          id: isAnonymous
-            ? Symbol(`anonymous-task.events.afterRun`)
-            : `${id as string}.events.afterRun`,
+          id: generateId(isAnonymous, id, "events.afterRun"),
         }),
         [symbolFilePath]: getCallerFile(),
       },
       onError: {
         ...defineEvent({
-          id: isAnonymous
-            ? Symbol(`anonymous-task.events.onError`)
-            : `${id as string}.events.onError`,
+          id: generateId(isAnonymous, id, "events.onError"),
         }),
         [symbolFilePath]: getCallerFile(),
       },
@@ -167,13 +182,13 @@ export function defineResource<
     configSchema: constConfig.configSchema,
     with: function (config: TConfig) {
       // Validate config with schema if provided (fail fast)
-      if (this.configSchema) {
+      if (constConfig.configSchema) {
         try {
-          config = this.configSchema.parse(config);
+          config = constConfig.configSchema.parse(config);
         } catch (error) {
           throw new ValidationError(
             "Resource config",
-            this.id,
+            id,
             error instanceof Error ? error : new Error(String(error))
           );
         }
@@ -190,25 +205,19 @@ export function defineResource<
     events: {
       beforeInit: {
         ...defineEvent({
-          id: isAnonymous
-            ? Symbol(`anonymous-resource.events.beforeInit`)
-            : `${id as string}.events.beforeInit`,
+          id: generateId(isAnonymous, id, "events.beforeInit"),
         }),
         [symbolFilePath]: filePath,
       },
       afterInit: {
         ...defineEvent({
-          id: isAnonymous
-            ? Symbol(`anonymous-resource.events.afterInit`)
-            : `${id as string}.events.afterInit`,
+          id: generateId(isAnonymous, id, "events.afterInit"),
         }),
         [symbolFilePath]: filePath,
       },
       onError: {
         ...defineEvent({
-          id: isAnonymous
-            ? Symbol(`anonymous-resource.events.onError`)
-            : `${id as string}.events.onError`,
+          id: generateId(isAnonymous, id, "events.onError"),
         }),
         [symbolFilePath]: filePath,
       },
@@ -312,13 +321,27 @@ export function defineMiddleware<
   middlewareDef: IMiddlewareDefinition<TConfig, TDependencies>
 ): IMiddleware<TConfig, TDependencies> {
   const filePath = getCallerFile();
+  const isAnonymous = !Boolean(middlewareDef.id);
+  const id =
+    middlewareDef.id || generateCallerIdFromFile(filePath, "middleware");
   const base = {
     [symbolFilePath]: filePath,
     [symbolMiddleware]: true,
     config: {} as TConfig,
-    id: middlewareDef.id || generateCallerIdFromFile(filePath, "middleware"),
+    id,
     ...middlewareDef,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
+    events: {
+      beforeRun: defineEvent<MiddlewareBeforeRunEventPayload>({
+        id: generateId(isAnonymous, id, "events.beforeRun"),
+      }),
+      afterRun: defineEvent<MiddlewareAfterRunEventPayload>({
+        id: generateId(isAnonymous, id, "events.afterRun"),
+      }),
+      onError: defineEvent<OnErrorEventPayload>({
+        id: generateId(isAnonymous, id, "events.onError"),
+      }),
+    },
   } as IMiddleware<TConfig, TDependencies>;
 
   // Wrap an object to ensure we always return chainable helpers
@@ -472,9 +495,9 @@ export function defineTag<TConfig = void, TEnforceContract = void>(
     id,
     meta: definition.meta,
     with(tagConfig: TConfig) {
-      if (this.configSchema) {
+      if (definition.configSchema) {
         try {
-          tagConfig = this.configSchema.parse(tagConfig);
+          tagConfig = definition.configSchema.parse(tagConfig);
         } catch (error) {
           throw new ValidationError("Tag config", this.id, error as Error);
         }

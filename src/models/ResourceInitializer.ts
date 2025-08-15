@@ -32,6 +32,114 @@ export class ResourceInitializer {
     dependencies: DependencyValuesType<TDeps>
   ): Promise<{ value: TValue; context: TContext }> {
     const context = resource.context?.();
+    await this.emitResourceBeforeInitEvents<TConfig, TValue, TDeps, TContext>(
+      config,
+      resource
+    );
+
+    let value: TValue | undefined;
+    try {
+      if (resource.init) {
+        value = await this.initWithMiddleware(
+          resource,
+          config,
+          dependencies,
+          context
+        );
+      }
+
+      await this.emitResourceAfterInitEvents<TConfig, TValue, TDeps, TContext>(
+        resource,
+        config,
+        value
+      );
+
+      this.logger.debug(`Resource ${resource.id.toString()} initialized`, {
+        source: resource.id,
+      });
+
+      return { value: value as TValue, context };
+    } catch (error) {
+      let isSuppressed = await this.emitResourceOnErrorEvents<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext
+      >(resource, error);
+
+      if (!isSuppressed) throw error;
+
+      return { value: undefined as unknown as TValue, context: {} as TContext };
+    }
+  }
+
+  private async emitResourceOnErrorEvents<
+    TConfig = null,
+    TValue extends Promise<any> = Promise<any>,
+    TDeps extends DependencyMapType = {},
+    TContext = any
+  >(resource: IResource<TConfig, TValue, TDeps, any, any>, error: unknown) {
+    let isSuppressed = false;
+    function suppress() {
+      isSuppressed = true;
+    }
+
+    // If you want to rewthrow the error, this should be done inside the onError event.
+    await this.eventManager.emit(
+      resource.events.onError,
+      {
+        error: error as Error,
+        suppress,
+      },
+      resource.id
+    );
+    await this.eventManager.emit(
+      globalEvents.resources.onError,
+      {
+        error: error as Error,
+        resource,
+        suppress,
+      },
+      resource.id
+    );
+    return isSuppressed;
+  }
+
+  private async emitResourceAfterInitEvents<
+    TConfig = null,
+    TValue extends Promise<any> = Promise<any>,
+    TDeps extends DependencyMapType = {},
+    TContext = any
+  >(
+    resource: IResource<TConfig, TValue, TDeps, any, any>,
+    config: TConfig,
+    value: TValue | undefined
+  ) {
+    await this.eventManager.emit(
+      resource.events.afterInit,
+      {
+        config,
+        value: value as TValue,
+      },
+      resource.id
+    );
+    await this.eventManager.emit(
+      globalEvents.resources.afterInit,
+      {
+        config,
+        resource,
+        value: value as TValue,
+      },
+      resource.id
+    );
+  }
+
+  private async emitResourceBeforeInitEvents<
+    TConfig = null,
+    TValue extends Promise<any> = Promise<any>,
+    TDeps extends DependencyMapType = {},
+    TContext = any
+  >(config: TConfig, resource: IResource<TConfig, TValue, TDeps, any, any>) {
     await this.eventManager.emit(
       globalEvents.resources.beforeInit,
       {
@@ -46,71 +154,6 @@ export class ResourceInitializer {
       { config },
       resource.id
     );
-
-    let error: any, value: TValue | undefined;
-    try {
-      if (resource.init) {
-        value = await this.initWithMiddleware(
-          resource,
-          config,
-          dependencies,
-          context
-        );
-      }
-
-      await this.eventManager.emit(
-        resource.events.afterInit,
-        {
-          config,
-          value: value as TValue,
-        },
-        resource.id
-      );
-      await this.eventManager.emit(
-        globalEvents.resources.afterInit,
-        {
-          config,
-          resource,
-          value: value as TValue,
-        },
-        resource.id
-      );
-
-      this.logger.debug(`Resource ${resource.id.toString()} initialized`, {
-        source: resource.id,
-      });
-
-      return { value: value as TValue, context };
-    } catch (e) {
-      error = e;
-      let isSuppressed = false;
-      function suppress() {
-        isSuppressed = true;
-      }
-
-      // If you want to rewthrow the error, this should be done inside the onError event.
-      await this.eventManager.emit(
-        resource.events.onError,
-        {
-          error: error as Error,
-          suppress,
-        },
-        resource.id
-      );
-      await this.eventManager.emit(
-        globalEvents.resources.onError,
-        {
-          error: error as Error,
-          resource,
-          suppress,
-        },
-        resource.id
-      );
-
-      if (!isSuppressed) throw e;
-
-      return { value: undefined as unknown as TValue, context: {} as TContext };
-    }
   }
 
   public async initWithMiddleware<

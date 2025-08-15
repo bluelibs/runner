@@ -1,4 +1,4 @@
-import { createContext, task, run, resource } from "../index";
+import { createContext, task, run, resource, Store } from "../index";
 import { ContextError } from "../context";
 
 describe("Context System", () => {
@@ -16,6 +16,7 @@ describe("Context System", () => {
       await expect(run(r)).resolves.toEqual({
         value: { id: "1" },
         dispose: expect.any(Function),
+        store: expect.any(Store),
       });
     });
   });
@@ -39,6 +40,7 @@ describe("Context System", () => {
       await expect(run(r)).resolves.toEqual({
         value: "ok",
         dispose: expect.any(Function),
+        store: expect.any(Store),
       });
     });
   });

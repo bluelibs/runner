@@ -1,6 +1,18 @@
 import { defineEvent } from "../define";
-import { ITask, IResource, IEvent } from "../defs";
+import {
+  ITask,
+  IResource,
+  IEvent,
+  MiddlewareBeforeRunEventPayload,
+  OnErrorEventPayload,
+  MiddlewareAfterRunEventPayload,
+  IMiddleware,
+  MiddlewareInputMaybeTaskOrResource,
+} from "../defs";
 import { ILog } from "../models/Logger";
+import { globalTags } from "./globalTags";
+
+const systemTag = globalTags.system;
 
 export const globalEvents = {
   beforeInit: defineEvent({
@@ -9,7 +21,7 @@ export const globalEvents = {
       title: "Before Initialization",
       description:
         "Triggered before any resource or system-wide initialization occurs.",
-      tags: ["system"],
+      tags: [systemTag],
     },
   }),
   afterInit: defineEvent({
@@ -18,7 +30,7 @@ export const globalEvents = {
       title: "After Initialization",
       description:
         "Fired after the system or resource initialization is completed.",
-      tags: ["system"],
+      tags: [systemTag],
     },
   }),
   log: defineEvent<ILog>({
@@ -26,7 +38,7 @@ export const globalEvents = {
     meta: {
       title: "Log Event",
       description: "Used to log events and messages across the system.",
-      tags: ["system"],
+      tags: [systemTag],
     },
   }),
   tasks: {
@@ -39,7 +51,7 @@ export const globalEvents = {
         title: "Before Task Execution",
         description:
           "Triggered before a task starts running, providing access to the input data.",
-        tags: ["system"],
+        tags: [systemTag],
       },
     }),
     afterRun: defineEvent<{
@@ -53,7 +65,7 @@ export const globalEvents = {
         title: "After Task Execution",
         description:
           "Fired after a task has completed, providing both the input and output data.",
-        tags: ["system"],
+        tags: [systemTag],
       },
     }),
     onError: defineEvent<{
@@ -66,7 +78,7 @@ export const globalEvents = {
         title: "Task Error",
         description:
           "Triggered when an error occurs during task execution. Allows error suppression.",
-        tags: ["system"],
+        tags: [systemTag],
       },
     }),
   },
@@ -80,7 +92,7 @@ export const globalEvents = {
         title: "Before Resource Initialization",
         description:
           "Fired before a resource is initialized, with access to the configuration.",
-        tags: ["system"],
+        tags: [systemTag],
       },
     }),
     afterInit: defineEvent<{
@@ -93,7 +105,7 @@ export const globalEvents = {
         title: "After Resource Initialization",
         description:
           "Fired after a resource has been initialized, providing the final value.",
-        tags: ["system"],
+        tags: [systemTag],
       },
     }),
     onError: defineEvent<{
@@ -106,7 +118,46 @@ export const globalEvents = {
         title: "Resource Error",
         description:
           "Triggered when an error occurs during resource initialization. Allows error suppression.",
-        tags: ["system"],
+        tags: [systemTag],
+      },
+    }),
+  },
+  middlewares: {
+    beforeRun: defineEvent<
+      MiddlewareBeforeRunEventPayload & {
+        middleware: IMiddleware;
+      }
+    >({
+      id: "globals.events.middleware.beforeRun",
+      meta: {
+        title: "Before Middleware Run",
+        description: "Triggered before a middleware runs.",
+        tags: [systemTag],
+      },
+    }),
+    afterRun: defineEvent<
+      MiddlewareAfterRunEventPayload & {
+        middleware: IMiddleware;
+      } & MiddlewareInputMaybeTaskOrResource
+    >({
+      id: "globals.events.middleware.afterRun",
+      meta: {
+        title: "After Middleware Run",
+        description: "Triggered after a middleware runs.",
+        tags: [systemTag],
+      },
+    }),
+    onError: defineEvent<
+      OnErrorEventPayload & {
+        middleware: IMiddleware;
+      } & MiddlewareInputMaybeTaskOrResource
+    >({
+      id: "globals.events.middleware.onError",
+      meta: {
+        title: "Middleware Error",
+        description:
+          "Triggered when an error occurs during middleware execution. Allows error suppression.",
+        tags: [systemTag],
       },
     }),
   },
@@ -122,4 +173,7 @@ export const globalEventsArray = [
   globalEvents.resources.beforeInit,
   globalEvents.resources.afterInit,
   globalEvents.resources.onError,
+  globalEvents.middlewares.beforeRun,
+  globalEvents.middlewares.afterRun,
+  globalEvents.middlewares.onError,
 ];

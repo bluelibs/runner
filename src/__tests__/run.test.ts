@@ -694,6 +694,16 @@ describe("run", () => {
     expect(mockFn).toHaveBeenCalled();
   });
 
+  it("should be able to run a resource with a config", async () => {
+    const testResource = defineResource({
+      id: "test.resource",
+      init: async (config: { prefix: string }) => `${config.prefix} World!`,
+    });
+
+    const result = await run(testResource.with({ prefix: "Hello," }));
+    expect(result.value).toBe("Hello, World!");
+  });
+
   describe("disposal", () => {
     it("should be able to dispose of a resource", async () => {
       const disposeFn = jest.fn();

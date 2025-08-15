@@ -273,6 +273,9 @@ const myResource = resource({ ... });
 - `myResource.events.beforeInit` - Fires before the resource initializes
 - `myResource.events.afterInit` - Fires after the resource initializes
 - `myResource.events.onError` - Fires when the resource initialization fails
+- `myMiddleware.events.beforeRun` - Fires before the middleware runs.
+- `myMiddleware.events.afterRun` - Fires after the middleware has executed successfuly.
+- `myMiddleware.events.onError` - Fires after the middleware has executed successfuly.
 
 Each event has its own utilities and functions.
 
@@ -286,6 +289,9 @@ The framework comes with its own set of events that fire during the lifecycle. T
 - `globals.resources.beforeInit` - "Initializing a resource"
 - `globals.resources.afterInit` - "Resource is ready"
 - `globals.resources.onError` - "Resource initialization failed"
+- `globals.middleware.beforeRun` - "Hey, I'm about to run this middleware"
+- `globals.middleware.afterRun` - "Middleware run completed, I'm applying the next next()"
+- `globals.middleware.onError` - "Oops, something went wrong"
 
 ```typescript
 const taskLogger = task({
