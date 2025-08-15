@@ -36,22 +36,15 @@ export function findCircularDependencies(
     stack.add(node.id);
     path.push(node.id);
 
-    if (node.dependencies && typeof node.dependencies === "object") {
-      for (const [depKey, dependentNode] of Object.entries(node.dependencies)) {
-        if (!dependentNode) {
-          result.missingDependencies.push({
-            nodeId: node.id,
-            dependencyId: depKey,
-          });
-          continue;
-        }
-        dfs(dependentNode);
+    for (const [depKey, dependentNode] of Object.entries(node.dependencies)) {
+      if (!dependentNode) {
+        result.missingDependencies.push({
+          nodeId: node.id,
+          dependencyId: depKey,
+        });
+        continue;
       }
-    } else {
-      result.missingDependencies.push({
-        nodeId: node.id,
-        dependencyId: "unknown",
-      });
+      dfs(dependentNode);
     }
 
     stack.delete(node.id);

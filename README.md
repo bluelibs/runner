@@ -342,7 +342,7 @@ Middleware wraps around your tasks and resources, adding cross-cutting concerns 
 // This is a middleware that accepts a config
 const authMiddleware = middleware({
   id: "app.middleware.auth",
-  // You can also add dependencies, no problem.
+  // You can also add dependencies, no problem, same
   run: async (
     { task, next },
     dependencies,
@@ -373,9 +373,15 @@ Want to add logging to everything? Authentication to all tasks? Global middlewar
 ```typescript
 const logMiddleware = middleware({
   id: "app.middleware.log",
-  run: async ({ task, next }) => {
-    console.log(`Executing: ${task.definition.id}`);
-    const result = await next(task.input);
+  dependencies: {
+    logger: global.resources.logger,
+  },
+  run: async ({ task, resource, next }) => {
+    if (!task) {
+      return;
+    }
+    console.log(`Executing: ${task.definition.id}`); // equivalent with resource.definition.id
+    const result = await next(task.input); // equivalent with resource.config
     console.log(`Completed: ${task.definition.id}`);
     return result;
   },
@@ -390,12 +396,27 @@ const app = resource({
     logMiddleware.everywhere({
       tasks(task) {
         // ITask
-        // check for tags or etc
+        // check for tags or other metas
         return task?.meta?.tags.includes("test"); // apply it only to tasks that have a tag called 'test'
       },
       // For resources, you do not need such functionality as resources are initiated once when the server boots
       // You can add this logic into your global middleware.
       resources: false,
+    }),
+  ],
+});
+```
+
+**Note:** A global middleware can depend on resources or tasks. However, any such resources or tasks will be excluded from the dependency tree (Task -> Middleware), and the middleware will not run for those specific tasks or resources. This approach gives middleware true flexibility and control.
+
+Local middleware overrides global middleware. If you want to apply your global middleware for a specific task, but with different config:
+
+```ts
+task({
+  // ...
+  middleware: [
+    theGlobalMiddleware.with({
+      /* your own localized config */
     }),
   ],
 });
@@ -1557,26 +1578,6 @@ const database = resource({
     scalingPolicy: "auto",
   },
   // ... implementation
-});
-```
-
-#### Global Middleware Application
-
-```typescript
-const app = resource({
-  id: "app",
-  register: [
-    // Apply performance middleware globally but only to tagged tasks
-    performanceMiddleware.everywhere({
-      tasks: true,
-      resources: false,
-    }),
-    // Apply rate limiting only to API tasks
-    rateLimitMiddleware.everywhere({
-      tasks: true,
-      resources: false,
-    }),
-  ],
 });
 ```
 

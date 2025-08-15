@@ -166,8 +166,10 @@ export class Store {
     return this.registry.getEverywhereMiddlewareForTasks(task);
   }
 
-  public getEverywhereMiddlewareForResources(): IMiddleware[] {
-    return this.registry.getEverywhereMiddlewareForResources();
+  public getEverywhereMiddlewareForResources(
+    resource: IResource<any, any, any, any>
+  ): IMiddleware[] {
+    return this.registry.getEverywhereMiddlewareForResources(resource);
   }
 
   public storeGenericItem<C>(item: RegisterableItems) {

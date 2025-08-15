@@ -551,7 +551,8 @@ export interface IMiddleware<
   id: string | symbol;
   dependencies: TDependencies | (() => TDependencies);
   /**
-   * Attach this middleware globally. Use options to scope to tasks/resources.
+   * Attach this middleware globally. Use options to scope to tasks/resources. This only works in `register: []` for resources.
+   * You cannot declare a middleware as global in the middleware definition of a `task` or `resource`.
    */
   everywhere(
     config?: MiddlewareEverywhereOptions
