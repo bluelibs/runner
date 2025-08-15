@@ -1,6 +1,5 @@
-import { resource } from "@bluelibs/runner";
+import { globals, resource } from "@bluelibs/runner";
 import sqlite3 from "sqlite3";
-import { User } from "../types";
 
 export interface DatabaseConfig {
   filename?: string;
@@ -15,36 +14,42 @@ export interface Database {
   close: () => Promise<void>;
 }
 
-export const databaseResource = resource<DatabaseConfig, Promise<Database>>({
+export const db = resource({
   id: "app.resources.database",
-  init: async (config: DatabaseConfig): Promise<Database> => {
-    const { filename = ':memory:', verbose = false } = config;
-    
+  dependencies: {
+    logger: globals.resources.logger,
+  },
+  init: async (config: DatabaseConfig, { logger }): Promise<Database> => {
+    const { filename = ":memory:", verbose = false } = config;
+
     const db = new sqlite3.Database(filename, (err) => {
       if (err) {
-        console.error('Error opening database:', err);
+        logger.error("Error opening database:", err);
         throw err;
       }
       if (verbose) {
-        console.log('Connected to SQLite database:', filename);
+        logger.info(`Connected to SQLite database: ${filename}`);
       }
     });
 
     if (verbose) {
-      db.on('trace', (sql) => console.log('SQL:', sql));
+      db.on("trace", (sql) => logger.debug(`SQL: ${sql}`));
     }
 
     // Promisify database methods
     const run = (sql: string, params?: any[]): Promise<sqlite3.RunResult> => {
       return new Promise((resolve, reject) => {
-        db.run(sql, params || [], function(err) {
+        db.run(sql, params || [], function (err) {
           if (err) reject(err);
           else resolve(this);
         });
       });
     };
 
-    const get = <T = any>(sql: string, params?: any[]): Promise<T | undefined> => {
+    const get = <T = any>(
+      sql: string,
+      params?: any[]
+    ): Promise<T | undefined> => {
       return new Promise((resolve, reject) => {
         db.get(sql, params || [], (err, row) => {
           if (err) reject(err);
@@ -87,11 +92,11 @@ export const databaseResource = resource<DatabaseConfig, Promise<Database>>({
       run,
       get,
       all,
-      close
+      close,
     };
   },
-  dispose: async (database: Database) => {
+  dispose: async (database: Database, _, { logger }) => {
     await database.close();
-    console.log('Database connection closed');
-  }
+    logger.info("Database connection closed");
+  },
 });

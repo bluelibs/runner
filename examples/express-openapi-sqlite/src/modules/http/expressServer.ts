@@ -3,18 +3,12 @@ import express, { Express, Request, Response } from "express";
 import cors from "cors";
 import swaggerJSDoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
-import { httpTag } from "../tags/httpTag";
-import { RequestContext, RequestData } from "../contexts";
+import { httpTag } from "./http.tag";
+import { RequestContext, RequestData } from "./request.context";
+import { appConfig } from "../app.config";
 // Simple UUID generator (for demo purposes)
 const generateId = () =>
   Math.random().toString(36).substring(2) + Date.now().toString(36);
-
-export interface ExpressConfig {
-  port: number;
-  cors?: boolean;
-  apiPrefix?: string;
-  swaggerOptions?: swaggerJSDoc.Options;
-}
 
 export interface ExpressServer {
   app: Express;
@@ -22,30 +16,28 @@ export interface ExpressServer {
   port: number;
 }
 
-export const expressServerResource = resource<
-  ExpressConfig,
-  Promise<ExpressServer>
->({
+export const expressServerResource = resource({
   id: "app.resources.expressServer",
-  init: async (config: ExpressConfig): Promise<ExpressServer> => {
-    const { port, cors: enableCors = true, apiPrefix = "/api" } = config;
+  dependencies: {
+    appConfig,
+    logger: globals.resources.logger,
+  },
+  init: async (_, { appConfig, logger }): Promise<ExpressServer> => {
+    const { port } = appConfig;
 
     const app = express();
 
     // Basic middleware
     app.use(express.json());
     app.use(express.urlencoded({ extended: true }));
-
-    if (enableCors) {
-      app.use(cors());
-    }
+    app.use(cors());
 
     // Request context middleware
     app.use((req: Request, res: Response, next) => {
       const requestData: RequestData = {
         requestId: generateId(),
-        ip: req.ip || req.connection.remoteAddress || "unknown",
-        userAgent: req.get("User-Agent"),
+        ip: req.ip || req.socket.remoteAddress || "unknown",
+        userAgent: req.get("User-Agent") || "unknown",
         timestamp: new Date(),
       };
 
@@ -61,16 +53,16 @@ export const expressServerResource = resource<
 
     // Start server
     const server = app.listen(port, () => {
-      console.log(`🚀 Express server running on http://localhost:${port}`);
-      console.log(`📚 API documentation: http://localhost:${port}/api-docs`);
+      logger.info(`🚀 Express server running on http://localhost:${port}`);
+      logger.info(`📚 API documentation: http://localhost:${port}/api-docs`);
     });
 
     return { app, server, port };
   },
-  dispose: async ({ server }: ExpressServer) => {
+  dispose: async ({ server }, _, { logger }) => {
     return new Promise<void>((resolve) => {
       server.close(() => {
-        console.log("Express server stopped");
+        logger.info("Express server stopped");
         resolve();
       });
     });

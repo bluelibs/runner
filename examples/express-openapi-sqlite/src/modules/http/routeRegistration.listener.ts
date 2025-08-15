@@ -1,15 +1,20 @@
 // examples/express-openapi-sqlite/src/tasks/routeRegistration.ts
 import { task, globals } from "@bluelibs/runner";
 import { Request, Response } from "express";
-import { httpTag } from "../tags/httpTag";
-import { RequestContext, RequestData } from "../contexts";
-import { expressServerResource } from "../resources/expressServer";
+import { httpTag } from "./http.tag";
+import { RequestContext, RequestData } from "./request.context";
+import { expressServerResource } from "./expressServer";
 import swaggerUi from "swagger-ui-express";
 import { createDocument } from "zod-openapi";
 
 export const routeRegistrationListener = task({
   id: "app.tasks.routeRegistration",
   on: globals.events.afterInit,
+  meta: {
+    title: "Route Registration Listener",
+    description:
+      "Listens for route registrations and registers them with the express server and assigns OpenAPI specs to it",
+  },
   dependencies: {
     store: globals.resources.store,
     taskRunner: globals.resources.taskRunner,
