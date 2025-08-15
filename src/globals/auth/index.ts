@@ -70,9 +70,15 @@ export { permissionCheckerResource } from "./resources/permissionChecker.resourc
 export { 
   authMiddleware, 
   requireAuthMiddleware, 
-  requireRoles, 
+  requireRoles,
+  requireRolesWithHierarchy,
+  requirePermission,
   requireAdminMiddleware,
-  requireSuperAdminMiddleware 
+  requireAdminWithHierarchyMiddleware,
+  requireSuperAdminMiddleware,
+  requireUserManagementPermission,
+  requireSystemConfigPermission,
+  requireBillingPermission
 } from "./middleware/auth.middleware";
 export { 
   jwtMiddleware, 
