@@ -51,7 +51,6 @@ export class CircularDependenciesError extends RuntimeError {
     const hasMiddleware = cycles.some((cycle) => cycle.includes("middleware"));
 
     let guidance = "\n\nTo resolve circular dependencies:";
-    guidance += "\n  • Use function-based dependencies: () => ({ dependency })";
     guidance +=
       "\n  • Consider refactoring to reduce coupling between components";
     guidance += "\n  • Extract shared dependencies into separate resources";
