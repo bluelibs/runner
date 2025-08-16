@@ -78,6 +78,7 @@ export function defineTask<
     middleware: taskConfig.middleware || [],
     run: taskConfig.run,
     inputSchema: taskConfig.inputSchema,
+    resultSchema: taskConfig.resultSchema,
     meta: taskConfig.meta || ({} as TMeta),
     // autorun,
     optional() {
@@ -162,6 +163,7 @@ export function defineResource<
     init: constConfig.init,
     context: constConfig.context,
     configSchema: constConfig.configSchema,
+    resultSchema: constConfig.resultSchema,
     with: function (config: TConfig) {
       // Validate config with schema if provided (fail fast)
       if (constConfig.configSchema) {

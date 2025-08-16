@@ -148,7 +148,17 @@ export class TaskRunner {
       const deps = storeTask?.computedDependencies as any;
 
       try {
-        return await task.run.call(null, input, deps);
+        const rawResult = await task.run.call(null, input, deps);
+        // Validate result with schema if provided (ignores middleware)
+        if (task.resultSchema) {
+          try {
+            // result schema validates the resolved value of the promise
+            return task.resultSchema.parse(rawResult as any);
+          } catch (error) {
+            throw new ValidationError("Task result", task.id, error as any);
+          }
+        }
+        return rawResult;
       } catch (error) {
         // Emit central error boundary; still rethrow to caller
         try {

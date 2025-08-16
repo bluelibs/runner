@@ -173,7 +173,7 @@ export class Store {
 
   public async dispose() {
     for (const resource of this.resources.values()) {
-      if (resource.resource.dispose) {
+      if (resource.isInitialized && resource.resource.dispose) {
         await resource.resource.dispose(
           resource.value,
           resource.config,

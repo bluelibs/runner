@@ -9,6 +9,7 @@ import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
 import { globalEvents } from "../globals/globalEvents";
+import { ValidationError } from "../errors";
 
 export class ResourceInitializer {
   constructor(
@@ -73,7 +74,26 @@ export class ResourceInitializer {
   ) {
     let next = async (config: C): Promise<V | undefined> => {
       if (resource.init) {
-        return resource.init.call(null, config, dependencies, context);
+        const rawValue = await resource.init.call(
+          null,
+          config,
+          dependencies,
+          context
+        );
+        // Validate result with schema if provided (ignores middleware)
+        if (resource.resultSchema) {
+          try {
+            return resource.resultSchema.parse(rawValue);
+          } catch (error) {
+            throw new ValidationError(
+              "Resource result",
+              resource.id,
+              error as any
+            );
+          }
+        }
+
+        return rawValue;
       }
     };
 

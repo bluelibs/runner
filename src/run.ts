@@ -128,8 +128,10 @@ export async function run<C, V extends Promise<any>>(
   const taskRunner = new TaskRunner(store, eventManager, logger);
   store.setTaskRunner(taskRunner);
 
+  // Register this run's event manager for global process error safety nets
+  let unhookProcessSafetyNets: (() => void) | undefined;
   if (errorBoundary) {
-    setupProcessLevelSafetyNets(eventManager);
+    unhookProcessSafetyNets = registerProcessLevelSafetyNets(eventManager);
   }
 
   const processor = new DependencyProcessor(
@@ -139,102 +141,168 @@ export async function run<C, V extends Promise<any>>(
     logger
   );
 
-  // In the registration phase we register deeply all the resources, tasks, middleware and events
-  store.initializeStore(resource, config);
+  // We may install shutdown hooks; capture unhook function to remove them on dispose
+  let unhookShutdown: (() => void) | undefined;
 
-  if (debug) {
-    store.storeGenericItem(debugResource.with(debug));
-  }
-
-  // We verify that there isn't any circular dependencies before we begin computing the dependencies
-  const dependentNodes = store.getDependentNodes();
-  const circularDependencies = findCircularDependencies(dependentNodes);
-  if (circularDependencies.cycles.length > 0) {
-    throw new CircularDependenciesError(circularDependencies.cycles);
-  }
-
-  // the overrides that were registered now will override the other registered resources
-  await store.processOverrides();
-
-  // a form of hooking, we create the events for all tasks and store them so they can be referenced
-  await store.storeEventsForAllTRM();
-  await logger.debug("Events stored. Attaching listeners...");
-  await processor.attachListeners();
-  await logger.debug("Listeners attached. Computing dependencies...");
-  await processor.computeAllDependencies();
-  // After this stage, logger print policy could have been set.
-  await logger.debug(
-    "Dependencies computed. Proceeding with initialization..."
-  );
-
-  // Now we can safely compute dependencies without being afraid of an infinite loop.
-  // The hooking part is done here.
-
-  // Now we can initialise the root resource
-  await processor.initializeRoot();
-
-  await logger.debug("System initialized and operational.");
-
-  // disallow manipulation or attaching more
-  store.lock();
-  eventManager.lock();
-  await logger.lock();
-
-  if (shutdownHooks) {
-    setupShutdownHooks(() => store.dispose());
-  }
-
-  await eventManager.emit(
-    globalEvents.ready,
-    {
-      root: store.root.resource,
-    },
-    "system"
-  );
-
-  return {
-    value: store.root.value,
-    dispose: () => store.dispose(),
-    store,
-    taskRunner,
-    eventManager,
+  // Helper dispose that always unhooks process listeners first
+  const disposeAll = async () => {
+    try {
+      if (unhookProcessSafetyNets) {
+        unhookProcessSafetyNets();
+        unhookProcessSafetyNets = undefined;
+      }
+      if (unhookShutdown) {
+        unhookShutdown();
+        unhookShutdown = undefined;
+      }
+    } finally {
+      await store.dispose();
+    }
   };
+
+  try {
+    // In the registration phase we register deeply all the resources, tasks, middleware and events
+    store.initializeStore(resource, config);
+
+    if (debug) {
+      store.storeGenericItem(debugResource.with(debug));
+    }
+
+    // We verify that there isn't any circular dependencies before we begin computing the dependencies
+    const dependentNodes = store.getDependentNodes();
+    const circularDependencies = findCircularDependencies(dependentNodes);
+    if (circularDependencies.cycles.length > 0) {
+      throw new CircularDependenciesError(circularDependencies.cycles);
+    }
+
+    // the overrides that were registered now will override the other registered resources
+    await store.processOverrides();
+
+    // a form of hooking, we create the events for all tasks and store them so they can be referenced
+    await store.storeEventsForAllTRM();
+    await logger.debug("Events stored. Attaching listeners...");
+    await processor.attachListeners();
+    await logger.debug("Listeners attached. Computing dependencies...");
+    await processor.computeAllDependencies();
+    // After this stage, logger print policy could have been set.
+    await logger.debug(
+      "Dependencies computed. Proceeding with initialization..."
+    );
+
+    // Now we can safely compute dependencies without being afraid of an infinite loop.
+    // The hooking part is done here.
+
+    // Now we can initialise the root resource
+    await processor.initializeRoot();
+
+    await logger.debug("System initialized and operational.");
+
+    // disallow manipulation or attaching more
+    store.lock();
+    eventManager.lock();
+    await logger.lock();
+
+    await eventManager.emit(
+      globalEvents.ready,
+      {
+        root: store.root.resource,
+      },
+      "system"
+    );
+
+    if (shutdownHooks) {
+      unhookShutdown = registerShutdownHook(() => store.dispose());
+    }
+
+    return {
+      value: store.root.value,
+      dispose: disposeAll,
+      store,
+      taskRunner,
+      eventManager,
+    };
+  } catch (err) {
+    // Rollback initialized resources
+    await disposeAll();
+    throw err;
+  }
 }
 
-function setupProcessLevelSafetyNets(eventManager: EventManager) {
+// Global registry of active EventManagers for process-level safety nets
+const activeEventManagers = new Set<EventManager>();
+let processSafetyNetsInstalled = false;
+
+function installGlobalProcessSafetyNetsOnce() {
+  if (processSafetyNetsInstalled) return;
+  processSafetyNetsInstalled = true;
   const onUncaughtException = async (err: any) => {
-    try {
-      await eventManager.emit(
-        globalEvents.unhandledError,
-        { kind: "process", error: err, note: "uncaughtException" },
-        "process"
-      );
-    } catch (_) {}
+    for (const em of activeEventManagers) {
+      try {
+        await em.emit(
+          globalEvents.unhandledError,
+          { kind: "process", error: err, note: "uncaughtException" },
+          "process"
+        );
+      } catch (_) {}
+    }
   };
   const onUnhandledRejection = async (reason: any) => {
-    try {
-      await eventManager.emit(
-        globalEvents.unhandledError,
-        { kind: "process", error: reason, note: "unhandledRejection" },
-        "process"
-      );
-    } catch (_) {}
+    for (const em of activeEventManagers) {
+      try {
+        await em.emit(
+          globalEvents.unhandledError,
+          { kind: "process", error: reason, note: "unhandledRejection" },
+          "process"
+        );
+      } catch (_) {}
+    }
   };
   process.on("uncaughtException", onUncaughtException as any);
   process.on("unhandledRejection", onUnhandledRejection as any);
 }
 
-function setupShutdownHooks(disposeOnce: () => Promise<void>) {
+function registerProcessLevelSafetyNets(eventManager: EventManager) {
+  installGlobalProcessSafetyNetsOnce();
+  activeEventManagers.add(eventManager);
+  return () => {
+    activeEventManagers.delete(eventManager);
+  };
+}
+
+// Global shutdown registry: one listener per signal, dispatching to active disposers
+const activeDisposers = new Set<() => Promise<void>>();
+let shutdownHooksInstalled = false;
+
+function installGlobalShutdownHooksOnce() {
+  if (shutdownHooksInstalled) return;
+  shutdownHooksInstalled = true;
   const handler = async (signal: NodeJS.Signals) => {
     try {
-      await disposeOnce();
+      // Snapshot to avoid mutation during iteration
+      const disposers = Array.from(activeDisposers);
+      for (const d of disposers) {
+        try {
+          await d();
+        } catch {
+          // continue disposing others
+        }
+        // Make shutdown idempotent: remove disposer after first invocation
+        activeDisposers.delete(d);
+      }
     } finally {
-      // Exit with code 0 for graceful shutdown
       process.exit(0);
     }
   };
-  process.once("SIGINT", handler);
-  process.once("SIGTERM", handler);
+  process.on("SIGINT", handler);
+  process.on("SIGTERM", handler);
+}
+
+function registerShutdownHook(disposeOnce: () => Promise<void>) {
+  installGlobalShutdownHooksOnce();
+  activeDisposers.add(disposeOnce);
+  return () => {
+    activeDisposers.delete(disposeOnce);
+  };
 }
 
 function extractResourceAndConfig<C, V extends Promise<any>>(

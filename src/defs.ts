@@ -308,6 +308,14 @@ export interface ITaskDefinition<
    */
   inputSchema?: IValidationSchema<TInput>;
   /**
+   * Optional validation schema for the task result.
+   * When provided, the result will be validated immediately after the task's
+   * `run` resolves, without considering middleware.
+   */
+  resultSchema?: IValidationSchema<
+    TOutput extends Promise<infer U> ? U : never
+  >;
+  /**
    * The task body. If `on` is set, the input is an `IEventEmission`. Otherwise,
    * it's the declared input type.
    */
@@ -405,6 +413,14 @@ export interface IResourceDefinition<
   ) => HasContracts<TMeta> extends true
     ? EnsureResponseSatisfiesContracts<TMeta, TValue>
     : TValue;
+  /**
+   * Optional validation schema for the resource's resolved value.
+   * When provided, the value will be validated immediately after `init` resolves,
+   * without considering middleware.
+   */
+  resultSchema?: IValidationSchema<
+    TValue extends Promise<infer U> ? U : TValue
+  >;
   /**
    * Clean-up function for the resource. This is called when the resource is no longer needed.
    *
