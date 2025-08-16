@@ -23,6 +23,39 @@ export const globalEvents = {
     },
   }),
   /**
+   * Emitted right before a middleware's run executes (for tasks/resources).
+   */
+  middlewareTriggered: defineEvent<{
+    kind: "task" | "resource";
+    middlewareId: string;
+    targetId: string;
+  }>({
+    id: "global.events.middlewareTriggered",
+    meta: {
+      title: "Middleware Triggered",
+      description:
+        "Emitted immediately before a middleware starts running for a task or resource.",
+      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+    },
+  }),
+  /**
+   * Emitted after a middleware completes (success or failure). Contains optional error.
+   */
+  middlewareCompleted: defineEvent<{
+    kind: "task" | "resource";
+    middlewareId: string;
+    targetId: string;
+    error?: Error;
+  }>({
+    id: "global.events.middlewareCompleted",
+    meta: {
+      title: "Middleware Completed",
+      description:
+        "Emitted after a middleware finishes running for a task or resource.",
+      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+    },
+  }),
+  /**
    * Emitted right before a hook's run executes.
    */
   hookTriggered: defineEvent<{
@@ -77,4 +110,6 @@ export const globalEventsArray: IEvent<any>[] = [
   globalEvents.hookTriggered,
   globalEvents.hookCompleted,
   globalEvents.unhandledError,
+  globalEvents.middlewareTriggered,
+  globalEvents.middlewareCompleted,
 ];

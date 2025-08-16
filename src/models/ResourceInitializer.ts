@@ -94,17 +94,57 @@ export class ResourceInitializer {
 
       const nextFunction = next;
       next = async (config: C) => {
-        return storeMiddleware.middleware.run(
+        await this.eventManager.emit(
+          globalEvents.middlewareTriggered,
           {
-            resource: {
-              definition: resource,
-              config,
-            },
-            next: nextFunction,
+            kind: "resource",
+            middlewareId: middleware.id,
+            targetId: resource.id as any,
           },
-          storeMiddleware.computedDependencies,
-          middleware.config
+          middleware.id as any
         );
+        try {
+          const result = await storeMiddleware.middleware.run(
+            {
+              resource: {
+                definition: resource,
+                config,
+              },
+              next: nextFunction,
+            },
+            storeMiddleware.computedDependencies,
+            middleware.config
+          );
+          await this.eventManager.emit(
+            globalEvents.middlewareCompleted,
+            {
+              kind: "resource",
+              middlewareId: middleware.id,
+              targetId: resource.id as any,
+            },
+            middleware.id as any
+          );
+          return result as any;
+        } catch (error) {
+          try {
+            await this.eventManager.emit(
+              globalEvents.unhandledError,
+              { kind: "middleware", id: middleware.id as any, error },
+              middleware.id as any
+            );
+          } catch (_) {}
+          await this.eventManager.emit(
+            globalEvents.middlewareCompleted,
+            {
+              kind: "resource",
+              middlewareId: middleware.id,
+              targetId: resource.id as any,
+              error: error as any,
+            },
+            middleware.id as any
+          );
+          throw error;
+        }
       };
     }
 

@@ -5,6 +5,10 @@ import { globalEventListener } from "./globalEvent.hook";
 import { tasksAndResourcesTrackerMiddleware } from "./executionTracker.middleware";
 import { globalTags } from "../../globalTags";
 import { hookCompletedListener, hookTriggeredListener } from "./hook.hook";
+import {
+  middlewareCompletedListener,
+  middlewareTriggeredListener,
+} from "./middleware.hook";
 
 export const debugResource = defineResource({
   id: "globals.resources.debug",
@@ -14,6 +18,8 @@ export const debugResource = defineResource({
       globalEventListener,
       hookTriggeredListener,
       hookCompletedListener,
+      middlewareTriggeredListener,
+      middlewareCompletedListener,
       tasksAndResourcesTrackerMiddleware.everywhere(),
     ];
   },

@@ -14,6 +14,7 @@ export type DebugConfig = {
   logTaskOnError: boolean;
   logMiddlewareBeforeRun: boolean;
   logMiddlewareAfterRun: boolean;
+  logMiddlewareOnError: boolean;
   logEventEmissionOnRun: boolean;
   logEventEmissionInput: boolean;
   /**
@@ -28,6 +29,7 @@ export const allFalse: DebugConfig = Object.freeze({
   logResourceAfterRun: false,
   logMiddlewareBeforeRun: false,
   logMiddlewareAfterRun: false,
+  logMiddlewareOnError: false,
   logTaskBeforeRun: false,
   logTaskAfterRun: false,
   logTaskInput: false,
@@ -50,6 +52,9 @@ export const levelNormal: DebugConfig = Object.freeze({
   logResourceAfterRun: true,
   logResourceOnError: true,
   logTaskOnError: true,
+  logMiddlewareBeforeRun: true,
+  logMiddlewareAfterRun: true,
+  logMiddlewareOnError: true,
   logHookTriggered: true,
   logHookCompleted: true,
   logEventEmissionOnRun: true,

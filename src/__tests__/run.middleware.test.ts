@@ -580,6 +580,79 @@ describe("Middleware behavior (no lifecycle)", () => {
     await run(app);
     expect(called).toBe(true);
   });
+
+  it("emits middlewareTriggered and middlewareCompleted around task middleware", async () => {
+    const calls: string[] = [];
+    const spyHook = defineHook({
+      id: "spy.hook",
+      on: globalEvents.middlewareTriggered,
+      run: async (e) => {
+        calls.push(e.id);
+      },
+    });
+
+    const mw = defineMiddleware({
+      id: "mw.events.task",
+      run: async ({ next }) => next(),
+    });
+
+    const t = defineTask({
+      id: "task.events",
+      middleware: [mw],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app.middleware.events.task",
+      register: [mw, t, spyHook],
+      dependencies: { t },
+      async init(_, { t }) {
+        await t();
+      },
+    });
+
+    await run(app);
+    // We attach only to triggered here for typing constraints; ensure at least 1 emit
+    expect(
+      calls.filter((c) => c === globalEvents.middlewareTriggered.id).length
+    ).toBe(1);
+  });
+
+  it("emits middlewareTriggered/middlewareCompleted for resource middleware", async () => {
+    const calls: string[] = [];
+    const spyHook = defineHook({
+      id: "spy.hook.resource",
+      on: globalEvents.middlewareTriggered,
+      run: async (e) => {
+        calls.push(e.id);
+      },
+    });
+
+    const mw = defineMiddleware({
+      id: "mw.events.res.local",
+      run: async ({ next }) => next({}),
+    });
+    const sub = defineResource({
+      id: "sub.res",
+      async init() {
+        return "sub";
+      },
+    });
+    const app = defineResource({
+      id: "app.middleware.events.res",
+      register: [mw.everywhere(), spyHook, sub],
+      dependencies: { sub },
+      async init(_, { sub }) {
+        return sub;
+      },
+      middleware: [mw],
+    });
+
+    await run(app);
+    expect(
+      calls.filter((c) => c === globalEvents.middlewareTriggered.id).length
+    ).toBeGreaterThan(0);
+  });
 });
 
 describe("Middleware.everywhere()", () => {

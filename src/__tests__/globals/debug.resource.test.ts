@@ -130,6 +130,15 @@ describe("globals.resources.debug", () => {
     expect(messages.some((m) => m.includes("Task tests.task completed"))).toBe(
       true
     );
+    // Middleware observability messages
+    // Allow for either ordering due to interleaving; just assert presence
+    const joined = messages.join("\n");
+    expect(joined.includes("[middleware] tests.local.middleware started")).toBe(
+      true
+    );
+    expect(
+      joined.includes("[middleware] tests.local.middleware completed")
+    ).toBe(true);
     // Resource logs are implementation-defined depending on eager/lazy init.
     // We assert task tracking here.
   });

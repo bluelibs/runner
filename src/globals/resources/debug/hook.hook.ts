@@ -14,13 +14,15 @@ export const hookTriggeredListener = defineHook({
     logger: globalResources.logger,
     debugConfig,
   },
-  run: async (event, { logger, debugConfig }) => {
+  run: async (event, deps) => {
+    if (!deps) return;
+    const { logger, debugConfig } = deps;
     if (hasSystemTag(event)) {
       return;
     }
 
-    debugConfig = getConfig(debugConfig, event!);
-    if (debugConfig.logHookTriggered) {
+    const resolved = getConfig(debugConfig, event!);
+    if (resolved.logHookTriggered) {
       let logString = `[hook] ${event!.id} triggered`;
       await logger.info(logString);
     }
@@ -39,11 +41,13 @@ export const hookCompletedListener = defineHook({
     logger: globalResources.logger,
     debugConfig,
   },
-  run: async (event, { logger, debugConfig }) => {
+  run: async (event, deps) => {
+    if (!deps) return;
+    const { logger, debugConfig } = deps;
     // For internal observability events we still want to log when enabled
 
-    debugConfig = getConfig(debugConfig, event!);
-    if (debugConfig.logHookCompleted) {
+    const resolved = getConfig(debugConfig, event!);
+    if (resolved.logHookCompleted) {
       let logString = `[hook] ${event!.id} completed`;
       await logger.info(logString);
     }

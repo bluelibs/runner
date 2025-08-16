@@ -11,6 +11,7 @@ import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
 import { ValidationError } from "../errors";
 import { globalEvents } from "../globals/globalEvents";
+import { globalTags } from "../globals/globalTags";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
@@ -67,10 +68,13 @@ export class TaskRunner {
   ): Promise<any> {
     // Hooks are stored in `store.hooks`; use their computed deps
     const deps = this.store.hooks.get(hook.id)?.computedDependencies as any;
-    const isObservabilityEvent =
-      emission.id === globalEvents.hookTriggered.id ||
-      emission.id === globalEvents.hookCompleted.id;
+    // Internal observability events are tagged to be excluded from global listeners.
+    // We detect them by tag so we don't double-wrap them with our own hookTriggered/hookCompleted.
+    const isObservabilityEvent = Boolean(
+      globalTags.excludeFromGlobalListeners.extract(emission as any)
+    );
 
+    // The logic here is that we don't want to have lifecycle events for the events that are excluded from global ones.
     if (isObservabilityEvent) {
       return hook.run(emission as any, deps);
     }
@@ -193,6 +197,16 @@ export class TaskRunner {
       next = async (input) => {
         let result: any;
         try {
+          // Observability: emit middlewareTriggered (excluded from global listeners)
+          await this.eventManager.emit(
+            globalEvents.middlewareTriggered,
+            {
+              kind: "task",
+              middlewareId: middleware.id,
+              targetId: task.id as any,
+            },
+            middleware.id
+          );
           result = await storeMiddleware.middleware.run(
             {
               task: {
@@ -204,7 +218,16 @@ export class TaskRunner {
             storeMiddleware.computedDependencies,
             middleware.config
           );
-
+          // Observability: emit middlewareCompleted (excluded from global listeners)
+          await this.eventManager.emit(
+            globalEvents.middlewareCompleted,
+            {
+              kind: "task",
+              middlewareId: middleware.id,
+              targetId: task.id as any,
+            },
+            middleware.id
+          );
           return result;
         } catch (error) {
           // Emit unhandledError for middleware failures; still rethrow to caller
@@ -215,6 +238,17 @@ export class TaskRunner {
               middleware.id
             );
           } catch (_) {}
+          // Always emit middlewareCompleted with error after unhandledError
+          await this.eventManager.emit(
+            globalEvents.middlewareCompleted,
+            {
+              kind: "task",
+              middlewareId: middleware.id,
+              targetId: task.id as any,
+              error: error as any,
+            },
+            middleware.id
+          );
           throw error;
         }
       };
