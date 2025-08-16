@@ -7,6 +7,7 @@ import {
   IMiddlewareDefinition,
   DependencyValuesType,
   IResource,
+  IResourceWithConfig,
 } from "./defs";
 import { DependencyProcessor } from "./models/DependencyProcessor";
 import { EventManager } from "./models/EventManager";
@@ -15,7 +16,9 @@ import { Store } from "./models/Store";
 import { findCircularDependencies } from "./tools/findCircularDependencies";
 import { CircularDependenciesError } from "./errors";
 import { globalResources } from "./globals/globalResources";
-import { Logger } from "./models/Logger";
+import { Logger, LogLevels, PrintStrategy } from "./models/Logger";
+import { isResourceWithConfig } from "./define";
+import { debugResource, DebugFriendlyConfig } from "./globals/resources/debug";
 
 export type ResourcesStoreElementType<
   C = any,
@@ -52,20 +55,82 @@ export type RunnerState = {
   middleware: Record<string, MiddlewareStoreElementType>;
 };
 
-export async function run<C, V>(
-  resource: IResource<C, V extends Promise<any> ? V : Promise<any>>,
-  config?: C
+export type RunOptions = {
+  /**
+   * Defaults to false. If true, we introduce logging to the console.
+   */
+  debug?: DebugFriendlyConfig;
+  logs?: {
+    /**
+     * Defaults to info.
+     */
+    printThreshold?: LogLevels;
+    /**
+     * Defaults to PRETTY. How to print the logs.
+     */
+    printStrategy?: PrintStrategy;
+    /**
+     * Defaults to false. If true, we buffer logs until the root resource is ready.
+     * This provides you with the chance to see the logs before the root resource is ready.
+     */
+    bufferLogs?: boolean;
+  };
+  /**
+   * When true (default), installs a central error boundary that catches uncaught errors
+   * from process-level events and emits `global.unhandledError`.
+   */
+  errorBoundary?: boolean;
+  /**
+   * When true (default), installs SIGINT/SIGTERM handlers that call dispose() on the root.
+   */
+  shutdownHooks?: boolean;
+};
+
+export async function run<C, V extends Promise<any>>(
+  resourceOrResourceWithConfig:
+    | IResourceWithConfig<C, V>
+    | IResource<void, V, any, any> // For void configs
+    | IResource<{ [K in any]?: any }, V, any, any>, // For optional config
+  options?: RunOptions
 ): Promise<{
   value: V extends Promise<infer U> ? U : V;
+  store: Store;
   dispose: () => Promise<void>;
+  /** This is used to run tasks. */
+  taskRunner: TaskRunner;
+  eventManager: EventManager;
 }> {
+  const {
+    debug = false,
+    logs = {},
+    errorBoundary = true,
+    shutdownHooks = true,
+  } = options || {};
+  const {
+    printThreshold = "info",
+    printStrategy = "pretty",
+    bufferLogs = false,
+  } = logs;
+
   const eventManager = new EventManager();
+  let { resource, config } = extractResourceAndConfig(
+    resourceOrResourceWithConfig
+  );
 
   // ensure for logger, that it can be used only after: computeAllDependencies() has executed
-  const logger = new Logger(eventManager);
+  const logger = new Logger({
+    printThreshold,
+    printStrategy,
+    bufferLogs,
+  });
 
   const store = new Store(eventManager, logger);
   const taskRunner = new TaskRunner(store, eventManager, logger);
+
+  if (errorBoundary) {
+    setupProcessLevelSafetyNets(eventManager);
+  }
+
   const processor = new DependencyProcessor(
     store,
     eventManager,
@@ -78,6 +143,10 @@ export async function run<C, V>(
   store.storeGenericItem(globalResources.logger.with(logger));
   store.storeGenericItem(globalResources.taskRunner.with(taskRunner));
 
+  if (debug) {
+    store.storeGenericItem(debugResource.with(debug));
+  }
+
   // We verify that there isn't any circular dependencies before we begin computing the dependencies
   const dependentNodes = store.getDependentNodes();
   const circularDependencies = findCircularDependencies(dependentNodes);
@@ -89,7 +158,7 @@ export async function run<C, V>(
   await store.processOverrides();
 
   // a form of hooking, we create the events for all tasks and store them so they can be referenced
-  await store.storeEventsForAllTasks();
+  await store.storeEventsForAllTRM();
   await processor.attachListeners();
   await processor.computeAllDependencies();
 
@@ -98,19 +167,88 @@ export async function run<C, V>(
 
   // Now we can safely compute dependencies without being afraid of an infinite loop.
   // The hooking part is done here.
-  await eventManager.emit(globalEvents.beforeInit, null, resource.id);
 
   // Now we can initialise the root resource
   await processor.initializeRoot();
 
-  await eventManager.emit(globalEvents.afterInit, null, resource.id);
   await logger.debug("System initialized and operational.");
 
   // disallow manipulation or attaching more
   store.lock();
+  eventManager.lock();
+  await logger.lock();
+
+  if (shutdownHooks) {
+    setupShutdownHooks(() => store.dispose());
+  }
+
+  await eventManager.emit(
+    globalEvents.ready,
+    {
+      root: store.root.resource,
+    },
+    "system"
+  );
 
   return {
     value: store.root.value,
     dispose: () => store.dispose(),
+    store,
+    taskRunner,
+    eventManager,
   };
+}
+
+function setupProcessLevelSafetyNets(eventManager: EventManager) {
+  const onUncaughtException = async (err: any) => {
+    try {
+      await eventManager.emit(
+        globalEvents.unhandledError,
+        { kind: "process", error: err, note: "uncaughtException" },
+        "process"
+      );
+    } catch (_) {}
+  };
+  const onUnhandledRejection = async (reason: any) => {
+    try {
+      await eventManager.emit(
+        globalEvents.unhandledError,
+        { kind: "process", error: reason, note: "unhandledRejection" },
+        "process"
+      );
+    } catch (_) {}
+  };
+  process.on("uncaughtException", onUncaughtException as any);
+  process.on("unhandledRejection", onUnhandledRejection as any);
+}
+
+function setupShutdownHooks(disposeOnce: () => Promise<void>) {
+  const handler = async (signal: NodeJS.Signals) => {
+    try {
+      await disposeOnce();
+    } finally {
+      // Exit with code 0 for graceful shutdown
+      process.exit(0);
+    }
+  };
+  process.once("SIGINT", handler);
+  process.once("SIGTERM", handler);
+}
+
+function extractResourceAndConfig<C, V extends Promise<any>>(
+  resourceOrResourceWithConfig:
+    | IResourceWithConfig<C, V>
+    | IResource<void, V, any, any> // For void configs
+    | IResource<{ [K in any]?: any }, V, any, any> // For optional config
+) {
+  let resource: IResource<any, any, any, any>;
+  let config: any;
+  if (isResourceWithConfig(resourceOrResourceWithConfig)) {
+    resource = resourceOrResourceWithConfig.resource;
+    config = resourceOrResourceWithConfig.config;
+  } else {
+    resource = resourceOrResourceWithConfig as IResource<any, any, any, any>;
+    config = undefined;
+  }
+  return { resource, config };
 }

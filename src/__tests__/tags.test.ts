@@ -19,19 +19,27 @@ describe("Configurable Tags", () => {
       expect(typeof performanceTag.extract).toBe("function");
     });
 
-    it("should create a tag with symbol id", () => {
-      const symbolId = Symbol("test.tag");
-      const testTag = defineTag<{ value: string }>({ id: symbolId });
-
-      expect(testTag.id).toBe(symbolId);
-    });
-
     it("should create a tag without configuration", () => {
       const simpleTag = defineTag({ id: "simple.tag" });
 
       expect(simpleTag.id).toBe("simple.tag");
       expect(typeof simpleTag.with).toBe("function");
       expect(typeof simpleTag.extract).toBe("function");
+    });
+
+    it("should work with validation schema", () => {
+      const simpleTag = defineTag<{ value: string }>({
+        id: "simple.tag",
+        configSchema: {
+          parse: (input) => {
+            throw new Error("Validation Error");
+          },
+        },
+      });
+
+      expect(() => simpleTag.with({ value: 123 as unknown as string })).toThrow(
+        "Validation Error"
+      );
     });
   });
 
@@ -118,19 +126,6 @@ describe("Configurable Tags", () => {
 
       expect(extracted).not.toBeNull();
       expect(extracted?.config).toEqual({ alertAboveMs: 100 });
-    });
-
-    it("should handle symbol ids correctly", () => {
-      const symbolId = Symbol("test.tag");
-      const testTag = defineTag<{ data: string }>({ id: symbolId });
-
-      const tags = [testTag.with({ data: "test" })];
-
-      const extracted = testTag.extract(tags);
-
-      expect(extracted).not.toBeNull();
-      expect(extracted?.id).toBe(symbolId);
-      expect(extracted?.config).toEqual({ data: "test" });
     });
 
     it("should extract configured tag from a taggable object (task.definition)", () => {

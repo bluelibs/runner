@@ -9,13 +9,13 @@ import {
 
 export class StoreValidator {
   constructor(
-    private tasks: Map<string | symbol, TaskStoreElementType>,
-    private resources: Map<string | symbol, ResourceStoreElementType>,
-    private events: Map<string | symbol, EventStoreElementType>,
-    private middlewares: Map<string | symbol, MiddlewareStoreElementType>
+    private tasks: Map<string, TaskStoreElementType>,
+    private resources: Map<string, ResourceStoreElementType>,
+    private events: Map<string, EventStoreElementType>,
+    private middlewares: Map<string, MiddlewareStoreElementType>
   ) {}
 
-  checkIfIDExists(id: string | symbol): void | never {
+  checkIfIDExists(id: string): void | never {
     if (this.tasks.has(id)) {
       throw new DuplicateRegistrationError("Task", id);
     }
@@ -32,10 +32,11 @@ export class StoreValidator {
 
   runSanityChecks() {
     for (const task of this.tasks.values()) {
-      task.task.middleware.forEach((middlewareAttachment) => {
+      const middlewares = task.task.middleware;
+      middlewares.forEach((middlewareAttachment) => {
         if (!this.middlewares.has(middlewareAttachment.id)) {
           throw new DependencyNotFoundError(
-            `Middleware ${middlewareAttachment.id.toString()} in Task ${task.task.id.toString()}`
+            `Middleware ${middlewareAttachment.id} in Task ${task.task.id}`
           );
         }
       });

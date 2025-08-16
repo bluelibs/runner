@@ -3,8 +3,8 @@
  *
  * This file contains the strongly-typed contract for tasks, resources, events
  * and middleware. It mirrors the mental model described in the README:
- * - Tasks are functions (with lifecycle events)
- * - Resources are singletons (with init/dispose hooks and lifecycle events)
+ * - Tasks are functions
+ * - Resources are singletons (with init/dispose hooks)
  * - Events are simple, strongly-typed emissions
  * - Middleware can target both tasks and resources
  *
@@ -52,6 +52,8 @@ export const symbolMiddleware: unique symbol = Symbol("runner.middleware");
 export const symbolMiddlewareConfigured: unique symbol = Symbol(
   "runner.middlewareConfigured"
 );
+/** @internal Marks hook definitions (event listeners without middleware) */
+export const symbolHook: unique symbol = Symbol("runner.hook");
 export const symbolMiddlewareGlobal: unique symbol = Symbol(
   "runner.middlewareGlobal"
 );
@@ -60,6 +62,11 @@ export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol(
 );
 export const symbolMiddlewareEverywhereResources: unique symbol = Symbol(
   "runner.middlewareGlobalResources"
+);
+
+/** @internal Marks an optional dependency wrapper */
+export const symbolOptionalDependency: unique symbol = Symbol(
+  "runner.optionalDependency"
 );
 
 /** @internal Path to aid anonymous id generation and error messages */
@@ -75,14 +82,16 @@ export const symbolIndexResource: unique symbol = Symbol(
 );
 
 export interface ITagDefinition<TConfig = void, TEnforceContract = void> {
-  id: string | symbol;
+  id: string;
+  meta?: ITagMeta;
+  configSchema?: IValidationSchema<TConfig>;
 }
 
 /**
  * A configured instance of a tag as produced by `ITag.with()`.
  */
 export interface ITagWithConfig<TConfig = void, TEnforceContract = void> {
-  id: string | symbol;
+  id: string;
   /** The tag definition used to produce this configured instance. */
   tag: ITag<TConfig, TEnforceContract>;
   /** The configuration captured for this tag instance. */
@@ -127,8 +136,8 @@ export type TagType =
  * - For required config → identifier with required config
  */
 export type ExtractedTagResult<TConfig, TEnforceContract> = {} extends TConfig
-  ? { id: string | symbol; config?: TConfig }
-  : { id: string | symbol; config: TConfig };
+  ? { id: string; config?: TConfig }
+  : { id: string; config: TConfig };
 
 /**
  * Any object that can carry tags via metadata. This mirrors how tasks,
@@ -153,6 +162,7 @@ export interface ITaskMeta extends IMeta {}
 export interface IResourceMeta extends IMeta {}
 export interface IEventMeta extends IMeta {}
 export interface IMiddlewareMeta extends IMeta {}
+export interface ITagMeta extends Omit<IMeta, "tags"> {}
 
 /**
  * A mapping of dependency keys to Runner definitions. Used in `dependencies`
@@ -161,8 +171,21 @@ export interface IMiddlewareMeta extends IMeta {}
  */
 export type DependencyMapType = Record<
   string,
-  ITask<any, any, any, any> | IResource<any, any, any> | IEventDefinition<any>
+  | ITask<any, any, any, any>
+  | IResource<any, any, any, any, any>
+  | IEventDefinition<any>
+  | IOptionalDependency<ITask<any, any, any, any>>
+  | IOptionalDependency<IResource<any, any, any, any, any>>
+  | IOptionalDependency<IEventDefinition<any>>
 >;
+
+/** Wrapper type marking a dependency as optional at wiring time */
+export interface IOptionalDependency<T> {
+  /** The wrapped dependency definition */
+  inner: T;
+  /** Brand symbol for optional dependency */
+  [symbolOptionalDependency]: true;
+}
 
 // Helper Types for Extracting Generics
 type ExtractTaskInput<T> = T extends ITask<infer I, any, infer D> ? I : never;
@@ -204,10 +227,41 @@ export type DependencyValueType<T> = T extends ITask<any, any, any>
   ? ResourceDependency<ExtractResourceValue<T>>
   : T extends IEventDefinition<any>
   ? EventDependency<ExtractEventParams<T>>
+  : T extends IOptionalDependency<infer U>
+  ? DependencyValueType<U> | undefined
   : never;
 
 export type DependencyValuesType<T extends DependencyMapType> = {
   [K in keyof T]: DependencyValueType<T[K]>;
+};
+
+// Per-task local interceptor for resource dependency context
+export type TaskLocalInterceptor<TInput, TOutput> = (
+  next: (input: TInput) => TOutput,
+  input: TInput
+) => TOutput;
+
+// When tasks are injected into resources, they expose an intercept() API
+export type TaskDependencyWithIntercept<TInput, TOutput> = TaskDependency<
+  TInput,
+  TOutput
+> & {
+  intercept: (middleware: TaskLocalInterceptor<TInput, TOutput>) => void;
+};
+
+/** Resource-context dependency typing where tasks expose intercept() */
+export type ResourceDependencyValueType<T> = T extends ITask<any, any, any>
+  ? TaskDependencyWithIntercept<ExtractTaskInput<T>, ExtractTaskOutput<T>>
+  : T extends IResource<any, any>
+  ? ResourceDependency<ExtractResourceValue<T>>
+  : T extends IEventDefinition<any>
+  ? EventDependency<ExtractEventParams<T>>
+  : T extends IOptionalDependency<infer U>
+  ? ResourceDependencyValueType<U> | undefined
+  : never;
+
+export type ResourceDependencyValuesType<T extends DependencyMapType> = {
+  [K in keyof T]: ResourceDependencyValueType<T[K]>;
 };
 
 /**
@@ -222,6 +276,7 @@ export type RegisterableItems<T = any> =
   | IResource<void, any, any, any> // For void configs
   | IResource<{ [K in any]?: any }, any, any, any> // For optional config
   | ITask<any, any, any, any>
+  | IHook<any, any>
   | IMiddleware<any>
   | IEvent<any>;
 
@@ -234,14 +289,10 @@ export interface ITaskDefinition<
   TInput = any,
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
-  TOn extends "*" | IEventDefinition<any> | undefined = undefined, // Adding a generic to track 'on' type,
   TMeta extends ITaskMeta = any
 > {
-  /**
-   * Stable identifier. If omitted, an anonymous id is generated from file path
-   * (see README: Anonymous IDs).
-   */
-  id?: string | symbol;
+  /** Stable identifier. Anonymous IDs are not permitted. */
+  id: string;
   /**
    * Access other tasks/resources/events. Can be an object or a function when
    * you need late or config‑dependent resolution.
@@ -249,15 +300,6 @@ export interface ITaskDefinition<
   dependencies?: TDependencies | (() => TDependencies);
   /** Middleware applied around task execution. */
   middleware?: MiddlewareAttachments[];
-  /**
-   * Listen to events in a simple way
-   */
-  on?: TOn;
-  /**
-   * This makes sense only when `on` is specified to provide the order of the execution.
-   * The event with the lowest order will be executed first.
-   */
-  listenerOrder?: number;
   /** Optional metadata used for docs, filtering and tooling. */
   meta?: TMeta;
   /**
@@ -270,41 +312,14 @@ export interface ITaskDefinition<
    * it's the declared input type.
    */
   run: (
-    input: TOn extends undefined
-      ? TInput
-      : IEventEmission<TOn extends "*" ? any : ExtractEventParams<TOn>>,
+    input: TInput,
     dependencies: DependencyValuesType<TDependencies>
   ) => HasContracts<TMeta> extends true
     ? EnsureResponseSatisfiesContracts<TMeta, TOutput>
     : TOutput;
 }
 
-export type BeforeRunEventPayload<TInput> = {
-  input: TInput;
-};
-
-export type AfterRunEventPayload<TInput, TOutput> = {
-  input: TInput;
-  output: TOutput extends Promise<infer U> ? U : TOutput;
-  setOutput(newOutput: TOutput extends Promise<infer U> ? U : TOutput): void;
-};
-
-export type OnErrorEventPayload = {
-  error: any;
-  /**
-   * This function can be called to suppress the error from being thrown.
-   */
-  suppress(): void;
-};
-
-export type BeforeInitEventPayload<TConfig> = {
-  config: TConfig;
-};
-
-export type AfterInitEventPayload<TConfig, TValue> = {
-  config: TConfig;
-  value: TValue;
-};
+// Lifecycle event payload types removed
 
 /**
  * This is the response after the definition has been prepared. TODO: better naming?
@@ -313,23 +328,50 @@ export interface ITask<
   TInput = any,
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
-  TOn extends "*" | IEventDefinition<any> | undefined = undefined,
   TMeta extends ITaskMeta = any
-> extends ITaskDefinition<TInput, TOutput, TDependencies, TOn, TMeta> {
-  id: string | symbol;
+> extends ITaskDefinition<TInput, TOutput, TDependencies, TMeta> {
+  id: string;
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
   middleware: MiddlewareAttachments[];
-  /**
-   * These events are automatically populated after the task has been defined.
-   */
-  events: {
-    beforeRun: IEvent<BeforeRunEventPayload<TInput>>;
-    afterRun: IEvent<AfterRunEventPayload<TInput, TOutput>>;
-    onError: IEvent<OnErrorEventPayload>;
-  };
   [symbolFilePath]: string;
   [symbolTask]: true;
+  /** Return an optional dependency wrapper for this task. */
+  optional: () => IOptionalDependency<
+    ITask<TInput, TOutput, TDependencies, TMeta>
+  >;
+}
+
+/**
+ * Hook definition and instance types (event listeners without middleware)
+ */
+export interface IHookDefinition<
+  TDependencies extends DependencyMapType = {},
+  TOn extends "*" | IEventDefinition<any> = any,
+  TMeta extends ITaskMeta = any
+> {
+  id: string;
+  dependencies?: TDependencies | (() => TDependencies);
+  on: TOn;
+  /** Listener execution order. Lower numbers run first. */
+  order?: number;
+  meta?: TMeta;
+  run: (
+    event: IEventEmission<TOn extends "*" ? any : ExtractEventParams<TOn>>,
+    dependencies: DependencyValuesType<TDependencies>
+  ) => Promise<any>;
+}
+
+export interface IHook<
+  TDependencies extends DependencyMapType = {},
+  TOn extends "*" | IEventDefinition<any> = any,
+  TMeta extends ITaskMeta = any
+> extends IHookDefinition<TDependencies, TOn, TMeta> {
+  id: string;
+  dependencies: TDependencies | (() => TDependencies);
+  computedDependencies?: DependencyValuesType<TDependencies>;
+  [symbolFilePath]: string;
+  [symbolHook]: true;
 }
 
 export interface IResourceDefinition<
@@ -341,8 +383,8 @@ export interface IResourceDefinition<
   TRegisterableItems = any,
   TMeta extends IResourceMeta = any
 > {
-  /** Stable identifier. Omit to get an anonymous id. */
-  id?: string | symbol;
+  /** Stable identifier. */
+  id: string;
   /** Static or lazy dependency map. Receives `config` when provided. */
   dependencies?: TDependencies | ((config: TConfig) => TDependencies);
   /**
@@ -358,7 +400,7 @@ export interface IResourceDefinition<
   init?: (
     this: any,
     config: TConfig,
-    dependencies: DependencyValuesType<TDependencies>,
+    dependencies: ResourceDependencyValuesType<TDependencies>,
     context: TContext
   ) => HasContracts<TMeta> extends true
     ? EnsureResponseSatisfiesContracts<TMeta, TValue>
@@ -375,7 +417,7 @@ export interface IResourceDefinition<
     this: any,
     value: TValue extends Promise<infer U> ? U : TValue,
     config: TConfig,
-    dependencies: DependencyValuesType<TDependencies>,
+    dependencies: ResourceDependencyValuesType<TDependencies>,
     context: TContext
   ) => Promise<void>;
   meta?: TMeta;
@@ -421,24 +463,20 @@ export interface IResource<
     any,
     TMeta
   > {
-  id: string | symbol;
+  id: string;
   with(config: TConfig): IResourceWithConfig<TConfig, TValue, TDependencies>;
   register:
     | Array<RegisterableItems>
     | ((config: TConfig) => Array<RegisterableItems>);
-  /**
-   * These events are automatically populated after the task has been defined.
-   */
-  events: {
-    beforeInit: IEvent<BeforeInitEventPayload<TConfig>>;
-    afterInit: IEvent<AfterInitEventPayload<TConfig, TValue>>;
-    onError: IEvent<OnErrorEventPayload>;
-  };
   overrides: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
   middleware: MiddlewareAttachments[];
   [symbolFilePath]: string;
   [symbolIndexResource]: boolean;
   [symbolResource]: true;
+  /** Return an optional dependency wrapper for this resource. */
+  optional: () => IOptionalDependency<
+    IResource<TConfig, TValue, TDependencies, TContext, TMeta>
+  >;
 }
 
 export interface IResourceWithConfig<
@@ -459,8 +497,8 @@ export type EventHandlerType<T = any> = (
 ) => any | Promise<any>;
 
 export interface IEventDefinition<TPayload = void> {
-  /** Stable identifier. Omit to get an anonymous id. */
-  id?: string | symbol;
+  /** Stable identifier. Anonymous IDs are not permitted. */
+  id: string;
   meta?: IEventMeta;
   /**
    * Optional validation schema for runtime payload validation.
@@ -469,13 +507,19 @@ export interface IEventDefinition<TPayload = void> {
   payloadSchema?: IValidationSchema<TPayload>;
 }
 
+/**
+ * The definioten of the event.
+ * This is different from the event emission.
+ */
 export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
-  id: string | symbol;
+  id: string;
   /**
    * We use this event to discriminate between resources with just 'id' and 'events' as they collide. This is a workaround, should be redone using classes and instanceof.
    */
   [symbolEvent]: true;
   [symbolFilePath]: string;
+  /** Return an optional dependency wrapper for this event. */
+  optional: () => IOptionalDependency<IEvent<TPayload>>;
 }
 
 /**
@@ -486,7 +530,7 @@ export interface IEventEmission<TPayload = any> {
    * The ID of the event. This is the same as the event's ID.
    * This is useful for global event listeners.
    */
-  id: string | symbol;
+  id: string;
   /**
    * The data that the event carries. It can be anything.
    */
@@ -498,7 +542,7 @@ export interface IEventEmission<TPayload = any> {
   /**
    * The source of the event. This can be useful for debugging.
    */
-  source: string | symbol;
+  source: string;
   /**
    * Metadata associated with the event definition.
    */
@@ -517,8 +561,8 @@ export interface IMiddlewareDefinition<
   TConfig = any,
   TDependencies extends DependencyMapType = any
 > {
-  /** Stable identifier. Omit to get an anonymous id. */
-  id?: string | symbol;
+  /** Stable identifier. Anonymous IDs are not permitted. */
+  id: string;
   /** Static or lazy dependency map. */
   dependencies?: TDependencies | ((config: TConfig) => TDependencies);
   /**
@@ -528,6 +572,7 @@ export interface IMiddlewareDefinition<
   configSchema?: IValidationSchema<TConfig>;
   /**
    * The middleware body, called with task/resource execution input.
+   * The response of the middleware should be void, but we allow any to be returned for convenience.
    */
   run: (
     input: IMiddlewareExecutionInput,
@@ -536,6 +581,22 @@ export interface IMiddlewareDefinition<
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
 }
+
+export type MiddlewareInputMaybeTaskOrResource =
+  | {
+      task: {
+        definition: ITask<any, any, any, any>;
+        input: any;
+      };
+      resource?: never;
+    }
+  | {
+      resource: {
+        definition: IResource<any, any, any, any, any>;
+        config: any;
+      };
+      task?: never;
+    };
 
 export interface IMiddleware<
   TConfig = any,
@@ -548,7 +609,7 @@ export interface IMiddleware<
     | ((task: ITask<any, any, any, any>) => boolean);
   [symbolMiddlewareEverywhereResources]?: boolean;
 
-  id: string | symbol;
+  id: string;
   dependencies: TDependencies | (() => TDependencies);
   /**
    * Attach this middleware globally. Use options to scope to tasks/resources. This only works in `register: []` for resources.
@@ -585,7 +646,7 @@ export interface IMiddlewareExecutionInput<
 > {
   /** Task hook: present when wrapping a task run. */
   task?: {
-    definition: ITask<TTaskInput>;
+    definition: ITask<TTaskInput, any, any, any>;
     input: TTaskInput;
   };
   /** Resource hook: present when wrapping init/dispose. */

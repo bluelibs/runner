@@ -8,7 +8,7 @@
     "url": "https://github.com/bluelibs/bluelibs"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc --project tsconfig.build.json",
     "clean": "rm -rf dist",
     "watch": "tsc -w",
     "test": "jest --verbose --runInBand",

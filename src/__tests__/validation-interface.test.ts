@@ -1,4 +1,4 @@
-import { defineTask, defineResource, defineEvent, defineMiddleware } from "../define";
+import { defineTask, defineResource, defineEvent, defineMiddleware, defineHook } from "../define";
 import { run } from "../run";
 import { IValidationSchema } from "../defs";
 
@@ -279,7 +279,7 @@ describe("Generic Validation Interface", () => {
       });
 
       let receivedMessage = "";
-      const listenerTask = defineTask({
+      const listenerTask = defineHook({
         id: "task.listener",
         on: testEvent,
         run: async (event) => {

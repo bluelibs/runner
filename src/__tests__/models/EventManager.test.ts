@@ -5,6 +5,7 @@ import {
   symbolFilePath,
 } from "../../defs";
 import { EventManager } from "../../models/EventManager";
+import { defineEvent } from "../../define";
 
 describe("EventManager", () => {
   let eventManager: EventManager;
@@ -12,11 +13,7 @@ describe("EventManager", () => {
 
   beforeEach(() => {
     eventManager = new EventManager();
-    eventDefinition = {
-      id: "testEvent",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
+    eventDefinition = defineEvent<string>({ id: "testEvent" });
   });
 
   it("should add and emit event listener", async () => {
@@ -170,16 +167,8 @@ describe("EventManager", () => {
   });
 
   it("should handle multiple events", async () => {
-    const eventDef1: IEvent<string> = {
-      id: "event1",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
-    const eventDef2: IEvent<string> = {
-      id: "event2",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
+    const eventDef1 = defineEvent<string>({ id: "event1" });
+    const eventDef2 = defineEvent<string>({ id: "event2" });
 
     const handler1 = jest.fn();
     const handler2 = jest.fn();
@@ -222,16 +211,8 @@ describe("EventManager", () => {
   });
 
   it("should handle listeners added to multiple events", async () => {
-    const eventDef1: IEvent<string> = {
-      id: "event1",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
-    const eventDef2: IEvent<string> = {
-      id: "event2",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
+    const eventDef1 = defineEvent<string>({ id: "event1" });
+    const eventDef2 = defineEvent<string>({ id: "event2" });
 
     const handler = jest.fn();
 
@@ -258,16 +239,8 @@ describe("EventManager", () => {
   });
 
   it("should not affect other events when emitting one", async () => {
-    const eventDef1: IEvent<string> = {
-      id: "event1",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
-    const eventDef2: IEvent<string> = {
-      id: "event2",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
+    const eventDef1 = defineEvent<string>({ id: "event1" });
+    const eventDef2 = defineEvent<string>({ id: "event2" });
 
     const handler1 = jest.fn();
     const handler2 = jest.fn();
@@ -403,11 +376,7 @@ describe("EventManager", () => {
   it("should handle listeners with no data", async () => {
     const handler = jest.fn();
 
-    const voidEventDefinition: IEvent<void> = {
-      id: "voidEvent",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
+    const voidEventDefinition = defineEvent<void>({ id: "voidEvent" });
 
     eventManager.addListener(voidEventDefinition, handler);
 
@@ -460,16 +429,8 @@ describe("EventManager", () => {
     });
 
     it("should invalidate all caches when adding global listeners", async () => {
-      const event1: IEvent<string> = {
-        id: "event1",
-        [symbolEvent]: true,
-        [symbolFilePath]: "test.ts",
-      };
-      const event2: IEvent<string> = {
-        id: "event2",
-        [symbolEvent]: true,
-        [symbolFilePath]: "test.ts",
-      };
+      const event1 = defineEvent<string>({ id: "event1" });
+      const event2 = defineEvent<string>({ id: "event2" });
 
       const handler1 = jest.fn();
       const handler2 = jest.fn();
@@ -493,11 +454,7 @@ describe("EventManager", () => {
     });
 
     it("should optimize for empty listener scenarios", async () => {
-      const emptyEventDef: IEvent<string> = {
-        id: "emptyEvent",
-        [symbolEvent]: true,
-        [symbolFilePath]: "test.ts",
-      };
+      const emptyEventDef = defineEvent<string>({ id: "emptyEvent" });
 
       // Should return immediately without creating event object
       await eventManager.emit(emptyEventDef, "test", "source");
@@ -552,16 +509,8 @@ describe("EventManager", () => {
     });
 
     it("should reuse cached results across different event types", async () => {
-      const event1: IEvent<string> = {
-        id: "event1",
-        [symbolEvent]: true,
-        [symbolFilePath]: "test.ts",
-      };
-      const event2: IEvent<string> = {
-        id: "event2",
-        [symbolEvent]: true,
-        [symbolFilePath]: "test.ts",
-      };
+      const event1 = defineEvent<string>({ id: "event1" });
+      const event2 = defineEvent<string>({ id: "event2" });
 
       const handler1 = jest.fn();
       const handler2 = jest.fn();
@@ -581,5 +530,87 @@ describe("EventManager", () => {
       expect(handler2).toHaveBeenCalledTimes(2);
       expect(globalHandler).toHaveBeenCalledTimes(4);
     });
+  });
+
+  it("should stop propagation when stopPropagation is called", async () => {
+    const results: string[] = [];
+
+    const firstHandler = jest.fn((event: IEventEmission<string>) => {
+      results.push("first");
+      expect(event.isPropagationStopped()).toBe(false);
+      event.stopPropagation();
+      expect(event.isPropagationStopped()).toBe(true);
+    });
+
+    const secondHandler = jest.fn(() => {
+      results.push("second");
+    });
+
+    const globalHandler = jest.fn(() => {
+      results.push("global");
+    });
+
+    eventManager.addListener(eventDefinition, firstHandler, { order: 1 });
+    eventManager.addListener(eventDefinition, secondHandler, { order: 2 });
+    eventManager.addGlobalListener(globalHandler, { order: 3 });
+
+    await eventManager.emit(eventDefinition, "data", "test");
+
+    expect(firstHandler).toHaveBeenCalledTimes(1);
+    expect(secondHandler).not.toHaveBeenCalled();
+    expect(globalHandler).not.toHaveBeenCalled();
+    expect(results).toEqual(["first"]);
+  });
+
+  it("hasListeners returns false when no listeners are registered", () => {
+    const emptyEvent = defineEvent<string>({ id: "noListenersEvent" });
+
+    expect(eventManager.hasListeners(emptyEvent)).toBe(false);
+  });
+
+  it("hasListeners returns false for an event that has no listeners while others do", () => {
+    const targetEvent = defineEvent<string>({ id: "targetEvent" });
+    const otherEvent = defineEvent<string>({ id: "otherEvent" });
+
+    eventManager.addListener(otherEvent, jest.fn());
+
+    expect(eventManager.hasListeners(targetEvent)).toBe(false);
+  });
+
+  it("hasListeners returns true when event listeners are registered", () => {
+    const handler = jest.fn();
+    eventManager.addListener(eventDefinition, handler);
+    expect(eventManager.hasListeners(eventDefinition)).toBe(true);
+  });
+
+  it("validates payload with schema: success and failure", async () => {
+    const schemaEvent = defineEvent<any>({
+      id: "schema.event",
+      payloadSchema: {
+        parse: (data: any) => {
+          if (!data || typeof data.x !== "number") {
+            throw new Error("Invalid");
+          }
+          return data;
+        },
+      },
+    });
+    const ok = jest.fn();
+    eventManager.addListener(schemaEvent, ok);
+    await expect(
+      eventManager.emit(schemaEvent, { x: 1 }, "src")
+    ).resolves.toBeUndefined();
+    expect(ok).toHaveBeenCalled();
+
+    await expect(
+      eventManager.emit(schemaEvent, { x: "nope" } as any, "src")
+    ).rejects.toThrow(/Event payload/i);
+  });
+
+  it("hasListeners returns true when only global listeners exist and event has empty array", () => {
+    const handler = jest.fn();
+    eventManager.addGlobalListener(handler);
+    (eventManager as any).listeners.set(eventDefinition.id, []);
+    expect(eventManager.hasListeners(eventDefinition)).toBe(true);
   });
 });

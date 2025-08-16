@@ -1,4 +1,4 @@
-import { defineTask, defineResource, defineEvent, defineMiddleware } from "../define";
+import { defineTask, defineResource, defineEvent, defineMiddleware, defineHook } from "../define";
 import { run } from "../run";
 import { ValidationError } from "../errors";
 import { IValidationSchema } from "../defs";
@@ -88,7 +88,7 @@ describe("Validation Edge Cases", () => {
       payloadSchema: payloadSchema,
     });
 
-    const listenerTask = defineTask({
+    const listenerTask = defineHook({
       id: "task.listener",
       on: event,
       run: async (event) => {

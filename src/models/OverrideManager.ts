@@ -11,12 +11,12 @@ import { StoreRegistry } from "./StoreRegistry";
 
 export class OverrideManager {
   public overrides: Map<
-    string | symbol,
+    string,
     IResource | IMiddleware | ITask | IResourceWithConfig
   > = new Map();
 
   public overrideRequests: Set<{
-    source: string | symbol;
+    source: string;
     override: RegisterableItems;
   }> = new Set();
 
@@ -28,7 +28,7 @@ export class OverrideManager {
         this.storeOverridesDeeply(override);
       }
 
-      let id: string | symbol;
+      let id: string;
       if (utils.isResourceWithConfig(override)) {
         this.storeOverridesDeeply(override.resource);
         id = override.resource.id;

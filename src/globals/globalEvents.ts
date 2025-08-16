@@ -1,125 +1,97 @@
 import { defineEvent } from "../define";
-import { ITask, IResource, IEvent } from "../defs";
+import { IEvent, IResource } from "../defs";
 import { ILog } from "../models/Logger";
+import { globalTags } from "./globalTags";
+
+const systemTag = globalTags.system;
 
 export const globalEvents = {
-  beforeInit: defineEvent({
-    id: "globals.events.beforeInit",
+  // Minimal core events retained if any (custom events can still be defined by users)
+  /**
+   * Emitted when the system is fully initialized and ready for work.
+   */
+  ready: defineEvent<{
+    root: IResource<any, any, any, any>;
+  }>({
+    id: "global.ready",
     meta: {
-      title: "Before Initialization",
+      title: "System Ready",
       description:
-        "Triggered before any resource or system-wide initialization occurs.",
-      tags: ["system"],
+        "Emitted when the system has completed boot and is ready for listeners to start work." +
+        "This runs right before returning value for run().",
+      tags: [systemTag],
     },
   }),
-  afterInit: defineEvent({
-    id: "globals.events.afterInit",
+  /**
+   * Emitted right before a hook's run executes.
+   */
+  hookTriggered: defineEvent<{
+    hookId: string;
+    eventId: string;
+  }>({
+    id: "global.events.hookTriggered",
     meta: {
-      title: "After Initialization",
+      title: "Hook Triggered",
       description:
-        "Fired after the system or resource initialization is completed.",
-      tags: ["system"],
+        "Emitted immediately before a hook starts running for an event.",
+      tags: [systemTag, globalTags.excludeFromGlobalListeners],
     },
   }),
-  log: defineEvent<ILog>({
-    id: "globals.events.log",
+  /**
+   * Emitted after a hook completes (success or failure). Contains optional error.
+   */
+  hookCompleted: defineEvent<{
+    hookId: string;
+    eventId: string;
+    error?: Error;
+  }>({
+    id: "global.hookCompleted",
     meta: {
-      title: "Log Event",
-      description: "Used to log events and messages across the system.",
-      tags: ["system"],
+      title: "Hook Completed",
+      description: "Emitted after a hook finishes running for an event.",
+      tags: [systemTag, globalTags.excludeFromGlobalListeners],
     },
   }),
-  tasks: {
-    beforeRun: defineEvent<{
-      task: ITask<any, any, any>;
-      input: any;
-    }>({
-      id: "globals.events.tasks.beforeRun",
-      meta: {
-        title: "Before Task Execution",
-        description:
-          "Triggered before a task starts running, providing access to the input data.",
-        tags: ["system"],
-      },
-    }),
-    afterRun: defineEvent<{
-      task: ITask<any, any, any>;
-      input: any;
-      output: any;
-      setOutput: (newOutput: any) => void;
-    }>({
-      id: "globals.events.tasks.afterRun",
-      meta: {
-        title: "After Task Execution",
-        description:
-          "Fired after a task has completed, providing both the input and output data.",
-        tags: ["system"],
-      },
-    }),
-    onError: defineEvent<{
-      error: any;
-      suppress: () => void;
-      task: ITask<any, any, any>;
-    }>({
-      id: "globals.events.tasks.onError",
-      meta: {
-        title: "Task Error",
-        description:
-          "Triggered when an error occurs during task execution. Allows error suppression.",
-        tags: ["system"],
-      },
-    }),
-  },
-  resources: {
-    beforeInit: defineEvent<{
-      resource: IResource<any, any, any>;
-      config: any;
-    }>({
-      id: "globals.events.resources.beforeInit",
-      meta: {
-        title: "Before Resource Initialization",
-        description:
-          "Fired before a resource is initialized, with access to the configuration.",
-        tags: ["system"],
-      },
-    }),
-    afterInit: defineEvent<{
-      resource: IResource<any, any, any>;
-      config: any;
-      value: any;
-    }>({
-      id: "globals.events.resources.afterInit",
-      meta: {
-        title: "After Resource Initialization",
-        description:
-          "Fired after a resource has been initialized, providing the final value.",
-        tags: ["system"],
-      },
-    }),
-    onError: defineEvent<{
-      error: Error;
-      suppress: () => void;
-      resource: IResource<any, any, any>;
-    }>({
-      id: "globals.events.resources.onError",
-      meta: {
-        title: "Resource Error",
-        description:
-          "Triggered when an error occurs during resource initialization. Allows error suppression.",
-        tags: ["system"],
-      },
-    }),
-  },
-};
+  /**
+   * Emitted when an event listener throws. Used as a non-crashing fallback.
+   */
+  listenerError: defineEvent<{
+    eventId: string;
+    source: string;
+    error: any;
+  }>({
+    id: "global.listenerError",
+    meta: {
+      title: "Listener Error",
+      description:
+        "Emitted when an event listener throws. Handlers can log or route this.",
+      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+    },
+  }),
+  /**
+   * Central error boundary event for any thrown error across the runner.
+   */
+  unhandledError: defineEvent<{
+    kind: "task" | "middleware" | "resourceInit" | "hook" | "process";
+    id?: string;
+    source?: string;
+    note?: string;
+    error: any;
+  }>({
+    id: "global.unhandledError",
+    meta: {
+      title: "Unhandled Error",
+      description:
+        "Central error boundary event for any thrown error across the runner.",
+      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+    },
+  }),
+} as const;
 
-export const globalEventsArray = [
-  globalEvents.log,
-  globalEvents.beforeInit,
-  globalEvents.afterInit,
-  globalEvents.tasks.beforeRun,
-  globalEvents.tasks.afterRun,
-  globalEvents.tasks.onError,
-  globalEvents.resources.beforeInit,
-  globalEvents.resources.afterInit,
-  globalEvents.resources.onError,
+export const globalEventsArray: IEvent<any>[] = [
+  globalEvents.ready,
+  globalEvents.hookTriggered,
+  globalEvents.hookCompleted,
+  globalEvents.listenerError,
+  globalEvents.unhandledError,
 ];

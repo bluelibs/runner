@@ -1,14 +1,14 @@
 import {
   DependencyMapType,
   DependencyValuesType,
-  ITask,
   IResource,
+  ResourceDependencyValuesType,
 } from "../defs";
 import { EventManager } from "./EventManager";
-import { globalEvents } from "../globals/globalEvents";
 import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
+import { globalEvents } from "../globals/globalEvents";
 
 export class ResourceInitializer {
   constructor(
@@ -29,25 +29,11 @@ export class ResourceInitializer {
   >(
     resource: IResource<TConfig, TValue, TDeps>,
     config: TConfig,
-    dependencies: DependencyValuesType<TDeps>
+    dependencies: ResourceDependencyValuesType<TDeps>
   ): Promise<{ value: TValue; context: TContext }> {
     const context = resource.context?.();
-    await this.eventManager.emit(
-      globalEvents.resources.beforeInit,
-      {
-        config,
-        resource,
-      },
-      resource.id
-    );
 
-    await this.eventManager.emit(
-      resource.events.beforeInit,
-      { config },
-      resource.id
-    );
-
-    let error: any, value: TValue | undefined;
+    let value: TValue | undefined;
     try {
       if (resource.init) {
         value = await this.initWithMiddleware(
@@ -58,60 +44,21 @@ export class ResourceInitializer {
         );
       }
 
-      await this.eventManager.emit(
-        resource.events.afterInit,
-        {
-          config,
-          value: value as TValue,
-        },
-        resource.id
-      );
-      await this.eventManager.emit(
-        globalEvents.resources.afterInit,
-        {
-          config,
-          resource,
-          value: value as TValue,
-        },
-        resource.id
-      );
-
-      this.logger.debug(`Resource ${resource.id.toString()} initialized`, {
-        source: resource.id,
-      });
-
       return { value: value as TValue, context };
-    } catch (e) {
-      error = e;
-      let isSuppressed = false;
-      function suppress() {
-        isSuppressed = true;
-      }
-
-      // If you want to rewthrow the error, this should be done inside the onError event.
-      await this.eventManager.emit(
-        resource.events.onError,
-        {
-          error: error as Error,
-          suppress,
-        },
-        resource.id
-      );
-      await this.eventManager.emit(
-        globalEvents.resources.onError,
-        {
-          error: error as Error,
-          resource,
-          suppress,
-        },
-        resource.id
-      );
-
-      if (!isSuppressed) throw e;
-
-      return { value: undefined as unknown as TValue, context: {} as TContext };
+    } catch (error) {
+      // Emit central error boundary; still rethrow to caller
+      try {
+        await this.eventManager.emit(
+          globalEvents.unhandledError,
+          { kind: "resourceInit", id: resource.id as any, error },
+          resource.id as any
+        );
+      } catch (_) {}
+      throw error;
     }
   }
+
+  // Lifecycle emissions removed
 
   public async initWithMiddleware<
     C,
@@ -121,7 +68,7 @@ export class ResourceInitializer {
   >(
     resource: IResource<C, V, D, TContext>,
     config: C,
-    dependencies: DependencyValuesType<D>,
+    dependencies: ResourceDependencyValuesType<D>,
     context: TContext
   ) {
     let next = async (config: C): Promise<V | undefined> => {

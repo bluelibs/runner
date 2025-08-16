@@ -34,7 +34,11 @@ describe("requireContextMiddleware", () => {
 
   it("throws ContextError when the context has not been provided", async () => {
     // Arrange → a context whose `use` returns undefined, simulating missing provider
-    const fakeContext = createFakeContext(() => undefined);
+    const fakeContext = createFakeContext(() => {
+      throw new ContextError(
+        "Context not available. Did you forget to provide the context via ContextName.provide()?"
+      );
+    });
     const next = jest.fn();
 
     // Act & Assert

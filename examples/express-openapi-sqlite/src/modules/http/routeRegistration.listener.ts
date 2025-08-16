@@ -9,7 +9,7 @@ import { createDocument } from "zod-openapi";
 
 export const routeRegistrationListener = task({
   id: "app.tasks.routeRegistration",
-  on: globals.events.afterInit,
+  // on: globals.events.afterInit,
   meta: {
     title: "Route Registration Listener",
     description:

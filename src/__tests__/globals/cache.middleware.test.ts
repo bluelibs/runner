@@ -344,7 +344,7 @@ describe("Caching System", () => {
           id: "app",
           register: [cacheResource, cacheMiddleware, testTask],
           dependencies: { testTask, cache: cacheResource },
-          async init(_, { testTask, cache }) {
+          async init(_: void, { testTask, cache }) {
             const firstRun = await testTask();
             const secondRun = await testTask(); // Should be cached
 
@@ -651,17 +651,17 @@ describe("Caching System", () => {
         run: async () => "test",
       });
 
-      const result = await run(
-        defineResource({
-          id: "app",
-          register: [disposableCacheResource, cacheMiddleware, testTask],
-          dependencies: { testTask, cache: disposableCacheResource },
-          async init(_, { testTask, cache }) {
-            await testTask();
-            return cache;
-          },
-        })
-      );
+      const app = defineResource({
+        id: "app",
+        register: [disposableCacheResource, cacheMiddleware, testTask],
+        dependencies: { testTask, cache: disposableCacheResource },
+        async init(_, { testTask, cache }) {
+          await testTask();
+          return cache;
+        },
+      });
+
+      const result = await run(app);
 
       // Manually dispose to trigger cleanup
       await result.dispose();
