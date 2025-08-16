@@ -5,6 +5,7 @@ import { Store } from "../models/Store";
 import { TaskRunner } from "../models/TaskRunner";
 import { cacheResource } from "./middleware/cache.middleware";
 import { queueResource } from "./resources/queue.resource";
+import { authResources } from "./auth";
 
 const store = defineResource({
   id: "globals.resources.store",
@@ -50,4 +51,5 @@ export const globalResources = {
   }),
   cache: cacheResource,
   queue: queueResource,
+  auth: authResources,
 };
