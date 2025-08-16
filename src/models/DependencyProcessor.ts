@@ -133,8 +133,20 @@ export class DependencyProcessor {
   ): ResourceDependencyValuesType<TD> {
     const wrapped: Record<string, unknown> = {};
     for (const key of Object.keys(deps) as Array<keyof TD>) {
-      const original = deps[key];
+      const original = deps[key] as any;
       const value = (extracted as Record<string, unknown>)[key as string];
+      // Handle optional wrappers
+      if (utils.isOptional(original)) {
+        const inner = original.inner as any;
+        if (utils.isTask(inner)) {
+          wrapped[key as string] = value
+            ? this.makeTaskWithIntercept(inner)
+            : undefined;
+        } else {
+          wrapped[key as string] = value as unknown;
+        }
+        continue;
+      }
       if (utils.isTask(original)) {
         wrapped[key as string] = this.makeTaskWithIntercept(original);
       } else {
@@ -227,6 +239,20 @@ export class DependencyProcessor {
   }
 
   async extractDependency(object: any, source: string) {
+    if (utils.isOptional(object)) {
+      const inner = object.inner as any;
+      if (utils.isResource(inner)) {
+        const exists = this.store.resources.get(inner.id) !== undefined;
+        return exists ? this.extractResourceDependency(inner) : undefined;
+      } else if (utils.isTask(inner)) {
+        const exists = this.store.tasks.get(inner.id) !== undefined;
+        return exists ? this.extractTaskDependency(inner) : undefined;
+      } else if (utils.isEvent(inner)) {
+        const exists = this.store.events.get(inner.id) !== undefined;
+        return exists ? this.extractEventDependency(inner, source) : undefined;
+      }
+      throw new UnknownItemTypeError(inner);
+    }
     if (utils.isResource(object)) {
       return this.extractResourceDependency(object);
     } else if (utils.isTask(object)) {

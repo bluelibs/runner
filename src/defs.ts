@@ -64,6 +64,11 @@ export const symbolMiddlewareEverywhereResources: unique symbol = Symbol(
   "runner.middlewareGlobalResources"
 );
 
+/** @internal Marks an optional dependency wrapper */
+export const symbolOptionalDependency: unique symbol = Symbol(
+  "runner.optionalDependency"
+);
+
 /** @internal Path to aid anonymous id generation and error messages */
 export const symbolFilePath: unique symbol = Symbol("runner.filePath");
 /** @internal Marks disposable instances */
@@ -166,8 +171,21 @@ export interface ITagMeta extends Omit<IMeta, "tags"> {}
  */
 export type DependencyMapType = Record<
   string,
-  ITask<any, any, any, any> | IResource<any, any, any> | IEventDefinition<any>
+  | ITask<any, any, any, any>
+  | IResource<any, any, any, any, any>
+  | IEventDefinition<any>
+  | IOptionalDependency<ITask<any, any, any, any>>
+  | IOptionalDependency<IResource<any, any, any, any, any>>
+  | IOptionalDependency<IEventDefinition<any>>
 >;
+
+/** Wrapper type marking a dependency as optional at wiring time */
+export interface IOptionalDependency<T> {
+  /** The wrapped dependency definition */
+  inner: T;
+  /** Brand symbol for optional dependency */
+  [symbolOptionalDependency]: true;
+}
 
 // Helper Types for Extracting Generics
 type ExtractTaskInput<T> = T extends ITask<infer I, any, infer D> ? I : never;
@@ -209,6 +227,8 @@ export type DependencyValueType<T> = T extends ITask<any, any, any>
   ? ResourceDependency<ExtractResourceValue<T>>
   : T extends IEventDefinition<any>
   ? EventDependency<ExtractEventParams<T>>
+  : T extends IOptionalDependency<infer U>
+  ? DependencyValueType<U> | undefined
   : never;
 
 export type DependencyValuesType<T extends DependencyMapType> = {
@@ -236,6 +256,8 @@ export type ResourceDependencyValueType<T> = T extends ITask<any, any, any>
   ? ResourceDependency<ExtractResourceValue<T>>
   : T extends IEventDefinition<any>
   ? EventDependency<ExtractEventParams<T>>
+  : T extends IOptionalDependency<infer U>
+  ? ResourceDependencyValueType<U> | undefined
   : never;
 
 export type ResourceDependencyValuesType<T extends DependencyMapType> = {
@@ -314,6 +336,10 @@ export interface ITask<
   middleware: MiddlewareAttachments[];
   [symbolFilePath]: string;
   [symbolTask]: true;
+  /** Return an optional dependency wrapper for this task. */
+  optional: () => IOptionalDependency<
+    ITask<TInput, TOutput, TDependencies, TMeta>
+  >;
 }
 
 /**
@@ -447,6 +473,10 @@ export interface IResource<
   [symbolFilePath]: string;
   [symbolIndexResource]: boolean;
   [symbolResource]: true;
+  /** Return an optional dependency wrapper for this resource. */
+  optional: () => IOptionalDependency<
+    IResource<TConfig, TValue, TDependencies, TContext, TMeta>
+  >;
 }
 
 export interface IResourceWithConfig<
@@ -477,6 +507,10 @@ export interface IEventDefinition<TPayload = void> {
   payloadSchema?: IValidationSchema<TPayload>;
 }
 
+/**
+ * The definioten of the event.
+ * This is different from the event emission.
+ */
 export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
   id: string;
   /**
@@ -484,6 +518,8 @@ export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
    */
   [symbolEvent]: true;
   [symbolFilePath]: string;
+  /** Return an optional dependency wrapper for this event. */
+  optional: () => IOptionalDependency<IEvent<TPayload>>;
 }
 
 /**

@@ -214,7 +214,10 @@ export class StoreRegistry {
   }
 
   private idExistsAsMiddlewareDependency(id: string, deps: DependencyMapType) {
-    return Object.values(deps).some((x) => x.id === id);
+    return Object.values(deps).some((x: any) => {
+      const candidate = utils.isOptional(x) ? (x as any).inner : x;
+      return (candidate as any)?.id === id;
+    });
   }
 
   private prepareResource<C>(
@@ -274,8 +277,11 @@ export class StoreRegistry {
         for (const [depKey, depItem] of Object.entries(
           task.task.dependencies
         )) {
-          if (depItem && typeof depItem === "object" && "id" in depItem) {
-            const depNode = nodeMap.get((depItem as { id: string }).id);
+          const candidate: any = utils.isOptional(depItem)
+            ? (depItem as any).inner
+            : depItem;
+          if (candidate && typeof candidate === "object" && "id" in candidate) {
+            const depNode = nodeMap.get((candidate as { id: string }).id);
             if (depNode) {
               node.dependencies[depKey] = depNode;
             }
@@ -316,8 +322,11 @@ export class StoreRegistry {
         for (const [depKey, depItem] of Object.entries(
           middleware.middleware.dependencies
         )) {
-          if (depItem && typeof depItem === "object" && "id" in depItem) {
-            const depNode = nodeMap.get((depItem as { id: string }).id);
+          const candidate: any = utils.isOptional(depItem)
+            ? (depItem as any).inner
+            : depItem;
+          if (candidate && typeof candidate === "object" && "id" in candidate) {
+            const depNode = nodeMap.get((candidate as { id: string }).id);
             if (depNode) {
               node.dependencies[depKey] = depNode;
             }
@@ -335,8 +344,11 @@ export class StoreRegistry {
         for (const [depKey, depItem] of Object.entries(
           resource.resource.dependencies
         )) {
-          if (depItem && typeof depItem === "object" && "id" in depItem) {
-            const depNode = nodeMap.get((depItem as { id: string }).id);
+          const candidate: any = utils.isOptional(depItem)
+            ? (depItem as any).inner
+            : depItem;
+          if (candidate && typeof candidate === "object" && "id" in candidate) {
+            const depNode = nodeMap.get((candidate as { id: string }).id);
             if (depNode) {
               node.dependencies[depKey] = depNode;
             }

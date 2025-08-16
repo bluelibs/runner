@@ -47,7 +47,7 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
         task.definition.id
       )} completed in ${duration}ms`;
       if (debugConfig.logTaskResult) {
-        logString += ` with result: ${safeStringify(result)}`;
+        logString += ` with result: \n${safeStringify(result)}`;
       }
       await logger.info(logString);
 
@@ -67,7 +67,7 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
       debugConfig = getConfig(debugConfig, resource?.definition);
       let logString = `[resource] ${resource.definition.id} starting to run`;
       if (debugConfig.logResourceConfig) {
-        logString += ` with config: ${safeStringify(resource.config)}`;
+        logString += ` with config: \n${safeStringify(resource.config)}`;
       }
       await logger.info(logString);
       const result = await next(resource.config);
@@ -76,7 +76,7 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
         resource.definition.id
       )} initialized in ${duration}ms`;
       if (debugConfig.logResourceResult) {
-        logString += ` with result: ${safeStringify(result)}`;
+        logString += ` with result: \n${safeStringify(result)}`;
       }
       await logger.info(logString);
 

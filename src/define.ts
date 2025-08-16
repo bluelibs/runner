@@ -38,6 +38,8 @@ import {
   IResourceMeta,
   IHook,
   IHookDefinition,
+  IOptionalDependency,
+  symbolOptionalDependency,
 } from "./defs";
 import { MiddlewareAlreadyGlobalError, ValidationError } from "./errors";
 import { getCallerFile } from "./tools/getCallerFile";
@@ -78,6 +80,12 @@ export function defineTask<
     inputSchema: taskConfig.inputSchema,
     meta: taskConfig.meta || ({} as TMeta),
     // autorun,
+    optional() {
+      return {
+        inner: this,
+        [symbolOptionalDependency]: true,
+      } as IOptionalDependency<ITask<Input, Output, Deps, TMeta>>;
+    },
   };
 }
 
@@ -178,6 +186,14 @@ export function defineResource<
 
     meta: (constConfig.meta || {}) as TMeta,
     middleware: constConfig.middleware || [],
+    optional() {
+      return {
+        inner: this,
+        [symbolOptionalDependency]: true,
+      } as IOptionalDependency<
+        IResource<TConfig, TValue, TDeps, TPrivate, TMeta>
+      >;
+    },
   };
 }
 
@@ -200,6 +216,12 @@ export function defineEvent<TPayload = void>(
     id: eventConfig.id,
     [symbolFilePath]: callerFilePath,
     [symbolEvent]: true, // This is a workaround
+    optional() {
+      return {
+        inner: this,
+        [symbolOptionalDependency]: true,
+      } as IOptionalDependency<IEvent<TPayload>>;
+    },
   };
 }
 
@@ -344,6 +366,13 @@ export function isHook(definition: any): definition is IHook {
  */
 export function isMiddleware(definition: any): definition is IMiddleware {
   return definition && definition[symbolMiddleware];
+}
+
+/** Type guard: checks if a definition is an Optional Dependency wrapper. */
+export function isOptional(
+  definition: any
+): definition is IOptionalDependency<any> {
+  return definition && definition[symbolOptionalDependency];
 }
 
 /**

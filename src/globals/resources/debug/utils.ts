@@ -2,7 +2,7 @@ import { ITaggable } from "../../../defs";
 import { globalTags } from "../../globalTags";
 export const safeStringify = (value: any) => {
   try {
-    return JSON.stringify(value);
+    return JSON.stringify(value, null, 2);
   } catch (error) {
     return String(value);
   }

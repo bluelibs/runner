@@ -5,6 +5,7 @@ import {
   symbolFilePath,
 } from "../../defs";
 import { EventManager } from "../../models/EventManager";
+import { defineEvent } from "../../define";
 
 describe("EventManager", () => {
   let eventManager: EventManager;
@@ -12,11 +13,7 @@ describe("EventManager", () => {
 
   beforeEach(() => {
     eventManager = new EventManager();
-    eventDefinition = {
-      id: "testEvent",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
+    eventDefinition = defineEvent<string>({ id: "testEvent" });
   });
 
   it("should add and emit event listener", async () => {
@@ -170,16 +167,8 @@ describe("EventManager", () => {
   });
 
   it("should handle multiple events", async () => {
-    const eventDef1: IEvent<string> = {
-      id: "event1",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
-    const eventDef2: IEvent<string> = {
-      id: "event2",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
+    const eventDef1 = defineEvent<string>({ id: "event1" });
+    const eventDef2 = defineEvent<string>({ id: "event2" });
 
     const handler1 = jest.fn();
     const handler2 = jest.fn();
@@ -222,16 +211,8 @@ describe("EventManager", () => {
   });
 
   it("should handle listeners added to multiple events", async () => {
-    const eventDef1: IEvent<string> = {
-      id: "event1",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
-    const eventDef2: IEvent<string> = {
-      id: "event2",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
+    const eventDef1 = defineEvent<string>({ id: "event1" });
+    const eventDef2 = defineEvent<string>({ id: "event2" });
 
     const handler = jest.fn();
 
@@ -258,16 +239,8 @@ describe("EventManager", () => {
   });
 
   it("should not affect other events when emitting one", async () => {
-    const eventDef1: IEvent<string> = {
-      id: "event1",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
-    const eventDef2: IEvent<string> = {
-      id: "event2",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
+    const eventDef1 = defineEvent<string>({ id: "event1" });
+    const eventDef2 = defineEvent<string>({ id: "event2" });
 
     const handler1 = jest.fn();
     const handler2 = jest.fn();
@@ -403,11 +376,7 @@ describe("EventManager", () => {
   it("should handle listeners with no data", async () => {
     const handler = jest.fn();
 
-    const voidEventDefinition: IEvent<void> = {
-      id: "voidEvent",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
+    const voidEventDefinition = defineEvent<void>({ id: "voidEvent" });
 
     eventManager.addListener(voidEventDefinition, handler);
 
@@ -460,16 +429,8 @@ describe("EventManager", () => {
     });
 
     it("should invalidate all caches when adding global listeners", async () => {
-      const event1: IEvent<string> = {
-        id: "event1",
-        [symbolEvent]: true,
-        [symbolFilePath]: "test.ts",
-      };
-      const event2: IEvent<string> = {
-        id: "event2",
-        [symbolEvent]: true,
-        [symbolFilePath]: "test.ts",
-      };
+      const event1 = defineEvent<string>({ id: "event1" });
+      const event2 = defineEvent<string>({ id: "event2" });
 
       const handler1 = jest.fn();
       const handler2 = jest.fn();
@@ -493,11 +454,7 @@ describe("EventManager", () => {
     });
 
     it("should optimize for empty listener scenarios", async () => {
-      const emptyEventDef: IEvent<string> = {
-        id: "emptyEvent",
-        [symbolEvent]: true,
-        [symbolFilePath]: "test.ts",
-      };
+      const emptyEventDef = defineEvent<string>({ id: "emptyEvent" });
 
       // Should return immediately without creating event object
       await eventManager.emit(emptyEventDef, "test", "source");
@@ -552,16 +509,8 @@ describe("EventManager", () => {
     });
 
     it("should reuse cached results across different event types", async () => {
-      const event1: IEvent<string> = {
-        id: "event1",
-        [symbolEvent]: true,
-        [symbolFilePath]: "test.ts",
-      };
-      const event2: IEvent<string> = {
-        id: "event2",
-        [symbolEvent]: true,
-        [symbolFilePath]: "test.ts",
-      };
+      const event1 = defineEvent<string>({ id: "event1" });
+      const event2 = defineEvent<string>({ id: "event2" });
 
       const handler1 = jest.fn();
       const handler2 = jest.fn();
@@ -614,26 +563,14 @@ describe("EventManager", () => {
   });
 
   it("hasListeners returns false when no listeners are registered", () => {
-    const emptyEvent: IEvent<string> = {
-      id: "noListenersEvent",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
+    const emptyEvent = defineEvent<string>({ id: "noListenersEvent" });
 
     expect(eventManager.hasListeners(emptyEvent)).toBe(false);
   });
 
   it("hasListeners returns false for an event that has no listeners while others do", () => {
-    const targetEvent: IEvent<string> = {
-      id: "targetEvent",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
-    const otherEvent: IEvent<string> = {
-      id: "otherEvent",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
-    };
+    const targetEvent = defineEvent<string>({ id: "targetEvent" });
+    const otherEvent = defineEvent<string>({ id: "otherEvent" });
 
     eventManager.addListener(otherEvent, jest.fn());
 
@@ -647,10 +584,8 @@ describe("EventManager", () => {
   });
 
   it("validates payload with schema: success and failure", async () => {
-    const schemaEvent: any = {
+    const schemaEvent = defineEvent<any>({
       id: "schema.event",
-      [symbolEvent]: true,
-      [symbolFilePath]: "test.ts",
       payloadSchema: {
         parse: (data: any) => {
           if (!data || typeof data.x !== "number") {
@@ -659,7 +594,7 @@ describe("EventManager", () => {
           return data;
         },
       },
-    };
+    });
     const ok = jest.fn();
     eventManager.addListener(schemaEvent, ok);
     await expect(
