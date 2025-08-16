@@ -121,4 +121,18 @@ describe("createTestResource", () => {
 
     await dispose();
   });
+
+  it("getResource returns the resource value when present", async () => {
+    const db = resource({
+      id: "db.value",
+      init: async () => ({ url: "mem://" }),
+    });
+    const app = resource({ id: "app.for.getResource.success", register: [db] });
+    const { value: t, dispose } = await run(createTestResource(app));
+
+    const value = t.getResource("db.value");
+    expect(value).toEqual({ url: "mem://" });
+
+    await dispose();
+  });
 });

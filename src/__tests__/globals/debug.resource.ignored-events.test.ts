@@ -4,6 +4,7 @@ import { createTestResource } from "../../testing";
 import { debugResource } from "../../globals/resources/debug";
 import { globalEvents } from "../../globals/globalEvents";
 import { globalResources } from "../../globals/globalResources";
+import { globalTags } from "../../globals/globalTags";
 
 describe("debug resource - ignored system/lifecycle events", () => {
   it("does not log system/lifecycle events from global listener", async () => {
@@ -43,5 +44,47 @@ describe("debug resource - ignored system/lifecycle events", () => {
     expect(infoLogs.some((l) => l.message.includes("[event] tests."))).toBe(
       false
     );
+  });
+
+  it("does not track system-tagged task execution in middleware (early return branch)", async () => {
+    const messages: string[] = [];
+
+    const collector = defineResource({
+      id: "tests.collector.ignored.task",
+      dependencies: { logger: globalResources.logger },
+      async init(_, { logger }) {
+        logger.onLog((log) => {
+          messages.push(String(log.message));
+        });
+        return messages;
+      },
+    });
+
+    const systemTask = defineTask({
+      id: "tests.system.task",
+      meta: { tags: [globalTags.system] },
+      async run() {
+        return "ok" as const;
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.ignored.task",
+      register: [debugResource.with("verbose"), collector, systemTask],
+      dependencies: { systemTask },
+      async init(_, { systemTask }) {
+        await systemTask();
+        return "done" as const;
+      },
+    });
+
+    await run(app);
+
+    // Ensure middleware did not log task start/completed lines for system-tagged task
+    const joined = messages.join("\n");
+    expect(joined.includes("[task] tests.system.task starting to run")).toBe(
+      false
+    );
+    expect(joined.includes("[task] tests.system.task completed")).toBe(false);
   });
 });

@@ -131,5 +131,118 @@ describe("globals.resources.debug", () => {
     // Resource logs are implementation-defined depending on eager/lazy init.
     // We assert task tracking here.
   });
+
+  it("auto-registers debug via run(options.debug) and logs events", async () => {
+    const logs: Array<{ level: string; message: string }> = [];
+
+    const collector = defineResource({
+      id: "tests.collector.options.debug",
+      dependencies: { logger: globalResources.logger },
+      async init(_, { logger }) {
+        logger.onLog((log) => {
+          logs.push(log);
+        });
+        return logs;
+      },
+    });
+
+    const testEvent = defineEvent<{ foo: string }>({
+      id: "tests.event.options",
+    });
+
+    const emitter = defineTask({
+      id: "tests.emitter.options",
+      dependencies: { testEvent },
+      async run(_input, { testEvent }) {
+        await testEvent({ foo: "bar" });
+        return "ok";
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.options",
+      register: [collector, testEvent, emitter],
+      async init() {
+        return "done";
+      },
+    });
+
+    const harness = createTestResource(app);
+    const { value: t } = await run(harness, { debug: "verbose" });
+    await t.runTask(emitter);
+
+    const infoLogs = logs
+      .filter((l) => l.level === "info")
+      .map((l) => String(l.message));
+    expect(
+      infoLogs.some((m) => m.includes("[event] tests.event.options"))
+    ).toBe(true);
+  });
+
+  it("does not log task execution after system is locked and logs errors during init", async () => {
+    const messages: string[] = [];
+
+    const collector = defineResource({
+      id: "tests.collector.locked",
+      dependencies: { logger: globalResources.logger },
+      async init(_, { logger }) {
+        logger.onLog((log) => {
+          messages.push(String(log.message));
+        });
+        return messages;
+      },
+    });
+
+    const failingTask = defineTask({
+      id: "tests.failing.task",
+      async run() {
+        throw new Error("boom");
+      },
+    });
+
+    const simpleTask = defineTask({
+      id: "tests.simple.task",
+      async run() {
+        return "ok";
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.locked",
+      register: [
+        debugResource.with("verbose"),
+        collector,
+        failingTask,
+        simpleTask,
+      ],
+      // Ensure collector initializes before app init (so it can subscribe before buffered logs flush)
+      dependencies: { failingTask, collector },
+      async init(_c, { failingTask }) {
+        // Trigger error during init so middleware catch path is covered
+        await expect(failingTask()).rejects.toThrow("boom");
+        return "ready";
+      },
+    });
+
+    const harness = createTestResource(app);
+    const { value: t } = await run(harness);
+
+    // After run completes, system is locked. Running a task now should not produce debug logs.
+    const before = messages.length;
+    await t.runTask(simpleTask);
+    const after = messages.length;
+
+    // No new task start/completed messages should be added post-lock
+    const newMessages = messages.slice(before, after).join("\n");
+    expect(
+      newMessages.includes("[task] tests.simple.task starting to run")
+    ).toBe(false);
+    expect(newMessages.includes("[task] tests.simple.task completed")).toBe(
+      false
+    );
+
+    // Ensure error was logged during init
+    expect(messages.some((m) => m.includes("Error: boom"))).toBe(true);
+  });
   // Optionally, add error logging tests later
 });

@@ -639,4 +639,43 @@ describe("EventManager", () => {
 
     expect(eventManager.hasListeners(targetEvent)).toBe(false);
   });
+
+  it("hasListeners returns true when event listeners are registered", () => {
+    const handler = jest.fn();
+    eventManager.addListener(eventDefinition, handler);
+    expect(eventManager.hasListeners(eventDefinition)).toBe(true);
+  });
+
+  it("validates payload with schema: success and failure", async () => {
+    const schemaEvent: any = {
+      id: "schema.event",
+      [symbolEvent]: true,
+      [symbolFilePath]: "test.ts",
+      payloadSchema: {
+        parse: (data: any) => {
+          if (!data || typeof data.x !== "number") {
+            throw new Error("Invalid");
+          }
+          return data;
+        },
+      },
+    };
+    const ok = jest.fn();
+    eventManager.addListener(schemaEvent, ok);
+    await expect(
+      eventManager.emit(schemaEvent, { x: 1 }, "src")
+    ).resolves.toBeUndefined();
+    expect(ok).toHaveBeenCalled();
+
+    await expect(
+      eventManager.emit(schemaEvent, { x: "nope" } as any, "src")
+    ).rejects.toThrow(/Event payload/i);
+  });
+
+  it("hasListeners returns true when only global listeners exist and event has empty array", () => {
+    const handler = jest.fn();
+    eventManager.addGlobalListener(handler);
+    (eventManager as any).listeners.set(eventDefinition.id, []);
+    expect(eventManager.hasListeners(eventDefinition)).toBe(true);
+  });
 });

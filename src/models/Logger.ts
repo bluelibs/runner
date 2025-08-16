@@ -271,27 +271,27 @@ export class Logger {
     output.forEach((line) => console.log(line));
   }
 
-  public async info(message: any, logInfo: LogInfo = {}) {
+  public async info(message: any, logInfo?: LogInfo) {
     await this.log("info", message, logInfo);
   }
 
-  public async error(message: any, logInfo: LogInfo = {}) {
+  public async error(message: any, logInfo?: LogInfo) {
     await this.log("error", message, logInfo);
   }
 
-  public async warn(message: any, logInfo: LogInfo = {}) {
+  public async warn(message: any, logInfo?: LogInfo) {
     await this.log("warn", message, logInfo);
   }
 
-  public async debug(message: any, logInfo: LogInfo = {}) {
+  public async debug(message: any, logInfo?: LogInfo) {
     await this.log("debug", message, logInfo);
   }
 
-  public async trace(message: any, logInfo: LogInfo = {}) {
+  public async trace(message: any, logInfo?: LogInfo) {
     await this.log("trace", message, logInfo);
   }
 
-  public async critical(message: any, logInfo: LogInfo = {}) {
+  public async critical(message: any, logInfo?: LogInfo) {
     await this.log("critical", message, logInfo);
   }
 

@@ -325,7 +325,7 @@ describe("run", () => {
       const task = defineHook({
         id: "app",
         on: testEvent,
-        dependencies: { testEvent },
+        dependencies: () => ({ testEvent }),
         async run(event, { testEvent }) {
           eventHandler();
           await testEvent({ message: "Event emitted" });

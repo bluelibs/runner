@@ -189,6 +189,15 @@ describe("Logger", () => {
     expect(outputs).not.toContain("context:");
   });
 
+  it("omits context section when only bound source exists (filtered to empty)", async () => {
+    const base = createLogger({ threshold: "trace" });
+    const logger = base.with({ source: "only-src" });
+    await logger.info("msg");
+    const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(outputs).toContain("[only-src]");
+    expect(outputs).not.toContain("context:");
+  });
+
   it("formats object messages with indented subsequent lines", async () => {
     const logger = createLogger({ threshold: "trace" });
     await logger.info({ k: "v", nested: { a: 1 } });
@@ -234,5 +243,18 @@ describe("Logger", () => {
     expect(outputs).toContain("custom level");
     // icon should be the default ● when unknown
     expect(outputs).toMatch(/●[\s\S]*CUSTOM/);
+  });
+
+  it("prints object messages with indentation (strategy does not affect content formatting)", async () => {
+    const logger = new Logger({
+      printThreshold: "info",
+      printStrategy: "json",
+      bufferLogs: false,
+    });
+    await logger.info({ a: 1, b: { c: 2 } });
+    const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    expect(outputs).toContain('"a": 1');
+    expect(outputs).toContain('"b": {');
+    expect(outputs).toContain('"c": 2');
   });
 });

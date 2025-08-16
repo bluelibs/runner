@@ -286,7 +286,7 @@ export class StoreRegistry {
       // Add local middleware dependencies for tasks (hooks have no middleware)
       if (!utils.isHook(task.task)) {
         const t = task.task as ITask<any, any, any, any>;
-        for (const middleware of t.middleware || []) {
+        for (const middleware of t.middleware) {
           const middlewareNode = nodeMap.get(middleware.id);
           if (middlewareNode) {
             node.dependencies[middleware.id] = middlewareNode;
