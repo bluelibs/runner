@@ -25,10 +25,9 @@ export interface IEventHandlerOptions<T = any> {
 }
 
 export class EventManager {
-  private listeners: Map<string | symbol, IListenerStorage[]> = new Map();
+  private listeners: Map<string, IListenerStorage[]> = new Map();
   private globalListeners: IListenerStorage[] = [];
-  private cachedMergedListeners: Map<string | symbol, IListenerStorage[]> =
-    new Map();
+  private cachedMergedListeners: Map<string, IListenerStorage[]> = new Map();
   private globalListenersCacheValid = true;
   #isLocked = false;
 
@@ -65,9 +64,7 @@ export class EventManager {
     return result;
   }
 
-  private getCachedMergedListeners(
-    eventId: string | symbol
-  ): IListenerStorage[] {
+  private getCachedMergedListeners(eventId: string): IListenerStorage[] {
     if (!this.globalListenersCacheValid) {
       this.cachedMergedListeners.clear();
       this.globalListenersCacheValid = true;
@@ -93,7 +90,7 @@ export class EventManager {
     return cached;
   }
 
-  private invalidateCache(eventId?: string | symbol): void {
+  private invalidateCache(eventId?: string): void {
     if (eventId) {
       this.cachedMergedListeners.delete(eventId);
     } else {
@@ -104,7 +101,7 @@ export class EventManager {
   async emit<TInput>(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: string | symbol
+    source: string
   ): Promise<void> {
     // Validate payload with schema if provided
     if (eventDefinition.payloadSchema) {
@@ -208,7 +205,12 @@ export class EventManager {
   }
 
   hasListeners<T>(eventDefinition: IEvent<T>): boolean {
-    const eventListeners = this.listeners.get(eventDefinition.id) || [];
+    const eventListeners = this.listeners.get(eventDefinition.id);
+
+    if (!eventListeners) {
+      return false;
+    }
+
     return eventListeners.length > 0 || this.globalListeners.length > 0;
   }
 }

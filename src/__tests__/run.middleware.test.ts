@@ -3,6 +3,7 @@ import {
   defineTask,
   defineResource,
   defineEvent,
+  defineHook,
 } from "../define";
 import { run } from "../run";
 import { globalEvents } from "../globals/globalEvents";
@@ -477,58 +478,14 @@ describe("Configurable Middleware (.with)", () => {
   });
 });
 
-describe("Middleware Events Emission", () => {
-  it("should emit middleware beforeRun/afterRun events (local and global)", async () => {
+describe("Middleware behavior (no lifecycle)", () => {
+  it("should execute middleware around tasks", async () => {
     const calls: string[] = [];
 
     const mw = defineMiddleware({
       id: "mw.events",
       run: async ({ next }) => {
         return next();
-      },
-    });
-
-    const localBefore = defineTask({
-      id: "listener.local.before",
-      on: mw.events.beforeRun,
-      run: async (event) => {
-        const { task } = event.data as any;
-        expect(task).toBeDefined();
-        expect(task.definition.id).toBe("test.task.events");
-        calls.push(`local-before:${String(task.definition.id)}`);
-      },
-    });
-
-    const localAfter = defineTask({
-      id: "listener.local.after",
-      on: mw.events.afterRun,
-      run: async (event) => {
-        const { task } = event.data as any;
-        expect(task).toBeDefined();
-        expect(task.definition.id).toBe("test.task.events");
-        calls.push(`local-after:${String(task.definition.id)}`);
-      },
-    });
-
-    const globalBefore = defineTask({
-      id: "listener.global.before",
-      on: globalEvents.middlewares.beforeRun,
-      run: async (event) => {
-        const { middleware, task } = event.data as any;
-        expect(middleware.id).toBe(mw.id);
-        expect(task.definition.id).toBe("test.task.events");
-        calls.push(`global-before:${String(task.definition.id)}`);
-      },
-    });
-
-    const globalAfter = defineTask({
-      id: "listener.global.after",
-      on: globalEvents.middlewares.afterRun,
-      run: async (event) => {
-        const { middleware, task } = event.data as any;
-        expect(middleware.id).toBe(mw.id);
-        expect(task.definition.id).toBe("test.task.events");
-        calls.push(`global-after:${String(task.definition.id)}`);
       },
     });
 
@@ -540,7 +497,7 @@ describe("Middleware Events Emission", () => {
 
     const app = defineResource({
       id: "app.middleware.events",
-      register: [mw, t, localBefore, localAfter, globalBefore, globalAfter],
+      register: [mw, t],
       dependencies: { t },
       async init(_, { t }) {
         const result = await t();
@@ -550,49 +507,14 @@ describe("Middleware Events Emission", () => {
 
     await run(app);
 
-    expect(calls).toEqual(
-      expect.arrayContaining([
-        "local-before:test.task.events",
-        "local-after:test.task.events",
-        "global-before:test.task.events",
-        "global-after:test.task.events",
-      ])
-    );
+    expect(calls).toEqual([]);
   });
 
-  it("should emit middleware onError and allow suppression", async () => {
-    const localCalls: string[] = [];
-    const globalCalls: string[] = [];
-
+  it("should throw middleware errors", async () => {
     const mw = defineMiddleware({
       id: "mw.error",
       run: async () => {
         throw new Error("boom");
-      },
-    });
-
-    const localOnError = defineTask({
-      id: "listener.local.onError",
-      on: mw.events.onError,
-      run: async (event) => {
-        const { error, suppress, task } = event.data as any;
-        expect(error).toBeInstanceOf(Error);
-        expect(task.definition.id).toBe("test.task.error");
-        localCalls.push("local-onError");
-        suppress();
-      },
-    });
-
-    const globalOnError = defineTask({
-      id: "listener.global.onError",
-      on: globalEvents.middlewares.onError,
-      run: async (event) => {
-        const { error, middleware, task } = event.data as any;
-        expect(error).toBeInstanceOf(Error);
-        expect(middleware.id).toBe(mw.id);
-        expect(task.definition.id).toBe("test.task.error");
-        globalCalls.push("global-onError");
-        // Do not suppress here; suppression already done locally should carry through
       },
     });
 
@@ -602,50 +524,22 @@ describe("Middleware Events Emission", () => {
       run: async () => "ok",
     });
 
+    let insideInit = false;
     const app = defineResource({
       id: "app.middleware.onError.suppressed",
-      register: [mw, t, localOnError, globalOnError],
+      register: [mw, t],
       dependencies: { t },
       async init(_, { t }) {
-        const result = await t();
-        // Since middleware threw but error was suppressed, the chain ends without a value
-        expect(result).toBeUndefined();
+        await expect(t()).rejects.toThrow("boom");
+        insideInit = true;
       },
     });
 
     await run(app);
-
-    expect(localCalls).toContain("local-onError");
-    expect(globalCalls).toContain("global-onError");
+    expect(insideInit).toBe(true);
   });
 
-  it("should rethrow middleware errors when not suppressed", async () => {
-    const mw = defineMiddleware({
-      id: "mw.error.nosuppress",
-      run: async () => {
-        throw new Error("boom");
-      },
-    });
-
-    const t = defineTask({
-      id: "test.task.error.nosuppress",
-      middleware: [mw],
-      run: async () => "ok",
-    });
-
-    const app = defineResource({
-      id: "app.middleware.onError.nosuppress",
-      register: [mw, t],
-      dependencies: { t },
-      async init(_, { t }) {
-        await t();
-      },
-    });
-
-    await expect(run(app)).rejects.toThrowError(/boom/);
-  });
-
-  it("should always throw for global event listener tasks (no suppression path)", async () => {
+  it("global event hooks should not run middleware (no errors thrown)", async () => {
     const mw = defineMiddleware({
       id: "mw.error.global.listener",
       run: async () => {
@@ -653,36 +547,16 @@ describe("Middleware Events Emission", () => {
       },
     });
 
-    // Handlers for middleware error events – should NOT be called for global listeners
-    const localOnErrorCalled: string[] = [];
-    const globalOnErrorCalled: string[] = [];
-
-    const localOnError = defineTask({
-      id: "listener.local.onError.globalListener",
-      on: mw.events.onError,
-      run: async () => {
-        localOnErrorCalled.push("local");
-      },
-    });
-
-    const globalOnError = defineTask({
-      id: "listener.global.onError.globalListener",
-      on: globalEvents.middlewares.onError,
-      run: async () => {
-        globalOnErrorCalled.push("global");
-      },
-    });
-
     const evt = defineEvent<{ msg: string }>({
       id: "custom.global.listener.event",
     });
 
-    const globalListener = defineTask({
+    let called = false;
+    const globalListener = defineHook({
       id: "global.listener.task",
       on: "*",
-      middleware: [mw],
       run: async () => {
-        // should never get here due to middleware throwing
+        called = true;
       },
     });
 
@@ -696,18 +570,15 @@ describe("Middleware Events Emission", () => {
 
     const app = defineResource({
       id: "app.middleware.global.listener",
-      register: [mw, localOnError, globalOnError, evt, globalListener, emitter],
+      register: [evt, globalListener, emitter],
       dependencies: { emitter },
       async init(_, { emitter }) {
         await emitter();
       },
     });
 
-    await expect(run(app)).rejects.toThrowError(/boom-global/);
-
-    // Ensure no error events were emitted for middleware when listener is global
-    expect(localOnErrorCalled).toHaveLength(0);
-    expect(globalOnErrorCalled).toHaveLength(0);
+    await run(app);
+    expect(called).toBe(true);
   });
 });
 
@@ -907,12 +778,10 @@ describe("Middleware.everywhere()", () => {
       id: "everywhere.middleware",
       run: async ({ task, resource, next }, deps, config) => {
         if (task) {
-          calls.push(`task:${String(task.definition.id)}:${config.flag}`);
+          calls.push(`task:${task.definition.id}:${config.flag}`);
         }
         if (resource) {
-          calls.push(
-            `resource:${String(resource.definition.id)}:${config.flag}`
-          );
+          calls.push(`resource:${resource.definition.id}:${config.flag}`);
         }
         return next();
       },

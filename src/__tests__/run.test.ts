@@ -3,6 +3,7 @@ import {
   defineResource,
   defineEvent,
   defineMiddleware,
+  defineHook,
 } from "../define";
 import { run } from "../run";
 import { globalResources } from "../globals/globalResources";
@@ -16,7 +17,7 @@ describe("main exports", () => {
     expect(typeof mainExports.resource).toBe("function");
     expect(typeof mainExports.event).toBe("function");
     expect(typeof mainExports.middleware).toBe("function");
-    expect(typeof mainExports.index).toBe("function");
+    expect(typeof mainExports.hook).toBe("function");
     expect(typeof mainExports.tag).toBe("function");
     expect(typeof mainExports.run).toBe("function");
     expect(typeof mainExports.createContext).toBe("function");
@@ -124,10 +125,10 @@ describe("run", () => {
         },
       });
 
-      const handlerTask = defineTask({
+      const handlerTask = defineHook({
         id: "handler.task",
         on: testEvent,
-        run: eventHandler,
+        run: eventHandler as any,
       });
 
       const app = defineResource({
@@ -143,48 +144,7 @@ describe("run", () => {
       await run(app);
     });
 
-    it("should emit the proper beforeRun, afterRun, onError events and I can listen to them", async () => {
-      const beforeRunHandler = jest.fn();
-      const afterRunHandler = jest.fn();
-      const onErrorHandler = jest.fn();
-
-      const testTask = defineTask({
-        id: "test.task",
-        run: async () => "Task executed",
-      });
-
-      const onBeforeRun = defineTask({
-        id: "on.before.run",
-        on: testTask.events.beforeRun,
-        run: beforeRunHandler,
-      });
-
-      const onAfterRun = defineTask({
-        id: "on.after.run",
-        on: testTask.events.afterRun,
-        run: afterRunHandler,
-      });
-
-      const onError = defineTask({
-        id: "on.error",
-        on: testTask.events.onError,
-        run: onErrorHandler,
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [testTask, onBeforeRun, onAfterRun, onError],
-        dependencies: { testTask },
-        async init(_, { testTask }) {
-          await testTask();
-          expect(beforeRunHandler).toHaveBeenCalled();
-          expect(afterRunHandler).toHaveBeenCalled();
-          expect(onErrorHandler).not.toHaveBeenCalled();
-        },
-      });
-
-      await run(app);
-    });
+    // Lifecycle-specific task events removed
 
     it("should propagate the error to the parent", async () => {
       const testTask = defineTask({
@@ -197,15 +157,9 @@ describe("run", () => {
       let value = false;
       const errorHook = jest.fn();
 
-      const handler = defineTask({
-        id: "handler",
-        on: testTask.events.onError,
-        run: errorHook,
-      });
-
       const app = defineResource({
         id: "app",
-        register: [testTask, handler],
+        register: [testTask],
         dependencies: { testTask },
         async init(_, { testTask }) {
           await testTask();
@@ -213,7 +167,6 @@ describe("run", () => {
       });
 
       await expect(run(app)).rejects.toThrow("Task failed");
-      expect(errorHook).toHaveBeenCalled();
     });
 
     it("should be able to register an task with middleware and execute it, ensuring the middleware is called in the correct order", async () => {
@@ -340,11 +293,11 @@ describe("run", () => {
       await expect(run(app)).rejects.toThrow(/Circular dependencies detected/);
     });
 
-    it("should be able to listen to an event through the 'on' property", async () => {
+    it("should be able to listen to an event through a hook", async () => {
       const testEvent = defineEvent<{ message: string }>({ id: "test.event" });
       const eventHandler = jest.fn();
 
-      const task = defineTask({
+      const task = defineHook({
         id: "app",
         on: testEvent,
         async run(event) {
@@ -355,7 +308,7 @@ describe("run", () => {
       const app = defineResource({
         id: "app.resource",
         register: [testEvent, task],
-        dependencies: { task, testEvent },
+        dependencies: { testEvent },
         async init(_, deps) {
           await deps.testEvent({ message: "Event emitted" });
         },
@@ -365,11 +318,11 @@ describe("run", () => {
       expect(eventHandler).toHaveBeenCalled();
     });
 
-    it("should avoid infinite recursion by omitting task emissions recursively", async () => {
+    it("should avoid infinite recursion by omitting hook emissions recursively", async () => {
       const testEvent = defineEvent<{ message: string }>({ id: "test.event" });
       const eventHandler = jest.fn();
 
-      const task = defineTask({
+      const task = defineHook({
         id: "app",
         on: testEvent,
         dependencies: { testEvent },
@@ -382,7 +335,7 @@ describe("run", () => {
       const app = defineResource({
         id: "app.resource",
         register: [testEvent, task],
-        dependencies: { task, testEvent },
+        dependencies: { testEvent },
         async init(_, deps) {
           await deps.testEvent({ message: "Event emitted" });
         },
@@ -402,7 +355,7 @@ describe("run", () => {
         id: "dummy",
         init: async () => "dummy",
       });
-      const task = defineTask({
+      const task = defineHook({
         id: "app",
         on: "*",
         dependencies: { dummyResource },
@@ -417,7 +370,7 @@ describe("run", () => {
       const app = defineResource({
         id: "app.resource",
         register: [testEvent, task, dummyResource],
-        dependencies: { task, testEvent },
+        dependencies: { testEvent },
         async init(_, deps) {
           isReady = true;
           await deps.testEvent({ message: "Event emitted" });
@@ -529,7 +482,7 @@ describe("run", () => {
       await run(app);
     });
 
-    it("should allow suppression of an error", async () => {
+    it("should allow suppression of an error (no longer supported)", async () => {
       const supressMock = jest.fn();
       const erroringResource = defineResource({
         id: "error.resource",
@@ -549,44 +502,17 @@ describe("run", () => {
         },
       });
 
-      const resourceErrorHandler = defineTask({
-        id: "resourcehandler",
-        on: erroringResource.events.onError,
-        run: async (event) => {
-          supressMock();
-          event.data.suppress();
-        },
-      });
-
-      const taskErrorHandler = defineTask({
-        id: "taskhandler",
-        on: erroringTask.events.onError,
-        run: async (event) => {
-          supressMock();
-          event.data.suppress();
-        },
-      });
-
       const app = defineResource({
         id: "app",
-        register: [
-          erroringResource,
-          erroringTask,
-          resourceErrorHandler,
-          taskErrorHandler,
-        ],
+        register: [erroringResource, erroringTask],
         dependencies: { erroringResource, erroringTask },
-        async init(_, { erroringResource, erroringTask }) {
-          expect(erroringResource).toBeUndefined();
-          expect(await erroringTask()).toBeUndefined();
-
-          return "ok";
+        async init(_, { erroringTask }) {
+          await expect(erroringTask()).rejects.toThrow("Run failed");
         },
       });
 
-      const result = await run(app);
-      expect(result.value).toBe("ok");
-      expect(supressMock).toHaveBeenCalledTimes(2);
+      await expect(run(app)).rejects.toThrow("Init failed");
+      expect(supressMock).toHaveBeenCalledTimes(0);
     });
   });
 
@@ -1045,6 +971,27 @@ describe("run", () => {
 
       // dispose should be called with undefined value since no init
       expect(disposeFn).toHaveBeenCalledWith(undefined, {}, {}, {});
+    });
+  });
+
+  describe("system ready event", () => {
+    it("should allow listeners to hook into globalEvents.ready and be called when the system is ready", async () => {
+      const { globalEvents } = await import("../globals/globalEvents");
+      const handler = jest.fn();
+      const readyListener = defineHook({
+        id: "ready.listener",
+        on: globalEvents.ready,
+        run: handler as any,
+      });
+      const app = defineResource({
+        id: "app",
+        register: [readyListener],
+        async init() {
+          // nothing
+        },
+      });
+      await run(app);
+      expect(handler).toHaveBeenCalled();
     });
   });
 });

@@ -11,6 +11,7 @@ import {
   symbolMiddlewareEverywhereTasks,
   IEvent,
   ITag,
+  IHook,
 } from "../defs";
 import { IDependentNode } from "../tools/findCircularDependencies";
 import * as utils from "../define";
@@ -22,13 +23,14 @@ import {
   EventStoreElementType,
 } from "./StoreTypes";
 import { StoreValidator } from "./StoreValidator";
+import { symbolHook } from "../defs";
 
 export class StoreRegistry {
-  public tasks: Map<string | symbol, TaskStoreElementType> = new Map();
-  public resources: Map<string | symbol, ResourceStoreElementType> = new Map();
-  public events: Map<string | symbol, EventStoreElementType> = new Map();
-  public middlewares: Map<string | symbol, MiddlewareStoreElementType> =
-    new Map();
+  public tasks: Map<string, TaskStoreElementType> = new Map();
+  public resources: Map<string, ResourceStoreElementType> = new Map();
+  public events: Map<string, EventStoreElementType> = new Map();
+  public middlewares: Map<string, MiddlewareStoreElementType> = new Map();
+  public hooks: Map<string, IHook<any, any>> = new Map();
 
   private validator: StoreValidator;
 
@@ -48,6 +50,8 @@ export class StoreRegistry {
   storeGenericItem<C>(item: RegisterableItems) {
     if (utils.isTask(item)) {
       this.storeTask<C>(item);
+    } else if (utils.isHook && utils.isHook(item)) {
+      this.storeHook<C>(item as IHook);
     } else if (utils.isResource(item)) {
       this.storeResource<C>(item);
     } else if (utils.isEvent(item)) {
@@ -59,6 +63,18 @@ export class StoreRegistry {
     } else {
       throw new UnknownItemTypeError(item);
     }
+  }
+
+  storeHook<C>(item: IHook<any, any>, check = true) {
+    check && this.validator.checkIfIDExists(item.id);
+
+    item.dependencies =
+      typeof item.dependencies === "function"
+        ? item.dependencies()
+        : item.dependencies;
+
+    // store separately
+    this.hooks.set(item.id, item);
   }
 
   storeMiddleware<C>(item: IMiddleware<any>, check = true) {
@@ -151,23 +167,7 @@ export class StoreRegistry {
    * TRM = tasks, resources and middlewares
    */
   storeEventsForAllTRM() {
-    for (const task of this.tasks.values()) {
-      this.storeEvent(task.task.events.beforeRun);
-      this.storeEvent(task.task.events.afterRun);
-      this.storeEvent(task.task.events.onError);
-    }
-
-    for (const resource of this.resources.values()) {
-      this.storeEvent(resource.resource.events.beforeInit);
-      this.storeEvent(resource.resource.events.afterInit);
-      this.storeEvent(resource.resource.events.onError);
-    }
-
-    for (const middleware of this.middlewares.values()) {
-      this.storeEvent(middleware.middleware.events.beforeRun);
-      this.storeEvent(middleware.middleware.events.afterRun);
-      this.storeEvent(middleware.middleware.events.onError);
-    }
+    // Lifecycle events removed; no-op retained for API compatibility
   }
 
   getEverywhereMiddlewareForTasks(
@@ -213,10 +213,7 @@ export class StoreRegistry {
       .map((x) => x.middleware);
   }
 
-  private idExistsAsMiddlewareDependency(
-    id: string | symbol,
-    deps: DependencyMapType
-  ) {
+  private idExistsAsMiddlewareDependency(id: string, deps: DependencyMapType) {
     return Object.values(deps).some((x) => x.id === id);
   }
 
@@ -236,12 +233,12 @@ export class StoreRegistry {
     const depenedants: IDependentNode[] = [];
 
     // First, create all nodes
-    const nodeMap = new Map<string | symbol, IDependentNode>();
+    const nodeMap = new Map<string, IDependentNode>();
 
     // Create nodes for tasks
     for (const task of this.tasks.values()) {
       const node: IDependentNode = {
-        id: task.task.id.toString(),
+        id: task.task.id,
         dependencies: {},
       };
       nodeMap.set(task.task.id, node);
@@ -251,7 +248,7 @@ export class StoreRegistry {
     // Create nodes for middleware
     for (const middleware of this.middlewares.values()) {
       const node: IDependentNode = {
-        id: middleware.middleware.id.toString(),
+        id: middleware.middleware.id,
         dependencies: {},
       };
       nodeMap.set(middleware.middleware.id, node);
@@ -261,7 +258,7 @@ export class StoreRegistry {
     // Create nodes for resources
     for (const resource of this.resources.values()) {
       const node: IDependentNode = {
-        id: resource.resource.id.toString(),
+        id: resource.resource.id,
         dependencies: {},
       };
       nodeMap.set(resource.resource.id, node);
@@ -278,7 +275,7 @@ export class StoreRegistry {
           task.task.dependencies
         )) {
           if (depItem && typeof depItem === "object" && "id" in depItem) {
-            const depNode = nodeMap.get((depItem as any).id);
+            const depNode = nodeMap.get((depItem as { id: string }).id);
             if (depNode) {
               node.dependencies[depKey] = depNode;
             }
@@ -286,20 +283,27 @@ export class StoreRegistry {
         }
       }
 
-      // Add local middleware dependencies
-      for (const middleware of task.task.middleware) {
-        const middlewareNode = nodeMap.get(middleware.id);
-        if (middlewareNode) {
-          node.dependencies[middleware.id.toString()] = middlewareNode;
+      // Add local middleware dependencies for tasks (hooks have no middleware)
+      if (!utils.isHook(task.task)) {
+        const t = task.task as ITask<any, any, any, any>;
+        for (const middleware of t.middleware || []) {
+          const middlewareNode = nodeMap.get(middleware.id);
+          if (middlewareNode) {
+            node.dependencies[middleware.id] = middlewareNode;
+          }
         }
       }
 
       // Add global middleware dependencies for tasks
-      const perTaskMiddleware = this.getEverywhereMiddlewareForTasks(task.task);
-      for (const middleware of perTaskMiddleware) {
-        const middlewareNode = nodeMap.get(middleware.id);
-        if (middlewareNode) {
-          node.dependencies[middleware.id.toString()] = middlewareNode;
+      if (!utils.isHook(task.task)) {
+        const perTaskMiddleware = this.getEverywhereMiddlewareForTasks(
+          task.task as ITask<any, any, any, any>
+        );
+        for (const middleware of perTaskMiddleware) {
+          const middlewareNode = nodeMap.get(middleware.id);
+          if (middlewareNode) {
+            node.dependencies[middleware.id] = middlewareNode;
+          }
         }
       }
     }
@@ -313,7 +317,7 @@ export class StoreRegistry {
           middleware.middleware.dependencies
         )) {
           if (depItem && typeof depItem === "object" && "id" in depItem) {
-            const depNode = nodeMap.get((depItem as any).id);
+            const depNode = nodeMap.get((depItem as { id: string }).id);
             if (depNode) {
               node.dependencies[depKey] = depNode;
             }
@@ -332,7 +336,7 @@ export class StoreRegistry {
           resource.resource.dependencies
         )) {
           if (depItem && typeof depItem === "object" && "id" in depItem) {
-            const depNode = nodeMap.get((depItem as any).id);
+            const depNode = nodeMap.get((depItem as { id: string }).id);
             if (depNode) {
               node.dependencies[depKey] = depNode;
             }
@@ -344,7 +348,7 @@ export class StoreRegistry {
       for (const middleware of resource.resource.middleware) {
         const middlewareNode = nodeMap.get(middleware.id);
         if (middlewareNode) {
-          node.dependencies[middleware.id.toString()] = middlewareNode;
+          node.dependencies[middleware.id] = middlewareNode;
         }
       }
 
@@ -356,7 +360,7 @@ export class StoreRegistry {
       for (const middleware of perResourceMiddleware) {
         const middlewareNode = nodeMap.get(middleware.id);
         if (middlewareNode) {
-          node.dependencies[middleware.id.toString()] = middlewareNode;
+          node.dependencies[middleware.id] = middlewareNode;
         }
       }
     }

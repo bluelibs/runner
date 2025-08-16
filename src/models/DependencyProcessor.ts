@@ -8,6 +8,7 @@ import {
   IEventEmission,
 } from "../defs";
 import { Store } from "./Store";
+import { symbolHook } from "../defs";
 import { ResourceStoreElementType, TaskStoreElementType } from "./StoreTypes";
 import * as utils from "../define";
 import { EventManager } from "./EventManager";
@@ -45,6 +46,10 @@ export class DependencyProcessor {
    * This function is going to go through all the resources, tasks and middleware to compute their required dependencies.
    */
   async computeAllDependencies() {
+    for (const resource of this.store.resources.values()) {
+      await this.processResourceDependencies(resource);
+    }
+
     for (const middleware of this.store.middlewares.values()) {
       const deps = middleware.middleware.dependencies as DependencyMapType;
       middleware.computedDependencies = await this.extractDependencies(
@@ -57,8 +62,10 @@ export class DependencyProcessor {
       await this.computeTaskDependencies(task);
     }
 
-    for (const resource of this.store.resources.values()) {
-      await this.processResourceDependencies(resource);
+    // Compute hook dependencies (hooks cannot be dependencies themselves)
+    for (const hook of this.store.hooks.values()) {
+      const deps = hook.dependencies as DependencyMapType;
+      hook.computedDependencies = await this.extractDependencies(deps, hook.id);
     }
 
     // leftovers that were registered but not depended upon, except root
@@ -132,31 +139,27 @@ export class DependencyProcessor {
    * Processes all hooks, should run before emission of any event.
    */
   public attachListeners() {
-    for (const task of this.store.tasks.values()) {
-      if (task.task.on) {
-        let eventDefinition = task.task.on;
+    // Attach listeners for dedicated hooks map
+    for (const hook of this.store.hooks.values()) {
+      if (hook.on) {
+        const eventDefinition = hook.on;
 
         const handler = async (receivedEvent: IEventEmission<any>) => {
-          if (receivedEvent.source === task.task.id) {
-            // we don't want to trigger the same task that emitted the event
-            // process.exit(0);
+          if (receivedEvent.source === hook.id) {
             return;
           }
-
-          return this.taskRunner.run(task.task, receivedEvent);
+          return this.taskRunner.runHook(hook, receivedEvent);
         };
 
+        const order = hook.order ?? 0;
+
         if (eventDefinition === "*") {
-          this.eventManager.addGlobalListener(handler, {
-            order: task.task.listenerOrder || 0,
-          });
+          this.eventManager.addGlobalListener(handler, { order });
         } else {
           if (this.store.events.get(eventDefinition.id) === undefined) {
             throw new EventNotFoundError(eventDefinition.id);
           }
-          this.eventManager.addListener(eventDefinition, handler, {
-            order: task.task.listenerOrder || 0,
-          });
+          this.eventManager.addListener(eventDefinition, handler, { order });
         }
       }
     }
@@ -164,7 +167,7 @@ export class DependencyProcessor {
 
   async extractDependencies<T extends DependencyMapType>(
     map: T,
-    source: string | symbol
+    source: string
   ): Promise<DependencyValuesType<T>> {
     const object = {} as DependencyValuesType<T>;
 
@@ -175,7 +178,7 @@ export class DependencyProcessor {
     return object;
   }
 
-  async extractDependency(object: any, source: string | symbol) {
+  async extractDependency(object: any, source: string) {
     if (utils.isResource(object)) {
       return this.extractResourceDependency(object);
     } else if (utils.isTask(object)) {
@@ -192,7 +195,7 @@ export class DependencyProcessor {
    * @param object
    * @returns
    */
-  extractEventDependency(object: IEvent<any>, source: string | symbol) {
+  extractEventDependency(object: IEvent<any>, source: string) {
     return async (input: any) => {
       return this.eventManager.emit(object, input, source);
     };
@@ -201,7 +204,7 @@ export class DependencyProcessor {
   async extractTaskDependency(object: ITask<any, any, {}>) {
     const storeTask = this.store.tasks.get(object.id);
     if (storeTask === undefined) {
-      throw new DependencyNotFoundError(`Task ${object.id.toString()}`);
+      throw new DependencyNotFoundError(`Task ${object.id}`);
     }
 
     if (!storeTask.isInitialized) {
@@ -216,7 +219,7 @@ export class DependencyProcessor {
       );
     }
 
-    return (input: any) => {
+    return (input: unknown) => {
       return this.taskRunner.run(storeTask.task, input);
     };
   }
@@ -225,7 +228,7 @@ export class DependencyProcessor {
     // check if it exists in the store with the value
     const storeResource = this.store.resources.get(object.id);
     if (storeResource === undefined) {
-      throw new DependencyNotFoundError(`Resource ${object.id.toString()}`);
+      throw new DependencyNotFoundError(`Resource ${object.id}`);
     }
 
     const { resource, config } = storeResource;

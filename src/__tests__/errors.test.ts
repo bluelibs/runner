@@ -3,6 +3,7 @@ import {
   defineResource,
   defineEvent,
   defineMiddleware,
+  defineHook,
 } from "../define";
 import { run } from "../run";
 import { Errors } from "..";
@@ -96,7 +97,7 @@ describe("Errors", () => {
   it("should throw eventNotFound error", async () => {
     const nonExistentEvent = { id: "non.existent.event" } as any;
 
-    const task = defineTask({
+    const task = defineHook({
       id: "test.task",
       on: nonExistentEvent,
       run: async () => {},
@@ -326,15 +327,27 @@ describe("Errors", () => {
       expect(storeError).toBeInstanceOf(RuntimeError);
 
       // Test ValidationError with Error object
-      const validationErrorWithError = new ValidationError("Task input", "test-task", new Error("Required field missing"));
+      const validationErrorWithError = new ValidationError(
+        "Task input",
+        "test-task",
+        new Error("Required field missing")
+      );
       expect(validationErrorWithError.name).toBe("ValidationError");
-      expect(validationErrorWithError.message).toBe("Task input validation failed for test-task: Required field missing");
+      expect(validationErrorWithError.message).toBe(
+        "Task input validation failed for test-task: Required field missing"
+      );
       expect(validationErrorWithError).toBeInstanceOf(RuntimeError);
 
       // Test ValidationError with string
-      const validationErrorWithString = new ValidationError("Resource config", Symbol("test-resource"), "Invalid configuration");
+      const validationErrorWithString = new ValidationError(
+        "Resource config",
+        "test-resource",
+        "Invalid configuration"
+      );
       expect(validationErrorWithString.name).toBe("ValidationError");
-      expect(validationErrorWithString.message).toBe("Resource config validation failed for Symbol(test-resource): Invalid configuration");
+      expect(validationErrorWithString.message).toBe(
+        "Resource config validation failed for test-resource: Invalid configuration"
+      );
       expect(validationErrorWithString).toBeInstanceOf(RuntimeError);
     });
   });

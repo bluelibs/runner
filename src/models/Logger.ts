@@ -10,7 +10,7 @@ export type LogLevels =
   | "critical";
 
 export interface LogInfo {
-  source?: string | symbol;
+  source?: string;
   error?: Error;
   data?: Record<string, any>;
   [key: string]: any;
@@ -68,7 +68,7 @@ export class Logger {
   private buffer: ILog[] = [];
   private boundContext: Record<string, any> = {};
   private localListeners: Array<(log: ILog) => void | Promise<void>> = [];
-  private isReady: boolean = false;
+  private isLocked: boolean = false;
 
   public static Severity = {
     trace: 0,
@@ -307,8 +307,8 @@ export class Logger {
    * This is used to trigger the local listeners and print the buffered logs (if they exists)
    * @returns A promise that resolves when the logger is ready.
    */
-  public async markAsReady() {
-    if (this.isReady) {
+  public async lock() {
+    if (this.isLocked) {
       return;
     }
 
@@ -324,7 +324,7 @@ export class Logger {
     }
     this.bufferLogs = false;
     this.buffer = [];
-    this.isReady = true;
+    this.isLocked = true;
   }
 
   private canPrint(level: LogLevels) {

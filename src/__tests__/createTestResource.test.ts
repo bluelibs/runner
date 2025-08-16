@@ -7,6 +7,7 @@ import {
   globals,
   event,
 } from "..";
+import { ResourceNotFoundError } from "../errors";
 
 describe("createTestResource", () => {
   it("runs tasks within the full ecosystem and returns results", async () => {
@@ -40,38 +41,8 @@ describe("createTestResource", () => {
     const harness = createTestResource(app, { overrides: [mockDb] });
     const { value: t, dispose } = await run(harness);
 
-    const kind = await t.runTask(getDbKind, undefined);
+    const kind = await t.runTask(getDbKind);
     expect(kind).toBe("mock");
-
-    await dispose();
-  });
-
-  it("allows accessing resource values and subscribing to events", async () => {
-    const eventsSeen: Array<any> = [];
-
-    const say = task({ id: "t.say", run: async (m: string) => m });
-
-    const listener = task({
-      id: "tests.log-listener",
-      on: globals.events.tasks.beforeRun,
-      run: async (e: any) => eventsSeen.push(e.data),
-    });
-
-    const app = resource({ id: "app2", register: [say, listener] });
-
-    const harness = createTestResource(app);
-    const { value: t, dispose } = await run(harness);
-
-    // Subscribe via facade as well (no-op if using global path instead)
-    // t.on(globals.events.log, (e) => eventsSeen.push(e.data));
-
-    await t.runTask(say, "hello");
-
-    // We can also query resource values (will often be undefined for pure tasks)
-    expect(t.getResource("app2")).toBeUndefined();
-
-    // At least one event was recorded via the listener
-    expect(Array.isArray(eventsSeen)).toBe(true);
 
     await dispose();
   });
@@ -133,6 +104,20 @@ describe("createTestResource", () => {
     const ok2: number | undefined = await t.runTask(usesUpper, {
       n: 3,
     } as const);
+
+    await dispose();
+  });
+
+  it("throws when getResource() cannot find the requested resource", async () => {
+    const app = resource({ id: "app.for.getResource.throw", register: [] });
+    const { value: t, dispose } = await run(createTestResource(app));
+
+    expect(() => t.getResource("non.existent.resource.id")).toThrow(
+      ResourceNotFoundError
+    );
+    expect(() => t.getResource("non.existent.resource.id")).toThrow(
+      'Resource "non.existent.resource.id" not found. Did you forget to register it or are you using the correct id?'
+    );
 
     await dispose();
   });

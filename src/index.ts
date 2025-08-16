@@ -3,9 +3,9 @@ import {
   defineResource,
   defineEvent,
   defineMiddleware,
-  defineIndex,
   defineTag,
   defineOverride,
+  defineHook,
 } from "./define";
 import { createContext } from "./context";
 import { globalEvents } from "./globals/globalEvents";
@@ -28,9 +28,9 @@ export {
   defineResource as resource,
   defineEvent as event,
   defineMiddleware as middleware,
-  defineIndex as index,
   defineTag as tag,
   defineOverride as override,
+  defineHook as hook,
   run,
   createContext,
   createTestResource,

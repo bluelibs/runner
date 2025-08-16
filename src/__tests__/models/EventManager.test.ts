@@ -582,4 +582,61 @@ describe("EventManager", () => {
       expect(globalHandler).toHaveBeenCalledTimes(4);
     });
   });
+
+  it("should stop propagation when stopPropagation is called", async () => {
+    const results: string[] = [];
+
+    const firstHandler = jest.fn((event: IEventEmission<string>) => {
+      results.push("first");
+      expect(event.isPropagationStopped()).toBe(false);
+      event.stopPropagation();
+      expect(event.isPropagationStopped()).toBe(true);
+    });
+
+    const secondHandler = jest.fn(() => {
+      results.push("second");
+    });
+
+    const globalHandler = jest.fn(() => {
+      results.push("global");
+    });
+
+    eventManager.addListener(eventDefinition, firstHandler, { order: 1 });
+    eventManager.addListener(eventDefinition, secondHandler, { order: 2 });
+    eventManager.addGlobalListener(globalHandler, { order: 3 });
+
+    await eventManager.emit(eventDefinition, "data", "test");
+
+    expect(firstHandler).toHaveBeenCalledTimes(1);
+    expect(secondHandler).not.toHaveBeenCalled();
+    expect(globalHandler).not.toHaveBeenCalled();
+    expect(results).toEqual(["first"]);
+  });
+
+  it("hasListeners returns false when no listeners are registered", () => {
+    const emptyEvent: IEvent<string> = {
+      id: "noListenersEvent",
+      [symbolEvent]: true,
+      [symbolFilePath]: "test.ts",
+    };
+
+    expect(eventManager.hasListeners(emptyEvent)).toBe(false);
+  });
+
+  it("hasListeners returns false for an event that has no listeners while others do", () => {
+    const targetEvent: IEvent<string> = {
+      id: "targetEvent",
+      [symbolEvent]: true,
+      [symbolFilePath]: "test.ts",
+    };
+    const otherEvent: IEvent<string> = {
+      id: "otherEvent",
+      [symbolEvent]: true,
+      [symbolFilePath]: "test.ts",
+    };
+
+    eventManager.addListener(otherEvent, jest.fn());
+
+    expect(eventManager.hasListeners(targetEvent)).toBe(false);
+  });
 });

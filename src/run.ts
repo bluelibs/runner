@@ -145,17 +145,24 @@ export async function run<C, V extends Promise<any>>(
 
   // Now we can safely compute dependencies without being afraid of an infinite loop.
   // The hooking part is done here.
-  await eventManager.emit(globalEvents.beforeInit, null, resource.id);
 
   // Now we can initialise the root resource
   await processor.initializeRoot();
 
-  await eventManager.emit(globalEvents.afterInit, null, resource.id);
   await logger.debug("System initialized and operational.");
 
   // disallow manipulation or attaching more
   store.lock();
-  await logger.markAsReady();
+  eventManager.lock();
+  await logger.lock();
+
+  await eventManager.emit(
+    globalEvents.ready,
+    {
+      root: store.root.resource,
+    },
+    "system"
+  );
 
   return {
     value: store.root.value,
@@ -176,7 +183,7 @@ function extractResourceAndConfig<C, V extends Promise<any>>(
     config = resourceOrResourceWithConfig.config;
   } else {
     resource = resourceOrResourceWithConfig as IResource<any, any, any, any>;
-    config = {} as any;
+    config = undefined;
   }
   return { resource, config };
 }

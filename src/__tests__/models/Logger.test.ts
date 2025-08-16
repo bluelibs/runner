@@ -92,7 +92,7 @@ describe("Logger", () => {
     expect(consoleSpy).not.toHaveBeenCalled();
     expect(levels).toHaveLength(0);
 
-    await logger.markAsReady();
+    await logger.lock();
 
     // listeners then printing
     expect(levels).toEqual(["first", "second"]);
@@ -111,9 +111,9 @@ describe("Logger", () => {
   it("markAsReady is idempotent (second call is no-op)", async () => {
     const logger = createLogger({ buffer: true, threshold: "trace" });
     await logger.info("first");
-    await logger.markAsReady();
+    await logger.lock();
     consoleSpy.mockClear();
-    await logger.markAsReady();
+    await logger.lock();
     expect(consoleSpy).not.toHaveBeenCalled();
   });
 

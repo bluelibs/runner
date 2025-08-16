@@ -12,6 +12,7 @@ import {
   DependencyValuesType,
 } from "./defs";
 import { EventManager, Logger, Store, TaskRunner } from "./models";
+import { ResourceNotFoundError } from "./errors";
 
 let testResourceCounter = 0;
 
@@ -52,11 +53,17 @@ function buildTestFacade(deps: {
     // Run a task within the fully initialized ecosystem
     runTask: <I, O extends Promise<any>, D extends DependencyMapType>(
       task: ITask<I, O, D>,
-      input: I
+      ...args: I extends undefined ? [] : [I]
     ): Promise<Awaited<O> | undefined> =>
-      deps.taskRunner.run(task, input) as any,
+      deps.taskRunner.run(task, ...args) as any,
     // Access a resource value by id (string or symbol)
-    getResource: (id: string | symbol) => deps.store.resources.get(id)?.value,
+    getResource: (id: string) => {
+      const entry = deps.store.resources.get(id);
+      if (!entry) {
+        throw new ResourceNotFoundError(id);
+      }
+      return entry.value;
+    },
     // Expose internals when needed in tests (not recommended for app usage)
     taskRunner: deps.taskRunner,
     store: deps.store,

@@ -55,6 +55,9 @@ export class Store {
   get tasks() {
     return this.registry.tasks;
   }
+  get hooks() {
+    return this.registry.hooks;
+  }
   get resources() {
     return this.registry.resources;
   }
@@ -77,7 +80,6 @@ export class Store {
 
   lock() {
     this.#isLocked = true;
-    this.eventManager.lock();
   }
 
   checkLock() {

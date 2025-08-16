@@ -4,7 +4,6 @@ import { EventManager } from "../../models/EventManager";
 import { defineResource } from "../../define";
 import { Logger } from "../../models";
 import { globalResources } from "../../globals/globalResources";
-import { globalEvents } from "../../globals/globalEvents";
 
 describe("ResourceInitializer", () => {
   let store: Store;
@@ -23,7 +22,7 @@ describe("ResourceInitializer", () => {
     resourceInitializer = new ResourceInitializer(store, eventManager, logger);
   });
 
-  it("should initialize a resource and emit events", async () => {
+  it("should initialize a resource", async () => {
     const mockResource = defineResource({
       id: "testResource",
       init: jest.fn().mockResolvedValue("initialized value"),
@@ -31,8 +30,6 @@ describe("ResourceInitializer", () => {
 
     const mockConfig = undefined;
     const mockDependencies = {};
-
-    const emitSpy = jest.spyOn(eventManager, "emit");
 
     const result = await resourceInitializer.initializeResource(
       mockResource,
@@ -47,32 +44,10 @@ describe("ResourceInitializer", () => {
       undefined
     );
 
-    expect(emitSpy).toHaveBeenCalledWith(
-      globalEvents.resources.beforeInit,
-      {
-        config: mockConfig,
-        resource: mockResource,
-      },
-      "testResource"
-    );
-    expect(emitSpy).toHaveBeenCalledWith(
-      mockResource.events.beforeInit,
-      {
-        config: mockConfig,
-      },
-      "testResource"
-    );
-    expect(emitSpy).toHaveBeenCalledWith(
-      mockResource.events.afterInit,
-      {
-        config: mockConfig,
-        value: "initialized value",
-      },
-      "testResource"
-    );
+    // No lifecycle events anymore
   });
 
-  it("should handle errors and emit onError event", async () => {
+  it("should throw errors from resource init", async () => {
     const mockError = new Error("Initialization error");
     const mockResource = defineResource({
       id: "testResource",
@@ -82,37 +57,17 @@ describe("ResourceInitializer", () => {
     const mockConfig = undefined;
     const mockDependencies = {};
 
-    const emitSpy = jest.spyOn(eventManager, "emit");
-
-    let result;
-    try {
-      result = await resourceInitializer.initializeResource(
+    await expect(
+      resourceInitializer.initializeResource(
         mockResource,
         mockConfig,
         mockDependencies
-      );
-    } catch (e) {}
-
-    expect(result).toBeUndefined();
+      )
+    ).rejects.toThrow(mockError);
     expect(mockResource.init).toHaveBeenCalledWith(
       mockConfig,
       mockDependencies,
       undefined
-    );
-    expect(emitSpy).toHaveBeenCalledWith(
-      mockResource.events.beforeInit,
-      {
-        config: mockConfig,
-      },
-      "testResource"
-    );
-    expect(emitSpy).toHaveBeenCalledWith(
-      mockResource.events.onError,
-      {
-        error: mockError,
-        suppress: expect.any(Function),
-      },
-      "testResource"
     );
   });
 
@@ -124,8 +79,6 @@ describe("ResourceInitializer", () => {
     const mockConfig = 42;
     const mockDependencies = {};
 
-    const emitSpy = jest.spyOn(eventManager, "emit");
-
     const result = await resourceInitializer.initializeResource(
       mockResource,
       mockConfig,
@@ -133,20 +86,6 @@ describe("ResourceInitializer", () => {
     );
 
     expect(result).toEqual({ value: undefined, context: undefined });
-    expect(emitSpy).toHaveBeenCalledWith(
-      mockResource.events.beforeInit,
-      {
-        config: mockConfig,
-      },
-      "testResource"
-    );
-    expect(emitSpy).toHaveBeenCalledWith(
-      mockResource.events.afterInit,
-      {
-        config: mockConfig,
-        value: undefined,
-      },
-      "testResource"
-    );
+    // No lifecycle events anymore
   });
 });

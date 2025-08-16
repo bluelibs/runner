@@ -5,6 +5,7 @@ import {
   IEventDefinition,
   IResource,
   ITask,
+  IHook,
   IResourceWithConfig,
   RegisterableItems,
   IMiddleware,
@@ -28,10 +29,18 @@ export type ResourceStoreElementType<
 export type TaskStoreElementType<
   Input = any,
   Output extends Promise<any> = any,
-  D extends DependencyMapType = any,
-  TOn extends "*" | IEventDefinition | undefined = any
+  D extends DependencyMapType = any
 > = {
-  task: ITask<Input, Output, D, TOn>;
+  task: ITask<Input, Output, D>;
+  computedDependencies: DependencyValuesType<D>;
+  isInitialized: boolean;
+};
+
+export type HookStoreElementType<
+  D extends DependencyMapType = any,
+  TOn extends "*" | IEventDefinition = any
+> = {
+  hook: IHook<D, TOn>;
   computedDependencies: DependencyValuesType<D>;
   isInitialized: boolean;
 };

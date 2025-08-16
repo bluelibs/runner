@@ -12,7 +12,7 @@ export class RuntimeError extends Error {
  * Error thrown when attempting to register a component with a duplicate ID
  */
 export class DuplicateRegistrationError extends RuntimeError {
-  constructor(type: string, id: string | symbol) {
+  constructor(type: string, id: string) {
     super(
       `${type} "${id.toString()}" already registered. Did you use the same 'id' in two different components? Keep in mind, that all TERM elements need unique ids.`
     );
@@ -24,7 +24,7 @@ export class DuplicateRegistrationError extends RuntimeError {
  * Error thrown when a dependency is not found in the registry
  */
 export class DependencyNotFoundError extends RuntimeError {
-  constructor(key: string | symbol) {
+  constructor(key: string) {
     super(
       `Dependency ${key.toString()} not found. Did you forget to register it through a resource?`
     );
@@ -71,9 +71,21 @@ export class CircularDependenciesError extends RuntimeError {
  * Error thrown when an event is not found in the registry
  */
 export class EventNotFoundError extends RuntimeError {
-  constructor(id: string | symbol) {
+  constructor(id: string) {
     super(`Event "${id.toString()}" not found. Did you forget to register it?`);
     this.name = "EventNotFoundError";
+  }
+}
+
+/**
+ * Error thrown when a resource is not found in the store
+ */
+export class ResourceNotFoundError extends RuntimeError {
+  constructor(id: string) {
+    super(
+      `Resource "${id.toString()}" not found. Did you forget to register it or are you using the correct id?`
+    );
+    this.name = "ResourceNotFoundError";
   }
 }
 
@@ -81,7 +93,7 @@ export class EventNotFoundError extends RuntimeError {
  * Error thrown when attempting to make a middleware global when it's already global
  */
 export class MiddlewareAlreadyGlobalError extends RuntimeError {
-  constructor(id: string | symbol) {
+  constructor(id: string) {
     super(
       `Cannot call .everywhere() on an already global middleware. It's enough to call everywhere() only once: ${id.toString()}`
     );
@@ -93,7 +105,7 @@ export class MiddlewareAlreadyGlobalError extends RuntimeError {
  * Error thrown when attempting to modify a locked component
  */
 export class LockedError extends RuntimeError {
-  constructor(what: string | symbol) {
+  constructor(what: string) {
     super(`Cannot modify the ${what.toString()} when it is locked.`);
     this.name = "LockedError";
   }
@@ -113,11 +125,7 @@ export class StoreAlreadyInitializedError extends RuntimeError {
  * Error thrown when validation fails for task input, resource config, middleware config, or event payload
  */
 export class ValidationError extends RuntimeError {
-  constructor(
-    type: string,
-    id: string | symbol,
-    originalError: Error | string
-  ) {
+  constructor(type: string, id: string, originalError: Error | string) {
     const errorMessage =
       originalError instanceof Error
         ? originalError.message

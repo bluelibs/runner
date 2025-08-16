@@ -5,6 +5,7 @@ import {
   defineMiddleware,
   defineOverride,
   defineTag,
+  defineHook,
 } from "../define";
 import { IMeta } from "../defs";
 import {
@@ -181,7 +182,7 @@ describe.skip("typesafety", () => {
       run: async () => "Task executed",
     });
 
-    const testResource = defineTask({
+    const testResource = defineHook({
       id: "test.resource",
       dependencies: { task },
       on: hookEvent,
@@ -195,7 +196,7 @@ describe.skip("typesafety", () => {
       },
     });
 
-    const testResource2 = defineTask({
+    const testResource2 = defineHook({
       id: "test.resource",
       dependencies: { task },
       on: "*",

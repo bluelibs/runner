@@ -4,7 +4,7 @@ import { Queue } from "../../models/Queue";
 export const queueResource = defineResource({
   id: "globals.resources.queue",
   context: () => ({
-    map: new Map<string | symbol, Queue>(),
+    map: new Map<string, Queue>(),
   }),
   init: async (_, deps, context) => {
     const map = context.map;

@@ -17,7 +17,7 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
 
     // Task handling
     if (task) {
-      if (store.isLocked) {
+      if (!store || store.isLocked) {
         return next(task.input);
       }
 
@@ -26,7 +26,7 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
       }
 
       debugConfig = getConfig(debugConfig, task?.definition);
-      let logString = `[task] ${String(task.definition.id)} starting to run`;
+      let logString = `[task] ${task.definition.id} starting to run`;
       if (debugConfig.logTaskInput) {
         logString += ` with input: \n${safeStringify(task.input)}`;
       }
@@ -36,7 +36,9 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
       try {
         result = await next(task.input);
       } catch (error) {
-        console.log(error);
+        logger.error(String(error), {
+          error: error as Error,
+        });
         throw error;
       }
       const duration = Date.now() - start;
@@ -54,7 +56,7 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
 
     // Resource handling
     if (resource) {
-      if (store.isLocked) {
+      if (!store || store.isLocked) {
         return next(resource.config);
       }
 
@@ -63,9 +65,7 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
       }
 
       debugConfig = getConfig(debugConfig, resource?.definition);
-      let logString = `[resource] ${String(
-        resource.definition.id
-      )} starting to run`;
+      let logString = `[resource] ${resource.definition.id} starting to run`;
       if (debugConfig.logResourceConfig) {
         logString += ` with config: ${safeStringify(resource.config)}`;
       }
