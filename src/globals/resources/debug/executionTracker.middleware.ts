@@ -28,14 +28,7 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
       });
 
       let result: any;
-      try {
-        result = await next(task.input);
-      } catch (error) {
-        logger.error(String(error), {
-          error: error as Error,
-        });
-        throw error;
-      }
+      result = await next(task.input);
       const duration = Date.now() - start;
 
       const taskCompleteMessage = `Task ${task.definition.id} completed in ${duration}ms`;
