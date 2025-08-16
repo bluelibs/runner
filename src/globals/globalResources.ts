@@ -9,9 +9,8 @@ import { globalTags } from "./globalTags";
 
 const systemTag = globalTags.system;
 
-const store = defineResource({
+const store = defineResource<void, Promise<Store>>({
   id: "globals.resources.store",
-  init: async (store: Store) => store,
   meta: {
     title: "Store",
     description:
@@ -22,9 +21,8 @@ const store = defineResource({
 
 export const globalResources = {
   store,
-  eventManager: defineResource({
+  eventManager: defineResource<void, Promise<EventManager>>({
     id: "globals.resources.eventManager",
-    init: async (em: EventManager) => em,
     meta: {
       title: "Event Manager",
       description:
@@ -32,9 +30,8 @@ export const globalResources = {
       tags: [systemTag],
     },
   }),
-  taskRunner: defineResource({
+  taskRunner: defineResource<void, Promise<TaskRunner>>({
     id: "globals.resources.taskRunner",
-    init: async (runner: TaskRunner) => runner,
     meta: {
       title: "Task Runner",
       description:
@@ -42,9 +39,8 @@ export const globalResources = {
       tags: [systemTag],
     },
   }),
-  logger: defineResource({
+  logger: defineResource<void, Promise<Logger>>({
     id: "globals.resources.logger",
-    init: async (logger: Logger) => logger,
     meta: {
       // We skip system tag for logger because it's part of the utility toolkit.
       title: "Logger",

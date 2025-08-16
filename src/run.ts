@@ -126,6 +126,7 @@ export async function run<C, V extends Promise<any>>(
 
   const store = new Store(eventManager, logger);
   const taskRunner = new TaskRunner(store, eventManager, logger);
+  store.setTaskRunner(taskRunner);
 
   if (errorBoundary) {
     setupProcessLevelSafetyNets(eventManager);
@@ -140,8 +141,6 @@ export async function run<C, V extends Promise<any>>(
 
   // In the registration phase we register deeply all the resources, tasks, middleware and events
   store.initializeStore(resource, config);
-  store.storeGenericItem(globalResources.logger.with(logger));
-  store.storeGenericItem(globalResources.taskRunner.with(taskRunner));
 
   if (debug) {
     store.storeGenericItem(debugResource.with(debug));

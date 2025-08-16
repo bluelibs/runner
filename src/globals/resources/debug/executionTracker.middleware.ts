@@ -17,9 +17,9 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
 
     // Task handling
     if (task) {
-      if (hasSystemTag(task?.definition)) {
-        return next(task.input);
-      }
+      //   if (hasSystemTag(task?.definition)) {
+      //     return next(task.input);
+      //   }
 
       debugConfig = getConfig(debugConfig, task?.definition);
       const taskStartMessage = `Task ${task.definition.id} is running...`;
@@ -27,24 +27,23 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
         data: debugConfig.logTaskInput ? { input: task.input } : undefined,
       });
 
-      let result: any;
-      result = await next(task.input);
-      const duration = Date.now() - start;
-
-      const taskCompleteMessage = `Task ${task.definition.id} completed in ${duration}ms`;
-      await logger.info(taskCompleteMessage, {
-        data: debugConfig.logTaskOutput ? { result } : undefined,
-      });
-
-      return result;
+      try {
+        const result = await next(task.input);
+        const duration = Date.now() - start;
+        const taskCompleteMessage = `Task ${task.definition.id} completed in ${duration}ms`;
+        await logger.info(taskCompleteMessage, {
+          data: debugConfig.logTaskOutput ? { result } : undefined,
+        });
+        return result;
+      } catch (error) {
+        // Ensure error is visible in logs as a message
+        await logger.error(error);
+        throw error;
+      }
     }
 
     // Resource handling
     if (resource) {
-      if (hasSystemTag(resource?.definition)) {
-        return next(resource.config);
-      }
-
       debugConfig = getConfig(debugConfig, resource?.definition);
       const resourceStartMessage = `Resource ${resource.definition.id} is initializing...`;
       await logger.info(resourceStartMessage, {
@@ -52,16 +51,20 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
           ? { config: resource.config }
           : undefined,
       });
-      const result = await next(resource.config);
-      const duration = Date.now() - start;
-      const resourceCompleteMessage = `Resource ${String(
-        resource.definition.id
-      )} initialized in ${duration}ms`;
-      await logger.info(resourceCompleteMessage, {
-        data: debugConfig.logResourceValue ? { result } : undefined,
-      });
-
-      return result;
+      try {
+        const result = await next(resource.config);
+        const duration = Date.now() - start;
+        const resourceCompleteMessage = `Resource ${String(
+          resource.definition.id
+        )} initialized in ${duration}ms`;
+        await logger.info(resourceCompleteMessage, {
+          data: debugConfig.logResourceValue ? { result } : undefined,
+        });
+        return result;
+      } catch (error) {
+        await logger.error(error);
+        throw error;
+      }
     }
   },
   meta: {

@@ -186,7 +186,7 @@ describe("globals.resources.debug", () => {
     ).toBe(true);
   });
 
-  it("does not log task execution after system is locked and logs errors during init", async () => {
+  it("log the error when a task fails", async () => {
     const messages: string[] = [];
 
     const collector = defineResource({
@@ -256,6 +256,49 @@ describe("globals.resources.debug", () => {
     expect(messages.some((m) => m.includes("Error: boom"))).toBe(true);
   });
 
+  it("logs the error when a resource fails", async () => {
+    const messages: string[] = [];
+
+    const collector = defineResource({
+      id: "tests.collector.resource.error",
+      dependencies: { logger: globalResources.logger },
+      async init(_, { logger }) {
+        logger.onLog((log) => {
+          messages.push(String(log.message));
+        });
+        return messages;
+      },
+    });
+
+    const failingResource = defineResource({
+      id: "tests.failing.resource",
+      async init() {
+        throw new Error("resource-bad");
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.resource.error",
+      register: [debugResource.with("verbose"), collector, failingResource],
+      // Ensure collector is initialized before failing resource so it can subscribe to logs
+      dependencies: { collector, failingResource },
+      async init() {
+        return "ready";
+      },
+    });
+
+    await expect(
+      run(app, {
+        logs: {
+          printThreshold: null,
+        },
+      })
+    ).rejects.toThrow("resource-bad");
+
+    // Ensure error was logged by the middleware's resource error path
+    expect(messages.some((m) => m.includes("Error: resource-bad"))).toBe(true);
+  });
+
   it("should work for when we don't print result, input, or error", async () => {
     const logs: Array<{ level: string; message: string }> = [];
 
@@ -303,7 +346,7 @@ describe("globals.resources.debug", () => {
     );
   });
 
-  it.only("omits task input/result, resource config/value, and event payload when flags are false", async () => {
+  it("omits task input/result, resource config/value, and event payload when flags are false", async () => {
     const logs: Array<{
       level: string;
       message: any;

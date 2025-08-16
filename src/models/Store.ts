@@ -20,7 +20,11 @@ import {
   MiddlewareStoreElementType,
   EventStoreElementType,
 } from "./StoreTypes";
-import { getBuiltInResources, getBuiltInMiddlewares } from "./StoreConstants";
+import { TaskRunner } from "./TaskRunner";
+import { globalResources } from "../globals/globalResources";
+import { requireContextMiddleware } from "../globals/middleware/requireContext.middleware";
+import { retryMiddleware } from "../globals/middleware/retry.middleware";
+import { timeoutMiddleware } from "../globals/middleware/timeout.middleware";
 
 // Re-export types for backward compatibility
 export {
@@ -38,6 +42,7 @@ export class Store {
   private registry: StoreRegistry;
   private overrideManager: OverrideManager;
   private validator: StoreValidator;
+  private taskRunner?: TaskRunner;
 
   #isLocked = false;
   #isInitialized = false;
@@ -89,11 +94,24 @@ export class Store {
   }
 
   private registerGlobalComponents() {
-    // Register built-in resources
-    const builtInResources = getBuiltInResources(this.eventManager, this);
-    builtInResources.forEach((resource) => {
+    const builtInResourcesMap = new Map<
+      IResource<any, any, any, any, any>,
+      any
+    >();
+    builtInResourcesMap.set(globalResources.store, this);
+    builtInResourcesMap.set(globalResources.eventManager, this.eventManager);
+    builtInResourcesMap.set(globalResources.logger, this.logger);
+    builtInResourcesMap.set(globalResources.taskRunner, this.taskRunner!);
+    this.registry.storeGenericItem(globalResources.queue);
+
+    for (const [resource, value] of builtInResourcesMap.entries()) {
       this.registry.storeGenericItem(resource);
-    });
+      const entry = this.resources.get(resource.id);
+      if (entry) {
+        entry.value = value;
+        entry.isInitialized = true;
+      }
+    }
 
     // Register global events
     globalEventsArray.forEach((event) => {
@@ -101,13 +119,21 @@ export class Store {
     });
 
     // Register built-in middlewares
-    const builtInMiddlewares = getBuiltInMiddlewares();
+    const builtInMiddlewares = [
+      requireContextMiddleware,
+      retryMiddleware,
+      timeoutMiddleware,
+    ];
     builtInMiddlewares.forEach((middleware) => {
       this.registry.middlewares.set(middleware.id, {
         middleware,
         computedDependencies: {},
       });
     });
+  }
+
+  public setTaskRunner(taskRunner: TaskRunner) {
+    this.taskRunner = taskRunner;
   }
 
   private setupRootResource(root: IResource<any>, config: any) {
