@@ -45,26 +45,10 @@ export const globalEvents = {
     eventId: string;
     error?: Error;
   }>({
-    id: "global.hookCompleted",
+    id: "global.events.hookCompleted",
     meta: {
       title: "Hook Completed",
       description: "Emitted after a hook finishes running for an event.",
-      tags: [systemTag, globalTags.excludeFromGlobalListeners],
-    },
-  }),
-  /**
-   * Emitted when an event listener throws. Used as a non-crashing fallback.
-   */
-  listenerError: defineEvent<{
-    eventId: string;
-    source: string;
-    error: any;
-  }>({
-    id: "global.listenerError",
-    meta: {
-      title: "Listener Error",
-      description:
-        "Emitted when an event listener throws. Handlers can log or route this.",
       tags: [systemTag, globalTags.excludeFromGlobalListeners],
     },
   }),
@@ -78,7 +62,7 @@ export const globalEvents = {
     note?: string;
     error: any;
   }>({
-    id: "global.unhandledError",
+    id: "global.events.unhandledError",
     meta: {
       title: "Unhandled Error",
       description:
@@ -92,6 +76,5 @@ export const globalEventsArray: IEvent<any>[] = [
   globalEvents.ready,
   globalEvents.hookTriggered,
   globalEvents.hookCompleted,
-  globalEvents.listenerError,
   globalEvents.unhandledError,
 ];

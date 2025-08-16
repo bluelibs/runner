@@ -49,16 +49,16 @@ export class DependencyProcessor {
    * This function is going to go through all the resources, tasks and middleware to compute their required dependencies.
    */
   async computeAllDependencies() {
-    for (const resource of this.store.resources.values()) {
-      await this.processResourceDependencies(resource);
-    }
-
     for (const middleware of this.store.middlewares.values()) {
       const deps = middleware.middleware.dependencies as DependencyMapType;
       middleware.computedDependencies = await this.extractDependencies(
         deps,
         middleware.middleware.id
       );
+    }
+
+    for (const resource of this.store.resources.values()) {
+      await this.processResourceDependencies(resource);
     }
 
     for (const task of this.store.tasks.values()) {
@@ -180,19 +180,19 @@ export class DependencyProcessor {
   }
 
   public async initializeRoot() {
-    const storeResource = this.store.root;
+    const rootResource = this.store.root;
 
     const { value, context } =
       await this.resourceInitializer.initializeResource(
-        storeResource.resource,
-        storeResource.config,
+        rootResource.resource,
+        rootResource.config,
         // They are already computed
-        storeResource.computedDependencies!
+        rootResource.computedDependencies!
       );
 
-    storeResource.context = context;
-    storeResource.value = value;
-    storeResource.isInitialized = true;
+    rootResource.context = context;
+    rootResource.value = value;
+    rootResource.isInitialized = true;
   }
 
   /**
@@ -240,7 +240,7 @@ export class DependencyProcessor {
 
   async extractDependency(object: any, source: string) {
     if (utils.isOptional(object)) {
-      const inner = object.inner as any;
+      const inner = object.inner;
       if (utils.isResource(inner)) {
         const exists = this.store.resources.get(inner.id) !== undefined;
         return exists ? this.extractResourceDependency(inner) : undefined;

@@ -6,6 +6,11 @@ describe("LogPrinter", () => {
   let logs: string[];
   let errs: string[];
 
+  beforeAll(() => {
+    console.log = ((msg?: any) => logs.push(String(msg))) as any;
+    console.error = ((msg?: any) => errs.push(String(msg))) as any;
+  });
+
   beforeEach(() => {
     logs = [];
     errs = [];
@@ -17,6 +22,11 @@ describe("LogPrinter", () => {
 
   afterEach(() => {
     LogPrinter.resetWriters();
+  });
+
+  afterAll(() => {
+    console.log = origLog;
+    console.error = origErr;
   });
 
   const baseLog = {

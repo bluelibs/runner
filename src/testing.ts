@@ -28,7 +28,7 @@ export function createTestResource(
   }
 ): IResource<void, Promise<ReturnType<typeof buildTestFacade>>> {
   return defineResource({
-    id: `tests.createTestResource.${++testResourceCounter}`,
+    id: `testing.${root.id}.${++testResourceCounter}`,
     register: [root],
     overrides: options?.overrides || [],
     dependencies: {

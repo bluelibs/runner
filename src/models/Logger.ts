@@ -35,7 +35,7 @@ export interface ILog {
 
 export type PrintStrategy = PrinterStrategy;
 export class Logger {
-  private printThreshold: LogLevels = "info";
+  private printThreshold: null | LogLevels = "info";
   private printStrategy: PrintStrategy = "pretty";
   private bufferLogs: boolean = false;
   private buffer: ILog[] = [];
@@ -44,6 +44,7 @@ export class Logger {
   private isLocked: boolean = false;
   private useColors: boolean = true;
   private printer: LogPrinter;
+  private source?: string;
 
   public static Severity = {
     trace: 0,
@@ -56,12 +57,13 @@ export class Logger {
 
   constructor(
     options: {
-      printThreshold: LogLevels;
+      printThreshold: null | LogLevels;
       printStrategy: PrintStrategy;
       bufferLogs: boolean;
       useColors?: boolean;
     },
-    boundContext: Record<string, any> = {}
+    boundContext: Record<string, any> = {},
+    source?: string
   ) {
     this.boundContext = { ...boundContext };
     this.printThreshold = options.printThreshold;
@@ -75,6 +77,7 @@ export class Logger {
       strategy: this.printStrategy,
       useColors: this.useColors,
     });
+    this.source = source;
   }
 
   private detectColorSupport(): boolean {
@@ -93,7 +96,13 @@ export class Logger {
   /**
    * Creates a new logger instance with additional bound context
    */
-  public with(context: Record<string, any>): Logger {
+  public with({
+    source,
+    context,
+  }: {
+    source?: string;
+    context?: Record<string, any>;
+  }): Logger {
     return new Logger(
       {
         printThreshold: this.printThreshold,
@@ -101,7 +110,8 @@ export class Logger {
         bufferLogs: this.bufferLogs,
         useColors: this.useColors,
       },
-      { ...this.boundContext, ...context }
+      { ...this.boundContext, ...context },
+      source
     );
   }
 
@@ -118,7 +128,7 @@ export class Logger {
     const log: ILog = {
       level,
       message,
-      source: source || this.boundContext.source,
+      source: source || this.source,
       timestamp: new Date(),
       error: error ? this.extractErrorInfo(error) : undefined,
       data: data || undefined,
@@ -214,6 +224,10 @@ export class Logger {
 
   private canPrint(level: LogLevels) {
     if (this.printStrategy === "none") {
+      return false;
+    }
+
+    if (this.printThreshold === null) {
       return false;
     }
 

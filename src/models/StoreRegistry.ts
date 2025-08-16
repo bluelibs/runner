@@ -68,25 +68,27 @@ export class StoreRegistry {
   storeHook<C>(item: IHook<any, any>, check = true) {
     check && this.validator.checkIfIDExists(item.id);
 
-    item.dependencies =
+    const hook = { ...item } as IHook<any, any>;
+    hook.dependencies =
       typeof item.dependencies === "function"
-        ? item.dependencies()
+        ? (item.dependencies as any)()
         : item.dependencies;
 
     // store separately
-    this.hooks.set(item.id, item);
+    this.hooks.set(hook.id, hook);
   }
 
   storeMiddleware<C>(item: IMiddleware<any>, check = true) {
     check && this.validator.checkIfIDExists(item.id);
 
-    item.dependencies =
+    const middleware = { ...item } as IMiddleware<any>;
+    middleware.dependencies =
       typeof item.dependencies === "function"
-        ? item.dependencies(item.config)
+        ? (item.dependencies as any)(item.config)
         : item.dependencies;
 
-    this.middlewares.set(item.id, {
-      middleware: item,
+    this.middlewares.set(middleware.id, {
+      middleware,
       computedDependencies: {},
     });
   }
@@ -102,18 +104,18 @@ export class StoreRegistry {
   ) {
     check && this.validator.checkIfIDExists(item.resource.id);
 
-    this.prepareResource(item.resource, item.config);
+    const prepared = this.prepareResource(item.resource, item.config);
 
-    this.resources.set(item.resource.id, {
-      resource: item.resource,
+    this.resources.set(prepared.id, {
+      resource: prepared,
       config: item.config,
       value: undefined,
       isInitialized: false,
       context: {},
     });
 
-    this.computeRegistrationDeeply(item.resource, item.config);
-    return item.resource;
+    this.computeRegistrationDeeply(prepared, item.config);
+    return prepared;
   }
 
   computeRegistrationDeeply<C>(element: IResource<C>, config?: C) {
@@ -121,9 +123,6 @@ export class StoreRegistry {
       typeof element.register === "function"
         ? element.register(config as C)
         : element.register;
-
-    // if it was a computed function ensure the registered terms are stored, not the function.
-    element.register = items;
 
     for (const item of items) {
       // will call registration if it detects another resource.
@@ -134,30 +133,31 @@ export class StoreRegistry {
   storeResource<C>(item: IResource<any, any, any>, check = true) {
     check && this.validator.checkIfIDExists(item.id);
 
-    this.prepareResource(item, {});
+    const prepared = this.prepareResource(item, {});
 
-    this.resources.set(item.id, {
-      resource: item,
+    this.resources.set(prepared.id, {
+      resource: prepared,
       config: {},
       value: undefined,
       isInitialized: false,
-      context: item.context?.() || {},
+      context: prepared.context?.() || {},
     });
 
-    this.computeRegistrationDeeply(item, {});
-    return item;
+    this.computeRegistrationDeeply(prepared, {});
+    return prepared;
   }
 
   storeTask<C>(item: ITask<any, any, {}>, check = true) {
     check && this.validator.checkIfIDExists(item.id);
 
-    item.dependencies =
+    const task = { ...item } as ITask<any, any, {}>;
+    task.dependencies =
       typeof item.dependencies === "function"
-        ? item.dependencies()
+        ? (item.dependencies as any)()
         : item.dependencies;
 
-    this.tasks.set(item.id, {
-      task: item,
+    this.tasks.set(task.id, {
+      task,
       computedDependencies: {},
       isInitialized: false,
     });
@@ -224,12 +224,13 @@ export class StoreRegistry {
     item: IResource<any, any, any>,
     config: any
   ): IResource<any, any, any> {
-    item.dependencies =
+    const cloned: IResource<any, any, any> = { ...item };
+    cloned.dependencies =
       typeof item.dependencies === "function"
-        ? item.dependencies(config)
+        ? (item.dependencies as any)(config)
         : item.dependencies;
 
-    return item;
+    return cloned;
   }
 
   getDependentNodes() {

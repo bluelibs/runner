@@ -17,16 +17,12 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
 
     // Task handling
     if (task) {
-      if (!store || store.isLocked) {
-        return next(task.input);
-      }
-
       if (hasSystemTag(task?.definition)) {
         return next(task.input);
       }
 
       debugConfig = getConfig(debugConfig, task?.definition);
-      const taskStartMessage = `[task] ${task.definition.id} starting to run`;
+      const taskStartMessage = `Task ${task.definition.id} is running...`;
       await logger.info(taskStartMessage, {
         data: debugConfig.logTaskInput ? { input: task.input } : undefined,
       });
@@ -42,11 +38,9 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
       }
       const duration = Date.now() - start;
 
-      const taskCompleteMessage = `[task] ${String(
-        task.definition.id
-      )} completed in ${duration}ms`;
+      const taskCompleteMessage = `Task ${task.definition.id} completed in ${duration}ms`;
       await logger.info(taskCompleteMessage, {
-        data: debugConfig.logTaskResult ? { result } : undefined,
+        data: debugConfig.logTaskOutput ? { result } : undefined,
       });
 
       return result;
@@ -54,16 +48,12 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
 
     // Resource handling
     if (resource) {
-      if (!store || store.isLocked) {
-        return next(resource.config);
-      }
-
       if (hasSystemTag(resource?.definition)) {
         return next(resource.config);
       }
 
       debugConfig = getConfig(debugConfig, resource?.definition);
-      const resourceStartMessage = `[resource] ${resource.definition.id} starting to run`;
+      const resourceStartMessage = `Resource ${resource.definition.id} is initializing...`;
       await logger.info(resourceStartMessage, {
         data: debugConfig.logResourceConfig
           ? { config: resource.config }
@@ -71,11 +61,11 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
       });
       const result = await next(resource.config);
       const duration = Date.now() - start;
-      const resourceCompleteMessage = `[resource] ${String(
+      const resourceCompleteMessage = `Resource ${String(
         resource.definition.id
       )} initialized in ${duration}ms`;
       await logger.info(resourceCompleteMessage, {
-        data: debugConfig.logResourceResult ? { result } : undefined,
+        data: debugConfig.logResourceValue ? { result } : undefined,
       });
 
       return result;

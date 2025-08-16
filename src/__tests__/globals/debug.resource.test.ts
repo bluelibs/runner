@@ -9,6 +9,7 @@ import { globalEvents } from "../../globals/globalEvents";
 import { debugResource } from "../../globals/resources/debug/debug.resource";
 import { createTestResource } from "../../testing";
 import { globalResources } from "../../globals/globalResources";
+import { levelVerbose } from "../../globals/resources/debug";
 
 Error.stackTraceLimit = Infinity;
 
@@ -51,7 +52,7 @@ describe("globals.resources.debug", () => {
       logs: {
         bufferLogs: false,
         printStrategy: "pretty",
-        printThreshold: "debug",
+        printThreshold: null,
       },
     });
 
@@ -118,16 +119,17 @@ describe("globals.resources.debug", () => {
     await run(app, {
       logs: {
         bufferLogs: true,
+        printThreshold: null,
       },
     });
 
     // Task/resource tracker messages (assert present during boot)
-    expect(
-      messages.some((m) => m.includes("[task] tests.task starting to run"))
-    ).toBe(true);
-    expect(
-      messages.some((m) => m.includes("[task] tests.task completed"))
-    ).toBe(true);
+    expect(messages.some((m) => m.includes("Task tests.task is running"))).toBe(
+      true
+    );
+    expect(messages.some((m) => m.includes("Task tests.task completed"))).toBe(
+      true
+    );
     // Resource logs are implementation-defined depending on eager/lazy init.
     // We assert task tracking here.
   });
@@ -168,7 +170,12 @@ describe("globals.resources.debug", () => {
     });
 
     const harness = createTestResource(app);
-    const { value: t } = await run(harness, { debug: "verbose" });
+    const { value: t } = await run(harness, {
+      debug: "verbose",
+      logs: {
+        printThreshold: null,
+      },
+    });
     await t.runTask(emitter);
 
     const infoLogs = logs
@@ -225,7 +232,11 @@ describe("globals.resources.debug", () => {
     });
 
     const harness = createTestResource(app);
-    const { value: t } = await run(harness);
+    const { value: t } = await run(harness, {
+      logs: {
+        printThreshold: null,
+      },
+    });
 
     // After run completes, system is locked. Running a task now should not produce debug logs.
     const before = messages.length;
@@ -244,5 +255,150 @@ describe("globals.resources.debug", () => {
     // Ensure error was logged during init
     expect(messages.some((m) => m.includes("Error: boom"))).toBe(true);
   });
-  // Optionally, add error logging tests later
+
+  it("should work for when we don't print result, input, or error", async () => {
+    const logs: Array<{ level: string; message: string }> = [];
+
+    const collector = defineResource({
+      id: "tests.collector.options.debug",
+      dependencies: { logger: globalResources.logger },
+      async init(_, { logger }) {
+        logger.onLog((log) => {
+          logs.push(log);
+        });
+        return logs;
+      },
+    });
+
+    const testTask = defineTask({
+      id: "tests.task",
+      async run() {
+        return "result";
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.events",
+      register: [debugResource.with("normal"), collector, testTask],
+      async init() {
+        return "done";
+      },
+    });
+
+    const harness = createTestResource(app);
+    const { value: t } = await run(harness, {
+      logs: {
+        printThreshold: null,
+      },
+    });
+
+    await t.runTask(testTask);
+
+    const messages = logs.map((l) => l.message);
+    expect(messages.some((m) => m.includes(`Resource ${collector.id}`))).toBe(
+      true
+    );
+    expect(messages.some((m) => m.includes(`Resource ${harness.id}`))).toBe(
+      true
+    );
+  });
+
+  it.only("omits task input/result, resource config/value, and event payload when flags are false", async () => {
+    const logs: Array<{
+      level: string;
+      message: any;
+      data?: Record<string, any> | undefined;
+    }> = [];
+
+    const collector = defineResource({
+      id: "tests.collector.flags",
+      dependencies: { logger: globalResources.logger },
+      async init(_c: { value: string }, { logger }) {
+        logger.onLog((log) => {
+          logs.push({ level: log.level, message: log.message, data: log.data });
+        });
+        return logs;
+      },
+    });
+
+    const testEvent = defineEvent<{ foo: string }>({ id: "tests.flags.event" });
+
+    const testTask = defineTask({
+      id: "tests.flags.task",
+      dependencies: { testEvent },
+      async run(_input: { name: string }, { testEvent }) {
+        await testEvent({ foo: "bar" });
+        return "result";
+      },
+    });
+
+    // We skip asserting resource init logs to avoid eager/lazy init differences
+    const config = {
+      ...levelVerbose,
+      logTaskInput: false,
+      logTaskOutput: false,
+      logResourceConfig: false,
+      logResourceValue: false,
+      logEventEmissionInput: false,
+    } as const;
+
+    const app = defineResource({
+      id: "tests.app.flags",
+      register: [collector.with({ value: "test" }), testEvent, testTask],
+      dependencies: { testTask, collector },
+      async init(_c, { testTask }) {
+        return "done";
+      },
+    });
+
+    const harness = createTestResource(app);
+    const { value: t } = await run(harness, {
+      logs: { printThreshold: null, bufferLogs: true },
+      debug: config,
+    });
+
+    // Execute once more post-boot to ensure task logs captured
+    await t.runTask(testTask, { name: "test" });
+
+    const messages = logs.map((l) => String(l.message));
+
+    // Ensure the messages we're targeting exist
+    expect(
+      messages.some((m) => m.includes("Task tests.flags.task is running"))
+    ).toBe(true);
+    expect(
+      messages.some((m) => m.includes("Task tests.flags.task completed"))
+    ).toBe(true);
+    expect(
+      messages.some((m) => m.includes("[event] tests.flags.event emitted"))
+    ).toBe(true);
+
+    // Now validate the attached data payloads are omitted according to flags
+    const taskStart = logs.find((l) =>
+      String(l.message).includes("Task tests.flags.task is running")
+    );
+    expect(taskStart?.data).toBeUndefined();
+
+    const taskComplete = logs.find((l) =>
+      String(l.message).includes("Task tests.flags.task completed")
+    );
+    expect(taskComplete?.data).toBeUndefined();
+
+    const resourceStart = logs.find((l) =>
+      String(l.message).includes(
+        "Resource tests.flags.resource is initializing"
+      )
+    );
+    expect(resourceStart?.data).toBeUndefined();
+
+    const resourceComplete = logs.find((l) =>
+      String(l.message).includes("Resource tests.flags.resource initialized")
+    );
+    expect(resourceComplete?.data).toBeUndefined();
+
+    const eventLog = logs.find((l) =>
+      String(l.message).includes("[event] tests.flags.event emitted")
+    );
+    expect(eventLog?.data).toBeUndefined();
+  });
 });

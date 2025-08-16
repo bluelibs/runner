@@ -34,7 +34,7 @@ describe("Logger", () => {
 
   it("supports with() to bind and merge context, and uses bound source as fallback", async () => {
     const base = createLogger();
-    const logger = base.with({ source: "worker", userId: 42 });
+    const logger = base.with({ source: "worker", context: { userId: 42 } });
 
     await logger.info("hello");
 
@@ -178,7 +178,10 @@ describe("Logger", () => {
 
   it("prints context merging bound and log contexts, omitting source", async () => {
     const base = createLogger({ threshold: "trace" });
-    const logger = base.with({ source: "svc", traceId: "t-1" });
+    const logger = base.with({
+      source: "svc",
+      context: { traceId: "t-1" },
+    });
     await logger.info("ctx msg", { sessionId: "s-1" });
     const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
     expect(outputs).toContain("context:");

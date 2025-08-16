@@ -3,13 +3,13 @@ import { debugTag } from "./debug.tag";
 
 export type DebugConfig = {
   logResourceConfig: boolean;
-  logResourceResult: boolean;
+  logResourceValue: boolean;
   logResourceBeforeRun: boolean;
   logResourceAfterRun: boolean;
   logResourceOnError: boolean;
   logTaskBeforeRun: boolean;
   logTaskInput: boolean;
-  logTaskResult: boolean;
+  logTaskOutput: boolean;
   logTaskAfterRun: boolean;
   logTaskOnError: boolean;
   logMiddlewareBeforeRun: boolean;
@@ -23,7 +23,7 @@ export type DebugConfig = {
   logHookCompleted: boolean;
 };
 
-export const allFalse: DebugConfig = {
+export const allFalse: DebugConfig = Object.freeze({
   logResourceBeforeRun: false,
   logResourceAfterRun: false,
   logMiddlewareBeforeRun: false,
@@ -31,18 +31,18 @@ export const allFalse: DebugConfig = {
   logTaskBeforeRun: false,
   logTaskAfterRun: false,
   logTaskInput: false,
-  logTaskResult: false,
+  logTaskOutput: false,
   logResourceConfig: false,
-  logResourceResult: false,
+  logResourceValue: false,
   logResourceOnError: false,
   logTaskOnError: false,
   logHookTriggered: false,
   logHookCompleted: false,
   logEventEmissionOnRun: false,
   logEventEmissionInput: false,
-};
+});
 
-export const levelNormal: DebugConfig = {
+export const levelNormal: DebugConfig = Object.freeze({
   ...allFalse,
   logTaskAfterRun: true,
   logTaskBeforeRun: true,
@@ -54,17 +54,21 @@ export const levelNormal: DebugConfig = {
   logHookCompleted: true,
   logEventEmissionOnRun: true,
   logEventEmissionInput: true,
-};
+});
 
-export const levelVerbose: DebugConfig = {
+Object.freeze(levelNormal);
+
+export const levelVerbose: DebugConfig = Object.freeze({
   ...levelNormal,
   logTaskInput: true,
-  logTaskResult: true,
+  logTaskOutput: true,
   logResourceConfig: true,
-  logResourceResult: true,
+  logResourceValue: true,
   logHookTriggered: true,
   logHookCompleted: true,
-};
+});
+
+Object.freeze(levelVerbose);
 
 export type DebugFriendlyConfig = "normal" | "verbose" | DebugConfig;
 
@@ -80,10 +84,10 @@ export const getConfig = (
     }
   }
   if (config === "normal") {
-    return levelNormal;
+    return { ...levelNormal };
   }
   if (config === "verbose") {
-    return levelVerbose;
+    return { ...levelVerbose };
   }
-  return config;
+  return { ...(config as DebugConfig) };
 };

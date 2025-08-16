@@ -10,8 +10,9 @@ export const debugConfig = defineResource({
     tags: [globalTags.system],
   },
   init: async (config: DebugFriendlyConfig) => {
-    const myConfig = getConfig(config);
+    const myConfig = { ...getConfig(config) };
 
+    Object.freeze(myConfig);
     return myConfig;
   },
 });

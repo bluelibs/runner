@@ -62,9 +62,9 @@ export type RunOptions = {
   debug?: DebugFriendlyConfig;
   logs?: {
     /**
-     * Defaults to info.
+     * Defaults to info. Use null to disable logging.
      */
-    printThreshold?: LogLevels;
+    printThreshold?: null | LogLevels;
     /**
      * Defaults to PRETTY. How to print the logs.
      */
@@ -159,11 +159,14 @@ export async function run<C, V extends Promise<any>>(
 
   // a form of hooking, we create the events for all tasks and store them so they can be referenced
   await store.storeEventsForAllTRM();
+  await logger.debug("Events stored. Attaching listeners...");
   await processor.attachListeners();
+  await logger.debug("Listeners attached. Computing dependencies...");
   await processor.computeAllDependencies();
-
   // After this stage, logger print policy could have been set.
-  await logger.debug("All elements have been initalized..");
+  await logger.debug(
+    "Dependencies computed. Proceeding with initialization..."
+  );
 
   // Now we can safely compute dependencies without being afraid of an infinite loop.
   // The hooking part is done here.
