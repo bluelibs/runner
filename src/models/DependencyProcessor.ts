@@ -6,6 +6,9 @@ import {
   IEventDefinition,
   IEvent,
   IEventEmission,
+  TaskLocalInterceptor,
+  ResourceDependencyValuesType,
+  TaskDependencyWithIntercept,
 } from "../defs";
 import { Store } from "./Store";
 import { symbolHook } from "../defs";
@@ -97,7 +100,7 @@ export class DependencyProcessor {
           await this.resourceInitializer.initializeResource(
             resource.resource,
             resource.config,
-            resource.computedDependencies as DependencyValuesType<{}>
+            resource.computedDependencies!
           );
         resource.context = context;
         resource.value = value;
@@ -109,14 +112,59 @@ export class DependencyProcessor {
    * Processes dependencies and hooks
    * @param resource
    */
-  protected async processResourceDependencies(
-    resource: ResourceStoreElementType<any, any, {}>
+  protected async processResourceDependencies<TD extends DependencyMapType>(
+    resource: ResourceStoreElementType<any, any, TD>
   ) {
-    const deps = resource.resource.dependencies as DependencyMapType;
-    resource.computedDependencies = await this.extractDependencies(
+    const deps = (resource.resource.dependencies || ({} as TD)) as TD;
+    const extracted = await this.extractDependencies(
       deps,
       resource.resource.id
     );
+
+    resource.computedDependencies = this.wrapResourceDependencies<TD>(
+      deps,
+      extracted
+    );
+  }
+
+  private wrapResourceDependencies<TD extends DependencyMapType>(
+    deps: TD,
+    extracted: DependencyValuesType<TD>
+  ): ResourceDependencyValuesType<TD> {
+    const wrapped: Record<string, unknown> = {};
+    for (const key of Object.keys(deps) as Array<keyof TD>) {
+      const original = deps[key];
+      const value = (extracted as Record<string, unknown>)[key as string];
+      if (utils.isTask(original)) {
+        wrapped[key as string] = this.makeTaskWithIntercept(original);
+      } else {
+        wrapped[key as string] = value as unknown;
+      }
+    }
+    return wrapped as unknown as ResourceDependencyValuesType<TD>;
+  }
+
+  private makeTaskWithIntercept<
+    I,
+    O extends Promise<any>,
+    D extends DependencyMapType
+  >(original: ITask<I, O, D>): TaskDependencyWithIntercept<I, O> {
+    const taskId = original.id;
+    const fn: (input: I) => O = (input) => {
+      const storeTask = this.store.tasks.get(taskId)!;
+      const effective: ITask<I, O, D> = storeTask.task;
+
+      return this.taskRunner.run(effective, input) as O;
+    };
+    return Object.assign(fn, {
+      intercept: (middleware: TaskLocalInterceptor<I, O>) => {
+        this.store.checkLock();
+        const storeTask = this.store.tasks.get(taskId)!;
+
+        if (!storeTask.interceptors) storeTask.interceptors = [];
+        storeTask.interceptors.push(middleware);
+      },
+    }) as TaskDependencyWithIntercept<I, O>;
   }
 
   public async initializeRoot() {
@@ -127,7 +175,7 @@ export class DependencyProcessor {
         storeResource.resource,
         storeResource.config,
         // They are already computed
-        storeResource.computedDependencies as DependencyValuesType<{}>
+        storeResource.computedDependencies!
       );
 
     storeResource.context = context;
@@ -240,14 +288,14 @@ export class DependencyProcessor {
 
       // check if it has an initialisation function that provides the value
       if (resource.init) {
+        const depMap = (resource.dependencies || {}) as DependencyMapType;
+        const raw = await this.extractDependencies(depMap, resource.id);
+        const wrapped = this.wrapResourceDependencies(depMap, raw);
         const { value, context } =
           await this.resourceInitializer.initializeResource(
             resource,
             config,
-            await this.extractDependencies(
-              resource.dependencies || {},
-              resource.id
-            )
+            wrapped
           );
 
         storeResource.context = context;

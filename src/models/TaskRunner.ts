@@ -74,7 +74,7 @@ export class TaskRunner {
     TOutput extends Promise<any>,
     TDeps extends DependencyMapType
   >(task: ITask<TInput, TOutput, TDeps>) {
-    const storeTask = this.store.tasks.get(task.id);
+    const storeTask = this.store.tasks.get(task.id)!;
 
     // this is the final next()
     let next = async (input: any) => {
@@ -106,6 +106,15 @@ export class TaskRunner {
       .getEverywhereMiddlewareForTasks(task)
       .filter((x) => !existingMiddlewareIds.includes(x.id));
     const createdMiddlewares = [...globalMiddlewares, ...existingMiddlewares];
+
+    // Inject local per-task interceptors first (closest to the task)
+    if (storeTask.interceptors && storeTask.interceptors.length > 0) {
+      for (let i = storeTask.interceptors.length - 1; i >= 0; i--) {
+        const interceptor = storeTask.interceptors[i];
+        const nextFunction = next;
+        next = async (input) => interceptor(nextFunction, input);
+      }
+    }
 
     if (createdMiddlewares.length === 0) {
       return next;

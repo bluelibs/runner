@@ -215,6 +215,33 @@ export type DependencyValuesType<T extends DependencyMapType> = {
   [K in keyof T]: DependencyValueType<T[K]>;
 };
 
+// Per-task local interceptor for resource dependency context
+export type TaskLocalInterceptor<TInput, TOutput> = (
+  next: (input: TInput) => TOutput,
+  input: TInput
+) => TOutput;
+
+// When tasks are injected into resources, they expose an intercept() API
+export type TaskDependencyWithIntercept<TInput, TOutput> = TaskDependency<
+  TInput,
+  TOutput
+> & {
+  intercept: (middleware: TaskLocalInterceptor<TInput, TOutput>) => void;
+};
+
+/** Resource-context dependency typing where tasks expose intercept() */
+export type ResourceDependencyValueType<T> = T extends ITask<any, any, any>
+  ? TaskDependencyWithIntercept<ExtractTaskInput<T>, ExtractTaskOutput<T>>
+  : T extends IResource<any, any>
+  ? ResourceDependency<ExtractResourceValue<T>>
+  : T extends IEventDefinition<any>
+  ? EventDependency<ExtractEventParams<T>>
+  : never;
+
+export type ResourceDependencyValuesType<T extends DependencyMapType> = {
+  [K in keyof T]: ResourceDependencyValueType<T[K]>;
+};
+
 /**
  * Anything you can put inside a resource's `register: []`.
  * - Resources (with or without `.with()`)
@@ -347,7 +374,7 @@ export interface IResourceDefinition<
   init?: (
     this: any,
     config: TConfig,
-    dependencies: DependencyValuesType<TDependencies>,
+    dependencies: ResourceDependencyValuesType<TDependencies>,
     context: TContext
   ) => HasContracts<TMeta> extends true
     ? EnsureResponseSatisfiesContracts<TMeta, TValue>
@@ -364,7 +391,7 @@ export interface IResourceDefinition<
     this: any,
     value: TValue extends Promise<infer U> ? U : TValue,
     config: TConfig,
-    dependencies: DependencyValuesType<TDependencies>,
+    dependencies: ResourceDependencyValuesType<TDependencies>,
     context: TContext
   ) => Promise<void>;
   meta?: TMeta;

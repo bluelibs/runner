@@ -151,7 +151,7 @@ export class Store {
         await resource.resource.dispose(
           resource.value,
           resource.config,
-          resource.computedDependencies as DependencyMapType,
+          resource.computedDependencies as any,
           resource.context
         );
       }
@@ -182,6 +182,11 @@ export class Store {
     this.registry.storeEventsForAllTRM();
   }
 
+  /**
+   * Returns all tasks with the given tag.
+   * @param tag - The tag to filter by.
+   * @returns The tasks with the given tag.
+   */
   public getTasksWithTag(tag: string | ITag) {
     return this.registry.getTasksWithTag(tag);
   }

@@ -10,6 +10,8 @@ import {
   RegisterableItems,
   IMiddleware,
   IEvent,
+  TaskLocalInterceptor,
+  ResourceDependencyValuesType,
 } from "../defs";
 
 export type ResourceStoreElementType<
@@ -19,7 +21,7 @@ export type ResourceStoreElementType<
   TContext = any
 > = {
   resource: IResource<C, V, D>;
-  computedDependencies?: DependencyValuesType<D>;
+  computedDependencies?: ResourceDependencyValuesType<D>;
   config: C;
   value: V;
   context: TContext;
@@ -34,6 +36,7 @@ export type TaskStoreElementType<
   task: ITask<Input, Output, D>;
   computedDependencies: DependencyValuesType<D>;
   isInitialized: boolean;
+  interceptors?: Array<TaskLocalInterceptor<any, any>>;
 };
 
 export type HookStoreElementType<

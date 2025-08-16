@@ -1,4 +1,12 @@
-import { createContext, task, run, resource, Store } from "../index";
+import {
+  createContext,
+  task,
+  run,
+  resource,
+  Store,
+  TaskRunner,
+  EventManager,
+} from "../index";
 import { ContextError } from "../context";
 
 describe("Context System", () => {
@@ -17,6 +25,8 @@ describe("Context System", () => {
         value: { id: "1" },
         dispose: expect.any(Function),
         store: expect.any(Store),
+        taskRunner: expect.any(TaskRunner),
+        eventManager: expect.any(EventManager),
       });
     });
   });
@@ -41,6 +51,8 @@ describe("Context System", () => {
         value: "ok",
         dispose: expect.any(Function),
         store: expect.any(Store),
+        taskRunner: expect.any(TaskRunner),
+        eventManager: expect.any(EventManager),
       });
     });
   });

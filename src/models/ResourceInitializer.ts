@@ -1,4 +1,9 @@
-import { DependencyMapType, DependencyValuesType, IResource } from "../defs";
+import {
+  DependencyMapType,
+  DependencyValuesType,
+  IResource,
+  ResourceDependencyValuesType,
+} from "../defs";
 import { EventManager } from "./EventManager";
 import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
@@ -23,7 +28,7 @@ export class ResourceInitializer {
   >(
     resource: IResource<TConfig, TValue, TDeps>,
     config: TConfig,
-    dependencies: DependencyValuesType<TDeps>
+    dependencies: ResourceDependencyValuesType<TDeps>
   ): Promise<{ value: TValue; context: TContext }> {
     const context = resource.context?.();
 
@@ -54,7 +59,7 @@ export class ResourceInitializer {
   >(
     resource: IResource<C, V, D, TContext>,
     config: C,
-    dependencies: DependencyValuesType<D>,
+    dependencies: ResourceDependencyValuesType<D>,
     context: TContext
   ) {
     let next = async (config: C): Promise<V | undefined> => {

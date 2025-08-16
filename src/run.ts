@@ -87,6 +87,9 @@ export async function run<C, V extends Promise<any>>(
   value: V extends Promise<infer U> ? U : V;
   store: Store;
   dispose: () => Promise<void>;
+  /** This is used to run tasks. */
+  taskRunner: TaskRunner;
+  eventManager: EventManager;
 }> {
   const { debug = false, logs = {} } = options || {};
   const {
@@ -168,6 +171,8 @@ export async function run<C, V extends Promise<any>>(
     value: store.root.value,
     dispose: () => store.dispose(),
     store,
+    taskRunner,
+    eventManager,
   };
 }
 function extractResourceAndConfig<C, V extends Promise<any>>(
