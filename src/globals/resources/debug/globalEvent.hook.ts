@@ -1,7 +1,7 @@
 import { defineHook } from "../../../define";
 import { globalResources } from "../../globalResources";
 import { globalTags } from "../../globalTags";
-import { hasSystemOrLifecycleTag, safeStringify } from "./utils";
+import { hasSystemTag } from "./utils";
 import { debugConfig } from "./debugConfig.resource";
 import { getConfig } from "./types";
 import { globalEvents } from "../../globalEvents";
@@ -14,18 +14,18 @@ export const globalEventListener = defineHook({
     debugConfig,
   },
   run: async (event, { logger, debugConfig }) => {
-    if (hasSystemOrLifecycleTag(event)) {
+    if (hasSystemTag(event)) {
       return;
     }
 
     debugConfig = getConfig(debugConfig, event!);
     if (debugConfig.logEventEmissionOnRun) {
-      let logString = `[event] ${String(event!.id)} emitted`;
-      if (debugConfig.logEventEmissionInput) {
-        logString += ` with payload: \n${safeStringify(event!.data)}`;
-      }
-
-      await logger.info(logString);
+      const message = `[event] ${String(event!.id)} emitted`;
+      await logger.info(message, {
+        data: debugConfig.logEventEmissionInput
+          ? { payload: event!.data }
+          : undefined,
+      });
     }
   },
   meta: {

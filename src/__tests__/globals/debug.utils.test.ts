@@ -1,7 +1,4 @@
-import {
-  hasSystemOrLifecycleTag,
-  safeStringify,
-} from "../../globals/resources/debug/utils";
+import { hasSystemTag } from "../../globals/resources/debug/utils";
 import {
   getConfig,
   levelNormal,
@@ -13,6 +10,7 @@ import { defineResource } from "../../define";
 import { createTestResource } from "../../testing";
 import { run } from "../../run";
 import { debugConfig } from "../../globals/resources/debug/debugConfig.resource";
+import { safeStringify } from "../../models/utils/safeStringify";
 
 describe("debug utils and types", () => {
   it("safeStringify handles circular structures without throwing", () => {
@@ -20,16 +18,14 @@ describe("debug utils and types", () => {
     a.self = a;
     const result = safeStringify(a);
     expect(typeof result).toBe("string");
-    expect(result).toBe("[object Object]");
+    expect(result).toBe('{"self":"[Circular]"}');
   });
 
   it("hasSystemOrLifecycleTag detects system and lifecycle tags", () => {
     const sys = { meta: { tags: [globalTags.system] } } as any;
-    const life = { meta: { tags: [globalTags.lifecycle] } } as any;
     const none = { meta: { tags: [] } } as any;
-    expect(hasSystemOrLifecycleTag(sys)).toBe(true);
-    expect(hasSystemOrLifecycleTag(life)).toBe(true);
-    expect(hasSystemOrLifecycleTag(none)).toBe(false);
+    expect(hasSystemTag(sys)).toBe(true);
+    expect(hasSystemTag(none)).toBe(false);
   });
 
   it("getConfig resolves normal, verbose and overrides via taggable", () => {

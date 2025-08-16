@@ -13,14 +13,14 @@ export const globalTags = {
         "System-wide tags. Used for filtering out noise when you're focusing on your application.",
     },
   }),
-  lifecycle: defineTag<{
+  excludeFromGlobalListeners: defineTag<{
     metadata?: Record<string, any>;
   }>({
-    id: "globals.tags.lifecycle",
+    id: "globals.tags.excludeFromGlobalListeners",
     meta: {
-      title: "Lifecycle",
+      title: "Exclude Event From Global Listeners",
       description:
-        "Lifecycle tags. This relates to before initialization, before running, on error and after elements.",
+        "Marks events that should not be dispatched to global listeners (on: '*').",
     },
   }),
   debug: debugTag,

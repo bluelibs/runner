@@ -5,6 +5,7 @@ import { debugResource } from "../../globals/resources/debug";
 import { globalEvents } from "../../globals/globalEvents";
 import { globalResources } from "../../globals/globalResources";
 import { globalTags } from "../../globals/globalTags";
+import { defineEvent, defineHook } from "../../define";
 
 describe("debug resource - ignored system/lifecycle events", () => {
   it("does not log system/lifecycle events from global listener", async () => {
@@ -86,5 +87,47 @@ describe("debug resource - ignored system/lifecycle events", () => {
       false
     );
     expect(joined.includes("[task] tests.system.task completed")).toBe(false);
+  });
+
+  it("does not log hook triggered/completed messages (system-tagged observability events are skipped)", async () => {
+    const messages: string[] = [];
+
+    const collector = defineResource({
+      id: "tests.collector.hooks.ignored",
+      dependencies: { logger: globalResources.logger },
+      async init(_, { logger }) {
+        logger.onLog((log) => {
+          messages.push(String(log.message));
+        });
+        return messages;
+      },
+    });
+
+    const userEvent = defineEvent<{ n: number }>({ id: "tests.user.event" });
+
+    // A normal hook listening to a user event
+    const userHook = defineHook({
+      id: "tests.user.hook",
+      on: userEvent,
+      async run() {
+        // no-op
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.hooks.ignored",
+      register: [debugResource.with("verbose"), collector, userEvent, userHook],
+      dependencies: { userEvent },
+      async init(_, { userEvent }) {
+        await userEvent({ n: 1 });
+        return "ready" as const;
+      },
+    });
+
+    await run(app);
+
+    const joined = messages.join("\n");
+    expect(joined.includes("[hook] tests.user.hook triggered")).toBe(false);
+    expect(joined.includes("[hook] tests.user.hook completed")).toBe(false);
   });
 });

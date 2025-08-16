@@ -381,6 +381,164 @@ describe("run", () => {
       expect(eventHandler).toHaveBeenCalled();
       expect(matched).toBe(true);
     });
+
+    it("emits hookTriggered and hookCompleted around hook execution (success)", async () => {
+      const { globalEvents } = await import("../globals/globalEvents");
+
+      const testEvent = defineEvent<{ value: number }>({
+        id: "hooks.test.event",
+      });
+
+      const observed: Array<{ id: string; payload: any }> = [];
+
+      // Listen specifically to the observability events (not global '*')
+      const hookTriggeredListener = defineHook({
+        id: "tests.hooks.triggered.listener",
+        on: globalEvents.hookTriggered,
+        async run(event) {
+          observed.push({ id: event.id, payload: event.data });
+        },
+      });
+
+      const hookCompletedListener = defineHook({
+        id: "tests.hooks.completed.listener",
+        on: globalEvents.hookCompleted,
+        async run(event) {
+          observed.push({ id: event.id, payload: event.data });
+        },
+      });
+
+      const handler = jest.fn();
+      const appHook = defineHook({
+        id: "tests.hooks.app",
+        on: testEvent,
+        async run(e) {
+          handler(e.data.value);
+        },
+      });
+
+      // Global '*' listener should NOT receive the hookTriggered/hookCompleted
+      const globalAnySeen: string[] = [];
+      const globalAny = defineHook({
+        id: "tests.hooks.globalAny",
+        on: "*",
+        async run(e) {
+          globalAnySeen.push(e.id);
+        },
+      });
+
+      const app = defineResource({
+        id: "hooks.app.success",
+        register: [
+          testEvent,
+          appHook,
+          hookTriggeredListener,
+          hookCompletedListener,
+          globalAny,
+        ],
+        dependencies: { testEvent },
+        async init(_, { testEvent }) {
+          await testEvent({ value: 42 });
+        },
+      });
+
+      await run(app);
+
+      // Ensure our business hook executed
+      expect(handler).toHaveBeenCalledWith(42);
+
+      // Ensure we observed both lifecycle events with correct payload for the specific hook
+      const appOnly = observed.filter(
+        (o) => o.payload.hookId === "tests.hooks.app"
+      );
+      const ids = appOnly.map((o) => o.id);
+      expect(ids).toEqual([
+        globalEvents.hookTriggered.id,
+        globalEvents.hookCompleted.id,
+      ]);
+
+      expect(appOnly[0].payload).toEqual({
+        hookId: "tests.hooks.app",
+        eventId: testEvent.id,
+      });
+      expect(appOnly[1].payload).toEqual({
+        hookId: "tests.hooks.app",
+        eventId: testEvent.id,
+      });
+
+      // Global '*' should not see the observability events
+      expect(globalAnySeen).toContain("hooks.test.event");
+      expect(globalAnySeen).not.toContain(globalEvents.hookTriggered.id);
+      expect(globalAnySeen).not.toContain(globalEvents.hookCompleted.id);
+    });
+
+    it("emits hookCompleted with error when hook throws", async () => {
+      const { globalEvents } = await import("../globals/globalEvents");
+
+      const testEvent = defineEvent<{ value: number }>({
+        id: "hooks.test.event.error",
+      });
+
+      const observed: Array<{ id: string; payload: any }> = [];
+
+      const hookTriggeredListener = defineHook({
+        id: "tests.hooks.triggered.listener.error",
+        on: globalEvents.hookTriggered,
+        async run(event) {
+          observed.push({ id: event.id, payload: event.data });
+        },
+      });
+
+      const hookCompletedListener = defineHook({
+        id: "tests.hooks.completed.listener.error",
+        on: globalEvents.hookCompleted,
+        async run(event) {
+          observed.push({ id: event.id, payload: event.data });
+        },
+      });
+
+      const appHook = defineHook({
+        id: "tests.hooks.app.error",
+        on: testEvent,
+        async run() {
+          throw new Error("fail-me");
+        },
+      });
+
+      const app = defineResource({
+        id: "hooks.app.error",
+        register: [
+          testEvent,
+          appHook,
+          hookTriggeredListener,
+          hookCompletedListener,
+        ],
+        dependencies: { testEvent },
+        async init(_, { testEvent }) {
+          await testEvent({ value: 1 });
+        },
+      });
+
+      await expect(run(app)).rejects.toThrow("fail-me");
+
+      const appOnly = observed.filter(
+        (o) => o.payload.hookId === "tests.hooks.app.error"
+      );
+      const ids = appOnly.map((o) => o.id);
+      expect(ids).toEqual([
+        globalEvents.hookTriggered.id,
+        globalEvents.hookCompleted.id,
+      ]);
+
+      expect(appOnly[0].payload).toEqual({
+        hookId: "tests.hooks.app.error",
+        eventId: testEvent.id,
+      });
+      expect(appOnly[1].payload.hookId).toBe("tests.hooks.app.error");
+      expect(appOnly[1].payload.eventId).toBe(testEvent.id);
+      expect(appOnly[1].payload.error).toBeTruthy();
+      expect(appOnly[1].payload.error.message).toContain("fail-me");
+    });
   });
 
   // Resources

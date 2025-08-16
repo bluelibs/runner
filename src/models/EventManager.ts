@@ -5,6 +5,7 @@ import {
   IEventEmission,
 } from "../defs";
 import { LockedError, ValidationError } from "../errors";
+import { globalTags } from "../globals/globalTags";
 import { Logger } from "./Logger";
 
 const HandlerOptionsDefaults = { order: 0 };
@@ -13,6 +14,8 @@ interface IListenerStorage {
   order: number;
   filter?: (event: IEventEmission<any>) => boolean;
   handler: EventHandlerType;
+  /** True when this listener originates from addGlobalListener(). */
+  isGlobal: boolean;
 }
 
 export interface IEventHandlerOptions<T = any> {
@@ -62,6 +65,16 @@ export class EventManager {
     while (i < a.length) result.push(a[i++]);
     while (j < b.length) result.push(b[j++]);
     return result;
+  }
+
+  /**
+   * Returns true if the given emission carries the tag that marks
+   * it as excluded from global ("*") listeners.
+   */
+  private isExcludedFromGlobal(event: IEventEmission<any>): boolean {
+    const tag = globalTags.excludeFromGlobalListeners.extract(event);
+
+    return Boolean(tag);
   }
 
   private getCachedMergedListeners(eventId: string): IListenerStorage[] {
@@ -136,9 +149,18 @@ export class EventManager {
       isPropagationStopped: () => propagationStopped,
     };
 
+    const excludeFromGlobal = this.isExcludedFromGlobal(event);
+
     for (const listener of allListeners) {
       if (propagationStopped) {
         break;
+      }
+
+      // If this event is marked to be excluded from global listeners,
+      // we only allow non-global (event-specific) listeners to run.
+      // Global listeners are mixed into `allListeners` but flagged.
+      if (excludeFromGlobal && listener.isGlobal) {
+        continue;
       }
 
       if (!listener.filter || listener.filter(event)) {
@@ -174,6 +196,7 @@ export class EventManager {
       handler,
       order: options.order || 0,
       filter: options.filter,
+      isGlobal: false,
     };
 
     if (Array.isArray(event)) {
@@ -199,6 +222,7 @@ export class EventManager {
       handler,
       order: options.order || 0,
       filter: options.filter,
+      isGlobal: true,
     };
     this.insertListener(this.globalListeners, newListener);
     this.invalidateCache();

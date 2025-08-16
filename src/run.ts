@@ -75,6 +75,15 @@ export type RunOptions = {
      */
     bufferLogs?: boolean;
   };
+  /**
+   * When true (default), installs a central error boundary that catches uncaught errors
+   * from process-level events and emits `global.unhandledError`.
+   */
+  errorBoundary?: boolean;
+  /**
+   * When true (default), installs SIGINT/SIGTERM handlers that call dispose() on the root.
+   */
+  shutdownHooks?: boolean;
 };
 
 export async function run<C, V extends Promise<any>>(
@@ -91,7 +100,12 @@ export async function run<C, V extends Promise<any>>(
   taskRunner: TaskRunner;
   eventManager: EventManager;
 }> {
-  const { debug = false, logs = {} } = options || {};
+  const {
+    debug = false,
+    logs = {},
+    errorBoundary = true,
+    shutdownHooks = true,
+  } = options || {};
   const {
     printThreshold = "info",
     printStrategy = "pretty",
@@ -112,6 +126,11 @@ export async function run<C, V extends Promise<any>>(
 
   const store = new Store(eventManager, logger);
   const taskRunner = new TaskRunner(store, eventManager, logger);
+
+  if (errorBoundary) {
+    setupProcessLevelSafetyNets(eventManager);
+  }
+
   const processor = new DependencyProcessor(
     store,
     eventManager,
@@ -159,6 +178,10 @@ export async function run<C, V extends Promise<any>>(
   eventManager.lock();
   await logger.lock();
 
+  if (shutdownHooks) {
+    setupShutdownHooks(() => store.dispose());
+  }
+
   await eventManager.emit(
     globalEvents.ready,
     {
@@ -175,6 +198,43 @@ export async function run<C, V extends Promise<any>>(
     eventManager,
   };
 }
+
+function setupProcessLevelSafetyNets(eventManager: EventManager) {
+  const onUncaughtException = async (err: any) => {
+    try {
+      await eventManager.emit(
+        globalEvents.unhandledError,
+        { kind: "process", error: err, note: "uncaughtException" },
+        "process"
+      );
+    } catch (_) {}
+  };
+  const onUnhandledRejection = async (reason: any) => {
+    try {
+      await eventManager.emit(
+        globalEvents.unhandledError,
+        { kind: "process", error: reason, note: "unhandledRejection" },
+        "process"
+      );
+    } catch (_) {}
+  };
+  process.on("uncaughtException", onUncaughtException as any);
+  process.on("unhandledRejection", onUnhandledRejection as any);
+}
+
+function setupShutdownHooks(disposeOnce: () => Promise<void>) {
+  const handler = async (signal: NodeJS.Signals) => {
+    try {
+      await disposeOnce();
+    } finally {
+      // Exit with code 0 for graceful shutdown
+      process.exit(0);
+    }
+  };
+  process.once("SIGINT", handler);
+  process.once("SIGTERM", handler);
+}
+
 function extractResourceAndConfig<C, V extends Promise<any>>(
   resourceOrResourceWithConfig:
     | IResourceWithConfig<C, V>

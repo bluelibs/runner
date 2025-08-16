@@ -1,5 +1,5 @@
 import { defineMiddleware } from "../../../define";
-import { hasSystemOrLifecycleTag, safeStringify } from "./utils";
+import { hasSystemTag } from "./utils";
 import { debugConfig } from "./debugConfig.resource";
 import { globalResources } from "../../globalResources";
 import { globalTags } from "../../globalTags";
@@ -21,16 +21,15 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
         return next(task.input);
       }
 
-      if (hasSystemOrLifecycleTag(task?.definition)) {
+      if (hasSystemTag(task?.definition)) {
         return next(task.input);
       }
 
       debugConfig = getConfig(debugConfig, task?.definition);
-      let logString = `[task] ${task.definition.id} starting to run`;
-      if (debugConfig.logTaskInput) {
-        logString += ` with input: \n${safeStringify(task.input)}`;
-      }
-      await logger.info(logString);
+      const taskStartMessage = `[task] ${task.definition.id} starting to run`;
+      await logger.info(taskStartMessage, {
+        data: debugConfig.logTaskInput ? { input: task.input } : undefined,
+      });
 
       let result: any;
       try {
@@ -43,13 +42,12 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
       }
       const duration = Date.now() - start;
 
-      logString = `[task] ${String(
+      const taskCompleteMessage = `[task] ${String(
         task.definition.id
       )} completed in ${duration}ms`;
-      if (debugConfig.logTaskResult) {
-        logString += ` with result: \n${safeStringify(result)}`;
-      }
-      await logger.info(logString);
+      await logger.info(taskCompleteMessage, {
+        data: debugConfig.logTaskResult ? { result } : undefined,
+      });
 
       return result;
     }
@@ -60,25 +58,25 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
         return next(resource.config);
       }
 
-      if (hasSystemOrLifecycleTag(resource?.definition)) {
+      if (hasSystemTag(resource?.definition)) {
         return next(resource.config);
       }
 
       debugConfig = getConfig(debugConfig, resource?.definition);
-      let logString = `[resource] ${resource.definition.id} starting to run`;
-      if (debugConfig.logResourceConfig) {
-        logString += ` with config: \n${safeStringify(resource.config)}`;
-      }
-      await logger.info(logString);
+      const resourceStartMessage = `[resource] ${resource.definition.id} starting to run`;
+      await logger.info(resourceStartMessage, {
+        data: debugConfig.logResourceConfig
+          ? { config: resource.config }
+          : undefined,
+      });
       const result = await next(resource.config);
       const duration = Date.now() - start;
-      logString = `[resource] ${String(
+      const resourceCompleteMessage = `[resource] ${String(
         resource.definition.id
       )} initialized in ${duration}ms`;
-      if (debugConfig.logResourceResult) {
-        logString += ` with result: \n${safeStringify(result)}`;
-      }
-      await logger.info(logString);
+      await logger.info(resourceCompleteMessage, {
+        data: debugConfig.logResourceResult ? { result } : undefined,
+      });
 
       return result;
     }

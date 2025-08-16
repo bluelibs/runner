@@ -12,7 +12,7 @@ alwaysApply: true
 - Always include tests; run via `npm run test -- {context}`.
 - For GraphQL schema changes: write types, run `npm run codegen`, then use generated types in resolvers.
 - Add `meta.title`, `meta.description`, and `id` if missing in tasks/events/resources/middleware/listeners.
-- Always run tests to ensure they pass and maintain coverage at 100%.
+- After the implementation is completed, run the full suite of tests and ensure 100% coverage.
 - After every implementation, suggest 3 improvements if and only if tests pass and coverage is maintained at 100%.
 
 ## **SHOULD**

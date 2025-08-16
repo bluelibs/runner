@@ -8,6 +8,7 @@ import { EventManager } from "./EventManager";
 import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
+import { globalEvents } from "../globals/globalEvents";
 
 export class ResourceInitializer {
   constructor(
@@ -45,6 +46,14 @@ export class ResourceInitializer {
 
       return { value: value as TValue, context };
     } catch (error) {
+      // Emit central error boundary; still rethrow to caller
+      try {
+        await this.eventManager.emit(
+          globalEvents.unhandledError,
+          { kind: "resourceInit", id: resource.id as any, error },
+          resource.id as any
+        );
+      } catch (_) {}
       throw error;
     }
   }

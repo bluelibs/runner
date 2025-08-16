@@ -14,11 +14,13 @@ export type DebugConfig = {
   logTaskOnError: boolean;
   logMiddlewareBeforeRun: boolean;
   logMiddlewareAfterRun: boolean;
+  logEventEmissionOnRun: boolean;
+  logEventEmissionInput: boolean;
   /**
    * Events marked with system are hidden by default.
    */
-  logEventEmissionOnRun: boolean;
-  logEventEmissionInput: boolean;
+  logHookTriggered: boolean;
+  logHookCompleted: boolean;
 };
 
 export const allFalse: DebugConfig = {
@@ -32,10 +34,12 @@ export const allFalse: DebugConfig = {
   logTaskResult: false,
   logResourceConfig: false,
   logResourceResult: false,
-  logEventEmissionOnRun: false,
-  logEventEmissionInput: false,
   logResourceOnError: false,
   logTaskOnError: false,
+  logHookTriggered: false,
+  logHookCompleted: false,
+  logEventEmissionOnRun: false,
+  logEventEmissionInput: false,
 };
 
 export const levelNormal: DebugConfig = {
@@ -46,7 +50,10 @@ export const levelNormal: DebugConfig = {
   logResourceAfterRun: true,
   logResourceOnError: true,
   logTaskOnError: true,
+  logHookTriggered: true,
+  logHookCompleted: true,
   logEventEmissionOnRun: true,
+  logEventEmissionInput: true,
 };
 
 export const levelVerbose: DebugConfig = {
@@ -55,7 +62,8 @@ export const levelVerbose: DebugConfig = {
   logTaskResult: true,
   logResourceConfig: true,
   logResourceResult: true,
-  logEventEmissionInput: true,
+  logHookTriggered: true,
+  logHookCompleted: true,
 };
 
 export type DebugFriendlyConfig = "normal" | "verbose" | DebugConfig;

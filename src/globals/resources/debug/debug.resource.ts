@@ -1,9 +1,10 @@
 import { defineResource } from "../../../define";
 import { debugConfig } from "./debugConfig.resource";
 import { DebugFriendlyConfig } from "./types";
-import { globalEventListener } from "./globalEvent.listener";
+import { globalEventListener } from "./globalEvent.hook";
 import { tasksAndResourcesTrackerMiddleware } from "./executionTracker.middleware";
 import { globalTags } from "../../globalTags";
+import { hookCompletedListener, hookTriggeredListener } from "./hook.hook";
 
 export const debugResource = defineResource({
   id: "globals.resources.debug",
@@ -11,6 +12,8 @@ export const debugResource = defineResource({
     return [
       debugConfig.with(config),
       globalEventListener,
+      hookTriggeredListener,
+      hookCompletedListener,
       tasksAndResourcesTrackerMiddleware.everywhere(),
     ];
   },

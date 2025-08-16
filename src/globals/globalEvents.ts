@@ -22,6 +22,76 @@ export const globalEvents = {
       tags: [systemTag],
     },
   }),
+  /**
+   * Emitted right before a hook's run executes.
+   */
+  hookTriggered: defineEvent<{
+    hookId: string;
+    eventId: string;
+  }>({
+    id: "global.events.hookTriggered",
+    meta: {
+      title: "Hook Triggered",
+      description:
+        "Emitted immediately before a hook starts running for an event.",
+      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+    },
+  }),
+  /**
+   * Emitted after a hook completes (success or failure). Contains optional error.
+   */
+  hookCompleted: defineEvent<{
+    hookId: string;
+    eventId: string;
+    error?: Error;
+  }>({
+    id: "global.hookCompleted",
+    meta: {
+      title: "Hook Completed",
+      description: "Emitted after a hook finishes running for an event.",
+      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+    },
+  }),
+  /**
+   * Emitted when an event listener throws. Used as a non-crashing fallback.
+   */
+  listenerError: defineEvent<{
+    eventId: string;
+    source: string;
+    error: any;
+  }>({
+    id: "global.listenerError",
+    meta: {
+      title: "Listener Error",
+      description:
+        "Emitted when an event listener throws. Handlers can log or route this.",
+      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+    },
+  }),
+  /**
+   * Central error boundary event for any thrown error across the runner.
+   */
+  unhandledError: defineEvent<{
+    kind: "task" | "middleware" | "resourceInit" | "hook" | "process";
+    id?: string;
+    source?: string;
+    note?: string;
+    error: any;
+  }>({
+    id: "global.unhandledError",
+    meta: {
+      title: "Unhandled Error",
+      description:
+        "Central error boundary event for any thrown error across the runner.",
+      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+    },
+  }),
 } as const;
 
-export const globalEventsArray: IEvent<any>[] = [globalEvents.ready];
+export const globalEventsArray: IEvent<any>[] = [
+  globalEvents.ready,
+  globalEvents.hookTriggered,
+  globalEvents.hookCompleted,
+  globalEvents.listenerError,
+  globalEvents.unhandledError,
+];

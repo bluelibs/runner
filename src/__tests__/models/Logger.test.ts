@@ -2,6 +2,7 @@ import { Logger } from "../../models/Logger";
 
 describe("Logger", () => {
   let consoleSpy: jest.SpyInstance;
+  let consoleErrorSpy: jest.SpyInstance;
 
   const createLogger = (
     opts?: Partial<{ threshold: any; strategy: any; buffer: boolean }>
@@ -12,13 +13,23 @@ describe("Logger", () => {
       bufferLogs: opts?.buffer ?? false,
     });
 
+  const gather = () => {
+    const logs = consoleSpy.mock.calls.map((c) => String(c[0]));
+    const errs = consoleErrorSpy.mock.calls.map((c) => String(c[0]));
+    return [...logs, ...errs].join("\n");
+  };
+
   beforeEach(() => {
     consoleSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+    consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation((() => {}) as any);
   });
 
   afterEach(() => {
     jest.clearAllMocks();
     consoleSpy.mockRestore();
+    consoleErrorSpy.mockRestore();
   });
 
   it("supports with() to bind and merge context, and uses bound source as fallback", async () => {
@@ -27,7 +38,7 @@ describe("Logger", () => {
 
     await logger.info("hello");
 
-    const all = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    const all = gather();
     expect(all).toContain("[worker]");
     expect(all).toContain("context:");
     expect(all).toContain('"userId": 42');
@@ -53,6 +64,7 @@ describe("Logger", () => {
     expect(seen).toHaveLength(1);
     expect(seen[0].level).toBe("info");
     expect(consoleSpy).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
   it("respects print threshold severity", async () => {
@@ -61,10 +73,12 @@ describe("Logger", () => {
     await logger.warn("WARN_MSG");
     await logger.error("ERROR_MSG");
 
-    const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    const outputs = gather();
     expect(outputs).not.toContain("INFO_MSG");
     expect(outputs).toContain("WARN_MSG");
     expect(outputs).toContain("ERROR_MSG");
+    // Ensure warn/error went to stderr path
+    expect(consoleErrorSpy).toHaveBeenCalled();
   });
 
   it("disables printing when strategy is none", async () => {
@@ -78,6 +92,7 @@ describe("Logger", () => {
 
     expect(seen).toHaveLength(1);
     expect(consoleSpy).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
   it("buffers logs until markAsReady() and then prints and notifies listeners in order", async () => {
@@ -90,13 +105,14 @@ describe("Logger", () => {
     await logger.info("first");
     await logger.warn("second");
     expect(consoleSpy).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
     expect(levels).toHaveLength(0);
 
     await logger.lock();
 
     // listeners then printing
     expect(levels).toEqual(["first", "second"]);
-    const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    const outputs = gather();
     expect(outputs.indexOf("first")).toBeGreaterThanOrEqual(0);
     expect(outputs.indexOf("second")).toBeGreaterThan(outputs.indexOf("first"));
 
@@ -128,7 +144,7 @@ describe("Logger", () => {
     ].join("\n");
 
     await logger.error("failing", { error: err });
-    const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    const outputs = gather();
     expect(outputs).toContain("Error: Boom");
     expect(outputs).toContain("func1 (file1.js:10:5)");
     expect(outputs).toContain("func2 (file2.js:20:5)");
@@ -140,7 +156,7 @@ describe("Logger", () => {
     const err = new Error("NoStack");
     (err as any).stack = undefined;
     await logger.error("oops", { error: err });
-    const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    const outputs = gather();
     expect(outputs).toContain("Error: NoStack");
     expect(outputs).not.toContain("↳");
   });
@@ -184,7 +200,7 @@ describe("Logger", () => {
       context: undefined,
     } as any;
     logger.print(log);
-    const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    const outputs = gather();
     expect(outputs).toContain("no ctx");
     expect(outputs).not.toContain("context:");
   });
@@ -193,7 +209,7 @@ describe("Logger", () => {
     const base = createLogger({ threshold: "trace" });
     const logger = base.with({ source: "only-src" });
     await logger.info("msg");
-    const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    const outputs = gather();
     expect(outputs).toContain("[only-src]");
     expect(outputs).not.toContain("context:");
   });
@@ -201,7 +217,7 @@ describe("Logger", () => {
   it("formats object messages with indented subsequent lines", async () => {
     const logger = createLogger({ threshold: "trace" });
     await logger.info({ k: "v", nested: { a: 1 } });
-    const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    const outputs = gather();
     // subsequent lines are prefixed with many spaces
     expect(outputs).toMatch(/\n\s{30,}\"nested\":/);
   });
@@ -238,8 +254,9 @@ describe("Logger", () => {
       context: {},
     } as any;
     consoleSpy.mockClear();
+    consoleErrorSpy.mockClear();
     logger.print(fake);
-    const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    const outputs = gather();
     expect(outputs).toContain("custom level");
     // icon should be the default ● when unknown
     expect(outputs).toMatch(/●[\s\S]*CUSTOM/);
@@ -248,13 +265,32 @@ describe("Logger", () => {
   it("prints object messages with indentation (strategy does not affect content formatting)", async () => {
     const logger = new Logger({
       printThreshold: "info",
-      printStrategy: "json",
+      printStrategy: "json_pretty",
       bufferLogs: false,
+      useColors: true,
     });
     await logger.info({ a: 1, b: { c: 2 } });
-    const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
+    const outputs = gather();
     expect(outputs).toContain('"a": 1');
     expect(outputs).toContain('"b": {');
     expect(outputs).toContain('"c": 2');
+  });
+
+  it("respects NO_COLOR env by disabling ANSI color codes", async () => {
+    const prev = process.env.NO_COLOR;
+    process.env.NO_COLOR = "1";
+    try {
+      const logger = createLogger({ threshold: "info" });
+      await logger.info("plain");
+      const outputs = gather();
+      // No ESC sequences should be present
+      expect(outputs).not.toMatch(/\x1b\[/);
+    } finally {
+      if (prev === undefined) {
+        delete (process.env as any).NO_COLOR;
+      } else {
+        process.env.NO_COLOR = prev;
+      }
+    }
   });
 });

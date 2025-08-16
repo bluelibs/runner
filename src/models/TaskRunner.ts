@@ -10,6 +10,7 @@ import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
 import { ValidationError } from "../errors";
+import { globalEvents } from "../globals/globalEvents";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
@@ -52,6 +53,13 @@ export class TaskRunner {
   /**
    * Runs a hook (event listener) without any middleware.
    * Ensures dependencies are resolved from the hooks registry.
+   *
+   * Emits two internal observability events around the hook execution:
+   * - global.hookTriggered (before)
+   * - global.hookCompleted (after, with optional error)
+   *
+   * These observability events are tagged to be ignored by global listeners
+   * and are not re-emitted for their own handlers to avoid recursion.
    */
   public async runHook<TPayload, TDeps extends DependencyMapType = {}>(
     hook: IHook<TDeps, any>,
@@ -59,7 +67,48 @@ export class TaskRunner {
   ): Promise<any> {
     // Hooks are stored in `store.hooks`; use their computed deps
     const deps = this.store.hooks.get(hook.id)?.computedDependencies as any;
-    return hook.run(emission as any, deps);
+    const isObservabilityEvent =
+      emission.id === globalEvents.hookTriggered.id ||
+      emission.id === globalEvents.hookCompleted.id;
+
+    if (isObservabilityEvent) {
+      return hook.run(emission as any, deps);
+    }
+    // Emit hookTriggered (excluded from global listeners)
+    await this.eventManager.emit(
+      globalEvents.hookTriggered,
+      { hookId: hook.id, eventId: emission.id },
+      hook.id
+    );
+
+    try {
+      const result = await hook.run(emission as any, deps);
+      await this.eventManager.emit(
+        globalEvents.hookCompleted,
+        { hookId: hook.id, eventId: emission.id },
+        hook.id
+      );
+      return result;
+    } catch (err: any) {
+      // Emit central error boundary for hook failures
+      try {
+        await this.eventManager.emit(
+          globalEvents.unhandledError,
+          { kind: "hook", id: hook.id, source: emission.id, error: err },
+          hook.id
+        );
+      } catch (_) {}
+      await this.eventManager.emit(
+        globalEvents.hookCompleted,
+        {
+          hookId: hook.id,
+          eventId: emission.id,
+          error: err,
+        },
+        hook.id
+      );
+      throw err;
+    }
   }
 
   /**
@@ -94,7 +143,19 @@ export class TaskRunner {
       // Resolve dependencies for tasks
       const deps = storeTask?.computedDependencies as any;
 
-      return task.run.call(null, input, deps);
+      try {
+        return await task.run.call(null, input, deps);
+      } catch (error) {
+        // Emit central error boundary; still rethrow to caller
+        try {
+          await this.eventManager.emit(
+            globalEvents.unhandledError,
+            { kind: "task", id: task.id as any, error },
+            task.id as any
+          );
+        } catch (_) {}
+        throw error;
+      }
     };
 
     const existingMiddlewares = task.middleware;
@@ -146,6 +207,14 @@ export class TaskRunner {
 
           return result;
         } catch (error) {
+          // Emit unhandledError for middleware failures; still rethrow to caller
+          try {
+            await this.eventManager.emit(
+              globalEvents.unhandledError,
+              { kind: "middleware", id: middleware.id, error },
+              middleware.id
+            );
+          } catch (_) {}
           throw error;
         }
       };
