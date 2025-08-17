@@ -12,7 +12,6 @@ import { Logger } from "./Logger";
 import { ValidationError } from "../errors";
 import { globalEvents } from "../globals/globalEvents";
 import { globalTags } from "../globals/globalTags";
-import { OnUnhandledError } from "./UnhandledError";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
@@ -23,8 +22,7 @@ export class TaskRunner {
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
-    protected readonly logger: Logger,
-    protected readonly onUnhandledError: OnUnhandledError
+    protected readonly logger: Logger
   ) {}
 
   /**
@@ -97,7 +95,7 @@ export class TaskRunner {
       return result;
     } catch (err: unknown) {
       try {
-        await this.onUnhandledError({
+        await this.store.onUnhandledError?.({
           error: err,
           kind: "hook",
           source: hook.id,
@@ -162,7 +160,11 @@ export class TaskRunner {
         return rawResult;
       } catch (error: unknown) {
         try {
-          await this.onUnhandledError({ error, kind: "task", source: task.id });
+          await this.store.onUnhandledError?.({
+            error,
+            kind: "task",
+            source: task.id,
+          });
         } catch (_) {}
         throw error;
       }
@@ -237,7 +239,7 @@ export class TaskRunner {
           return result;
         } catch (error: unknown) {
           try {
-            await this.onUnhandledError({
+            await this.store.onUnhandledError?.({
               error,
               kind: "middleware",
               source: middleware.id,

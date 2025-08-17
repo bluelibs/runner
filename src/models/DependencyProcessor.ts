@@ -16,7 +16,6 @@ import { ResourceStoreElementType, TaskStoreElementType } from "./StoreTypes";
 import * as utils from "../define";
 import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";
-import { OnUnhandledError } from "./UnhandledError";
 import { TaskRunner } from "./TaskRunner";
 import {
   DependencyNotFoundError,
@@ -37,14 +36,12 @@ export class DependencyProcessor {
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
     protected readonly taskRunner: TaskRunner,
-    protected readonly logger: Logger,
-    protected readonly onUnhandledError: OnUnhandledError
+    protected readonly logger: Logger
   ) {
     this.resourceInitializer = new ResourceInitializer(
       store,
       eventManager,
-      logger,
-      onUnhandledError
+      logger
     );
   }
 

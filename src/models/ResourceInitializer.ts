@@ -10,14 +10,12 @@ import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
 import { globalEvents } from "../globals/globalEvents";
 import { ValidationError } from "../errors";
-import { OnUnhandledError } from "./UnhandledError";
 
 export class ResourceInitializer {
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
-    protected readonly logger: Logger,
-    protected readonly onUnhandledError: OnUnhandledError
+    protected readonly logger: Logger
   ) {}
 
   /**
@@ -50,7 +48,7 @@ export class ResourceInitializer {
       return { value: value as TValue, context };
     } catch (error: unknown) {
       try {
-        await this.onUnhandledError({
+        await this.store.onUnhandledError?.({
           error,
           kind: "resourceInit",
           source: resource.id,
@@ -148,7 +146,7 @@ export class ResourceInitializer {
           return result as any;
         } catch (error: unknown) {
           try {
-            await this.onUnhandledError({
+            await this.store.onUnhandledError?.({
               error,
               kind: "middleware",
               source: middleware.id,

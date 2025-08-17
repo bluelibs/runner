@@ -25,6 +25,7 @@ import { globalResources } from "../globals/globalResources";
 import { requireContextMiddleware } from "../globals/middleware/requireContext.middleware";
 import { retryMiddleware } from "../globals/middleware/retry.middleware";
 import { timeoutMiddleware } from "../globals/middleware/timeout.middleware";
+import { OnUnhandledError } from "./UnhandledError";
 
 // Re-export types for backward compatibility
 export {
@@ -43,6 +44,7 @@ export class Store {
   private overrideManager: OverrideManager;
   private validator: StoreValidator;
   private taskRunner?: TaskRunner;
+  public onUnhandledError?: OnUnhandledError;
 
   #isLocked = false;
   #isInitialized = false;

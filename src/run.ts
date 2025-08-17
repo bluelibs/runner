@@ -108,13 +108,10 @@ export async function run<C, V extends Promise<any>>(
     onUnhandledErrorOpt || createDefaultUnhandledError(logger);
 
   const store = new Store(eventManager, logger);
-  const taskRunner = new TaskRunner(
-    store,
-    eventManager,
-    logger,
-    onUnhandledError
-  );
+  const taskRunner = new TaskRunner(store, eventManager, logger);
   store.setTaskRunner(taskRunner);
+  // expose handler centrally on the store
+  store.onUnhandledError = onUnhandledError;
 
   // Register this run's event manager for global process error safety nets
   let unhookProcessSafetyNets: (() => void) | undefined;
@@ -128,8 +125,7 @@ export async function run<C, V extends Promise<any>>(
     store,
     eventManager,
     taskRunner,
-    logger,
-    onUnhandledError
+    logger
   );
 
   // We may install shutdown hooks; capture unhook function to remove them on dispose
