@@ -19,7 +19,14 @@ describe("ResourceInitializer", () => {
       bufferLogs: false,
     });
     store = new Store(eventManager, logger);
-    resourceInitializer = new ResourceInitializer(store, eventManager, logger);
+    resourceInitializer = new ResourceInitializer(
+      store,
+      eventManager,
+      logger,
+      async ({ logger }) => {
+        // no-op
+      }
+    );
   });
 
   it("should initialize a resource", async () => {

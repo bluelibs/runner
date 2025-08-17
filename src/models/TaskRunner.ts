@@ -12,6 +12,7 @@ import { Logger } from "./Logger";
 import { ValidationError } from "../errors";
 import { globalEvents } from "../globals/globalEvents";
 import { globalTags } from "../globals/globalTags";
+import { OnUnhandledError } from "./UnhandledError";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
@@ -22,7 +23,8 @@ export class TaskRunner {
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
-    protected readonly logger: Logger
+    protected readonly logger: Logger,
+    protected readonly onUnhandledError: OnUnhandledError
   ) {}
 
   /**
@@ -93,21 +95,16 @@ export class TaskRunner {
         hook.id
       );
       return result;
-    } catch (err: any) {
-      // Emit central error boundary for hook failures
+    } catch (err: unknown) {
       try {
-        await this.eventManager.emit(
-          globalEvents.unhandledError,
-          { kind: "hook", source: hook.id, error: err },
-          hook.id
-        );
+        await this.onUnhandledError({ logger: this.logger, error: err });
       } catch (_) {}
       await this.eventManager.emit(
         globalEvents.hookCompleted,
         {
           hookId: hook.id,
           eventId: emission.id,
-          error: err,
+          error: err as any,
         },
         hook.id
       );
@@ -159,14 +156,9 @@ export class TaskRunner {
           }
         }
         return rawResult;
-      } catch (error) {
-        // Emit central error boundary; still rethrow to caller
+      } catch (error: unknown) {
         try {
-          await this.eventManager.emit(
-            globalEvents.unhandledError,
-            { kind: "task", source: task.id, error },
-            task.id as any
-          );
+          await this.onUnhandledError({ logger: this.logger, error });
         } catch (_) {}
         throw error;
       }
@@ -239,14 +231,9 @@ export class TaskRunner {
             middleware.id
           );
           return result;
-        } catch (error) {
-          // Emit unhandledError for middleware failures; still rethrow to caller
+        } catch (error: unknown) {
           try {
-            await this.eventManager.emit(
-              globalEvents.unhandledError,
-              { kind: "middleware", source: middleware.id, error },
-              middleware.id
-            );
+            await this.onUnhandledError({ logger: this.logger, error });
           } catch (_) {}
           // Always emit middlewareCompleted with error after unhandledError
           await this.eventManager.emit(

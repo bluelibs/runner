@@ -88,15 +88,20 @@ const internal = event({
 });
 ```
 
-## Unified Error Handling
+## Unhandled Errors
+
+By default, unhandled errors are logged. You can customize this via `run({ onUnhandledError })`:
 
 ```ts
-const errorHandler = hook({
-  id: "app.hooks.errors",
-  on: globals.events.unhandledError,
-  run: async (e) => console.error("Unhandled:", e.data.kind, e.data.error),
+await run(app, {
+  onUnhandledError: async ({ logger, error }) => {
+    await logger.error("Unhandled error", { error });
+    // Optional: also emit your own event or send to telemetry here
+  },
 });
 ```
+
+If you prefer event-driven handling, you can still attach a hook to a custom event of your own.
 
 ## Debug (zero‑overhead when disabled)
 

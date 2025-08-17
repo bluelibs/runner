@@ -235,7 +235,21 @@ export class Logger {
 
   private async triggerLocalListeners(log: ILog) {
     for (const listener of this.localListeners) {
-      await listener(log);
+      try {
+        await listener(log);
+      } catch (error) {
+        this.print({
+          level: "error",
+          message: "Error in log listener",
+          timestamp: new Date(),
+          error: {
+            name: "ListenerError",
+            message: error instanceof Error ? error.message : String(error),
+          },
+        });
+        // We're not breaking the app due to logListener errors.
+        continue;
+      }
     }
   }
 }

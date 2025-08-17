@@ -842,30 +842,9 @@ The framework can automatically handle uncaught exceptions and unhandled rejecti
 const { dispose } = await run(app, {
   errorBoundary: true, // Catch process-level errors
   shutdownHooks: true, // Graceful shutdown on signals
-});
-
-// This will be caught by the error boundary
-const errorBoundaryHandler = hook({
-  id: "app.hooks.errorBoundary",
-  on: globalEvents.unhandledError,
-  run: async (event) => {
-    const { kind, error, note } = event.data;
-
-    if (kind === "process") {
-      console.error(`Process error (${note}):`, error);
-
-      // Could send to error tracking service
-      await errorTracker.captureException(error, {
-        context: { kind, note },
-      });
-
-      // Optionally trigger graceful shutdown
-      if (error.severity === "critical") {
-        console.log("Critical error detected, initiating shutdown...");
-        await dispose();
-        process.exit(1);
-      }
-    }
+  onUnhandledError: async ({ logger, error }) => {
+    await logger.error("Unhandled error", { error });
+    // Optionally report to telemetry or decide to dispose/exit
   },
 });
 ```

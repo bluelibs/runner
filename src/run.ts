@@ -23,41 +23,12 @@ import {
   registerProcessLevelSafetyNets,
   registerShutdownHook,
 } from "./processHooks";
-
-export type ResourcesStoreElementType<
-  C = any,
-  V extends Promise<any> = any,
-  D extends DependencyMapType = {}
-> = {
-  resource: IResourceDefinition<C, V, D>;
-  computedDependencies?: DependencyValuesType<D>;
-  config: C;
-  value: V;
-};
-
-export type TasksStoreElementType<
-  Input = any,
-  Output extends Promise<any> = any,
-  D extends DependencyMapType = {}
-> = {
-  task: ITaskDefinition<Input, Output, D>;
-  computedDependencies?: DependencyValuesType<D>;
-};
-
-export type MiddlewareStoreElementType = {
-  middleware: IMiddlewareDefinition;
-};
-
-export type EventStoreElementType = {
-  event: IEventDefinition;
-};
-
-export type RunnerState = {
-  tasks: Record<string, TasksStoreElementType>;
-  resources: Record<string, ResourcesStoreElementType>;
-  events: Record<string, EventStoreElementType>;
-  middleware: Record<string, MiddlewareStoreElementType>;
-};
+import {
+  OnUnhandledError,
+  defaultUnhandledError,
+  bindProcessErrorHandler,
+  safeReportUnhandledError,
+} from "./models/UnhandledError";
 
 export type RunOptions = {
   /**
@@ -81,13 +52,17 @@ export type RunOptions = {
   };
   /**
    * When true (default), installs a central error boundary that catches uncaught errors
-   * from process-level events and emits `global.unhandledError`.
+   * from process-level events and routes them to `onUnhandledError`.
    */
   errorBoundary?: boolean;
   /**
    * When true (default), installs SIGINT/SIGTERM handlers that call dispose() on the root.
    */
   shutdownHooks?: boolean;
+  /**
+   * Custom handler for any unhandled error caught by Runner. Defaults to logging via the created logger.
+   */
+  onUnhandledError?: OnUnhandledError;
 };
 
 export async function run<C, V extends Promise<any>>(
@@ -109,6 +84,7 @@ export async function run<C, V extends Promise<any>>(
     logs = {},
     errorBoundary = true,
     shutdownHooks = true,
+    onUnhandledError: onUnhandledErrorOpt,
   } = options || {};
   const {
     printThreshold = "info",
@@ -128,21 +104,32 @@ export async function run<C, V extends Promise<any>>(
     bufferLogs,
   });
 
+  const onUnhandledError: OnUnhandledError =
+    onUnhandledErrorOpt || defaultUnhandledError;
+
   const store = new Store(eventManager, logger);
-  const taskRunner = new TaskRunner(store, eventManager, logger);
+  const taskRunner = new TaskRunner(
+    store,
+    eventManager,
+    logger,
+    onUnhandledError
+  );
   store.setTaskRunner(taskRunner);
 
   // Register this run's event manager for global process error safety nets
   let unhookProcessSafetyNets: (() => void) | undefined;
   if (errorBoundary) {
-    unhookProcessSafetyNets = registerProcessLevelSafetyNets(eventManager);
+    unhookProcessSafetyNets = registerProcessLevelSafetyNets(
+      bindProcessErrorHandler(onUnhandledError, logger)
+    );
   }
 
   const processor = new DependencyProcessor(
     store,
     eventManager,
     taskRunner,
-    logger
+    logger,
+    onUnhandledError
   );
 
   // We may install shutdown hooks; capture unhook function to remove them on dispose
@@ -228,6 +215,7 @@ export async function run<C, V extends Promise<any>>(
   } catch (err) {
     // Rollback initialized resources
     await disposeAll();
+    await safeReportUnhandledError(onUnhandledError, logger, err);
     throw err;
   }
 }

@@ -1,9 +1,8 @@
 import { defineResource } from "../define";
 import { run } from "../run";
-import { globalEvents } from "../globals/globalEvents";
 
 describe("run.ts shutdown hooks & error boundary", () => {
-  it("installs process safety nets and emits unhandledError", async () => {
+  it("installs process safety nets and calls onUnhandledError for uncaughtException", async () => {
     const app = defineResource({
       id: "tests.app.safety",
       async init() {
@@ -11,17 +10,13 @@ describe("run.ts shutdown hooks & error boundary", () => {
       },
     });
 
-    const observed: any[] = [];
-
-    const { dispose, eventManager } = await run(app, {
+    const onUnhandledError = jest.fn();
+    const { dispose } = await run(app, {
       logs: { printThreshold: null },
       errorBoundary: true,
       shutdownHooks: false,
+      onUnhandledError: async ({ logger, error }) => onUnhandledError(error),
     });
-
-    // Can't add listeners after lock; instead trigger a process event and just ensure no throw
-    const handler = (e: any) => observed.push(e);
-    const onConsole = jest.spyOn(console, "log").mockImplementation(() => {});
 
     // Emit uncaughtException without killing the process by catching internally
     // @ts-ignore
@@ -30,13 +25,14 @@ describe("run.ts shutdown hooks & error boundary", () => {
     // Give event loop a tick
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(observed.length >= 0).toBe(true);
+    expect(onUnhandledError).toHaveBeenCalled();
+    const err = onUnhandledError.mock.calls[0][0];
+    expect(err).toBeInstanceOf(Error);
 
     await dispose();
-    onConsole.mockRestore();
   });
 
-  it("emits unhandledError on unhandledRejection", async () => {
+  it("calls onUnhandledError on unhandledRejection", async () => {
     const app = defineResource({
       id: "tests.app.unhandledRejection",
       async init() {
@@ -44,13 +40,13 @@ describe("run.ts shutdown hooks & error boundary", () => {
       },
     });
 
-    const { dispose, eventManager } = await run(app, {
+    const onUnhandledError = jest.fn();
+    const { dispose } = await run(app, {
       logs: { printThreshold: null },
       errorBoundary: true,
       shutdownHooks: false,
+      onUnhandledError: async ({ logger, error }) => onUnhandledError(error),
     });
-
-    const spy = jest.spyOn(eventManager, "emit");
 
     // @ts-ignore
     process.emit(
@@ -61,14 +57,9 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(spy).toHaveBeenCalledWith(
-      globalEvents.unhandledError,
-      expect.objectContaining({
-        kind: "process",
-        source: "unhandledRejection",
-      }),
-      "process"
-    );
+    expect(onUnhandledError).toHaveBeenCalled();
+    const err = onUnhandledError.mock.calls[0][0];
+    expect(err).toBeInstanceOf(Error);
 
     await dispose();
   });

@@ -89,11 +89,7 @@ export const globalEvents = {
    * Central error boundary event for any thrown error across the runner.
    */
   unhandledError: defineEvent<{
-    kind: "task" | "middleware" | "resourceInit" | "hook" | "process";
-    /**
-     * Where it happened, which element id triggered this issue.
-     */
-    source?: string;
+    kind: "task" | "middleware" | "resourceInit" | "hook" | "process" | "run";
     error: any;
   }>({
     id: "global.events.unhandledError",

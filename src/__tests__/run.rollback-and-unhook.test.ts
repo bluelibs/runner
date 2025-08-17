@@ -107,24 +107,25 @@ describe("run.ts rollback and unhooking", () => {
       },
     });
 
-    const { dispose, eventManager } = await run(app, {
+    const onUnhandledError = jest.fn();
+    const { dispose } = await run(app, {
       logs: { printThreshold: null },
       shutdownHooks: false,
       errorBoundary: true,
+      onUnhandledError: async ({ logger, error }) => onUnhandledError(error),
     });
 
-    const spy = jest.spyOn(eventManager, "emit");
     // @ts-ignore
     process.emit("unhandledRejection", new Error("boom"), Promise.resolve());
     await new Promise((r) => setTimeout(r, 0));
-    expect(spy).toHaveBeenCalled();
+    expect(onUnhandledError).toHaveBeenCalled();
 
-    spy.mockClear();
+    onUnhandledError.mockClear();
     await dispose();
-    // After dispose, this run's eventManager should be unregistered and not receive events
+    // After dispose, this run's handler should be unregistered and not receive events
     // @ts-ignore
     process.emit("unhandledRejection", new Error("boom2"), Promise.resolve());
     await new Promise((r) => setTimeout(r, 0));
-    expect(spy).not.toHaveBeenCalled();
+    expect(onUnhandledError).not.toHaveBeenCalled();
   });
 });

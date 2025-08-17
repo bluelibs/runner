@@ -1,32 +1,28 @@
-import { EventManager } from "./models/EventManager";
-import { globalEvents } from "./globals/globalEvents";
+import { OnUnhandledError } from "./models/UnhandledError";
 
-// Global registry of active EventManagers for process-level safety nets
-const activeEventManagers = new Set<EventManager>();
+// Global registry of active error handlers for process-level safety nets
+const activeErrorHandlers = new Set<
+  (
+    error: unknown,
+    source: "uncaughtException" | "unhandledRejection"
+  ) => void | Promise<void>
+>();
 let processSafetyNetsInstalled = false;
 
 function installGlobalProcessSafetyNetsOnce() {
   if (processSafetyNetsInstalled) return;
   processSafetyNetsInstalled = true;
   const onUncaughtException = async (err: any) => {
-    for (const em of activeEventManagers) {
+    for (const handler of activeErrorHandlers) {
       try {
-        await em.emit(
-          globalEvents.unhandledError,
-          { kind: "process", error: err, source: "uncaughtException" },
-          "process"
-        );
+        await handler(err, "uncaughtException");
       } catch (_) {}
     }
   };
   const onUnhandledRejection = async (reason: any) => {
-    for (const em of activeEventManagers) {
+    for (const handler of activeErrorHandlers) {
       try {
-        await em.emit(
-          globalEvents.unhandledError,
-          { kind: "process", error: reason, source: "unhandledRejection" },
-          "process"
-        );
+        await handler(reason, "unhandledRejection");
       } catch (_) {}
     }
   };
@@ -34,11 +30,16 @@ function installGlobalProcessSafetyNetsOnce() {
   process.on("unhandledRejection", onUnhandledRejection as any);
 }
 
-export function registerProcessLevelSafetyNets(eventManager: EventManager) {
+export function registerProcessLevelSafetyNets(
+  handler: (
+    error: unknown,
+    source: "uncaughtException" | "unhandledRejection"
+  ) => void | Promise<void>
+) {
   installGlobalProcessSafetyNetsOnce();
-  activeEventManagers.add(eventManager);
+  activeErrorHandlers.add(handler);
   return () => {
-    activeEventManagers.delete(eventManager);
+    activeErrorHandlers.delete(handler);
   };
 }
 
