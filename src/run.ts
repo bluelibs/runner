@@ -25,7 +25,7 @@ import {
 } from "./processHooks";
 import {
   OnUnhandledError,
-  defaultUnhandledError,
+  createDefaultUnhandledError,
   bindProcessErrorHandler,
   safeReportUnhandledError,
 } from "./models/UnhandledError";
@@ -105,7 +105,7 @@ export async function run<C, V extends Promise<any>>(
   });
 
   const onUnhandledError: OnUnhandledError =
-    onUnhandledErrorOpt || defaultUnhandledError;
+    onUnhandledErrorOpt || createDefaultUnhandledError(logger);
 
   const store = new Store(eventManager, logger);
   const taskRunner = new TaskRunner(
@@ -120,7 +120,7 @@ export async function run<C, V extends Promise<any>>(
   let unhookProcessSafetyNets: (() => void) | undefined;
   if (errorBoundary) {
     unhookProcessSafetyNets = registerProcessLevelSafetyNets(
-      bindProcessErrorHandler(onUnhandledError, logger)
+      bindProcessErrorHandler(onUnhandledError)
     );
   }
 
@@ -215,7 +215,11 @@ export async function run<C, V extends Promise<any>>(
   } catch (err) {
     // Rollback initialized resources
     await disposeAll();
-    await safeReportUnhandledError(onUnhandledError, logger, err);
+    await safeReportUnhandledError(onUnhandledError, {
+      error: err,
+      kind: "run",
+      source: "run",
+    });
     throw err;
   }
 }

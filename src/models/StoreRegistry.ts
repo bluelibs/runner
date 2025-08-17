@@ -21,7 +21,7 @@ import {
   MiddlewareStoreElementType,
   ResourceStoreElementType,
   EventStoreElementType,
-} from "./StoreTypes";
+} from "../defs";
 import { StoreValidator } from "./StoreValidator";
 import { symbolHook } from "../defs";
 

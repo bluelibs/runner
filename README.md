@@ -338,18 +338,6 @@ const systemReadyHook = hook({
   },
 });
 
-const errorHandler = hook({
-  id: "app.hooks.errorHandler",
-  on: globals.events.unhandledError,
-  run: async (event) => {
-    console.error(
-      `💥 Unhandled error in ${event.data.kind}:`,
-      event.data.error
-    );
-    // Send to error tracking service
-  },
-});
-
 const hookObserver = hook({
   id: "app.hooks.hookObserver",
   on: globals.events.hookTriggered,
@@ -364,7 +352,7 @@ const hookObserver = hook({
 **Available Global Events:**
 
 - `globalEvents.ready` - System has completed initialization
-- `globalEvents.unhandledError` - Central error boundary for all errors
+  // Note: global unhandled error event was removed. Use run({ onUnhandledError })
 - `globalEvents.hookTriggered` - Before a hook executes
 - `globalEvents.hookCompleted` - After a hook finishes
 
@@ -639,146 +627,6 @@ const handleRequest = task({
 });
 ```
 
-## The Index Pattern
-
-When your app grows beyond "hello world", you'll want to group related dependencies. The `index()` helper is your friend - it's basically a 3-in-1 resource that registers, depends on, and returns everything you give it.
-
-```typescript
-// This registers all services, depends on them, and returns them as one clean interface
-const services = index({
-  userService,
-  emailService,
-  paymentService,
-  notificationService,
-});
-
-const app = resource({
-  id: "app",
-  register: [services],
-  dependencies: { services },
-  init: async (_, { services }) => {
-    // Access everything through one clean interface
-    const user = await services.userService.createUser(userData);
-    await services.emailService.sendWelcome(user.email);
-  },
-});
-```
-
-## Error Handling
-
-_Comprehensive error management with global boundaries and graceful degradation_
-
-Errors happen. The framework now provides centralized error handling through global events, optional dependencies, and proper error boundaries to make your app more resilient.
-
-```typescript
-// Central error handler using the global unhandled error event
-const errorHandler = hook({
-  id: "app.hooks.errorHandler",
-  on: globalEvents.unhandledError,
-  dependencies: { logger: globals.resources.logger },
-  run: async (event, { logger }) => {
-    const { kind, id, error, source } = event.data;
-
-    await logger.error(`Error in ${kind}${id ? ` ${id}` : ""}`, {
-      error,
-      source,
-      data: { kind, id },
-    });
-
-    // Send to error tracking service
-    if (kind === "task" && error.name === "ValidationError") {
-      // Handle validation errors differently
-      await notifyUser(error.message);
-    } else {
-      await errorTrackingService.captureException(error);
-    }
-  },
-});
-
-// Optional dependencies for graceful degradation
-const resilientTask = task({
-  id: "app.tasks.resilient",
-  dependencies: {
-    emailService: emailService.optional(), // Won't fail if not available
-    logger: globals.resources.logger,
-  },
-  run: async (userData, { emailService, logger }) => {
-    const user = await createUser(userData);
-
-    // Only send email if service is available
-    if (emailService) {
-      await emailService.sendWelcome(user.email);
-    } else {
-      await logger.warn("Email service unavailable, skipping welcome email");
-    }
-
-    return user;
-  },
-});
-```
-
-### Error Recovery Patterns
-
-The framework supports various error recovery patterns for building resilient applications:
-
-```typescript
-import { hook, task, resource, globalEvents } from "@bluelibs/runner";
-
-// Circuit breaker pattern with hooks
-const circuitBreakerState = new Map<
-  string,
-  { failures: number; lastFailure: Date }
->();
-
-const circuitBreakerHook = hook({
-  id: "app.hooks.circuitBreaker",
-  on: globalEvents.unhandledError,
-  run: async (event) => {
-    if (event.data.kind === "task") {
-      const taskId = event.data.id;
-      if (!taskId) return;
-
-      const state = circuitBreakerState.get(taskId) || {
-        failures: 0,
-        lastFailure: new Date(),
-      };
-      state.failures++;
-      state.lastFailure = new Date();
-      circuitBreakerState.set(taskId, state);
-
-      // Temporarily disable task if too many failures
-      if (state.failures > 3) {
-        console.warn(`Circuit breaker activated for ${taskId}`);
-        // Could add logic to disable task temporarily
-      }
-    }
-  },
-});
-
-// Dead letter queue pattern
-const deadLetterQueue: any[] = [];
-
-const deadLetterHandler = hook({
-  id: "app.hooks.deadLetter",
-  on: globalEvents.unhandledError,
-  run: async (event) => {
-    if (event.data.kind === "task") {
-      // Store failed operations for later retry
-      deadLetterQueue.push({
-        taskId: event.data.id,
-        error: event.data.error,
-        timestamp: new Date(),
-        // Could store original input if available
-      });
-
-      console.log(
-        `Added failed operation to dead letter queue: ${event.data.id}`
-      );
-    }
-  },
-});
-```
-
 ## System Shutdown Hooks
 
 _Graceful shutdown and cleanup when your app needs to stop_
@@ -845,6 +693,47 @@ const { dispose } = await run(app, {
   onUnhandledError: async ({ logger, error }) => {
     await logger.error("Unhandled error", { error });
     // Optionally report to telemetry or decide to dispose/exit
+  },
+});
+```
+
+#### onUnhandledError option
+
+The `onUnhandledError` callback is invoked by Runner whenever an error escapes normal handling. It receives a structured payload you can ship to logging/telemetry and decide mitigation steps.
+
+```ts
+type UnhandledErrorKind =
+  | "process" // uncaughtException / unhandledRejection
+  | "task" // task.run threw and wasn't handled
+  | "middleware" // middleware threw and wasn't handled
+  | "resourceInit" // resource init failed
+  | "hook" // hook.run threw and wasn't handled
+  | "run"; // failures in run() lifecycle
+
+interface OnUnhandledErrorInfo {
+  error: unknown;
+  kind?: UnhandledErrorKind;
+  source?: string; // additional origin hint (ex: "uncaughtException")
+}
+
+type OnUnhandledError = (info: OnUnhandledErrorInfo) => void | Promise<void>;
+```
+
+Default behavior (when not provided) logs the normalized error via the created `logger` at `error` level. Provide your own handler to integrate with tools like Sentry/PagerDuty or to trigger shutdown strategies.
+
+Example with telemetry and conditional shutdown:
+
+```ts
+await run(app, {
+  errorBoundary: true,
+  onUnhandledError: async ({ error, kind, source }) => {
+    await telemetry.capture(error as Error, { kind, source });
+    // Optionally decide on remediation strategy
+    if (kind === "process") {
+      // For hard process faults, prefer fast, clean exit after flushing logs
+      await flushAll();
+      process.exit(1);
+    }
   },
 });
 ```
@@ -3242,6 +3131,10 @@ console.log(`Active events: ${eventManager.getEventCount()}`);
 
 - `debug`: "normal" | "verbose" | custom debug config
 - `log`: "pretty" | "json" | custom log format
+- `logs`: { printThreshold?: null | LogLevels; printStrategy?: PrintStrategy; bufferLogs?: boolean }
+- `errorBoundary`: boolean — when true, installs handlers for `uncaughtException` and `unhandledRejection`
+- `shutdownHooks`: boolean — when true, installs SIGINT/SIGTERM handlers to call `dispose()`
+- `onUnhandledError`: OnUnhandledError — centralized handler for unhandled errors (see above)
 
 ### Compact NPM Build
 
@@ -3335,7 +3228,7 @@ const errorHandler = task({
 
 // NEW - Global error handling
 const errorHandler = hook({
-  on: globalEvents.unhandledError,
+  on: someErrorEvent,
   run: async (event) => {
     /* ... */
   },

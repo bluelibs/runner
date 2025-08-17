@@ -1,43 +1,53 @@
 import { Logger } from "./Logger";
 
-export interface OnUnhandledErrorArgs {
-  logger: Logger;
+export type UnhandledErrorKind =
+  | "process"
+  | "task"
+  | "middleware"
+  | "resourceInit"
+  | "hook"
+  | "run";
+
+export interface OnUnhandledErrorInfo {
   error: unknown;
+  kind?: UnhandledErrorKind;
+  source?: string;
 }
 
 export type OnUnhandledError = (
-  args: OnUnhandledErrorArgs
+  info: OnUnhandledErrorInfo
 ) => void | Promise<void>;
 
-export async function defaultUnhandledError({
-  logger,
-  error,
-}: OnUnhandledErrorArgs): Promise<void> {
-  const normalizedError =
-    error instanceof Error ? error : new Error(String(error));
-  await logger.error("Unhandled error", { error: normalizedError });
+export function createDefaultUnhandledError(logger: Logger): OnUnhandledError {
+  return async ({ error, kind, source }: OnUnhandledErrorInfo) => {
+    const normalizedError =
+      error instanceof Error ? error : new Error(String(error));
+    await logger.error("Unhandled error", {
+      source,
+      error: normalizedError,
+      data: kind ? { kind } : undefined,
+    });
+  };
 }
 
 export function bindProcessErrorHandler(
-  onUnhandledError: OnUnhandledError,
-  logger: Logger
+  handler: OnUnhandledError
 ): (
   error: unknown,
   source: "uncaughtException" | "unhandledRejection"
 ) => void | Promise<void> {
-  return async (error) => {
+  return async (error, source) => {
     try {
-      await onUnhandledError({ logger, error });
+      await handler({ error, kind: "process", source });
     } catch {}
   };
 }
 
 export async function safeReportUnhandledError(
-  onUnhandledError: OnUnhandledError,
-  logger: Logger,
-  error: unknown
+  handler: OnUnhandledError,
+  info: OnUnhandledErrorInfo
 ): Promise<void> {
   try {
-    await onUnhandledError({ logger, error });
+    await handler(info);
   } catch {}
 }

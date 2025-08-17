@@ -15,7 +15,8 @@ describe("run.ts shutdown hooks & error boundary", () => {
       logs: { printThreshold: null },
       errorBoundary: true,
       shutdownHooks: false,
-      onUnhandledError: async ({ logger, error }) => onUnhandledError(error),
+      onUnhandledError: async ({ error, kind, source }) =>
+        onUnhandledError(error, kind, source),
     });
 
     // Emit uncaughtException without killing the process by catching internally
@@ -45,7 +46,8 @@ describe("run.ts shutdown hooks & error boundary", () => {
       logs: { printThreshold: null },
       errorBoundary: true,
       shutdownHooks: false,
-      onUnhandledError: async ({ logger, error }) => onUnhandledError(error),
+      onUnhandledError: async ({ error, kind, source }) =>
+        onUnhandledError(error, kind, source),
     });
 
     // @ts-ignore

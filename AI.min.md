@@ -8,11 +8,12 @@ npm install @bluelibs/runner
 
 ## TL;DR
 
-- Tasks: functions with DI and middleware
-- Resources: managed singletons (init/dispose)
-- Events: decoupled communication
-- Hooks: lightweight event listeners
-- Middleware: cross‑cutting concerns
+- **Lifecycle**: `run() → init resources (deps first) → 'ready' event → dispose() (reverse order)`
+- **Tasks**: Functions with DI and middleware. Flow: `call → middleware → input validation → run() → result validation → return`
+- **Resources**: Managed singletons (init/dispose).
+- **Events**: Decoupled communication. Flow: `emit → validation → find & order hooks → run hooks (stoppable)`
+- **Hooks**: Lightweight event listeners. Async and awaited by default.
+- **Middleware**: Cross-cutting concerns. Async and awaited by default.
 
 ## Quick Start
 
@@ -168,6 +169,27 @@ const appWithGlobal = resource({
   register: [auth.everywhere({ tasks: true, resources: false })],
   // you can also opt-in for filters: tasks(task) { return true; }
 });
+```
+
+## Context (request-scoped values)
+
+```ts
+import { createContext } from "@bluelibs/runner";
+
+const UserCtx = createContext<{ userId: string }>("app.userContext");
+
+// In middleware or entry-point
+UserCtx.provide({ userId: "u1" }, async () => {
+  await someTask(); // has access to the context
+});
+
+// In a task or hook
+const user = UserCtx.use(); // -> { userId: "u1" }
+
+// In a task definition
+const task = {
+  middleware: [UserCtx.require()], // Throws if context is not provided
+};
 ```
 
 ## Run Options (high‑level)

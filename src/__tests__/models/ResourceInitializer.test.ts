@@ -23,7 +23,7 @@ describe("ResourceInitializer", () => {
       store,
       eventManager,
       logger,
-      async ({ logger }) => {
+      async () => {
         // no-op
       }
     );

@@ -97,7 +97,11 @@ export class TaskRunner {
       return result;
     } catch (err: unknown) {
       try {
-        await this.onUnhandledError({ logger: this.logger, error: err });
+        await this.onUnhandledError({
+          error: err,
+          kind: "hook",
+          source: hook.id,
+        });
       } catch (_) {}
       await this.eventManager.emit(
         globalEvents.hookCompleted,
@@ -158,7 +162,7 @@ export class TaskRunner {
         return rawResult;
       } catch (error: unknown) {
         try {
-          await this.onUnhandledError({ logger: this.logger, error });
+          await this.onUnhandledError({ error, kind: "task", source: task.id });
         } catch (_) {}
         throw error;
       }
@@ -233,7 +237,11 @@ export class TaskRunner {
           return result;
         } catch (error: unknown) {
           try {
-            await this.onUnhandledError({ logger: this.logger, error });
+            await this.onUnhandledError({
+              error,
+              kind: "middleware",
+              source: middleware.id,
+            });
           } catch (_) {}
           // Always emit middlewareCompleted with error after unhandledError
           await this.eventManager.emit(

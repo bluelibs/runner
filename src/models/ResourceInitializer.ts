@@ -50,7 +50,11 @@ export class ResourceInitializer {
       return { value: value as TValue, context };
     } catch (error: unknown) {
       try {
-        await this.onUnhandledError({ logger: this.logger, error });
+        await this.onUnhandledError({
+          error,
+          kind: "resourceInit",
+          source: resource.id,
+        });
       } catch (_) {}
       throw error;
     }
@@ -144,7 +148,11 @@ export class ResourceInitializer {
           return result as any;
         } catch (error: unknown) {
           try {
-            await this.onUnhandledError({ logger: this.logger, error });
+            await this.onUnhandledError({
+              error,
+              kind: "middleware",
+              source: middleware.id,
+            });
           } catch (_) {}
           await this.eventManager.emit(
             globalEvents.middlewareCompleted,

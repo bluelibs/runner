@@ -12,11 +12,7 @@
 - 🐛 **Debug mode that won't slow you down** - zero performance impact when you're not using it
 - 🛑 **Smart shutdown hooks** - they know when to bail out gracefully when things go wrong
 - ⚙️ **Run options galore!** Configure `logs`, `debug`, `shutdownHooks`, and `errorBoundary` to your heart's content
-- 👀 **Observability superpowers** for middleware and hooks:
-  - global.events.hookTriggered
-  - global.events.hookCompleted
-  - global.events.middlewareTriggered
-  - global.events.middlewareCompleted
+- 🧯 **Centralized unhandled error handler** via `run({ onUnhandledError })` for consistent error reporting
 
 ### 🏃‍♂️ Running Your App (The New Way)
 
@@ -72,6 +68,7 @@ const myResource = resource({
 We added result schema validation because sometimes your functions return weird stuff and you want to catch it before it breaks everything downstream.
 
 **For tasks:**
+
 ```ts
 const myTask = task({
   id: "validated-task",
@@ -85,13 +82,14 @@ const myTask = task({
       success: true,
       data: "all good!",
       count: 42,
-      // If you return something that doesn't match the schema, we'll let you know! 
+      // If you return something that doesn't match the schema, we'll let you know!
     };
   },
 });
 ```
 
 **For resources:**
+
 ```ts
 const myResource = resource({
   id: "validated-resource",
@@ -100,7 +98,7 @@ const myResource = resource({
       isConnected: z.boolean(),
       url: z.string(),
     }),
-  }), // Keep your resource outputs in check! 
+  }), // Keep your resource outputs in check!
   init: async (config, deps) => {
     return {
       connection: {
@@ -194,22 +192,20 @@ const logsExtension = resource({
 
 ### 🎣 Gotta Catch 'Em All (Error Edition!)
 
-We unified error catching because who wants to remember multiple event names? One hook to rule them all!
+We unified error catching behind a single, centralized handler. Instead of relying on framework error events, use `run({ onUnhandledError })`.
 
 ```ts
-hook({
-  id: "pokemon.catch-em.all", // 10/10 naming, no notes
-  on: globals.events.unhandledError,
-  dependencies: {},
-  init: async (e, deps) => {
-    const unhandledError = e.data;
-    // kind: "task" | "middleware" | "resourceInit" | "hook" | "process"
-    // Basically, if it crashed, you'll know about it! 💥
+await run(app, {
+  errorBoundary: true, // installs uncaughtException & unhandledRejection handlers
+  onUnhandledError: async ({ error, kind, source }) => {
+    // kind: "task" | "middleware" | "resourceInit" | "hook" | "process" | "run"
+    // source: optional origin hint (ex: "uncaughtException")
+    await telemetry.capture(error as Error, { kind, source });
   },
 });
 ```
 
-**Pro tip:** This error is too cool for global listeners ("\*") - it's got that exclusion tag swagger! 😎
+If you prefer event-driven handling, define your own event and emit it from this callback.
 
 ### 🐛 Debug Mode: Now With 0% Performance Guilt!
 

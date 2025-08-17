@@ -5,7 +5,7 @@ import {
   MiddlewareStoreElementType,
   ResourceStoreElementType,
   EventStoreElementType,
-} from "./StoreTypes";
+} from "../defs";
 
 export class StoreValidator {
   constructor(

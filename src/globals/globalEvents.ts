@@ -106,7 +106,6 @@ export const globalEventsArray: IEvent<any>[] = [
   globalEvents.ready,
   globalEvents.hookTriggered,
   globalEvents.hookCompleted,
-  globalEvents.unhandledError,
   globalEvents.middlewareTriggered,
   globalEvents.middlewareCompleted,
 ];

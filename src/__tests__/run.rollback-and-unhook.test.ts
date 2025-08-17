@@ -112,7 +112,8 @@ describe("run.ts rollback and unhooking", () => {
       logs: { printThreshold: null },
       shutdownHooks: false,
       errorBoundary: true,
-      onUnhandledError: async ({ logger, error }) => onUnhandledError(error),
+      onUnhandledError: async ({ error, kind, source }) =>
+        onUnhandledError(error, kind, source),
     });
 
     // @ts-ignore

@@ -20,14 +20,9 @@ describe("TaskRunner", () => {
       bufferLogs: false,
     });
     store = new Store(eventManager, logger);
-    taskRunner = new TaskRunner(
-      store,
-      eventManager,
-      logger,
-      async ({ logger }) => {
-        // no-op
-      }
-    );
+    taskRunner = new TaskRunner(store, eventManager, logger, async () => {
+      // no-op
+    });
   });
 
   it("should run an task without middleware", async () => {
