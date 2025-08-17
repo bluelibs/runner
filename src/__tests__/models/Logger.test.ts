@@ -8,7 +8,10 @@ describe("Logger", () => {
     opts?: Partial<{ threshold: any; strategy: any; buffer: boolean }>
   ) =>
     new Logger({
-      printThreshold: (opts?.threshold ?? "info") as any,
+      printThreshold:
+        opts && Object.prototype.hasOwnProperty.call(opts, "threshold")
+          ? opts.threshold
+          : "info",
       printStrategy: (opts?.strategy ?? "pretty") as any,
       bufferLogs: opts?.buffer ?? false,
     });
@@ -117,6 +120,46 @@ describe("Logger", () => {
     consoleSpy.mockClear();
     await logger.lock();
     expect(consoleSpy).not.toHaveBeenCalled();
+  });
+
+  it("catches errors from log listeners and logs a listener error without stopping others", async () => {
+    const logger = createLogger({ threshold: "trace" });
+    const seen: string[] = [];
+    logger.onLog(() => {
+      throw new Error("listener failed");
+    });
+    logger.onLog((log) => {
+      seen.push(String(log.message));
+    });
+
+    await logger.info("hello");
+
+    // second listener still executed
+    expect(seen).toEqual(["hello"]);
+    // an internal error is printed about the listener failure
+    const outputs = gather();
+    expect(outputs).toContain("Error in log listener");
+  });
+
+  it("formats non-Error thrown by listener using String(error)", async () => {
+    const logger = createLogger({ threshold: "trace" });
+    logger.onLog(() => {
+      // throw a primitive to exercise the fallback branch
+      // eslint-disable-next-line no-throw-literal
+      throw "primitive" as any;
+    });
+    await logger.info("hi");
+    const outputs = gather();
+    expect(outputs).toContain("Error in log listener");
+    expect(outputs).toContain("primitive");
+  });
+
+  it("does not print anything when threshold is null", async () => {
+    const logger = createLogger({ threshold: null });
+    await logger.info("should not print");
+    await logger.error("should also not print");
+    expect(consoleSpy).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
   });
 
   it("formats errors with stack: shows error line and first two frames", async () => {

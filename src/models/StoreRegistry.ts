@@ -23,7 +23,6 @@ import {
   EventStoreElementType,
 } from "../defs";
 import { StoreValidator } from "./StoreValidator";
-import { symbolHook } from "../defs";
 
 export class StoreRegistry {
   public tasks: Map<string, TaskStoreElementType> = new Map();
