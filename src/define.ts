@@ -262,6 +262,7 @@ export function defineMiddleware<
     [symbolFilePath]: filePath,
     [symbolMiddleware]: true,
     config: {} as TConfig,
+    configSchema: middlewareDef.configSchema,
     ...middlewareDef,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
   } as IMiddleware<TConfig, TDependencies>;

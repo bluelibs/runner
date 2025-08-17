@@ -90,9 +90,10 @@ export const globalEvents = {
    */
   unhandledError: defineEvent<{
     kind: "task" | "middleware" | "resourceInit" | "hook" | "process";
-    id?: string;
+    /**
+     * Where it happened, which element id triggered this issue.
+     */
     source?: string;
-    note?: string;
     error: any;
   }>({
     id: "global.events.unhandledError",

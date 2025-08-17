@@ -51,7 +51,7 @@ export class ResourceInitializer {
       try {
         await this.eventManager.emit(
           globalEvents.unhandledError,
-          { kind: "resourceInit", id: resource.id as any, error },
+          { kind: "resourceInit", source: resource.id as any, error },
           resource.id as any
         );
       } catch (_) {}
@@ -149,7 +149,7 @@ export class ResourceInitializer {
           try {
             await this.eventManager.emit(
               globalEvents.unhandledError,
-              { kind: "middleware", id: middleware.id as any, error },
+              { kind: "middleware", source: middleware.id as any, error },
               middleware.id as any
             );
           } catch (_) {}

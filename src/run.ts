@@ -19,6 +19,10 @@ import { globalResources } from "./globals/globalResources";
 import { Logger, LogLevels, PrintStrategy } from "./models/Logger";
 import { isResourceWithConfig } from "./define";
 import { debugResource, DebugFriendlyConfig } from "./globals/resources/debug";
+import {
+  registerProcessLevelSafetyNets,
+  registerShutdownHook,
+} from "./processHooks";
 
 export type ResourcesStoreElementType<
   C = any,
@@ -57,7 +61,7 @@ export type RunnerState = {
 
 export type RunOptions = {
   /**
-   * Defaults to false. If true, we introduce logging to the console.
+   * Defaults to undefined. If true, we introduce logging to the console.
    */
   debug?: DebugFriendlyConfig;
   logs?: {
@@ -101,7 +105,7 @@ export async function run<C, V extends Promise<any>>(
   eventManager: EventManager;
 }> {
   const {
-    debug = false,
+    debug = undefined,
     logs = {},
     errorBoundary = true,
     shutdownHooks = true,
@@ -228,82 +232,7 @@ export async function run<C, V extends Promise<any>>(
   }
 }
 
-// Global registry of active EventManagers for process-level safety nets
-const activeEventManagers = new Set<EventManager>();
-let processSafetyNetsInstalled = false;
-
-function installGlobalProcessSafetyNetsOnce() {
-  if (processSafetyNetsInstalled) return;
-  processSafetyNetsInstalled = true;
-  const onUncaughtException = async (err: any) => {
-    for (const em of activeEventManagers) {
-      try {
-        await em.emit(
-          globalEvents.unhandledError,
-          { kind: "process", error: err, note: "uncaughtException" },
-          "process"
-        );
-      } catch (_) {}
-    }
-  };
-  const onUnhandledRejection = async (reason: any) => {
-    for (const em of activeEventManagers) {
-      try {
-        await em.emit(
-          globalEvents.unhandledError,
-          { kind: "process", error: reason, note: "unhandledRejection" },
-          "process"
-        );
-      } catch (_) {}
-    }
-  };
-  process.on("uncaughtException", onUncaughtException as any);
-  process.on("unhandledRejection", onUnhandledRejection as any);
-}
-
-function registerProcessLevelSafetyNets(eventManager: EventManager) {
-  installGlobalProcessSafetyNetsOnce();
-  activeEventManagers.add(eventManager);
-  return () => {
-    activeEventManagers.delete(eventManager);
-  };
-}
-
-// Global shutdown registry: one listener per signal, dispatching to active disposers
-const activeDisposers = new Set<() => Promise<void>>();
-let shutdownHooksInstalled = false;
-
-function installGlobalShutdownHooksOnce() {
-  if (shutdownHooksInstalled) return;
-  shutdownHooksInstalled = true;
-  const handler = async (signal: NodeJS.Signals) => {
-    try {
-      // Snapshot to avoid mutation during iteration
-      const disposers = Array.from(activeDisposers);
-      for (const d of disposers) {
-        try {
-          await d();
-        } catch {
-          // continue disposing others
-        }
-        // Make shutdown idempotent: remove disposer after first invocation
-        activeDisposers.delete(d);
-      }
-    } finally {
-      process.exit(0);
-    }
-  };
-  process.on("SIGINT", handler);
-  process.on("SIGTERM", handler);
-}
-
-function registerShutdownHook(disposeOnce: () => Promise<void>) {
-  installGlobalShutdownHooksOnce();
-  activeDisposers.add(disposeOnce);
-  return () => {
-    activeDisposers.delete(disposeOnce);
-  };
-}
+// process hooks moved to processHooks.ts for clarity
 
 function extractResourceAndConfig<C, V extends Promise<any>>(
   resourceOrResourceWithConfig:

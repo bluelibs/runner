@@ -1,5 +1,5 @@
 import { safeStringify } from "./utils/safeStringify";
-export type PrintStrategy = "pretty" | "json" | "json_pretty" | "none";
+export type PrintStrategy = "pretty" | "json" | "json_pretty";
 
 export type LogLevels =
   | "trace"
@@ -81,8 +81,6 @@ export class LogPrinter {
   }
 
   public print(log: PrintableLog): void {
-    if (this.strategy === "none") return;
-
     if (this.strategy === "json") {
       // Compact JSON line
       LogPrinter.writers.log(safeStringify(this.normalizeForJson(log)));

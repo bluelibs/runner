@@ -45,7 +45,7 @@ describe("run.ts rollback and unhooking", () => {
     });
 
     await expect(
-      run(app, { logs: { printStrategy: "none" }, shutdownHooks: false })
+      run(app, { logs: { printThreshold: null }, shutdownHooks: false })
     ).rejects.toThrow("init failed");
 
     // dep and bad should have been disposed; never was not initialized.
@@ -71,7 +71,7 @@ describe("run.ts rollback and unhooking", () => {
 
     // First run: should react to SIGINT
     const first = await run(app, {
-      logs: { printStrategy: "none" },
+      logs: { printThreshold: null },
       shutdownHooks: true,
       errorBoundary: false,
     });
@@ -83,7 +83,7 @@ describe("run.ts rollback and unhooking", () => {
     // Second run: dispose should unregister; SIGINT should not call its dispose again
     calls.length = 0;
     const second = await run(app, {
-      logs: { printStrategy: "none" },
+      logs: { printThreshold: null },
       shutdownHooks: true,
       errorBoundary: false,
     });
@@ -108,7 +108,7 @@ describe("run.ts rollback and unhooking", () => {
     });
 
     const { dispose, eventManager } = await run(app, {
-      logs: { printStrategy: "none" },
+      logs: { printThreshold: null },
       shutdownHooks: false,
       errorBoundary: true,
     });

@@ -60,12 +60,6 @@ describe("LogPrinter", () => {
     expect(logs[0].includes("\n")).toBe(true);
   });
 
-  it("handles none strategy as no-op", () => {
-    const p = new LogPrinter({ strategy: "none", useColors: false });
-    p.print({ ...baseLog });
-    expect(logs.length + errs.length).toBe(0);
-  });
-
   it("handles circular and bigint in message/data/context", () => {
     const p = new LogPrinter({ strategy: "json", useColors: false });
     const circ: any = { x: 1 };

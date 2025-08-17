@@ -13,6 +13,7 @@ import {
   HasContracts,
 } from "../defs.returnTag";
 import { createTestResource, run } from "..";
+import z from "zod";
 
 // This is skipped because we mostly check typesafety.
 describe.skip("typesafety", () => {
@@ -420,5 +421,44 @@ describe.skip("typesafety", () => {
         return {};
       },
     });
+  });
+
+  it("should correctly infer schemas from validation options", async () => {
+    const task = defineTask({
+      id: "task",
+      inputSchema: z.object({ name: z.string() }),
+      resultSchema: z.object({ name: z.string() }),
+      run: async (input) => {
+        input.name;
+        // @ts-expect-error
+        input.age;
+
+        return {
+          name: "123",
+        };
+      },
+    });
+
+    const middleware = defineMiddleware({
+      id: "middleware",
+      configSchema: z.object({ ttl: z.number().positive() }),
+      run: async ({ next }, deps, config) => {
+        config.ttl;
+        // @ts-expect-error
+        config.ttl2;
+      },
+    });
+
+    const resource = defineResource({
+      id: "resource",
+      configSchema: z.object({ ttl: z.number().positive() }),
+      init: async (cfg) => {
+        cfg.ttl;
+        // @ts-expect-error
+        cfg.ttl2;
+      },
+    });
+
+    expect(true).toBe(true);
   });
 });

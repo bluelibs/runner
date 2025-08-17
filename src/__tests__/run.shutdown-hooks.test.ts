@@ -14,7 +14,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const observed: any[] = [];
 
     const { dispose, eventManager } = await run(app, {
-      logs: { printStrategy: "none" },
+      logs: { printThreshold: null },
       errorBoundary: true,
       shutdownHooks: false,
     });
@@ -45,7 +45,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const { dispose, eventManager } = await run(app, {
-      logs: { printStrategy: "none" },
+      logs: { printThreshold: null },
       errorBoundary: true,
       shutdownHooks: false,
     });
@@ -63,7 +63,10 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
     expect(spy).toHaveBeenCalledWith(
       globalEvents.unhandledError,
-      expect.objectContaining({ kind: "process", note: "unhandledRejection" }),
+      expect.objectContaining({
+        kind: "process",
+        source: "unhandledRejection",
+      }),
       "process"
     );
 
@@ -91,7 +94,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     };
 
     const { value } = await run(app, {
-      logs: { printStrategy: "none" },
+      logs: { printThreshold: null },
       errorBoundary: false,
       shutdownHooks: true,
     });

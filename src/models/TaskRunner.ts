@@ -98,7 +98,7 @@ export class TaskRunner {
       try {
         await this.eventManager.emit(
           globalEvents.unhandledError,
-          { kind: "hook", id: hook.id, source: emission.id, error: err },
+          { kind: "hook", source: hook.id, error: err },
           hook.id
         );
       } catch (_) {}
@@ -164,7 +164,7 @@ export class TaskRunner {
         try {
           await this.eventManager.emit(
             globalEvents.unhandledError,
-            { kind: "task", id: task.id as any, error },
+            { kind: "task", source: task.id, error },
             task.id as any
           );
         } catch (_) {}
@@ -244,7 +244,7 @@ export class TaskRunner {
           try {
             await this.eventManager.emit(
               globalEvents.unhandledError,
-              { kind: "middleware", id: middleware.id, error },
+              { kind: "middleware", source: middleware.id, error },
               middleware.id
             );
           } catch (_) {}

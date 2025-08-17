@@ -81,20 +81,6 @@ describe("Logger", () => {
     expect(consoleErrorSpy).toHaveBeenCalled();
   });
 
-  it("disables printing when strategy is none", async () => {
-    const logger = createLogger({ threshold: "trace", strategy: "none" });
-    const seen: any[] = [];
-    logger.onLog((log) => {
-      seen.push(log);
-    });
-
-    await logger.error("boom");
-
-    expect(seen).toHaveLength(1);
-    expect(consoleSpy).not.toHaveBeenCalled();
-    expect(consoleErrorSpy).not.toHaveBeenCalled();
-  });
-
   it("buffers logs until markAsReady() and then prints and notifies listeners in order", async () => {
     const logger = createLogger({ buffer: true, threshold: "trace" });
     const levels: string[] = [];

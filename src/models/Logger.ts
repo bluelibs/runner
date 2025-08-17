@@ -223,10 +223,6 @@ export class Logger {
   }
 
   private canPrint(level: LogLevels) {
-    if (this.printStrategy === "none") {
-      return false;
-    }
-
     if (this.printThreshold === null) {
       return false;
     }
