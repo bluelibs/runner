@@ -141,4 +141,57 @@ describe("debug resource - ignored system/lifecycle events", () => {
     expect(joined.includes("[hook] tests.user.hook triggered")).toBe(false);
     expect(joined.includes("[hook] tests.user.hook completed")).toBe(false);
   });
+
+  it("does not log system-tagged events via global event listener", async () => {
+    const messages: string[] = [];
+
+    const collector = defineResource({
+      id: "tests.collector.system.event",
+      dependencies: { logger: globalResources.logger },
+      async init(_, { logger }) {
+        logger.onLog((log) => {
+          messages.push(String(log.message));
+        });
+        return messages;
+      },
+    });
+
+    const systemEvent = defineEvent<{ v: number }>({
+      id: "tests.system.event",
+      meta: { tags: [globalTags.system] },
+    });
+
+    const emitSystemEvent = defineTask({
+      id: "tests.emit.system.event",
+      dependencies: { systemEvent },
+      async run(_input, { systemEvent }) {
+        await systemEvent({ v: 1 });
+        return "ok" as const;
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.system.event",
+      register: [
+        debugResource.with("verbose"),
+        collector,
+        systemEvent,
+        emitSystemEvent,
+      ],
+      async init() {
+        return "ready" as const;
+      },
+    });
+
+    const rr = await run(app, {
+      logs: {
+        printThreshold: null,
+      },
+    });
+
+    await rr.runTask(emitSystemEvent);
+
+    const joined = messages.join("\n");
+    expect(joined.includes("Event tests.system.event emitted")).toBe(false);
+  });
 });

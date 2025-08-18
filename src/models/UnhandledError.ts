@@ -15,14 +15,14 @@ export interface OnUnhandledErrorInfo {
 }
 
 export type OnUnhandledError = (
-  info: OnUnhandledErrorInfo
+  info: OnUnhandledErrorInfo,
 ) => void | Promise<void>;
 
 export function createDefaultUnhandledError(logger: Logger): OnUnhandledError {
   return async ({ error, kind, source }: OnUnhandledErrorInfo) => {
     const normalizedError =
       error instanceof Error ? error : new Error(String(error));
-    await logger.error("Unhandled error", {
+    await logger.error(`${normalizedError.toString()}`, {
       source,
       error: normalizedError,
       data: kind ? { kind } : undefined,
@@ -31,10 +31,10 @@ export function createDefaultUnhandledError(logger: Logger): OnUnhandledError {
 }
 
 export function bindProcessErrorHandler(
-  handler: OnUnhandledError
+  handler: OnUnhandledError,
 ): (
   error: unknown,
-  source: "uncaughtException" | "unhandledRejection"
+  source: "uncaughtException" | "unhandledRejection",
 ) => void | Promise<void> {
   return async (error, source) => {
     try {
@@ -45,7 +45,7 @@ export function bindProcessErrorHandler(
 
 export async function safeReportUnhandledError(
   handler: OnUnhandledError,
-  info: OnUnhandledErrorInfo
+  info: OnUnhandledErrorInfo,
 ): Promise<void> {
   try {
     await handler(info);

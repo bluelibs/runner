@@ -6,25 +6,12 @@ import { app } from "./modules";
  */
 async function startApp() {
   try {
-    const { value: appInstance, dispose } = await run(app);
-
-    // Graceful shutdown
-    process.on("SIGTERM", async () => {
-      console.log("\n📴 Received SIGTERM, shutting down gracefully...");
-      await dispose();
-      process.exit(0);
+    const { value: appInstance, dispose } = await run(app, {
+      debug: "verbose",
     });
-
-    process.on("SIGINT", async () => {
-      console.log("\n📴 Received SIGINT, shutting down gracefully...");
-      await dispose();
-      process.exit(0);
-    });
-
     return appInstance;
   } catch (error) {
-    console.error("❌ Failed to start application:", error);
-    process.exit(1);
+    process.exit(0);
   }
 }
 

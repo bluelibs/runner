@@ -20,7 +20,7 @@ describe("UnhandledError helpers", () => {
     await handler({ error: "boom", kind: "task", source: "x" });
     expect(spy).toHaveBeenCalledTimes(1);
     const args = spy.mock.calls[0];
-    expect(args[0]).toBe("Unhandled error");
+    expect(args[0]).toBe("Error: boom");
     const info = args[1] as any;
     expect(info.source).toBe("x");
     expect(info.error).toBeInstanceOf(Error);
@@ -53,7 +53,7 @@ describe("UnhandledError helpers", () => {
       throw new Error("handler failed");
     });
     await expect(
-      safeReportUnhandledError(noisy, { error: new Error("x") })
+      safeReportUnhandledError(noisy, { error: new Error("x") }),
     ).resolves.toBeUndefined();
   });
 });

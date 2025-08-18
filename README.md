@@ -724,12 +724,12 @@ const serverResource = resource({
 The framework can automatically handle uncaught exceptions and unhandled rejections:
 
 ```typescript
-const { dispose } = await run(app, {
+const { dispose, logger } = await run(app, {
   errorBoundary: true, // Catch process-level errors
   shutdownHooks: true, // Graceful shutdown on signals
   onUnhandledError: async ({ error, kind, source }) => {
     // We log it by default
-    await logger.error("Unhandled error", { error });
+    await logger.error(`Unhandled error: ${error && error.toString()}`);
     // Optionally report to telemetry or decide to dispose/exit
   },
 });

@@ -35,32 +35,21 @@ export class ResourceInitializer {
     const context = resource.context?.();
 
     let value: TValue | undefined;
-    try {
-      // Create a no-op init function if it doesn't exist
-      if (!resource.init) {
-        resource.init = (async () => undefined) as any;
-      }
-
-      if (resource.init) {
-        value = await this.initWithMiddleware(
-          resource,
-          config,
-          dependencies,
-          context,
-        );
-      }
-
-      return { value: value as TValue, context };
-    } catch (error: unknown) {
-      try {
-        await this.store.onUnhandledError?.({
-          error,
-          kind: "resourceInit",
-          source: resource.id,
-        });
-      } catch (_) {}
-      throw error;
+    // Create a no-op init function if it doesn't exist
+    if (!resource.init) {
+      resource.init = (async () => undefined) as any;
     }
+
+    if (resource.init) {
+      value = await this.initWithMiddleware(
+        resource,
+        config,
+        dependencies,
+        context,
+      );
+    }
+
+    return { value: value as TValue, context };
   }
 
   // Lifecycle emissions removed
@@ -153,8 +142,8 @@ export class ResourceInitializer {
           try {
             await this.store.onUnhandledError?.({
               error,
-              kind: "middleware",
-              source: middleware.id,
+              kind: "resourceInit",
+              source: resource.id,
             });
           } catch (_) {}
           await this.eventManager.emit(

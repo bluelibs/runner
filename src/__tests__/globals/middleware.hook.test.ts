@@ -29,10 +29,10 @@ describe("globals.resources.debug.middleware listeners", () => {
     });
 
     expect(
-      infos.some((m) => m.includes("[middleware] m started for task t")),
+      infos.some((m) => m.includes("Middleware triggered for task t")),
     ).toBe(true);
     expect(
-      infos.some((m) => m.includes("[middleware] m completed for task t")),
+      infos.some((m) => m.includes("Middleware completed for task t")),
     ).toBe(true);
   });
 

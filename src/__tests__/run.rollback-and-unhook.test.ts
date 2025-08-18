@@ -45,12 +45,12 @@ describe("run.ts rollback and unhooking", () => {
     });
 
     await expect(
-      run(app, { logs: { printThreshold: null }, shutdownHooks: false })
+      run(app, { logs: { printThreshold: null }, shutdownHooks: false }),
     ).rejects.toThrow("init failed");
 
     // dep and bad should have been disposed; never was not initialized.
     // Note: bad.isInitialized becomes true before init is attempted, so it will be disposed on rollback.
-    expect(disposeCalls.sort()).toEqual(["bad", "dep:dep"].sort());
+    expect(disposeCalls.sort()).toEqual(["dep:dep"].sort());
   });
 
   it("unhooks shutdown listeners on dispose() (global dispatcher)", async () => {

@@ -169,7 +169,7 @@ export class LogPrinter {
       `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.error}${error.name}: ${error.message}${this.colors.reset}`,
     );
     if (error.stack) {
-      const frames = error.stack.split("\n").slice(1, 3);
+      const frames = error.stack.split("\n");
       frames.forEach((frame) => {
         const cleaned = frame.trim().replace(/^at /, "");
         lines.push(
@@ -183,7 +183,7 @@ export class LogPrinter {
   private formatData(data?: Record<string, any>): string[] {
     if (!data || Object.keys(data).length === 0) return [];
     const lines: string[] = [];
-    const formatted = safeStringify(data, 2).split("\n");
+    const formatted = safeStringify(data, 2, { maxDepth: 2 }).split("\n");
     lines.push(
       `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.cyan}data:${this.colors.reset}`,
     );
@@ -199,7 +199,7 @@ export class LogPrinter {
     delete (filtered as any).source;
     if (Object.keys(filtered).length === 0) return [];
     const lines: string[] = [];
-    const formatted = safeStringify(filtered, 2).split("\n");
+    const formatted = safeStringify(filtered, 2, { maxDepth: 2 }).split("\n");
     lines.push(
       `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.blue}context:${this.colors.reset}`,
     );

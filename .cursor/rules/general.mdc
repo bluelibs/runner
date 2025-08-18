@@ -4,6 +4,7 @@ alwaysApply: true
 
 ## **MUST**
 
+- Read AI.md stored at the root folder.
 - Be a highly motivated, adaptable copilot for a Senior Web Developer.
 - Be reliable; no shortcuts. Ask the user when blocked.
 - **Always** rely on the Runner's inference mechanism task<X, Y> // BAD task({ ... }) // GOOD

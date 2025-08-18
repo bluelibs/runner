@@ -8,7 +8,7 @@ import { globalEvents } from "../../globalEvents";
 import { safeStringify } from "../../../models/utils/safeStringify";
 
 export const hookTriggeredListener = defineHook({
-  id: "globals.debug.tasks.hookTriggeredListener",
+  id: "debug.hookTriggeredListener",
   on: globalEvents.hookTriggered,
   dependencies: {
     logger: globalResources.logger,
@@ -25,8 +25,10 @@ export const hookTriggeredListener = defineHook({
     const resolved = getConfig(debugConfig, event!);
     if (resolved.logHookTriggered) {
       const hookId = event.data?.hook?.id ?? event.id;
-      let logString = `[hook] ${hookId} triggered`;
-      await logger.info(logString);
+      let logString = `Hook triggered for ${String(hookId)}`;
+      await logger.info(logString, {
+        source: "debug.hookTriggeredListener",
+      });
     }
   },
   meta: {
@@ -37,7 +39,7 @@ export const hookTriggeredListener = defineHook({
 });
 
 export const hookCompletedListener = defineHook({
-  id: "globals.debug.tasks.hookCompletedListener",
+  id: "debug.hookCompletedListener",
   on: globalEvents.hookCompleted,
   dependencies: {
     logger: globalResources.logger,
@@ -47,15 +49,17 @@ export const hookCompletedListener = defineHook({
     if (!deps) return;
     const { logger, debugConfig } = deps;
     // Skip logging for system-tagged observability events
-    if (hasSystemTag(event)) {
+    if (hasSystemTag(event.data.hook)) {
       return;
     }
 
     const resolved = getConfig(debugConfig, event!);
     if (resolved.logHookCompleted) {
       const hookId = event.data?.hook?.id ?? event.id;
-      let logString = `[hook] ${hookId} completed`;
-      await logger.info(logString);
+      let logString = `Hook completed for ${String(hookId)}`;
+      await logger.info(logString, {
+        source: "debug.hookCompletedListener",
+      });
     }
   },
 });

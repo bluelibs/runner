@@ -21,7 +21,7 @@ describe("globals.resources.debug.hook listeners", () => {
 
     expect(
       infos.some((m) =>
-        m.includes("[hook] tests.user.hookTriggered triggered"),
+        m.includes("Hook triggered for tests.user.hookTriggered"),
       ),
     ).toBe(true);
   });
@@ -41,9 +41,10 @@ describe("globals.resources.debug.hook listeners", () => {
       debugConfig: "verbose" as any,
     });
 
+    console.log(infos);
     expect(
       infos.some((m) =>
-        m.includes("[hook] tests.user.hookCompleted completed"),
+        m.includes("Hook completed for tests.user.hookCompleted"),
       ),
     ).toBe(true);
   });
@@ -65,7 +66,7 @@ describe("globals.resources.debug.hook listeners", () => {
 
     expect(
       infos.some((m) =>
-        m.includes("[hook] tests.user.hookCompleted.flags completed"),
+        m.includes("Hook completed for tests.user.hookCompleted.flags"),
       ),
     ).toBe(false);
 
@@ -78,7 +79,7 @@ describe("globals.resources.debug.hook listeners", () => {
     );
     expect(
       infos.some((m) =>
-        m.includes("[hook] tests.user.hookTriggered.flags triggered"),
+        m.includes("Hook triggered for tests.user.hookTriggered.flags"),
       ),
     ).toBe(false);
   });

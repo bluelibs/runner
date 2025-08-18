@@ -11,12 +11,13 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const onUnhandledError = jest.fn();
-    const { dispose } = await run(app, {
+    const { dispose, logger } = await run(app, {
       logs: { printThreshold: null },
       errorBoundary: true,
       shutdownHooks: false,
-      onUnhandledError: async ({ error, kind, source }) =>
-        onUnhandledError(error, kind, source),
+      onUnhandledError: async ({ error, kind, source }) => {
+        onUnhandledError(error, kind, source);
+      },
     });
 
     // Emit uncaughtException without killing the process by catching internally
@@ -54,7 +55,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     process.emit(
       "unhandledRejection",
       new Error("boom-unhandled"),
-      Promise.resolve()
+      Promise.resolve(),
     );
 
     await new Promise((r) => setTimeout(r, 0));

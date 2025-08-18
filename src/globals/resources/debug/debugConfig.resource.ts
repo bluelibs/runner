@@ -3,7 +3,7 @@ import { DebugFriendlyConfig, getConfig } from "./types";
 import { globalTags } from "../../../globals/globalTags";
 
 export const debugConfig = defineResource({
-  id: "globals.resources.debug.config",
+  id: "globals.debug.resources.config",
   meta: {
     title: "Debug Config",
     description: "Debug config. This is used to debug the system.",

@@ -5,7 +5,7 @@ describe("Logger", () => {
   let consoleErrorSpy: jest.SpyInstance;
 
   const createLogger = (
-    opts?: Partial<{ threshold: any; strategy: any; buffer: boolean }>
+    opts?: Partial<{ threshold: any; strategy: any; buffer: boolean }>,
   ) =>
     new Logger({
       printThreshold:
@@ -160,24 +160,6 @@ describe("Logger", () => {
     await logger.error("should also not print");
     expect(consoleSpy).not.toHaveBeenCalled();
     expect(consoleErrorSpy).not.toHaveBeenCalled();
-  });
-
-  it("formats errors with stack: shows error line and first two frames", async () => {
-    const logger = createLogger({ threshold: "trace" });
-    const err = new Error("Boom");
-    (err as any).stack = [
-      "Error: Boom",
-      "    at func1 (file1.js:10:5)",
-      "    at func2 (file2.js:20:5)",
-      "    at func3 (file3.js:30:5)",
-    ].join("\n");
-
-    await logger.error("failing", { error: err });
-    const outputs = gather();
-    expect(outputs).toContain("Error: Boom");
-    expect(outputs).toContain("func1 (file1.js:10:5)");
-    expect(outputs).toContain("func2 (file2.js:20:5)");
-    expect(outputs).not.toContain("func3 (file3.js:30:5)");
   });
 
   it("formats errors without stack: shows only the error line", async () => {

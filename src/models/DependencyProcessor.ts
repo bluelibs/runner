@@ -36,12 +36,12 @@ export class DependencyProcessor {
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
     protected readonly taskRunner: TaskRunner,
-    protected readonly logger: Logger
+    protected readonly logger: Logger,
   ) {
     this.resourceInitializer = new ResourceInitializer(
       store,
       eventManager,
-      logger
+      logger,
     );
   }
 
@@ -53,7 +53,7 @@ export class DependencyProcessor {
       const deps = middleware.middleware.dependencies as DependencyMapType;
       middleware.computedDependencies = await this.extractDependencies(
         deps,
-        middleware.middleware.id
+        middleware.middleware.id,
       );
     }
 
@@ -77,12 +77,12 @@ export class DependencyProcessor {
   }
 
   private async computeTaskDependencies(
-    task: TaskStoreElementType<any, any, any>
+    task: TaskStoreElementType<any, any, any>,
   ) {
     const deps = task.task.dependencies as DependencyMapType;
     task.computedDependencies = await this.extractDependencies(
       deps,
-      task.task.id
+      task.task.id,
     );
   }
 
@@ -100,7 +100,7 @@ export class DependencyProcessor {
           await this.resourceInitializer.initializeResource(
             resource.resource,
             resource.config,
-            resource.computedDependencies!
+            resource.computedDependencies!,
           );
         resource.context = context;
         resource.value = value;
@@ -113,23 +113,23 @@ export class DependencyProcessor {
    * @param resource
    */
   protected async processResourceDependencies<TD extends DependencyMapType>(
-    resource: ResourceStoreElementType<any, any, TD>
+    resource: ResourceStoreElementType<any, any, TD>,
   ) {
     const deps = (resource.resource.dependencies || ({} as TD)) as TD;
     const extracted = await this.extractDependencies(
       deps,
-      resource.resource.id
+      resource.resource.id,
     );
 
     resource.computedDependencies = this.wrapResourceDependencies<TD>(
       deps,
-      extracted
+      extracted,
     );
   }
 
   private wrapResourceDependencies<TD extends DependencyMapType>(
     deps: TD,
-    extracted: DependencyValuesType<TD>
+    extracted: DependencyValuesType<TD>,
   ): ResourceDependencyValuesType<TD> {
     const wrapped: Record<string, unknown> = {};
     for (const key of Object.keys(deps) as Array<keyof TD>) {
@@ -159,7 +159,7 @@ export class DependencyProcessor {
   private makeTaskWithIntercept<
     I,
     O extends Promise<any>,
-    D extends DependencyMapType
+    D extends DependencyMapType,
   >(original: ITask<I, O, D>): TaskDependencyWithIntercept<I, O> {
     const taskId = original.id;
     const fn: (input: I) => O = (input) => {
@@ -187,7 +187,7 @@ export class DependencyProcessor {
         rootResource.resource,
         rootResource.config,
         // They are already computed
-        rootResource.computedDependencies!
+        rootResource.computedDependencies!,
       );
 
     rootResource.context = context;
@@ -227,7 +227,7 @@ export class DependencyProcessor {
 
   async extractDependencies<T extends DependencyMapType>(
     map: T,
-    source: string
+    source: string,
   ): Promise<DependencyValuesType<T>> {
     const object = {} as DependencyValuesType<T>;
 
@@ -289,7 +289,7 @@ export class DependencyProcessor {
 
       storeTask.computedDependencies = await this.extractDependencies(
         dependencies,
-        storeTask.task.id
+        storeTask.task.id,
       );
     }
 
@@ -309,9 +309,6 @@ export class DependencyProcessor {
     if (storeResource.isInitialized) {
       return storeResource.value;
     } else {
-      // we need to initialize the resource
-      storeResource.isInitialized = true;
-
       // check if it has an initialisation function that provides the value
       if (resource.init) {
         const depMap = (resource.dependencies || {}) as DependencyMapType;
@@ -321,12 +318,15 @@ export class DependencyProcessor {
           await this.resourceInitializer.initializeResource(
             resource,
             config,
-            wrapped
+            wrapped,
           );
 
         storeResource.context = context;
         storeResource.value = value;
       }
+
+      // we need to initialize the resource
+      storeResource.isInitialized = true;
     }
 
     return storeResource.value;

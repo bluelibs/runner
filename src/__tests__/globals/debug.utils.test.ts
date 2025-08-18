@@ -20,6 +20,24 @@ describe("debug utils and types", () => {
     expect(result).toBe('{"self":"[Circular]"}');
   });
 
+  it("safeStringify prints functions as placeholders", () => {
+    const obj = { fn: () => {}, nested: { handler() {} } } as any;
+    const result = safeStringify(obj, 2);
+    expect(result).toContain('"fn": "function()"');
+    expect(result).toContain('"handler": "function()"');
+  });
+
+  it("safeStringify limits depth when maxDepth is provided", () => {
+    const obj = {
+      level1: { level2: { level3: { x: 1 } } },
+      arr1: { arr2: [1, 2, 3] },
+    };
+    const result = safeStringify(obj, 2, { maxDepth: 2 });
+    // With maxDepth=2 we allow root and its direct children; grandchildren get summarized
+    expect(result).toContain('"level2": "[Object]"');
+    expect(result).toContain('"arr2": "[Array]"');
+  });
+
   it("hasSystemOrLifecycleTag detects system and lifecycle tags", () => {
     const sys = { meta: { tags: [globalTags.system] } } as any;
     const none = { meta: { tags: [] } } as any;

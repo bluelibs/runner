@@ -145,12 +145,12 @@ export async function run<C, V extends Promise<any>>(
   };
 
   try {
-    // In the registration phase we register deeply all the resources, tasks, middleware and events
-    store.initializeStore(resource, config);
-
     if (debug) {
       store.storeGenericItem(debugResource.with(debug));
     }
+
+    // In the registration phase we register deeply all the resources, tasks, middleware and events
+    store.initializeStore(resource, config);
 
     // We verify that there isn't any circular dependencies before we begin computing the dependencies
     const dependentNodes = store.getDependentNodes();
@@ -209,11 +209,6 @@ export async function run<C, V extends Promise<any>>(
   } catch (err) {
     // Rollback initialized resources
     await disposeAll();
-    await safeReportUnhandledError(onUnhandledError, {
-      error: err,
-      kind: "run",
-      source: "run",
-    });
     throw err;
   }
 }

@@ -63,7 +63,7 @@ describe("globals.resources.debug", () => {
 
     const infoLogs = logs.filter((l) => l.level === "info");
     expect(
-      infoLogs.some((l) => l.message.includes("[event] tests.event")),
+      infoLogs.some((l) => l.message.includes("Event tests.event emitted")),
     ).toBe(true);
   });
 
@@ -136,12 +136,12 @@ describe("globals.resources.debug", () => {
     // Middleware observability messages
     // Allow for either ordering due to interleaving; just assert presence
     const joined = messages.join("\n");
-    expect(joined.includes("[middleware] tests.local.middleware started")).toBe(
+    expect(joined.includes("Middleware triggered for task tests.task")).toBe(
       true,
     );
-    expect(
-      joined.includes("[middleware] tests.local.middleware completed"),
-    ).toBe(true);
+    expect(joined.includes("Middleware completed for task tests.task")).toBe(
+      true,
+    );
     // Resource logs are implementation-defined depending on eager/lazy init.
     // We assert task tracking here.
   });
@@ -197,7 +197,7 @@ describe("globals.resources.debug", () => {
       .filter((l) => l.level === "info")
       .map((l) => String(l.message));
     expect(
-      infoLogs.some((m) => m.includes("[event] tests.event.options")),
+      infoLogs.some((m) => m.includes("Event tests.event.options emitted")),
     ).toBe(true);
   });
 
@@ -314,6 +314,7 @@ describe("globals.resources.debug", () => {
     ).rejects.toThrow("resource-bad");
 
     // Ensure error was logged by the middleware's resource error path
+    console.log(messages);
     expect(messages.some((m) => m.includes("Error: resource-bad"))).toBe(true);
   });
 
@@ -437,7 +438,7 @@ describe("globals.resources.debug", () => {
       messages.some((m) => m.includes("Task tests.flags.task completed")),
     ).toBe(true);
     expect(
-      messages.some((m) => m.includes("[event] tests.flags.event emitted")),
+      messages.some((m) => m.includes("Event tests.flags.event emitted")),
     ).toBe(true);
 
     // Now validate the attached data payloads are omitted according to flags
@@ -464,7 +465,7 @@ describe("globals.resources.debug", () => {
     expect(resourceComplete?.data).toBeUndefined();
 
     const eventLog = logs.find((l) =>
-      String(l.message).includes("[event] tests.flags.event emitted"),
+      String(l.message).includes("Event tests.flags.event emitted"),
     );
     expect(eventLog?.data).toBeUndefined();
   });

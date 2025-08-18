@@ -51,13 +51,19 @@ export const expressServerResource = resource({
       res.json({ status: "ok", timestamp: new Date().toISOString() });
     });
 
-    // Start server
-    const server = app.listen(port, () => {
-      logger.info(`🚀 Express server running on http://localhost:${port}`);
-      logger.info(`📚 API documentation: http://localhost:${port}/api-docs`);
+    // Start server, we do this to ensure before this resource responds, the server is ready.
+    const promise = new Promise<ExpressServer>((resolve, reject) => {
+      const server = app.listen(port, () => {
+        logger.info(`🚀 Express server running on http://localhost:${port}`);
+        logger.info(`📚 API documentation: http://localhost:${port}/api-docs`);
+        resolve({ app, server, port });
+      });
+      server.on("error", (err: Error) => {
+        reject(err);
+      });
     });
 
-    return { app, server, port };
+    return promise;
   },
   dispose: async ({ server }, _, { logger }) => {
     return new Promise<void>((resolve) => {

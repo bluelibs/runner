@@ -11,7 +11,7 @@ export type LogLevels =
   | "error"
   | "critical";
 
-export interface LogInfo {
+export interface ILogInfo {
   source?: string;
   error?: Error;
   data?: Record<string, any>;
@@ -63,7 +63,7 @@ export class Logger {
       useColors?: boolean;
     },
     boundContext: Record<string, any> = {},
-    source?: string
+    source?: string,
   ) {
     this.boundContext = { ...boundContext };
     this.printThreshold = options.printThreshold;
@@ -111,7 +111,7 @@ export class Logger {
         useColors: this.useColors,
       },
       { ...this.boundContext, ...context },
-      source
+      source,
     );
   }
 
@@ -121,7 +121,7 @@ export class Logger {
   public async log(
     level: LogLevels,
     message: any,
-    logInfo: LogInfo = {}
+    logInfo: ILogInfo = {},
   ): Promise<void> {
     const { source, error, data, ...context } = logInfo;
 
@@ -159,27 +159,27 @@ export class Logger {
     };
   }
 
-  public async info(message: any, logInfo?: LogInfo) {
+  public async info(message: any, logInfo?: ILogInfo) {
     await this.log("info", message, logInfo);
   }
 
-  public async error(message: any, logInfo?: LogInfo) {
+  public async error(message: any, logInfo?: ILogInfo) {
     await this.log("error", message, logInfo);
   }
 
-  public async warn(message: any, logInfo?: LogInfo) {
+  public async warn(message: any, logInfo?: ILogInfo) {
     await this.log("warn", message, logInfo);
   }
 
-  public async debug(message: any, logInfo?: LogInfo) {
+  public async debug(message: any, logInfo?: ILogInfo) {
     await this.log("debug", message, logInfo);
   }
 
-  public async trace(message: any, logInfo?: LogInfo) {
+  public async trace(message: any, logInfo?: ILogInfo) {
     await this.log("trace", message, logInfo);
   }
 
-  public async critical(message: any, logInfo?: LogInfo) {
+  public async critical(message: any, logInfo?: ILogInfo) {
     await this.log("critical", message, logInfo);
   }
 

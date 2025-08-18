@@ -18,7 +18,7 @@ export const globalEvents = {
       description:
         "Emitted when the system has completed boot and is ready for listeners to start work." +
         "This runs right before returning value for run().",
-      tags: [systemTag],
+      tags: [], // Intentionally left no system tag. Because this is an 'interest' event.
     },
   }),
   /**
