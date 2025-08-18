@@ -7,3 +7,4 @@ export * from "./ResourceInitializer";
 export * from "./Semaphore";
 export * from "./Queue";
 export * from "./UnhandledError";
+export * from "./RunResult";
