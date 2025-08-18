@@ -8,7 +8,7 @@ npm install @bluelibs/runner
 
 ## Core Philosophy
 
-BlueLibs Runner is not a "minimal" framework; it's a **powerful and integrated** one. It provides a comprehensive set of tools for building robust, testable, and maintainable applications by combining a predictable Dependency Injection (DI) container with a dynamic metadata and eventing system.
+BlueLibs Runner is a **powerful and integrated** framework. It provides a comprehensive set of tools for building robust, testable, and maintainable applications by combining a predictable Dependency Injection (DI) container with a dynamic metadata and eventing system.
 
 ## DI Container Guarantees
 
