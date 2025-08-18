@@ -44,9 +44,9 @@ describe("run.ts rollback and unhooking", () => {
       },
     });
 
-    await expect(
-      run(app, { logs: { printThreshold: null }, shutdownHooks: false }),
-    ).rejects.toThrow("init failed");
+    await expect(run(app, { shutdownHooks: false })).rejects.toThrow(
+      "init failed",
+    );
 
     // dep and bad should have been disposed; never was not initialized.
     // Note: bad.isInitialized becomes true before init is attempted, so it will be disposed on rollback.
@@ -71,7 +71,6 @@ describe("run.ts rollback and unhooking", () => {
 
     // First run: should react to SIGINT
     const first = await run(app, {
-      logs: { printThreshold: null },
       shutdownHooks: true,
       errorBoundary: false,
     });
@@ -83,7 +82,6 @@ describe("run.ts rollback and unhooking", () => {
     // Second run: dispose should unregister; SIGINT should not call its dispose again
     calls.length = 0;
     const second = await run(app, {
-      logs: { printThreshold: null },
       shutdownHooks: true,
       errorBoundary: false,
     });
@@ -109,7 +107,6 @@ describe("run.ts rollback and unhooking", () => {
 
     const onUnhandledError = jest.fn();
     const { dispose } = await run(app, {
-      logs: { printThreshold: null },
       shutdownHooks: false,
       errorBoundary: true,
       onUnhandledError: async ({ error, kind, source }) =>

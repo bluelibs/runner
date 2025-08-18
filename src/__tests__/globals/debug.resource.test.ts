@@ -51,13 +51,7 @@ describe("globals.resources.debug", () => {
       id: "tests.harness.events",
       register: [app],
     });
-    const rr = await run(harness, {
-      logs: {
-        bufferLogs: false,
-        printStrategy: "pretty",
-        printThreshold: null,
-      },
-    });
+    const rr = await run(harness);
 
     await rr.runTask(emitter);
 
@@ -119,12 +113,7 @@ describe("globals.resources.debug", () => {
       },
     });
 
-    await run(app, {
-      logs: {
-        bufferLogs: true,
-        printThreshold: null,
-      },
-    });
+    await run(app);
 
     // Task/resource tracker messages (assert present during boot)
     expect(messages.some((m) => m.includes("Task tests.task is running"))).toBe(
@@ -187,9 +176,6 @@ describe("globals.resources.debug", () => {
     });
     const rr = await run(harness, {
       debug: "verbose",
-      logs: {
-        printThreshold: null,
-      },
     });
     await rr.runTask(emitter);
 
@@ -250,11 +236,7 @@ describe("globals.resources.debug", () => {
       id: "tests.harness.locked",
       register: [app],
     });
-    const rr = await run(harness, {
-      logs: {
-        printThreshold: null,
-      },
-    });
+    const rr = await run(harness);
 
     // After run completes, system is locked. Running a task now should not produce debug logs.
     const before = messages.length;
@@ -305,13 +287,7 @@ describe("globals.resources.debug", () => {
       },
     });
 
-    await expect(
-      run(app, {
-        logs: {
-          printThreshold: null,
-        },
-      }),
-    ).rejects.toThrow("resource-bad");
+    await expect(run(app)).rejects.toThrow("resource-bad");
 
     // Ensure error was logged by the middleware's resource error path
     console.log(messages);
@@ -351,11 +327,7 @@ describe("globals.resources.debug", () => {
       id: "tests.harness.events.simple",
       register: [app],
     });
-    const rr = await run(harness, {
-      logs: {
-        printThreshold: null,
-      },
-    });
+    const rr = await run(harness);
 
     await rr.runTask(testTask);
 
@@ -421,7 +393,7 @@ describe("globals.resources.debug", () => {
       register: [app],
     });
     const rr = await run(harness, {
-      logs: { printThreshold: null, bufferLogs: true },
+      logs: { bufferLogs: true },
       debug: config,
     });
 

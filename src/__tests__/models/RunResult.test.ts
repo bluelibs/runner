@@ -39,7 +39,7 @@ describe("RunResult", () => {
       },
     });
 
-    const r = await run(app, { logs: { printThreshold: null } });
+    const r = await run(app);
     expect(typeof r.runTask).toBe("function");
     expect(typeof r.emitEvent).toBe("function");
     expect(typeof r.getResourceValue).toBe("function");
@@ -95,7 +95,7 @@ describe("RunResult", () => {
       },
     });
 
-    const r = await run(app, { logs: { printThreshold: null } });
+    const r = await run(app);
 
     await r.runTask("rr.inc", { by: 2 });
     await r.emitEvent("rr.ping", { n: 3 });
@@ -107,7 +107,7 @@ describe("RunResult", () => {
 
   it("throws helpful errors for missing string ids", async () => {
     const app = defineResource({ id: "rr.empty" });
-    const r = await run(app, { logs: { printThreshold: null } });
+    const r = await run(app);
 
     expect(() => r.runTask("nope.task")).toThrow('Task "nope.task" not found.');
     expect(() => r.emitEvent("nope.event")).toThrow(

@@ -5,16 +5,8 @@ import {
   defineMiddleware,
   defineHook,
 } from "../define";
-import { run as originalRun } from "../run";
+import { run } from "../run";
 import { Errors } from "..";
-import { IResource } from "../defs";
-
-const run = (app: IResource) =>
-  originalRun(app, {
-    logs: {
-      printThreshold: null,
-    },
-  });
 
 const {
   RuntimeError,
@@ -40,7 +32,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Task", "test.task").message
+      new DuplicateRegistrationError("Task", "test.task").message,
     );
   });
 
@@ -61,7 +53,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new UnknownItemTypeError({}).message
+      new UnknownItemTypeError({}).message,
     );
   });
 
@@ -77,7 +69,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new UnknownItemTypeError({}).message
+      new UnknownItemTypeError({}).message,
     );
   });
 
@@ -117,7 +109,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new EventNotFoundError("non.existent.event").message
+      new EventNotFoundError("non.existent.event").message,
     );
   });
 
@@ -174,7 +166,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Resource", "res1").message
+      new DuplicateRegistrationError("Resource", "res1").message,
     );
   });
 
@@ -195,7 +187,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Middleware", "middlewarex").message
+      new DuplicateRegistrationError("Middleware", "middlewarex").message,
     );
   });
 
@@ -213,7 +205,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Event", "ev1").message
+      new DuplicateRegistrationError("Event", "ev1").message,
     );
   });
 
@@ -242,7 +234,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DependencyNotFoundError("Task test.off.the.grid").message
+      new DependencyNotFoundError("Task test.off.the.grid").message,
     );
   });
 
@@ -270,7 +262,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DependencyNotFoundError("Resource test.off.the.grid").message
+      new DependencyNotFoundError("Resource test.off.the.grid").message,
     );
   });
 
@@ -280,7 +272,7 @@ describe("Errors", () => {
       run: async () => {},
     }).everywhere();
     expect(() => first.everywhere()).toThrow(
-      new MiddlewareAlreadyGlobalError("x").message
+      new MiddlewareAlreadyGlobalError("x").message,
     );
   });
 
@@ -338,11 +330,11 @@ describe("Errors", () => {
       const validationErrorWithError = new ValidationError(
         "Task input",
         "test-task",
-        new Error("Required field missing")
+        new Error("Required field missing"),
       );
       expect(validationErrorWithError.name).toBe("ValidationError");
       expect(validationErrorWithError.message).toBe(
-        "Task input validation failed for test-task: Required field missing"
+        "Task input validation failed for test-task: Required field missing",
       );
       expect(validationErrorWithError).toBeInstanceOf(RuntimeError);
 
@@ -350,11 +342,11 @@ describe("Errors", () => {
       const validationErrorWithString = new ValidationError(
         "Resource config",
         "test-resource",
-        "Invalid configuration"
+        "Invalid configuration",
       );
       expect(validationErrorWithString.name).toBe("ValidationError");
       expect(validationErrorWithString.message).toBe(
-        "Resource config validation failed for test-resource: Invalid configuration"
+        "Resource config validation failed for test-resource: Invalid configuration",
       );
       expect(validationErrorWithString).toBeInstanceOf(RuntimeError);
     });

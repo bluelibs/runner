@@ -91,7 +91,7 @@ export async function run<C, V extends Promise<any>>(
     onUnhandledError: onUnhandledErrorOpt,
   } = options || {};
   const {
-    printThreshold = "info",
+    printThreshold = process.env.NODE_ENV === "test" ? null : "info",
     printStrategy = "pretty",
     bufferLogs = false,
   } = logs;

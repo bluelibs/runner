@@ -11,8 +11,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     const onUnhandledError = jest.fn();
-    const { dispose, logger } = await run(app, {
-      logs: { printThreshold: null },
+    const { dispose } = await run(app, {
       errorBoundary: true,
       shutdownHooks: false,
       onUnhandledError: async ({ error, kind, source }) => {
@@ -44,7 +43,6 @@ describe("run.ts shutdown hooks & error boundary", () => {
 
     const onUnhandledError = jest.fn();
     const { dispose } = await run(app, {
-      logs: { printThreshold: null },
       errorBoundary: true,
       shutdownHooks: false,
       onUnhandledError: async ({ error, kind, source }) =>
@@ -88,7 +86,6 @@ describe("run.ts shutdown hooks & error boundary", () => {
     };
 
     const { value } = await run(app, {
-      logs: { printThreshold: null },
       errorBoundary: false,
       shutdownHooks: true,
     });

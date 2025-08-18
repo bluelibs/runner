@@ -1111,9 +1111,10 @@ const app = resource({
     })
   },
 })
+
 run(app, {
   logs: {
-    printThreshold: "info", // use null to disable printing, and hook into onLog()
+    printThreshold: "info", // use null to disable printing, and hook into onLog(), if in 'test' mode default is null unless specified
     printStrategy: "pretty", // you also have "plain", "json" and "json-pretty" with circular dep safety for JSON formatting.
     bufferLogs: false, // Starts sending out logs only after the system emits the ready event. Useful for when you're sending them out.
   },
@@ -2670,6 +2671,8 @@ describe("registerUser task", () => {
 Spin up your whole app, keep all the middleware/events, and still test like a human. The `run()` function returns a `RunnerResult`.
 
 This contains the classic `value` and `dispose()` but it also exposes `logger`, `runTask()`, `emitEvent()`, and `getResourceValue()` by default.
+
+Note: The default `printThreshold` inside tests is `null` not `info`. This is verified via `process.env.NODE_ENV === 'test'`, if you want to see the logs ensure you set it accordingly.
 
 ```typescript
 import { run, resource, task, event, override } from "@bluelibs/runner";

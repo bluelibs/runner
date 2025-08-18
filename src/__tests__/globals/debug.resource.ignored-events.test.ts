@@ -29,11 +29,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
       },
     });
 
-    await run(app, {
-      logs: {
-        printThreshold: null,
-      },
-    });
+    await run(app);
 
     // Emit system-lifecycle events directly
     // Simulate a system/lifecycle event by emitting ready via EventManager if necessary
@@ -82,11 +78,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
       },
     });
 
-    await run(app, {
-      logs: {
-        printThreshold: null,
-      },
-    });
+    await run(app);
 
     // Ensure middleware did not log task start/completed lines for system-tagged task
     const joined = messages.join("\n");
@@ -131,11 +123,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
       },
     });
 
-    await run(app, {
-      logs: {
-        printThreshold: null,
-      },
-    });
+    await run(app);
 
     const joined = messages.join("\n");
     expect(joined.includes("[hook] tests.user.hook triggered")).toBe(false);
@@ -183,11 +171,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
       },
     });
 
-    const rr = await run(app, {
-      logs: {
-        printThreshold: null,
-      },
-    });
+    const rr = await run(app);
 
     await rr.runTask(emitSystemEvent);
 
