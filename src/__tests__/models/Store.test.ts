@@ -7,7 +7,7 @@ import {
   defineEvent,
   defineTag,
 } from "../../define";
-import { Logger } from "../../models";
+import { Logger, PrintStrategy } from "../../models";
 
 describe("Store", () => {
   let eventManager: EventManager;
@@ -16,7 +16,11 @@ describe("Store", () => {
 
   beforeEach(() => {
     eventManager = new EventManager();
-    logger = new Logger(eventManager);
+    logger = new Logger({
+      printThreshold: "info",
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
     store = new Store(eventManager, logger);
   });
 
@@ -158,9 +162,25 @@ describe("Store", () => {
     expect(Array.isArray(result)).toBe(true);
   });
 
+  it("getDependentNodes handles empty middleware and task middleware arrays (branches)", () => {
+    const root = defineResource({ id: "root.dep.nodes", register: [] });
+    store.initializeStore(root, {});
+    // add a task with empty middleware
+    const t = defineTask({
+      id: "t.empty.mw",
+      middleware: [],
+      async run() {
+        return 1;
+      },
+    });
+    store.storeGenericItem(t);
+    const nodes = store.getDependentNodes();
+    expect(Array.isArray(nodes)).toBe(true);
+  });
+
   it("should call storeEventsForAllTasks method", () => {
     // Test storeEventsForAllTasks method (line 165)
-    expect(() => store.storeEventsForAllTasks()).not.toThrow();
+    expect(() => store.storeEventsForAllTRM()).not.toThrow();
   });
 
   it("should call getDependentNodes method", () => {
@@ -174,6 +194,7 @@ describe("Store", () => {
       id: "tags.test",
     });
     const taskTest = defineTask({
+      id: "task.test",
       meta: {
         tags: [tag, "test"],
       },
@@ -182,6 +203,7 @@ describe("Store", () => {
       },
     });
     const unfindableTask = defineTask({
+      id: "task.unfindable",
       run: async () => 1,
     });
     const rootResource = defineResource({
@@ -203,12 +225,14 @@ describe("Store", () => {
       id: "tags.test",
     });
     const resourceTest = defineResource({
+      id: "resource.test",
       meta: {
         tags: [tag, "test"],
       },
     });
 
     const unfindableResource = defineResource({
+      id: "resource.unfindable",
       init: async () => 1,
     });
     const rootResource = defineResource({
@@ -223,5 +247,30 @@ describe("Store", () => {
     expect(result).toHaveLength(1);
     const result2 = store.getResourcesWithTag("test");
     expect(result2).toHaveLength(1);
+  });
+
+  it("getEverywhereMiddlewareForTasks excludes middleware that depends on the task", () => {
+    const task: any = { id: "task.dep", middleware: [], dependencies: {} };
+    const mw: any = { id: "mw", dependencies: { t: task } };
+    // mark middleware as everywhere for tasks via the internal symbol
+    (mw as any)[Symbol.for("middleware.everywhere.tasks")] = true;
+    (store as any).registry.middlewares.set("mw", {
+      middleware: mw,
+      computedDependencies: {},
+    });
+    const res = store.getEverywhereMiddlewareForTasks(task);
+    expect(res).toHaveLength(0);
+  });
+
+  it("getEverywhereMiddlewareForResources excludes middleware that depends on the resource", () => {
+    const resource: any = { id: "res.dep", middleware: [], dependencies: {} };
+    const mw: any = { id: "mw2", dependencies: { r: resource } };
+    (mw as any)[Symbol.for("middleware.everywhere.resources")] = true;
+    (store as any).registry.middlewares.set("mw2", {
+      middleware: mw,
+      computedDependencies: {},
+    });
+    const res = store.getEverywhereMiddlewareForResources(resource);
+    expect(res).toHaveLength(0);
   });
 });

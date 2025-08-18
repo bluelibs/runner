@@ -1,5 +1,6 @@
 import { createContext, task, run, resource } from "../index";
 import { ContextError } from "../context";
+import { Logger } from "../models/Logger";
 
 describe("Context System", () => {
   const TestContext = createContext<{ id: string }>();
@@ -13,10 +14,14 @@ describe("Context System", () => {
     await expect(run(r)).rejects.toThrow(ContextError);
 
     await TestContext.provide({ id: "1" }, async () => {
-      await expect(run(r)).resolves.toEqual({
-        value: { id: "1" },
-        dispose: expect.any(Function),
-      });
+      const res = await run(r);
+      expect(res).toEqual(
+        expect.objectContaining({
+          value: { id: "1" },
+          dispose: expect.any(Function),
+          logger: expect.any(Logger),
+        })
+      );
     });
   });
 
@@ -36,10 +41,14 @@ describe("Context System", () => {
     await expect(run(r)).rejects.toThrow(ContextError);
 
     await TestContext.provide({ id: "1" }, async () => {
-      await expect(run(r)).resolves.toEqual({
-        value: "ok",
-        dispose: expect.any(Function),
-      });
+      const res = await run(r);
+      expect(res).toEqual(
+        expect.objectContaining({
+          value: "ok",
+          dispose: expect.any(Function),
+          logger: expect.any(Logger),
+        })
+      );
     });
   });
 

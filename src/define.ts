@@ -28,6 +28,7 @@ import {
   TagType,
   ITaggable,
   symbolTask,
+  symbolHook,
   symbolMiddlewareEverywhereTasks,
   symbolMiddlewareEverywhereResources,
   symbolResourceWithConfig,
@@ -35,19 +36,20 @@ import {
   symbolMiddleware,
   ITaskMeta,
   IResourceMeta,
+  IHook,
+  IHookDefinition,
+  IOptionalDependency,
+  symbolOptionalDependency,
 } from "./defs";
 import { MiddlewareAlreadyGlobalError, ValidationError } from "./errors";
-import { generateCallerIdFromFile, getCallerFile } from "./tools/getCallerFile";
-
-// Helper function to get the caller file
+import { getCallerFile } from "./tools/getCallerFile";
 
 /**
  * Define a task.
- * Generates a strongly-typed task object with id, lifecycle events, dependencies,
+ * Generates a strongly-typed task object with id, dependencies,
  * middleware, and metadata.
  *
  * - If `id` is omitted, an anonymous, file-based id is generated.
- * - Wires lifecycle events: `beforeRun`, `afterRun`, `onError`.
  * - Carries through dependencies, middleware, input schema, and metadata.
  *
  * @typeParam Input - Input type accepted by the task's `run` function.
@@ -62,14 +64,12 @@ export function defineTask<
   Input = undefined,
   Output extends Promise<any> = any,
   Deps extends DependencyMapType = any,
-  TOn extends "*" | IEventDefinition | undefined = undefined,
   TMeta extends ITaskMeta = any
 >(
-  taskConfig: ITaskDefinition<Input, Output, Deps, TOn, TMeta>
-): ITask<Input, Output, Deps, TOn, TMeta> {
+  taskConfig: ITaskDefinition<Input, Output, Deps, TMeta>
+): ITask<Input, Output, Deps, TMeta> {
   const filePath = getCallerFile();
-  const isAnonymous = !Boolean(taskConfig.id);
-  const id = taskConfig.id || generateCallerIdFromFile(filePath, "task");
+  const id = taskConfig.id;
   return {
     [symbolTask]: true,
     [symbolFilePath]: filePath,
@@ -77,38 +77,39 @@ export function defineTask<
     dependencies: taskConfig.dependencies || ({} as Deps),
     middleware: taskConfig.middleware || [],
     run: taskConfig.run,
-    on: taskConfig.on,
-    listenerOrder: taskConfig.listenerOrder,
     inputSchema: taskConfig.inputSchema,
-    events: {
-      beforeRun: {
-        ...defineEvent({
-          id: isAnonymous
-            ? Symbol(`anonymous-task.events.beforeRun`)
-            : `${id as string}.events.beforeRun`,
-        }),
-        [symbolFilePath]: getCallerFile(),
-      },
-      afterRun: {
-        ...defineEvent({
-          id: isAnonymous
-            ? Symbol(`anonymous-task.events.afterRun`)
-            : `${id as string}.events.afterRun`,
-        }),
-        [symbolFilePath]: getCallerFile(),
-      },
-      onError: {
-        ...defineEvent({
-          id: isAnonymous
-            ? Symbol(`anonymous-task.events.onError`)
-            : `${id as string}.events.onError`,
-        }),
-        [symbolFilePath]: getCallerFile(),
-      },
-    },
+    resultSchema: taskConfig.resultSchema,
     meta: taskConfig.meta || ({} as TMeta),
     // autorun,
+    optional() {
+      return {
+        inner: this,
+        [symbolOptionalDependency]: true,
+      } as IOptionalDependency<ITask<Input, Output, Deps, TMeta>>;
+    },
   };
+}
+
+/**
+ * Define a hook (event listeners).
+ * Same shape as task with mandatory `on` and without `middleware`.
+ */
+export function defineHook<
+  D extends DependencyMapType = any,
+  TOn extends "*" | IEventDefinition = any,
+  TMeta extends ITaskMeta = any
+>(hookDef: IHookDefinition<D, TOn, TMeta>): IHook<D, TOn, TMeta> {
+  const filePath = getCallerFile();
+  return {
+    [symbolHook]: true,
+    [symbolFilePath]: filePath,
+    id: hookDef.id,
+    dependencies: hookDef.dependencies || ({} as D),
+    on: hookDef.on,
+    order: hookDef.order,
+    run: hookDef.run,
+    meta: hookDef.meta || ({} as TMeta),
+  } as IHook<D, TOn, TMeta>;
 }
 
 export function defineResource<
@@ -130,11 +131,10 @@ export function defineResource<
 ): IResource<TConfig, TValue, TDeps, TPrivate, TMeta> {
   /**
    * Define a resource.
-   * Produces a strongly-typed resource with id, lifecycle events, registration hooks,
+   * Produces a strongly-typed resource with id, registration hooks,
    * and optional config schema.
    *
    * - If `id` is omitted, an anonymous, file-based id is generated (resource or index flavored).
-   * - Wires lifecycle events: `beforeInit`, `afterInit`, `onError`.
    * - Provides `.with(config)` for config-bound registration with optional runtime validation.
    *
    * @typeParam TConfig - Configuration type accepted by the resource.
@@ -149,9 +149,7 @@ export function defineResource<
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const isIndexResource = constConfig[symbolIndexResource] || false;
   const isAnonymous = !Boolean(constConfig.id);
-  const id =
-    constConfig.id ||
-    generateCallerIdFromFile(filePath, isIndexResource ? "index" : "resource");
+  const id = constConfig.id;
 
   return {
     [symbolResource]: true,
@@ -165,15 +163,16 @@ export function defineResource<
     init: constConfig.init,
     context: constConfig.context,
     configSchema: constConfig.configSchema,
+    resultSchema: constConfig.resultSchema,
     with: function (config: TConfig) {
       // Validate config with schema if provided (fail fast)
-      if (this.configSchema) {
+      if (constConfig.configSchema) {
         try {
-          config = this.configSchema.parse(config);
+          config = constConfig.configSchema.parse(config);
         } catch (error) {
           throw new ValidationError(
             "Resource config",
-            this.id,
+            id,
             error instanceof Error ? error : new Error(String(error))
           );
         }
@@ -187,80 +186,21 @@ export function defineResource<
       };
     },
 
-    events: {
-      beforeInit: {
-        ...defineEvent({
-          id: isAnonymous
-            ? Symbol(`anonymous-resource.events.beforeInit`)
-            : `${id as string}.events.beforeInit`,
-        }),
-        [symbolFilePath]: filePath,
-      },
-      afterInit: {
-        ...defineEvent({
-          id: isAnonymous
-            ? Symbol(`anonymous-resource.events.afterInit`)
-            : `${id as string}.events.afterInit`,
-        }),
-        [symbolFilePath]: filePath,
-      },
-      onError: {
-        ...defineEvent({
-          id: isAnonymous
-            ? Symbol(`anonymous-resource.events.onError`)
-            : `${id as string}.events.onError`,
-        }),
-        [symbolFilePath]: filePath,
-      },
-    },
     meta: (constConfig.meta || {}) as TMeta,
     middleware: constConfig.middleware || [],
+    optional() {
+      return {
+        inner: this,
+        [symbolOptionalDependency]: true,
+      } as IOptionalDependency<
+        IResource<TConfig, TValue, TDeps, TPrivate, TMeta>
+      >;
+    },
   };
 }
 
-/**
- * Creates an "index" resource which groups multiple registerable items under
- * a single dependency. The resulting resource registers every item, depends
- * on the same items, and returns the resolved dependency map so users can
- * access them naturally: `deps.services.myTask()` or `deps.services.myResource`.
- */
-export function defineIndex<
-  T extends Record<string, RegisterableItems>,
-  D extends {
-    [K in keyof T]: T[K] extends IResourceWithConfig<any, any, any>
-      ? T[K]["resource"]
-      : T[K];
-  } & DependencyMapType
->(items: T): IResource<void, Promise<DependencyValuesType<D>>, D> {
-  // Build dependency map from given items; unwrap `.with()` to the base resource
-  const dependencies = {} as D;
-  const register: RegisterableItems[] = [];
-
-  for (const key of Object.keys(items) as (keyof T)[]) {
-    const item = items[key];
-    register.push(item);
-
-    if (isResourceWithConfig(item)) {
-      (dependencies as any)[key] = item.resource;
-    } else {
-      (dependencies as any)[key] = item as any;
-    }
-  }
-  const callerFilePath = getCallerFile();
-
-  return defineResource({
-    register,
-    dependencies,
-    async init(_, deps) {
-      return deps as any;
-    },
-    [symbolFilePath]: callerFilePath,
-    [symbolIndexResource]: true,
-  });
-}
-
 export function defineEvent<TPayload = void>(
-  config?: IEventDefinition<TPayload>
+  config: IEventDefinition<TPayload>
 ): IEvent<TPayload> {
   /**
    * Define an event.
@@ -272,12 +212,18 @@ export function defineEvent<TPayload = void>(
    * @returns A branded event definition.
    */
   const callerFilePath = getCallerFile();
-  const eventConfig = config || {};
+  const eventConfig = config;
   return {
     ...eventConfig,
-    id: eventConfig.id || generateCallerIdFromFile(callerFilePath, "event"),
+    id: eventConfig.id,
     [symbolFilePath]: callerFilePath,
     [symbolEvent]: true, // This is a workaround
+    optional() {
+      return {
+        inner: this,
+        [symbolOptionalDependency]: true,
+      } as IOptionalDependency<IEvent<TPayload>>;
+    },
   };
 }
 
@@ -316,7 +262,7 @@ export function defineMiddleware<
     [symbolFilePath]: filePath,
     [symbolMiddleware]: true,
     config: {} as TConfig,
-    id: middlewareDef.id || generateCallerIdFromFile(filePath, "middleware"),
+    configSchema: middlewareDef.configSchema,
     ...middlewareDef,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
   } as IMiddleware<TConfig, TDependencies>;
@@ -411,6 +357,11 @@ export function isEvent(definition: any): definition is IEvent {
   return definition && definition[symbolEvent];
 }
 
+/** Type guard: checks if a definition is a Hook. */
+export function isHook(definition: any): definition is IHook {
+  return definition && definition[symbolHook];
+}
+
 /**
  * Type guard: checks if a definition is a Middleware.
  * @param definition - Any value to test.
@@ -418,6 +369,13 @@ export function isEvent(definition: any): definition is IEvent {
  */
 export function isMiddleware(definition: any): definition is IMiddleware {
   return definition && definition[symbolMiddleware];
+}
+
+/** Type guard: checks if a definition is an Optional Dependency wrapper. */
+export function isOptional(
+  definition: any
+): definition is IOptionalDependency<any> {
+  return definition && definition[symbolOptionalDependency];
 }
 
 /**
@@ -442,7 +400,7 @@ export function defineOverride<T extends IMiddleware<any, any>>(
 ): T;
 export function defineOverride(
   base: ITask | IResource | IMiddleware,
-  patch: Record<string | symbol, unknown>
+  patch: Record<string, unknown>
 ): ITask | IResource | IMiddleware {
   const { id: _ignored, ...rest } = (patch || {}) as any;
   // Ensure we never change the id, and merge overrides last
@@ -470,9 +428,18 @@ export function defineTag<TConfig = void, TEnforceContract = void>(
 
   return {
     id,
+    meta: definition.meta,
     with(tagConfig: TConfig) {
+      if (definition.configSchema) {
+        try {
+          tagConfig = definition.configSchema.parse(tagConfig);
+        } catch (error) {
+          throw new ValidationError("Tag config", this.id, error as Error);
+        }
+      }
       return {
         id,
+        meta: definition.meta,
         tag: this,
         config: tagConfig as any,
       } as ITagWithConfig<TConfig>;

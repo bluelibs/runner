@@ -1,8 +1,8 @@
 import { resource } from "@bluelibs/runner";
 import { expressServerResource } from "./expressServer";
-import { routeRegistrationListener } from "./routeRegistration.listener";
+import { routeRegistrationHook } from "./routeRegistration.hook";
 
 export const http = resource({
   id: "app.modules.http",
-  register: [expressServerResource, routeRegistrationListener],
+  register: [expressServerResource, routeRegistrationHook],
 });

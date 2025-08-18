@@ -5,6 +5,7 @@ import {
   IEventEmission,
 } from "../defs";
 import { LockedError, ValidationError } from "../errors";
+import { globalTags } from "../globals/globalTags";
 import { Logger } from "./Logger";
 
 const HandlerOptionsDefaults = { order: 0 };
@@ -13,6 +14,8 @@ interface IListenerStorage {
   order: number;
   filter?: (event: IEventEmission<any>) => boolean;
   handler: EventHandlerType;
+  /** True when this listener originates from addGlobalListener(). */
+  isGlobal: boolean;
 }
 
 export interface IEventHandlerOptions<T = any> {
@@ -25,10 +28,9 @@ export interface IEventHandlerOptions<T = any> {
 }
 
 export class EventManager {
-  private listeners: Map<string | symbol, IListenerStorage[]> = new Map();
+  private listeners: Map<string, IListenerStorage[]> = new Map();
   private globalListeners: IListenerStorage[] = [];
-  private cachedMergedListeners: Map<string | symbol, IListenerStorage[]> =
-    new Map();
+  private cachedMergedListeners: Map<string, IListenerStorage[]> = new Map();
   private globalListenersCacheValid = true;
   #isLocked = false;
 
@@ -48,7 +50,7 @@ export class EventManager {
 
   private mergeSortedListeners(
     a: IListenerStorage[],
-    b: IListenerStorage[]
+    b: IListenerStorage[],
   ): IListenerStorage[] {
     const result: IListenerStorage[] = [];
     let i = 0,
@@ -65,9 +67,17 @@ export class EventManager {
     return result;
   }
 
-  private getCachedMergedListeners(
-    eventId: string | symbol
-  ): IListenerStorage[] {
+  /**
+   * Returns true if the given emission carries the tag that marks
+   * it as excluded from global ("*") listeners.
+   */
+  private isExcludedFromGlobal(event: IEventEmission<any>): boolean {
+    const tag = globalTags.excludeFromGlobalHooks.extract(event);
+
+    return Boolean(tag);
+  }
+
+  private getCachedMergedListeners(eventId: string): IListenerStorage[] {
     if (!this.globalListenersCacheValid) {
       this.cachedMergedListeners.clear();
       this.globalListenersCacheValid = true;
@@ -85,7 +95,7 @@ export class EventManager {
       } else {
         cached = this.mergeSortedListeners(
           eventListeners,
-          this.globalListeners
+          this.globalListeners,
         );
       }
       this.cachedMergedListeners.set(eventId, cached);
@@ -93,7 +103,7 @@ export class EventManager {
     return cached;
   }
 
-  private invalidateCache(eventId?: string | symbol): void {
+  private invalidateCache(eventId?: string): void {
     if (eventId) {
       this.cachedMergedListeners.delete(eventId);
     } else {
@@ -104,17 +114,21 @@ export class EventManager {
   async emit<TInput>(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: string | symbol
+    source: string,
   ): Promise<void> {
     // Validate payload with schema if provided
     if (eventDefinition.payloadSchema) {
       try {
         data = eventDefinition.payloadSchema.parse(data);
       } catch (error) {
-        throw new ValidationError("Event payload", eventDefinition.id, error instanceof Error ? error : new Error(String(error)));
+        throw new ValidationError(
+          "Event payload",
+          eventDefinition.id,
+          error instanceof Error ? error : new Error(String(error)),
+        );
       }
     }
-    
+
     const allListeners = this.getCachedMergedListeners(eventDefinition.id);
 
     if (allListeners.length === 0) {
@@ -135,9 +149,18 @@ export class EventManager {
       isPropagationStopped: () => propagationStopped,
     };
 
+    const excludeFromGlobal = this.isExcludedFromGlobal(event);
+
     for (const listener of allListeners) {
       if (propagationStopped) {
         break;
+      }
+
+      // If this event is marked to be excluded from global listeners,
+      // we only allow non-global (event-specific) listeners to run.
+      // Global listeners are mixed into `allListeners` but flagged.
+      if (excludeFromGlobal && listener.isGlobal) {
+        continue;
       }
 
       if (!listener.filter || listener.filter(event)) {
@@ -148,7 +171,7 @@ export class EventManager {
 
   private insertListener(
     listeners: IListenerStorage[],
-    newListener: IListenerStorage
+    newListener: IListenerStorage,
   ): void {
     let low = 0;
     let high = listeners.length;
@@ -166,13 +189,14 @@ export class EventManager {
   addListener<T>(
     event: IEvent<T> | Array<IEvent<T>>,
     handler: EventHandlerType<T>,
-    options: IEventHandlerOptions<T> = HandlerOptionsDefaults
+    options: IEventHandlerOptions<T> = HandlerOptionsDefaults,
   ): void {
     this.checkLock();
     const newListener: IListenerStorage = {
       handler,
       order: options.order || 0,
       filter: options.filter,
+      isGlobal: false,
     };
 
     if (Array.isArray(event)) {
@@ -191,20 +215,26 @@ export class EventManager {
 
   addGlobalListener(
     handler: EventHandlerType,
-    options: IEventHandlerOptions = HandlerOptionsDefaults
+    options: IEventHandlerOptions = HandlerOptionsDefaults,
   ): void {
     this.checkLock();
     const newListener: IListenerStorage = {
       handler,
       order: options.order || 0,
       filter: options.filter,
+      isGlobal: true,
     };
     this.insertListener(this.globalListeners, newListener);
     this.invalidateCache();
   }
 
   hasListeners<T>(eventDefinition: IEvent<T>): boolean {
-    const eventListeners = this.listeners.get(eventDefinition.id) || [];
+    const eventListeners = this.listeners.get(eventDefinition.id);
+
+    if (!eventListeners) {
+      return false;
+    }
+
     return eventListeners.length > 0 || this.globalListeners.length > 0;
   }
 }

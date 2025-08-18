@@ -1,20 +1,21 @@
 import {
   DependencyMapType,
   DependencyValuesType,
-  ITask,
   IResource,
+  ResourceDependencyValuesType,
 } from "../defs";
 import { EventManager } from "./EventManager";
-import { globalEvents } from "../globals/globalEvents";
 import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
+import { globalEvents } from "../globals/globalEvents";
+import { ValidationError } from "../errors";
 
 export class ResourceInitializer {
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
-    protected readonly logger: Logger
+    protected readonly logger: Logger,
   ) {}
 
   /**
@@ -25,108 +26,67 @@ export class ResourceInitializer {
     TConfig = null,
     TValue extends Promise<any> = Promise<any>,
     TDeps extends DependencyMapType = {},
-    TContext = any
+    TContext = any,
   >(
     resource: IResource<TConfig, TValue, TDeps>,
     config: TConfig,
-    dependencies: DependencyValuesType<TDeps>
+    dependencies: ResourceDependencyValuesType<TDeps>,
   ): Promise<{ value: TValue; context: TContext }> {
     const context = resource.context?.();
-    await this.eventManager.emit(
-      globalEvents.resources.beforeInit,
-      {
-        config,
-        resource,
-      },
-      resource.id
-    );
 
-    await this.eventManager.emit(
-      resource.events.beforeInit,
-      { config },
-      resource.id
-    );
-
-    let error: any, value: TValue | undefined;
-    try {
-      if (resource.init) {
-        value = await this.initWithMiddleware(
-          resource,
-          config,
-          dependencies,
-          context
-        );
-      }
-
-      await this.eventManager.emit(
-        resource.events.afterInit,
-        {
-          config,
-          value: value as TValue,
-        },
-        resource.id
-      );
-      await this.eventManager.emit(
-        globalEvents.resources.afterInit,
-        {
-          config,
-          resource,
-          value: value as TValue,
-        },
-        resource.id
-      );
-
-      this.logger.debug(`Resource ${resource.id.toString()} initialized`, {
-        source: resource.id,
-      });
-
-      return { value: value as TValue, context };
-    } catch (e) {
-      error = e;
-      let isSuppressed = false;
-      function suppress() {
-        isSuppressed = true;
-      }
-
-      // If you want to rewthrow the error, this should be done inside the onError event.
-      await this.eventManager.emit(
-        resource.events.onError,
-        {
-          error: error as Error,
-          suppress,
-        },
-        resource.id
-      );
-      await this.eventManager.emit(
-        globalEvents.resources.onError,
-        {
-          error: error as Error,
-          resource,
-          suppress,
-        },
-        resource.id
-      );
-
-      if (!isSuppressed) throw e;
-
-      return { value: undefined as unknown as TValue, context: {} as TContext };
+    let value: TValue | undefined;
+    // Create a no-op init function if it doesn't exist
+    if (!resource.init) {
+      resource.init = (async () => undefined) as any;
     }
+
+    if (resource.init) {
+      value = await this.initWithMiddleware(
+        resource,
+        config,
+        dependencies,
+        context,
+      );
+    }
+
+    return { value: value as TValue, context };
   }
+
+  // Lifecycle emissions removed
 
   public async initWithMiddleware<
     C,
     V extends Promise<any>,
     D extends DependencyMapType,
-    TContext
+    TContext,
   >(
     resource: IResource<C, V, D, TContext>,
     config: C,
-    dependencies: DependencyValuesType<D>,
-    context: TContext
+    dependencies: ResourceDependencyValuesType<D>,
+    context: TContext,
   ) {
     let next = async (config: C): Promise<V | undefined> => {
       if (resource.init) {
-        return resource.init.call(null, config, dependencies, context);
+        const rawValue = await resource.init.call(
+          null,
+          config,
+          dependencies,
+          context,
+        );
+        // Validate result with schema if provided (ignores middleware)
+        if (resource.resultSchema) {
+          try {
+            return resource.resultSchema.parse(rawValue);
+          } catch (error) {
+            throw new ValidationError(
+              "Resource result",
+              resource.id,
+              error as any,
+            );
+          }
+        }
+
+        return rawValue;
       }
     };
 
@@ -142,22 +102,62 @@ export class ResourceInitializer {
     for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
       const middleware = createdMiddlewares[i];
       const storeMiddleware = this.store.middlewares.get(
-        middleware.id
+        middleware.id,
       ) as MiddlewareStoreElementType; // we know it exists because at this stage all sanity checks have been done.
 
       const nextFunction = next;
       next = async (config: C) => {
-        return storeMiddleware.middleware.run(
+        await this.eventManager.emit(
+          globalEvents.middlewareTriggered,
           {
-            resource: {
-              definition: resource,
-              config,
-            },
-            next: nextFunction,
+            kind: "resource",
+            middleware: middleware as any,
+            targetId: resource.id as any,
           },
-          storeMiddleware.computedDependencies,
-          middleware.config
+          middleware.id as any,
         );
+        try {
+          const result = await storeMiddleware.middleware.run(
+            {
+              resource: {
+                definition: resource,
+                config,
+              },
+              next: nextFunction,
+            },
+            storeMiddleware.computedDependencies,
+            middleware.config,
+          );
+          await this.eventManager.emit(
+            globalEvents.middlewareCompleted,
+            {
+              kind: "resource",
+              middleware: middleware as any,
+              targetId: resource.id as any,
+            },
+            middleware.id as any,
+          );
+          return result as any;
+        } catch (error: unknown) {
+          try {
+            await this.store.onUnhandledError?.({
+              error,
+              kind: "resourceInit",
+              source: resource.id,
+            });
+          } catch (_) {}
+          await this.eventManager.emit(
+            globalEvents.middlewareCompleted,
+            {
+              kind: "resource",
+              middleware: middleware as any,
+              targetId: resource.id as any,
+              error: error as any,
+            },
+            middleware.id as any,
+          );
+          throw error;
+        }
       };
     }
 

@@ -3,6 +3,7 @@ import {
   defineResource,
   defineEvent,
   defineMiddleware,
+  defineHook,
 } from "../define";
 import { run } from "../run";
 import { Errors } from "..";
@@ -31,7 +32,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Task", "test.task").message
+      new DuplicateRegistrationError("Task", "test.task").message,
     );
   });
 
@@ -52,7 +53,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new UnknownItemTypeError({}).message
+      new UnknownItemTypeError({}).message,
     );
   });
 
@@ -68,7 +69,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new UnknownItemTypeError({}).message
+      new UnknownItemTypeError({}).message,
     );
   });
 
@@ -96,7 +97,7 @@ describe("Errors", () => {
   it("should throw eventNotFound error", async () => {
     const nonExistentEvent = { id: "non.existent.event" } as any;
 
-    const task = defineTask({
+    const task = defineHook({
       id: "test.task",
       on: nonExistentEvent,
       run: async () => {},
@@ -108,7 +109,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new EventNotFoundError("non.existent.event").message
+      new EventNotFoundError("non.existent.event").message,
     );
   });
 
@@ -165,7 +166,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Resource", "res1").message
+      new DuplicateRegistrationError("Resource", "res1").message,
     );
   });
 
@@ -186,7 +187,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Middleware", "middlewarex").message
+      new DuplicateRegistrationError("Middleware", "middlewarex").message,
     );
   });
 
@@ -204,7 +205,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Event", "ev1").message
+      new DuplicateRegistrationError("Event", "ev1").message,
     );
   });
 
@@ -233,7 +234,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DependencyNotFoundError("Task test.off.the.grid").message
+      new DependencyNotFoundError("Task test.off.the.grid").message,
     );
   });
 
@@ -261,7 +262,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DependencyNotFoundError("Resource test.off.the.grid").message
+      new DependencyNotFoundError("Resource test.off.the.grid").message,
     );
   });
 
@@ -271,7 +272,7 @@ describe("Errors", () => {
       run: async () => {},
     }).everywhere();
     expect(() => first.everywhere()).toThrow(
-      new MiddlewareAlreadyGlobalError("x").message
+      new MiddlewareAlreadyGlobalError("x").message,
     );
   });
 
@@ -326,15 +327,27 @@ describe("Errors", () => {
       expect(storeError).toBeInstanceOf(RuntimeError);
 
       // Test ValidationError with Error object
-      const validationErrorWithError = new ValidationError("Task input", "test-task", new Error("Required field missing"));
+      const validationErrorWithError = new ValidationError(
+        "Task input",
+        "test-task",
+        new Error("Required field missing"),
+      );
       expect(validationErrorWithError.name).toBe("ValidationError");
-      expect(validationErrorWithError.message).toBe("Task input validation failed for test-task: Required field missing");
+      expect(validationErrorWithError.message).toBe(
+        "Task input validation failed for test-task: Required field missing",
+      );
       expect(validationErrorWithError).toBeInstanceOf(RuntimeError);
 
       // Test ValidationError with string
-      const validationErrorWithString = new ValidationError("Resource config", Symbol("test-resource"), "Invalid configuration");
+      const validationErrorWithString = new ValidationError(
+        "Resource config",
+        "test-resource",
+        "Invalid configuration",
+      );
       expect(validationErrorWithString.name).toBe("ValidationError");
-      expect(validationErrorWithString.message).toBe("Resource config validation failed for Symbol(test-resource): Invalid configuration");
+      expect(validationErrorWithString.message).toBe(
+        "Resource config validation failed for test-resource: Invalid configuration",
+      );
       expect(validationErrorWithString).toBeInstanceOf(RuntimeError);
     });
   });

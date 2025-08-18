@@ -18,12 +18,9 @@ export const requireContextMiddleware = defineMiddleware({
       );
     }
 
+    // This will throw if the context is not available
     const ctx = config.context.use();
-    if (!ctx) {
-      throw new ContextError(
-        "Context not available. Did you forget to provide the context via ContextName.provide()?"
-      );
-    }
+
     if (task) {
       return next(task.input);
     }

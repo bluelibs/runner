@@ -17,7 +17,6 @@ describe("Caching System", () => {
         dependencies: { cache: cacheResource },
         async init(_, { cache }) {
           expect(cache.cacheFactoryTask).toBeDefined();
-          expect(cache.async).toBeUndefined();
           expect(cache.defaultOptions).toEqual({
             ttl: 10000,
             max: 100,
@@ -344,7 +343,7 @@ describe("Caching System", () => {
           id: "app",
           register: [cacheResource, cacheMiddleware, testTask],
           dependencies: { testTask, cache: cacheResource },
-          async init(_, { testTask, cache }) {
+          async init(_: void, { testTask, cache }) {
             const firstRun = await testTask();
             const secondRun = await testTask(); // Should be cached
 
@@ -354,7 +353,7 @@ describe("Caching System", () => {
 
             return cache;
           },
-        })
+        }),
       );
 
       // Dispose the resource - this should clear all cache instances
@@ -400,12 +399,11 @@ describe("Caching System", () => {
         init: async (config: any, { cacheFactoryTask }) => ({
           map: new Map<string, AsyncMockCache>(),
           cacheFactoryTask,
-          async: true,
           defaultOptions: { ttl: 10 * 1000, ...config?.defaultOptions },
         }),
         dispose: async (cache) => {
           await Promise.all(
-            [...cache.map.values()].map((instance) => instance.clear())
+            [...cache.map.values()].map((instance) => instance.clear()),
           );
         },
       });
@@ -635,12 +633,11 @@ describe("Caching System", () => {
         init: async (config: any, { cacheFactoryTask }) => ({
           map: new Map<string, AsyncDisposableCache>(),
           cacheFactoryTask,
-          async: true,
           defaultOptions: { ttl: 10 * 1000, ...config?.defaultOptions },
         }),
         dispose: async (cache) => {
           await Promise.all(
-            [...cache.map.values()].map((instance) => instance.clear())
+            [...cache.map.values()].map((instance) => instance.clear()),
           );
         },
       });
@@ -651,17 +648,17 @@ describe("Caching System", () => {
         run: async () => "test",
       });
 
-      const result = await run(
-        defineResource({
-          id: "app",
-          register: [disposableCacheResource, cacheMiddleware, testTask],
-          dependencies: { testTask, cache: disposableCacheResource },
-          async init(_, { testTask, cache }) {
-            await testTask();
-            return cache;
-          },
-        })
-      );
+      const app = defineResource({
+        id: "app",
+        register: [disposableCacheResource, cacheMiddleware, testTask],
+        dependencies: { testTask, cache: disposableCacheResource },
+        async init(_, { testTask, cache }) {
+          await testTask();
+          return cache;
+        },
+      });
+
+      const result = await run(app);
 
       // Manually dispose to trigger cleanup
       await result.dispose();
@@ -765,7 +762,7 @@ describe("Caching System", () => {
       });
 
       await expect(run(app)).rejects.toThrow(
-        "Cache middleware can only be used in tasks"
+        "Cache middleware can only be used in tasks",
       );
     });
   });

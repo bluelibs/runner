@@ -1,0 +1,30 @@
+---
+description: Always apply this rule to all files.
+globs: ["**/*"]
+alwaysApply: true
+---
+
+## **MUST**
+
+- Read AI.md stored at the root folder if it's not already in your context.
+- Be a highly motivated, adaptable copilot for a Senior Web Developer.
+- Be reliable; no shortcuts. Ask the user when blocked.
+- **Always** rely on the Runner's inference mechanism task<X, Y> // BAD task({ ... }) // GOOD
+- **Always** code with type-safety in mind.
+- Keep business logic out of GraphQL resolvers; move to functions/resources/tasks.
+- Always include tests; run via `npm run test -- {context}`.
+- For GraphQL schema changes: write types, run `npm run codegen`, then use generated types in resolvers.
+- Add `meta.title`, `meta.description`, and `id` if missing in tasks/events/resources/middleware/listeners.
+- After the implementation is completed, run the full suite of tests and ensure 100% coverage.
+- After every implementation, suggest improvements if and only if tests pass and coverage is maintained at 100%.
+
+## **SHOULD**
+
+- Avoid file pollution; split code for readability.
+- Provide verbose descriptions & dev guides for types.
+- Update `README.md` after passing tests if features change.
+
+## **MAY**
+
+- Use `(as any)` **only** as a tracked, temporary fix.
+- Further refine/reorganize code for better DX without altering behavior.

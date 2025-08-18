@@ -5,13 +5,15 @@ import {
   defineMiddleware,
   defineOverride,
   defineTag,
+  defineHook,
 } from "../define";
 import { IMeta } from "../defs";
 import {
   EnsureResponseSatisfiesContracts,
   HasContracts,
 } from "../defs.returnTag";
-import { createTestResource, run } from "..";
+import { run } from "..";
+import z from "zod";
 
 // This is skipped because we mostly check typesafety.
 describe.skip("typesafety", () => {
@@ -181,7 +183,7 @@ describe.skip("typesafety", () => {
       run: async () => "Task executed",
     });
 
-    const testResource = defineTask({
+    const testResource = defineHook({
       id: "test.resource",
       dependencies: { task },
       on: hookEvent,
@@ -195,7 +197,7 @@ describe.skip("typesafety", () => {
       },
     });
 
-    const testResource2 = defineTask({
+    const testResource2 = defineHook({
       id: "test.resource",
       dependencies: { task },
       on: "*",
@@ -211,7 +213,7 @@ describe.skip("typesafety", () => {
     expect(true).toBe(true);
   });
 
-  it("createTestResource.runTask: should be type-safe", async () => {
+  it("RunResult.runTask: should be type-safe", async () => {
     type Input = { x: number };
     type Output = Promise<number>;
 
@@ -238,20 +240,20 @@ describe.skip("typesafety", () => {
       id: "types.app",
       register: [add, depTask, main],
     });
-    const harness = createTestResource(app);
+    const harness = defineResource({ id: "types.harness", register: [app] });
 
     // Types: input must match, override deps must match, output is awaited number
-    const { value: t } = await run(harness);
-    const r1: number | undefined = await t.runTask(add, { x: 1 });
+    const rr = await run(harness);
+    const r1: number | undefined = await rr.runTask(add, { x: 1 });
     // @ts-expect-error wrong input type
-    await t.runTask(add, { z: 1 });
+    await rr.runTask(add, { z: 1 });
     // @ts-expect-error missing input
-    await t.runTask(add);
+    await rr.runTask(add);
 
-    const r2: number | undefined = await t.runTask(main, { x: 2 });
+    const r2: number | undefined = await rr.runTask(main, { x: 2 });
 
     // @ts-expect-error wrong deps override type
-    await t.runTask(main, { x: 2 }, { depTask: async (i: number) => "x" });
+    await rr.runTask(main, { x: 2 }, { depTask: async (i: number) => "x" });
 
     expect(true).toBe(true);
   });
@@ -419,5 +421,44 @@ describe.skip("typesafety", () => {
         return {};
       },
     });
+  });
+
+  it("should correctly infer schemas from validation options", async () => {
+    const task = defineTask({
+      id: "task",
+      inputSchema: z.object({ name: z.string() }),
+      resultSchema: z.object({ name: z.string() }),
+      run: async (input) => {
+        input.name;
+        // @ts-expect-error
+        input.age;
+
+        return {
+          name: "123",
+        };
+      },
+    });
+
+    const middleware = defineMiddleware({
+      id: "middleware",
+      configSchema: z.object({ ttl: z.number().positive() }),
+      run: async ({ next }, deps, config) => {
+        config.ttl;
+        // @ts-expect-error
+        config.ttl2;
+      },
+    });
+
+    const resource = defineResource({
+      id: "resource",
+      configSchema: z.object({ ttl: z.number().positive() }),
+      init: async (cfg) => {
+        cfg.ttl;
+        // @ts-expect-error
+        cfg.ttl2;
+      },
+    });
+
+    expect(true).toBe(true);
   });
 });

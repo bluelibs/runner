@@ -5,44 +5,44 @@ import { Store } from "../models/Store";
 import { TaskRunner } from "../models/TaskRunner";
 import { cacheResource } from "./middleware/cache.middleware";
 import { queueResource } from "./resources/queue.resource";
+import { globalTags } from "./globalTags";
 
-const store = defineResource({
+const systemTag = globalTags.system;
+
+const store = defineResource<void, Promise<Store>>({
   id: "globals.resources.store",
-  init: async (store: Store) => store,
   meta: {
     title: "Store",
     description:
       "A global store that can be used to store and retrieve tasks, resources, events and middleware",
-    tags: ["internal"],
+    tags: [systemTag],
   },
 });
 
 export const globalResources = {
   store,
-  eventManager: defineResource({
+  eventManager: defineResource<void, Promise<EventManager>>({
     id: "globals.resources.eventManager",
-    init: async (em: EventManager) => em,
     meta: {
       title: "Event Manager",
       description:
         "Manages all events and event listeners. This is meant to be used internally for most use-cases.",
-      tags: ["internal"],
+      tags: [systemTag],
     },
   }),
-  taskRunner: defineResource({
+  taskRunner: defineResource<void, Promise<TaskRunner>>({
     id: "globals.resources.taskRunner",
-    init: async (runner: TaskRunner) => runner,
     meta: {
       title: "Task Runner",
       description:
         "Manages the execution of tasks and task dependencies. This is meant to be used internally for most use-cases.",
-      tags: ["internal"],
+      tags: [systemTag],
     },
   }),
-  logger: defineResource({
+  logger: defineResource<void, Promise<Logger>>({
     id: "globals.resources.logger",
-    init: async (logger: Logger) => logger,
     meta: {
+      // We skip system tag for logger because it's part of the utility toolkit.
       title: "Logger",
       description:
         "Logs all events and errors. This is meant to be used internally for most use-cases. Emits a globals.log event for each log.",

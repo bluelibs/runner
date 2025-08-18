@@ -12,6 +12,7 @@ import {
   DependencyValuesType,
 } from "./defs";
 import { EventManager, Logger, Store, TaskRunner } from "./models";
+import { ResourceNotFoundError } from "./errors";
 
 let testResourceCounter = 0;
 
@@ -19,15 +20,16 @@ let testResourceCounter = 0;
  * Helper to create a minimal test harness resource that wraps a root app (or any registerable)
  * and exposes convenient testing utilities while running the full ecosystem
  * (registration, overrides, middleware, events) without modifying the core API.
+ * @deprecated Use `run` instead with your testResource, as it provides the necessary toolkit.
  */
 export function createTestResource(
   root: RegisterableItems,
   options?: {
     overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
-  }
+  },
 ): IResource<void, Promise<ReturnType<typeof buildTestFacade>>> {
   return defineResource({
-    id: `tests.createTestResource.${++testResourceCounter}`,
+    id: `testing.${root.id}.${++testResourceCounter}`,
     register: [root],
     overrides: options?.overrides || [],
     dependencies: {
@@ -41,7 +43,6 @@ export function createTestResource(
     },
   });
 }
-
 function buildTestFacade(deps: {
   taskRunner: TaskRunner;
   store: Store;
@@ -52,11 +53,11 @@ function buildTestFacade(deps: {
     // Run a task within the fully initialized ecosystem
     runTask: <I, O extends Promise<any>, D extends DependencyMapType>(
       task: ITask<I, O, D>,
-      input: I
+      ...args: I extends undefined ? [] : [I]
     ): Promise<Awaited<O> | undefined> =>
-      deps.taskRunner.run(task, input) as any,
+      deps.taskRunner.run(task, ...args) as any,
     // Access a resource value by id (string or symbol)
-    getResource: (id: string | symbol) => deps.store.resources.get(id)?.value,
+    getResource: (id: string) => deps.store.resources.get(id)?.value,
     // Expose internals when needed in tests (not recommended for app usage)
     taskRunner: deps.taskRunner,
     store: deps.store,

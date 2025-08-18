@@ -1,4 +1,4 @@
-import { createTestResource, run } from "@bluelibs/runner";
+import { resource, run } from "@bluelibs/runner";
 import request from "supertest";
 import { app } from "../index";
 import { db } from "../modules/db/database";
@@ -18,7 +18,9 @@ describe("Express OpenAPI SQLite Integration", () => {
 
   beforeAll(async () => {
     // Start the application
-    const testApp = createTestResource(app, {
+    const testApp = resource({
+      id: "tests.harness.express",
+      register: [app],
       overrides: [
         db.with({
           filename: ":memory:",
@@ -26,10 +28,10 @@ describe("Express OpenAPI SQLite Integration", () => {
         }),
       ],
     });
-    const result = await run(testApp);
-    appInstance = result.value;
-    dispose = result.dispose;
-    server = result.value.getResource(expressServerResource.id).app;
+    const rr = await run(testApp);
+    appInstance = rr.value;
+    dispose = rr.dispose;
+    server = rr.getResourceValue(expressServerResource).app;
   });
 
   afterAll(async () => {
@@ -151,7 +153,7 @@ describe("Express OpenAPI SQLite Integration", () => {
 
       expect(response.body.success).toBe(false);
       expect(response.body.error).toMatch(
-        /Authentication required|Authentication/
+        /Authentication required|Authentication/,
       );
     });
 

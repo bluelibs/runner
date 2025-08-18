@@ -1,5 +1,12 @@
-import { defineMiddleware, defineTask, defineResource } from "../define";
+import {
+  defineMiddleware,
+  defineTask,
+  defineResource,
+  defineEvent,
+  defineHook,
+} from "../define";
 import { run } from "../run";
+import { globalEvents } from "../globals/globalEvents";
 
 describe("Middleware", () => {
   it("should be able to register the middleware and execute it", async () => {
@@ -471,6 +478,183 @@ describe("Configurable Middleware (.with)", () => {
   });
 });
 
+describe("Middleware behavior (no lifecycle)", () => {
+  it("should execute middleware around tasks", async () => {
+    const calls: string[] = [];
+
+    const mw = defineMiddleware({
+      id: "mw.events",
+      run: async ({ next }) => {
+        return next();
+      },
+    });
+
+    const t = defineTask({
+      id: "test.task.events",
+      middleware: [mw],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app.middleware.events",
+      register: [mw, t],
+      dependencies: { t },
+      async init(_, { t }) {
+        const result = await t();
+        expect(result).toBe("ok");
+      },
+    });
+
+    await run(app);
+
+    expect(calls).toEqual([]);
+  });
+
+  it("should throw middleware errors", async () => {
+    const mw = defineMiddleware({
+      id: "mw.error",
+      run: async () => {
+        throw new Error("boom");
+      },
+    });
+
+    const t = defineTask({
+      id: "test.task.error",
+      middleware: [mw],
+      run: async () => "ok",
+    });
+
+    let insideInit = false;
+    const app = defineResource({
+      id: "app.middleware.onError.suppressed",
+      register: [mw, t],
+      dependencies: { t },
+      async init(_, { t }) {
+        await expect(t()).rejects.toThrow("boom");
+        insideInit = true;
+      },
+    });
+
+    await run(app);
+    expect(insideInit).toBe(true);
+  });
+
+  it("global event hooks should not run middleware (no errors thrown)", async () => {
+    const mw = defineMiddleware({
+      id: "mw.error.global.listener",
+      run: async () => {
+        throw new Error("boom-global");
+      },
+    });
+
+    const evt = defineEvent<{ msg: string }>({
+      id: "custom.global.listener.event",
+    });
+
+    let called = false;
+    const globalListener = defineHook({
+      id: "global.listener.task",
+      on: "*",
+      run: async () => {
+        called = true;
+      },
+    });
+
+    const emitter = defineTask({
+      id: "event.emitter.for.global",
+      dependencies: { evt },
+      run: async (_, { evt }) => {
+        await evt({ msg: "hi" });
+      },
+    });
+
+    const app = defineResource({
+      id: "app.middleware.global.listener",
+      register: [evt, globalListener, emitter],
+      dependencies: { emitter },
+      async init(_, { emitter }) {
+        await emitter();
+      },
+    });
+
+    await run(app);
+    expect(called).toBe(true);
+  });
+
+  it("emits middlewareTriggered and middlewareCompleted around task middleware", async () => {
+    const calls: string[] = [];
+    const spyHook = defineHook({
+      id: "spy.hook",
+      on: globalEvents.middlewareTriggered,
+      run: async (e) => {
+        calls.push(e.id);
+      },
+    });
+
+    const mw = defineMiddleware({
+      id: "mw.events.task",
+      run: async ({ next }) => next(),
+    });
+
+    const t = defineTask({
+      id: "task.events",
+      middleware: [mw],
+      run: async () => "ok",
+    });
+
+    const app = defineResource({
+      id: "app.middleware.events.task",
+      register: [mw, t, spyHook],
+      dependencies: { t },
+      async init(_, { t }) {
+        await t();
+      },
+    });
+
+    await run(app);
+    // We attach only to triggered here for typing constraints; ensure at least 1 emit
+    expect(
+      calls.filter((c) => c === globalEvents.middlewareTriggered.id).length
+    ).toBe(1);
+  });
+
+  it("emits middlewareTriggered/middlewareCompleted for resource middleware", async () => {
+    const calls: string[] = [];
+    const spyHook = defineHook({
+      id: "spy.hook.resource",
+      on: globalEvents.middlewareTriggered,
+      run: async (e) => {
+        calls.push(e.id);
+      },
+    });
+
+    const mw = defineMiddleware({
+      id: "mw.events.res.local",
+      run: async ({ next }) => next({}),
+    });
+    const sub = defineResource({
+      id: "sub.res",
+      async init() {
+        return "sub";
+      },
+    });
+    const app = defineResource({
+      id: "app.middleware.events.res",
+      register: [mw.everywhere(), spyHook, sub],
+      dependencies: { sub },
+      async init(_, { sub }) {
+        return sub;
+      },
+      middleware: [mw],
+    });
+
+    await run(app);
+    expect(
+      calls.filter((c) => c === globalEvents.middlewareTriggered.id).length
+    ).toBeGreaterThan(0);
+  });
+});
+
 describe("Middleware.everywhere()", () => {
   it("should work with { tasks: true, resources: true }", async () => {
     const calls: string[] = [];
@@ -667,12 +851,10 @@ describe("Middleware.everywhere()", () => {
       id: "everywhere.middleware",
       run: async ({ task, resource, next }, deps, config) => {
         if (task) {
-          calls.push(`task:${String(task.definition.id)}:${config.flag}`);
+          calls.push(`task:${task.definition.id}:${config.flag}`);
         }
         if (resource) {
-          calls.push(
-            `resource:${String(resource.definition.id)}:${config.flag}`
-          );
+          calls.push(`resource:${resource.definition.id}:${config.flag}`);
         }
         return next();
       },

@@ -1,5 +1,7 @@
 import { globalEvents } from "../globals/globalEvents";
 import { EventManager } from "./EventManager";
+import { LogPrinter, PrintStrategy as PrinterStrategy } from "./LogPrinter";
+import { safeStringify } from "./utils/safeStringify";
 
 export type LogLevels =
   | "trace"
@@ -9,15 +11,16 @@ export type LogLevels =
   | "error"
   | "critical";
 
-export interface LogInfo {
-  source?: string | symbol;
+export interface ILogInfo {
+  source?: string;
   error?: Error;
   data?: Record<string, any>;
+  context?: Record<string, any>;
   [key: string]: any;
 }
 
 export interface ILog {
-  level: string;
+  level: LogLevels;
   source?: string;
   message: any;
   timestamp: Date;
@@ -30,9 +33,18 @@ export interface ILog {
   context?: Record<string, any>;
 }
 
+export type PrintStrategy = PrinterStrategy;
 export class Logger {
-  printThreshold: LogLevels | null = null;
+  private printThreshold: null | LogLevels = "info";
+  private printStrategy: PrintStrategy = "pretty";
+  private bufferLogs: boolean = false;
+  private buffer: ILog[] = [];
   private boundContext: Record<string, any> = {};
+  private localListeners: Array<(log: ILog) => void | Promise<void>> = [];
+  private isLocked: boolean = false;
+  private useColors: boolean = true;
+  private printer: LogPrinter;
+  private source?: string;
 
   public static Severity = {
     trace: 0,
@@ -44,48 +56,95 @@ export class Logger {
   };
 
   constructor(
-    protected eventManager: EventManager,
-    boundContext: Record<string, any> = {}
+    options: {
+      printThreshold: null | LogLevels;
+      printStrategy: PrintStrategy;
+      bufferLogs: boolean;
+      useColors?: boolean;
+    },
+    boundContext: Record<string, any> = {},
+    source?: string,
   ) {
     this.boundContext = { ...boundContext };
-    this.printThreshold = this.getDefaultPrintThreshold();
+    this.printThreshold = options.printThreshold;
+    this.printStrategy = options.printStrategy;
+    this.bufferLogs = options.bufferLogs;
+    this.useColors =
+      typeof options.useColors === "boolean"
+        ? options.useColors
+        : this.detectColorSupport();
+    this.printer = new LogPrinter({
+      strategy: this.printStrategy,
+      useColors: this.useColors,
+    });
+    this.source = source;
   }
 
-  /**
-   * Determines the default print threshold based on environment variables
-   */
-  private getDefaultPrintThreshold(): LogLevels | null {
-    // Check if logging is explicitly disabled
-    const disableLogs = process.env.RUNNER_DISABLE_LOGS;
-    if (disableLogs === "true" || disableLogs === "1") {
-      return null;
-    }
-
-    // Check for specific log level override
-    const logLevel = process.env.RUNNER_LOG_LEVEL;
-    if (logLevel && this.isValidLogLevel(logLevel)) {
-      return logLevel as LogLevels;
-    }
-
-    // Default to 'info' level for better developer experience
-    return "info";
-  }
-
-  /**
-   * Validates if a string is a valid log level
-   */
-  private isValidLogLevel(level: string): boolean {
-    return Object.keys(Logger.Severity).includes(level);
+  private detectColorSupport(): boolean {
+    // Respect NO_COLOR convention
+    // eslint-disable-next-line no-undef
+    const noColor = typeof process !== "undefined" && !!process.env.NO_COLOR;
+    if (noColor) return false;
+    // eslint-disable-next-line no-undef
+    const isTty =
+      typeof process !== "undefined" &&
+      !!process.stdout &&
+      !!process.stdout.isTTY;
+    return isTty;
   }
 
   /**
    * Creates a new logger instance with additional bound context
    */
-  public with(context: Record<string, any>): Logger {
-    return new Logger(this.eventManager, {
-      ...this.boundContext,
-      ...context,
-    });
+  public with({
+    source,
+    context,
+  }: {
+    source?: string;
+    context?: Record<string, any>;
+  }): Logger {
+    return new Logger(
+      {
+        printThreshold: this.printThreshold,
+        printStrategy: this.printStrategy,
+        bufferLogs: this.bufferLogs,
+        useColors: this.useColors,
+      },
+      { ...this.boundContext, ...context },
+      source,
+    );
+  }
+
+  /**
+   * Core logging method with structured LogInfo
+   */
+  public async log(
+    level: LogLevels,
+    message: any,
+    logInfo: ILogInfo = {},
+  ): Promise<void> {
+    const { source, error, data, ...context } = logInfo;
+
+    const log: ILog = {
+      level,
+      message,
+      source: source || this.source,
+      timestamp: new Date(),
+      error: error ? this.extractErrorInfo(error) : undefined,
+      data: data || undefined,
+      context: { ...this.boundContext, ...context },
+    };
+
+    if (this.bufferLogs) {
+      this.buffer.push(log);
+      return;
+    }
+
+    await this.triggerLocalListeners(log);
+
+    if (this.canPrint(level)) {
+      this.printer.print(log);
+    }
   }
 
   private extractErrorInfo(error: Error): {
@@ -100,183 +159,97 @@ export class Logger {
     };
   }
 
-  /**
-   * Core logging method with structured LogInfo
-   */
-  public log(level: LogLevels, message: any, logInfo: LogInfo = {}): void {
-    const { source, error, data, ...context } = logInfo;
+  public async info(message: any, logInfo?: ILogInfo) {
+    await this.log("info", message, logInfo);
+  }
 
-    const log: ILog = {
-      level,
-      message,
-      source: source || this.boundContext.source,
-      timestamp: new Date(),
-      error: error ? this.extractErrorInfo(error) : undefined,
-      data: data || undefined,
-      context: { ...this.boundContext, ...context },
-    };
+  public async error(message: any, logInfo?: ILogInfo) {
+    await this.log("error", message, logInfo);
+  }
 
-    if (
-      this.printThreshold &&
-      Logger.Severity[level] >= Logger.Severity[this.printThreshold]
-    ) {
-      this.print(log);
-    }
+  public async warn(message: any, logInfo?: ILogInfo) {
+    await this.log("warn", message, logInfo);
+  }
 
-    if (this.eventManager.hasListeners(globalEvents.log)) {
-      setImmediate(() => {
-        this.eventManager
-          .emit(
-            globalEvents.log,
-            log,
-            source || this.boundContext.source || "unknown"
-          )
-          .catch((err) => {
-            console.error("Logger event emission failed:", err);
-          });
-      });
-    }
+  public async debug(message: any, logInfo?: ILogInfo) {
+    await this.log("debug", message, logInfo);
+  }
+
+  public async trace(message: any, logInfo?: ILogInfo) {
+    await this.log("trace", message, logInfo);
+  }
+
+  public async critical(message: any, logInfo?: ILogInfo) {
+    await this.log("critical", message, logInfo);
   }
 
   /**
-   * Will print logs after that, use `null` to disable autoprinting.
-   * @param level
+   * Direct print for tests and advanced scenarios. Delegates to LogPrinter.
    */
-  public setPrintThreshold(level: LogLevels | null) {
-    this.printThreshold = level;
-  }
-
   public print(log: ILog) {
-    const { level, source, message, timestamp, error, data, context } = log;
+    this.printer.print(log);
+  }
 
-    // Color codes for different log levels
-    const colors = {
-      trace: "\x1b[90m", // bright black/gray
-      debug: "\x1b[36m", // cyan
-      info: "\x1b[32m", // green
-      warn: "\x1b[33m", // yellow
-      error: "\x1b[31m", // red
-      critical: "\x1b[35m", // magenta
-      reset: "\x1b[0m", // reset
-      bold: "\x1b[1m", // bold
-      dim: "\x1b[2m", // dim
-      blue: "\x1b[34m", // blue
-      red: "\x1b[31m", // red
-      cyan: "\x1b[36m", // cyan
-    };
+  /**
+   * @param listener - A listener that will be triggered for every log.
+   */
+  public onLog(listener: (log: ILog) => void | Promise<void>) {
+    this.localListeners.push(listener);
+  }
 
-    const levelColor = colors[level as keyof typeof colors] || colors.info;
-
-    // Format timestamp
-    const time = timestamp.toLocaleTimeString("en-US", {
-      hour12: false,
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-    const ms = timestamp.getMilliseconds().toString().padStart(3, "0");
-    const formattedTime = `${colors.dim}${time}.${ms}${colors.reset}`;
-
-    // Format level with color and padding
-    const levelStr = `${levelColor}${colors.bold}${level
-      .toUpperCase()
-      .padEnd(8)}${colors.reset}`;
-
-    // Format source
-    const sourceStr = source ? `${colors.blue}[${source}]${colors.reset} ` : "";
-
-    // Format the main message
-    let messageStr: string;
-    if (typeof message === "object") {
-      messageStr = JSON.stringify(message, null, 2);
-    } else {
-      messageStr = String(message);
+  /**
+   * Marks the logger as ready.
+   * This is used to trigger the local listeners and print the buffered logs (if they exists)
+   * @returns A promise that resolves when the logger is ready.
+   */
+  public async lock() {
+    if (this.isLocked) {
+      return;
     }
 
-    // Build the main log line
-    const mainLine = `${formattedTime} ${levelStr} ${sourceStr}${messageStr}`;
-
-    // Start building output lines
-    const lines = [mainLine];
-
-    // Add error information if present
-    if (error) {
-      lines.push(
-        `${colors.dim}├─ ${colors.red}Error: ${error.name}${colors.reset}`
-      );
-      lines.push(
-        `${colors.dim}├─ ${colors.red}${error.message}${colors.reset}`
-      );
-      if (error.stack) {
-        const stackLines = error.stack.split("\n").slice(1, 4); // Show first 3 stack frames
-        stackLines.forEach((line, index) => {
-          const prefix = index === stackLines.length - 1 ? "└─" : "├─";
-          lines.push(
-            `${colors.dim}${prefix} ${colors.red}${line.trim()}${colors.reset}`
-          );
-        });
+    if (this.bufferLogs) {
+      for (const log of this.buffer) {
+        await this.triggerLocalListeners(log);
+      }
+      for (const log of this.buffer) {
+        if (this.canPrint(log.level)) {
+          this.printer.print(log);
+        }
       }
     }
+    this.bufferLogs = false;
+    this.buffer = [];
+    this.isLocked = true;
+  }
 
-    // Add structured data if present
-    if (data && Object.keys(data).length > 0) {
-      lines.push(`${colors.dim}├─ ${colors.cyan}Data:${colors.reset}`);
-      const dataStr = JSON.stringify(data, null, 2);
-      const dataLines = dataStr.split("\n");
-      dataLines.forEach((line, index) => {
-        const prefix = index === dataLines.length - 1 ? "└─" : "├─";
-        lines.push(
-          `${colors.dim}${prefix}   ${colors.cyan}${line}${colors.reset}`
-        );
-      });
+  private canPrint(level: LogLevels) {
+    if (this.printThreshold === null) {
+      return false;
     }
 
-    // Add context if present (excluding common context we already show)
-    const filteredContext = context ? { ...context } : {};
-    delete filteredContext.source; // Already shown in source
+    return (
+      this.printThreshold &&
+      Logger.Severity[level] >= Logger.Severity[this.printThreshold]
+    );
+  }
 
-    if (filteredContext && Object.keys(filteredContext).length > 0) {
-      lines.push(`${colors.dim}└─ ${colors.blue}Context:${colors.reset}`);
-      const contextStr = JSON.stringify(filteredContext, null, 2);
-      const contextLines = contextStr.split("\n");
-      contextLines.forEach((line, index) => {
-        const prefix = index === contextLines.length - 1 ? "  " : "  ";
-        lines.push(
-          `${colors.dim}${prefix}   ${colors.blue}${line}${colors.reset}`
-        );
-      });
+  private async triggerLocalListeners(log: ILog) {
+    for (const listener of this.localListeners) {
+      try {
+        await listener(log);
+      } catch (error) {
+        this.print({
+          level: "error",
+          message: "Error in log listener",
+          timestamp: new Date(),
+          error: {
+            name: "ListenerError",
+            message: error instanceof Error ? error.message : String(error),
+          },
+        });
+        // We're not breaking the app due to logListener errors.
+        continue;
+      }
     }
-
-    // Output all lines
-    lines.forEach((line) => console.log(line));
-
-    // Add a subtle separator for multi-line logs
-    if (lines.length > 1) {
-      console.log(`${colors.dim}${colors.reset}`);
-    }
-  }
-
-  public info(message: any, logInfo: LogInfo = {}) {
-    this.log("info", message, logInfo);
-  }
-
-  public error(message: any, logInfo: LogInfo = {}) {
-    this.log("error", message, logInfo);
-  }
-
-  public warn(message: any, logInfo: LogInfo = {}) {
-    this.log("warn", message, logInfo);
-  }
-
-  public debug(message: any, logInfo: LogInfo = {}) {
-    this.log("debug", message, logInfo);
-  }
-
-  public trace(message: any, logInfo: LogInfo = {}) {
-    this.log("trace", message, logInfo);
-  }
-
-  public critical(message: any, logInfo: LogInfo = {}) {
-    this.log("critical", message, logInfo);
   }
 }

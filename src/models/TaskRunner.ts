@@ -1,10 +1,17 @@
-import { DependencyMapType, DependencyValuesType, ITask } from "../defs";
+import {
+  DependencyMapType,
+  IMiddleware,
+  ITask,
+  IHook,
+  IEventEmission,
+} from "../defs";
 import { EventManager } from "./EventManager";
-import { globalEvents } from "../globals/globalEvents";
 import { Store } from "./Store";
 import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
 import { ValidationError } from "../errors";
+import { globalEvents } from "../globals/globalEvents";
+import { globalTags } from "../globals/globalTags";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
@@ -15,7 +22,7 @@ export class TaskRunner {
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
-    protected readonly logger: Logger
+    protected readonly logger: Logger,
   ) {}
 
   /**
@@ -27,10 +34,10 @@ export class TaskRunner {
   public async run<
     TInput,
     TOutput extends Promise<any>,
-    TDeps extends DependencyMapType
+    TDeps extends DependencyMapType,
   >(
     task: ITask<TInput, TOutput, TDeps>,
-    input: TInput
+    input?: TInput,
   ): Promise<TOutput | undefined> {
     let runner = this.runnerStore.get(task.id);
     if (!runner) {
@@ -39,98 +46,71 @@ export class TaskRunner {
       this.runnerStore.set(task.id, runner);
     }
 
-    const isGlobalEventListener = task.on === "*";
+    return await runner(input);
+  }
 
-    if (!isGlobalEventListener) {
-      await this.eventManager.emit(task.events.beforeRun, { input }, task.id);
+  // Lifecycle emissions removed
+
+  /**
+   * Runs a hook (event listener) without any middleware.
+   * Ensures dependencies are resolved from the hooks registry.
+   *
+   * Emits two internal observability events around the hook execution:
+   * - global.hookTriggered (before)
+   * - global.hookCompleted (after, with optional error)
+   *
+   * These observability events are tagged to be ignored by global listeners
+   * and are not re-emitted for their own handlers to avoid recursion.
+   */
+  public async runHook<TPayload, TDeps extends DependencyMapType = {}>(
+    hook: IHook<TDeps, any>,
+    emission: IEventEmission<TPayload>,
+  ): Promise<any> {
+    // Hooks are stored in `store.hooks`; use their computed deps
+    const deps = this.store.hooks.get(hook.id)?.computedDependencies as any;
+    // Internal observability events are tagged to be excluded from global listeners.
+    // We detect them by tag so we don't double-wrap them with our own hookTriggered/hookCompleted.
+    const isObservabilityEvent = Boolean(
+      globalTags.excludeFromGlobalHooks.extract(emission as any),
+    );
+
+    // The logic here is that we don't want to have lifecycle events for the events that are excluded from global ones.
+    if (isObservabilityEvent) {
+      return hook.run(emission as any, deps);
     }
+    // Emit hookTriggered (excluded from global listeners)
+    await this.eventManager.emit(
+      globalEvents.hookTriggered,
+      { hook, eventId: emission.id },
+      hook.id,
+    );
 
-    if (
-      !isGlobalEventListener &&
-      task.on !== globalEvents.tasks.beforeRun &&
-      task.on !== globalEvents.tasks.afterRun
-    ) {
-      await this.eventManager.emit(
-        globalEvents.tasks.beforeRun,
-        {
-          task,
-          input,
-        },
-        task.id
-      );
-    }
-
-    let error;
     try {
-      // craft the next function starting from the first next function
-      const result = {
-        output: await runner(input),
-      };
-      const setOutput = (newOutput: any) => {
-        result.output = newOutput;
-      };
-
-      // If it's a global event listener, we stop emitting so we don't get into an infinite loop.
-      if (!isGlobalEventListener) {
-        await this.eventManager.emit(
-          task.events.afterRun,
-          {
-            input,
-            get output() {
-              return result.output;
-            },
-            setOutput,
-          },
-          task.id
-        );
-      }
-
-      if (
-        !isGlobalEventListener &&
-        task.on !== globalEvents.tasks.beforeRun &&
-        task.on !== globalEvents.tasks.afterRun
-      ) {
-        // If it's a lifecycle listener we prevent from emitting further events.
-        await this.eventManager.emit(
-          globalEvents.tasks.afterRun,
-          {
-            task,
-            input,
-            get output() {
-              return result.output;
-            },
-            setOutput,
-          },
-          task.id
-        );
-      }
-
-      return result.output;
-    } catch (e) {
-      let isSuppressed = false;
-      function suppress() {
-        isSuppressed = true;
-      }
-
-      error = e;
-
-      // If you want to rewthrow the error, this should be done inside the onError event.
+      const result = await hook.run(emission as any, deps);
       await this.eventManager.emit(
-        task.events.onError,
-        { error, suppress },
-        task.id
+        globalEvents.hookCompleted,
+        { hook, eventId: emission.id },
+        hook.id,
       );
+      return result;
+    } catch (err: unknown) {
+      try {
+        await this.store.onUnhandledError?.({
+          error: err,
+          kind: "hook",
+          source: hook.id,
+        });
+      } catch (_) {}
       await this.eventManager.emit(
-        globalEvents.tasks.onError,
+        globalEvents.hookCompleted,
         {
-          task,
-          error,
-          suppress,
+          hook,
+          eventId: emission.id,
+          error: err as any,
         },
-        task.id
+        hook.id,
       );
-
-      if (!isSuppressed) throw e;
+      throw err;
     }
   }
 
@@ -144,9 +124,9 @@ export class TaskRunner {
   protected createRunnerWithMiddleware<
     TInput,
     TOutput extends Promise<any>,
-    TDeps extends DependencyMapType
+    TDeps extends DependencyMapType,
   >(task: ITask<TInput, TOutput, TDeps>) {
-    const storeTask = this.store.tasks.get(task.id);
+    const storeTask = this.store.tasks.get(task.id)!;
 
     // this is the final next()
     let next = async (input: any) => {
@@ -158,12 +138,36 @@ export class TaskRunner {
           throw new ValidationError(
             "Task input",
             task.id,
-            error instanceof Error ? error : new Error(String(error))
+            error instanceof Error ? error : new Error(String(error)),
           );
         }
       }
 
-      return task.run.call(null, input, storeTask?.computedDependencies as any);
+      // Resolve dependencies for tasks
+      const deps = storeTask?.computedDependencies as any;
+
+      try {
+        const rawResult = await task.run.call(null, input, deps);
+        // Validate result with schema if provided (ignores middleware)
+        if (task.resultSchema) {
+          try {
+            // result schema validates the resolved value of the promise
+            return task.resultSchema.parse(rawResult as any);
+          } catch (error) {
+            throw new ValidationError("Task result", task.id, error as any);
+          }
+        }
+        return rawResult;
+      } catch (error: unknown) {
+        try {
+          await this.store.onUnhandledError?.({
+            error,
+            kind: "task",
+            source: task.id,
+          });
+        } catch (_) {}
+        throw error;
+      }
     };
 
     const existingMiddlewares = task.middleware;
@@ -176,6 +180,15 @@ export class TaskRunner {
       .filter((x) => !existingMiddlewareIds.includes(x.id));
     const createdMiddlewares = [...globalMiddlewares, ...existingMiddlewares];
 
+    // Inject local per-task interceptors first (closest to the task)
+    if (storeTask.interceptors && storeTask.interceptors.length > 0) {
+      for (let i = storeTask.interceptors.length - 1; i >= 0; i--) {
+        const interceptor = storeTask.interceptors[i];
+        const nextFunction = next;
+        next = async (input) => interceptor(nextFunction, input);
+      }
+    }
+
     if (createdMiddlewares.length === 0) {
       return next;
     }
@@ -185,22 +198,66 @@ export class TaskRunner {
     for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
       const middleware = createdMiddlewares[i];
       const storeMiddleware = this.store.middlewares.get(
-        middleware.id
+        middleware.id,
       ) as MiddlewareStoreElementType; // we know it exists because at this stage all sanity checks have been done.
 
       const nextFunction = next;
       next = async (input) => {
-        return storeMiddleware.middleware.run(
-          {
-            task: {
-              definition: task as any,
-              input,
+        let result: any;
+        try {
+          // Observability: emit middlewareTriggered (excluded from global listeners)
+          await this.eventManager.emit(
+            globalEvents.middlewareTriggered,
+            {
+              kind: "task",
+              middleware: middleware as any,
+              targetId: task.id as any,
             },
-            next: nextFunction,
-          },
-          storeMiddleware.computedDependencies,
-          middleware.config
-        );
+            middleware.id,
+          );
+          result = await storeMiddleware.middleware.run(
+            {
+              task: {
+                definition: task,
+                input,
+              },
+              next: nextFunction,
+            },
+            storeMiddleware.computedDependencies,
+            middleware.config,
+          );
+          // Observability: emit middlewareCompleted (excluded from global listeners)
+          await this.eventManager.emit(
+            globalEvents.middlewareCompleted,
+            {
+              kind: "task",
+              middleware: middleware as any,
+              targetId: task.id as any,
+            },
+            middleware.id,
+          );
+          return result;
+        } catch (error: unknown) {
+          try {
+            await this.store.onUnhandledError?.({
+              error,
+              kind: "middleware",
+              source: middleware.id,
+            });
+          } catch (_) {}
+          // Always emit middlewareCompleted with error after unhandledError
+          await this.eventManager.emit(
+            globalEvents.middlewareCompleted,
+            {
+              kind: "task",
+              middleware: middleware as any,
+              targetId: task.id as any,
+              error: error as any,
+            },
+            middleware.id,
+          );
+          throw error;
+        }
       };
     }
 
