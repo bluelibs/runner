@@ -256,7 +256,11 @@ const { dispose } = await run(app, {
 ## Run Options (high‑level)
 
 - debug: "normal" | "verbose" | DebugConfig
-- logs: { printThreshold?: LogLevel | null; printStrategy?: "pretty" | "json" | "json-pretty" | "plain"; bufferLogs?: boolean }
+- logs: {
+  - printThreshold?: LogLevel | null;
+  - printStrategy?: "pretty" | "json" | "json-pretty" | "plain";
+  - bufferLogs?: boolean
+- }
 - errorBoundary: boolean (default true)
 - shutdownHooks: boolean (default true)
 - onUnhandledError(error) {}

@@ -258,7 +258,7 @@ We unified error catching behind a single, centralized handler. Instead of relyi
 
 ```ts
 await run(app, {
-  errorBoundary: true, // installs uncaughtException & unhandledRejection handlers
+  errorBoundary: true, // installs uncaughtException & unhandledRejection handlers on process
   onUnhandledError: async ({ error, kind, source }) => {
     // kind: "task" | "middleware" | "resourceInit" | "hook" | "process" | "run"
     // source: optional origin hint (ex: "uncaughtException")

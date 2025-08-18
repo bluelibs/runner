@@ -11,7 +11,7 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 
 - [View the documentation page here](https://bluelibs.github.io/runner/)
 - [Express + OpenAPI + SQLite Example](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite)
-- [AI-friendly Documentation](https://github.com/bluelibs/runner/blob/main/AI.md)
+- [AI-friendly Documentation (~3500 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)
 - [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)
 
 Welcome to BlueLibs Runner, where we've taken the chaos of modern application architecture and turned it into something that won't make you question your life choices at 3am. This isn't just another framework – it's your new best friend who actually understands that code should be readable, testable, and not require a PhD in abstract nonsense to maintain.
@@ -88,7 +88,7 @@ const { dispose } = await run(app, { debug: "verbose" });
 
 ## The Big Four
 
-Another term to define them would be TERM. (tasks, events, resources, middleware)
+The framework is built around four core concepts: Tasks, Resources, Events, and Middleware. Understanding them is key to using the runner effectively.
 
 ### Tasks
 
@@ -281,7 +281,7 @@ import { event, hook, globals } from "@bluelibs/runner";
 const internalEvent = event({
   id: "app.events.internal",
   meta: {
-    tags: [globals.tag.excludeFromGlobalListeners],
+    tags: [globals.tags.excludeFromGlobalListeners],
   },
 });
 ```
@@ -296,7 +296,7 @@ const internalEvent = event({
 
 #### Hooks
 
-The modern way to listen to events is through hooks - lightweight event listeners that don't carry the overhead of tasks:
+The modern way to listen to events is through hooks. They are lightweight event listeners, similar to tasks, but with a few key differences.
 
 ```typescript
 import { hook } from "@bluelibs/runner";
@@ -352,12 +352,12 @@ const hookObserver = hook({
 
 **Available Global Events:**
 
-- `global.events.ready` - System has completed initialization
+- `globals.events.ready` - System has completed initialization
   // Note: global unhandled error event was removed. Use run({ onUnhandledError })
-- `global.events.hookTriggered` - Before a hook executes
-- `global.events.hookCompleted` - After a hook finishes
-- `global.events.middlewareTriggered` - Before a middleware executes
-- `global.events.middlewareCompleted` - After a middleware finishes
+- `globals.events.hookTriggered` - Before a hook executes
+- `globals.events.hookCompleted` - After a hook finishes
+- `globals.events.middlewareTriggered` - Before a middleware executes
+- `globals.events.middlewareCompleted` - After a middleware finishes
 
 #### stopPropagation()
 
@@ -438,7 +438,7 @@ Want to add logging to everything? Authentication to all tasks? Global middlewar
 const logMiddleware = middleware({
   id: "app.middleware.log",
   dependencies: {
-    logger: global.resources.logger,
+    logger: globals.resources.logger,
   },
   // You either get a task or a resource
   run: async ({ task, resource, next }) => {
@@ -494,7 +494,7 @@ _Resources can dynamically modify task behavior during initialization_
 Task interceptors (`task.intercept()`) are the modern replacement for component lifecycle events, allowing resources to dynamically modify task behavior without tight coupling.
 
 ```typescript
-import { task, resource, run, globals } from "@bluelibs/runner";
+import { task, resource, run } from "@bluelibs/runner";
 
 const calculatorTask = task({
   id: "app.tasks.calculator",
@@ -509,10 +509,8 @@ const interceptorResource = resource({
   dependencies: {
     calculatorTask,
   },
-  init: async (_, {
-    const calculatorTask = store.getTask(calculator);
-
-    // Task can be run like calculatorTask(input) or inside resources we can also do:
+  init: async (_, { calculatorTask }) => {
+    // Intercept the task to modify its behavior
     calculatorTask.intercept(async (next, input) => {
       console.log("1. Interceptor before task run");
       const result = await next(input);
@@ -524,11 +522,11 @@ const interceptorResource = resource({
 
 const app = resource({
   id: "app",
-  register: [calculator, interceptorResource],
-  dependencies: { calculator },
-  init: async (_, { calculator }) => {
+  register: [calculatorTask, interceptorResource],
+  dependencies: { calculatorTask },
+  init: async (_, { calculatorTask }) => {
     console.log("2. Calling the task...");
-    const result = await calculator({ value: 10 });
+    const result = await calculatorTask({ value: 10 });
     console.log("5. Final result:", result);
     // Final result: { result: 11, intercepted: true }
   },
@@ -632,6 +630,9 @@ const handleRequest = resource({
 Context shines when combined with middleware for request-scoped data:
 
 ```typescript
+import { createContext, middleware } from "@bluelibs/runner";
+import { randomUUID } from "crypto";
+
 const RequestContext = createContext<{
   requestId: string;
   startTime: number;
@@ -644,7 +645,7 @@ const requestMiddleware = middleware({
     // This works even in express middleware if needed.
     return RequestContext.provide(
       {
-        requestId: crypto.randomUUID(),
+        requestId: randomUUID(),
         startTime: Date.now(),
         userAgent: "MyApp/1.0",
       },
@@ -907,7 +908,7 @@ for (let i = 0; i < 1000; i++) {
 **Middleware Ordering**: Place faster middleware first
 
 ```typescript
-const task = defineTask({
+const task = task({
   middleware: [
     fastAuthCheck, // ~0.1ms
     slowRateLimiting, // ~2ms
@@ -1229,6 +1230,7 @@ Want to use Winston as your transport? No problem - integrate it seamlessly:
 
 ```typescript
 import winston from "winston";
+import { resource, globals } from "@bluelibs/runner";
 
 // Create Winston logger, put it in a resource if used from various places.
 const winstonLogger = winston.createLogger({
@@ -1250,9 +1252,10 @@ const winstonLogger = winston.createLogger({
 // Bridge BlueLibs logs to Winston using hooks
 const winstonBridgeResource = resource({
   id: "app.resources.winstonBridge",
-  init: async () => {
-    const log = event.data;
-
+  dependencies: {
+    logger: globals.resources.logger,
+  },
+  init: async (_, { logger }) => {
     // Map log levels (BlueLibs -> Winston)
     const levelMapping = {
       trace: "silly",
@@ -1401,7 +1404,7 @@ const criticalTask = task({
   id: "app.tasks.critical",
   meta: {
     tags: [
-      globals.tag.debug.with({
+      globals.tags.debug.with({
         logTaskInput: true,
         logTaskResult: true,
         logTaskOnError: true,
@@ -1681,7 +1684,7 @@ import { globals } from "@bluelibs/runner";
 const internalTask = task({
   id: "app.tasks.internal",
   meta: {
-    tags: [globals.tag.system], // Marks as system component
+    tags: [globals.tags.system], // Marks as system component
   },
   run: async () => "internal work",
 });
@@ -1704,12 +1707,12 @@ const debugTask = task({
 const internalEvent = event({
   id: "app.events.internal",
   meta: {
-    tags: [global.tags.excludeFromGlobalListeners],
+    tags: [globals.tags.excludeFromGlobalListeners],
   },
 });
 ```
 
-To process these tags you can hook into `global.events.ready`, use the global store as dependency and use the `getTasksWithTag()` and `getResourcesWithTag()` functionality.
+To process these tags you can hook into `globals.events.ready`, use the global store as dependency and use the `getTasksWithTag()` and `getResourcesWithTag()` functionality.
 
 #### Structured Tags
 
@@ -1956,9 +1959,13 @@ const userTask = task({
 To keep things dead simple, we avoided poluting the D.I. with this concept. Therefore, we recommend using a resource with a factory function to create instances of your classes:
 
 ```typescript
+// Assume MyClass is defined elsewhere
+// class MyClass { constructor(input: any, option: string) { ... } }
+
 const myFactory = resource({
   id: "app.factories.myFactory",
   init: async (config: { someOption: string }) => {
+    // This resource's value is a factory function
     return (input: any) => {
       return new MyClass(input, config.someOption);
     };
@@ -1967,10 +1974,12 @@ const myFactory = resource({
 
 const app = resource({
   id: "app",
-  register: [myFactory],
+  // Configure the factory resource upon registration
+  register: [myFactory.with({ someOption: "configured-value" })],
   dependencies: { myFactory },
   init: async (_, { myFactory }) => {
-    const instance = myFactory({ someOption: "value" });
+    // `myFactory` is now the configured factory function
+    const instance = myFactory({ someInput: "hello" });
   },
 });
 ```
@@ -2483,7 +2492,6 @@ import {
   task,
   event,
   middleware,
-  index,
   run,
   createContext,
 } from "@bluelibs/runner";
@@ -2575,19 +2583,19 @@ const sendWelcomeEmail = hook({
   },
 });
 
-// Group everything together
-const services = index({
-  userService,
-  registerUser,
-  adminOnlyTask,
-});
-
 // Express server
 const server = resource({
   id: "app.server",
-  register: [config, database, services, sendWelcomeEmail],
-  dependencies: { config, services },
-  init: async (_, { config, services }) => {
+  register: [
+    config,
+    database,
+    userService,
+    registerUser,
+    adminOnlyTask,
+    sendWelcomeEmail,
+  ],
+  dependencies: { config, registerUser, adminOnlyTask },
+  init: async (_, { config, registerUser, adminOnlyTask }) => {
     const app = express();
     app.use(express.json());
 
@@ -2601,7 +2609,7 @@ const server = resource({
 
     app.post("/register", async (req, res) => {
       try {
-        const user = await services.registerUser(req.body);
+        const user = await registerUser(req.body);
         res.json({ success: true, user });
       } catch (error) {
         res.status(400).json({ error: error.message });
@@ -2610,7 +2618,7 @@ const server = resource({
 
     app.get("/admin", async (req, res) => {
       try {
-        const data = await services.adminOnlyTask();
+        const data = await adminOnlyTask();
         res.json({ data });
       } catch (error) {
         res.status(403).json({ error: error.message });

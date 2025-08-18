@@ -12,9 +12,9 @@
 
 ```ts
 import { run } from "@bluelibs/runner";
-import { defineResource } from "@bluelibs/runner";
+import { resource } from "@bluelibs/runner";
 
-const app = defineResource({
+const app = resource({
   id: "app",
   async init() {
     // setup root
@@ -41,14 +41,14 @@ await dispose();
 If any resource fails during initialization, `run()` throws and automatically disposes all previously initialized resources:
 
 ```ts
-const failing = defineResource({
+const failing = resource({
   id: "failing",
   async init() {
     throw new Error("boom");
   },
 });
 
-const app = defineResource({
+const app = resource({
   id: "app",
   dependencies: { failing },
   async init() {
@@ -57,7 +57,7 @@ const app = defineResource({
 });
 
 await expect(run(app, { logs: { printStrategy: "none" } })).rejects.toThrow(
-  "boom"
+  "boom",
 );
 // All initialized resources before the failure were disposed.
 ```
