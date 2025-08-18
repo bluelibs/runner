@@ -6,6 +6,7 @@ import {
   defineMiddleware,
 } from "../define";
 import { run } from "../run";
+import { TagType } from "../defs";
 
 describe("Configurable Tags", () => {
   describe("Tag Definition", () => {
@@ -76,10 +77,8 @@ describe("Configurable Tags", () => {
       });
 
       const tags = [
-        "simple-string-tag",
         performanceTag.with({ alertAboveMs: 200 }),
-        "another-string",
-      ];
+      ] satisfies TagType[];
 
       const extracted = performanceTag.extract(tags);
 
@@ -91,7 +90,7 @@ describe("Configurable Tags", () => {
     it("should extract unconfigured tag from tags array", () => {
       const simpleTag = defineTag({ id: "simple.tag" });
 
-      const tags = ["string-tag", simpleTag, "another-string"];
+      const tags = [simpleTag] satisfies TagType[];
 
       const extracted = simpleTag.extract(tags);
 
@@ -100,27 +99,14 @@ describe("Configurable Tags", () => {
       expect(extracted?.config).toBeUndefined();
     });
 
-    it("should return null if tag not found", () => {
-      const performanceTag = defineTag<{ alertAboveMs: number }>({
-        id: "performance.track",
-      });
-
-      const tags = ["string-tag", "another-string"];
-
-      const extracted = performanceTag.extract(tags);
-
-      expect(extracted).toBeNull();
-    });
-
     it("should ignore string tags during extraction", () => {
       const performanceTag = defineTag<{ alertAboveMs: number }>({
         id: "performance.track",
       });
 
       const tags = [
-        "performance.track", // This is a string, not the tag
         performanceTag.with({ alertAboveMs: 100 }),
-      ];
+      ] satisfies TagType[];
 
       const extracted = performanceTag.extract(tags);
 
@@ -135,9 +121,7 @@ describe("Configurable Tags", () => {
 
       const task = defineTask({
         id: "task.with.tags",
-        meta: {
-          tags: [performanceTag.with({ alertAboveMs: 123 })],
-        },
+        tags: [performanceTag.with({ alertAboveMs: 123 })],
         run: async () => "ok",
       });
 
@@ -168,21 +152,15 @@ describe("Configurable Tags", () => {
 
       const testTask = defineTask({
         id: "test.task",
-        meta: {
-          tags: [
-            "api",
-            performanceTag.with({ alertAboveMs: 200 }),
-            "important",
-          ],
-        },
+        tags: [performanceTag.with({ alertAboveMs: 200 })],
         run: async () => {
           return "success";
         },
       });
 
-      expect(testTask.meta?.tags).toHaveLength(3);
-      expect(testTask.meta?.tags?.[0]).toBe("api");
-      expect(testTask.meta?.tags?.[2]).toBe("important");
+      expect(testTask.tags).toHaveLength(3);
+      expect(testTask.tags?.[0]).toBe("api");
+      expect(testTask.tags?.[2]).toBe("important");
 
       const extracted = performanceTag.extract(testTask.meta?.tags || []);
       expect(extracted).not.toBeNull();
@@ -214,41 +192,23 @@ describe("Configurable Tags", () => {
 
       const fastTask = defineTask({
         id: "fast.task",
-        meta: {
-          tags: [performanceTag.with({ alertAboveMs: 100 })],
-        },
+        tags: [performanceTag.with({ alertAboveMs: 100 })],
         run: async () => "fast",
       });
 
       const slowTask = defineTask({
         id: "slow.task",
-        meta: {
-          tags: [performanceTag.with({ alertAboveMs: 500 })],
-        },
+        tags: [performanceTag.with({ alertAboveMs: 500 })],
         run: async () => "slow",
-      });
-
-      const normalTask = defineTask({
-        id: "normal.task",
-        meta: {
-          tags: ["just-a-string"],
-        },
-        run: async () => "normal",
       });
 
       const app = defineResource({
         id: "test.app",
-        register: [
-          fastTask,
-          slowTask,
-          normalTask,
-          performanceMiddleware.everywhere(),
-        ],
-        dependencies: { fastTask, slowTask, normalTask },
-        init: async (_, { fastTask, slowTask, normalTask }) => {
+        register: [fastTask, slowTask, performanceMiddleware.everywhere()],
+        dependencies: { fastTask, slowTask },
+        init: async (_, { fastTask, slowTask }) => {
           await fastTask();
           await slowTask();
-          await normalTask();
           return "done";
         },
       });
@@ -272,14 +232,12 @@ describe("Configurable Tags", () => {
 
       const database = defineResource({
         id: "database",
-        meta: {
-          tags: ["database", dbTag.with({ connectionTimeout: 5000 })],
-        },
+        tags: [dbTag.with({ connectionTimeout: 5000 })],
         init: async () => ({ query: () => "result" }),
       });
 
-      expect(database.meta?.tags).toHaveLength(2);
-      const extracted = dbTag.extract(database.meta?.tags || []);
+      expect(database.tags).toHaveLength(1);
+      const extracted = dbTag.extract(database.tags);
       expect(extracted?.config).toEqual({ connectionTimeout: 5000 });
     });
   });
@@ -292,13 +250,11 @@ describe("Configurable Tags", () => {
 
       const userEvent = defineEvent<{ userId: string }>({
         id: "user.created",
-        meta: {
-          tags: ["user-event", auditTag.with({ sensitive: true })],
-        },
+        tags: [auditTag.with({ sensitive: true })],
       });
 
-      expect(userEvent.meta?.tags).toHaveLength(2);
-      const extracted = auditTag.extract(userEvent.meta?.tags || []);
+      expect(userEvent.tags).toHaveLength(1);
+      const extracted = auditTag.extract(userEvent.tags);
       expect(extracted?.config).toEqual({ sensitive: true });
     });
   });
@@ -311,18 +267,14 @@ describe("Configurable Tags", () => {
 
       const rateLimitMiddleware = defineMiddleware({
         id: "rate.limit.middleware",
-        meta: {
-          tags: ["security", rateLimitTag.with({ requestsPerMinute: 60 })],
-        },
+        tags: [rateLimitTag.with({ requestsPerMinute: 60 })],
         run: async ({ next, task }) => {
           return next(task?.input);
         },
       });
 
-      expect(rateLimitMiddleware.meta?.tags).toHaveLength(2);
-      const extracted = rateLimitTag.extract(
-        rateLimitMiddleware.meta?.tags || [],
-      );
+      expect(rateLimitMiddleware.tags).toHaveLength(1);
+      const extracted = rateLimitTag.extract(rateLimitMiddleware.tags);
       expect(extracted?.config).toEqual({ requestsPerMinute: 60 });
     });
   });
@@ -331,9 +283,7 @@ describe("Configurable Tags", () => {
     it("should work with existing string tags", () => {
       const task = defineTask({
         id: "legacy.task",
-        meta: {
-          tags: ["api", "legacy", "important"],
-        },
+        tags: [{ id: "api" }, { id: "legacy" }, { id: "important" }],
         run: async () => "success",
       });
 

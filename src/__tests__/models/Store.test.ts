@@ -195,9 +195,7 @@ describe("Store", () => {
     });
     const taskTest = defineTask({
       id: "task.test",
-      meta: {
-        tags: [tag, "test"],
-      },
+      tags: [tag],
       async run() {
         return "OK";
       },
@@ -226,9 +224,7 @@ describe("Store", () => {
     });
     const resourceTest = defineResource({
       id: "resource.test",
-      meta: {
-        tags: [tag, "test"],
-      },
+      tags: [tag],
     });
 
     const unfindableResource = defineResource({

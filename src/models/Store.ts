@@ -74,6 +74,9 @@ export class Store {
   get middlewares() {
     return this.registry.middlewares;
   }
+  get tags() {
+    return this.registry.tags;
+  }
   get overrides() {
     return this.overrideManager.overrides;
   }

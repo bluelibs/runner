@@ -7,7 +7,7 @@ import {
   defineTag,
   defineHook,
 } from "../define";
-import { IMeta } from "../defs";
+import { IMeta, TagType } from "../defs";
 import {
   EnsureResponseSatisfiesContracts,
   HasContracts,
@@ -302,16 +302,15 @@ describe.skip("typesafety", () => {
 
     const task = defineTask({
       id: "task",
-      meta: {
-        tags: [
-          tag,
-          // @ts-expect-error
-          tag2,
-          tag2optional,
-          tag2.with({ value: 123 }),
-          tag3,
-        ],
-      },
+      tags: [
+        tag,
+        // @ts-expect-error
+        tag2,
+        tag2optional,
+        tag2.with({ value: 123 }),
+        tag3,
+      ],
+      meta: {},
       run: async (input) => {
         return input;
       },
@@ -332,20 +331,18 @@ describe.skip("typesafety", () => {
     const tag = defineTag<{ value: number }, IUser>({ id: "tag" });
     const tag2 = defineTag<void, IOther>({ id: "tag2" });
 
-    const meta = {
-      tags: [tag.with({ value: 123 }), tag2, "string"],
-    } satisfies IMeta;
+    const tags = [tag.with({ value: 123 }), tag2] satisfies TagType[];
 
     const response = {
       age: 123,
       name: "123", // intentional
     };
-    type TEST = HasContracts<typeof meta>;
-    type TEST2 = EnsureResponseSatisfiesContracts<typeof meta, typeof response>;
+    type TEST = HasContracts<typeof tags>;
+    type TEST2 = EnsureResponseSatisfiesContracts<typeof tags, typeof response>;
 
     const task = defineTask({
       id: "task",
-      meta,
+      tags,
       run: async (input: { name: string }) => {
         return {
           age: 123,
@@ -355,7 +352,7 @@ describe.skip("typesafety", () => {
     });
     const task2 = defineTask({
       id: "task",
-      meta,
+      tags,
       // @ts-expect-error
       run: async (input: { name: string }) => {
         return {
@@ -366,7 +363,7 @@ describe.skip("typesafety", () => {
 
     const task3 = defineTask({
       id: "task",
-      meta,
+      tags,
       // @ts-expect-error
       run: async (input: { name: string }) => {
         return {};
@@ -386,13 +383,11 @@ describe.skip("typesafety", () => {
     const tag = defineTag<{ value: number }, IUser>({ id: "tag" });
     const tag2 = defineTag<void, IOther>({ id: "tag2" });
 
-    const meta = {
-      tags: [tag.with({ value: 123 }), tag2, "string"],
-    } satisfies IMeta;
+    const tags = [tag.with({ value: 123 }), tag2] satisfies TagType[];
 
     const resourceOk = defineResource({
       id: "resource.ok",
-      meta,
+      tags,
       init: async () => {
         return {
           age: 123,
@@ -403,7 +398,7 @@ describe.skip("typesafety", () => {
 
     const resourceBad1 = defineResource({
       id: "resource.bad1",
-      meta,
+      tags,
       // @ts-expect-error
       init: async () => {
         return {
@@ -415,7 +410,7 @@ describe.skip("typesafety", () => {
 
     const resourceBad2 = defineResource({
       id: "resource.bad2",
-      meta,
+      tags,
       // @ts-expect-error
       init: async () => {
         return {};

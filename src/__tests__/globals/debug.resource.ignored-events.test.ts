@@ -62,7 +62,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
 
     const systemTask = defineTask({
       id: "tests.system.task",
-      meta: { tags: [globalTags.system] },
+      tags: [globalTags.system],
       async run() {
         return "ok" as const;
       },
@@ -146,7 +146,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
 
     const systemEvent = defineEvent<{ v: number }>({
       id: "tests.system.event",
-      meta: { tags: [globalTags.system] },
+      tags: [globalTags.system],
     });
 
     const emitSystemEvent = defineTask({

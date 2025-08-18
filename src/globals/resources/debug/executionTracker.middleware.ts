@@ -79,6 +79,8 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
     }
   },
   meta: {
-    tags: [globalTags.system],
+    title: "Execution Tracker",
+    description: "Tracks the execution of tasks and resources.",
   },
+  tags: [globalTags.system],
 });

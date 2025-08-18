@@ -20,6 +20,9 @@ import {
   HasContracts,
 } from "./defs.returnTag";
 
+export interface ITaggable {
+  tags?: TagType[];
+}
 /**
  * Generic validation schema interface that can be implemented by any validation library.
  * Compatible with Zod, Yup, Joi, and other validation libraries.
@@ -63,6 +66,8 @@ export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol(
 export const symbolMiddlewareEverywhereResources: unique symbol = Symbol(
   "runner.middlewareGlobalResources",
 );
+/** @internal Marks a tag definition */
+export const symbolTag: unique symbol = Symbol("runner.tag");
 
 /** @internal Marks an optional dependency wrapper */
 export const symbolOptionalDependency: unique symbol = Symbol(
@@ -109,13 +114,13 @@ export interface ITag<TConfig = void, TEnforceContract = void>
    */
   with(config: TConfig): ITagWithConfig<TConfig, TEnforceContract>;
   /**
-   * Extracts either a configured instance or the bare tag from a list of tags
-   * or from a taggable object (`{ meta: { tags?: [] } }`).
+   * Extracts either a configured instance or the bare tag from a list of tags.
    */
   extract(
-    target: TagType[] | ITaggable,
+    target: ITaggable | TagType[],
   ): ExtractedTagResult<TConfig, TEnforceContract> | null;
   [symbolFilePath]: string;
+  [symbolTag]: true;
 }
 
 /**
@@ -124,7 +129,6 @@ export interface ITag<TConfig = void, TEnforceContract = void>
  * Required-config tags must appear as configured instances.
  */
 export type TagType =
-  | string
   | ITag<void, any>
   | ITag<{ [K in any]?: any }, any>
   | ITagWithConfig<any, any>;
@@ -140,22 +144,12 @@ export type ExtractedTagResult<TConfig, TEnforceContract> = {} extends TConfig
   : { id: string; config: TConfig };
 
 /**
- * Any object that can carry tags via metadata. This mirrors how tasks,
- * resources, events, and middleware expose `meta.tags`.
- */
-export interface ITaggable {
-  meta?: {
-    tags?: TagType[];
-  };
-}
-/**
  * Common metadata you can attach to tasks/resources/events/middleware.
  * Useful for docs, filtering and middleware decisions.
  */
 export interface IMeta {
   title?: string;
   description?: string;
-  tags?: TagType[];
 }
 
 export interface ITaskMeta extends IMeta {}
@@ -278,7 +272,8 @@ export type RegisterableItems<T = any> =
   | ITask<any, any, any, any>
   | IHook<any, any>
   | IMiddleware<any>
-  | IEvent<any>;
+  | IEvent<any>
+  | ITag<any, any>;
 
 export type MiddlewareAttachments =
   | IMiddleware<void>
@@ -290,6 +285,7 @@ export interface ITaskDefinition<
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
+  TTags extends TagType[] = TagType[],
 > {
   id: string;
   /**
@@ -321,9 +317,11 @@ export interface ITaskDefinition<
   run: (
     input: TInput,
     dependencies: DependencyValuesType<TDependencies>,
-  ) => HasContracts<TMeta> extends true
-    ? EnsureResponseSatisfiesContracts<TMeta, TOutput>
+  ) => HasContracts<TTags> extends true
+    ? EnsureResponseSatisfiesContracts<TTags, TOutput>
     : TOutput;
+
+  tags?: TTags;
 }
 
 // Lifecycle event payload types removed
@@ -336,7 +334,8 @@ export interface ITask<
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
-> extends ITaskDefinition<TInput, TOutput, TDependencies, TMeta> {
+  TTags extends TagType[] = TagType[],
+> extends ITaskDefinition<TInput, TOutput, TDependencies, TMeta, TTags> {
   id: string;
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
@@ -345,8 +344,9 @@ export interface ITask<
   [symbolTask]: true;
   /** Return an optional dependency wrapper for this task. */
   optional: () => IOptionalDependency<
-    ITask<TInput, TOutput, TDependencies, TMeta>
+    ITask<TInput, TOutput, TDependencies, TMeta, TTags>
   >;
+  tags: TTags;
 }
 
 /**
@@ -367,6 +367,7 @@ export interface IHookDefinition<
     event: IEventEmission<TOn extends "*" ? any : ExtractEventParams<TOn>>,
     dependencies: DependencyValuesType<TDependencies>,
   ) => Promise<any>;
+  tags?: TagType[];
 }
 
 export interface IHook<
@@ -379,6 +380,7 @@ export interface IHook<
   computedDependencies?: DependencyValuesType<TDependencies>;
   [symbolFilePath]: string;
   [symbolHook]: true;
+  tags: TagType[];
 }
 
 export interface IResourceDefinition<
@@ -389,6 +391,7 @@ export interface IResourceDefinition<
   THooks = any,
   TRegisterableItems = any,
   TMeta extends IResourceMeta = any,
+  TTags extends TagType[] = TagType[],
 > {
   /** Stable identifier. */
   id: string;
@@ -409,8 +412,8 @@ export interface IResourceDefinition<
     config: TConfig,
     dependencies: ResourceDependencyValuesType<TDependencies>,
     context: TContext,
-  ) => HasContracts<TMeta> extends true
-    ? EnsureResponseSatisfiesContracts<TMeta, TValue>
+  ) => HasContracts<TTags> extends true
+    ? EnsureResponseSatisfiesContracts<TTags, TValue>
     : TValue;
   /**
    * Optional validation schema for the resource's resolved value.
@@ -461,6 +464,7 @@ export interface IResourceDefinition<
    * This is used internally when creating index resources.
    */
   [symbolIndexResource]?: boolean;
+  tags?: TTags;
 }
 
 export interface IResource<
@@ -469,6 +473,7 @@ export interface IResource<
   TDependencies extends DependencyMapType = any,
   TContext = any,
   TMeta extends IResourceMeta = any,
+  TTags extends TagType[] = TagType[],
 > extends IResourceDefinition<
     TConfig,
     TValue,
@@ -476,7 +481,8 @@ export interface IResource<
     TContext,
     any,
     any,
-    TMeta
+    TMeta,
+    TTags
   > {
   id: string;
   with(config: TConfig): IResourceWithConfig<TConfig, TValue, TDependencies>;
@@ -492,6 +498,7 @@ export interface IResource<
   optional: () => IOptionalDependency<
     IResource<TConfig, TValue, TDependencies, TContext, TMeta>
   >;
+  tags: TTags;
 }
 
 export interface IResourceWithConfig<
@@ -519,6 +526,7 @@ export interface IEventDefinition<TPayload = void> {
    * When provided, event payload will be validated when emitted.
    */
   payloadSchema?: IValidationSchema<TPayload>;
+  tags?: TagType[];
 }
 
 /**
@@ -534,6 +542,7 @@ export interface IEvent<TPayload = any> extends IEventDefinition<TPayload> {
   [symbolFilePath]: string;
   /** Return an optional dependency wrapper for this event. */
   optional: () => IOptionalDependency<IEvent<TPayload>>;
+  tags: TagType[];
 }
 
 /**
@@ -569,6 +578,10 @@ export interface IEventEmission<TPayload = any> {
    * Returns true if propagation has been stopped.
    */
   isPropagationStopped(): boolean;
+  /**
+   * The tags that the event carries.
+   */
+  tags: TagType[];
 }
 
 export interface IMiddlewareDefinition<
@@ -593,6 +606,7 @@ export interface IMiddlewareDefinition<
     config: TConfig,
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
+  tags?: TagType[];
 }
 
 export type MiddlewareInputMaybeTaskOrResource =
@@ -637,6 +651,7 @@ export interface IMiddleware<
   with: (config: TConfig) => IMiddlewareConfigured<TConfig, TDependencies>;
   [symbolFilePath]: string;
   [symbolMiddleware]: true;
+  tags: TagType[];
 }
 
 export interface IMiddlewareConfigured<

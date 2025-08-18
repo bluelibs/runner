@@ -40,6 +40,7 @@ import {
   IHookDefinition,
   IOptionalDependency,
   symbolOptionalDependency,
+  symbolTag,
 } from "./defs";
 import { MiddlewareAlreadyGlobalError, ValidationError } from "./errors";
 import { getCallerFile } from "./tools/getCallerFile";
@@ -65,9 +66,10 @@ export function defineTask<
   Output extends Promise<any> = any,
   Deps extends DependencyMapType = any,
   TMeta extends ITaskMeta = any,
+  TTags extends TagType[] = TagType[],
 >(
-  taskConfig: ITaskDefinition<Input, Output, Deps, TMeta>,
-): ITask<Input, Output, Deps, TMeta> {
+  taskConfig: ITaskDefinition<Input, Output, Deps, TMeta, TTags>,
+): ITask<Input, Output, Deps, TMeta, TTags> {
   const filePath = getCallerFile();
   const id = taskConfig.id;
   return {
@@ -80,12 +82,13 @@ export function defineTask<
     inputSchema: taskConfig.inputSchema,
     resultSchema: taskConfig.resultSchema,
     meta: taskConfig.meta || ({} as TMeta),
+    tags: taskConfig.tags || ([] as unknown as TTags),
     // autorun,
     optional() {
       return {
         inner: this,
         [symbolOptionalDependency]: true,
-      } as IOptionalDependency<ITask<Input, Output, Deps, TMeta>>;
+      } as IOptionalDependency<ITask<Input, Output, Deps, TMeta, TTags>>;
     },
   };
 }
@@ -109,6 +112,7 @@ export function defineHook<
     order: hookDef.order,
     run: hookDef.run,
     meta: hookDef.meta || ({} as TMeta),
+    tags: hookDef.tags || [],
   } as IHook<D, TOn, TMeta>;
 }
 
@@ -118,6 +122,7 @@ export function defineResource<
   TDeps extends DependencyMapType = {},
   TPrivate = any,
   TMeta extends IResourceMeta = any,
+  TTags extends TagType[] = TagType[],
 >(
   constConfig: IResourceDefinition<
     TConfig,
@@ -126,9 +131,10 @@ export function defineResource<
     TPrivate,
     any,
     any,
-    TMeta
+    TMeta,
+    TTags
   >,
-): IResource<TConfig, TValue, TDeps, TPrivate, TMeta> {
+): IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags> {
   /**
    * Define a resource.
    * Produces a strongly-typed resource with id, registration hooks,
@@ -164,6 +170,7 @@ export function defineResource<
     context: constConfig.context,
     configSchema: constConfig.configSchema,
     resultSchema: constConfig.resultSchema,
+    tags: constConfig.tags || ([] as unknown as TTags),
     with: function (config: TConfig) {
       // Validate config with schema if provided (fail fast)
       if (constConfig.configSchema) {
@@ -218,6 +225,7 @@ export function defineEvent<TPayload = void>(
     id: eventConfig.id,
     [symbolFilePath]: callerFilePath,
     [symbolEvent]: true, // This is a workaround
+    tags: eventConfig.tags || [],
     optional() {
       return {
         inner: this,
@@ -371,6 +379,15 @@ export function isMiddleware(definition: any): definition is IMiddleware {
   return definition && definition[symbolMiddleware];
 }
 
+/**
+ * Type guard: checks if a definition is a Tag.
+ * @param definition - Any value to test.
+ * @returns True when `definition` is a branded Tag.
+ */
+export function isTag(definition: any): definition is ITag {
+  return definition && definition[symbolTag];
+}
+
 /** Type guard: checks if a definition is an Optional Dependency wrapper. */
 export function isOptional(
   definition: any,
@@ -429,6 +446,8 @@ export function defineTag<TConfig = void, TEnforceContract = void>(
   return {
     id,
     meta: definition.meta,
+    [symbolTag]: true,
+    [symbolFilePath]: getCallerFile(),
     with(tagConfig: TConfig) {
       if (definition.configSchema) {
         try {
@@ -444,8 +463,8 @@ export function defineTag<TConfig = void, TEnforceContract = void>(
         config: tagConfig as any,
       } as ITagWithConfig<TConfig>;
     },
-    extract(target: TagType[] | ITaggable) {
-      const tags = Array.isArray(target) ? target : target?.meta?.tags || [];
+    extract(target: TagType[]) {
+      const tags = Array.isArray(target) ? target : [];
       for (const candidate of tags) {
         if (typeof candidate === "string") continue;
         // Configured instance

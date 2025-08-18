@@ -18,7 +18,6 @@ export const globalEvents = {
       description:
         "Emitted when the system has completed boot and is ready for listeners to start work." +
         "This runs right before returning value for run().",
-      tags: [], // Intentionally left no system tag. Because this is an 'interest' event.
     },
   }),
   /**
@@ -34,8 +33,8 @@ export const globalEvents = {
       title: "Middleware Triggered",
       description:
         "Emitted immediately before a middleware starts running for a task or resource.",
-      tags: [systemTag, globalTags.excludeFromGlobalHooks],
     },
+    tags: [systemTag, globalTags.excludeFromGlobalHooks],
   }),
   /**
    * Emitted after a middleware completes (success or failure). Contains optional error.
@@ -51,8 +50,8 @@ export const globalEvents = {
       title: "Middleware Completed",
       description:
         "Emitted after a middleware finishes running for a task or resource.",
-      tags: [systemTag, globalTags.excludeFromGlobalHooks],
     },
+    tags: [systemTag, globalTags.excludeFromGlobalHooks],
   }),
   /**
    * Emitted right before a hook's run executes.
@@ -66,8 +65,8 @@ export const globalEvents = {
       title: "Hook Triggered",
       description:
         "Emitted immediately before a hook starts running for an event.",
-      tags: [systemTag, globalTags.excludeFromGlobalHooks],
     },
+    tags: [systemTag, globalTags.excludeFromGlobalHooks],
   }),
   /**
    * Emitted after a hook completes (success or failure). Contains optional error.
@@ -81,8 +80,8 @@ export const globalEvents = {
     meta: {
       title: "Hook Completed",
       description: "Emitted after a hook finishes running for an event.",
-      tags: [systemTag, globalTags.excludeFromGlobalHooks],
     },
+    tags: [systemTag, globalTags.excludeFromGlobalHooks],
   }),
   /**
    * Central error boundary event for any thrown error across the runner.
@@ -96,8 +95,8 @@ export const globalEvents = {
       title: "Unhandled Error",
       description:
         "Central error boundary event for any thrown error across the runner.",
-      tags: [systemTag, globalTags.excludeFromGlobalHooks],
     },
+    tags: [systemTag, globalTags.excludeFromGlobalHooks],
   }),
 } as const;
 

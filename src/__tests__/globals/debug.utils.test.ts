@@ -10,6 +10,7 @@ import { defineResource } from "../../define";
 import { run } from "../../run";
 import { debugConfig } from "../../globals/resources/debug/debugConfig.resource";
 import { safeStringify } from "../../models/utils/safeStringify";
+import { ITaggable } from "../../defs";
 
 describe("debug utils and types", () => {
   it("safeStringify handles circular structures without throwing", () => {
@@ -63,7 +64,7 @@ describe("debug utils and types", () => {
     const custom = { ...levelNormal, logTaskInput: true };
     expect(getConfig(custom)).toEqual(custom);
 
-    const taggable = { meta: { tags: [debugTag.with("verbose")] } } as any;
+    const taggable = { tags: [debugTag.with("verbose")] } satisfies ITaggable;
     const overridden = getConfig("normal", taggable);
     expect(overridden).toEqual(levelVerbose);
   });

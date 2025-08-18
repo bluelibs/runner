@@ -30,6 +30,7 @@ export class StoreRegistry {
   public events: Map<string, EventStoreElementType> = new Map();
   public middlewares: Map<string, MiddlewareStoreElementType> = new Map();
   public hooks: Map<string, IHook<any, any>> = new Map();
+  public tags: Map<string, ITag> = new Map();
 
   private validator: StoreValidator;
 
@@ -59,9 +60,16 @@ export class StoreRegistry {
       this.storeMiddleware<C>(item);
     } else if (utils.isResourceWithConfig(item)) {
       this.storeResourceWithConfig<C>(item);
+    } else if (utils.isTag(item)) {
+      this.storeTag(item);
     } else {
       throw new UnknownItemTypeError(item);
     }
+  }
+
+  storeTag(item: ITag) {
+    this.validator.checkIfIDExists(item.id);
+    this.tags.set(item.id, item);
   }
 
   storeHook<C>(item: IHook<any, any>, check = true) {
@@ -383,26 +391,22 @@ export class StoreRegistry {
   }
 
   getTasksWithTag(tag: string | ITag) {
-    if (typeof tag === "string") {
-      return Array.from(this.tasks.values()).filter((x) =>
-        x.task.meta?.tags?.includes(tag),
-      );
-    }
+    const tagId = typeof tag === "string" ? tag : tag.id;
 
     return Array.from(this.tasks.values())
-      .filter((x) => tag.extract(x.task.meta?.tags))
+      .filter((x) => {
+        return x.task.tags.some((t) => t.id === tagId);
+      })
       .map((x) => x.task);
   }
 
   getResourcesWithTag(tag: string | ITag) {
-    if (typeof tag === "string") {
-      return Array.from(this.resources.values()).filter((x) =>
-        x.resource.meta?.tags?.includes(tag),
-      );
-    }
+    const tagId = typeof tag === "string" ? tag : tag.id;
 
     return Array.from(this.resources.values())
-      .filter((x) => tag.extract(x.resource.meta?.tags))
+      .filter((x) => {
+        return x.resource.tags.some((t) => t.id === tagId);
+      })
       .map((x) => x.resource);
   }
 }

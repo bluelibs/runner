@@ -1,6 +1,6 @@
 // HasContracts<Meta> → true if contracts present, else false
 
-import { ITag, ITagWithConfig } from "./defs";
+import { ITag, ITagWithConfig, TagType } from "./defs";
 import { IMeta } from "./defs";
 
 // Keep these param names aligned with your defs.ts: ITag<TConfig, TEnforceContract>
@@ -30,6 +30,10 @@ export type ExtractContractsFromTags<TTags extends readonly unknown[]> =
     ? FilterContracts<TTags>
     : Array<ExtractReturnFromTag<TTags[number]>>;
 
+export type ExtractTagsWithNonVoidReturnTypeFromTags<TTags extends TagType[]> =
+  TTags extends readonly unknown[] ? ExtractContractsFromTags<TTags> : [];
+
+/** @deprecated Use ExtractTagsWithNonVoidReturnTypeFromTags instead */
 export type ExtractTagsWithNonVoidReturnTypeFromMeta<TMeta extends IMeta> =
   TMeta extends { tags?: infer TTags }
     ? TTags extends readonly unknown[]
@@ -37,10 +41,8 @@ export type ExtractTagsWithNonVoidReturnTypeFromMeta<TMeta extends IMeta> =
       : []
     : [];
 
-type IsNeverTuple<T extends readonly unknown[]> = T extends [] ? true : false;
-
-export type HasContracts<T extends IMeta> =
-  ExtractTagsWithNonVoidReturnTypeFromMeta<T> extends never[] ? false : true; // HasContracts and enforcement
+export type HasContracts<T extends TagType[]> =
+  ContractsUnionTags<T> extends never[] ? false : true; // HasContracts and enforcement
 
 // Ensure a response type satisfies ALL contracts (intersection)
 type UnionToIntersection<U> = (
@@ -49,13 +51,19 @@ type UnionToIntersection<U> = (
   ? I
   : never;
 
+type ContractsUnionTags<T extends TagType[]> =
+  ExtractTagsWithNonVoidReturnTypeFromTags<T> extends readonly (infer U)[]
+    ? U
+    : never;
+
+/** @deprecated */
 type ContractsUnion<TMeta extends IMeta> =
   ExtractTagsWithNonVoidReturnTypeFromMeta<TMeta> extends readonly (infer U)[]
     ? U
     : never;
 
-type ContractsIntersection<TMeta extends IMeta> = UnionToIntersection<
-  ContractsUnion<TMeta>
+type ContractsIntersection<TTags extends TagType[]> = UnionToIntersection<
+  ContractsUnionTags<TTags>
 >;
 
 /**
@@ -70,22 +78,23 @@ type Simplify<T> = { [K in keyof T]: T[K] } & {};
  * Intersected with `never` in call sites when desired to ensure assignment
  * fails while still surfacing a readable shape in tooltips.
  */
-export type ContractViolationError<TMeta extends IMeta, TActual> = {
+export type ContractViolationError<TTags extends TagType[], TActual> = {
   message: "Value does not satisfy all tag contracts";
-  expected: Simplify<ContractsIntersection<TMeta>>;
+  expected: Simplify<ContractsIntersection<TTags>>;
   received: TActual;
 };
 
-export type EnsureResponseSatisfiesContracts<TMeta extends IMeta, TResponse> = [
-  ContractsUnion<TMeta>,
-] extends [never]
+export type EnsureResponseSatisfiesContracts<
+  TTags extends TagType[],
+  TResponse,
+> = [ContractsUnionTags<TTags>] extends [never]
   ? TResponse // no contracts, allow as-is
   : TResponse extends Promise<infer U>
   ? Promise<
-      U extends ContractsIntersection<TMeta>
+      U extends ContractsIntersection<TTags>
         ? U
-        : ContractViolationError<TMeta, U>
+        : ContractViolationError<TTags, U>
     >
-  : TResponse extends ContractsIntersection<TMeta>
+  : TResponse extends ContractsIntersection<TTags>
   ? TResponse
-  : ContractViolationError<TMeta, TResponse>;
+  : ContractViolationError<TTags, TResponse>;

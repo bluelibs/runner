@@ -147,6 +147,7 @@ export class EventManager {
         propagationStopped = true;
       },
       isPropagationStopped: () => propagationStopped,
+      tags: eventDefinition.tags || [],
     };
 
     const excludeFromGlobal = this.isExcludedFromGlobal(event);
