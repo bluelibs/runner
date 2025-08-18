@@ -1,17 +1,10 @@
-import {
-  DependencyMapType,
-  IMiddleware,
-  ITask,
-  IHook,
-  IEventEmission,
-} from "../defs";
+import { DependencyMapType, ITask, IHook, IEventEmission } from "../defs";
 import { EventManager } from "./EventManager";
 import { Store } from "./Store";
-import { MiddlewareStoreElementType } from "./StoreTypes";
 import { Logger } from "./Logger";
-import { ValidationError } from "../errors";
 import { globalEvents } from "../globals/globalEvents";
 import { globalTags } from "../globals/globalTags";
+import { MiddlewareManager } from "./MiddlewareManager";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
@@ -23,7 +16,15 @@ export class TaskRunner {
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
     protected readonly logger: Logger,
-  ) {}
+  ) {
+    this.middlewareManager = new MiddlewareManager(
+      this.store,
+      this.eventManager,
+      this.logger,
+    );
+  }
+
+  private readonly middlewareManager: MiddlewareManager;
 
   /**
    * Begins the execution of an task. These are registered tasks and all sanity checks have been performed at this stage to ensure consistency of the object.
@@ -126,141 +127,6 @@ export class TaskRunner {
     TOutput extends Promise<any>,
     TDeps extends DependencyMapType,
   >(task: ITask<TInput, TOutput, TDeps>) {
-    const storeTask = this.store.tasks.get(task.id)!;
-
-    // this is the final next()
-    let next = async (input: any) => {
-      // Validate input with schema if provided
-      if (task.inputSchema) {
-        try {
-          input = task.inputSchema.parse(input);
-        } catch (error) {
-          throw new ValidationError(
-            "Task input",
-            task.id,
-            error instanceof Error ? error : new Error(String(error)),
-          );
-        }
-      }
-
-      // Resolve dependencies for tasks
-      const deps = storeTask?.computedDependencies as any;
-
-      try {
-        const rawResult = await task.run.call(null, input, deps);
-        // Validate result with schema if provided (ignores middleware)
-        if (task.resultSchema) {
-          try {
-            // result schema validates the resolved value of the promise
-            return task.resultSchema.parse(rawResult as any);
-          } catch (error) {
-            throw new ValidationError("Task result", task.id, error as any);
-          }
-        }
-        return rawResult;
-      } catch (error: unknown) {
-        try {
-          await this.store.onUnhandledError?.({
-            error,
-            kind: "task",
-            source: task.id,
-          });
-        } catch (_) {}
-        throw error;
-      }
-    };
-
-    const existingMiddlewares = task.middleware;
-    const existingMiddlewareIds = existingMiddlewares.map((x) => x.id);
-    // The logic here is that we want to attach the middleware only once, so we filter out the ones that are already attached at the task level.
-    // This allows a very flexible approach, you can have a global middleware that has a specific config for the rest, but for a specific task, you can override it.
-    // This enables a very powerful approach to middleware.
-    const globalMiddlewares = this.store
-      .getEverywhereMiddlewareForTasks(task)
-      .filter((x) => !existingMiddlewareIds.includes(x.id));
-    const createdMiddlewares = [...globalMiddlewares, ...existingMiddlewares];
-
-    // Inject local per-task interceptors first (closest to the task)
-    if (storeTask.interceptors && storeTask.interceptors.length > 0) {
-      for (let i = storeTask.interceptors.length - 1; i >= 0; i--) {
-        const interceptor = storeTask.interceptors[i];
-        const nextFunction = next;
-        next = async (input) => interceptor(nextFunction, input);
-      }
-    }
-
-    if (createdMiddlewares.length === 0) {
-      return next;
-    }
-
-    // we need to run the middleware in reverse order
-    // so we can chain the next function
-    for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
-      const middleware = createdMiddlewares[i];
-      const storeMiddleware = this.store.middlewares.get(
-        middleware.id,
-      ) as MiddlewareStoreElementType; // we know it exists because at this stage all sanity checks have been done.
-
-      const nextFunction = next;
-      next = async (input) => {
-        let result: any;
-        try {
-          // Observability: emit middlewareTriggered (excluded from global listeners)
-          await this.eventManager.emit(
-            globalEvents.middlewareTriggered,
-            {
-              kind: "task",
-              middleware: middleware as any,
-              targetId: task.id as any,
-            },
-            middleware.id,
-          );
-          result = await storeMiddleware.middleware.run(
-            {
-              task: {
-                definition: task,
-                input,
-              },
-              next: nextFunction,
-            },
-            storeMiddleware.computedDependencies,
-            middleware.config,
-          );
-          // Observability: emit middlewareCompleted (excluded from global listeners)
-          await this.eventManager.emit(
-            globalEvents.middlewareCompleted,
-            {
-              kind: "task",
-              middleware: middleware as any,
-              targetId: task.id as any,
-            },
-            middleware.id,
-          );
-          return result;
-        } catch (error: unknown) {
-          try {
-            await this.store.onUnhandledError?.({
-              error,
-              kind: "middleware",
-              source: middleware.id,
-            });
-          } catch (_) {}
-          // Always emit middlewareCompleted with error after unhandledError
-          await this.eventManager.emit(
-            globalEvents.middlewareCompleted,
-            {
-              kind: "task",
-              middleware: middleware as any,
-              targetId: task.id as any,
-              error: error as any,
-            },
-            middleware.id,
-          );
-          throw error;
-        }
-      };
-    }
-
-    return next;
+    return this.middlewareManager.composeTaskRunner(task);
   }
 }
