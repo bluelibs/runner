@@ -5,8 +5,16 @@ import {
   defineMiddleware,
   defineHook,
 } from "../define";
-import { run } from "../run";
+import { run as originalRun } from "../run";
 import { Errors } from "..";
+import { IResource } from "../defs";
+
+const run = (app: IResource) =>
+  originalRun(app, {
+    logs: {
+      printThreshold: null,
+    },
+  });
 
 const {
   RuntimeError,

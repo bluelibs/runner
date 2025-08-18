@@ -29,7 +29,7 @@ describe("Express OpenAPI SQLite Integration", () => {
     const result = await run(testApp);
     appInstance = result.value;
     dispose = result.dispose;
-    server = result.value.getResource(expressServerResource.id).app;
+    server = result.value.getResourceValue(expressServerResource.id).app;
   });
 
   afterAll(async () => {

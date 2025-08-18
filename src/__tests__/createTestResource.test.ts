@@ -108,14 +108,14 @@ describe("createTestResource", () => {
     await dispose();
   });
 
-  it("throws when getResource() cannot find the requested resource", async () => {
+  it("throws when getResourceValue() cannot find the requested resource", async () => {
     const app = resource({ id: "app.for.getResource.throw", register: [] });
     const { value: t, dispose } = await run(createTestResource(app));
 
-    expect(() => t.getResource("non.existent.resource.id")).toThrow(
+    expect(() => t.getResourceValue("non.existent.resource.id")).toThrow(
       ResourceNotFoundError
     );
-    expect(() => t.getResource("non.existent.resource.id")).toThrow(
+    expect(() => t.getResourceValue("non.existent.resource.id")).toThrow(
       'Resource "non.existent.resource.id" not found. Did you forget to register it or are you using the correct id?'
     );
 
@@ -130,7 +130,7 @@ describe("createTestResource", () => {
     const app = resource({ id: "app.for.getResource.success", register: [db] });
     const { value: t, dispose } = await run(createTestResource(app));
 
-    const value = t.getResource("db.value");
+    const value = t.getResourceValue("db.value");
     expect(value).toEqual({ url: "mem://" });
 
     await dispose();

@@ -65,20 +65,23 @@ export type RunOptions = {
   onUnhandledError?: OnUnhandledError;
 };
 
-export async function run<C, V extends Promise<any>>(
-  resourceOrResourceWithConfig:
-    | IResourceWithConfig<C, V>
-    | IResource<void, V, any, any> // For void configs
-    | IResource<{ [K in any]?: any }, V, any, any>, // For optional config
-  options?: RunOptions
-): Promise<{
+export type RunResult<V extends Promise<any>> = {
   value: V extends Promise<infer U> ? U : V;
   store: Store;
   dispose: () => Promise<void>;
   /** This is used to run tasks. */
   taskRunner: TaskRunner;
   eventManager: EventManager;
-}> {
+  logger: Logger;
+};
+
+export async function run<C, V extends Promise<any>>(
+  resourceOrResourceWithConfig:
+    | IResourceWithConfig<C, V>
+    | IResource<void, V, any, any> // For void configs
+    | IResource<{ [K in any]?: any }, V, any, any>, // For optional config
+  options?: RunOptions
+): Promise<RunResult<V>> {
   const {
     debug = undefined,
     logs = {},
@@ -207,6 +210,7 @@ export async function run<C, V extends Promise<any>>(
       store,
       taskRunner,
       eventManager,
+      logger,
     };
   } catch (err) {
     // Rollback initialized resources

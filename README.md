@@ -206,7 +206,7 @@ const dbResource = resource({
     return db;
   },
   async dispose(db, config, deps, ctx) {
-    // Same context available - no more "how do I access that thing I created?"
+    // This is to avoid exposing internals as resource result.
     for (const pool of ctx.pools) {
       await pool.drain();
     }
@@ -270,16 +270,16 @@ const logAllEventsHook = hook({
 
 #### Excluding Events from Global Listeners
 
-Sometimes you have internal or system events that should not be picked up by wildcard listeners. Use the `excludeFromGlobalListeners` tag to prevent events from being sent to `\"*\"` listeners:
+Sometimes you have internal or system events that should not be picked up by wildcard listeners. Use the `excludeFromGlobalListeners` tag to prevent events from being sent to `"*"` listeners:
 
 ```typescript
-import { event, hook, globalTags } from "@bluelibs/runner";
+import { event, hook, globals } from "@bluelibs/runner";
 
 // Internal event that won't be seen by global listeners
 const internalEvent = event({
   id: "app.events.internal",
   meta: {
-    tags: [globalTags.excludeFromGlobalListeners],
+    tags: [globals.tag.excludeFromGlobalListeners],
   },
 });
 ```
@@ -321,7 +321,6 @@ Hooks are perfect for:
 
 - Lighter weight - no middleware support
 - Designed specifically for event handling
-- Better performance for simple reactive logic
 
 #### Global Events
 
@@ -351,10 +350,12 @@ const hookObserver = hook({
 
 **Available Global Events:**
 
-- `globalEvents.ready` - System has completed initialization
+- `global.events.ready` - System has completed initialization
   // Note: global unhandled error event was removed. Use run({ onUnhandledError })
-- `globalEvents.hookTriggered` - Before a hook executes
-- `globalEvents.hookCompleted` - After a hook finishes
+- `global.events.hookTriggered` - Before a hook executes
+- `global.events.hookCompleted` - After a hook finishes
+- `global.events.middlewareTriggered` - Before a middleware executes
+- `global.events.middlewareCompleted` - After a middleware finishes
 
 #### stopPropagation()
 
@@ -378,7 +379,7 @@ const criticalAlert = event<{
 const emergencyHandler = hook({
   id: "app.hooks.emergencyHandler",
   on: criticalAlert,
-  listenerOrder: -100, // Higher priority (lower numbers run first)
+  order: -100, // Higher priority (lower numbers run first)
   run: async (event) => {
     console.log(`Alert received: ${event.data.severity}`);
 
@@ -437,6 +438,7 @@ const logMiddleware = middleware({
   dependencies: {
     logger: global.resources.logger,
   },
+  // You either get a task or a resource
   run: async ({ task, resource, next }) => {
     if (!task) {
       return;
@@ -487,17 +489,50 @@ task({
 
 _Resources can dynamically modify task behavior during initialization_
 
-Task interceptors allow resources to dynamically modify task inputs and outputs during their initialization phase. This powerful pattern enables resources to augment task behavior without tight coupling.
+Task interceptors (`task.intercept()`) are the modern replacement for component lifecycle events, allowing resources to dynamically modify task behavior without tight coupling.
 
 ```typescript
-import { task, resource, run } from "@bluelibs/runner";
+import { task, resource, run, globals } from "@bluelibs/runner";
 
-const calculator = task({
+const calculatorTask = task({
   id: "app.tasks.calculator",
   run: async (input: { value: number }) => {
+    console.log("3. Task is running...");
     return { result: input.value + 1 };
   },
 });
+
+const interceptorResource = resource({
+  id: "app.interceptor",
+  dependencies: {
+    calculatorTask,
+  },
+  init: async (_, {
+    const calculatorTask = store.getTask(calculator);
+
+    // Task can be run like calculatorTask(input) or inside resources we can also do:
+    calculatorTask.intercept(async (next, input) => {
+      console.log("1. Interceptor before task run");
+      const result = await next(input);
+      console.log("4. Interceptor after task run");
+      return { ...result, intercepted: true };
+    });
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [calculator, interceptorResource],
+  dependencies: { calculator },
+  init: async (_, { calculator }) => {
+    console.log("2. Calling the task...");
+    const result = await calculator({ value: 10 });
+    console.log("5. Final result:", result);
+    // Final result: { result: 11, intercepted: true }
+  },
+});
+
+await run(app);
 ```
 
 ## Optional Dependencies
@@ -701,7 +736,7 @@ const { dispose } = await run(app, {
 
 The `onUnhandledError` callback is invoked by Runner whenever an error escapes normal handling. It receives a structured payload you can ship to logging/telemetry and decide mitigation steps.
 
-```ts
+```typescript
 type UnhandledErrorKind =
   | "process" // uncaughtException / unhandledRejection
   | "task" // task.run threw and wasn't handled
@@ -723,7 +758,7 @@ Default behavior (when not provided) logs the normalized error via the created `
 
 Example with telemetry and conditional shutdown:
 
-```ts
+```typescript
 await run(app, {
   errorBoundary: true,
   onUnhandledError: async ({ error, kind, source }) => {
@@ -1048,6 +1083,16 @@ BlueLibs Runner comes with a built-in logging system that's event-driven, struct
 
 ### Basic Logging
 
+```ts
+run(app, {
+  logs: {
+    printThreshold: "info", // use null to disable printing, and hook into onLog()
+    printStrategy: "pretty", // you also have "json" and "json-pretty" with circular dep safety.
+    bufferLogs: false, // Starts sending out logs only after the system emits the ready event. Useful for when you're sending them out.
+  },
+});
+```
+
 ```typescript
 import { globals } from "@bluelibs/runner";
 
@@ -1069,16 +1114,6 @@ const businessTask = task({
     logger.trace("Very detailed trace"); // ❌ Hidden by default
   },
 });
-```
-
-**Good news!** Logs at `info` level and above are visible by default, so you'll see your application logs immediately without any configuration. For development and debugging, you can easily show more detailed logs:
-
-```bash
-# Show debug logs and framework internals
-RUNNER_LOG_LEVEL=debug node your-app.js
-
-# Hide all logs for production
-RUNNER_DISABLE_LOGS=true node your-app.js
 ```
 
 ### Log Levels
@@ -1159,11 +1194,10 @@ const requestHandler = task({
   run: async (requestData, { logger }) => {
     const request = RequestContext.use();
 
-    // Create a contextual logger with bound metadata
-    const requestLogger = logger.with({
+    // Create a contextual logger with bound metadata with source and context
+    const requestLogger = logger.with("api.handler", {
       requestId: request.requestId,
       userId: request.userId,
-      source: "api.handler",
     });
 
     // All logs from this logger will include the bound context
@@ -1193,23 +1227,7 @@ The Debug Resource is a powerful observability suite that hooks into the framewo
 ### Quick Start with Debug
 
 ```typescript
-import { globals } from "@bluelibs/runner";
-
-const app = resource({
-  id: "app",
-  register: [
-    // Enable debug logging with different levels
-    globals.resources.debug.with("normal"), // Basic visibility
-    // globals.resources.debug.with("verbose"), // Detailed visibility
-
-    // Your other resources...
-    userService,
-    emailService,
-  ],
-});
-
-// Or enable debug globally when running
-const { dispose } = await run(app, { debug: "verbose" });
+run(app, { debug: "verbose" });
 ```
 
 ### Debug Levels
@@ -1220,13 +1238,13 @@ const { dispose } = await run(app, { debug: "verbose" });
 - Event emissions
 - Hook executions
 - Error tracking
+- Performance timing data
 
 **"verbose"** - Detailed visibility for deep debugging:
 
 - All "normal" features plus:
 - Task input/output logging
 - Resource configuration and results
-- Performance timing data
 
 **Custom Configuration**:
 
@@ -1251,16 +1269,16 @@ const app = resource({
 
 ### Per-Component Debug Configuration
 
-Use debug tags to configure debugging on individual components:
+Use debug tags to configure debugging on individual components, when you're interested in just a few verbose ones.
 
 ```typescript
-import { globalTags } from "@bluelibs/runner";
+import { globals } from "@bluelibs/runner";
 
 const criticalTask = task({
   id: "app.tasks.critical",
   meta: {
     tags: [
-      globalTags.debug.with({
+      globals.tag.debug.with({
         logTaskInput: true,
         logTaskResult: true,
         logTaskOnError: true,
@@ -1280,7 +1298,6 @@ const criticalTask = task({
 // Debug options at startup
 const { dispose, taskRunner, eventManager } = await run(app, {
   debug: "verbose", // Enable debug globally
-  log: "json", // Change log output format
 });
 
 // Access internals for advanced debugging
@@ -1356,8 +1373,8 @@ const logShipper = hook({
 });
 
 // Filter logs by source
-const databaseLogHandler = task({
-  id: "app.logging.database",
+const databaseLogHandler = hook({
+  id: "app.hooks.databaseLogHandler",
   on: globals.events.log,
   run: async (event) => {
     const log = event.data;
@@ -1367,7 +1384,7 @@ const databaseLogHandler = task({
       await databaseMonitoring.recordMetric({
         operation: log.data?.operation,
         duration: log.data?.duration,
-        level: log.level,
+        level: log.data?.level,
       });
     }
   },
@@ -1764,7 +1781,7 @@ const internalEvent = event({
 });
 ```
 
-To process these tags you can hook into `globalEvents.ready`, use the global store as dependency and use the `getTasksWithTag()` and `getResourcesWithTag()` functionality.
+To process these tags you can hook into `global.events.ready`, use the global store as dependency and use the `getTasksWithTag()` and `getResourcesWithTag()` functionality.
 
 #### Structured Tags
 
@@ -1819,7 +1836,9 @@ const ageContract = tag<void, { age: number }>({ id: "contract.age" });
 
 // Works with configured tags too
 const preferenceContract = tag<{ locale: string }, { preferredLocale: string }>(
-  { id: "contract.preferences" }
+  {
+    id: "contract.preferences",
+  }
 );
 ```
 
@@ -2205,7 +2224,7 @@ Add a `configSchema` to middleware to validate configurations. Like resources, *
 ```typescript
 const timingConfigSchema = z.object({
   timeout: z.number().positive(),
-  logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
+  logLevel: z.enum(["debug", "info", "warn", "error"])).default("info"),
   logSuccessful: z.boolean().default(true),
 });
 
@@ -2758,6 +2777,7 @@ const registerUser = task({ id: "app.tasks.registerUser" /* ... */ });
 // Boom: full ecosystem run (middleware, events, overrides) with a tiny driver
 const { value: t, dispose } = await run(harness);
 const result = await t.runTask(registerUser, { email: "x@y.z" });
+const value = t.getResourceValue(id | resource); // get the value from the run context
 expect(result).toMatchObject({ success: true });
 await dispose();
 ```
@@ -3106,12 +3126,12 @@ const { dispose } = await run(app);
 const { dispose } = await run(
   app.with({
     environment: "production",
-    debugMode: false,
+    someBusinessLogic: false,
   })
 );
 
 // With debug and logging options
-const { dispose, taskRunner, eventManager } = await run(app, {
+const { dispose, taskRunner, eventManager, store } = await run(app, {
   debug: "verbose", // Enable comprehensive debug logging
   log: "json", // Use JSON log format instead of pretty
 });
@@ -3135,15 +3155,6 @@ console.log(`Active events: ${eventManager.getEventCount()}`);
 - `errorBoundary`: boolean — when true, installs handlers for `uncaughtException` and `unhandledRejection`
 - `shutdownHooks`: boolean — when true, installs SIGINT/SIGTERM handlers to call `dispose()`
 - `onUnhandledError`: OnUnhandledError — centralized handler for unhandled errors (see above)
-
-### Compact NPM Build
-
-The framework now excludes tests and development files from the NPM package, resulting in:
-
-- **50% smaller package size**
-- **Faster installation times**
-- **Cleaner node_modules**
-- **Production-optimized bundle**
 
 ## Why Choose BlueLibs Runner?
 
@@ -3169,27 +3180,6 @@ This is part of the [BlueLibs](https://www.bluelibs.com) ecosystem. We're not tr
 - [GitHub Repository](https://github.com/bluelibs/runner) - ⭐ if you find this useful
 - [Documentation](https://bluelibs.github.io/runner/) - When you need the full details
 - [Issues](https://github.com/bluelibs/runner/issues) - When something breaks (or you want to make it better)
-
-## Breaking Changes Summary
-
-**v2.0 introduces several breaking changes for a cleaner, more powerful architecture:**
-
-### Removed Features
-
-- ❌ **Task/Resource lifecycle events** (`task.events.beforeRun`, etc.)
-- ❌ **Anonymous ID generation** - All components now require explicit `id` properties
-- ❌ **setOutput functionality** in event handlers
-- ❌ **Complex global event system** - Simplified to core events only
-
-### New Features
-
-- ✅ **Hooks system** - Lightweight event listeners with `hook()`
-- ✅ **Optional dependencies** - Graceful degradation with `.optional()`
-- ✅ **Debug resource** - Professional debugging suite
-- ✅ **Enhanced middleware** - Lifecycle events and safer global middleware
-- ✅ **Global tags** - Better component classification and control
-- ✅ **Enhanced run function** - Debug options and framework access
-- ✅ **Centralized error handling** - Global error boundary events
 
 ### Migration Guide
 
@@ -3249,8 +3239,6 @@ const myTask = task({
   run: async () => "result",
 });
 ```
-
-## The Bottom Line
 
 BlueLibs Runner v2.0 is what happens when you take all the good ideas from modern frameworks, learn from real-world usage, and build something even better. It's more powerful, more flexible, and still makes sense when you read it six months later.
 

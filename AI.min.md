@@ -6,6 +6,17 @@
 npm install @bluelibs/runner
 ```
 
+## Core Philosophy
+
+BlueLibs Runner is not a "minimal" framework; it's a **powerful and integrated** one. It provides a comprehensive set of tools for building robust, testable, and maintainable applications by combining a predictable Dependency Injection (DI) container with a dynamic metadata and eventing system.
+
+## DI Container Guarantees
+
+This is the foundation of trust for any DI framework.
+
+- **Circular Dependencies**: A runtime circular dependency (e.g., `A → B → A`) is a fatal error. The runner **will fail to start** and will throw a descriptive error showing the full dependency chain, forcing you to fix the architecture.
+- **Override Precedence**: Overrides are applied top-down. In case of conflicting overrides for the same `id`, the one defined closest to the root `run()` call wins. The "root is the boss."
+
 ## TL;DR
 
 - **Lifecycle**: `run() → init resources (deps first) → 'ready' event → dispose() (reverse order)`
@@ -54,7 +65,8 @@ const app = resource({
 });
 
 // Run with optional debug/logs
-await run(app.with({}), {
+// If app had a config app.with(config) for 1st arg
+await run(app, {
   debug: "normal", // "normal" | "verbose" | DebugConfig
   logs: { printThreshold: "info", printStrategy: "pretty" },
 });
@@ -91,25 +103,34 @@ const internal = event({
 
 ## Unhandled Errors
 
-By default, unhandled errors are logged. You can customize this via `run({ onUnhandledError })`:
+By default, unhandled errors are just logged. You can customize this via `run(app, { onUnhandledError })`:
 
 ```ts
 await run(app, {
-  onUnhandledError: async ({ logger, error }) => {
-    await logger.error("Unhandled error", { error });
-    // Optional: also emit your own event or send to telemetry here
+  errorBoundary: true, // Catch process-level errors (default: true)
+  onUnhandledError: async ({ error, kind, source }) => {
+    // kind: "task" | "middleware" | "resourceInit" | "hook" | "process" | "run"
+    // source: optional origin hint (ex: "uncaughtException")
+    await telemetry.capture(error as Error, { kind, source });
+
+    // Optionally decide on remediation strategy
+    if (kind === "process") {
+      // For hard process faults, prefer fast, clean exit after flushing logs
+      await flushAll();
+      process.exit(1);
+    }
   },
 });
 ```
 
-If you prefer event-driven handling, you can still attach a hook to a custom event of your own.
+If you prefer event-driven handling, you can still emit your own custom events from this callback.
 
 ## Debug (zero‑overhead when disabled)
 
 Enable globally at run time:
 
 ```ts
-await run(app, { debug: "verbose" });
+await run(app, { debug: "verbose" }); // "normal" or DebugConfig
 ```
 
 or per‑component via tag:
@@ -137,6 +158,11 @@ const logsExtension = resource({
   id: "app.logs",
   dependencies: { logger: globals.resources.logger },
   init: async (_, { logger }) => {
+    logger.info("test", { data }); // "trace", "debug", "info", "warn", "error", "critical"
+    const sublogger = logger.with({
+      source: "app.logs",
+      context: {},
+    });
     logger.onLog((log) => {
       // ship or transform
     });
@@ -147,9 +173,9 @@ const logsExtension = resource({
 ## Middleware (global or local)
 
 ```ts
-import { middleware, resource, task } from "@bluelibs/runner";
+import { middleware, resource, task, globals } from "@bluelibs/runner";
 
-// Config for middleware is specified here, or via configSchema
+// Custom middleware
 const auth = middleware<{ role: string }>({
   id: "app.middleware.auth",
   run: async ({ task, next }, _, cfg) => {
@@ -164,8 +190,32 @@ const adminOnly = task({
   run: async () => "secret",
 });
 
+// Built-in middleware patterns
+const resilientTask = task({
+  id: "app.tasks.resilient",
+  middleware: [
+    // Retry with exponential backoff
+    globals.middleware.retry.with({
+      retries: 3,
+      delayStrategy: (attempt) => 1000 * attempt,
+      stopRetryIf: (error) => error.message === "Invalid credentials",
+    }),
+    // Timeout protection
+    globals.middleware.timeout.with({ ttl: 10000 }),
+    // Caching
+    globals.middleware.cache.with({
+      ttl: 60000,
+      keyBuilder: (taskId, input) => `${taskId}-${JSON.stringify(input)}`,
+    }),
+  ],
+  run: async () => expensiveApiCall(),
+});
+
+// Global middleware
 const appWithGlobal = resource({
   id: "app",
+  // Note: To prevent deadlocks, a global middleware that depends on a resource
+  // will be silently excluded from running on that specific resource.
   register: [auth.everywhere({ tasks: true, resources: false })],
   // you can also opt-in for filters: tasks(task) { return true; }
 });
@@ -192,16 +242,40 @@ const task = {
 };
 ```
 
+## System Shutdown & Error Boundary
+
+The framework includes built-in support for graceful shutdowns:
+
+```ts
+const { dispose } = await run(app, {
+  shutdownHooks: true, // Automatically handle SIGTERM/SIGINT (default: true)
+  errorBoundary: true, // Catch unhandled errors and rejections (default: true)
+});
+```
+
+## Performance
+
+BlueLibs Runner is designed for high performance with minimal overhead:
+
+- **Basic task execution**: ~2.2M/second
+- **Task execution with 5 middlewares**: ~180,000 tasks/sec
+- **Resource initialization**: ~67,000 resources/sec
+- **Event emission and handling**: ~385,753 events/sec
+- **Middleware overhead**: ~0.0013ms for all 5 middlewares (virtually zero)
+
+Test yourself: `npm run benchmark` in the @bluelibs/runner repo.
+
 ## Run Options (high‑level)
 
 - debug: "normal" | "verbose" | DebugConfig
 - logs: { printThreshold?: LogLevel | null; printStrategy?: "pretty" | "json" | "json-pretty"; bufferLogs?: boolean }
 - errorBoundary: boolean (default true)
 - shutdownHooks: boolean (default true)
+- onUnhandledError(error) {}
 
 Note: `globals` is a convenience object exposing framework internals:
 
-- `globals.events` (ready, unhandledError, hookTriggered, hookCompleted, middlewareTriggered, middlewareCompleted)
+- `globals.events` (ready, hookTriggered, hookCompleted, middlewareTriggered, middlewareCompleted)
 - `globals.resources` (store, taskRunner, eventManager, logger, cache, queue)
 - `globals.middlewares` (retry, cache, timeout, requireContext)
 - `globals.tags` (system, debug, excludeFromGlobalListeners)
@@ -239,7 +313,7 @@ const harness = createTestResource(app, {
 });
 
 const { value: t, dispose } = await run(harness);
-await t.runTask(someTask, { input: 1 });
+await t.runTask(someTask, { input: 1 }); // t.getResourceValue(id | resource), t.eventManager, t.taskRunner, t.store
 await dispose();
 ```
 

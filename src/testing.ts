@@ -57,7 +57,8 @@ function buildTestFacade(deps: {
     ): Promise<Awaited<O> | undefined> =>
       deps.taskRunner.run(task, ...args) as any,
     // Access a resource value by id (string or symbol)
-    getResource: (id: string) => {
+    getResourceValue: (id: string | { id: string }) => {
+      id = typeof id === "string" ? id : id.id;
       const entry = deps.store.resources.get(id);
       if (!entry) {
         throw new ResourceNotFoundError(id);

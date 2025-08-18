@@ -8,6 +8,7 @@ import {
   EventManager,
 } from "../index";
 import { ContextError } from "../context";
+import { Logger } from "../models/Logger";
 
 describe("Context System", () => {
   const TestContext = createContext<{ id: string }>();
@@ -27,6 +28,7 @@ describe("Context System", () => {
         store: expect.any(Store),
         taskRunner: expect.any(TaskRunner),
         eventManager: expect.any(EventManager),
+        logger: expect.any(Logger),
       });
     });
   });
@@ -53,6 +55,7 @@ describe("Context System", () => {
         store: expect.any(Store),
         taskRunner: expect.any(TaskRunner),
         eventManager: expect.any(EventManager),
+        logger: expect.any(Logger),
       });
     });
   });
