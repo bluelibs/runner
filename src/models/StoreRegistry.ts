@@ -38,7 +38,7 @@ export class StoreRegistry {
       this.tasks,
       this.resources,
       this.events,
-      this.middlewares
+      this.middlewares,
     );
   }
 
@@ -99,7 +99,7 @@ export class StoreRegistry {
 
   storeResourceWithConfig<C>(
     item: IResourceWithConfig<any, any, any>,
-    check = true
+    check = true,
   ) {
     check && this.validator.checkIfIDExists(item.resource.id);
 
@@ -122,6 +122,8 @@ export class StoreRegistry {
       typeof element.register === "function"
         ? element.register(config as C)
         : element.register;
+
+    element.register = items;
 
     for (const item of items) {
       // will call registration if it detects another resource.
@@ -170,7 +172,7 @@ export class StoreRegistry {
   }
 
   getEverywhereMiddlewareForTasks(
-    task: ITask<any, any, any, any>
+    task: ITask<any, any, any, any>,
   ): IMiddleware[] {
     return Array.from(this.middlewares.values())
       .filter((x) => {
@@ -194,7 +196,7 @@ export class StoreRegistry {
    * Returns all global middleware for resource, which do not depend on the target resource.
    */
   getEverywhereMiddlewareForResources(
-    target: IResource<any, any, any, any>
+    target: IResource<any, any, any, any>,
   ): IMiddleware[] {
     return Array.from(this.middlewares.values())
       .filter((x) => {
@@ -204,7 +206,7 @@ export class StoreRegistry {
         // If the middleware depends on the target resource, it should not be applied to the target resource
         const isDependency = this.idExistsAsMiddlewareDependency(
           target.id,
-          x.middleware.dependencies
+          x.middleware.dependencies,
         );
         // If it's a direct dependency we exclude it.
         return !isDependency;
@@ -221,7 +223,7 @@ export class StoreRegistry {
 
   private prepareResource<C>(
     item: IResource<any, any, any>,
-    config: any
+    config: any,
   ): IResource<any, any, any> {
     const cloned: IResource<any, any, any> = { ...item };
     cloned.dependencies =
@@ -275,7 +277,7 @@ export class StoreRegistry {
       // Add task dependencies
       if (task.task.dependencies) {
         for (const [depKey, depItem] of Object.entries(
-          task.task.dependencies
+          task.task.dependencies,
         )) {
           const candidate: any = utils.isOptional(depItem)
             ? (depItem as any).inner
@@ -303,7 +305,7 @@ export class StoreRegistry {
       // Add global middleware dependencies for tasks
       if (!utils.isHook(task.task)) {
         const perTaskMiddleware = this.getEverywhereMiddlewareForTasks(
-          task.task as ITask<any, any, any, any>
+          task.task as ITask<any, any, any, any>,
         );
         for (const middleware of perTaskMiddleware) {
           const middlewareNode = nodeMap.get(middleware.id);
@@ -320,7 +322,7 @@ export class StoreRegistry {
 
       if (middleware.middleware.dependencies) {
         for (const [depKey, depItem] of Object.entries(
-          middleware.middleware.dependencies
+          middleware.middleware.dependencies,
         )) {
           const candidate: any = utils.isOptional(depItem)
             ? (depItem as any).inner
@@ -342,7 +344,7 @@ export class StoreRegistry {
       // Add resource dependencies
       if (resource.resource.dependencies) {
         for (const [depKey, depItem] of Object.entries(
-          resource.resource.dependencies
+          resource.resource.dependencies,
         )) {
           const candidate: any = utils.isOptional(depItem)
             ? (depItem as any).inner
@@ -366,7 +368,7 @@ export class StoreRegistry {
 
       // Add global middleware dependencies for resources
       const perResourceMiddleware = this.getEverywhereMiddlewareForResources(
-        resource.resource
+        resource.resource,
       );
 
       for (const middleware of perResourceMiddleware) {
@@ -383,7 +385,7 @@ export class StoreRegistry {
   getTasksWithTag(tag: string | ITag) {
     if (typeof tag === "string") {
       return Array.from(this.tasks.values()).filter((x) =>
-        x.task.meta?.tags?.includes(tag)
+        x.task.meta?.tags?.includes(tag),
       );
     }
 
@@ -395,7 +397,7 @@ export class StoreRegistry {
   getResourcesWithTag(tag: string | ITag) {
     if (typeof tag === "string") {
       return Array.from(this.resources.values()).filter((x) =>
-        x.resource.meta?.tags?.includes(tag)
+        x.resource.meta?.tags?.includes(tag),
       );
     }
 
