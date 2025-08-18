@@ -10,7 +10,7 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 </p>
 
 - [UX Friendly Docs](https://bluelibs.github.io/runner/)
-- [AI Friendly Docs (~3500 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)
+- [AI Friendly Docs (<4000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)
 - [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)
 - [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite)
 
