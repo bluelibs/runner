@@ -1,5 +1,5 @@
 // examples/express-openapi-sqlite/src/tasks/routeRegistration.ts
-import { task, globals } from "@bluelibs/runner";
+import { hook, globals } from "@bluelibs/runner";
 import { Request, Response } from "express";
 import { httpTag } from "./http.tag";
 import { RequestContext, RequestData } from "./request.context";
@@ -7,9 +7,9 @@ import { expressServerResource } from "./expressServer";
 import swaggerUi from "swagger-ui-express";
 import { createDocument } from "zod-openapi";
 
-export const routeRegistrationListener = task({
-  id: "app.tasks.routeRegistration",
-  // on: globals.events.afterInit,
+export const routeRegistrationHook = hook({
+  id: "app.hooks.routeRegistration",
+  on: globals.events.ready,
   meta: {
     title: "Route Registration Listener",
     description:
@@ -41,7 +41,7 @@ export const routeRegistrationListener = task({
             response: res,
           };
           const result = await RequestContext.provide(requestData, () =>
-            taskRunner.run(task, taskInput)
+            taskRunner.run(task, taskInput),
           );
           res.status(200).json(result);
         } catch (err) {

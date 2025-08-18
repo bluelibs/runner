@@ -74,7 +74,7 @@ export async function run<C, V extends Promise<any>>(
     | IResourceWithConfig<C, V>
     | IResource<void, V, any, any> // For void configs
     | IResource<{ [K in any]?: any }, V, any, any>, // For optional config
-  options?: RunOptions
+  options?: RunOptions,
 ): Promise<RunResult<V extends Promise<infer U> ? U : V>> {
   const {
     debug = undefined,
@@ -91,7 +91,7 @@ export async function run<C, V extends Promise<any>>(
 
   const eventManager = new EventManager();
   let { resource, config } = extractResourceAndConfig(
-    resourceOrResourceWithConfig
+    resourceOrResourceWithConfig,
   );
 
   // ensure for logger, that it can be used only after: computeAllDependencies() has executed
@@ -114,7 +114,7 @@ export async function run<C, V extends Promise<any>>(
   let unhookProcessSafetyNets: (() => void) | undefined;
   if (errorBoundary) {
     unhookProcessSafetyNets = registerProcessLevelSafetyNets(
-      bindProcessErrorHandler(onUnhandledError)
+      bindProcessErrorHandler(onUnhandledError),
     );
   }
 
@@ -122,7 +122,7 @@ export async function run<C, V extends Promise<any>>(
     store,
     eventManager,
     taskRunner,
-    logger
+    logger,
   );
 
   // We may install shutdown hooks; capture unhook function to remove them on dispose
@@ -170,7 +170,7 @@ export async function run<C, V extends Promise<any>>(
     await processor.computeAllDependencies();
     // After this stage, logger print policy could have been set.
     await logger.debug(
-      "Dependencies computed. Proceeding with initialization..."
+      "Dependencies computed. Proceeding with initialization...",
     );
 
     // Now we can safely compute dependencies without being afraid of an infinite loop.
@@ -178,8 +178,6 @@ export async function run<C, V extends Promise<any>>(
 
     // Now we can initialise the root resource
     await processor.initializeRoot();
-
-    await logger.debug("System initialized and operational.");
 
     // disallow manipulation or attaching more
     store.lock();
@@ -191,8 +189,10 @@ export async function run<C, V extends Promise<any>>(
       {
         root: store.root.resource,
       },
-      "system"
+      "system",
     );
+
+    await logger.info("Runner online. Awaiting tasks and events.");
 
     if (shutdownHooks) {
       unhookShutdown = registerShutdownHook(() => store.dispose());
@@ -204,7 +204,7 @@ export async function run<C, V extends Promise<any>>(
       store,
       eventManager,
       taskRunner,
-      disposeAll
+      disposeAll,
     );
   } catch (err) {
     // Rollback initialized resources
@@ -224,7 +224,7 @@ function extractResourceAndConfig<C, V extends Promise<any>>(
   resourceOrResourceWithConfig:
     | IResourceWithConfig<C, V>
     | IResource<void, V, any, any> // For void configs
-    | IResource<{ [K in any]?: any }, V, any, any> // For optional config
+    | IResource<{ [K in any]?: any }, V, any, any>, // For optional config
 ) {
   let resource: IResource<any, any, any, any>;
   let config: any;
