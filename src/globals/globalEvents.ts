@@ -34,7 +34,7 @@ export const globalEvents = {
       title: "Middleware Triggered",
       description:
         "Emitted immediately before a middleware starts running for a task or resource.",
-      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+      tags: [systemTag, globalTags.excludeFromGlobalHooks],
     },
   }),
   /**
@@ -51,7 +51,7 @@ export const globalEvents = {
       title: "Middleware Completed",
       description:
         "Emitted after a middleware finishes running for a task or resource.",
-      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+      tags: [systemTag, globalTags.excludeFromGlobalHooks],
     },
   }),
   /**
@@ -66,7 +66,7 @@ export const globalEvents = {
       title: "Hook Triggered",
       description:
         "Emitted immediately before a hook starts running for an event.",
-      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+      tags: [systemTag, globalTags.excludeFromGlobalHooks],
     },
   }),
   /**
@@ -81,7 +81,7 @@ export const globalEvents = {
     meta: {
       title: "Hook Completed",
       description: "Emitted after a hook finishes running for an event.",
-      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+      tags: [systemTag, globalTags.excludeFromGlobalHooks],
     },
   }),
   /**
@@ -96,7 +96,7 @@ export const globalEvents = {
       title: "Unhandled Error",
       description:
         "Central error boundary event for any thrown error across the runner.",
-      tags: [systemTag, globalTags.excludeFromGlobalListeners],
+      tags: [systemTag, globalTags.excludeFromGlobalHooks],
     },
   }),
 } as const;

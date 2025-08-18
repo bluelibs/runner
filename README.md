@@ -272,7 +272,7 @@ const logAllEventsHook = hook({
 
 #### Excluding Events from Global Listeners
 
-Sometimes you have internal or system events that should not be picked up by wildcard listeners. Use the `excludeFromGlobalListeners` tag to prevent events from being sent to `"*"` listeners:
+Sometimes you have internal or system events that should not be picked up by wildcard listeners. Use the `excludeFromGlobalHooks` tag to prevent events from being sent to `"*"` listeners:
 
 ```typescript
 import { event, hook, globals } from "@bluelibs/runner";
@@ -281,7 +281,7 @@ import { event, hook, globals } from "@bluelibs/runner";
 const internalEvent = event({
   id: "app.events.internal",
   meta: {
-    tags: [globals.tags.excludeFromGlobalListeners],
+    tags: [globals.tags.excludeFromGlobalHooks],
   },
 });
 ```
@@ -1707,7 +1707,7 @@ const debugTask = task({
 const internalEvent = event({
   id: "app.events.internal",
   meta: {
-    tags: [globals.tags.excludeFromGlobalListeners],
+    tags: [globals.tags.excludeFromGlobalHooks],
   },
 });
 ```

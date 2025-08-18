@@ -71,7 +71,7 @@ export class TaskRunner {
     // Internal observability events are tagged to be excluded from global listeners.
     // We detect them by tag so we don't double-wrap them with our own hookTriggered/hookCompleted.
     const isObservabilityEvent = Boolean(
-      globalTags.excludeFromGlobalListeners.extract(emission as any),
+      globalTags.excludeFromGlobalHooks.extract(emission as any),
     );
 
     // The logic here is that we don't want to have lifecycle events for the events that are excluded from global ones.

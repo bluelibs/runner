@@ -13,14 +13,14 @@ export const globalTags = {
         "System-wide tags. Used for filtering out noise when you're focusing on your application.",
     },
   }),
-  excludeFromGlobalListeners: defineTag<{
+  excludeFromGlobalHooks: defineTag<{
     metadata?: Record<string, any>;
   }>({
-    id: "globals.tags.excludeFromGlobalListeners",
+    id: "globals.tags.excludeFromGlobalHooks",
     meta: {
-      title: "Exclude Event From Global Listeners",
+      title: "Exclude Event From Global Hooks",
       description:
-        "Marks events that should not be dispatched to global listeners (on: '*').",
+        "Marks events that should not be dispatched to global hooks (on: '*').",
     },
   }),
   debug: debugTag,

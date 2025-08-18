@@ -3,7 +3,7 @@
 ### 🎉 What's New & Shiny
 
 - 🎣 **Hook system got its own apartment!** No more living with tasks - they're officially separated
-- 🤫 **Invisible events with `globals.tags.excludeFromGlobalListeners`** - because sometimes events need privacy too
+- 🤫 **Invisible events with `globals.tags.excludeFromGlobalHooks`** - because sometimes events need privacy too
   - Perfect for avoiding those awkward deadlock situations when your global events get a little too chatty with side-effects
 - 🏷️ **System tagging with `globals.tags.system`** - like putting a "Do Not Disturb" sign on your runner internals
 - 🎯 **Task interception powers** - resources can now be nosy neighbors to specific tasks

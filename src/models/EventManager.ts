@@ -50,7 +50,7 @@ export class EventManager {
 
   private mergeSortedListeners(
     a: IListenerStorage[],
-    b: IListenerStorage[]
+    b: IListenerStorage[],
   ): IListenerStorage[] {
     const result: IListenerStorage[] = [];
     let i = 0,
@@ -72,7 +72,7 @@ export class EventManager {
    * it as excluded from global ("*") listeners.
    */
   private isExcludedFromGlobal(event: IEventEmission<any>): boolean {
-    const tag = globalTags.excludeFromGlobalListeners.extract(event);
+    const tag = globalTags.excludeFromGlobalHooks.extract(event);
 
     return Boolean(tag);
   }
@@ -95,7 +95,7 @@ export class EventManager {
       } else {
         cached = this.mergeSortedListeners(
           eventListeners,
-          this.globalListeners
+          this.globalListeners,
         );
       }
       this.cachedMergedListeners.set(eventId, cached);
@@ -114,7 +114,7 @@ export class EventManager {
   async emit<TInput>(
     eventDefinition: IEvent<TInput>,
     data: TInput,
-    source: string
+    source: string,
   ): Promise<void> {
     // Validate payload with schema if provided
     if (eventDefinition.payloadSchema) {
@@ -124,7 +124,7 @@ export class EventManager {
         throw new ValidationError(
           "Event payload",
           eventDefinition.id,
-          error instanceof Error ? error : new Error(String(error))
+          error instanceof Error ? error : new Error(String(error)),
         );
       }
     }
@@ -171,7 +171,7 @@ export class EventManager {
 
   private insertListener(
     listeners: IListenerStorage[],
-    newListener: IListenerStorage
+    newListener: IListenerStorage,
   ): void {
     let low = 0;
     let high = listeners.length;
@@ -189,7 +189,7 @@ export class EventManager {
   addListener<T>(
     event: IEvent<T> | Array<IEvent<T>>,
     handler: EventHandlerType<T>,
-    options: IEventHandlerOptions<T> = HandlerOptionsDefaults
+    options: IEventHandlerOptions<T> = HandlerOptionsDefaults,
   ): void {
     this.checkLock();
     const newListener: IListenerStorage = {
@@ -215,7 +215,7 @@ export class EventManager {
 
   addGlobalListener(
     handler: EventHandlerType,
-    options: IEventHandlerOptions = HandlerOptionsDefaults
+    options: IEventHandlerOptions = HandlerOptionsDefaults,
   ): void {
     this.checkLock();
     const newListener: IListenerStorage = {

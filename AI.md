@@ -97,7 +97,7 @@ const audit = hook({
 // Exclude internal events from "*"
 const internal = event({
   id: "app.events.internal",
-  meta: { tags: [globals.tags.excludeFromGlobalListeners] },
+  meta: { tags: [globals.tags.excludeFromGlobalHooks] },
 });
 ```
 
@@ -270,7 +270,7 @@ Note: `globals` is a convenience object exposing framework internals:
 - `globals.events` (ready, hookTriggered, hookCompleted, middlewareTriggered, middlewareCompleted)
 - `globals.resources` (store, taskRunner, eventManager, logger, cache, queue)
 - `globals.middleware` (retry, cache, timeout, requireContext)
-- `globals.tags` (system, debug, excludeFromGlobalListeners)
+- `globals.tags` (system, debug, excludeFromGlobalHooks)
 
 ## Overrides
 
