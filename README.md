@@ -9,10 +9,10 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 <a href="https://github.com/bluelibs/runner" target="_blank"><img src="https://img.shields.io/badge/github-blue" alt="GitHub" /></a>
 </p>
 
-- [View the documentation page here](https://bluelibs.github.io/runner/)
-- [Express + OpenAPI + SQLite Example](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite)
-- [AI-friendly Documentation (~3500 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)
+- [UX Friendly Docs](https://bluelibs.github.io/runner/)
+- [AI Friendly Docs (~3500 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)
 - [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)
+- [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite)
 
 Welcome to BlueLibs Runner, where we've taken the chaos of modern application architecture and turned it into something that won't make you question your life choices at 3am. This isn't just another framework – it's your new best friend who actually understands that code should be readable, testable, and not require a PhD in abstract nonsense to maintain.
 
@@ -1934,13 +1934,13 @@ Overrides are applied after everything is registered. If multiple overrides targ
 
 As your app grows, you'll want consistent naming. Here's the convention that won't drive you crazy:
 
-| Type           | Format                                    |
-| -------------- | ----------------------------------------- |
-| Tasks          | `{domain}.tasks.{taskName}`               |
-| Listener Tasks | `{domain}.tasks.{taskName}.on{EventName}` |
-| Resources      | `{domain}.resources.{resourceName}`       |
-| Events         | `{domain}.events.{eventName}`             |
-| Middleware     | `{domain}.middleware.{middlewareName}`    |
+| Type       | Format                                    |
+| ---------- | ----------------------------------------- |
+| Resources  | `{domain}.resources.{resourceName}`       |
+| Tasks      | `{domain}.tasks.{taskName}`               |
+| Events     | `{domain}.events.{eventName}`             |
+| Hooks      | `{domain}.tasks.{taskName}.on{EventName}` |
+| Middleware | `{domain}.middleware.{middlewareName}`    |
 
 ```typescript
 // Helper function for consistency

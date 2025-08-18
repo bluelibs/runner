@@ -34,10 +34,10 @@ import { resource, task, run } from "@bluelibs/runner";
 
 const server = resource({
   id: "app.server",
-  // shared between init, dispose
+  // "context" is for private state between init() and dispose()
   context: () => ({ value: null }),
   init: async (config: { port: number }, dependencies, ctx) => {
-    ctx.value = "some-value"; // If ever need to store extra values for correct dispose
+    ctx.value = "some-value"; // Store private state for dispose()
 
     const app = express();
     const server = app.listen(config.port);
@@ -287,6 +287,43 @@ const app = resource({
 });
 ```
 
+## Namespacing
+
+As your app grows, use a consistent naming convention. This is the recommended format:
+
+| Type       | Format                                 |
+| ---------- | -------------------------------------- |
+| Tasks      | `{domain}.tasks.{taskName}`            |
+| Hooks      | `{domain}.hooks.on{EventName}`         |
+| Resources  | `{domain}.resources.{resourceName}`    |
+| Events     | `{domain}.events.{eventName}`          |
+| Middleware | `{domain}.middleware.{middlewareName}` |
+
+## Factory Pattern
+
+Use a resource to act as a factory for creating class instances. The resource is configured once, and the resulting function can be used throughout the app.
+
+```ts
+const myFactory = resource({
+  id: "app.factories.myFactory",
+  init: async (config: SomeConfigType) => {
+    // The resource's value is a factory function
+    return (input: any) => {
+      return new MyClass(input, config.someOption);
+    };
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [myFactory.with({ someOption: "configured" })],
+  dependencies: { myFactory },
+  init: async (_, { myFactory }) => {
+    const instance = myFactory({ someInput: "hello" });
+  },
+});
+```
+
 ## Testing
 
 ```ts
@@ -427,11 +464,14 @@ const registerRoutes = hook({
 });
 ```
 
-## Bonus
+## Key Patterns & Features
 
-- Optional dependencies: `dependencies: { analytics: analyticsService.optional() }`
-- Stop propagation: inside hooks `event.stopPropagation()`
-- All components require an explicit `id`
+- **Optional Dependencies**: Gracefully handle missing services by defining dependencies as optional. The dependency will be `null` if not registered.
+  `dependencies: { analytics: analyticsService.optional() }`
+
+- **Stop Propagation**: Prevent other hooks from running for a specific event.
+  `// inside a hook`
+  `event.stopPropagation()`
 
 That’s it. Small surface area, strong primitives, great DX.
 
