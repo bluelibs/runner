@@ -49,8 +49,8 @@ describe("debug utils and types", () => {
   });
 
   it("hasSystemOrLifecycleTag detects system and lifecycle tags", () => {
-    const sys = { meta: { tags: [globalTags.system] } } as any;
-    const none = { meta: { tags: [] } } as any;
+    const sys: ITaggable = { tags: [globalTags.system] };
+    const none: ITaggable = { tags: [] };
     expect(hasSystemTag(sys)).toBe(true);
     expect(hasSystemTag(none)).toBe(false);
   });

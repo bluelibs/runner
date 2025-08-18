@@ -193,7 +193,7 @@ export class Logger {
   /**
    * @param listener - A listener that will be triggered for every log.
    */
-  public onLog(listener: (log: ILog) => void | Promise<void>) {
+  public onLog(listener: (log: ILog) => any) {
     this.localListeners.push(listener);
   }
 

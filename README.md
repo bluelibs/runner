@@ -280,9 +280,7 @@ import { event, hook, globals } from "@bluelibs/runner";
 // Internal event that won't be seen by global listeners
 const internalEvent = event({
   id: "app.events.internal",
-  meta: {
-    tags: [globals.tags.excludeFromGlobalHooks],
-  },
+  tags: [globals.tags.excludeFromGlobalHooks],
 });
 ```
 
@@ -462,7 +460,7 @@ const app = resource({
       tasks(task) {
         // ITask
         // check for tags or other metas
-        return task?.meta?.tags.includes("test"); // apply it only to tasks that have a tag called 'test'
+        return Boolean(myTag.extract(task)); // apply it only to tasks that have a tag called 'test'
       },
       // For resources, you do not need such functionality as resources are initiated once when the server boots
       // You can add this logic into your global middleware.
@@ -849,7 +847,7 @@ BlueLibs Runner is designed with performance in mind. The framework introduces m
 
 Test it yourself by cloning @bluelibs/runner and running `npm run benchmark`.
 
-You may see negative middlewareOverheadMs. This is a measurement artifact at micro-benchmark scale: JIT warm‑up, CPU scheduling, GC timing, and cache effects can make the “with middleware” run appear slightly faster than the baseline. Interpret small negatives as ≈ 0 overhead.
+You may see negative middlewareOverheadMs. This is a measurement artifact at micro-benchmark scale: JIT warm‑up, CPU scheduling, GC timing, and cache effects can make the "with middleware" run appear slightly faster than the baseline. Interpret small negatives as ≈ 0 overhead.
 
 ### Performance Benchmarks
 
@@ -1566,47 +1564,7 @@ const sendWelcomeEmail = task({
 
 Tags are the most powerful part of the metadata system used for classification. They can be simple strings or sophisticated configuration objects that control component behavior.
 
-#### String Tags for Simple Classification
-
-```typescript
-const adminTask = task({
-  id: "app.tasks.admin.deleteUser",
-  meta: {
-    title: "Delete User Account",
-    description: "Permanently removes a user account and all associated data",
-    tags: [
-      "admin", // Access level
-      "destructive", // Behavioral flag
-      "user", // Domain
-      "gdpr-compliant", // Compliance flag
-    ],
-  },
-  run: async (userId) => {
-    // Deletion logic
-  },
-});
-
-// Middleware that adds extra logging for destructive operations
-const auditMiddleware = middleware({
-  id: "app.middleware.audit",
-  run: async ({ task, next }) => {
-    const isDestructive = task.definition.meta?.tags?.includes("destructive");
-
-    if (isDestructive) {
-      console.log(`🔥 DESTRUCTIVE OPERATION: ${task.definition.id}`);
-      await auditLogger.log({
-        operation: task.definition.id,
-        user: getCurrentUser(),
-        timestamp: new Date(),
-      });
-    }
-
-    return next(task.input);
-  },
-});
-```
-
-#### Advanced Tags with Configuration
+#### Tags with Configuration
 
 For more sophisticated control, you can create structured tags that carry configuration:
 
@@ -1928,7 +1886,7 @@ const overriddenMiddleware = override(originalMiddleware, {
 });
 ```
 
-Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the root) wins, because it’s applied last. Conflicting overrides are allowed; overriding something that wasn’t registered throws. Use override() to change behavior safely while preserving the original id.
+Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the root) wins, because it's applied last. Conflicting overrides are allowed; overriding something that wasn't registered throws. Use override() to change behavior safely while preserving the original id.
 
 ## Namespacing
 

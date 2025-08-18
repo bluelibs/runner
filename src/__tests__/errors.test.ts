@@ -4,6 +4,7 @@ import {
   defineEvent,
   defineMiddleware,
   defineHook,
+  defineTag,
 } from "../define";
 import { run } from "../run";
 import { Errors } from "..";
@@ -167,6 +168,49 @@ describe("Errors", () => {
 
     await expect(run(app)).rejects.toThrow(
       new DuplicateRegistrationError("Resource", "res1").message,
+    );
+  });
+
+  it("Should throw duplicate error for tags with the same id", async () => {
+    const tag1 = defineTag({
+      id: "tag1",
+    });
+    const tag2 = defineTag({
+      id: "tag1",
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [tag1, tag2],
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      new DuplicateRegistrationError("Tag", "tag1").message,
+    );
+  });
+
+  it("Should throw duplicate error for hooks with the same id", async () => {
+    const event = defineEvent({
+      id: "event1",
+    });
+    const hook1 = defineHook({
+      id: "hook1",
+      on: event,
+      run: async () => {},
+    });
+    const hook2 = defineHook({
+      id: "hook1",
+      on: event,
+      run: async () => {},
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [hook1, hook2],
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      new DuplicateRegistrationError("Hook", "hook1").message,
     );
   });
 

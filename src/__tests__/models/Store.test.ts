@@ -206,7 +206,7 @@ describe("Store", () => {
     });
     const rootResource = defineResource({
       id: "root",
-      register: [taskTest, unfindableTask],
+      register: [taskTest, unfindableTask, tag],
       init: async () => "Root Value",
     });
 
@@ -214,7 +214,7 @@ describe("Store", () => {
     const result = store.getTasksWithTag(tag);
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
-    const result2 = store.getTasksWithTag("test");
+    const result2 = store.getTasksWithTag("tags.test");
     expect(result2).toHaveLength(1);
   });
 
@@ -233,7 +233,7 @@ describe("Store", () => {
     });
     const rootResource = defineResource({
       id: "root",
-      register: [resourceTest, unfindableResource],
+      register: [resourceTest, unfindableResource, tag],
       init: async () => "Root Value",
     });
 
@@ -241,7 +241,7 @@ describe("Store", () => {
     const result = store.getResourcesWithTag(tag);
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
-    const result2 = store.getResourcesWithTag("test");
+    const result2 = store.getResourcesWithTag("tags.test");
     expect(result2).toHaveLength(1);
   });
 

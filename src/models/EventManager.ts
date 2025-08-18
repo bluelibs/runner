@@ -72,9 +72,7 @@ export class EventManager {
    * it as excluded from global ("*") listeners.
    */
   private isExcludedFromGlobal(event: IEventEmission<any>): boolean {
-    const tag = globalTags.excludeFromGlobalHooks.extract(event);
-
-    return Boolean(tag);
+    return globalTags.excludeFromGlobalHooks.exists(event);
   }
 
   private getCachedMergedListeners(eventId: string): IListenerStorage[] {
@@ -147,7 +145,7 @@ export class EventManager {
         propagationStopped = true;
       },
       isPropagationStopped: () => propagationStopped,
-      tags: eventDefinition.tags || [],
+      tags: eventDefinition.tags,
     };
 
     const excludeFromGlobal = this.isExcludedFromGlobal(event);

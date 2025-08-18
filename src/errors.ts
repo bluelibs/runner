@@ -102,6 +102,18 @@ export class MiddlewareAlreadyGlobalError extends RuntimeError {
 }
 
 /**
+ * Error thrown when a tag is not found in the registry
+ */
+export class TagNotFoundError extends RuntimeError {
+  constructor(id: string) {
+    super(
+      `Tag "${id}" not registered. Did you forget to register it inside a resource?`,
+    );
+    this.name = "TagNotRegisteredError";
+  }
+}
+
+/**
  * Error thrown when attempting to modify a locked component
  */
 export class LockedError extends RuntimeError {

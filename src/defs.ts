@@ -68,6 +68,9 @@ export const symbolMiddlewareEverywhereResources: unique symbol = Symbol(
 );
 /** @internal Marks a tag definition */
 export const symbolTag: unique symbol = Symbol("runner.tag");
+export const symbolTagConfigured: unique symbol = Symbol(
+  "runner.tagConfigured",
+);
 
 /** @internal Marks an optional dependency wrapper */
 export const symbolOptionalDependency: unique symbol = Symbol(
@@ -90,59 +93,60 @@ export interface ITagDefinition<TConfig = void, TEnforceContract = void> {
   id: string;
   meta?: ITagMeta;
   configSchema?: IValidationSchema<TConfig>;
+  /**
+   * Utilizing config at definition level stores its defaults
+   */
+  config?: TConfig;
 }
 
-/**
- * A configured instance of a tag as produced by `ITag.with()`.
- */
-export interface ITagWithConfig<TConfig = void, TEnforceContract = void> {
-  id: string;
-  /** The tag definition used to produce this configured instance. */
-  tag: ITag<TConfig, TEnforceContract>;
-  /** The configuration captured for this tag instance. */
-  config: TConfig;
-}
-
-/**
- * A tag definition (builder). Use `.with(config)` to obtain configured instances,
- * and `.extract(tags)` to find either a configured instance or the bare tag in a list.
- */
 export interface ITag<TConfig = void, TEnforceContract = void>
   extends ITagDefinition<TConfig, TEnforceContract> {
   /**
+   * A special validation property.
+   * It resolves to `true` if TConfig only has optional keys, otherwise `false`.
+   */
+  readonly __configHasOnlyOptionalKeys: RequiredKeys<TConfig> extends never
+    ? true
+    : false;
+
+  config?: TConfig;
+  /**
+   * Checks if the tag exists in a taggable or a list of tags.
+   */
+  exists(target: ITaggable | TagType[]): boolean;
+  /**
    * Creates a configured instance of the tag.
    */
-  with(config: TConfig): ITagWithConfig<TConfig, TEnforceContract>;
+  with(config: TConfig): ITagConfigured<TConfig, TEnforceContract>;
   /**
-   * Extracts either a configured instance or the bare tag from a list of tags.
+   * Extracts the configuration of the tag from a taggable or a list of tags.
    */
-  extract(
-    target: ITaggable | TagType[],
-  ): ExtractedTagResult<TConfig, TEnforceContract> | null;
+  extract(target: ITaggable | TagType[]): TConfig | undefined;
   [symbolFilePath]: string;
   [symbolTag]: true;
 }
 
-/**
- * Restrict bare tags to those whose config can be omitted (void or optional object),
- * mirroring the same principle used for resources in `RegisterableItems`.
- * Required-config tags must appear as configured instances.
- */
+type ITagWithOptionalConfig<TValue> = ITag<any, TValue> & {
+  readonly __configHasOnlyOptionalKeys: true;
+};
+
+export interface ITagConfigured<TConfig = void, TEnforceContract = void>
+  extends ITag<TConfig, TEnforceContract> {
+  [symbolTagConfigured]: true;
+  config: TConfig;
+}
+type ObjectWithOnlyOptionalKeys = { [K in PropertyKey]?: any };
+
+type RequiredKeys<T> = {
+  [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
+}[keyof T];
+
 export type TagType =
   | ITag<void, any>
-  | ITag<{ [K in any]?: any }, any>
-  | ITagWithConfig<any, any>;
+  | ITagWithOptionalConfig<any>
+  | ITagConfigured<any, any>;
 
-/**
- * Conditional result type for `ITag.extract`:
- * - For void config → just the identifier
- * - For optional object config → identifier with optional config
- * - For required config → identifier with required config
- */
-export type ExtractedTagResult<TConfig, TEnforceContract> = {} extends TConfig
-  ? { id: string; config?: TConfig }
-  : { id: string; config: TConfig };
-
+const a: ITag<{ value: number }, any> = "x" as any;
 /**
  * Common metadata you can attach to tasks/resources/events/middleware.
  * Useful for docs, filtering and middleware decisions.
@@ -167,10 +171,10 @@ export type DependencyMapType = Record<
   string,
   | ITask<any, any, any, any>
   | IResource<any, any, any, any, any>
-  | IEventDefinition<any>
+  | IEvent<any>
   | IOptionalDependency<ITask<any, any, any, any>>
   | IOptionalDependency<IResource<any, any, any, any, any>>
-  | IOptionalDependency<IEventDefinition<any>>
+  | IOptionalDependency<IEvent<any>>
 >;
 
 /** Wrapper type marking a dependency as optional at wiring time */

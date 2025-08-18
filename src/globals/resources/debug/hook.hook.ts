@@ -34,8 +34,8 @@ export const hookTriggeredListener = defineHook({
   meta: {
     title: "Hook Listener",
     description: "Logs all hook events.",
-    tags: [globalTags.system],
   },
+  tags: [globalTags.system],
 });
 
 export const hookCompletedListener = defineHook({
@@ -55,7 +55,7 @@ export const hookCompletedListener = defineHook({
 
     const resolved = getConfig(debugConfig, event!);
     if (resolved.logHookCompleted) {
-      const hookId = event.data?.hook?.id ?? event.id;
+      const hookId = event.data.hook.id;
       let logString = `Hook completed for ${String(hookId)}`;
       await logger.info(logString, {
         source: "debug.hookCompletedListener",

@@ -68,7 +68,7 @@ export class RunResult<V> {
    */
   public getResourceValue = <Output extends Promise<any>>(
     resource: string | IResource<any, Output, any, any, any>,
-  ) => {
+  ): Output extends Promise<infer U> ? U : Output => {
     const resourceId = typeof resource === "string" ? resource : resource.id;
     if (!this.store.resources.has(resourceId)) {
       throw new ResourceNotFoundError(

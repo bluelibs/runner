@@ -1,14 +1,12 @@
 // HasContracts<Meta> → true if contracts present, else false
 
-import { ITag, ITagWithConfig, TagType } from "./defs";
+import { ITag, TagType } from "./defs";
 import { IMeta } from "./defs";
 
 // Keep these param names aligned with your defs.ts: ITag<TConfig, TEnforceContract>
 type NonVoid<T> = [T] extends [void] ? never : T;
 
-type ExtractReturnFromTag<T> = T extends ITagWithConfig<any, infer R>
-  ? NonVoid<R>
-  : T extends ITag<any, infer R>
+type ExtractReturnFromTag<T> = T extends ITag<any, infer R>
   ? NonVoid<R>
   : never;
 

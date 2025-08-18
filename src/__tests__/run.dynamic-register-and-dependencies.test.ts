@@ -182,15 +182,15 @@ describe("Dynamic Register and Dependencies", () => {
 
       expect(store.resources.has(dynamicApp.id)).toBe(true);
       expect(
-        store.resources.get(dynamicApp.id).resource.register,
+        store.resources.get(dynamicApp.id)!.resource.register,
       ).toBeInstanceOf(Array);
-      expect(store.resources.get(dynamicApp.id).resource.register).toHaveLength(
-        2,
-      );
-      expect(store.resources.get(dynamicApp.id).resource.register).toContain(
+      expect(
+        store.resources.get(dynamicApp.id)!.resource.register,
+      ).toHaveLength(2);
+      expect(store.resources.get(dynamicApp.id)!.resource.register).toContain(
         serviceA,
       );
-      expect(store.resources.get(dynamicApp.id).resource.register).toContain(
+      expect(store.resources.get(dynamicApp.id)!.resource.register).toContain(
         serviceB,
       );
     });

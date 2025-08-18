@@ -35,12 +35,7 @@ export class StoreRegistry {
   private validator: StoreValidator;
 
   constructor() {
-    this.validator = new StoreValidator(
-      this.tasks,
-      this.resources,
-      this.events,
-      this.middlewares,
-    );
+    this.validator = new StoreValidator(this);
   }
 
   getValidator(): StoreValidator {
@@ -67,7 +62,7 @@ export class StoreRegistry {
     }
   }
 
-  storeTag(item: ITag) {
+  storeTag(item: ITag<any, any>) {
     this.validator.checkIfIDExists(item.id);
     this.tags.set(item.id, item);
   }

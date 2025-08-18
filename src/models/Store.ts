@@ -26,6 +26,7 @@ import { requireContextMiddleware } from "../globals/middleware/requireContext.m
 import { retryMiddleware } from "../globals/middleware/retry.middleware";
 import { timeoutMiddleware } from "../globals/middleware/timeout.middleware";
 import { OnUnhandledError } from "./UnhandledError";
+import { globalTags } from "../globals/globalTags";
 
 // Re-export types for backward compatibility
 export {
@@ -117,6 +118,11 @@ export class Store {
         entry.isInitialized = true;
       }
     }
+
+    // Register global tags
+    Object.values(globalTags).forEach((tag) => {
+      this.registry.storeTag(tag);
+    });
 
     // Register global events
     globalEventsArray.forEach((event) => {

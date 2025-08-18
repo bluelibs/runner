@@ -7,6 +7,8 @@ import {
 } from "../define";
 import { run } from "../run";
 import { TagType } from "../defs";
+import { globalResources } from "../globals/globalResources";
+import { globalTags } from "../globals/globalTags";
 
 describe("Configurable Tags", () => {
   describe("Tag Definition", () => {
@@ -54,7 +56,6 @@ describe("Configurable Tags", () => {
 
       expect(configuredTag.id).toBe("performance.track");
       expect(configuredTag.config).toEqual({ alertAboveMs: 200 });
-      expect(configuredTag.tag).toBe(performanceTag);
     });
 
     it("should allow multiple configurations of the same tag", () => {
@@ -65,8 +66,6 @@ describe("Configurable Tags", () => {
 
       expect(shortCache.config.ttl).toBe(300);
       expect(longCache.config.ttl).toBe(3600);
-      expect(shortCache.tag).toBe(cacheTag);
-      expect(longCache.tag).toBe(cacheTag);
     });
   });
 
@@ -83,8 +82,7 @@ describe("Configurable Tags", () => {
       const extracted = performanceTag.extract(tags);
 
       expect(extracted).not.toBeNull();
-      expect(extracted?.id).toBe("performance.track");
-      expect(extracted?.config).toEqual({ alertAboveMs: 200 });
+      expect(extracted).toEqual({ alertAboveMs: 200 });
     });
 
     it("should extract unconfigured tag from tags array", () => {
@@ -95,23 +93,39 @@ describe("Configurable Tags", () => {
       const extracted = simpleTag.extract(tags);
 
       expect(extracted).not.toBeNull();
-      expect(extracted?.id).toBe("simple.tag");
-      expect(extracted?.config).toBeUndefined();
+      expect(extracted).toBeUndefined();
     });
 
-    it("should ignore string tags during extraction", () => {
+    it("should properly extend the tag data", () => {
+      const simpleTag = defineTag<{ value: number; other?: string }>({
+        id: "simple.tag",
+        config: { value: 2, other: "ss" },
+      });
+      const simpleTag2 = simpleTag.with({ value: 123 });
+
+      expect(simpleTag2.config).toEqual({ value: 123, other: "ss" });
+    });
+
+    it("should extract config and check existense when tag is present", () => {
       const performanceTag = defineTag<{ alertAboveMs: number }>({
         id: "performance.track",
       });
+      const nonExistentTag = defineTag({ id: "non.existent.tag" });
 
       const tags = [
         performanceTag.with({ alertAboveMs: 100 }),
       ] satisfies TagType[];
 
+      const exists = performanceTag.exists(tags);
+      expect(exists).toBe(true);
+
+      const exists2 = nonExistentTag.exists(tags);
+      expect(exists2).toBe(false);
+
       const extracted = performanceTag.extract(tags);
 
       expect(extracted).not.toBeNull();
-      expect(extracted?.config).toEqual({ alertAboveMs: 100 });
+      expect(extracted).toEqual({ alertAboveMs: 100 });
     });
 
     it("should extract configured tag from a taggable object (task.definition)", () => {
@@ -127,25 +141,25 @@ describe("Configurable Tags", () => {
 
       const extracted = performanceTag.extract(task);
       expect(extracted).not.toBeNull();
-      expect(extracted?.config).toEqual({ alertAboveMs: 123 });
+      expect(extracted).toEqual({ alertAboveMs: 123 });
     });
 
     it("should return null when taggable has no tags", () => {
       const t = defineTag({ id: "x" });
       const task = defineTask({ id: "no.tags", run: async () => "ok" });
-      expect(t.extract(task)).toBeNull();
+      expect(t.extract(task)).toBeUndefined();
     });
 
-    it("should work with a simple taggable carrying meta.tags directly", () => {
+    it("should work with a simple taggable carrying tags at root level", () => {
       const t = defineTag<{ p: number }>({ id: "pp" });
-      const taggable = { meta: { tags: [t.with({ p: 9 })] } } as any;
+      const taggable = { tags: [t.with({ p: 9 })] } as any;
       const extracted = t.extract(taggable);
-      expect(extracted?.config).toEqual({ p: 9 });
+      expect(extracted).toEqual({ p: 9 });
     });
   });
 
   describe("Integration with Tasks", () => {
-    it("should work with task metadata", () => {
+    it("should work with task tags", () => {
       const performanceTag = defineTag<{ alertAboveMs: number }>({
         id: "performance.track",
       });
@@ -158,13 +172,11 @@ describe("Configurable Tags", () => {
         },
       });
 
-      expect(testTask.tags).toHaveLength(3);
-      expect(testTask.tags?.[0]).toBe("api");
-      expect(testTask.tags?.[2]).toBe("important");
+      expect(testTask.tags).toHaveLength(1);
 
-      const extracted = performanceTag.extract(testTask.meta?.tags || []);
+      const extracted = performanceTag.extract(testTask);
       expect(extracted).not.toBeNull();
-      expect(extracted?.config).toEqual({ alertAboveMs: 200 });
+      expect(extracted).toEqual({ alertAboveMs: 200 });
     });
 
     it("should work with middleware checking tags", async () => {
@@ -177,12 +189,12 @@ describe("Configurable Tags", () => {
       const performanceMiddleware = defineMiddleware({
         id: "performance.middleware",
         run: async ({ task, next }) => {
-          if (task?.definition.meta?.tags) {
-            const extracted = performanceTag.extract(task.definition.meta.tags);
+          if (task?.definition.tags) {
+            const extracted = performanceTag.extract(task.definition.tags);
             if (extracted) {
               middlewareExecutions.push({
                 taskId: task.definition.id as string,
-                config: extracted.config,
+                config: extracted,
               });
             }
           }
@@ -204,7 +216,12 @@ describe("Configurable Tags", () => {
 
       const app = defineResource({
         id: "test.app",
-        register: [fastTask, slowTask, performanceMiddleware.everywhere()],
+        register: [
+          fastTask,
+          slowTask,
+          performanceMiddleware.everywhere(),
+          performanceTag,
+        ],
         dependencies: { fastTask, slowTask },
         init: async (_, { fastTask, slowTask }) => {
           await fastTask();
@@ -238,7 +255,7 @@ describe("Configurable Tags", () => {
 
       expect(database.tags).toHaveLength(1);
       const extracted = dbTag.extract(database.tags);
-      expect(extracted?.config).toEqual({ connectionTimeout: 5000 });
+      expect(extracted).toEqual({ connectionTimeout: 5000 });
     });
   });
 
@@ -255,7 +272,7 @@ describe("Configurable Tags", () => {
 
       expect(userEvent.tags).toHaveLength(1);
       const extracted = auditTag.extract(userEvent.tags);
-      expect(extracted?.config).toEqual({ sensitive: true });
+      expect(extracted).toEqual({ sensitive: true });
     });
   });
 
@@ -275,56 +292,38 @@ describe("Configurable Tags", () => {
 
       expect(rateLimitMiddleware.tags).toHaveLength(1);
       const extracted = rateLimitTag.extract(rateLimitMiddleware.tags);
-      expect(extracted?.config).toEqual({ requestsPerMinute: 60 });
+      expect(extracted).toEqual({ requestsPerMinute: 60 });
     });
   });
 
-  describe("Backward Compatibility", () => {
-    it("should work with existing string tags", () => {
-      const task = defineTask({
-        id: "legacy.task",
-        tags: [{ id: "api" }, { id: "legacy" }, { id: "important" }],
-        run: async () => "success",
+  // Backward compatibility with string tags has been removed.
+
+  describe("Integration with Store", () => {
+    it("should work with full run() integration and arrive in store", async () => {
+      const tag = defineTag({ id: "test.tag" });
+      const tag2 = defineTag({ id: "test.tag2" });
+      const resource = defineResource({
+        id: "test.resource",
+        register: [tag, tag2],
+        tags: [tag, tag2],
       });
 
-      // String tags should still work
-      expect(task.meta?.tags).toEqual(["api", "legacy", "important"]);
-
-      // New tags should not interfere with string tags
-      const performanceTag = defineTag<{ alertAboveMs: number }>({
-        id: "performance.track",
-      });
-
-      const extracted = performanceTag.extract(task.meta?.tags || []);
-      expect(extracted).toBeNull(); // Should not find the tag
-    });
-
-    it("should allow mixing string tags and configurable tags", () => {
-      const performanceTag = defineTag<{ alertAboveMs: number }>({
-        id: "performance.track",
-      });
-
-      const task = defineTask({
-        id: "mixed.task",
-        meta: {
-          tags: [
-            "api", // string tag
-            performanceTag.with({ alertAboveMs: 200 }), // configurable tag
-            "important", // string tag
-          ],
-        },
-        run: async () => "success",
-      });
-
-      expect(task.meta?.tags).toHaveLength(3);
-      expect(task.meta?.tags?.[0]).toBe("api");
-      expect(task.meta?.tags?.[2]).toBe("important");
-
-      const extracted = performanceTag.extract(task.meta?.tags || []);
-      expect(extracted?.config).toEqual({ alertAboveMs: 200 });
+      const result = await run(resource);
+      const store = result.getResourceValue(globalResources.store);
+      const tags = Array.from(store.tags.values());
+      expect(tags).toHaveLength(Object.values(globalTags).length + 2);
+      expect(tags).toContain(tag);
+      expect(tags).toContain(tag2);
     });
   });
-
+  it("should throw an exception if you are using an unregistered tag", () => {
+    const tag = defineTag({ id: "test.tag" });
+    const resource = defineResource({
+      id: "test.resource",
+      tags: [tag],
+    });
+    expect(run(resource)).rejects.toThrow('Tag "test.tag" not registered');
+  });
   describe("Edge Cases", () => {
     it("should handle null/undefined config", () => {
       const optionalTag = defineTag<{ value?: string }>({
@@ -335,7 +334,7 @@ describe("Configurable Tags", () => {
       expect(configuredTag.config).toEqual({});
 
       const extracted = optionalTag.extract([configuredTag]);
-      expect(extracted?.config).toEqual({});
+      expect(extracted).toEqual({});
     });
   });
 });

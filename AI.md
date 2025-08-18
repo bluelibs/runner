@@ -97,7 +97,7 @@ const audit = hook({
 // Exclude internal events from "*"
 const internal = event({
   id: "app.events.internal",
-  meta: { tags: [globals.tags.excludeFromGlobalHooks] },
+  tags: [globals.tags.excludeFromGlobalHooks],
 });
 ```
 
@@ -373,7 +373,7 @@ const processPayment = task({
 
 const internalSvc = resource({
   id: "app.resources.internal",
-  meta: { tags: [globals.tags.system] },
+  tags: [globals.tags.system],
   init: async () => ({}),
 });
 ```
@@ -386,13 +386,13 @@ const userContract = tag<void, { name: string }>({ id: "contract.user" });
 
 const getProfile = task({
   id: "app.tasks.getProfile",
-  meta: { tags: [userContract] },
+  tags: [userContract],
   run: async () => ({ name: "Ada" }), // must contain { name: string }
 });
 
 const profileService = resource({
   id: "app.resources.profile",
-  meta: { tags: [userContract] },
+  tags: [userContract],
   init: async () => ({ name: "Ada" }),
 });
 ```

@@ -24,7 +24,6 @@ import {
   symbolIndexResource,
   ITag,
   ITagDefinition,
-  ITagWithConfig,
   TagType,
   ITaggable,
   symbolTask,
@@ -41,6 +40,8 @@ import {
   IOptionalDependency,
   symbolOptionalDependency,
   symbolTag,
+  ITagConfigured,
+  symbolTagConfigured,
 } from "./defs";
 import { MiddlewareAlreadyGlobalError, ValidationError } from "./errors";
 import { getCallerFile } from "./tools/getCallerFile";
@@ -442,12 +443,22 @@ export function defineTag<TConfig = void, TEnforceContract = void>(
   definition: ITagDefinition<TConfig, TEnforceContract>,
 ): ITag<TConfig, TEnforceContract> {
   const id = definition.id;
-
-  return {
+  const filePath = getCallerFile();
+  const foundation = {
     id,
     meta: definition.meta,
+    config: definition.config,
+  } as ITag<TConfig, TEnforceContract>;
+
+  return {
+    ...foundation,
     [symbolTag]: true,
-    [symbolFilePath]: getCallerFile(),
+    [symbolFilePath]: filePath,
+    /**
+     * Specify custom config for this tag which extends the default one if exists
+     * @param tagConfig
+     * @returns
+     */
     with(tagConfig: TConfig) {
       if (definition.configSchema) {
         try {
@@ -456,23 +467,66 @@ export function defineTag<TConfig = void, TEnforceContract = void>(
           throw new ValidationError("Tag config", this.id, error as Error);
         }
       }
+      let config: TConfig;
+      if (typeof tagConfig === "object") {
+        if (typeof foundation.config === "object") {
+          config = {
+            ...foundation.config,
+            ...tagConfig,
+          };
+        } else {
+          config = tagConfig;
+        }
+      } else {
+        config = tagConfig;
+      }
       return {
-        id,
-        meta: definition.meta,
-        tag: this,
-        config: tagConfig as any,
-      } as ITagWithConfig<TConfig>;
+        ...foundation,
+        [symbolTagConfigured]: true,
+        config,
+      } as ITagConfigured<TConfig, TEnforceContract>;
     },
-    extract(target: TagType[]) {
-      const tags = Array.isArray(target) ? target : [];
-      for (const candidate of tags) {
-        if (typeof candidate === "string") continue;
-        // Configured instance
+    /**
+     * Checks if the tag exists in a taggable or a list of tags.
+     * @param target
+     * @returns
+     */
+    exists(target: ITaggable | TagType[]): boolean {
+      let currentTags: TagType[] = [];
+      if (Array.isArray(target)) {
+        currentTags = target;
+      } else {
+        currentTags = target.tags || [];
+      }
+
+      for (const candidate of currentTags) {
         if (candidate.id === id) {
-          return candidate as ITagWithConfig<TConfig>;
+          return true;
         }
       }
-      return null;
+
+      return false;
     },
-  } as ITag<TConfig>;
+    /**
+     * Function which serves 2 purposes, verifying if the task exists, and retrieving its config
+     * @param target
+     * @returns
+     */
+    extract(target: ITaggable | TagType[]): TConfig | undefined {
+      let currentTags: TagType[] = [];
+      if (Array.isArray(target)) {
+        currentTags = target;
+      } else {
+        currentTags = target.tags || [];
+      }
+
+      for (const candidate of currentTags) {
+        if (candidate.id === id) {
+          return candidate.config as TConfig;
+        }
+      }
+
+      return;
+    },
+  } as ITag<TConfig, TEnforceContract>;
 }

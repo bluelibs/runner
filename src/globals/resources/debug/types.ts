@@ -62,24 +62,34 @@ export const levelVerbose: DebugConfig = Object.freeze({
 
 Object.freeze(levelVerbose);
 
-export type DebugFriendlyConfig = "normal" | "verbose" | DebugConfig;
+/**
+ * If you choose to specify your own config, all values will be set to false by default and extended by your config.
+ */
+export type DebugFriendlyConfig = "normal" | "verbose" | Partial<DebugConfig>;
 
-export const getConfig = (
-  config: DebugFriendlyConfig,
-  taggable?: ITaggable,
-): DebugConfig => {
-  if (taggable) {
-    const debugLocal = debugTag.extract(taggable);
-
-    if (debugLocal) {
-      return getConfig(debugLocal.config);
-    }
-  }
+function formatConfig(config: DebugFriendlyConfig): DebugConfig {
   if (config === "normal") {
     return { ...levelNormal };
   }
   if (config === "verbose") {
     return { ...levelVerbose };
   }
-  return { ...(config as DebugConfig) };
+  return { ...allFalse, ...config };
+}
+
+export const getConfig = (
+  config: DebugFriendlyConfig,
+  taggable?: ITaggable,
+): DebugConfig => {
+  if (!taggable) {
+    return formatConfig(config);
+  }
+  const debugTagConfig = debugTag.extract(taggable);
+
+  if (debugTagConfig) {
+    const debugTagConfigFormatted = formatConfig(debugTagConfig);
+    return { ...formatConfig(config), ...debugTagConfigFormatted };
+  }
+
+  return formatConfig(config);
 };

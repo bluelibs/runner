@@ -295,7 +295,6 @@ describe.skip("typesafety", () => {
     const tag = defineTag({ id: "tag" });
     const tag2 = defineTag<{ value: number }>({ id: "tag2" });
     const tag2optional = defineTag<{ value?: number }>({ id: "tag2" });
-
     const tag3 = tag2.with({ value: 123 });
     // @ts-expect-error
     const tag4 = tag.with({ value: 123 });
@@ -308,6 +307,8 @@ describe.skip("typesafety", () => {
         tag2,
         tag2optional,
         tag2.with({ value: 123 }),
+        // @ts-expect-error
+        tag2.with({ value: "123" }),
         tag3,
       ],
       meta: {},

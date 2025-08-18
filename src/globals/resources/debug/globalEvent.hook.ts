@@ -32,6 +32,6 @@ export const globalEventListener = defineHook({
   meta: {
     title: "Non-system Event Logger",
     description: "Logs all non-system events.",
-    tags: [globalTags.system],
   },
+  tags: [globalTags.system],
 });
