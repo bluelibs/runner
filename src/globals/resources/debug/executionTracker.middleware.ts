@@ -64,7 +64,9 @@ export const tasksAndResourcesTrackerMiddleware = defineMiddleware({
         const resourceCompleteMessage = `Resource ${String(
           resource.definition.id,
         )} initialized in ${duration}ms`;
-        const shouldShowResult = debugConfig.logResourceValue;
+        const shouldShowResult =
+          debugConfig.logResourceValue && result !== undefined;
+
         await logger.info(resourceCompleteMessage, {
           data: shouldShowResult ? { result } : undefined,
           source: "debug.middleware.tracker",

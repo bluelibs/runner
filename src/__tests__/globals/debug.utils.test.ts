@@ -38,6 +38,15 @@ describe("debug utils and types", () => {
     expect(result).toContain('"arr2": "[Array]"');
   });
 
+  it("safeStringify depth calculation covers non-object holder branch", () => {
+    // When stringifying primitives at root, replacer's `this` is not an object initially
+    const result = safeStringify({ k: 1, arr: [{ deep: 1 }] }, 2, {
+      maxDepth: 1,
+    });
+    expect(result).toContain('"k": 1');
+    expect(result).toContain('"arr": "[Array]"');
+  });
+
   it("hasSystemOrLifecycleTag detects system and lifecycle tags", () => {
     const sys = { meta: { tags: [globalTags.system] } } as any;
     const none = { meta: { tags: [] } } as any;

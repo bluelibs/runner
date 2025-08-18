@@ -183,7 +183,7 @@ export class LogPrinter {
   private formatData(data?: Record<string, any>): string[] {
     if (!data || Object.keys(data).length === 0) return [];
     const lines: string[] = [];
-    const formatted = safeStringify(data, 2, { maxDepth: 2 }).split("\n");
+    const formatted = safeStringify(data, 2, { maxDepth: 3 }).split("\n");
     lines.push(
       `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.cyan}data:${this.colors.reset}`,
     );
@@ -199,7 +199,7 @@ export class LogPrinter {
     delete (filtered as any).source;
     if (Object.keys(filtered).length === 0) return [];
     const lines: string[] = [];
-    const formatted = safeStringify(filtered, 2, { maxDepth: 2 }).split("\n");
+    const formatted = safeStringify(filtered, 2, { maxDepth: 3 }).split("\n");
     lines.push(
       `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.blue}context:${this.colors.reset}`,
     );
