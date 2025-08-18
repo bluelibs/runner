@@ -14,7 +14,7 @@ export class RuntimeError extends Error {
 export class DuplicateRegistrationError extends RuntimeError {
   constructor(type: string, id: string) {
     super(
-      `${type} "${id.toString()}" already registered. Did you use the same 'id' in two different components? Keep in mind, that all TERM elements need unique ids.`
+      `${type} "${id.toString()}" already registered. Did you use the same 'id' in two different components? Keep in mind, that all TERM elements need unique ids.`,
     );
     this.name = "DuplicateRegistrationError";
   }
@@ -26,7 +26,7 @@ export class DuplicateRegistrationError extends RuntimeError {
 export class DependencyNotFoundError extends RuntimeError {
   constructor(key: string) {
     super(
-      `Dependency ${key.toString()} not found. Did you forget to register it through a resource?`
+      `Dependency ${key.toString()} not found. Did you forget to register it through a resource?`,
     );
     this.name = "DependencyNotFoundError";
   }
@@ -83,7 +83,7 @@ export class EventNotFoundError extends RuntimeError {
 export class ResourceNotFoundError extends RuntimeError {
   constructor(id: string) {
     super(
-      `Resource "${id.toString()}" not found. Did you forget to register it or are you using the correct id?`
+      `Resource "${id.toString()}" not found. Did you forget to register it or are you using the correct id?`,
     );
     this.name = "ResourceNotFoundError";
   }
@@ -95,7 +95,7 @@ export class ResourceNotFoundError extends RuntimeError {
 export class MiddlewareAlreadyGlobalError extends RuntimeError {
   constructor(id: string) {
     super(
-      `Cannot call .everywhere() on an already global middleware. It's enough to call everywhere() only once: ${id.toString()}`
+      `Cannot call .everywhere() on an already global middleware. It's enough to call everywhere() only once: ${id.toString()}`,
     );
     this.name = "MiddlewareAlreadyGlobalError";
   }

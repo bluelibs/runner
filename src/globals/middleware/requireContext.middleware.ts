@@ -10,11 +10,11 @@ export const requireContextMiddleware = defineMiddleware({
   async run(
     { task, resource, next },
     deps,
-    config: RequireContextMiddlewareConfig
+    config: RequireContextMiddlewareConfig,
   ) {
     if (!config.context) {
       throw new Error(
-        "Context not available. Did you forget to pass 'context' to the middleware?"
+        "Context not available. Did you forget to pass 'context' to the middleware?",
       );
     }
 

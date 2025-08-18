@@ -83,7 +83,7 @@ describe("Queue Resource", () => {
         };
 
         await expect(queue.run("error-queue", errorTask)).rejects.toThrow(
-          "Task failed"
+          "Task failed",
         );
 
         const successResult = await queue.run("error-queue", successTask);
@@ -103,7 +103,7 @@ describe("Queue Resource", () => {
 
     // Try to run a task on a disposed queue - should reject
     await expect(
-      result.value.run("test-queue", async () => "test")
+      result.value.run("test-queue", async () => "test"),
     ).rejects.toThrow(/disposed/);
   });
 
@@ -121,17 +121,17 @@ describe("Queue Resource", () => {
 
         // Exception should be catchable by the caller
         await expect(queue.run("error-queue", errorTask)).rejects.toThrow(
-          "Queue resource task error"
+          "Queue resource task error",
         );
 
         // Queue should still work for subsequent tasks
         await expect(queue.run("error-queue", successTask)).resolves.toBe(
-          "success"
+          "success",
         );
 
         // Multiple exceptions should all be catchable
         await expect(queue.run("error-queue", errorTask)).rejects.toThrow(
-          "Queue resource task error"
+          "Queue resource task error",
         );
       },
     });

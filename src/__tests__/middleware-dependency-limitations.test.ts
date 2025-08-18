@@ -171,7 +171,7 @@ describe("Middleware Dependency Limitations", () => {
       // This should work - shared dependencies are OK
       const result = await run(app);
       expect(result.value).toBe(
-        "Middleware[Shared service]: Task[Shared service]"
+        "Middleware[Shared service]: Task[Shared service]",
       );
     });
 
@@ -307,7 +307,7 @@ describe("Middleware Dependency Limitations", () => {
         run: async (
           { next },
           { configService },
-          config: { customTimeout?: number }
+          config: { customTimeout?: number },
         ) => {
           const timeout = config.customTimeout || configService.timeout;
           const result = await next();
@@ -406,10 +406,10 @@ describe("Middleware Dependency Limitations", () => {
         // Check for improved guidance
         expect(error.message).toContain("To resolve circular dependencies:");
         expect(error.message).toContain(
-          "For middleware: avoid depending on resources that use the same middleware"
+          "For middleware: avoid depending on resources that use the same middleware",
         );
         expect(error.message).toContain(
-          "Consider using events for communication"
+          "Consider using events for communication",
         );
       }
     });

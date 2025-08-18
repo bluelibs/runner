@@ -1,4 +1,10 @@
-import { defineTask, defineResource, defineEvent, defineMiddleware, defineHook } from "../define";
+import {
+  defineTask,
+  defineResource,
+  defineEvent,
+  defineMiddleware,
+  defineHook,
+} from "../define";
 import { run } from "../run";
 import { IValidationSchema } from "../defs";
 
@@ -6,7 +12,7 @@ import { IValidationSchema } from "../defs";
 class MockValidationSchema<T> implements IValidationSchema<T> {
   constructor(
     private validator: (input: unknown) => T,
-    private errorMessage?: string
+    private errorMessage?: string,
   ) {}
 
   parse(input: unknown): T {
@@ -20,7 +26,9 @@ class MockValidationSchema<T> implements IValidationSchema<T> {
 
 // Helper functions to create mock schemas similar to Zod
 const mockSchema = {
-  object: <T extends Record<string, any>>(shape: Record<keyof T, string>): IValidationSchema<T> => {
+  object: <T extends Record<string, any>>(
+    shape: Record<keyof T, string>,
+  ): IValidationSchema<T> => {
     return new MockValidationSchema((input: unknown) => {
       if (typeof input !== "object" || input === null) {
         throw new Error("Expected object");
@@ -40,7 +48,7 @@ const mockSchema = {
       return obj as T;
     });
   },
-  
+
   string: (): IValidationSchema<string> => {
     return new MockValidationSchema((input: unknown) => {
       if (typeof input !== "string") {
@@ -49,7 +57,7 @@ const mockSchema = {
       return input;
     });
   },
-  
+
   number: (): IValidationSchema<number> => {
     return new MockValidationSchema((input: unknown) => {
       if (typeof input !== "number") {
@@ -58,7 +66,7 @@ const mockSchema = {
       return input;
     });
   },
-  
+
   boolean: (): IValidationSchema<boolean> => {
     return new MockValidationSchema((input: unknown) => {
       if (typeof input !== "boolean") {
@@ -68,7 +76,10 @@ const mockSchema = {
     });
   },
 
-  transform: <T, U>(schema: IValidationSchema<T>, transformer: (value: T) => U): IValidationSchema<U> => {
+  transform: <T, U>(
+    schema: IValidationSchema<T>,
+    transformer: (value: T) => U,
+  ): IValidationSchema<U> => {
     return new MockValidationSchema((input: unknown) => {
       const validated = schema.parse(input);
       return transformer(validated);
@@ -159,7 +170,7 @@ describe("Generic Validation Interface", () => {
     it("should transform input data when schema supports it", async () => {
       const stringToNumberSchema = mockSchema.transform(
         mockSchema.string(),
-        (val: string) => parseInt(val, 10)
+        (val: string) => parseInt(val, 10),
       );
 
       const mathTask = defineTask({
@@ -207,7 +218,8 @@ describe("Generic Validation Interface", () => {
         configSchema: configSchema,
         init: async (config) => {
           return {
-            connect: () => `Connected to ${(config as any).host}:${(config as any).port}`,
+            connect: () =>
+              `Connected to ${(config as any).host}:${(config as any).port}`,
           };
         },
       });
@@ -235,7 +247,8 @@ describe("Generic Validation Interface", () => {
         configSchema: configSchema,
         init: async (config) => {
           return {
-            connect: () => `Connected to ${(config as any).host}:${(config as any).port}`,
+            connect: () =>
+              `Connected to ${(config as any).host}:${(config as any).port}`,
           };
         },
       });
@@ -297,7 +310,9 @@ describe("Generic Validation Interface", () => {
           expect(receivedMessage).toBe("Hello World");
 
           // This should throw with invalid payload
-          await expect(testEvent({ invalidField: 123 } as any)).rejects.toThrow(/Event payload validation failed/);
+          await expect(testEvent({ invalidField: 123 } as any)).rejects.toThrow(
+            /Event payload validation failed/,
+          );
         },
       });
 
@@ -413,11 +428,11 @@ describe("Generic Validation Interface", () => {
         init: async (_, { task, resource, event }) => {
           const taskResult = await task({ any: "data" });
           expect(taskResult).toBe('Received: {"any":"data"}');
-          
+
           expect(resource.config.anything).toBe("goes");
-          
+
           await event({ any: "payload" }); // Should work without validation
-          
+
           return "success";
         },
       });

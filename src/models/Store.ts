@@ -51,7 +51,7 @@ export class Store {
 
   constructor(
     protected readonly eventManager: EventManager,
-    protected readonly logger: Logger
+    protected readonly logger: Logger,
   ) {
     this.registry = new StoreRegistry();
     this.validator = this.registry.getValidator();
@@ -180,7 +180,7 @@ export class Store {
           resource.value,
           resource.config,
           resource.computedDependencies as any,
-          resource.context
+          resource.context,
         );
       }
     }
@@ -191,13 +191,13 @@ export class Store {
   }
 
   public getEverywhereMiddlewareForTasks(
-    task: ITask<any, any, any, any>
+    task: ITask<any, any, any, any>,
   ): IMiddleware[] {
     return this.registry.getEverywhereMiddlewareForTasks(task);
   }
 
   public getEverywhereMiddlewareForResources(
-    resource: IResource<any, any, any, any>
+    resource: IResource<any, any, any, any>,
   ): IMiddleware[] {
     return this.registry.getEverywhereMiddlewareForResources(resource);
   }

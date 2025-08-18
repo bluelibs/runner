@@ -53,7 +53,7 @@ export class Semaphore {
         operation.timeout = setTimeout(() => {
           this.removeFromQueue(operation);
           reject(
-            new Error(`Semaphore acquire timeout after ${options.timeout}ms`)
+            new Error(`Semaphore acquire timeout after ${options.timeout}ms`),
           );
         }, options.timeout);
       }
@@ -126,7 +126,7 @@ export class Semaphore {
    */
   async withPermit<T>(
     fn: () => Promise<T>,
-    options?: { timeout?: number; signal?: AbortSignal }
+    options?: { timeout?: number; signal?: AbortSignal },
   ): Promise<T> {
     await this.acquire(options);
     try {

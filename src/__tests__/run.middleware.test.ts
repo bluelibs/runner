@@ -175,7 +175,7 @@ describe("Middleware", () => {
 
     // expect it to contain this: Dependency Middleware test.task not found
     await expect(run(app)).rejects.toThrowError(
-      /Dependency Middleware middlewareId in Task test.task not found/
+      /Dependency Middleware middlewareId in Task test.task not found/,
     );
   });
 
@@ -227,7 +227,7 @@ describe("Middleware", () => {
 
     const result = await run(app);
     expect(String(result.value)).toBe(
-      "Middleware: Middleware: Sub initialized"
+      "Middleware: Middleware: Sub initialized",
     );
   });
 
@@ -614,7 +614,7 @@ describe("Middleware behavior (no lifecycle)", () => {
     await run(app);
     // We attach only to triggered here for typing constraints; ensure at least 1 emit
     expect(
-      calls.filter((c) => c === globalEvents.middlewareTriggered.id).length
+      calls.filter((c) => c === globalEvents.middlewareTriggered.id).length,
     ).toBe(1);
   });
 
@@ -650,7 +650,7 @@ describe("Middleware behavior (no lifecycle)", () => {
 
     await run(app);
     expect(
-      calls.filter((c) => c === globalEvents.middlewareTriggered.id).length
+      calls.filter((c) => c === globalEvents.middlewareTriggered.id).length,
     ).toBeGreaterThan(0);
   });
 });

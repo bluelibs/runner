@@ -38,7 +38,7 @@ describe("Configurable Tags", () => {
       });
 
       expect(() => simpleTag.with({ value: 123 as unknown as string })).toThrow(
-        "Validation Error"
+        "Validation Error",
       );
     });
   });
@@ -321,7 +321,7 @@ describe("Configurable Tags", () => {
 
       expect(rateLimitMiddleware.meta?.tags).toHaveLength(2);
       const extracted = rateLimitTag.extract(
-        rateLimitMiddleware.meta?.tags || []
+        rateLimitMiddleware.meta?.tags || [],
       );
       expect(extracted?.config).toEqual({ requestsPerMinute: 60 });
     });

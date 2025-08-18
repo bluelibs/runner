@@ -41,7 +41,7 @@ describe("Store", () => {
     expect(store.isLocked).toBe(true);
 
     expect(() => store.checkLock()).toThrow(
-      "Cannot modify the Store when it is locked."
+      "Cannot modify the Store when it is locked.",
     );
   });
 
@@ -116,7 +116,7 @@ describe("Store", () => {
     store.storeGenericItem(testTask);
 
     expect(() => store.storeGenericItem(testTask)).toThrow(
-      /already registered/i
+      /already registered/i,
     );
   });
 
@@ -129,7 +129,7 @@ describe("Store", () => {
     store.initializeStore(rootResource, {});
 
     expect(() => store.initializeStore(rootResource, {})).toThrow(
-      /Store already initialized/i
+      /Store already initialized/i,
     );
   });
 

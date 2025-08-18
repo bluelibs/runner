@@ -18,7 +18,7 @@ export type ResourceStoreElementType<
   C = any,
   V extends Promise<any> = any,
   D extends DependencyMapType = {},
-  TContext = any
+  TContext = any,
 > = {
   resource: IResource<C, V, D>;
   computedDependencies?: ResourceDependencyValuesType<D>;
@@ -31,7 +31,7 @@ export type ResourceStoreElementType<
 export type TaskStoreElementType<
   Input = any,
   Output extends Promise<any> = any,
-  D extends DependencyMapType = any
+  D extends DependencyMapType = any,
 > = {
   task: ITask<Input, Output, D>;
   computedDependencies: DependencyValuesType<D>;
@@ -41,7 +41,7 @@ export type TaskStoreElementType<
 
 export type HookStoreElementType<
   D extends DependencyMapType = any,
-  TOn extends "*" | IEventDefinition = any
+  TOn extends "*" | IEventDefinition = any,
 > = {
   hook: IHook<D, TOn>;
   computedDependencies: DependencyValuesType<D>;

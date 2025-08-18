@@ -12,7 +12,7 @@ interface FindCircularDependenciesResult {
 }
 
 export function findCircularDependencies(
-  nodes: IDependentNode[]
+  nodes: IDependentNode[],
 ): FindCircularDependenciesResult {
   const result: FindCircularDependenciesResult = {
     cycles: [],

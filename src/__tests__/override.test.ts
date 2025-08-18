@@ -40,7 +40,7 @@ describe("override() helper", () => {
     const v2 = await changed.init!(
       undefined as any,
       {} as any,
-      undefined as any
+      undefined as any,
     );
     expect(v1).toBe(1);
     expect(v2).toBe(2);

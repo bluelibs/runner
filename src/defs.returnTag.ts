@@ -18,7 +18,7 @@ type IsTuple<T extends readonly unknown[]> = number extends T["length"]
 
 type FilterContracts<
   TTags extends readonly unknown[],
-  Acc extends readonly unknown[] = []
+  Acc extends readonly unknown[] = [],
 > = TTags extends readonly [infer H, ...infer R]
   ? ExtractReturnFromTag<H> extends never
     ? FilterContracts<R, Acc>
@@ -77,7 +77,7 @@ export type ContractViolationError<TMeta extends IMeta, TActual> = {
 };
 
 export type EnsureResponseSatisfiesContracts<TMeta extends IMeta, TResponse> = [
-  ContractsUnion<TMeta>
+  ContractsUnion<TMeta>,
 ] extends [never]
   ? TResponse // no contracts, allow as-is
   : TResponse extends Promise<infer U>

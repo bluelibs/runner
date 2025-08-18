@@ -64,9 +64,9 @@ export function defineTask<
   Input = undefined,
   Output extends Promise<any> = any,
   Deps extends DependencyMapType = any,
-  TMeta extends ITaskMeta = any
+  TMeta extends ITaskMeta = any,
 >(
-  taskConfig: ITaskDefinition<Input, Output, Deps, TMeta>
+  taskConfig: ITaskDefinition<Input, Output, Deps, TMeta>,
 ): ITask<Input, Output, Deps, TMeta> {
   const filePath = getCallerFile();
   const id = taskConfig.id;
@@ -97,7 +97,7 @@ export function defineTask<
 export function defineHook<
   D extends DependencyMapType = any,
   TOn extends "*" | IEventDefinition = any,
-  TMeta extends ITaskMeta = any
+  TMeta extends ITaskMeta = any,
 >(hookDef: IHookDefinition<D, TOn, TMeta>): IHook<D, TOn, TMeta> {
   const filePath = getCallerFile();
   return {
@@ -117,7 +117,7 @@ export function defineResource<
   TValue extends Promise<any> = Promise<any>,
   TDeps extends DependencyMapType = {},
   TPrivate = any,
-  TMeta extends IResourceMeta = any
+  TMeta extends IResourceMeta = any,
 >(
   constConfig: IResourceDefinition<
     TConfig,
@@ -127,7 +127,7 @@ export function defineResource<
     any,
     any,
     TMeta
-  >
+  >,
 ): IResource<TConfig, TValue, TDeps, TPrivate, TMeta> {
   /**
    * Define a resource.
@@ -173,7 +173,7 @@ export function defineResource<
           throw new ValidationError(
             "Resource config",
             id,
-            error instanceof Error ? error : new Error(String(error))
+            error instanceof Error ? error : new Error(String(error)),
           );
         }
       }
@@ -200,7 +200,7 @@ export function defineResource<
 }
 
 export function defineEvent<TPayload = void>(
-  config: IEventDefinition<TPayload>
+  config: IEventDefinition<TPayload>,
 ): IEvent<TPayload> {
   /**
    * Define an event.
@@ -253,9 +253,9 @@ export type MiddlewareEverywhereOptions = {
  */
 export function defineMiddleware<
   TConfig extends Record<string, any> = any,
-  TDependencies extends DependencyMapType = any
+  TDependencies extends DependencyMapType = any,
 >(
-  middlewareDef: IMiddlewareDefinition<TConfig, TDependencies>
+  middlewareDef: IMiddlewareDefinition<TConfig, TDependencies>,
 ): IMiddleware<TConfig, TDependencies> {
   const filePath = getCallerFile();
   const base = {
@@ -269,7 +269,7 @@ export function defineMiddleware<
 
   // Wrap an object to ensure we always return chainable helpers
   const wrap = (
-    obj: IMiddleware<TConfig, TDependencies>
+    obj: IMiddleware<TConfig, TDependencies>,
   ): IMiddleware<TConfig, TDependencies> => {
     return {
       ...obj,
@@ -282,7 +282,7 @@ export function defineMiddleware<
             throw new ValidationError(
               "Middleware config",
               obj.id,
-              error instanceof Error ? error : new Error(String(error))
+              error instanceof Error ? error : new Error(String(error)),
             );
           }
         }
@@ -343,7 +343,7 @@ export function isResource(definition: any): definition is IResource {
  * @returns True when `definition` is a branded ResourceWithConfig.
  */
 export function isResourceWithConfig(
-  definition: any
+  definition: any,
 ): definition is IResourceWithConfig {
   return definition && definition[symbolResourceWithConfig];
 }
@@ -373,7 +373,7 @@ export function isMiddleware(definition: any): definition is IMiddleware {
 
 /** Type guard: checks if a definition is an Optional Dependency wrapper. */
 export function isOptional(
-  definition: any
+  definition: any,
 ): definition is IOptionalDependency<any> {
   return definition && definition[symbolOptionalDependency];
 }
@@ -388,19 +388,19 @@ export function isOptional(
  */
 export function defineOverride<T extends ITask<any, any, any, any>>(
   base: T,
-  patch: Omit<Partial<T>, "id">
+  patch: Omit<Partial<T>, "id">,
 ): T;
 export function defineOverride<T extends IResource<any, any, any, any>>(
   base: T,
-  patch: Omit<Partial<T>, "id">
+  patch: Omit<Partial<T>, "id">,
 ): T;
 export function defineOverride<T extends IMiddleware<any, any>>(
   base: T,
-  patch: Omit<Partial<T>, "id">
+  patch: Omit<Partial<T>, "id">,
 ): T;
 export function defineOverride(
   base: ITask | IResource | IMiddleware,
-  patch: Record<string, unknown>
+  patch: Record<string, unknown>,
 ): ITask | IResource | IMiddleware {
   const { id: _ignored, ...rest } = (patch || {}) as any;
   // Ensure we never change the id, and merge overrides last
@@ -422,7 +422,7 @@ export function defineOverride(
  * @returns A tag object with helpers to configure and extract.
  */
 export function defineTag<TConfig = void, TEnforceContract = void>(
-  definition: ITagDefinition<TConfig, TEnforceContract>
+  definition: ITagDefinition<TConfig, TEnforceContract>,
 ): ITag<TConfig, TEnforceContract> {
   const id = definition.id;
 

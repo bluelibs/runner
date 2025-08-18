@@ -12,7 +12,7 @@ export class StoreValidator {
     private tasks: Map<string, TaskStoreElementType>,
     private resources: Map<string, ResourceStoreElementType>,
     private events: Map<string, EventStoreElementType>,
-    private middlewares: Map<string, MiddlewareStoreElementType>
+    private middlewares: Map<string, MiddlewareStoreElementType>,
   ) {}
 
   checkIfIDExists(id: string): void | never {
@@ -36,7 +36,7 @@ export class StoreValidator {
       middlewares.forEach((middlewareAttachment) => {
         if (!this.middlewares.has(middlewareAttachment.id)) {
           throw new DependencyNotFoundError(
-            `Middleware ${middlewareAttachment.id} in Task ${task.task.id}`
+            `Middleware ${middlewareAttachment.id} in Task ${task.task.id}`,
           );
         }
       });

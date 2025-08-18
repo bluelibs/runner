@@ -1,13 +1,17 @@
-import { defineTask, defineResource, defineEvent, defineMiddleware, defineHook } from "../define";
+import {
+  defineTask,
+  defineResource,
+  defineEvent,
+  defineMiddleware,
+  defineHook,
+} from "../define";
 import { run } from "../run";
 import { ValidationError } from "../errors";
 import { IValidationSchema } from "../defs";
 
 // Mock validation schema similar to the existing pattern
 class MockValidationSchema<T> implements IValidationSchema<T> {
-  constructor(
-    private validator: (input: unknown) => T,
-  ) {}
+  constructor(private validator: (input: unknown) => T) {}
 
   parse(input: unknown): T {
     return this.validator(input);
@@ -37,7 +41,9 @@ describe("Validation Edge Cases", () => {
     });
 
     await expect(run(app)).rejects.toThrow(ValidationError);
-    await expect(run(app)).rejects.toThrow("Task input validation failed for task.nonErrorValidation: Non-error string thrown");
+    await expect(run(app)).rejects.toThrow(
+      "Task input validation failed for task.nonErrorValidation: Non-error string thrown",
+    );
   });
 
   it("should handle non-Error thrown from resource config validation", async () => {
@@ -56,7 +62,9 @@ describe("Validation Edge Cases", () => {
     }).toThrow(ValidationError);
     expect(() => {
       resource.with({ invalid: "config" } as any);
-    }).toThrow("Resource config validation failed for resource.nonErrorValidation: Resource config error string");
+    }).toThrow(
+      "Resource config validation failed for resource.nonErrorValidation: Resource config error string",
+    );
   });
 
   it("should handle non-Error thrown from middleware config validation", async () => {
@@ -75,7 +83,9 @@ describe("Validation Edge Cases", () => {
     }).toThrow(ValidationError);
     expect(() => {
       middleware.with({ invalid: "config" } as any);
-    }).toThrow("Middleware config validation failed for middleware.nonErrorValidation: Middleware config error string");
+    }).toThrow(
+      "Middleware config validation failed for middleware.nonErrorValidation: Middleware config error string",
+    );
   });
 
   it("should handle non-Error thrown from event payload validation", async () => {
@@ -106,6 +116,8 @@ describe("Validation Edge Cases", () => {
     });
 
     await expect(run(app)).rejects.toThrow(ValidationError);
-    await expect(run(app)).rejects.toThrow("Event payload validation failed for event.nonErrorValidation: Event payload error string");
+    await expect(run(app)).rejects.toThrow(
+      "Event payload validation failed for event.nonErrorValidation: Event payload error string",
+    );
   });
 });

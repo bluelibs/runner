@@ -26,9 +26,9 @@ describe("requireContextMiddleware", () => {
 
     // Act & Assert
     await expect(
-      requireContextMiddleware.run({ next } as any, {} as any, {} as any)
+      requireContextMiddleware.run({ next } as any, {} as any, {} as any),
     ).rejects.toThrow(
-      "Context not available. Did you forget to pass 'context' to the middleware?"
+      "Context not available. Did you forget to pass 'context' to the middleware?",
     );
   });
 
@@ -36,7 +36,7 @@ describe("requireContextMiddleware", () => {
     // Arrange → a context whose `use` returns undefined, simulating missing provider
     const fakeContext = createFakeContext(() => {
       throw new ContextError(
-        "Context not available. Did you forget to provide the context via ContextName.provide()?"
+        "Context not available. Did you forget to provide the context via ContextName.provide()?",
       );
     });
     const next = jest.fn();
@@ -46,8 +46,8 @@ describe("requireContextMiddleware", () => {
       requireContextMiddleware.run(
         { next } as any,
         {} as any,
-        { context: fakeContext } as any
-      )
+        { context: fakeContext } as any,
+      ),
     ).rejects.toBeInstanceOf(ContextError);
   });
 
@@ -60,7 +60,7 @@ describe("requireContextMiddleware", () => {
     const result = await requireContextMiddleware.run(
       { task, next } as any,
       {} as any,
-      { context: fakeContext } as any
+      { context: fakeContext } as any,
     );
 
     expect(next).toHaveBeenCalledTimes(1);
@@ -77,7 +77,7 @@ describe("requireContextMiddleware", () => {
     const result = await requireContextMiddleware.run(
       { resource, next } as any,
       {} as any,
-      { context: fakeContext } as any
+      { context: fakeContext } as any,
     );
 
     expect(next).toHaveBeenCalledTimes(1);
@@ -92,7 +92,7 @@ describe("requireContextMiddleware", () => {
     const result = await requireContextMiddleware.run(
       { next } as any,
       {} as any,
-      { context: fakeContext } as any
+      { context: fakeContext } as any,
     );
 
     expect(next).toHaveBeenCalledTimes(1);

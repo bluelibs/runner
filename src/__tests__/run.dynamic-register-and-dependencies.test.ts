@@ -29,7 +29,7 @@ describe("Dynamic Register and Dependencies", () => {
         dependencies: { dynamicService },
         init: async (_, { dynamicService }) => {
           expect(dynamicService).toBe(
-            "Dynamic service with Service A and Service B"
+            "Dynamic service with Service A and Service B",
           );
         },
       });
@@ -362,7 +362,7 @@ describe("Dynamic Register and Dependencies", () => {
         dependencies: { dynamicService },
         init: async (_, { dynamicService }) => {
           expect(dynamicService).toBe(
-            "https://localhost:3000/users (timeout: 5000ms)"
+            "https://localhost:3000/users (timeout: 5000ms)",
           );
         },
       });
@@ -389,7 +389,7 @@ describe("Dynamic Register and Dependencies", () => {
         },
         run: async ({ next }, { logger }, config: ValidationConfig) => {
           (logger as any).log(
-            `Validating with schema: ${config.schema} (strict: ${config.strict})`
+            `Validating with schema: ${config.schema} (strict: ${config.strict})`,
           );
           const result = await next();
           return `Validated[${config.schema}]: ${result}`;
@@ -497,7 +497,7 @@ describe("Dynamic Register and Dependencies", () => {
         run: async (
           { next },
           { cache, logger },
-          config: { enabled: boolean }
+          config: { enabled: boolean },
         ) => {
           if (!config.enabled) {
             return next();
@@ -506,7 +506,7 @@ describe("Dynamic Register and Dependencies", () => {
           (logger as any).log(
             `Cache configured with TTL: ${(cache as any).ttl}, MaxSize: ${
               (cache as any).maxSize
-            }`
+            }`,
           );
           const result = await next();
           return `Cached: ${result}`;
@@ -735,7 +735,7 @@ describe("Dynamic Register and Dependencies", () => {
         init: async (_, { dynamicService }) => {
           const result = dynamicService.process("test-data");
           expect(result).toBe(
-            "[DEBUG] DYN: Processing test-data | cached-test-data-ttl:3600"
+            "[DEBUG] DYN: Processing test-data | cached-test-data-ttl:3600",
           );
         },
       });
@@ -801,7 +801,7 @@ describe("Dynamic Register and Dependencies", () => {
             emailProvider: string;
             smsProvider: string;
           },
-          deps: any
+          deps: any,
         ) => ({
           notify: (type: string, recipient: string, content: string) => {
             if (type === "email" && config.enableEmail && deps.emailService) {
@@ -830,16 +830,16 @@ describe("Dynamic Register and Dependencies", () => {
           const emailResult = notificationService.notify(
             "email",
             "test@example.com",
-            "Hello World"
+            "Hello World",
           );
           const smsResult = notificationService.notify(
             "sms",
             "+1234567890",
-            "Hello SMS"
+            "Hello SMS",
           );
 
           expect(emailResult).toBe(
-            "sendgrid:email-key -> test@example.com: Hello World"
+            "sendgrid:email-key -> test@example.com: Hello World",
           );
           expect(smsResult).toBe("notification-disabled");
         },
@@ -879,13 +879,13 @@ describe("Dynamic Register and Dependencies", () => {
         run: async (
           { task, next },
           deps: any,
-          config: { auditEnabled: boolean; requiredRole: string }
+          config: { auditEnabled: boolean; requiredRole: string },
         ) => {
           const userRole = task?.input?.userRole || "guest";
 
           if (!deps.auth.validateRole(userRole)) {
             throw new Error(
-              `Access denied. Required role: ${deps.auth.getRequiredRole()}`
+              `Access denied. Required role: ${deps.auth.getRequiredRole()}`,
             );
           }
 
@@ -931,7 +931,7 @@ describe("Dynamic Register and Dependencies", () => {
 
           // Test access denied
           await expect(
-            protectedTask({ userRole: "user", data: "secret" })
+            protectedTask({ userRole: "user", data: "secret" }),
           ).rejects.toThrow("Access denied. Required role: admin");
         },
       });
@@ -991,7 +991,7 @@ describe("Dynamic Register and Dependencies", () => {
                     ? "prod-secondary"
                     : "dev-secondary",
                 port: config.environment === "prod" ? 5434 : 5435,
-              })
+              }),
             );
           }
 
@@ -1000,7 +1000,7 @@ describe("Dynamic Register and Dependencies", () => {
               cacheLayer.with({
                 redis: config.environment === "prod",
                 memory: config.environment === "dev",
-              })
+              }),
             );
           }
 
@@ -1019,7 +1019,7 @@ describe("Dynamic Register and Dependencies", () => {
             environment: "dev" | "prod";
             features: { caching: boolean; readReplica: boolean };
           },
-          deps: any
+          deps: any,
         ) => ({
           getData: (query: string, useCache: boolean = false) => {
             const cacheResult =
@@ -1054,7 +1054,7 @@ describe("Dynamic Register and Dependencies", () => {
           const result2 = complexService.getData("SELECT * FROM posts", true);
 
           expect(result1).toBe(
-            "secondary-prod-secondary:5434 -> SELECT * FROM users"
+            "secondary-prod-secondary:5434 -> SELECT * FROM users",
           );
           expect(result2).toBe("redis-SELECT * FROM posts");
         },
@@ -1115,7 +1115,7 @@ describe("Dynamic Register and Dependencies", () => {
             enableMetrics: boolean;
             metricsEndpoint: string;
           },
-          deps: any
+          deps: any,
         ) => ({
           process: (action: string) => {
             const configResult = deps.configService.get(action);
@@ -1147,7 +1147,7 @@ describe("Dynamic Register and Dependencies", () => {
               metricsEndpoint: string;
             };
           },
-          deps: any
+          deps: any,
         ) => ({
           childProcess: (action: string) =>
             `child: ${deps.parent.process(action)}`,
@@ -1174,7 +1174,7 @@ describe("Dynamic Register and Dependencies", () => {
         init: async (_, { childService }) => {
           const result = childService.childProcess("user-login");
           expect(result).toBe(
-            "child: MyApp-v1-user-login | metrics:http://metrics.example.com/user-login"
+            "child: MyApp-v1-user-login | metrics:http://metrics.example.com/user-login",
           );
         },
       });

@@ -4,7 +4,7 @@ import { OnUnhandledError } from "./models/UnhandledError";
 const activeErrorHandlers = new Set<
   (
     error: unknown,
-    source: "uncaughtException" | "unhandledRejection"
+    source: "uncaughtException" | "unhandledRejection",
   ) => void | Promise<void>
 >();
 let processSafetyNetsInstalled = false;
@@ -33,8 +33,8 @@ function installGlobalProcessSafetyNetsOnce() {
 export function registerProcessLevelSafetyNets(
   handler: (
     error: unknown,
-    source: "uncaughtException" | "unhandledRejection"
-  ) => void | Promise<void>
+    source: "uncaughtException" | "unhandledRejection",
+  ) => void | Promise<void>,
 ) {
   installGlobalProcessSafetyNetsOnce();
   activeErrorHandlers.add(handler);

@@ -67,7 +67,7 @@ export type DebugFriendlyConfig = "normal" | "verbose" | DebugConfig;
 
 export const getConfig = (
   config: DebugFriendlyConfig,
-  taggable?: ITaggable
+  taggable?: ITaggable,
 ): DebugConfig => {
   if (taggable) {
     const debugLocal = debugTag.extract(taggable);

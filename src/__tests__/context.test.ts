@@ -20,7 +20,7 @@ describe("Context System", () => {
           value: { id: "1" },
           dispose: expect.any(Function),
           logger: expect.any(Logger),
-        })
+        }),
       );
     });
   });
@@ -47,7 +47,7 @@ describe("Context System", () => {
           value: "ok",
           dispose: expect.any(Function),
           logger: expect.any(Logger),
-        })
+        }),
       );
     });
   });

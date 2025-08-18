@@ -230,7 +230,7 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrowError(
-      new DependencyNotFoundError("task2").message
+      new DependencyNotFoundError("task2").message,
     );
   });
 
@@ -256,7 +256,7 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrowError(
-      new DependencyNotFoundError("override2").message
+      new DependencyNotFoundError("override2").message,
     );
   });
 

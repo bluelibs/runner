@@ -30,7 +30,7 @@ export interface Context<T> {
    * enforces that certain keys are present on the context object).
    */
   require<K extends keyof T = never>(
-    keys?: K[]
+    keys?: K[],
   ): IMiddlewareConfigured<{ context: Context<T> }>;
 }
 
@@ -53,7 +53,7 @@ export function createContext<T>(name: string = "runner.context"): Context<T> {
     const store = getCurrentStore();
     if (!store || !store.has(ctxId)) {
       throw new ContextError(
-        `Context not available for symbol ${ctxId.toString()}`
+        `Context not available for symbol ${ctxId.toString()}`,
       );
     }
     return store.get(ctxId) as T;
