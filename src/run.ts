@@ -69,6 +69,13 @@ export type RunOptions = {
   onUnhandledError?: OnUnhandledError;
 };
 
+/**
+ * This is the central function that kicks off you runner. You can run as many resources as you want in a single process, they will run in complete isolation.
+ *
+ * @param resourceOrResourceWithConfig - The resource or resource with config to run.
+ * @param options - The options for the run.
+ * @returns A promise that resolves to the result of the run.
+ */
 export async function run<C, V extends Promise<any>>(
   resourceOrResourceWithConfig:
     | IResourceWithConfig<C, V>

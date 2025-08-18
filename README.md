@@ -11,6 +11,8 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 
 - [View the documentation page here](https://bluelibs.github.io/runner/)
 - [Express + OpenAPI + SQLite Example](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite)
+- [AI Documentation](https://github.com/bluelibs/runner/blob/main/AI.md)
+- [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)
 
 Welcome to BlueLibs Runner, where we've taken the chaos of modern application architecture and turned it into something that won't make you question your life choices at 3am. This isn't just another framework – it's your new best friend who actually understands that code should be readable, testable, and not require a PhD in abstract nonsense to maintain.
 
