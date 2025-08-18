@@ -46,7 +46,6 @@ export const levelNormal: DebugConfig = Object.freeze({
   logHookTriggered: true,
   logHookCompleted: true,
   logEventEmissionOnRun: true,
-  logEventEmissionInput: true,
 });
 
 Object.freeze(levelNormal);
