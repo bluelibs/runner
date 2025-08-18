@@ -57,8 +57,8 @@ export class TaskRunner {
    * Ensures dependencies are resolved from the hooks registry.
    *
    * Emits two internal observability events around the hook execution:
-   * - global.hookTriggered (before)
-   * - global.hookCompleted (after, with optional error)
+   * - globals.events.hookTriggered (before)
+   * - globals.events.hookCompleted (after, with optional error)
    *
    * These observability events are tagged to be ignored by global listeners
    * and are not re-emitted for their own handlers to avoid recursion.

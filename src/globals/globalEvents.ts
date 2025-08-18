@@ -12,7 +12,7 @@ export const globalEvents = {
   ready: defineEvent<{
     root: IResource<any, any, any, any>;
   }>({
-    id: "global.ready",
+    id: "globals.events.ready",
     meta: {
       title: "System Ready",
       description:
@@ -29,7 +29,7 @@ export const globalEvents = {
     middleware: IMiddleware<any, any>;
     targetId: string;
   }>({
-    id: "global.events.middlewareTriggered",
+    id: "globals.events.middlewareTriggered",
     meta: {
       title: "Middleware Triggered",
       description:
@@ -46,7 +46,7 @@ export const globalEvents = {
     targetId: string;
     error?: Error;
   }>({
-    id: "global.events.middlewareCompleted",
+    id: "globals.events.middlewareCompleted",
     meta: {
       title: "Middleware Completed",
       description:
@@ -61,7 +61,7 @@ export const globalEvents = {
     hook: IHook<any, any>;
     eventId: string;
   }>({
-    id: "global.events.hookTriggered",
+    id: "globals.events.hookTriggered",
     meta: {
       title: "Hook Triggered",
       description:
@@ -77,7 +77,7 @@ export const globalEvents = {
     eventId: string;
     error?: Error;
   }>({
-    id: "global.events.hookCompleted",
+    id: "globals.events.hookCompleted",
     meta: {
       title: "Hook Completed",
       description: "Emitted after a hook finishes running for an event.",
@@ -91,7 +91,7 @@ export const globalEvents = {
     kind: "task" | "middleware" | "resourceInit" | "hook" | "process" | "run";
     error: any;
   }>({
-    id: "global.events.unhandledError",
+    id: "globals.events.unhandledError",
     meta: {
       title: "Unhandled Error",
       description:
