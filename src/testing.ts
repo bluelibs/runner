@@ -20,6 +20,7 @@ let testResourceCounter = 0;
  * Helper to create a minimal test harness resource that wraps a root app (or any registerable)
  * and exposes convenient testing utilities while running the full ecosystem
  * (registration, overrides, middleware, events) without modifying the core API.
+ * @deprecated Use `run` instead with your testResource, as it provides the necessary toolkit.
  */
 export function createTestResource(
   root: RegisterableItems,

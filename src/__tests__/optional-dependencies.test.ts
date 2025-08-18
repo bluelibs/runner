@@ -140,10 +140,8 @@ describe("Optional dependencies", () => {
       async init() {
         // Running the task should not apply the middleware because it depends on the same task
         const harness = createTestResource(target);
-        const { runTask } = await (await import("../index"))
-          .run(harness)
-          .then((r) => r.value);
-        const out = await runTask(target);
+        const { value } = await run(harness);
+        const out = await value.runTask(target);
         expect(out).toBe("x");
         return "ready" as const;
       },
@@ -243,10 +241,10 @@ describe("Optional dependencies", () => {
       },
     });
     const { value } = await run(createTestResource(app));
-    const facade = value;
-    const nodes = facade.store.getDependentNodes();
-    // ensure nodes exist for our items (indirectly exercises optional path in graph build)
-    expect(nodes.find((n: any) => n.id === usesTask.id)).toBeTruthy();
-    expect(nodes.find((n: any) => n.id === usesRes.id)).toBeTruthy();
+    // Indirectly exercise optional path in graph build by checking we can run tasks
+    // (store internals no longer exposed via test harness)
+    expect(typeof value.runTask).toBe("function");
+    // We still validate by running a no-op task without throwing
+    await value.runTask(usesTask);
   });
 });

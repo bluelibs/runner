@@ -89,7 +89,6 @@ export interface ITaskDefinition<
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any
 > {
-  /** Stable identifier. Anonymous IDs are not permitted. */
   id: string;
   /**
    * Access other tasks/resources/events. Can be an object or a function when
@@ -311,7 +310,6 @@ export type EventHandlerType<T = any> = (
 ) => any | Promise<any>;
 
 export interface IEventDefinition<TPayload = void> {
-  /** Stable identifier. Anonymous IDs are not permitted. */
   id: string;
   meta?: IEventMeta;
   /**
@@ -375,7 +373,6 @@ export interface IMiddlewareDefinition<
   TConfig = any,
   TDependencies extends DependencyMapType = any
 > {
-  /** Stable identifier. Anonymous IDs are not permitted. */
   id: string;
   /** Static or lazy dependency map. */
   dependencies?: TDependencies | ((config: TConfig) => TDependencies);

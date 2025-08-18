@@ -8,15 +8,18 @@ import {
   DependencyValuesType,
   IResource,
   IResourceWithConfig,
+  ITask,
+  IEvent,
 } from "./defs";
 import { DependencyProcessor } from "./models/DependencyProcessor";
 import { EventManager } from "./models/EventManager";
 import { globalEvents } from "./globals/globalEvents";
 import { Store } from "./models/Store";
 import { findCircularDependencies } from "./tools/findCircularDependencies";
-import { CircularDependenciesError } from "./errors";
+import { CircularDependenciesError, RuntimeError } from "./errors";
 import { globalResources } from "./globals/globalResources";
 import { Logger, LogLevels, PrintStrategy } from "./models/Logger";
+import { ResourceNotFoundError } from "./errors";
 import { isResourceWithConfig } from "./define";
 import { debugResource, DebugFriendlyConfig } from "./globals/resources/debug";
 import {
@@ -29,6 +32,7 @@ import {
   bindProcessErrorHandler,
   safeReportUnhandledError,
 } from "./models/UnhandledError";
+import { RunResult } from "./models/RunResult";
 
 export type RunOptions = {
   /**
@@ -65,23 +69,13 @@ export type RunOptions = {
   onUnhandledError?: OnUnhandledError;
 };
 
-export type RunResult<V extends Promise<any>> = {
-  value: V extends Promise<infer U> ? U : V;
-  store: Store;
-  dispose: () => Promise<void>;
-  /** This is used to run tasks. */
-  taskRunner: TaskRunner;
-  eventManager: EventManager;
-  logger: Logger;
-};
-
 export async function run<C, V extends Promise<any>>(
   resourceOrResourceWithConfig:
     | IResourceWithConfig<C, V>
     | IResource<void, V, any, any> // For void configs
     | IResource<{ [K in any]?: any }, V, any, any>, // For optional config
   options?: RunOptions
-): Promise<RunResult<V>> {
+): Promise<RunResult<V extends Promise<infer U> ? U : V>> {
   const {
     debug = undefined,
     logs = {},
@@ -204,14 +198,13 @@ export async function run<C, V extends Promise<any>>(
       unhookShutdown = registerShutdownHook(() => store.dispose());
     }
 
-    return {
-      value: store.root.value,
-      dispose: disposeAll,
-      store,
-      taskRunner,
-      eventManager,
+    return new RunResult(
+      store.root.value,
       logger,
-    };
+      store,
+      eventManager,
+      taskRunner
+    );
   } catch (err) {
     // Rollback initialized resources
     await disposeAll();
