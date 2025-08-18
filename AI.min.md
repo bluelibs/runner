@@ -59,7 +59,7 @@ const app = resource({
   dependencies: { server, createUser },
   init: async (_, { server, createUser }) => {
     server.app.post("/users", async (req, res) =>
-      res.json(await createUser(req.body))
+      res.json(await createUser(req.body)),
     );
   },
 });
@@ -253,22 +253,10 @@ const { dispose } = await run(app, {
 });
 ```
 
-## Performance
-
-BlueLibs Runner is designed for high performance with minimal overhead:
-
-- **Basic task execution**: ~2.2M/second
-- **Task execution with 5 middlewares**: ~180,000 tasks/sec
-- **Resource initialization**: ~67,000 resources/sec
-- **Event emission and handling**: ~385,753 events/sec
-- **Middleware overhead**: ~0.0013ms for all 5 middlewares (virtually zero)
-
-Test yourself: `npm run benchmark` in the @bluelibs/runner repo.
-
 ## Run Options (high‑level)
 
 - debug: "normal" | "verbose" | DebugConfig
-- logs: { printThreshold?: LogLevel | null; printStrategy?: "pretty" | "json" | "json-pretty"; bufferLogs?: boolean }
+- logs: { printThreshold?: LogLevel | null; printStrategy?: "pretty" | "json" | "json-pretty" | "plain"; bufferLogs?: boolean }
 - errorBoundary: boolean (default true)
 - shutdownHooks: boolean (default true)
 - onUnhandledError(error) {}
@@ -277,7 +265,7 @@ Note: `globals` is a convenience object exposing framework internals:
 
 - `globals.events` (ready, hookTriggered, hookCompleted, middlewareTriggered, middlewareCompleted)
 - `globals.resources` (store, taskRunner, eventManager, logger, cache, queue)
-- `globals.middlewares` (retry, cache, timeout, requireContext)
+- `globals.middleware` (retry, cache, timeout, requireContext)
 - `globals.tags` (system, debug, excludeFromGlobalListeners)
 
 ## Overrides
@@ -298,7 +286,7 @@ const app = resource({
 ## Testing
 
 ```ts
-import { createTestResource, run, override } from "@bluelibs/runner";
+import { resource, run, override } from "@bluelibs/runner";
 
 const app = resource({
   id: "app",
@@ -306,15 +294,20 @@ const app = resource({
     /* tasks/resources */
   ],
 });
-const harness = createTestResource(app, {
+const harness = resource({
+  id: "test",
+  register: [app],
   overrides: [
     /* test overrides */
   ],
 });
 
-const { value: t, dispose } = await run(harness);
-await t.runTask(someTask, { input: 1 }); // t.getResourceValue(id | resource), t.eventManager, t.taskRunner, t.store
-await dispose();
+const rr = await run(harness);
+await rr.runTask(id | task, { input: 1 });
+// rr.getResourceValue(id | resource)
+// await rr.emitEvent(event, payload)
+// rr.logger.info("xxx")
+await rr.dispose();
 ```
 
 ## Metadata & Tags
@@ -446,7 +439,7 @@ import { Semaphore, Queue } from "@bluelibs/runner";
 // Semaphore: limit parallelism
 const dbSem = new Semaphore(5);
 const users = await dbSem.withPermit(async () =>
-  db.query("SELECT * FROM users")
+  db.query("SELECT * FROM users"),
 );
 
 // Queue: FIFO with cooperative cancellation

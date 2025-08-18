@@ -18,11 +18,6 @@ export const cacheFactoryTask = defineTask({
 
 type CacheResourceConfig = {
   defaultOptions?: any;
-  /**
-   * This specifies whether the cache handler is async or not (get, set, clear)
-   * This is for speed purposes.
-   */
-  async?: boolean;
 };
 
 type CacheMiddlewareConfig = {
@@ -39,7 +34,6 @@ export const cacheResource = defineResource({
     return {
       map: new Map<string, ICacheInstance>(),
       cacheFactoryTask,
-      async: config.async,
       defaultOptions: {
         ttl: 10 * 1000,
         max: 100, // Maximum number of items in cache
@@ -76,7 +70,6 @@ export const cacheMiddleware = defineMiddleware({
     }
 
     const taskId = task.definition.id;
-    const isAsync = cache.async;
     let cacheHolderForTask = cache.map.get(taskId);
     if (!cacheHolderForTask) {
       // Extract only LRUCache options, excluding keyBuilder
@@ -94,9 +87,7 @@ export const cacheMiddleware = defineMiddleware({
 
     const key = config.keyBuilder!(taskId, task.input);
 
-    const cachedValue = isAsync
-      ? await cacheHolderForTask.get(key)
-      : cacheHolderForTask.get(key);
+    const cachedValue = await cacheHolderForTask.get(key);
 
     if (cachedValue) {
       return cachedValue;
@@ -104,11 +95,7 @@ export const cacheMiddleware = defineMiddleware({
 
     const result = await next(task.input);
 
-    if (isAsync) {
-      await cacheHolderForTask.set(key, result);
-    } else {
-      cacheHolderForTask.set(key, result);
-    }
+    await cacheHolderForTask.set(key, result);
 
     return result;
   },

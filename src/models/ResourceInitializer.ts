@@ -15,7 +15,7 @@ export class ResourceInitializer {
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
-    protected readonly logger: Logger
+    protected readonly logger: Logger,
   ) {}
 
   /**
@@ -26,22 +26,27 @@ export class ResourceInitializer {
     TConfig = null,
     TValue extends Promise<any> = Promise<any>,
     TDeps extends DependencyMapType = {},
-    TContext = any
+    TContext = any,
   >(
     resource: IResource<TConfig, TValue, TDeps>,
     config: TConfig,
-    dependencies: ResourceDependencyValuesType<TDeps>
+    dependencies: ResourceDependencyValuesType<TDeps>,
   ): Promise<{ value: TValue; context: TContext }> {
     const context = resource.context?.();
 
     let value: TValue | undefined;
     try {
+      // Create a no-op init function if it doesn't exist
+      if (!resource.init) {
+        resource.init = (async () => undefined) as any;
+      }
+
       if (resource.init) {
         value = await this.initWithMiddleware(
           resource,
           config,
           dependencies,
-          context
+          context,
         );
       }
 
@@ -64,12 +69,12 @@ export class ResourceInitializer {
     C,
     V extends Promise<any>,
     D extends DependencyMapType,
-    TContext
+    TContext,
   >(
     resource: IResource<C, V, D, TContext>,
     config: C,
     dependencies: ResourceDependencyValuesType<D>,
-    context: TContext
+    context: TContext,
   ) {
     let next = async (config: C): Promise<V | undefined> => {
       if (resource.init) {
@@ -77,7 +82,7 @@ export class ResourceInitializer {
           null,
           config,
           dependencies,
-          context
+          context,
         );
         // Validate result with schema if provided (ignores middleware)
         if (resource.resultSchema) {
@@ -87,7 +92,7 @@ export class ResourceInitializer {
             throw new ValidationError(
               "Resource result",
               resource.id,
-              error as any
+              error as any,
             );
           }
         }
@@ -108,7 +113,7 @@ export class ResourceInitializer {
     for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
       const middleware = createdMiddlewares[i];
       const storeMiddleware = this.store.middlewares.get(
-        middleware.id
+        middleware.id,
       ) as MiddlewareStoreElementType; // we know it exists because at this stage all sanity checks have been done.
 
       const nextFunction = next;
@@ -117,10 +122,10 @@ export class ResourceInitializer {
           globalEvents.middlewareTriggered,
           {
             kind: "resource",
-            middlewareId: middleware.id,
+            middleware: middleware as any,
             targetId: resource.id as any,
           },
-          middleware.id as any
+          middleware.id as any,
         );
         try {
           const result = await storeMiddleware.middleware.run(
@@ -132,16 +137,16 @@ export class ResourceInitializer {
               next: nextFunction,
             },
             storeMiddleware.computedDependencies,
-            middleware.config
+            middleware.config,
           );
           await this.eventManager.emit(
             globalEvents.middlewareCompleted,
             {
               kind: "resource",
-              middlewareId: middleware.id,
+              middleware: middleware as any,
               targetId: resource.id as any,
             },
-            middleware.id as any
+            middleware.id as any,
           );
           return result as any;
         } catch (error: unknown) {
@@ -156,11 +161,11 @@ export class ResourceInitializer {
             globalEvents.middlewareCompleted,
             {
               kind: "resource",
-              middlewareId: middleware.id,
+              middleware: middleware as any,
               targetId: resource.id as any,
               error: error as any,
             },
-            middleware.id as any
+            middleware.id as any,
           );
           throw error;
         }

@@ -47,7 +47,7 @@ describe("Comprehensive Performance Benchmarks", () => {
         };
 
         console.log(
-          `Basic task execution: ${results.basicTaskExecution.tasksPerSecond} tasks/sec`
+          `Basic task execution: ${results.basicTaskExecution.tasksPerSecond} tasks/sec`,
         );
       },
     });
@@ -67,7 +67,7 @@ describe("Comprehensive Performance Benchmarks", () => {
           // Simple pass-through with minimal overhead
           return next(task?.input);
         },
-      })
+      }),
     );
 
     const task = defineTask({
@@ -100,12 +100,12 @@ describe("Comprehensive Performance Benchmarks", () => {
             (
               duration / iterations -
               results.basicTaskExecution.avgTimePerTaskMs
-            ).toFixed(4)
+            ).toFixed(4),
           ),
         };
 
         console.log(
-          `Task execution with ${middlewareCount} middlewares: ${results.middlewareTaskExecution.tasksPerSecond} tasks/sec`
+          `Task execution with ${middlewareCount} middlewares: ${results.middlewareTaskExecution.tasksPerSecond} tasks/sec`,
         );
       },
     });
@@ -120,14 +120,14 @@ describe("Comprehensive Performance Benchmarks", () => {
       defineResource({
         id: `benchmark.resource.${idx}`,
         init: async () => ({ value: idx, timestamp: Date.now() }),
-      })
+      }),
     );
 
     const app = defineResource({
       id: "benchmark.resource.app",
       register: resources,
       dependencies: Object.fromEntries(
-        resources.map((r, idx) => [`resource${idx}`, r])
+        resources.map((r, idx) => [`resource${idx}`, r]),
       ),
       async init() {
         // Resources are initialized during the run() call
@@ -148,7 +148,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     };
 
     console.log(
-      `Resource initialization: ${results.resourceInitialization.resourcesPerSecond} resources/sec`
+      `Resource initialization: ${results.resourceInitialization.resourcesPerSecond} resources/sec`,
     );
   });
 
@@ -202,7 +202,7 @@ describe("Comprehensive Performance Benchmarks", () => {
         };
 
         console.log(
-          `Event emission: ${results.eventEmissionAndHandling.eventsPerSecond} events/sec`
+          `Event emission: ${results.eventEmissionAndHandling.eventsPerSecond} events/sec`,
         );
       },
     });
@@ -223,7 +223,7 @@ describe("Comprehensive Performance Benchmarks", () => {
           defineResource({
             id: `benchmark.dep.${idx}`,
             init: async () => ({ level: idx, value: `base-${idx}` }),
-          })
+          }),
         );
       } else {
         deps.push(
@@ -234,7 +234,7 @@ describe("Comprehensive Performance Benchmarks", () => {
               level: idx,
               value: `${prev.value}-${idx}`,
             }),
-          })
+          }),
         );
       }
     }
@@ -252,7 +252,7 @@ describe("Comprehensive Performance Benchmarks", () => {
         register: [...deps, finalResource],
         dependencies: { finalResource },
         init: async (_, { finalResource }) => finalResource,
-      })
+      }),
     );
 
     const start = performance.now();
@@ -271,7 +271,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     };
 
     console.log(
-      `Dependency resolution: ${results.dependencyResolution.chainsPerSecond} chains/sec`
+      `Dependency resolution: ${results.dependencyResolution.chainsPerSecond} chains/sec`,
     );
   });
 
@@ -281,7 +281,7 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const expensiveTask = defineTask({
       id: "benchmark.cache.expensive",
-      middleware: [globals.middlewares.cache.with({ ttl: 5000 })],
+      middleware: [globals.middleware.cache.with({ ttl: 5000 })],
       run: async (n: number) => {
         // Simulate expensive computation
         let result = 0;
@@ -296,7 +296,7 @@ describe("Comprehensive Performance Benchmarks", () => {
       id: "benchmark.cache.app",
       register: [
         expensiveTask,
-        globals.middlewares.cache,
+        globals.middleware.cache,
         globals.resources.cache,
       ],
       dependencies: { expensiveTask },
@@ -321,22 +321,22 @@ describe("Comprehensive Performance Benchmarks", () => {
           timeWithoutCacheMs: parseFloat(withoutCacheDuration.toFixed(2)),
           timeWithCacheMs: parseFloat(withCacheDuration.toFixed(2)),
           avgTimeWithoutCacheMs: parseFloat(
-            (withoutCacheDuration / iterations).toFixed(4)
+            (withoutCacheDuration / iterations).toFixed(4),
           ),
           avgTimeWithCacheMs: parseFloat(
-            (withCacheDuration / cacheHitIterations).toFixed(4)
+            (withCacheDuration / cacheHitIterations).toFixed(4),
           ),
           speedupFactor: parseFloat(
             (
               withoutCacheDuration /
               iterations /
               (withCacheDuration / cacheHitIterations)
-            ).toFixed(2)
+            ).toFixed(2),
           ),
         };
 
         console.log(
-          `Cache middleware speedup: ${results.cacheMiddleware.speedupFactor}x faster with cache hits`
+          `Cache middleware speedup: ${results.cacheMiddleware.speedupFactor}x faster with cache hits`,
         );
       },
     });
@@ -366,7 +366,7 @@ describe("Comprehensive Performance Benchmarks", () => {
           data: new Array(1000).fill(idx),
           timestamp: Date.now(),
         }),
-      })
+      }),
     );
 
     const tasks = Array.from({ length: taskCount }, (_, idx) =>
@@ -376,7 +376,7 @@ describe("Comprehensive Performance Benchmarks", () => {
         run: async (input: number, { resource }) => {
           return resource.data.reduce((sum, val) => sum + val + input, 0);
         },
-      })
+      }),
     );
 
     const app = defineResource({
@@ -404,26 +404,26 @@ describe("Comprehensive Performance Benchmarks", () => {
         results.memoryUsage = {
           before: {
             heapUsedMB: parseFloat(
-              (beforeMemory.heapUsed / 1024 / 1024).toFixed(2)
+              (beforeMemory.heapUsed / 1024 / 1024).toFixed(2),
             ),
             heapTotalMB: parseFloat(
-              (beforeMemory.heapTotal / 1024 / 1024).toFixed(2)
+              (beforeMemory.heapTotal / 1024 / 1024).toFixed(2),
             ),
           },
           afterInit: {
             heapUsedMB: parseFloat(
-              (afterInitMemory.heapUsed / 1024 / 1024).toFixed(2)
+              (afterInitMemory.heapUsed / 1024 / 1024).toFixed(2),
             ),
             heapTotalMB: parseFloat(
-              (afterInitMemory.heapTotal / 1024 / 1024).toFixed(2)
+              (afterInitMemory.heapTotal / 1024 / 1024).toFixed(2),
             ),
           },
           afterExecution: {
             heapUsedMB: parseFloat(
-              (afterExecutionMemory.heapUsed / 1024 / 1024).toFixed(2)
+              (afterExecutionMemory.heapUsed / 1024 / 1024).toFixed(2),
             ),
             heapTotalMB: parseFloat(
-              (afterExecutionMemory.heapTotal / 1024 / 1024).toFixed(2)
+              (afterExecutionMemory.heapTotal / 1024 / 1024).toFixed(2),
             ),
           },
           initOverheadMB: parseFloat(
@@ -431,20 +431,20 @@ describe("Comprehensive Performance Benchmarks", () => {
               (afterInitMemory.heapUsed - beforeMemory.heapUsed) /
               1024 /
               1024
-            ).toFixed(2)
+            ).toFixed(2),
           ),
           executionOverheadMB: parseFloat(
             (
               (afterExecutionMemory.heapUsed - afterInitMemory.heapUsed) /
               1024 /
               1024
-            ).toFixed(2)
+            ).toFixed(2),
           ),
           componentCount: resourceCount + taskCount,
         };
 
         console.log(
-          `Memory overhead: ${results.memoryUsage.initOverheadMB}MB for ${results.memoryUsage.componentCount} components`
+          `Memory overhead: ${results.memoryUsage.initOverheadMB}MB for ${results.memoryUsage.componentCount} components`,
         );
       },
     });

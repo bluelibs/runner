@@ -105,7 +105,7 @@ const sendEmail = task({
 // Test it like a normal function (because it basically is)
 const result = await sendEmail.run(
   { to: "user@example.com", subject: "Hi", body: "Hello!" },
-  { emailService: mockEmailService, logger: mockLogger }
+  { emailService: mockEmailService, logger: mockLogger },
 );
 ```
 
@@ -256,7 +256,7 @@ const sendWelcomeEmail = hook({
 Sometimes you need to be the nosy neighbor of your application:
 
 ```typescript
-import { hook, globalTags } from "@bluelibs/runner";
+import { hook } from "@bluelibs/runner";
 
 const logAllEventsHook = hook({
   id: "app.hooks.logAllEvents",
@@ -342,7 +342,7 @@ const hookObserver = hook({
   on: globals.events.hookTriggered,
   run: async (event) => {
     console.log(
-      `🪝 Hook ${event.data.hookId} triggered for ${event.data.eventId}`
+      `🪝 Hook ${event.data.hook.id} triggered for ${event.data.eventId}`,
     );
   },
 });
@@ -408,7 +408,7 @@ const authMiddleware = middleware({
   run: async (
     { task, next },
     dependencies,
-    config: { requiredRole: string }
+    config: { requiredRole: string },
   ) => {
     const user = task.input.user;
     if (!user || user.role !== config.requiredRole) {
@@ -541,6 +541,8 @@ _Making your app resilient when services aren't available_
 
 Sometimes you want your application to gracefully handle missing dependencies instead of crashing. Optional dependencies let you build resilient systems that degrade gracefully.
 
+Keep in mind that you have full control over dependency registration by functionalising `dependencies(config) => ({ ... })` and `register(config) => []`.
+
 ```typescript
 const emailService = resource({
   id: "app.services.email",
@@ -599,7 +601,7 @@ Ever tried to pass user data through 15 function calls? Yeah, we've been there. 
 
 ```typescript
 const UserContext = createContext<{ userId: string; role: string }>(
-  "app.userContext"
+  "app.userContext",
 );
 
 const getUserData = task({
@@ -646,7 +648,7 @@ const requestMiddleware = middleware({
       },
       async () => {
         return next(task.input);
-      }
+      },
     );
   },
 });
@@ -725,14 +727,15 @@ The framework can automatically handle uncaught exceptions and unhandled rejecti
 const { dispose } = await run(app, {
   errorBoundary: true, // Catch process-level errors
   shutdownHooks: true, // Graceful shutdown on signals
-  onUnhandledError: async ({ logger, error }) => {
+  onUnhandledError: async ({ error, kind, source }) => {
+    // We log it by default
     await logger.error("Unhandled error", { error });
     // Optionally report to telemetry or decide to dispose/exit
   },
 });
 ```
 
-#### onUnhandledError option
+## Unhandled Errors
 
 The `onUnhandledError` callback is invoked by Runner whenever an error escapes normal handling. It receives a structured payload you can ship to logging/telemetry and decide mitigation steps.
 
@@ -813,8 +816,6 @@ const app = resource({
         max: 1000, // Maximum items in cache
         ttl: 30 * 1000, // Default TTL
       },
-      async: false, // in-memory is sync by default
-      // When using redis or others mark this as true to await response.
     }),
   ],
 });
@@ -828,15 +829,13 @@ import { task } from "@bluelibs/runner";
 const redisCacheFactory = task({
   id: "globals.tasks.cacheFactory", // Same ID as the default task
   run: async (options: any) => {
-    return new RedisCache(options); // Make sure to turn async on in the cacher.
+    return new RedisCache(options);
   },
 });
 
 const app = resource({
   id: "app",
-  register: [
-    // Your other stuff
-  ],
+  register: [globals.resources.cache],
   overrides: [redisCacheFactory], // Override the default cache factory
 });
 ```
@@ -853,9 +852,9 @@ You may see negative middlewareOverheadMs. This is a measurement artifact at mic
 
 Here are real performance metrics from our comprehensive benchmark suite on an M1 Max.
 
-#### Core Operations
+** Core Operations**
 
-- **Basic task execution**: ~270,000 tasks/sec to ~350,000 tasks/sec
+- **Basic task execution**: ~2.2M
 - **Task execution with 5 middlewares**: ~244,000 tasks/sec
 - **Resource initialization**: ~59,700 resources/sec
 - **Event emission and handling**: ~245,861 events/sec
@@ -931,7 +930,7 @@ const database = resource({
 
 ```typescript
 const expensiveTask = task({
-  middleware: [globals.middlewares.cache.with({ ttl: 60000 })],
+  middleware: [globals.middleware.cache.with({ ttl: 60000 })],
   run: async (input) => {
     // This expensive computation is cached
     return performExpensiveCalculation(input);
@@ -971,7 +970,7 @@ const duration = performance.now() - start;
 console.log(`${iterations} tasks in ${duration.toFixed(2)}ms`);
 console.log(`Average: ${(duration / iterations).toFixed(4)}ms per task`);
 console.log(
-  `Throughput: ${Math.round(iterations / (duration / 1000))} tasks/sec`
+  `Throughput: ${Math.round(iterations / (duration / 1000))} tasks/sec`,
 );
 ```
 
@@ -1079,27 +1078,19 @@ Best practices:
 
 _The structured logging system that actually makes debugging enjoyable_
 
-BlueLibs Runner comes with a built-in logging system that's event-driven, structured, and doesn't make you hate your life when you're trying to debug at 2 AM. It emits events for everything, so you can handle logs however you want - ship them to your favorite log warehouse, pretty-print them to console, or ignore them entirely (we won't judge).
+BlueLibs Runner comes with a built-in logging system that's structured, and doesn't make you hate your life when you're trying to debug at 2 AM.
 
 ### Basic Logging
 
 ```ts
-run(app, {
-  logs: {
-    printThreshold: "info", // use null to disable printing, and hook into onLog()
-    printStrategy: "pretty", // you also have "json" and "json-pretty" with circular dep safety.
-    bufferLogs: false, // Starts sending out logs only after the system emits the ready event. Useful for when you're sending them out.
+import { resource, globals } from "@bluelibs/runner";
+
+const app = resource({
+  id: "app",
+  dependencies: {
+    logger: globals.resources.logger;
   },
-});
-```
-
-```typescript
-import { globals } from "@bluelibs/runner";
-
-const businessTask = task({
-  id: "app.tasks.business",
-  dependencies: { logger: globals.resources.logger },
-  run: async (_, { logger }) => {
+  init: async () => {
     logger.info("Starting business process"); // ✅ Visible by default
     logger.warn("This might take a while"); // ✅ Visible by default
     logger.error("Oops, something went wrong", {
@@ -1112,6 +1103,17 @@ const businessTask = task({
     });
     logger.debug("Debug information"); // ❌ Hidden by default
     logger.trace("Very detailed trace"); // ❌ Hidden by default
+
+    logger.onLog(async (log) => {
+      // Catch logs
+    })
+  },
+})
+run(app, {
+  logs: {
+    printThreshold: "info", // use null to disable printing, and hook into onLog()
+    printStrategy: "pretty", // you also have "plain", "json" and "json-pretty" with circular dep safety for JSON formatting.
+    bufferLogs: false, // Starts sending out logs only after the system emits the ready event. Useful for when you're sending them out.
   },
 });
 ```
@@ -1185,7 +1187,7 @@ Create logger instances with bound context for consistent metadata across relate
 
 ```typescript
 const RequestContext = createContext<{ requestId: string; userId: string }>(
-  "app.requestContext"
+  "app.requestContext",
 );
 
 const requestHandler = task({
@@ -1217,6 +1219,124 @@ const requestHandler = task({
   },
 });
 ```
+
+### Integration with Winston
+
+Want to use Winston as your transport? No problem - integrate it seamlessly:
+
+```typescript
+import winston from "winston";
+
+// Create Winston logger, put it in a resource if used from various places.
+const winstonLogger = winston.createLogger({
+  level: "info",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json(),
+  ),
+  transports: [
+    new winston.transports.File({ filename: "error.log", level: "error" }),
+    new winston.transports.File({ filename: "combined.log" }),
+    new winston.transports.Console({
+      format: winston.format.simple(),
+    }),
+  ],
+});
+
+// Bridge BlueLibs logs to Winston using hooks
+const winstonBridgeResource = resource({
+  id: "app.resources.winstonBridge",
+  init: async () => {
+    const log = event.data;
+
+    // Map log levels (BlueLibs -> Winston)
+    const levelMapping = {
+      trace: "silly",
+      debug: "debug",
+      info: "info",
+      warn: "warn",
+      error: "error",
+      critical: "error", // Winston doesn't have critical, use error
+    };
+
+    logger.onLog((log) => {
+      // Convert Runner log to Winston format
+      const winstonMeta = {
+        source: log.source,
+        timestamp: log.timestamp,
+        data: log.data,
+        context: log.context,
+        ...(log.error && { error: log.error }),
+      };
+
+      const winstonLevel = levelMapping[log.level] || "info";
+      winstonLogger.log(winstonLevel, log.message, winstonMeta);
+    });
+  },
+});
+```
+
+### Custom Log Formatters
+
+Want to customize how logs are printed? You can override the print behavior:
+
+```typescript
+// Custom logger with JSON output
+class JSONLogger extends Logger {
+  print(log: ILog) {
+    console.log(
+      JSON.stringify(
+        {
+          timestamp: log.timestamp.toISOString(),
+          level: log.level.toUpperCase(),
+          source: log.source,
+          message: log.message,
+          data: log.data,
+          context: log.context,
+          error: log.error,
+        },
+        null,
+        2,
+      ),
+    );
+  }
+}
+
+// Custom logger resource
+const customLogger = resource({
+  id: "app.logger.custom",
+  dependencies: { eventManager: globals.resources.eventManager },
+  init: async (_, { eventManager }) => {
+    return new JSONLogger(eventManager);
+  },
+});
+
+// Or you could simply add it as "globals.resources.logger" and override the default logger
+```
+
+### Log Structure
+
+Every log event contains:
+
+```typescript
+interface ILog {
+  level: string; // The log level (trace, debug, info, etc.)
+  source?: string; // Where the log came from
+  message: any; // The main log message (can be object or string)
+  timestamp: Date; // When the log was created
+  error?: {
+    // Structured error information
+    name: string;
+    message: string;
+    stack?: string;
+  };
+  data?: Record<string, any>; // Additional structured data, it's about the log itself
+  context?: Record<string, any>; // Bound context from logger.with(), it's about the context in which the log was created
+}
+```
+
+### Catch Logs
 
 ## Debug Resource
 
@@ -1313,201 +1433,6 @@ The debug resource is designed for zero production overhead:
 - **Enabled**: Minimal overhead (~0.1ms per operation)
 - **Filtering**: System components are automatically excluded from debug logs
 - **Buffering**: Logs are batched for better performance
-
-### Print Threshold
-
-By default, logs at `info` level and above are automatically printed to console for better developer experience. You can easily control this behavior through environment variables:
-
-```bash
-# Disable all logging output
-RUNNER_DISABLE_LOGS=true node your-app.js
-
-# Set specific log level (trace, debug, info, warn, error, critical)
-RUNNER_LOG_LEVEL=debug node your-app.js
-RUNNER_LOG_LEVEL=error node your-app.js
-```
-
-### Event-Driven Log Handling
-
-Every log generates an event that you can listen to. This is where the real power comes in:
-
-```typescript
-// Ship logs to your favorite log warehouse using hooks
-const logShipper = hook({
-  id: "app.hooks.logShipper", // or pretty printer, or winston, pino bridge, etc.
-  on: "*", // Listen to all events for comprehensive logging
-  run: async (event) => {
-    // Filter for log events (adjust pattern as needed)
-    if (event.id !== "globals.events.log") return;
-
-    const log = event.data;
-
-    // Ship critical errors to PagerDuty
-    if (log.level === "critical") {
-      await pagerDuty.alert({
-        message: log.message,
-        details: log.data,
-        source: log.source,
-      });
-    }
-
-    // Ship all errors to error tracking
-    if (log.level === "error" || log.level === "critical") {
-      await sentry.captureException(log.error || new Error(log.message), {
-        tags: { source: log.source },
-        extra: log.data,
-        level: log.level,
-      });
-    }
-
-    // Ship everything to your log warehouse
-    await logWarehouse.ship({
-      timestamp: log.timestamp,
-      level: log.level,
-      message: log.message,
-      source: log.source,
-      data: log.data,
-      context: log.context,
-    });
-  },
-});
-
-// Filter logs by source
-const databaseLogHandler = hook({
-  id: "app.hooks.databaseLogHandler",
-  on: globals.events.log,
-  run: async (event) => {
-    const log = event.data;
-
-    // Only handle database-related logs
-    if (log.source?.includes("database")) {
-      await databaseMonitoring.recordMetric({
-        operation: log.data?.operation,
-        duration: log.data?.duration,
-        level: log.data?.level,
-      });
-    }
-  },
-});
-```
-
-### Integration with Winston
-
-Want to use Winston as your transport? No problem - integrate it seamlessly:
-
-```typescript
-import winston from "winston";
-
-// Create Winston logger, put it in a resource if used from various places.
-const winstonLogger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.errors({ stack: true }),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.File({ filename: "error.log", level: "error" }),
-    new winston.transports.File({ filename: "combined.log" }),
-    new winston.transports.Console({
-      format: winston.format.simple(),
-    }),
-  ],
-});
-
-// Bridge BlueLibs logs to Winston using hooks
-const winstonBridge = hook({
-  id: "app.hooks.winstonBridge",
-  on: "*", // Listen to all events
-  run: async (event) => {
-    // Filter for log events
-    if (event.id !== "globals.events.log") return;
-
-    const log = event.data;
-
-    // Convert BlueLibs log to Winston format
-    const winstonMeta = {
-      source: log.source,
-      timestamp: log.timestamp,
-      data: log.data,
-      context: log.context,
-      ...(log.error && { error: log.error }),
-    };
-
-    // Map log levels (BlueLibs -> Winston)
-    const levelMapping = {
-      trace: "silly",
-      debug: "debug",
-      info: "info",
-      warn: "warn",
-      error: "error",
-      critical: "error", // Winston doesn't have critical, use error
-    };
-
-    const winstonLevel = levelMapping[log.level] || "info";
-    winstonLogger.log(winstonLevel, log.message, winstonMeta);
-  },
-});
-```
-
-### Custom Log Formatters
-
-Want to customize how logs are printed? You can override the print behavior:
-
-```typescript
-// Custom logger with JSON output
-class JSONLogger extends Logger {
-  print(log: ILog) {
-    console.log(
-      JSON.stringify(
-        {
-          timestamp: log.timestamp.toISOString(),
-          level: log.level.toUpperCase(),
-          source: log.source,
-          message: log.message,
-          data: log.data,
-          context: log.context,
-          error: log.error,
-        },
-        null,
-        2
-      )
-    );
-  }
-}
-
-// Custom logger resource
-const customLogger = resource({
-  id: "app.logger.custom",
-  dependencies: { eventManager: globals.resources.eventManager },
-  init: async (_, { eventManager }) => {
-    return new JSONLogger(eventManager);
-  },
-});
-
-// Or you could simply add it as "globals.resources.logger" and override the default logger
-```
-
-### Log Structure
-
-Every log event contains:
-
-```typescript
-interface ILog {
-  level: string; // The log level (trace, debug, info, etc.)
-  source?: string; // Where the log came from
-  message: any; // The main log message (can be object or string)
-  timestamp: Date; // When the log was created
-  error?: {
-    // Structured error information
-    name: string;
-    message: string;
-    stack?: string;
-  };
-  data?: Record<string, any>; // Additional structured data, it's about the log itself
-  context?: Record<string, any>; // Bound context from logger.with(), it's about the context in which the log was created
-}
-```
 
 ### Debugging Tips & Best Practices
 
@@ -1690,7 +1615,7 @@ const performanceTag = tag<{ alertAboveMs: number; criticalAboveMs: number }>({
 const rateLimitTag = tag<{ maxRequestsPerMinute: number; burstLimit?: number }>(
   {
     id: "rate.limit",
-  }
+  },
 );
 
 const cacheTag = tag<{ ttl: number; keyPattern?: string }>({
@@ -1747,13 +1672,13 @@ const apiEndpoint = task({
 The framework now includes a sophisticated global tagging system for better component organization and control:
 
 ```typescript
-import { globalTags } from "@bluelibs/runner";
+import { globals } from "@bluelibs/runner";
 
 // System components (automatically excluded from debug logs)
 const internalTask = task({
   id: "app.tasks.internal",
   meta: {
-    tags: [globalTags.system], // Marks as system component
+    tags: [globals.tag.system], // Marks as system component
   },
   run: async () => "internal work",
 });
@@ -1763,7 +1688,7 @@ const debugTask = task({
   id: "app.tasks.debug",
   meta: {
     tags: [
-      globalTags.debug.with({
+      globals.tags.debug.with({
         logTaskInput: true,
         logTaskResult: true,
       }),
@@ -1776,7 +1701,7 @@ const debugTask = task({
 const internalEvent = event({
   id: "app.events.internal",
   meta: {
-    tags: [globalTags.excludeFromGlobalListeners],
+    tags: [global.tags.excludeFromGlobalListeners],
   },
 });
 ```
@@ -1801,7 +1726,7 @@ const performanceMiddleware = middleware({
 
         if (duration > perfConfigTag.config.criticalAboveMs) {
           await alerting.critical(
-            `Task ${task.definition.id} took ${duration}ms`
+            `Task ${task.definition.id} took ${duration}ms`,
           );
         } else if (duration > perfConfig.config.alertAboveMs) {
           await alerting.warn(`Task ${task.definition.id} took ${duration}ms`);
@@ -1812,7 +1737,7 @@ const performanceMiddleware = middleware({
         const duration = Date.now() - startTime;
         await alerting.error(
           `Task ${task.definition.id} failed after ${duration}ms`,
-          error
+          error,
         );
         throw error;
       }
@@ -1838,7 +1763,7 @@ const ageContract = tag<void, { age: number }>({ id: "contract.age" });
 const preferenceContract = tag<{ locale: string }, { preferredLocale: string }>(
   {
     id: "contract.preferences",
-  }
+  },
 );
 ```
 
@@ -1940,8 +1865,6 @@ const database = resource({
 ```
 
 Metadata transforms your components from anonymous functions into self-documenting, discoverable, and controllable building blocks. Use it wisely, and your future self (and your team) will thank you.
-
-## Advanced Usage: When You Need More Power
 
 ## Overrides
 
@@ -2586,7 +2509,7 @@ const database = resource({
 
 // Context for request data
 const RequestContext = createContext<{ userId?: string; role?: string }>(
-  "app.requestContext"
+  "app.requestContext",
 );
 
 // Events
@@ -2669,7 +2592,7 @@ const server = resource({
     app.use((req, res, next) => {
       RequestContext.provide(
         { userId: req.headers["user-id"], role: req.headers["user-role"] },
-        () => next()
+        () => next(),
       );
     });
 
@@ -2714,7 +2637,7 @@ process.on("SIGTERM", async () => {
 
 ## Testing
 
-### Unit Testing: Mock Everything, Test Everything
+### Unit Testing
 
 Unit testing is straightforward because everything is explicit:
 
@@ -2728,7 +2651,7 @@ describe("registerUser task", () => {
 
     const result = await registerUser.run(
       { name: "John", email: "john@example.com" },
-      { userService: mockUserService, userRegistered: mockEvent }
+      { userService: mockUserService, userRegistered: mockEvent },
     );
 
     expect(result.id).toBe("123");
@@ -2740,18 +2663,14 @@ describe("registerUser task", () => {
 });
 ```
 
-### Integration Testing: The Real Deal (But Actually Fun)
+### Integration Testing
 
-Spin up your whole app, keep all the middleware/events, and still test like a human. The trick: a tiny test harness.
+Spin up your whole app, keep all the middleware/events, and still test like a human. The `run()` function returns a `RunnerResult`.
+
+This contains the classic `value` and `dispose()` but it also exposes `logger`, `runTask()`, `emitEvent()`, and `getResourceValue()` by default.
 
 ```typescript
-import {
-  run,
-  createTestResource,
-  resource,
-  task,
-  override,
-} from "@bluelibs/runner";
+import { run, resource, task, event, override } from "@bluelibs/runner";
 
 // Your real app
 const app = resource({
@@ -2766,10 +2685,14 @@ const testDb = resource({
   id: "app.database",
   init: async () => new InMemoryDb(),
 });
+// If you use with override() it will enforce the same interface upon the overriden resource to ensure typesafety
 const mockMailer = override(realMailer, { init: async () => fakeMailer });
 
 // Create the test harness
-const harness = createTestResource(app, { overrides: [testDb, mockMailer] });
+const harness = resource({
+  id: "test",
+  overrides: [mockMailer, testDb],
+});
 
 // A task you want to drive in your tests
 const registerUser = task({ id: "app.tasks.registerUser" /* ... */ });
@@ -2777,33 +2700,13 @@ const registerUser = task({ id: "app.tasks.registerUser" /* ... */ });
 // Boom: full ecosystem run (middleware, events, overrides) with a tiny driver
 const { value: t, dispose } = await run(harness);
 const result = await t.runTask(registerUser, { email: "x@y.z" });
-const value = t.getResourceValue(id | resource); // get the value from the run context
+const value = t.getResourceValue(testDb); // since the resolution is done by id, this will return the exact same result as t.getResourceValue(actualDb)
+t.emitEvent(id | event, payload);
 expect(result).toMatchObject({ success: true });
 await dispose();
 ```
 
-Prefer scenario tests? Return whatever you want from the harness and assert outside:
-
-```typescript
-const flowHarness = createTestResource(
-  resource({
-    id: "app",
-    register: [db, createUser, issueToken],
-  })
-);
-
-const { value: t, dispose } = await run(flowHarness);
-const user = await t.runTask(createUser, { email: "a@b.c" });
-const token = await t.runTask(issueToken, { userId: user.id });
-expect(token).toBeTruthy();
-await dispose();
-```
-
-Why this rocks:
-
-- Minimal ceremony, no API pollution
-- Real wiring (middleware/events/overrides) – what runs in prod runs in tests
-- You choose: drive tasks directly or build domain-y flows
+When you're working with the actual task instances you benefit of autocompletion, if you rely on strings you will not benefit of autocompletion and typesafety for running these tasks.
 
 ## Semaphore
 
@@ -2851,7 +2754,7 @@ try {
 // Or with withPermit
 const result = await dbSemaphore.withPermit(
   async () => await slowDatabaseOperation(),
-  { timeout: 10000 } // 10 second timeout
+  { timeout: 10000 }, // 10 second timeout
 );
 ```
 
@@ -2863,7 +2766,7 @@ const controller = new AbortController();
 // Start an operation
 const operationPromise = dbSemaphore.withPermit(
   async () => await veryLongOperation(),
-  { signal: controller.signal }
+  { signal: controller.signal },
 );
 
 // Cancel the operation after 3 seconds
@@ -2907,6 +2810,53 @@ dbSemaphore.dispose();
 // Error: "Semaphore has been disposed"
 ```
 
+### Real-World Examples
+
+#### Database Connection Pool Manager
+
+```typescript
+class DatabaseManager {
+  private semaphore = new Semaphore(10); // Max 10 concurrent queries
+
+  async query(sql: string, params?: any[]) {
+    return this.semaphore.withPermit(
+      async () => {
+        const connection = await this.pool.getConnection();
+        try {
+          return await connection.query(sql, params);
+        } finally {
+          connection.release();
+        }
+      },
+      { timeout: 30000 }, // 30 second timeout
+    );
+  }
+
+  async shutdown() {
+    this.semaphore.dispose();
+    await this.pool.close();
+  }
+}
+```
+
+#### Rate-Limited API Client
+
+```typescript
+class APIClient {
+  private rateLimiter = new Semaphore(5); // Max 5 concurrent requests
+
+  async fetchUser(id: string, signal?: AbortSignal) {
+    return this.rateLimiter.withPermit(
+      async () => {
+        const response = await fetch(`/api/users/${id}`, { signal });
+        return response.json();
+      },
+      { signal, timeout: 10000 },
+    );
+  }
+}
+```
+
 ## Queue
 
 _The orderly guardian of chaos, the diplomatic bouncer of async operations._
@@ -2941,7 +2891,9 @@ await queue.dispose();
 
 The Queue provides each task with an `AbortSignal` for cooperative cancellation. Tasks should periodically check this signal to enable early termination.
 
-#### Example: Long-running Task
+### Examples
+
+**Example: Long-running Task**
 
 ```typescript
 const queue = new Queue();
@@ -2966,7 +2918,7 @@ const processLargeDataset = queue.run(async (signal) => {
 await queue.dispose({ cancel: true });
 ```
 
-#### Example: Network Request with Timeout
+**Network Request with Timeout**
 
 ```typescript
 const queue = new Queue();
@@ -2989,7 +2941,7 @@ const fetchWithCancellation = queue.run(async (signal) => {
 await queue.dispose({ cancel: true });
 ```
 
-#### Example: File Processing with Progress Tracking
+**Example: File Processing with Progress Tracking**
 
 ```typescript
 const queue = new Queue();
@@ -3035,7 +2987,7 @@ if (signal.aborted) {
 }
 ```
 
-##### Integrate with Native APIs
+**Integrate with Native APIs**
 
 Many Web APIs accept `AbortSignal`:
 
@@ -3043,11 +2995,11 @@ Many Web APIs accept `AbortSignal`:
 - `setTimeout(callback, delay, { signal })`
 - Custom async operations
 
-##### Avoid Nested Queuing
+**Avoid Nested Queuing**
 
 The Queue prevents deadlocks by rejecting attempts to queue tasks from within running tasks. Structure your code to avoid this pattern.
 
-##### Handle AbortError Gracefully
+**Handle AbortError Gracefully**
 
 ```typescript
 try {
@@ -3060,101 +3012,6 @@ try {
   throw error; // Re-throw unexpected errors
 }
 ```
-
----
-
-_Cooperative task scheduling with professional-grade cancellation support_
-
-### Real-World Examples
-
-### Database Connection Pool Manager
-
-```typescript
-class DatabaseManager {
-  private semaphore = new Semaphore(10); // Max 10 concurrent queries
-
-  async query(sql: string, params?: any[]) {
-    return this.semaphore.withPermit(
-      async () => {
-        const connection = await this.pool.getConnection();
-        try {
-          return await connection.query(sql, params);
-        } finally {
-          connection.release();
-        }
-      },
-      { timeout: 30000 } // 30 second timeout
-    );
-  }
-
-  async shutdown() {
-    this.semaphore.dispose();
-    await this.pool.close();
-  }
-}
-```
-
-### Rate-Limited API Client
-
-```typescript
-class APIClient {
-  private rateLimiter = new Semaphore(5); // Max 5 concurrent requests
-
-  async fetchUser(id: string, signal?: AbortSignal) {
-    return this.rateLimiter.withPermit(
-      async () => {
-        const response = await fetch(`/api/users/${id}`, { signal });
-        return response.json();
-      },
-      { signal, timeout: 10000 }
-    );
-  }
-}
-```
-
-## Enhanced Run Function
-
-_More power and flexibility at startup_
-
-The `run()` function has been enhanced to support resource configuration and debug options directly:
-
-```typescript
-// Basic usage
-const { dispose } = await run(app);
-
-// With resource configuration
-const { dispose } = await run(
-  app.with({
-    environment: "production",
-    someBusinessLogic: false,
-  })
-);
-
-// With debug and logging options
-const { dispose, taskRunner, eventManager, store } = await run(app, {
-  debug: "verbose", // Enable comprehensive debug logging
-  log: "json", // Use JSON log format instead of pretty
-});
-
-// Access framework internals for advanced use cases
-console.log(`Registered tasks: ${taskRunner.getTaskCount()}`);
-console.log(`Active events: ${eventManager.getEventCount()}`);
-```
-
-**Return Values:**
-
-- `dispose`: Graceful shutdown function
-- `taskRunner`: Access to task execution engine
-- `eventManager`: Access to event system
-
-**Options:**
-
-- `debug`: "normal" | "verbose" | custom debug config
-- `log`: "pretty" | "json" | custom log format
-- `logs`: { printThreshold?: null | LogLevels; printStrategy?: PrintStrategy; bufferLogs?: boolean }
-- `errorBoundary`: boolean — when true, installs handlers for `uncaughtException` and `unhandledRejection`
-- `shutdownHooks`: boolean — when true, installs SIGINT/SIGTERM handlers to call `dispose()`
-- `onUnhandledError`: OnUnhandledError — centralized handler for unhandled errors (see above)
 
 ## Why Choose BlueLibs Runner?
 

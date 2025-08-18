@@ -1,5 +1,4 @@
 import { defineResource, defineTask } from "../define";
-import { createTestResource } from "../testing";
 import { run } from "../run";
 
 describe("Per-task interceptors inside resources", () => {
@@ -25,12 +24,15 @@ describe("Per-task interceptors inside resources", () => {
       },
     });
 
-    const app = createTestResource(installer);
-    const { value: facade, dispose } = await run(app);
+    const appHarness = defineResource({
+      id: "tests.interceptors.harness",
+      register: [installer],
+    });
+    const rr = await run(appHarness);
 
-    const result = await facade.runTask(adder, { value: 10 });
+    const result = await rr.runTask(adder, { value: 10 });
     expect(result).toEqual({ value: 21 }); // (10 * 2) + 1
 
-    await dispose();
+    await rr.dispose();
   });
 });

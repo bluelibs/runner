@@ -226,7 +226,7 @@ import { globals, createContext } from "@bluelibs/runner";
 
 // Context for request-scoped data
 const UserContext = createContext<{ userId: string; requestId: string }>(
-  "user"
+  "user",
 );
 
 // Validation schemas
@@ -268,7 +268,6 @@ const app = resource({
     // Cache resource (required for cache middleware)
     globals.resources.cache.with({
       defaultOptions: { max: 1000, ttl: 30000 },
-      async: false, // Use Redis by overriding globals.tasks.cacheFactory
     }),
     // Logger resource (available by default)
     processUser,
@@ -278,18 +277,18 @@ const app = resource({
     // Provide context and run task
     return UserContext.provide(
       { userId: "123", requestId: "abc-123" },
-      async () => processUser({ name: "John", email: "john@example.com" })
+      async () => processUser({ name: "John", email: "john@example.com" }),
     );
   },
 });
 
 // Event-driven log shipping
-const logShipper = task({
-  on: globals.events.log,
-  run: async (event) => {
-    const log = event.data;
-    if (log.level === "error") await sendToSentry(log);
-    if (log.level === "critical") await pagerDuty.alert(log);
+const logShipper = resource({
+  id: "app.logShipper",
+  run: async (_, { logger }) => {
+    logger.onLog(async (log) => {
+      // Do something with the log.
+    });
   },
 });
 ```
@@ -390,7 +389,7 @@ import { Semaphore, Queue } from "@bluelibs/runner";
 const dbSemaphore = new Semaphore(5); // Max 5 concurrent
 const result = await dbSemaphore.withPermit(
   async () => await db.query("SELECT * FROM users"),
-  { timeout: 5000 }
+  { timeout: 5000 },
 );
 
 const queue = new Queue();
@@ -557,7 +556,10 @@ import { run, createTestResource, override } from "@bluelibs/runner";
 describe("createUser task", () => {
   it("should create user", async () => {
     const mockService = { create: jest.fn().mockResolvedValue({ id: "123" }) };
-    const result = await createUser.run({ name: "John" }, { userService: mockService });
+    const result = await createUser.run(
+      { name: "John" },
+      { userService: mockService },
+    );
     expect(result.id).toBe("123");
   });
 });
@@ -580,7 +582,7 @@ import { Semaphore, Queue } from "@bluelibs/runner";
 const dbSemaphore = new Semaphore(5);
 const result = await dbSemaphore.withPermit(
   async () => await db.query("SELECT * FROM users"),
-  { timeout: 5000 }
+  { timeout: 5000 },
 );
 
 // Queue - FIFO with cancellation support

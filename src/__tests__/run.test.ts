@@ -56,7 +56,7 @@ describe("main exports", () => {
     // Test globals sub-properties for complete coverage
     expect(typeof mainExports.globals.events).toBe("object");
     expect(typeof mainExports.globals.resources).toBe("object");
-    expect(typeof mainExports.globals.middlewares).toBe("object");
+    expect(typeof mainExports.globals.middleware).toBe("object");
   });
 });
 
@@ -449,7 +449,7 @@ describe("run", () => {
 
       // Ensure we observed both lifecycle events with correct payload for the specific hook
       const appOnly = observed.filter(
-        (o) => o.payload.hookId === "tests.hooks.app"
+        (o) => o.payload.hook?.id === "tests.hooks.app",
       );
       const ids = appOnly.map((o) => o.id);
       expect(ids).toEqual([
@@ -458,11 +458,11 @@ describe("run", () => {
       ]);
 
       expect(appOnly[0].payload).toEqual({
-        hookId: "tests.hooks.app",
+        hook: expect.objectContaining({ id: "tests.hooks.app" }),
         eventId: testEvent.id,
       });
       expect(appOnly[1].payload).toEqual({
-        hookId: "tests.hooks.app",
+        hook: expect.objectContaining({ id: "tests.hooks.app" }),
         eventId: testEvent.id,
       });
 
@@ -522,7 +522,7 @@ describe("run", () => {
       await expect(run(app)).rejects.toThrow("fail-me");
 
       const appOnly = observed.filter(
-        (o) => o.payload.hookId === "tests.hooks.app.error"
+        (o) => o.payload.hook?.id === "tests.hooks.app.error",
       );
       const ids = appOnly.map((o) => o.id);
       expect(ids).toEqual([
@@ -531,10 +531,10 @@ describe("run", () => {
       ]);
 
       expect(appOnly[0].payload).toEqual({
-        hookId: "tests.hooks.app.error",
+        hook: expect.objectContaining({ id: "tests.hooks.app.error" }),
         eventId: testEvent.id,
       });
-      expect(appOnly[1].payload.hookId).toBe("tests.hooks.app.error");
+      expect(appOnly[1].payload.hook.id).toBe("tests.hooks.app.error");
       expect(appOnly[1].payload.eventId).toBe(testEvent.id);
       expect(appOnly[1].payload.error).toBeTruthy();
       expect(appOnly[1].payload.error.message).toContain("fail-me");
@@ -814,7 +814,7 @@ describe("run", () => {
         "Resource Value",
         {},
         {},
-        undefined
+        undefined,
       );
     });
 

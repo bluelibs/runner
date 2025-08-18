@@ -16,9 +16,9 @@ export const middlewareTriggeredListener = defineHook({
     const { logger, debugConfig } = deps;
     const cfg = getConfig(debugConfig, event!);
     if (!cfg.logMiddlewareBeforeRun) return;
-    const { middlewareId, kind, targetId } = event!.data as any;
-    const msg = `[middleware] ${String(middlewareId)} started for ${String(
-      kind
+    const { middleware, kind, targetId } = event.data as any;
+    const msg = `[middleware] ${String(middleware.id)} started for ${String(
+      kind,
     )} ${String(targetId)}`;
     await logger.info(msg);
   },
@@ -36,9 +36,9 @@ export const middlewareCompletedListener = defineHook({
     const { logger, debugConfig } = deps;
     const cfg = getConfig(debugConfig, event!);
     if (!cfg.logMiddlewareAfterRun) return;
-    const { middlewareId, kind, targetId } = event!.data as any;
-    const msg = `[middleware] ${String(middlewareId)} completed for ${String(
-      kind
+    const { middleware, kind, targetId } = event!.data as any;
+    const msg = `[middleware] ${String(middleware.id)} completed for ${String(
+      kind,
     )} ${String(targetId)}`;
     await logger.info(msg);
   },

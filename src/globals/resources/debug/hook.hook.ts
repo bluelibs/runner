@@ -17,13 +17,15 @@ export const hookTriggeredListener = defineHook({
   run: async (event, deps) => {
     if (!deps) return;
     const { logger, debugConfig } = deps;
-    if (hasSystemTag(event)) {
+    if (hasSystemTag((event.data as any)?.hook)) {
       return;
     }
 
     const resolved = getConfig(debugConfig, event!);
     if (resolved.logHookTriggered) {
-      let logString = `[hook] ${event!.id} triggered`;
+      let logString = `[hook] ${
+        (event!.data as any)?.hook?.id ?? event!.id
+      } triggered`;
       await logger.info(logString);
     }
   },
@@ -48,7 +50,9 @@ export const hookCompletedListener = defineHook({
 
     const resolved = getConfig(debugConfig, event!);
     if (resolved.logHookCompleted) {
-      let logString = `[hook] ${event!.id} completed`;
+      let logString = `[hook] ${
+        (event!.data as any)?.hook?.id ?? event!.id
+      } completed`;
       await logger.info(logString);
     }
   },

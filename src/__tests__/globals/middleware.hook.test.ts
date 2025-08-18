@@ -11,8 +11,8 @@ describe("globals.resources.debug.middleware listeners", () => {
     };
     const event = {
       id: "global.events.middlewareTriggered",
-      data: { middlewareId: "m", kind: "task", targetId: "t" },
-    };
+      data: { middleware: { id: "m" }, kind: "task", targetId: "t" },
+    } as any;
 
     await middlewareTriggeredListener.run(event as any, {
       logger: logger as any,
@@ -21,18 +21,18 @@ describe("globals.resources.debug.middleware listeners", () => {
 
     const completed = {
       id: "global.events.middlewareCompleted",
-      data: { middlewareId: "m", kind: "task", targetId: "t" },
-    };
+      data: { middleware: { id: "m" }, kind: "task", targetId: "t" },
+    } as any;
     await middlewareCompletedListener.run(completed as any, {
       logger: logger as any,
       debugConfig: { logMiddlewareAfterRun: true } as any,
     });
 
     expect(
-      infos.some((m) => m.includes("[middleware] m started for task t"))
+      infos.some((m) => m.includes("[middleware] m started for task t")),
     ).toBe(true);
     expect(
-      infos.some((m) => m.includes("[middleware] m completed for task t"))
+      infos.some((m) => m.includes("[middleware] m completed for task t")),
     ).toBe(true);
   });
 
@@ -47,8 +47,8 @@ describe("globals.resources.debug.middleware listeners", () => {
     };
     const triggered = {
       id: "global.events.middlewareTriggered",
-      data: { middlewareId: "m", kind: "resource", targetId: "r" },
-    };
+      data: { middleware: { id: "m" }, kind: "resource", targetId: "r" },
+    } as any;
     await middlewareTriggeredListener.run(triggered as any, {
       logger: logger as any,
       debugConfig: cfg as any,
@@ -56,8 +56,8 @@ describe("globals.resources.debug.middleware listeners", () => {
 
     const completed = {
       id: "global.events.middlewareCompleted",
-      data: { middlewareId: "m", kind: "resource", targetId: "r" },
-    };
+      data: { middleware: { id: "m" }, kind: "resource", targetId: "r" },
+    } as any;
     await middlewareCompletedListener.run(completed as any, {
       logger: logger as any,
       debugConfig: cfg as any,
@@ -69,8 +69,8 @@ describe("globals.resources.debug.middleware listeners", () => {
   it("returns early when deps missing (defensive branch)", async () => {
     const event = {
       id: "global.events.middlewareTriggered",
-      data: { middlewareId: "m", kind: "task", targetId: "t" },
-    };
+      data: { middleware: { id: "m" }, kind: "task", targetId: "t" },
+    } as any;
     // Should not throw
     await middlewareTriggeredListener.run(event as any, undefined as any);
   });

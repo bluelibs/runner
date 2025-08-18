@@ -13,6 +13,7 @@
 - 🛑 **Smart shutdown hooks** - they know when to bail out gracefully when things go wrong
 - ⚙️ **Run options galore!** Configure `logs`, `debug`, `shutdownHooks`, and `errorBoundary` to your heart's content
 - 🧯 **Centralized unhandled error handler** via `run({ onUnhandledError })` for consistent error reporting
+- 🧪 **Simpler testing with `RunResult`** - `createTestResource` is deprecated; use `run()` and the returned `RunResult` helpers
 
 ### 🏃‍♂️ Running Your App (The New Way)
 
@@ -28,6 +29,67 @@ run(app, config);
 
 ```ts
 run(app.with(config), RunOptions);
+```
+
+### 🧪 Testing (Goodbye `createTestResource`)
+
+We deprecated `createTestResource`. Testing is now simpler and more powerful via `run(app)`, which returns a `RunResult` exposing:
+
+- `runTask(taskOrId, input?)`
+- `emitEvent(eventOrId, payload?)`
+- `getResourceValue(resourceOrId)`
+- `logger`
+- `dispose()`
+
+**Before** (using `createTestResource`):
+
+```ts
+const app = resource({ id: "app", register: [db, getDbKind] });
+const mockDb = override(db, { init: async () => ({ kind: "mock" }) });
+
+const harness = createTestResource(app, { overrides: [mockDb] });
+const { value: t, dispose } = await run(harness);
+
+const kind = await t.runTask(getDbKind);
+const dbValue = t.getResource("db");
+await dispose();
+```
+
+**After** (using `RunResult`):
+
+```ts
+const app = resource({
+  id: "app",
+  register: [db, getDbKind],
+  overrides: [mockDb],
+});
+
+const r = await run(app);
+const kind = await r.runTask(getDbKind);
+const dbValue = r.getResourceValue("db");
+await r.dispose();
+```
+
+You can also keep overrides separate by defining a tiny test harness resource and running it directly (no helper needed):
+
+```ts
+const harness = resource({
+  id: "tests.harness",
+  register: [app],
+  overrides: [mockDb],
+});
+
+const r = await run(harness);
+// r.runTask(...), r.emitEvent(...), r.getResourceValue(...)
+await r.dispose();
+```
+
+Pro tip: `RunResult` also supports string ids for convenience:
+
+```ts
+await r.runTask("t.db.kind");
+await r.emitEvent("app.ping", { n: 2 });
+const value = r.getResourceValue("db");
 ```
 
 ### 🪪 No More Anonymous Resources (Sorry, Mystery Resources!)
@@ -169,7 +231,7 @@ Logger was tired of competing for attention on the event bus. We gave it the spe
 run(app, {
   logs: {
     printThreshold: "info", // default, or null if you want radio silence
-    printStrategy: "pretty" | "json" | "json-pretty", // pick your poison
+    printStrategy: "pretty" | "json" | "json-pretty" | "plain", // pick your poison
   },
 });
 ```

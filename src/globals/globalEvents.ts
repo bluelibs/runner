@@ -1,6 +1,5 @@
 import { defineEvent } from "../define";
-import { IEvent, IResource } from "../defs";
-import { ILog } from "../models/Logger";
+import { IEvent, IResource, IHook, IMiddleware } from "../defs";
 import { globalTags } from "./globalTags";
 
 const systemTag = globalTags.system;
@@ -27,7 +26,7 @@ export const globalEvents = {
    */
   middlewareTriggered: defineEvent<{
     kind: "task" | "resource";
-    middlewareId: string;
+    middleware: IMiddleware<any, any>;
     targetId: string;
   }>({
     id: "global.events.middlewareTriggered",
@@ -43,7 +42,7 @@ export const globalEvents = {
    */
   middlewareCompleted: defineEvent<{
     kind: "task" | "resource";
-    middlewareId: string;
+    middleware: IMiddleware<any, any>;
     targetId: string;
     error?: Error;
   }>({
@@ -59,7 +58,7 @@ export const globalEvents = {
    * Emitted right before a hook's run executes.
    */
   hookTriggered: defineEvent<{
-    hookId: string;
+    hook: IHook<any, any>;
     eventId: string;
   }>({
     id: "global.events.hookTriggered",
@@ -74,7 +73,7 @@ export const globalEvents = {
    * Emitted after a hook completes (success or failure). Contains optional error.
    */
   hookCompleted: defineEvent<{
-    hookId: string;
+    hook: IHook<any, any>;
     eventId: string;
     error?: Error;
   }>({

@@ -203,7 +203,8 @@ export async function run<C, V extends Promise<any>>(
       logger,
       store,
       eventManager,
-      taskRunner
+      taskRunner,
+      disposeAll
     );
   } catch (err) {
     // Rollback initialized resources

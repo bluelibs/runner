@@ -1,12 +1,4 @@
-import {
-  resource,
-  task,
-  run,
-  middleware,
-  event,
-  definitions,
-  createTestResource,
-} from "../index";
+import { resource, task, run, middleware, event, definitions } from "../index";
 
 describe("Optional dependencies", () => {
   test("task.optional() missing should resolve to undefined in resource deps", async () => {
@@ -139,9 +131,12 @@ describe("Optional dependencies", () => {
       register: [target, mw],
       async init() {
         // Running the task should not apply the middleware because it depends on the same task
-        const harness = createTestResource(target);
-        const { value } = await run(harness);
-        const out = await value.runTask(target);
+        const harness = resource({
+          id: "tests.optional.middleware.harness",
+          register: [target],
+        });
+        const rr = await run(harness);
+        const out = await rr.runTask(target);
         expect(out).toBe("x");
         return "ready" as const;
       },
@@ -240,11 +235,15 @@ describe("Optional dependencies", () => {
         return "ready" as const;
       },
     });
-    const { value } = await run(createTestResource(app));
+    const harness = resource({
+      id: "tests.optional.graph.harness",
+      register: [app],
+    });
+    const rr = await run(harness);
     // Indirectly exercise optional path in graph build by checking we can run tasks
     // (store internals no longer exposed via test harness)
-    expect(typeof value.runTask).toBe("function");
+    expect(typeof rr.runTask).toBe("function");
     // We still validate by running a no-op task without throwing
-    await value.runTask(usesTask);
+    await rr.runTask(usesTask);
   });
 });

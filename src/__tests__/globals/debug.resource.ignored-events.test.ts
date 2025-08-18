@@ -1,6 +1,5 @@
 import { defineResource, defineTask } from "../../define";
 import { run } from "../../run";
-import { createTestResource } from "../../testing";
 import { debugResource } from "../../globals/resources/debug";
 import { globalEvents } from "../../globals/globalEvents";
 import { globalResources } from "../../globals/globalResources";
@@ -47,7 +46,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
     // Ensure no event log about [event] tests.* from system emission
     const infoLogs = logs.filter((l) => l.level === "info");
     expect(infoLogs.some((l) => l.message.includes("[event] tests."))).toBe(
-      false
+      false,
     );
   });
 
@@ -92,7 +91,7 @@ describe("debug resource - ignored system/lifecycle events", () => {
     // Ensure middleware did not log task start/completed lines for system-tagged task
     const joined = messages.join("\n");
     expect(joined.includes("[task] tests.system.task starting to run")).toBe(
-      false
+      false,
     );
     expect(joined.includes("[task] tests.system.task completed")).toBe(false);
   });

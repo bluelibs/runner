@@ -18,7 +18,7 @@ import { createTestResource } from "./testing";
 const globals = {
   events: globalEvents,
   resources: globalResources,
-  middlewares: globalMiddlewares,
+  middleware: globalMiddlewares,
   tags: globalTags,
 };
 

@@ -60,6 +60,15 @@ describe("LogPrinter", () => {
     expect(logs[0].includes("\n")).toBe(true);
   });
 
+  it("plain prints like pretty without ANSI even when useColors is true", () => {
+    const p = new LogPrinter({ strategy: "plain", useColors: true });
+    p.print({ ...baseLog });
+    expect(logs.length).toBeGreaterThan(0);
+    expect(errs.length).toBe(0);
+    const combined = logs.join("\n");
+    expect(combined).not.toMatch(/\x1b\[/);
+  });
+
   it("handles circular and bigint in message/data/context", () => {
     const p = new LogPrinter({ strategy: "json", useColors: false });
     const circ: any = { x: 1 };

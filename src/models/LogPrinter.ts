@@ -1,5 +1,5 @@
 import { safeStringify } from "./utils/safeStringify";
-export type PrintStrategy = "pretty" | "json" | "json_pretty";
+export type PrintStrategy = "pretty" | "plain" | "json" | "json_pretty";
 
 export type LogLevels =
   | "trace"
@@ -72,12 +72,17 @@ export class LogPrinter {
     colorTheme?: Partial<ColorTheme>;
   }) {
     this.strategy = options.strategy;
-    // If a custom colorTheme is provided, prefer starting from the colored theme
-    // so that overrides augment ANSI-enabled defaults even when useColors=false.
-    // This allows tests or consumers to opt-in per-key colors via colorTheme.
-    const base =
-      options.useColors || options.colorTheme ? COLORS : LogPrinter.NO_COLORS;
-    this.colors = { ...base, ...(options.colorTheme || {}) };
+    // For 'plain', force no ANSI colors regardless of options
+    if (options.strategy === "plain") {
+      this.colors = LogPrinter.NO_COLORS;
+    } else {
+      // If a custom colorTheme is provided, prefer starting from the colored theme
+      // so that overrides augment ANSI-enabled defaults even when useColors=false.
+      // This allows tests or consumers to opt-in per-key colors via colorTheme.
+      const base =
+        options.useColors || options.colorTheme ? COLORS : LogPrinter.NO_COLORS;
+      this.colors = { ...base, ...(options.colorTheme || {}) };
+    }
   }
 
   public print(log: PrintableLog): void {
@@ -150,7 +155,7 @@ export class LogPrinter {
       return json
         .split("\n")
         .map((line: string, i: number) =>
-          i === 0 ? line : `${padding}${line}`
+          i === 0 ? line : `${padding}${line}`,
         )
         .join("\n");
     }
@@ -161,14 +166,14 @@ export class LogPrinter {
     if (!error) return [];
     const lines: string[] = [];
     lines.push(
-      `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.error}${error.name}: ${error.message}${this.colors.reset}`
+      `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.error}${error.name}: ${error.message}${this.colors.reset}`,
     );
     if (error.stack) {
       const frames = error.stack.split("\n").slice(1, 3);
       frames.forEach((frame) => {
         const cleaned = frame.trim().replace(/^at /, "");
         lines.push(
-          `       ${this.colors.gray}↳${this.colors.reset} ${this.colors.dim}${cleaned}${this.colors.reset}`
+          `       ${this.colors.gray}↳${this.colors.reset} ${this.colors.dim}${cleaned}${this.colors.reset}`,
         );
       });
     }
@@ -180,7 +185,7 @@ export class LogPrinter {
     const lines: string[] = [];
     const formatted = safeStringify(data, 2).split("\n");
     lines.push(
-      `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.cyan}data:${this.colors.reset}`
+      `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.cyan}data:${this.colors.reset}`,
     );
     formatted.forEach((line) => {
       lines.push(`       ${this.colors.dim}${line}${this.colors.reset}`);
@@ -196,7 +201,7 @@ export class LogPrinter {
     const lines: string[] = [];
     const formatted = safeStringify(filtered, 2).split("\n");
     lines.push(
-      `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.blue}context:${this.colors.reset}`
+      `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.blue}context:${this.colors.reset}`,
     );
     formatted.forEach((line) => {
       lines.push(`       ${this.colors.dim}${line}${this.colors.reset}`);
@@ -245,7 +250,7 @@ export class LogPrinter {
   };
 
   public static setWriters(
-    writers: Partial<{ log: (msg: any) => void; error?: (msg: any) => void }>
+    writers: Partial<{ log: (msg: any) => void; error?: (msg: any) => void }>,
   ) {
     LogPrinter.writers = { ...LogPrinter.writers, ...writers };
   }

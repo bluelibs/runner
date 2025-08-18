@@ -45,28 +45,28 @@ export * from "./models/StoreTypes";
 export const symbolTask: unique symbol = Symbol("runner.task");
 export const symbolResource: unique symbol = Symbol("runner.resource");
 export const symbolResourceWithConfig: unique symbol = Symbol(
-  "runner.resourceWithConfig"
+  "runner.resourceWithConfig",
 );
 export const symbolEvent: unique symbol = Symbol("runner.event");
 export const symbolMiddleware: unique symbol = Symbol("runner.middleware");
 export const symbolMiddlewareConfigured: unique symbol = Symbol(
-  "runner.middlewareConfigured"
+  "runner.middlewareConfigured",
 );
 /** @internal Marks hook definitions (event listeners without middleware) */
 export const symbolHook: unique symbol = Symbol("runner.hook");
 export const symbolMiddlewareGlobal: unique symbol = Symbol(
-  "runner.middlewareGlobal"
+  "runner.middlewareGlobal",
 );
 export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol(
-  "runner.middlewareGlobalTasks"
+  "runner.middlewareGlobalTasks",
 );
 export const symbolMiddlewareEverywhereResources: unique symbol = Symbol(
-  "runner.middlewareGlobalResources"
+  "runner.middlewareGlobalResources",
 );
 
 /** @internal Marks an optional dependency wrapper */
 export const symbolOptionalDependency: unique symbol = Symbol(
-  "runner.optionalDependency"
+  "runner.optionalDependency",
 );
 
 /** @internal Path to aid anonymous id generation and error messages */
@@ -78,7 +78,7 @@ export const symbolStore: unique symbol = Symbol("runner.store");
 
 /** @internal Brand used by index() resources */
 export const symbolIndexResource: unique symbol = Symbol(
-  "runner.indexResource"
+  "runner.indexResource",
 );
 
 export interface ITagDefinition<TConfig = void, TEnforceContract = void> {
@@ -113,7 +113,7 @@ export interface ITag<TConfig = void, TEnforceContract = void>
    * or from a taggable object (`{ meta: { tags?: [] } }`).
    */
   extract(
-    target: TagType[] | ITaggable
+    target: TagType[] | ITaggable,
   ): ExtractedTagResult<TConfig, TEnforceContract> | null;
   [symbolFilePath]: string;
 }
@@ -238,7 +238,7 @@ export type DependencyValuesType<T extends DependencyMapType> = {
 // Per-task local interceptor for resource dependency context
 export type TaskLocalInterceptor<TInput, TOutput> = (
   next: (input: TInput) => TOutput,
-  input: TInput
+  input: TInput,
 ) => TOutput;
 
 // When tasks are injected into resources, they expose an intercept() API
@@ -286,10 +286,10 @@ export type MiddlewareAttachments =
   | IMiddlewareConfigured<any>;
 
 export interface ITaskDefinition<
-  TInput = any,
+  TInput = undefined,
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
-  TMeta extends ITaskMeta = any
+  TMeta extends ITaskMeta = any,
 > {
   id: string;
   /**
@@ -320,7 +320,7 @@ export interface ITaskDefinition<
    */
   run: (
     input: TInput,
-    dependencies: DependencyValuesType<TDependencies>
+    dependencies: DependencyValuesType<TDependencies>,
   ) => HasContracts<TMeta> extends true
     ? EnsureResponseSatisfiesContracts<TMeta, TOutput>
     : TOutput;
@@ -335,7 +335,7 @@ export interface ITask<
   TInput = any,
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
-  TMeta extends ITaskMeta = any
+  TMeta extends ITaskMeta = any,
 > extends ITaskDefinition<TInput, TOutput, TDependencies, TMeta> {
   id: string;
   dependencies: TDependencies | (() => TDependencies);
@@ -355,7 +355,7 @@ export interface ITask<
 export interface IHookDefinition<
   TDependencies extends DependencyMapType = {},
   TOn extends "*" | IEventDefinition<any> = any,
-  TMeta extends ITaskMeta = any
+  TMeta extends ITaskMeta = any,
 > {
   id: string;
   dependencies?: TDependencies | (() => TDependencies);
@@ -365,14 +365,14 @@ export interface IHookDefinition<
   meta?: TMeta;
   run: (
     event: IEventEmission<TOn extends "*" ? any : ExtractEventParams<TOn>>,
-    dependencies: DependencyValuesType<TDependencies>
+    dependencies: DependencyValuesType<TDependencies>,
   ) => Promise<any>;
 }
 
 export interface IHook<
   TDependencies extends DependencyMapType = {},
   TOn extends "*" | IEventDefinition<any> = any,
-  TMeta extends ITaskMeta = any
+  TMeta extends ITaskMeta = any,
 > extends IHookDefinition<TDependencies, TOn, TMeta> {
   id: string;
   dependencies: TDependencies | (() => TDependencies);
@@ -388,7 +388,7 @@ export interface IResourceDefinition<
   TContext = any,
   THooks = any,
   TRegisterableItems = any,
-  TMeta extends IResourceMeta = any
+  TMeta extends IResourceMeta = any,
 > {
   /** Stable identifier. */
   id: string;
@@ -408,7 +408,7 @@ export interface IResourceDefinition<
     this: any,
     config: TConfig,
     dependencies: ResourceDependencyValuesType<TDependencies>,
-    context: TContext
+    context: TContext,
   ) => HasContracts<TMeta> extends true
     ? EnsureResponseSatisfiesContracts<TMeta, TValue>
     : TValue;
@@ -433,7 +433,7 @@ export interface IResourceDefinition<
     value: TValue extends Promise<infer U> ? U : TValue,
     config: TConfig,
     dependencies: ResourceDependencyValuesType<TDependencies>,
-    context: TContext
+    context: TContext,
   ) => Promise<void>;
   meta?: TMeta;
   /**
@@ -468,7 +468,7 @@ export interface IResource<
   TValue extends Promise<any> = Promise<any>,
   TDependencies extends DependencyMapType = any,
   TContext = any,
-  TMeta extends IResourceMeta = any
+  TMeta extends IResourceMeta = any,
 > extends IResourceDefinition<
     TConfig,
     TValue,
@@ -497,7 +497,7 @@ export interface IResource<
 export interface IResourceWithConfig<
   TConfig = any,
   TValue extends Promise<any> = Promise<any>,
-  TDependencies extends DependencyMapType = any
+  TDependencies extends DependencyMapType = any,
 > {
   /** The id of the underlying resource. */
   id: string;
@@ -508,7 +508,7 @@ export interface IResourceWithConfig<
 }
 
 export type EventHandlerType<T = any> = (
-  event: IEventEmission<T>
+  event: IEventEmission<T>,
 ) => any | Promise<any>;
 
 export interface IEventDefinition<TPayload = void> {
@@ -573,7 +573,7 @@ export interface IEventEmission<TPayload = any> {
 
 export interface IMiddlewareDefinition<
   TConfig = any,
-  TDependencies extends DependencyMapType = any
+  TDependencies extends DependencyMapType = any,
 > {
   id: string;
   /** Static or lazy dependency map. */
@@ -590,7 +590,7 @@ export interface IMiddlewareDefinition<
   run: (
     input: IMiddlewareExecutionInput,
     dependencies: DependencyValuesType<TDependencies>,
-    config: TConfig
+    config: TConfig,
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
 }
@@ -613,7 +613,7 @@ export type MiddlewareInputMaybeTaskOrResource =
 
 export interface IMiddleware<
   TConfig = any,
-  TDependencies extends DependencyMapType = any
+  TDependencies extends DependencyMapType = any,
 > extends IMiddlewareDefinition<TConfig, TDependencies> {
   [symbolMiddleware]: true;
   [symbolMiddlewareConfigured]?: boolean;
@@ -629,7 +629,7 @@ export interface IMiddleware<
    * You cannot declare a middleware as global in the middleware definition of a `task` or `resource`.
    */
   everywhere(
-    config?: MiddlewareEverywhereOptions
+    config?: MiddlewareEverywhereOptions,
   ): IMiddleware<TConfig, TDependencies>;
   /** Current configuration object (empty by default). */
   config: TConfig;
@@ -641,13 +641,13 @@ export interface IMiddleware<
 
 export interface IMiddlewareConfigured<
   TConfig = any,
-  TDependencies extends DependencyMapType = any
+  TDependencies extends DependencyMapType = any,
 > extends IMiddleware<TConfig, TDependencies> {
   [symbolMiddlewareConfigured]: true;
 }
 
 export interface IMiddlewareDefinitionConfigured<
-  C extends Record<string, any> = {}
+  C extends Record<string, any> = {},
 > {
   middleware: IMiddleware<C>;
   config?: C;
@@ -655,7 +655,7 @@ export interface IMiddlewareDefinitionConfigured<
 
 export interface IMiddlewareExecutionInput<
   TTaskInput = any,
-  TResourceConfig = any
+  TResourceConfig = any,
 > {
   /** Task hook: present when wrapping a task run. */
   task?: {
@@ -668,6 +668,6 @@ export interface IMiddlewareExecutionInput<
     config: TResourceConfig;
   };
   next: (
-    taskInputOrResourceConfig?: TTaskInput | TResourceConfig
+    taskInputOrResourceConfig?: TTaskInput | TResourceConfig,
   ) => Promise<any>;
 }

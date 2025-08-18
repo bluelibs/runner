@@ -26,7 +26,7 @@ export function createTestResource(
   root: RegisterableItems,
   options?: {
     overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
-  }
+  },
 ): IResource<void, Promise<ReturnType<typeof buildTestFacade>>> {
   return defineResource({
     id: `testing.${root.id}.${++testResourceCounter}`,
@@ -43,7 +43,6 @@ export function createTestResource(
     },
   });
 }
-
 function buildTestFacade(deps: {
   taskRunner: TaskRunner;
   store: Store;
@@ -58,14 +57,7 @@ function buildTestFacade(deps: {
     ): Promise<Awaited<O> | undefined> =>
       deps.taskRunner.run(task, ...args) as any,
     // Access a resource value by id (string or symbol)
-    getResourceValue: (id: string | { id: string }) => {
-      id = typeof id === "string" ? id : id.id;
-      const entry = deps.store.resources.get(id);
-      if (!entry) {
-        throw new ResourceNotFoundError(id);
-      }
-      return entry.value;
-    },
+    getResource: (id: string) => deps.store.resources.get(id)?.value,
     // Expose internals when needed in tests (not recommended for app usage)
     taskRunner: deps.taskRunner,
     store: deps.store,

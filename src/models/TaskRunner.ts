@@ -22,7 +22,7 @@ export class TaskRunner {
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
-    protected readonly logger: Logger
+    protected readonly logger: Logger,
   ) {}
 
   /**
@@ -34,10 +34,10 @@ export class TaskRunner {
   public async run<
     TInput,
     TOutput extends Promise<any>,
-    TDeps extends DependencyMapType
+    TDeps extends DependencyMapType,
   >(
     task: ITask<TInput, TOutput, TDeps>,
-    input?: TInput
+    input?: TInput,
   ): Promise<TOutput | undefined> {
     let runner = this.runnerStore.get(task.id);
     if (!runner) {
@@ -64,14 +64,14 @@ export class TaskRunner {
    */
   public async runHook<TPayload, TDeps extends DependencyMapType = {}>(
     hook: IHook<TDeps, any>,
-    emission: IEventEmission<TPayload>
+    emission: IEventEmission<TPayload>,
   ): Promise<any> {
     // Hooks are stored in `store.hooks`; use their computed deps
     const deps = this.store.hooks.get(hook.id)?.computedDependencies as any;
     // Internal observability events are tagged to be excluded from global listeners.
     // We detect them by tag so we don't double-wrap them with our own hookTriggered/hookCompleted.
     const isObservabilityEvent = Boolean(
-      globalTags.excludeFromGlobalListeners.extract(emission as any)
+      globalTags.excludeFromGlobalListeners.extract(emission as any),
     );
 
     // The logic here is that we don't want to have lifecycle events for the events that are excluded from global ones.
@@ -81,16 +81,16 @@ export class TaskRunner {
     // Emit hookTriggered (excluded from global listeners)
     await this.eventManager.emit(
       globalEvents.hookTriggered,
-      { hookId: hook.id, eventId: emission.id },
-      hook.id
+      { hook, eventId: emission.id },
+      hook.id,
     );
 
     try {
       const result = await hook.run(emission as any, deps);
       await this.eventManager.emit(
         globalEvents.hookCompleted,
-        { hookId: hook.id, eventId: emission.id },
-        hook.id
+        { hook, eventId: emission.id },
+        hook.id,
       );
       return result;
     } catch (err: unknown) {
@@ -104,11 +104,11 @@ export class TaskRunner {
       await this.eventManager.emit(
         globalEvents.hookCompleted,
         {
-          hookId: hook.id,
+          hook,
           eventId: emission.id,
           error: err as any,
         },
-        hook.id
+        hook.id,
       );
       throw err;
     }
@@ -124,7 +124,7 @@ export class TaskRunner {
   protected createRunnerWithMiddleware<
     TInput,
     TOutput extends Promise<any>,
-    TDeps extends DependencyMapType
+    TDeps extends DependencyMapType,
   >(task: ITask<TInput, TOutput, TDeps>) {
     const storeTask = this.store.tasks.get(task.id)!;
 
@@ -138,7 +138,7 @@ export class TaskRunner {
           throw new ValidationError(
             "Task input",
             task.id,
-            error instanceof Error ? error : new Error(String(error))
+            error instanceof Error ? error : new Error(String(error)),
           );
         }
       }
@@ -198,7 +198,7 @@ export class TaskRunner {
     for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
       const middleware = createdMiddlewares[i];
       const storeMiddleware = this.store.middlewares.get(
-        middleware.id
+        middleware.id,
       ) as MiddlewareStoreElementType; // we know it exists because at this stage all sanity checks have been done.
 
       const nextFunction = next;
@@ -210,10 +210,10 @@ export class TaskRunner {
             globalEvents.middlewareTriggered,
             {
               kind: "task",
-              middlewareId: middleware.id,
+              middleware: middleware as any,
               targetId: task.id as any,
             },
-            middleware.id
+            middleware.id,
           );
           result = await storeMiddleware.middleware.run(
             {
@@ -224,17 +224,17 @@ export class TaskRunner {
               next: nextFunction,
             },
             storeMiddleware.computedDependencies,
-            middleware.config
+            middleware.config,
           );
           // Observability: emit middlewareCompleted (excluded from global listeners)
           await this.eventManager.emit(
             globalEvents.middlewareCompleted,
             {
               kind: "task",
-              middlewareId: middleware.id,
+              middleware: middleware as any,
               targetId: task.id as any,
             },
-            middleware.id
+            middleware.id,
           );
           return result;
         } catch (error: unknown) {
@@ -250,11 +250,11 @@ export class TaskRunner {
             globalEvents.middlewareCompleted,
             {
               kind: "task",
-              middlewareId: middleware.id,
+              middleware: middleware as any,
               targetId: task.id as any,
               error: error as any,
             },
-            middleware.id
+            middleware.id,
           );
           throw error;
         }

@@ -7,7 +7,6 @@ import {
 import { debugTag } from "../../globals/resources/debug/debug.tag";
 import { globalTags } from "../../globals/globalTags";
 import { defineResource } from "../../define";
-import { createTestResource } from "../../testing";
 import { run } from "../../run";
 import { debugConfig } from "../../globals/resources/debug/debugConfig.resource";
 import { safeStringify } from "../../models/utils/safeStringify";
