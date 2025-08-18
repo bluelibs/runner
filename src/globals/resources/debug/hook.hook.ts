@@ -17,15 +17,15 @@ export const hookTriggeredListener = defineHook({
   run: async (event, deps) => {
     if (!deps) return;
     const { logger, debugConfig } = deps;
-    if (hasSystemTag((event.data as any)?.hook)) {
+    // Skip logging for system-tagged observability events
+    if (hasSystemTag(event)) {
       return;
     }
 
     const resolved = getConfig(debugConfig, event!);
     if (resolved.logHookTriggered) {
-      let logString = `[hook] ${
-        (event!.data as any)?.hook?.id ?? event!.id
-      } triggered`;
+      const hookId = event.data?.hook?.id ?? event.id;
+      let logString = `[hook] ${hookId} triggered`;
       await logger.info(logString);
     }
   },
@@ -46,13 +46,15 @@ export const hookCompletedListener = defineHook({
   run: async (event, deps) => {
     if (!deps) return;
     const { logger, debugConfig } = deps;
-    // For internal observability events we still want to log when enabled
+    // Skip logging for system-tagged observability events
+    if (hasSystemTag(event)) {
+      return;
+    }
 
     const resolved = getConfig(debugConfig, event!);
     if (resolved.logHookCompleted) {
-      let logString = `[hook] ${
-        (event!.data as any)?.hook?.id ?? event!.id
-      } completed`;
+      const hookId = event.data?.hook?.id ?? event.id;
+      let logString = `[hook] ${hookId} completed`;
       await logger.info(logString);
     }
   },

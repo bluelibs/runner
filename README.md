@@ -854,7 +854,7 @@ Here are real performance metrics from our comprehensive benchmark suite on an M
 
 ** Core Operations**
 
-- **Basic task execution**: ~2.2M
+- **Basic task execution**: ~2.2M tasks/sec
 - **Task execution with 5 middlewares**: ~244,000 tasks/sec
 - **Resource initialization**: ~59,700 resources/sec
 - **Event emission and handling**: ~245,861 events/sec
@@ -3038,70 +3038,7 @@ This is part of the [BlueLibs](https://www.bluelibs.com) ecosystem. We're not tr
 - [Documentation](https://bluelibs.github.io/runner/) - When you need the full details
 - [Issues](https://github.com/bluelibs/runner/issues) - When something breaks (or you want to make it better)
 
-### Migration Guide
-
-**Event Listeners:**
-
-```typescript
-// OLD - Task-based listeners
-const listener = task({
-  id: "app.tasks.listener",
-  on: someEvent,
-  run: async (event) => {
-    /* ... */
-  },
-});
-
-// NEW - Hook-based listeners
-const listener = hook({
-  id: "app.hooks.listener",
-  on: someEvent,
-  run: async (event) => {
-    /* ... */
-  },
-});
-```
-
-**Error Handling:**
-
-```typescript
-// OLD - Per-task error events
-const errorHandler = task({
-  on: myTask.events.onError,
-  run: async (event) => {
-    /* ... */
-  },
-});
-
-// NEW - Global error handling
-const errorHandler = hook({
-  on: someErrorEvent,
-  run: async (event) => {
-    /* ... */
-  },
-});
-```
-
-**Anonymous IDs:**
-
-```typescript
-// OLD - Automatic ID generation
-const myTask = task({
-  run: async () => "result",
-});
-
-// NEW - Explicit IDs required
-const myTask = task({
-  id: "app.tasks.myTask",
-  run: async () => "result",
-});
-```
-
-BlueLibs Runner v2.0 is what happens when you take all the good ideas from modern frameworks, learn from real-world usage, and build something even better. It's more powerful, more flexible, and still makes sense when you read it six months later.
-
-The breaking changes were necessary to eliminate complexity and unlock powerful new features like optional dependencies, hooks, and the debug resource. Your future self (and your team) will thank you for upgrading.
-
-_P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still different. (And now it's even better.)_
+_P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still different._
 
 ## License
 
