@@ -1,4 +1,5 @@
 import { defineTask, defineResource, defineMiddleware } from "../define";
+import { globalResources } from "../globals/globalResources";
 import { run } from "../run";
 
 describe("Dynamic Register and Dependencies", () => {
@@ -175,7 +176,23 @@ describe("Dynamic Register and Dependencies", () => {
         },
       });
 
-      await run(dynamicApp);
+      const { getResourceValue } = await run(dynamicApp);
+
+      const store = getResourceValue(globalResources.store);
+
+      expect(store.resources.has(dynamicApp.id)).toBe(true);
+      expect(
+        store.resources.get(dynamicApp.id).resource.register,
+      ).toBeInstanceOf(Array);
+      expect(store.resources.get(dynamicApp.id).resource.register).toHaveLength(
+        2,
+      );
+      expect(store.resources.get(dynamicApp.id).resource.register).toContain(
+        serviceA,
+      );
+      expect(store.resources.get(dynamicApp.id).resource.register).toContain(
+        serviceB,
+      );
     });
 
     it("should support conditional registration based on environment", async () => {
