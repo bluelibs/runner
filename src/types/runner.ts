@@ -1,0 +1,38 @@
+import { DebugFriendlyConfig } from "../globals/resources/debug";
+import { LogLevels, PrintStrategy } from "../models/Logger";
+import { OnUnhandledError } from "../models/UnhandledError";
+
+export type RunOptions = {
+  /**
+   * Defaults to undefined. If true, we introduce logging to the console.
+   */
+  debug?: DebugFriendlyConfig;
+  logs?: {
+    /**
+     * Defaults to info. Use null to disable logging.
+     */
+    printThreshold?: null | LogLevels;
+    /**
+     * Defaults to PRETTY. How to print the logs.
+     */
+    printStrategy?: PrintStrategy;
+    /**
+     * Defaults to false. If true, we buffer logs until the root resource is ready.
+     * This provides you with the chance to see the logs before the root resource is ready.
+     */
+    bufferLogs?: boolean;
+  };
+  /**
+   * When true (default), installs a central error boundary that catches uncaught errors
+   * from process-level events and routes them to `onUnhandledError`.
+   */
+  errorBoundary?: boolean;
+  /**
+   * When true (default), installs SIGINT/SIGTERM handlers that call dispose() on the root.
+   */
+  shutdownHooks?: boolean;
+  /**
+   * Custom handler for any unhandled error caught by Runner. Defaults to logging via the created logger.
+   */
+  onUnhandledError?: OnUnhandledError;
+};

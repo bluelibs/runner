@@ -1,9 +1,4 @@
-// - Introduces a unique symbol brand CONTRACT to carry the generics.
-// - Makes that brand a required member of IContractable so inference can always recover the input/output types.
-// - Keeps your tuple-vs-array semantics.
-// - Adds the requested HasInputContracts, ExtractInputTypeFromContracts, and ExtractOutputTypeFromContracts.
-// - Keeps the Ensure* helpers for both input and output.
-// - Provides backward-compatible aliases for your existing tag-only helpers.
+// Solution to enforce input,output contracts from 'tags' and 'middleware'
 
 // A unique symbol key used only for typing (no runtime cost needed)
 export declare const CONTRACT: unique symbol;

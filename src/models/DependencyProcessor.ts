@@ -17,6 +17,8 @@ import { symbolHook } from "../defs";
 import {
   ResourceStoreElementType,
   TaskStoreElementType,
+  TaskMiddlewareStoreElementType,
+  ResourceMiddlewareStoreElementType,
 } from "../types/storeTypes";
 import * as utils from "../define";
 import { EventManager } from "./EventManager";
@@ -55,21 +57,13 @@ export class DependencyProcessor {
    * This function is going to go through all the resources, tasks and middleware to compute their required dependencies.
    */
   async computeAllDependencies() {
-    for (const middleware of this.store.taskMiddlewares.values()) {
-      const deps = middleware.middleware.dependencies as DependencyMapType;
-      middleware.computedDependencies = await this.extractDependencies(
-        deps,
-        middleware.middleware.id,
-      );
-    }
+    await this.computeMiddlewareCollectionDependencies(
+      this.store.taskMiddlewares.values(),
+    );
 
-    for (const middleware of this.store.resourceMiddlewares.values()) {
-      const deps = middleware.middleware.dependencies as DependencyMapType;
-      middleware.computedDependencies = await this.extractDependencies(
-        deps,
-        middleware.middleware.id,
-      );
-    }
+    await this.computeMiddlewareCollectionDependencies(
+      this.store.resourceMiddlewares.values(),
+    );
     for (const resource of this.store.resources.values()) {
       await this.processResourceDependencies(resource);
     }
@@ -91,6 +85,20 @@ export class DependencyProcessor {
     // leftovers that were registered but not depended upon, except root
     // they should still be initialized as they might extend other
     await this.initializeUninitializedResources();
+  }
+
+  private async computeMiddlewareCollectionDependencies(
+    collection:
+      | Iterable<TaskMiddlewareStoreElementType<any>>
+      | Iterable<ResourceMiddlewareStoreElementType<any>>,
+  ) {
+    for (const middleware of collection) {
+      const deps = middleware.middleware.dependencies as DependencyMapType;
+      middleware.computedDependencies = await this.extractDependencies(
+        deps,
+        middleware.middleware.id,
+      );
+    }
   }
 
   private async computeTaskDependencies(
