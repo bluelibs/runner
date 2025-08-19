@@ -371,7 +371,6 @@ const criticalAlert = event<{
   meta: {
     title: "System Alert Event",
     description: "Emitted when system issues are detected",
-    tags: ["monitoring", "alerts"],
   },
 });
 
@@ -400,20 +399,40 @@ const emergencyHandler = hook({
 
 Middleware wraps around your tasks and resources, adding cross-cutting concerns without polluting your business logic.
 
-Note: Middleware is now split by target. Use `middleware.task(...)` for task middleware and `middleware.resource(...)` for resource middleware.
+Note: Middleware is now split by target. Use `taskMiddleware(...)` for task middleware and `resourceMiddleware(...)` for resource middleware.
 
 ```typescript
 import { middleware } from "@bluelibs/runner";
 
 // Task middleware with config
-const authMiddleware = middleware.task<{ requiredRole: string }>({
+type AuthMiddlewareConfig = { requiredRole: string };
+const authMiddleware = taskMiddleware<AuthMiddlewareConfig>({
   id: "app.middleware.auth",
-  run: async ({ task, next }, _deps, config) => {
-    const user = task?.input?.user;
-    if (!user || user.role !== config.requiredRole) {
-      throw new Error("Unauthorized");
-    }
-    return next(task?.input);
+  run: async ({ task, next }, _deps, config: Config) => {
+    // Must return the value
+    return await next(task.input);
+  },
+});
+
+const adminTask = task({
+  id: "app.tasks.adminOnly",
+  middleware: [authMiddleware.with({ requiredRole: "admin" })],
+  run: async (input: { user: User }) => "Secret admin data",
+});
+```
+
+And now for resources:
+
+```ts
+import { middleware } from "@bluelibs/runner";
+
+// Task middleware with config
+type AuthMiddlewareConfig = { requiredRole: string };
+const authMiddleware = taskMiddleware<AuthMiddlewareConfig>({
+  id: "app.middleware.auth",
+  run: async ({ task, next }, _deps, config: Config) => {
+    // Must return the value
+    return await next(task.input);
   },
 });
 
@@ -778,7 +797,7 @@ import { globals } from "@bluelibs/runner";
 const expensiveTask = task({
   id: "app.tasks.expensive",
   middleware: [
-    globals.middleware.cache.with({
+    globals.middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
       keyBuilder: (taskId, input) => `${taskId}-${input.userId}`, // optional key builder
@@ -982,7 +1001,7 @@ import { globals } from "@bluelibs/runner";
 const flakyApiCall = task({
   id: "app.tasks.flakyApiCall",
   middleware: [
-    globals.middleware.retry.with({
+    globals.middleware.task.retry.with({
       retries: 5, // Try up to 5 times
       delayStrategy: (attempt) => 100 * Math.pow(2, attempt), // Exponential backoff
       stopRetryIf: (error) => error.message === "Invalid credentials", // Don't retry auth errors
@@ -1017,7 +1036,8 @@ import { globals } from "@bluelibs/runner";
 const apiTask = task({
   id: "app.tasks.externalApi",
   middleware: [
-    globals.middleware.timeout.with({ ttl: 5000 }), // 5 second timeout
+    // Works for tasks and resources via globals.middleware.resource.timeout
+    globals.middleware.task.timeout.with({ ttl: 5000 }), // 5 second timeout
   ],
   run: async () => {
     // This operation will be aborted if it takes longer than 5 seconds
@@ -1030,11 +1050,12 @@ const resilientTask = task({
   id: "app.tasks.resilient",
   middleware: [
     // Order matters here. Imagine a big onion.
-    globals.middleware.retry.with({
+    // Works for resources as well via globals.middleware.resource.retry
+    globals.middleware.task.retry.with({
       retries: 3,
       delayStrategy: (attempt) => 1000 * attempt, // 1s, 2s, 3s delays
     }),
-    globals.middleware.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
+    globals.middleware.task.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
   ],
   run: async () => {
     // Each retry attempt gets its own 10-second timeout
@@ -1383,15 +1404,13 @@ import { globals } from "@bluelibs/runner";
 
 const criticalTask = task({
   id: "app.tasks.critical",
-  meta: {
-    tags: [
-      globals.tags.debug.with({
-        logTaskInput: true,
-        logTaskResult: true,
-        logTaskOnError: true,
-      }),
-    ],
-  },
+  tags: [
+    globals.tags.debug.with({
+      logTaskInput: true,
+      logTaskResult: true,
+      logTaskOnError: true,
+    }),
+  ],
   run: async (input) => {
     // This task will have verbose debug logging
     return await processPayment(input);
@@ -1516,7 +1535,6 @@ const userService = resource({
     title: "User Management Service",
     description:
       "Handles user creation, authentication, and profile management",
-    tags: ["service", "user", "core"],
   },
   dependencies: { database },
   init: async (_, { database }) => ({
@@ -1534,7 +1552,6 @@ const sendWelcomeEmail = task({
   meta: {
     title: "Send Welcome Email",
     description: "Sends a welcome email to newly registered users",
-    tags: ["email", "automation", "user-onboarding"],
   },
   dependencies: { emailService },
   run: async (userData, { emailService }) => {
@@ -1545,7 +1562,7 @@ const sendWelcomeEmail = task({
 
 ### Tags
 
-Tags are the most powerful part of the metadata system used for classification. They can be simple strings or sophisticated configuration objects that control component behavior.
+Tags are the most powerful part of the metadata system used for classification. They can be simple strings or sophisticated configuration objects that control component behavior. They have to be registered for it to work, to understand their ownership.
 
 #### Tags with Configuration
 
@@ -1572,22 +1589,18 @@ const cacheTag = tag<{ ttl: number; keyPattern?: string }>({
 // Use structured tags in your components
 const expensiveTask = task({
   id: "app.tasks.expensiveCalculation",
-  meta: {
-    title: "Complex Data Processing",
-    description: "Performs heavy computational analysis on large datasets",
-    tags: [
-      "computation",
-      "background",
-      performanceTag.with({
-        alertAboveMs: 5000,
-        criticalAboveMs: 15000,
-      }),
-      cacheTag.with({
-        ttl: 300000, // 5 minutes
-        keyPattern: "calc-{userId}-{datasetId}",
-      }),
-    ],
-  },
+  tags: [
+    "computation",
+    "background",
+    performanceTag.with({
+      alertAboveMs: 5000,
+      criticalAboveMs: 15000,
+    }),
+    cacheTag.with({
+      ttl: 300000, // 5 minutes
+      keyPattern: "calc-{userId}-{datasetId}",
+    }),
+  ],
   run: async (input) => {
     // Heavy computation here
   },
@@ -1595,19 +1608,15 @@ const expensiveTask = task({
 
 const apiEndpoint = task({
   id: "app.tasks.api.getUserProfile",
-  meta: {
-    title: "Get User Profile",
-    description: "Returns user profile information with privacy filtering",
-    tags: [
-      "api",
-      "public",
-      rateLimitTag.with({
-        maxRequestsPerMinute: 100,
-        burstLimit: 20,
-      }),
-      cacheTag.with({ ttl: 60000 }), // 1 minute cache
-    ],
-  },
+  tags: [
+    "api",
+    "public",
+    rateLimitTag.with({
+      maxRequestsPerMinute: 100,
+      burstLimit: 20,
+    }),
+    cacheTag.with({ ttl: 60000 }), // 1 minute cache
+  ],
   run: async (userId) => {
     // API logic
   },
@@ -1624,32 +1633,26 @@ import { globals } from "@bluelibs/runner";
 // System components (automatically excluded from debug logs)
 const internalTask = task({
   id: "app.tasks.internal",
-  meta: {
-    tags: [globals.tags.system], // Marks as system component
-  },
+  tags: [globals.tags.system], // Marks as system component
   run: async () => "internal work",
 });
 
 // Debug-specific configuration
 const debugTask = task({
   id: "app.tasks.debug",
-  meta: {
-    tags: [
-      globals.tags.debug.with({
-        logTaskInput: true,
-        logTaskResult: true,
-      }),
-    ],
-  },
+  tags: [
+    globals.tags.debug.with({
+      logTaskInput: true,
+      logTaskResult: true,
+    }),
+  ],
   run: async (input) => processInput(input),
 });
 
 // Events that should not be sent to global listeners
 const internalEvent = event({
   id: "app.events.internal",
-  meta: {
-    tags: [globals.tags.excludeFromGlobalHooks],
-  },
+  tags: [globals.tags.excludeFromGlobalHooks],
 });
 ```
 
@@ -1661,21 +1664,20 @@ To process these tags you can hook into `globals.events.ready`, use the global s
 const performanceMiddleware = middleware.task({
   id: "app.middleware.performance",
   run: async ({ task, next }) => {
-    const tags = task?.definition.meta?.tags || [];
-    const perfConfigTag = performanceTag.extract(tags); // or easier: .extract(task.definition)
+    const perfConfiguration = performanceTag.extract(task.definition); // you can just use .exists() if you want to check for presence
 
-    if (perfConfigTag) {
+    if (perfConfiguration) {
       const startTime = Date.now();
 
       try {
         const result = await next(task?.input);
         const duration = Date.now() - startTime;
 
-        if (duration > perfConfigTag.config.criticalAboveMs) {
+        if (duration > perfConfiguration.criticalAboveMs) {
           await alerting.critical(
             `Task ${task.definition.id} took ${duration}ms`,
           );
-        } else if (duration > perfConfig.config.alertAboveMs) {
+        } else if (duration > perfConfiguration.alertAboveMs) {
           await alerting.warn(`Task ${task.definition.id} took ${duration}ms`);
         }
 
@@ -1714,19 +1716,13 @@ const preferenceContract = tag<{ locale: string }, { preferredLocale: string }>(
 );
 ```
 
-When these tags are present in `meta.tags`, the returned value must satisfy the intersection of all contract types:
+The return value must return a union of all tags with return contracts.
 
 ```typescript
 // Task: the awaited return value must satisfy { name: string } & { age: number }
 const getProfile = task({
   id: "app.tasks.getProfile",
-  meta: {
-    tags: [
-      userContract,
-      ageContract,
-      preferenceContract.with({ locale: "en" }),
-    ],
-  },
+  tags: [userContract, ageContract, preferenceContract.with({ locale: "en" })],
   run: async () => {
     return { name: "Ada", age: 37, preferredLocale: "en" }; // OK
   },
@@ -1735,7 +1731,7 @@ const getProfile = task({
 // Resource: init() return must satisfy the same intersection
 const profileService = resource({
   id: "app.resources.profileService",
-  meta: { tags: [userContract, ageContract] },
+  tags: [userContract, ageContract],
   init: async () => {
     return { name: "Ada", age: 37 }; // OK
   },
@@ -1747,7 +1743,7 @@ If the returned value does not satisfy the intersection, TypeScript surfaces a r
 ```typescript
 const badTask = task({
   id: "app.tasks.bad",
-  meta: { tags: [userContract, ageContract] },
+  tags: [userContract, ageContract],
   //    vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
   run: async () => ({ name: "Ada" }), // Missing { age: number }
   // Type error includes a helpful shape similar to:
@@ -1787,7 +1783,6 @@ const expensiveApiTask = task({
   meta: {
     title: "AI Image Generation",
     description: "Uses OpenAI DALL-E to generate images from text prompts",
-    tags: ["ai", "expensive", "external-api"],
     author: "AI Team",
     version: "2.1.0",
     apiVersion: "v2",
@@ -1802,7 +1797,6 @@ const database = resource({
   id: "app.database.primary",
   meta: {
     title: "Primary PostgreSQL Database",
-    tags: ["database", "critical", "persistent"],
     healthCheck: "/health/db", // Custom property!
     dependencies: ["postgresql", "connection-pool"],
     scalingPolicy: "auto",
@@ -1857,7 +1851,7 @@ const overriddenResource = override(originalResource, {
 });
 
 // Middleware
-const originalMiddleware = middleware({
+const originalMiddleware = taskMiddleware({
   id: "app.middleware.log",
   run: async ({ next }) => next(),
 });
@@ -1867,6 +1861,8 @@ const overriddenMiddleware = override(originalMiddleware, {
     return { wrapped: result } as any;
   },
 });
+
+// Even hooks
 ```
 
 Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the root) wins, because it's applied last. Conflicting overrides are allowed; overriding something that wasn't registered throws. Use override() to change behavior safely while preserving the original id.
@@ -1875,13 +1871,14 @@ Overrides are applied after everything is registered. If multiple overrides targ
 
 As your app grows, you'll want consistent naming. Here's the convention that won't drive you crazy:
 
-| Type       | Format                                    |
-| ---------- | ----------------------------------------- |
-| Resources  | `{domain}.resources.{resourceName}`       |
-| Tasks      | `{domain}.tasks.{taskName}`               |
-| Events     | `{domain}.events.{eventName}`             |
-| Hooks      | `{domain}.tasks.{taskName}.on{EventName}` |
-| Middleware | `{domain}.middleware.{middlewareName}`    |
+| Type                | Format                                          |
+| ------------------- | ----------------------------------------------- |
+| Resources           | `{domain}.resources.{resourceName}`             |
+| Tasks               | `{domain}.tasks.{taskName}`                     |
+| Events              | `{domain}.events.{eventName}`                   |
+| Hooks               | `{domain}.hooks.on{EventName}`                  |
+| Task Middleware     | `{domain}.middleware.task.{middlewareName}`     |
+| Resource Middleware | `{domain}.middleware.resource.{middlewareName}` |
 
 ```typescript
 // Helper function for consistency
@@ -2104,7 +2101,7 @@ const timingConfigSchema = z.object({
   logSuccessful: z.boolean().default(true),
 });
 
-const timingMiddleware = middleware({
+const timingMiddleware = taskMiddleware({ // or resourceMiddleware()
   id: "app.middleware.timing",
   configSchema: timingConfigSchema, // Validation on .with()
   run: async ({ next }, _, config) => {

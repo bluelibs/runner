@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "async_hooks";
 import { ITaskMiddlewareConfigured } from "./defs";
-import { requireContextMiddleware } from "./globals/middleware/requireContext.middleware";
+import { requireContextTaskMiddleware } from "./globals/middleware/requireContext.middleware";
 
 /**
  * Error thrown whenever a requested context is not available.
@@ -71,9 +71,10 @@ export function createContext<T>(name: string = "runner.context"): Context<T> {
   /**
    * Generates a middleware that guarantees the context exists (and optionally
    * enforces that certain keys are present on the context object).
+   * @throws {ContextError} if the context is not available
    */
   function require(): ITaskMiddlewareConfigured {
-    return requireContextMiddleware.with({ context: this as Context<T> });
+    return requireContextTaskMiddleware.with({ context: this as Context<T> });
   }
 
   return {

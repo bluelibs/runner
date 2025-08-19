@@ -1,6 +1,6 @@
 import { Context, ContextError } from "../context";
 import { cacheMiddleware } from "./middleware/cache.middleware";
-import { requireContextMiddleware } from "./middleware/requireContext.middleware";
+import { requireContextTaskMiddleware } from "./middleware/requireContext.middleware";
 import {
   retryTaskMiddleware,
   retryResourceMiddleware,
@@ -14,8 +14,16 @@ import {
  * Global middlewares
  */
 export const globalMiddlewares = {
-  requireContext: requireContextMiddleware,
-  retry: { task: retryTaskMiddleware, resource: retryResourceMiddleware },
-  cache: cacheMiddleware,
-  timeout: { task: timeoutTaskMiddleware, resource: timeoutResourceMiddleware },
+  requireContext: requireContextTaskMiddleware,
+  task: {
+    requireContext: requireContextTaskMiddleware,
+    cache: cacheMiddleware,
+    // common with resources
+    retry: retryTaskMiddleware,
+    timeout: timeoutTaskMiddleware,
+  },
+  resource: {
+    retry: retryResourceMiddleware,
+    timeout: timeoutResourceMiddleware,
+  },
 };

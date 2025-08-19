@@ -1,4 +1,4 @@
-## 🚀 Migration Guide: From 3.x.x to 4.x.x
+## 🚀 Migration Guide: From 3.x.x to 4.x.x (Extended Edition)
 
 ### 🎉 What's New & Shiny
 
@@ -14,6 +14,8 @@
 - ⚙️ **Run options galore!** Configure `logs`, `debug`, `shutdownHooks`, and `errorBoundary` to your heart's content
 - 🧯 **Centralized unhandled error handler** via `run({ onUnhandledError })` for consistent error reporting
 - 🧪 **Simpler testing with `RunResult`** - `createTestResource` is deprecated; use `run()` and the returned `RunResult` helpers
+- 🎭 **The Great Middleware Split of 2025** - middleware finally figured out what they want to be when they grow up
+- 🏷️ **Tags got promoted!** - no more living in meta's basement, they're top-level citizens now
 
 ### 🏃‍♂️ Running Your App (The New Way)
 
@@ -219,6 +221,126 @@ const myHook = hook({
   order: -100, // Cleaner name because we're not pretending anymore
   run: async (e, deps) => {}, // Fixed that typo while we were at it 😉
 });
+```
+
+### 🎭 The Great Middleware Split of 2025
+
+Remember when `middleware()` was trying to be everything to everyone? Like that friend who claims they're "equally good" at both singing AND dancing? Yeah, we fixed that.
+
+**Before** (the identity crisis era):
+
+```ts
+import { middleware } from "@bluelibs/runner";
+
+const confused = middleware({
+  id: "jack-of-all-trades",
+  run: async ({ task, next }) => {
+    // Am I for tasks? Resources? Who knows! 🤷‍♂️
+    // TypeScript is crying in the corner
+  },
+});
+```
+
+**After** (specialized and thriving):
+
+```ts
+import { taskMiddleware, resourceMiddleware } from "@bluelibs/runner";
+
+const taskSpecialist = taskMiddleware({
+  id: "task-whisperer",
+  run: async ({ task, next }, deps, config) => {
+    // I know EXACTLY what I am! task.input, task.id, task.definition
+    // TypeScript is doing a happy dance 💃
+  },
+});
+
+const resourceSpecialist = resourceMiddleware({
+  id: "resource-guardian",
+  run: async ({ resource, next }, deps, config) => {
+    // resource.id, resource.config, resource.definition
+    // Living my best specialized life! ✨
+  },
+});
+```
+
+**The `.everywhere()` pattern got smarter too:**
+
+```ts
+// Before: One middleware trying to do it all
+middleware.everywhere({ tasks: true, resources: true });
+
+// After: Each knows their lane
+taskSpecialist.everywhere(); // Only applies to tasks, duh!
+resourceSpecialist.everywhere(); // Resources only, thank you very much
+```
+
+### 🏷️ Tags Got Promoted! (No More Living in Meta's Basement)
+
+Tags were tired of being buried in `meta.tags`. They've moved out of their parent's basement and got their own apartment!
+
+**Before** (tags living under meta's roof):
+
+```ts
+const myTask = task({
+  id: "shy-task",
+  meta: {
+    title: "My Task",
+    description: "Does stuff",
+    tags: ["billing", perf.with({ warnAboveMs: 1000 })], // Hidden away like a teenager
+  },
+  run: async () => {},
+});
+
+const myResource = resource({
+  id: "nested-resource",
+  meta: {
+    tags: [globals.tags.system], // Why so deep? 🕳️
+  },
+  init: async () => ({}),
+});
+```
+
+**After** (tags standing proud at the top level):
+
+```ts
+const myTask = task({
+  id: "confident-task",
+  tags: ["billing", perf.with({ warnAboveMs: 1000 })], // BOOM! Right there! 💪
+  meta: {
+    title: "My Task", // Meta is now just for documentation
+    description: "Does stuff", // Not for behavior!
+  },
+  run: async () => {},
+});
+
+const myResource = resource({
+  id: "toplevel-resource",
+  tags: [globals.tags.system], // First-class citizen! 🎩
+  meta: {
+    // Meta is now purely informational, like a business card
+    title: "My Resource",
+    author: "Probably you",
+  },
+  init: async () => ({}),
+});
+```
+
+**Why we did this:**
+
+- Tags affect behavior (contracts, interception, discovery)
+- Meta is just... metadata (documentation, descriptions, your favorite color)
+- Separating church and state, but for code! ⛪️🏛️
+
+**Tag extraction got easier too:**
+
+```ts
+// Before (digging through meta)
+const cfg = perf.extract(task.definition.meta?.tags);
+
+// After (right there on top!)
+const cfg = perf.extract(task.definition.tags);
+// or if you already have the tags
+const cfg = perf.extract(tags);
 ```
 
 ### 📝 Logger Got VIP Treatment (No More Event Bus Drama!)

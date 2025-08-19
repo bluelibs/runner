@@ -1,4 +1,4 @@
-import { requireContextMiddleware } from "../../globals/middleware/requireContext.middleware";
+import { requireContextTaskMiddleware } from "../../globals/middleware/requireContext.middleware";
 import { ContextError } from "../../context";
 
 /**
@@ -26,7 +26,7 @@ describe("requireContextMiddleware", () => {
 
     // Act & Assert
     await expect(
-      requireContextMiddleware.run({ next } as any, {} as any, {} as any),
+      requireContextTaskMiddleware.run({ next } as any, {} as any, {} as any),
     ).rejects.toThrow(
       "Context not available. Did you forget to pass 'context' to the middleware?",
     );
@@ -43,7 +43,7 @@ describe("requireContextMiddleware", () => {
 
     // Act & Assert
     await expect(
-      requireContextMiddleware.run(
+      requireContextTaskMiddleware.run(
         { next } as any,
         {} as any,
         { context: fakeContext } as any,
@@ -57,7 +57,7 @@ describe("requireContextMiddleware", () => {
     const expectedResult = "task-result";
     const next = jest.fn().mockResolvedValue(expectedResult);
 
-    const result = await requireContextMiddleware.run(
+    const result = await requireContextTaskMiddleware.run(
       { task, next } as any,
       {} as any,
       { context: fakeContext } as any,

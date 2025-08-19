@@ -24,7 +24,7 @@ import {
 } from "./StoreTypes";
 import { TaskRunner } from "./TaskRunner";
 import { globalResources } from "../globals/globalResources";
-import { requireContextMiddleware } from "../globals/middleware/requireContext.middleware";
+import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
 import {
   retryTaskMiddleware,
   retryResourceMiddleware,
@@ -142,7 +142,7 @@ export class Store {
     // Register built-in middlewares
     // Built-in middlewares currently target tasks only; adjust as needed per kind
     const builtInTaskMiddlewares = [
-      requireContextMiddleware,
+      requireContextTaskMiddleware,
       retryTaskMiddleware,
       timeoutTaskMiddleware,
     ];

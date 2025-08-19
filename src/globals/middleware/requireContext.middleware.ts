@@ -5,7 +5,7 @@ type RequireContextMiddlewareConfig = {
   context: Context<any>;
 };
 
-export const requireContextMiddleware = defineTaskMiddleware({
+export const requireContextTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.requireContext",
   async run({ task, next }, deps, config: RequireContextMiddlewareConfig) {
     if (!config.context) {

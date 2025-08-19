@@ -55,6 +55,7 @@ const createUser = task({
 const app = resource({
   id: "app",
   // Resources with configurations must be registered with with() unless the configuration allows all optional
+  // All elements must be registered for them to be used in the system
   register: [server.with({ port: 3000 }), createUser],
   dependencies: { server, createUser },
   init: async (_, { server, createUser }) => {
@@ -173,22 +174,25 @@ const logsExtension = resource({
 ## Middleware (global or local)
 
 ```ts
-import { middleware, resource, task, globals } from "@bluelibs/runner";
+import {
+  taskMiddleware,
+  resourceMiddleware,
+  resource,
+  task,
+  globals,
+} from "@bluelibs/runner";
 
-// Custom task middleware.
-const auth = middleware.task<{ role: string }>({
+// Custom task middleware
+const auth = taskMiddleware<{ role: string }>({
   id: "app.middleware.auth",
   run: async ({ task, next }, _, cfg) => {
     if (task.input?.user?.role !== cfg.role) throw new Error("Unauthorized");
+    // You have to return the value and call it
     return next(task.input);
   },
 });
-const decorateResource = middleware.resource<{ role: string }>({
-  id: "app.middleware.auth",
-  run: async ({ resource, next }, _, cfg) => {
-    return next(resource.config);
-  },
-});
+
+const softDelete = resourceMiddleware();
 
 const adminOnly = task({
   id: "app.tasks.adminOnly",
@@ -197,19 +201,24 @@ const adminOnly = task({
 });
 
 // Built-in middleware patterns
+const {
+  task: { retry, timeout, cache },
+  // available: resource: { retry, timeout, cache } as well, same configs.
+} = globals.middleware;
+
 const resilientTask = task({
   id: "app.tasks.resilient",
   middleware: [
-    // Retry with exponential backoff
-    globals.middleware.retry.with({
+    // Retry with exponential backoff, allow each with timeout
+    retry.with({
       retries: 3,
       delayStrategy: (attempt) => 1000 * attempt,
       stopRetryIf: (error) => error.message === "Invalid credentials",
     }),
-    // Timeout protection
-    globals.middleware.timeout.with({ ttl: 10000 }),
-    // Caching
-    globals.middleware.cache.with({
+    // Timeout protection (propose-timeout)
+    timeout.with({ ttl: 10000 }),
+    // Caching first (onion-level)
+    cache.with({
       ttl: 60000,
       keyBuilder: (taskId, input) => `${taskId}-${JSON.stringify(input)}`,
     }),
@@ -222,8 +231,11 @@ const appWithGlobal = resource({
   id: "app",
   // Note: To prevent deadlocks, a global middleware that depends on a resource
   // will be silently excluded from running on that specific resource.
-  register: [auth.everywhere(true)],
-  // you can also opt-in for filters: tasks(task) { return true; }
+  register: [
+    // Same logic for task, task allowing you to add a filter function.
+    auth.everywhere(),
+    auth.everywhere((resource) => true), // filter easily, most likely via tags, but you have control
+  ],
 });
 ```
 
@@ -244,7 +256,7 @@ const user = UserCtx.use(); // -> { userId: "u1" }
 
 // In a task definition
 const task = {
-  middleware: [UserCtx.require()], // Throws if context is not provided
+  middleware: [UserCtx.require()], // This middleware works only in tasks.
 };
 ```
 
@@ -367,10 +379,10 @@ const perf = tag<{ warnAboveMs: number }>({ id: "perf" });
 
 const processPayment = task({
   id: "app.tasks.pay",
+  tags: [perf.with({ warnAboveMs: 1000 })],
   meta: {
     title: "Process Payment",
     description: "Detailed",
-    tags: ["billing", perf.with({ warnAboveMs: 1000 })],
   },
   run: async () => {
     /* ... */
@@ -379,6 +391,7 @@ const processPayment = task({
 
 const internalSvc = resource({
   id: "app.resources.internal",
+  register: [perf],
   tags: [globals.tags.system],
   init: async () => ({}),
 });
@@ -408,12 +421,13 @@ const profileService = resource({
 ```ts
 const perf = tag<{ warnAboveMs: number }>({ id: "perf" });
 
-const perfMiddleware = middleware({
+const perfMiddleware = taskMiddleware({
   id: "app.middleware.perf",
   run: async ({ task, next }) => {
-    const cfg = perf.extract(task.definition); // or perf.extract(task.definition.meta?.tags)
+    const cfg = perf.extract(task.definition);
+    // use perf.exists(task.definition) to check for existence
     if (!cfg) return next(task.input);
-    // performance hooks
+    // performance hooks here ...
   },
 });
 ```
