@@ -14,7 +14,10 @@ import {
 } from "../defs";
 import { Store } from "./Store";
 import { symbolHook } from "../defs";
-import { ResourceStoreElementType, TaskStoreElementType } from "./StoreTypes";
+import {
+  ResourceStoreElementType,
+  TaskStoreElementType,
+} from "../types/storeTypes";
 import * as utils from "../define";
 import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";

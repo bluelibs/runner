@@ -39,6 +39,7 @@ export {
 };
 
 // Convenience export for easy API: middleware.task / middleware.resource
+// or taskMiddleware / resourceMiddleware
 export const middleware = {
   task: defineTaskMiddleware,
   resource: defineResourceMiddleware,

@@ -11,15 +11,6 @@ import { getCallerFile } from "../tools/getCallerFile";
 export function defineEvent<TPayload = void>(
   config: IEventDefinition<TPayload>,
 ): IEvent<TPayload> {
-  /**
-   * Define an event.
-   * Generates a branded event definition with a stable id (anonymous if omitted)
-   * and file path metadata for better debugging.
-   *
-   * @typeParam TPayload - Payload type carried by the event.
-   * @param config - Optional event definition (id, etc.).
-   * @returns A branded event definition.
-   */
   const callerFilePath = getCallerFile();
   const eventConfig = config;
   return {

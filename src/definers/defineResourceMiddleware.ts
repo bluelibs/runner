@@ -12,11 +12,23 @@ import { MiddlewareAlreadyGlobalError, ValidationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 
 export function defineResourceMiddleware<
-  TConfig extends Record<string, any> = any,
+  TConfig = any,
+  TEnforceInputContract = void,
+  TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
 >(
-  middlewareDef: IResourceMiddlewareDefinition<TConfig, TDependencies>,
-): IResourceMiddleware<TConfig, TDependencies> {
+  middlewareDef: IResourceMiddlewareDefinition<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies
+  >,
+): IResourceMiddleware<
+  TConfig,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TDependencies
+> {
   const filePath = getCallerFile();
   const base = {
     [symbolFilePath]: filePath,
@@ -25,11 +37,26 @@ export function defineResourceMiddleware<
     configSchema: middlewareDef.configSchema,
     ...middlewareDef,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
-  } as IResourceMiddleware<TConfig, TDependencies>;
+  } as IResourceMiddleware<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies
+  >;
 
   const wrap = (
-    obj: IResourceMiddleware<TConfig, TDependencies>,
-  ): IResourceMiddleware<TConfig, TDependencies> => {
+    obj: IResourceMiddleware<
+      TConfig,
+      TEnforceInputContract,
+      TEnforceOutputContract,
+      TDependencies
+    >,
+  ): IResourceMiddleware<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies
+  > => {
     return {
       ...obj,
       with: (config: TConfig) => {
@@ -51,7 +78,7 @@ export function defineResourceMiddleware<
             ...(obj.config as TConfig),
             ...config,
           },
-        } as IResourceMiddleware<TConfig, TDependencies>);
+        } satisfies IResourceMiddleware<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
       },
       everywhere(
         filter:
@@ -64,9 +91,14 @@ export function defineResourceMiddleware<
         return wrap({
           ...obj,
           [symbolMiddlewareEverywhereResources]: filter,
-        } as IResourceMiddleware<TConfig, TDependencies>);
+        } satisfies IResourceMiddleware<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
       },
-    } as IResourceMiddleware<TConfig, TDependencies>;
+    } as IResourceMiddleware<
+      TConfig,
+      TEnforceInputContract,
+      TEnforceOutputContract,
+      TDependencies
+    >;
   };
 
   return wrap(base);

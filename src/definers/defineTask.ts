@@ -8,6 +8,7 @@ import {
   symbolFilePath,
   symbolOptionalDependency,
   IOptionalDependency,
+  TaskMiddlewareAttachments,
 } from "../defs";
 import { getCallerFile } from "../tools/getCallerFile";
 
@@ -15,9 +16,6 @@ import { getCallerFile } from "../tools/getCallerFile";
  * Define a task.
  * Generates a strongly-typed task object with id, dependencies,
  * middleware, and metadata.
- *
- * - If `id` is omitted, an anonymous, file-based id is generated.
- * - Carries through dependencies, middleware, input schema, and metadata.
  *
  * @typeParam Input - Input type accepted by the task's `run` function.
  * @typeParam Output - Promise type returned by the `run` function.
@@ -33,9 +31,10 @@ export function defineTask<
   Deps extends DependencyMapType = any,
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
+  TMiddleware extends TaskMiddlewareAttachments[] = TaskMiddlewareAttachments[],
 >(
-  taskConfig: ITaskDefinition<Input, Output, Deps, TMeta, TTags>,
-): ITask<Input, Output, Deps, TMeta, TTags> {
+  taskConfig: ITaskDefinition<Input, Output, Deps, TMeta, TTags, TMiddleware>,
+): ITask<Input, Output, Deps, TMeta, TTags, TMiddleware> {
   const filePath = getCallerFile();
   const id = taskConfig.id;
   return {
@@ -43,7 +42,7 @@ export function defineTask<
     [symbolFilePath]: filePath,
     id,
     dependencies: taskConfig.dependencies || ({} as Deps),
-    middleware: taskConfig.middleware || [],
+    middleware: taskConfig.middleware || ([] as unknown as TMiddleware),
     run: taskConfig.run,
     inputSchema: taskConfig.inputSchema,
     resultSchema: taskConfig.resultSchema,
@@ -54,7 +53,9 @@ export function defineTask<
       return {
         inner: this,
         [symbolOptionalDependency]: true,
-      } as IOptionalDependency<ITask<Input, Output, Deps, TMeta, TTags>>;
+      } as IOptionalDependency<
+        ITask<Input, Output, Deps, TMeta, TTags, TMiddleware>
+      >;
     },
   };
 }

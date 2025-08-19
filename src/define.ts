@@ -1,11 +1,3 @@
-/**
- * Factory functions for defining tasks, resources, events and middleware.
- *
- * These helpers create strongly-typed definitions while also wiring internal
- * metadata: anonymous IDs, file path tags (for better debugging), lifecycle
- * events, and global middleware flags. See README for high-level concepts.
- */
-
 // Re-export all define functions from their separate files
 export { defineTask } from "./definers/defineTask";
 export { defineHook } from "./definers/defineHook";
@@ -28,4 +20,3 @@ export {
   isTag,
   isOptional,
 } from "./definers/tools";
-

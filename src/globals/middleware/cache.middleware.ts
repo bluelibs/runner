@@ -66,7 +66,7 @@ export const cacheMiddleware = defineTaskMiddleware({
     };
 
     const taskId = task!.definition.id;
-    let cacheHolderForTask = cache.map.get(taskId);
+    let cacheHolderForTask = cache.map.get(taskId)!;
     if (!cacheHolderForTask) {
       // Extract only LRUCache options, excluding keyBuilder
       const { keyBuilder, ...lruOptions } = config;

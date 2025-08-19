@@ -21,7 +21,7 @@ import {
   TaskMiddlewareStoreElementType,
   ResourceMiddlewareStoreElementType,
   EventStoreElementType,
-} from "./StoreTypes";
+} from "../types/storeTypes";
 import { TaskRunner } from "./TaskRunner";
 import { globalResources } from "../globals/globalResources";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";

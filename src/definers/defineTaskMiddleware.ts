@@ -7,29 +7,29 @@ import {
   symbolTaskMiddleware,
   symbolMiddlewareConfigured,
   symbolMiddlewareEverywhereTasks,
+  ITaskMiddlewareConfigured,
 } from "../defs";
 import { MiddlewareAlreadyGlobalError, ValidationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 
-/**
- * Define a middleware.
- * Creates a middleware definition with anonymous id generation, `.with(config)`,
- * and `.everywhere()` helpers.
- *
- * - `.with(config)` merges config (optionally validated via `configSchema`).
- * - `.everywhere()` marks the middleware global (optionally scoping to tasks/resources).
- *
- * @typeParam TConfig - Configuration type accepted by the middleware.
- * @typeParam TDependencies - Dependency map type required by the middleware.
- * @param middlewareDef - The middleware definition config.
- * @returns A branded middleware definition usable by the runner.
- */
 export function defineTaskMiddleware<
-  TConfig extends Record<string, any> = any,
+  TConfig = any,
+  TEnforceInputContract = void,
+  TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
 >(
-  middlewareDef: ITaskMiddlewareDefinition<TConfig, TDependencies>,
-): ITaskMiddleware<TConfig, TDependencies> {
+  middlewareDef: ITaskMiddlewareDefinition<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies
+  >,
+): ITaskMiddleware<
+  TConfig,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TDependencies
+> {
   const filePath = getCallerFile();
   const base = {
     [symbolFilePath]: filePath,
@@ -37,12 +37,28 @@ export function defineTaskMiddleware<
     config: {} as TConfig,
     configSchema: middlewareDef.configSchema,
     ...middlewareDef,
-    dependencies: middlewareDef.dependencies || ({} as TDependencies),
-  } as ITaskMiddleware<TConfig, TDependencies>;
+    dependencies:
+      (middlewareDef.dependencies as TDependencies) || ({} as TDependencies),
+  } as ITaskMiddleware<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies
+  >;
 
   const wrap = (
-    obj: ITaskMiddleware<TConfig, TDependencies>,
-  ): ITaskMiddleware<TConfig, TDependencies> => {
+    obj: ITaskMiddleware<
+      TConfig,
+      TEnforceInputContract,
+      TEnforceOutputContract,
+      TDependencies
+    >,
+  ): ITaskMiddleware<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract,
+    TDependencies
+  > => {
     return {
       ...obj,
       with: (config: TConfig) => {
@@ -64,7 +80,7 @@ export function defineTaskMiddleware<
             ...(obj.config as TConfig),
             ...config,
           },
-        } as ITaskMiddleware<TConfig, TDependencies>);
+        } satisfies ITaskMiddlewareConfigured<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
       },
       everywhere(
         filter: boolean | ((task: ITask<any, any, any, any>) => boolean) = true,
@@ -75,9 +91,14 @@ export function defineTaskMiddleware<
         return wrap({
           ...obj,
           [symbolMiddlewareEverywhereTasks]: filter,
-        } as ITaskMiddleware<TConfig, TDependencies>);
+        } as ITaskMiddleware<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
       },
-    } as ITaskMiddleware<TConfig, TDependencies>;
+    } satisfies ITaskMiddleware<
+      TConfig,
+      TEnforceInputContract,
+      TEnforceOutputContract,
+      TDependencies
+    >;
   };
 
   return wrap(base);

@@ -7,10 +7,6 @@ import {
   defineHook,
 } from "../define";
 import { IMeta, TagType } from "../defs";
-import {
-  EnsureResponseSatisfiesContracts,
-  HasContracts,
-} from "../defs.returnTag";
 import { run } from "..";
 import z from "zod";
 import { middleware } from "..";
@@ -311,8 +307,8 @@ describe.skip("typesafety", () => {
       age: number;
     }
 
-    const tag = defineTag<{ value: number }, IUser>({ id: "tag" });
-    const tag2 = defineTag<void, IOther>({ id: "tag2" });
+    const tag = defineTag<{ value: number }, void, IUser>({ id: "tag" });
+    const tag2 = defineTag<void, void, IOther>({ id: "tag2" });
 
     const tags = [tag.with({ value: 123 }), tag2] satisfies TagType[];
 
@@ -320,8 +316,6 @@ describe.skip("typesafety", () => {
       age: 123,
       name: "123", // intentional
     };
-    type TEST = HasContracts<typeof tags>;
-    type TEST2 = EnsureResponseSatisfiesContracts<typeof tags, typeof response>;
 
     const task = defineTask({
       id: "task",
@@ -354,7 +348,70 @@ describe.skip("typesafety", () => {
     });
   });
 
-  it("should enforce contracts on resources", async () => {
+  it("should have contractable middleware", async () => {
+    const mw = middleware.task<void, { input: string }, { output: number }>({
+      id: "middleware",
+      run: async ({ next }, deps, config) => {
+        return {
+          output: 123,
+        };
+      },
+    });
+
+    const mwr = middleware.resource<
+      void,
+      { input: string },
+      { output: number }
+    >({
+      id: "middleware",
+      run: async ({ next }, deps, config) => {},
+    });
+
+    const mw2 = middleware.task<void, { input: string }, void>({
+      id: "middleware2",
+      run: async ({ next }, deps, config) => {
+        return {
+          output: 123,
+        };
+      },
+    });
+
+    const mwr2 = middleware.resource<void, { input: string }, void>({
+      id: "middleware2",
+      run: async ({ next }, deps, config) => {},
+    });
+
+    const task = defineTask({
+      id: "task",
+      middleware: [mw],
+      // @ts-expect-error
+      run: async (input) => {
+        input;
+        // @ts-expect-error
+        input.a;
+
+        return {
+          output: "str",
+        };
+      },
+    });
+
+    const resource = defineResource<{ input: string }>({
+      id: "resource",
+      middleware: [mwr, mwr2],
+      init: async (config) => {
+        config.input;
+        // @ts-expect-error
+        config.input2;
+
+        return {
+          output: 123,
+        };
+      },
+    });
+  });
+
+  it("should enforce tags contracts on resources", async () => {
     interface IUser {
       name: string;
     }
@@ -363,8 +420,8 @@ describe.skip("typesafety", () => {
       age: number;
     }
 
-    const tag = defineTag<{ value: number }, IUser>({ id: "tag" });
-    const tag2 = defineTag<void, IOther>({ id: "tag2" });
+    const tag = defineTag<{ value: number }, void, IUser>({ id: "tag" });
+    const tag2 = defineTag<void, void, IOther>({ id: "tag2" });
 
     const tags = [tag.with({ value: 123 }), tag2] satisfies TagType[];
 

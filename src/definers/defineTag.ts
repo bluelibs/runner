@@ -21,16 +21,24 @@ import { getCallerFile } from "../tools/getCallerFile";
  * @param definition - The tag definition (id).
  * @returns A tag object with helpers to configure and extract.
  */
-export function defineTag<TConfig = void, TEnforceContract = void>(
-  definition: ITagDefinition<TConfig, TEnforceContract>,
-): ITag<TConfig, TEnforceContract> {
+export function defineTag<
+  TConfig = void,
+  TEnforceInputContract = void,
+  TEnforceOutputContract = void,
+>(
+  definition: ITagDefinition<
+    TConfig,
+    TEnforceInputContract,
+    TEnforceOutputContract
+  >,
+): ITag<TConfig, TEnforceInputContract, TEnforceOutputContract> {
   const id = definition.id;
   const filePath = getCallerFile();
   const foundation = {
     id,
     meta: definition.meta,
     config: definition.config,
-  } as ITag<TConfig, TEnforceContract>;
+  } as ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>;
 
   return {
     ...foundation,
@@ -66,7 +74,11 @@ export function defineTag<TConfig = void, TEnforceContract = void>(
         ...foundation,
         [symbolTagConfigured]: true,
         config,
-      } as ITagConfigured<TConfig, TEnforceContract>;
+      } as ITagConfigured<
+        TConfig,
+        TEnforceInputContract,
+        TEnforceOutputContract
+      >;
     },
     /**
      * Checks if the tag exists in a taggable or a list of tags.
@@ -110,5 +122,5 @@ export function defineTag<TConfig = void, TEnforceContract = void>(
 
       return;
     },
-  } as ITag<TConfig, TEnforceContract>;
+  } satisfies ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>;
 }

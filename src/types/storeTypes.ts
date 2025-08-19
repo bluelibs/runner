@@ -1,16 +1,16 @@
 import {
   DependencyMapType,
   DependencyValuesType,
-  IEventDefinition,
-  IResource,
-  ITask,
-  IHook,
-  ITaskMiddleware,
-  IResourceMiddleware,
-  IEvent,
-  TaskLocalInterceptor,
   ResourceDependencyValuesType,
-} from "../defs";
+} from "./utilities";
+import { IResource } from "./resource";
+import { ITask } from "./task";
+import { IHook } from "./hook";
+import { ITaskMiddleware } from "./taskMiddleware";
+import { IResourceMiddleware } from "./resourceMiddleware";
+import { IEvent } from "./event";
+import { IEventDefinition } from "./event";
+import { TaskLocalInterceptor } from "./utilities";
 
 export type ResourceStoreElementType<
   C = any,

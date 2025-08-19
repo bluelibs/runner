@@ -10,6 +10,7 @@ import {
   symbolResourceWithConfig,
   symbolOptionalDependency,
   IOptionalDependency,
+  ResourceMiddlewareAttachments,
 } from "../defs";
 import { ValidationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
@@ -21,6 +22,7 @@ export function defineResource<
   TPrivate = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
+  TMiddleware extends ResourceMiddlewareAttachments[] = ResourceMiddlewareAttachments[],
 >(
   constConfig: IResourceDefinition<
     TConfig,
@@ -30,9 +32,10 @@ export function defineResource<
     any,
     any,
     TMeta,
-    TTags
+    TTags,
+    TMiddleware
   >,
-): IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags> {
+): IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware> {
   /**
    * Define a resource.
    * Produces a strongly-typed resource with id, registration hooks,
@@ -52,7 +55,6 @@ export function defineResource<
   // The symbolFilePath might already come from defineIndex() for example
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const isIndexResource = constConfig[symbolIndexResource] || false;
-  const isAnonymous = !Boolean(constConfig.id);
   const id = constConfig.id;
 
   return {
@@ -92,13 +94,13 @@ export function defineResource<
     },
 
     meta: (constConfig.meta || {}) as TMeta,
-    middleware: constConfig.middleware || [],
+    middleware: constConfig.middleware || ([] as unknown as TMiddleware),
     optional() {
       return {
         inner: this,
         [symbolOptionalDependency]: true,
       } as IOptionalDependency<
-        IResource<TConfig, TValue, TDeps, TPrivate, TMeta>
+        IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>
       >;
     },
   };

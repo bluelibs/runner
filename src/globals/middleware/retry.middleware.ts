@@ -32,7 +32,7 @@ export const retryTaskMiddleware = defineTaskMiddleware({
 
     while (true) {
       try {
-        return await next(input as any);
+        return await next(input);
       } catch (error) {
         const err = error as Error;
 
@@ -64,7 +64,7 @@ export const retryResourceMiddleware = defineResourceMiddleware({
     const shouldStop = config.stopRetryIf ?? (() => false);
     while (true) {
       try {
-        return await next(input as any);
+        return await next(input);
       } catch (error) {
         const err = error as Error;
         if (shouldStop(err) || attempts >= maxRetries) {

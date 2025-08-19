@@ -4,7 +4,7 @@ import { Store } from "./Store";
 import {
   TaskMiddlewareStoreElementType,
   ResourceMiddlewareStoreElementType,
-} from "./StoreTypes";
+} from "../types/storeTypes";
 import { Logger } from "./Logger";
 import { globalEvents } from "../globals/globalEvents";
 import { ValidationError } from "../errors";
