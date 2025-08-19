@@ -35,6 +35,7 @@ import {
 } from "../globals/middleware/timeout.middleware";
 import { OnUnhandledError } from "./UnhandledError";
 import { globalTags } from "../globals/globalTags";
+import { MiddlewareManager } from "./MiddlewareManager";
 
 // Re-export types for backward compatibility
 export {
@@ -52,6 +53,7 @@ export class Store {
   private overrideManager: OverrideManager;
   private validator: StoreValidator;
   private taskRunner?: TaskRunner;
+  private middlewareManager!: MiddlewareManager;
 
   #isLocked = false;
   #isInitialized = false;
@@ -64,6 +66,7 @@ export class Store {
     this.registry = new StoreRegistry();
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
+    this.middlewareManager = new MiddlewareManager(this, eventManager, logger);
   }
 
   // Delegate properties to registry
@@ -219,18 +222,6 @@ export class Store {
 
   public processOverrides() {
     this.overrideManager.processOverrides();
-  }
-
-  public getEverywhereMiddlewareForTasks(
-    task: ITask<any, any, any, any>,
-  ): ITaskMiddleware[] {
-    return this.registry.getEverywhereMiddlewareForTasks(task);
-  }
-
-  public getEverywhereMiddlewareForResources(
-    resource: IResource<any, any, any, any>,
-  ): IResourceMiddleware[] {
-    return this.registry.getEverywhereMiddlewareForResources(resource);
   }
 
   public storeGenericItem<C>(item: RegisterableItems) {

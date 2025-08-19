@@ -151,18 +151,6 @@ describe("Store", () => {
     expect(() => store.processOverrides()).not.toThrow();
   });
 
-  it("should call getEverywhereMiddlewareForTasks method", () => {
-    // Test getEverywhereMiddlewareForTasks method (lines 152-153)
-    const result = store.getEverywhereMiddlewareForTasks({} as any);
-    expect(Array.isArray(result)).toBe(true);
-  });
-
-  it("should call getEverywhereMiddlewareForResources method", () => {
-    // Test getEverywhereMiddlewareForResources method (lines 156-157)
-    const result = store.getEverywhereMiddlewareForResources({} as any);
-    expect(Array.isArray(result)).toBe(true);
-  });
-
   it("getDependentNodes handles empty middleware and task middleware arrays (branches)", () => {
     const root = defineResource({ id: "root.dep.nodes", register: [] });
     store.initializeStore(root, {});
@@ -244,30 +232,5 @@ describe("Store", () => {
     expect(result).toHaveLength(1);
     const result2 = store.getResourcesWithTag("tags.test");
     expect(result2).toHaveLength(1);
-  });
-
-  it("getEverywhereMiddlewareForTasks excludes middleware that depends on the task", () => {
-    const task: any = { id: "task.dep", middleware: [], dependencies: {} };
-    const mw: any = { id: "mw", dependencies: { t: task } };
-    // mark middleware as everywhere for tasks via the internal symbol
-    (mw as any)[Symbol.for("middleware.everywhere.tasks")] = true;
-    (store as any).registry.taskMiddlewares.set("mw", {
-      middleware: mw,
-      computedDependencies: {},
-    });
-    const res = store.getEverywhereMiddlewareForTasks(task);
-    expect(res).toHaveLength(0);
-  });
-
-  it("getEverywhereMiddlewareForResources excludes middleware that depends on the resource", () => {
-    const resource: any = { id: "res.dep", middleware: [], dependencies: {} };
-    const mw: any = { id: "mw2", dependencies: { r: resource } };
-    (mw as any)[Symbol.for("middleware.everywhere.resources")] = true;
-    (store as any).registry.resourceMiddlewares.set("mw2", {
-      middleware: mw,
-      computedDependencies: {},
-    });
-    const res = store.getEverywhereMiddlewareForResources(resource);
-    expect(res).toHaveLength(0);
   });
 });

@@ -147,7 +147,7 @@ describe("MiddlewareManager", () => {
 
     // Stub global middleware provider to return one with same id as local; manager should dedupe it
     const spy = jest
-      .spyOn(store, "getEverywhereMiddlewareForTasks")
+      .spyOn(manager, "getEverywhereMiddlewareForTasks")
       .mockReturnValue([mGlobalSameId]);
 
     const runner = manager.composeTaskRunner(task);
@@ -246,5 +246,48 @@ describe("MiddlewareManager", () => {
       {},
     );
     expect(result).toBeUndefined();
+  });
+
+  it("should call getEverywhereMiddlewareForTasks method", () => {
+    // Create a minimal, typed task
+    const t = defineTask({ id: "t.method", run: async () => 0 });
+    const result = manager.getEverywhereMiddlewareForTasks(t);
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("should call getEverywhereMiddlewareForResources method", () => {
+    // Create a minimal, typed resource
+    const r = defineResource({ id: "r.method" });
+    const result = manager.getEverywhereMiddlewareForResources(r);
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("getEverywhereMiddlewareForTasks excludes middleware that depends on the task", () => {
+    const task = defineTask({ id: "task.dep", run: async () => 0 });
+    const mw = middleware
+      .task({
+        id: "mw",
+        dependencies: { t: task },
+        run: async ({ next, task }) => next(task?.input),
+      })
+      .everywhere(true);
+    // register via public API to ensure types are respected
+    store.storeGenericItem(mw);
+    const res = manager.getEverywhereMiddlewareForTasks(task);
+    expect(res).toHaveLength(0);
+  });
+
+  it("getEverywhereMiddlewareForResources excludes middleware that depends on the resource", () => {
+    const resource = defineResource({ id: "res.dep" });
+    const mw2 = middleware
+      .resource({
+        id: "mw2",
+        dependencies: { r: resource },
+        run: async ({ next, resource }) => next(resource?.config),
+      })
+      .everywhere(true);
+    store.storeGenericItem(mw2);
+    const res = manager.getEverywhereMiddlewareForResources(resource);
+    expect(res).toHaveLength(0);
   });
 });

@@ -1,4 +1,14 @@
-import { DependencyMapType, ITask, IResource } from "../defs";
+import {
+  DependencyMapType,
+  ITask,
+  IResource,
+  IResourceMiddleware,
+  ITaskMiddleware,
+  symbolMiddlewareEverywhereTasks,
+  symbolMiddlewareEverywhereResources,
+  ResourceMiddlewareAttachments,
+  TagType,
+} from "../defs";
 import { EventManager } from "./EventManager";
 import { Store } from "./Store";
 import {
@@ -8,6 +18,7 @@ import {
 import { Logger } from "./Logger";
 import { globalEvents } from "../globals/globalEvents";
 import { ValidationError } from "../errors";
+import * as utils from "../define";
 
 /**
  * Centralizes middleware composition and execution for both tasks and resources.
@@ -194,14 +205,9 @@ export class MiddlewareManager {
 
       const nextFunction = next;
       next = async (cfg: C) => {
-        await this.eventManager.emit(
-          globalEvents.middlewareTriggered,
-          {
-            kind: "resource",
-            middleware: middleware as any,
-            targetId: resource.id as any,
-          },
-          middleware.id as any,
+        await this.emitMiddlewareBeforeRun<C, V, D, TContext>(
+          middleware,
+          resource,
         );
         try {
           const result = await storeMiddleware.middleware.run(
@@ -215,14 +221,9 @@ export class MiddlewareManager {
             storeMiddleware.computedDependencies,
             middleware.config,
           );
-          await this.eventManager.emit(
-            globalEvents.middlewareCompleted,
-            {
-              kind: "resource",
-              middleware: middleware as any,
-              targetId: resource.id as any,
-            },
-            middleware.id as any,
+          await this.emitMiddlewareAfterRun<C, V, D, TContext>(
+            middleware,
+            resource,
           );
           return result as any;
         } catch (error: unknown) {
@@ -237,11 +238,11 @@ export class MiddlewareManager {
             globalEvents.middlewareCompleted,
             {
               kind: "resource",
-              middleware: middleware as any,
-              targetId: resource.id as any,
-              error: error as any,
+              middleware: middleware,
+              targetId: resource.id,
+              error: error as Error,
             },
-            middleware.id as any,
+            middleware.id,
           );
           throw error;
         }
@@ -251,6 +252,62 @@ export class MiddlewareManager {
     return next(config);
   }
 
+  private async emitMiddlewareAfterRun<
+    C,
+    V extends Promise<any>,
+    D extends DependencyMapType,
+    TContext,
+  >(
+    middleware: any,
+    resource: IResource<
+      C,
+      V,
+      D,
+      TContext,
+      any,
+      TagType[],
+      ResourceMiddlewareAttachments[]
+    >,
+  ) {
+    await this.eventManager.emit(
+      globalEvents.middlewareCompleted,
+      {
+        kind: "resource",
+        middleware: middleware,
+        targetId: resource.id,
+      },
+      middleware.id,
+    );
+  }
+
+  private async emitMiddlewareBeforeRun<
+    C,
+    V extends Promise<any>,
+    D extends DependencyMapType,
+    TContext,
+  >(
+    middleware: any,
+    resource: IResource<
+      C,
+      V,
+      D,
+      TContext,
+      any,
+      TagType[],
+      ResourceMiddlewareAttachments[]
+    >,
+  ) {
+    await this.eventManager.emit(
+      globalEvents.middlewareTriggered,
+      {
+        kind: "resource",
+        middleware: middleware as any,
+        targetId: resource.id as any,
+      },
+      middleware.id as any,
+    );
+  }
+
   private getApplicableTaskMiddlewares<
     TInput,
     TOutput extends Promise<any>,
@@ -258,9 +315,9 @@ export class MiddlewareManager {
   >(task: ITask<TInput, TOutput, TDeps>) {
     const existingMiddlewares = task.middleware;
     const existingMiddlewareIds = existingMiddlewares.map((x) => x.id);
-    const globalMiddlewares = this.store
-      .getEverywhereMiddlewareForTasks(task)
-      .filter((x) => !existingMiddlewareIds.includes(x.id));
+    const globalMiddlewares = this.getEverywhereMiddlewareForTasks(task).filter(
+      (x) => !existingMiddlewareIds.includes(x.id),
+    );
     return [...globalMiddlewares, ...existingMiddlewares];
   }
 
@@ -272,9 +329,63 @@ export class MiddlewareManager {
   >(resource: IResource<C, V, D, TContext>) {
     const existingMiddlewares = resource.middleware;
     const existingMiddlewareIds = existingMiddlewares.map((x) => x.id);
-    const globalMiddlewares = this.store
-      .getEverywhereMiddlewareForResources(resource)
-      .filter((x) => !existingMiddlewareIds.includes(x.id));
+    const globalMiddlewares = this.getEverywhereMiddlewareForResources(
+      resource,
+    ).filter((x) => !existingMiddlewareIds.includes(x.id));
     return [...globalMiddlewares, ...existingMiddlewares];
+  }
+
+  /**
+   * @param task
+   * @returns
+   */
+  getEverywhereMiddlewareForTasks(
+    task: ITask<any, any, any, any>,
+  ): ITaskMiddleware[] {
+    return Array.from(this.store.taskMiddlewares.values())
+      .filter((x) => {
+        const flag = x.middleware[symbolMiddlewareEverywhereTasks];
+        if (!flag) return false;
+
+        const deps = x.middleware.dependencies as DependencyMapType;
+        const isDependency = this.idExistsAsMiddlewareDependency(task.id, deps);
+        // If the middleware depends on the task, it should not be applied to the task, we exclude it.
+        if (isDependency) return false;
+
+        if (typeof flag === "function") {
+          return flag(task);
+        }
+        return Boolean(flag);
+      })
+      .map((x) => x.middleware);
+  }
+
+  /**
+   * Returns all global middleware for resource, which do not depend on the target resource.
+   */
+  getEverywhereMiddlewareForResources(
+    target: IResource<any, any, any, any>,
+  ): IResourceMiddleware[] {
+    return Array.from(this.store.resourceMiddlewares.values())
+      .filter((x) => {
+        const flag = x.middleware[symbolMiddlewareEverywhereResources];
+        if (!flag) return false;
+
+        // If the middleware depends on the target resource, it should not be applied to the target resource
+        const isDependency = this.idExistsAsMiddlewareDependency(
+          target.id,
+          x.middleware.dependencies,
+        );
+        // If it's a direct dependency we exclude it.
+        return !isDependency;
+      })
+      .map((x) => x.middleware);
+  }
+
+  private idExistsAsMiddlewareDependency(id: string, deps: DependencyMapType) {
+    return Object.values(deps).some((x: any) => {
+      const candidate = utils.isOptional(x) ? (x as any).inner : x;
+      return (candidate as any)?.id === id;
+    });
   }
 }
