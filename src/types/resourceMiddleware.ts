@@ -53,7 +53,6 @@ export interface IResourceMiddleware<
     >,
     IContractable<TConfig, TEnforceInputContract, TEnforceOutputContract> {
   [symbolResourceMiddleware]: true;
-  [symbolMiddlewareConfigured]: boolean;
   [symbolMiddlewareEverywhereResources]?:
     | boolean
     | ((resource: IResource<any, any, any, any, any>) => boolean);
@@ -100,13 +99,6 @@ export interface IResourceMiddlewareConfigured<
   [symbolMiddlewareConfigured]: true;
 }
 
-export interface IResourceMiddlewareDefinitionConfigured<
-  C extends Record<string, any> = {},
-> {
-  middleware: IResourceMiddleware<C>;
-  config?: C;
-}
-
 export interface IResourceMiddlewareExecutionInput<TResourceConfig = any> {
   /** Resource hook */
   resource: {
@@ -115,3 +107,8 @@ export interface IResourceMiddlewareExecutionInput<TResourceConfig = any> {
   };
   next: (resourceConfig?: TResourceConfig) => Promise<any>;
 }
+
+export type ResourceMiddlewareAttachmentType =
+  | IResourceMiddleware<void, any, any, any>
+  | IResourceMiddleware<{ [K in any]?: any }, any, any, any>
+  | IResourceMiddlewareConfigured<any, any, any, any>;

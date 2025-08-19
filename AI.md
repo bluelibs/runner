@@ -173,6 +173,8 @@ const logsExtension = resource({
 
 ## Middleware (global or local)
 
+Middleware now supports type contracts with `<Config, Input, Output>` signature:
+
 ```ts
 import {
   taskMiddleware,
@@ -182,17 +184,41 @@ import {
   globals,
 } from "@bluelibs/runner";
 
-// Custom task middleware
-const auth = taskMiddleware<{ role: string }>({
+// Custom task middleware with type contracts
+const auth = taskMiddleware<
+  { role: string },
+  { user: { role: string } },
+  { user: { role: string; verified: boolean } }
+>({
   id: "app.middleware.auth",
   run: async ({ task, next }, _, cfg) => {
     if (task.input?.user?.role !== cfg.role) throw new Error("Unauthorized");
-    // You have to return the value and call it
-    return next(task.input);
+    const result = await next(task.input);
+    return { user: { ...task.input.user, verified: true } };
   },
 });
 
-const softDelete = resourceMiddleware();
+// Resource middleware can augment a resource's behavior after it's initialized.
+// For example, this `softDelete` middleware intercepts the `delete` method
+// of a resource and replaces it with a non-destructive update.
+const softDelete = resourceMiddleware({
+  id: "app.middleware.softDelete",
+  run: async ({ next }) => {
+    const resourceInstance = await next(); // The original resource instance
+
+    // This example assumes the resource has `update` and `delete` methods.
+    // A more robust implementation would check for their existence.
+
+    // Monkey-patch the 'delete' method
+    const originalDelete = resourceInstance.delete;
+    resourceInstance.delete = async (id: string, ...args) => {
+      // Instead of deleting, call 'update' to mark as deleted
+      return resourceInstance.update(id, { deletedAt: new Date() }, ...args);
+    };
+
+    return resourceInstance;
+  },
+});
 
 const adminOnly = task({
   id: "app.tasks.adminOnly",
@@ -205,6 +231,20 @@ const {
   task: { retry, timeout, cache },
   // available: resource: { retry, timeout, cache } as well, same configs.
 } = globals.middleware;
+
+// Example of custom middleware with full type contracts
+const validationMiddleware = taskMiddleware<
+  { strict: boolean },
+  { data: unknown },
+  { data: any; validated: boolean }
+>({
+  id: "app.middleware.validation",
+  run: async ({ task, next }, _, config) => {
+    // Validation logic here
+    const result = await next(task.input);
+    return { ...result, validated: true };
+  },
+});
 
 const resilientTask = task({
   id: "app.tasks.resilient",
@@ -376,6 +416,7 @@ import { tag, globals, task, resource } from "@bluelibs/runner";
 
 // Simple tags and debug/system globals
 const perf = tag<{ warnAboveMs: number }>({ id: "perf" });
+const contractTag = tag<void, void, { result: string }>({ id: "contract" });
 
 const processPayment = task({
   id: "app.tasks.pay",
@@ -400,8 +441,8 @@ const internalSvc = resource({
 ### Tag Contracts (type‑enforced returns)
 
 ```ts
-// Contract enforces the awaited return type
-const userContract = tag<void, { name: string }>({ id: "contract.user" });
+// Contract enforces the awaited return type (Config, Input, Output)
+const userContract = tag<void, void, { name: string }>({ id: "contract.user" });
 
 const getProfile = task({
   id: "app.tasks.getProfile",

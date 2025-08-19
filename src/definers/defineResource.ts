@@ -10,7 +10,8 @@ import {
   symbolResourceWithConfig,
   symbolOptionalDependency,
   IOptionalDependency,
-  ResourceMiddlewareAttachments,
+  ResourceMiddlewareAttachmentType,
+  IResourceWithConfig,
 } from "../defs";
 import { ValidationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
@@ -22,7 +23,7 @@ export function defineResource<
   TPrivate = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends ResourceMiddlewareAttachments[] = ResourceMiddlewareAttachments[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
 >(
   constConfig: IResourceDefinition<
     TConfig,
@@ -90,7 +91,15 @@ export function defineResource<
         id: this.id,
         resource: this,
         config,
-      };
+      } satisfies IResourceWithConfig<
+        TConfig,
+        TValue,
+        TDeps,
+        TPrivate,
+        TMeta,
+        TTags,
+        TMiddleware
+      >;
     },
 
     meta: (constConfig.meta || {}) as TMeta,

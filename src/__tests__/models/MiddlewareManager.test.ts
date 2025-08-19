@@ -2,8 +2,13 @@ import { MiddlewareManager } from "../../models/MiddlewareManager";
 import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { Logger } from "../../models/Logger";
-import { defineTask, defineResource } from "../../define";
-import { middleware, OnUnhandledError } from "../../index";
+import {
+  defineTask,
+  defineResource,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
+} from "../../define";
+import { OnUnhandledError } from "../../index";
 import { globalEvents } from "../../globals/globalEvents";
 
 describe("MiddlewareManager", () => {
@@ -27,7 +32,7 @@ describe("MiddlewareManager", () => {
   it("composes task runner with interceptors inside middleware and preserves order", async () => {
     const order: string[] = [];
 
-    const m1 = middleware.task({
+    const m1 = defineTaskMiddleware({
       id: "m1",
       run: async ({ next, task }) => {
         order.push("m1:before");
@@ -37,7 +42,7 @@ describe("MiddlewareManager", () => {
       },
     });
 
-    const m2 = middleware.task({
+    const m2 = defineTaskMiddleware({
       id: "m2",
       run: async ({ next, task }) => {
         order.push("m2:before");
@@ -105,21 +110,21 @@ describe("MiddlewareManager", () => {
       calls.push("completed");
     });
 
-    const mLocal = middleware.task({
+    const mLocal = defineTaskMiddleware({
       id: "shared",
       run: async ({ next, task }) => {
         const res = await next(task?.input);
         return (res as number) + 3;
       },
     });
-    const mOther = middleware.task({
+    const mOther = defineTaskMiddleware({
       id: "other",
       run: async ({ next, task }) => {
         const res = await next(task?.input);
         return (res as number) * 2;
       },
     });
-    const mGlobalSameId = middleware.task({
+    const mGlobalSameId = defineTaskMiddleware({
       id: "shared",
       run: async ({ next, task }) => next(task?.input),
     });
@@ -178,7 +183,7 @@ describe("MiddlewareManager", () => {
       calls.push({ kind: (e.data as any).kind, error: (e.data as any).error });
     });
 
-    const failing = middleware.task({
+    const failing = defineTaskMiddleware({
       id: "failing",
       run: async () => {
         throw new Error("boom");
@@ -213,7 +218,7 @@ describe("MiddlewareManager", () => {
   });
 
   it("wraps resource init with middleware and returns modified result", async () => {
-    const m = middleware.resource({
+    const m = defineResourceMiddleware({
       id: "rm",
       run: async ({ next, resource }) => {
         const result = await next(resource?.config);
@@ -264,13 +269,11 @@ describe("MiddlewareManager", () => {
 
   it("getEverywhereMiddlewareForTasks excludes middleware that depends on the task", () => {
     const task = defineTask({ id: "task.dep", run: async () => 0 });
-    const mw = middleware
-      .task({
-        id: "mw",
-        dependencies: { t: task },
-        run: async ({ next, task }) => next(task?.input),
-      })
-      .everywhere(true);
+    const mw = defineTaskMiddleware({
+      id: "mw",
+      dependencies: { t: task },
+      run: async ({ next, task }) => next(task?.input),
+    }).everywhere(true);
     // register via public API to ensure types are respected
     store.storeGenericItem(mw);
     const res = manager.getEverywhereMiddlewareForTasks(task);
@@ -279,13 +282,11 @@ describe("MiddlewareManager", () => {
 
   it("getEverywhereMiddlewareForResources excludes middleware that depends on the resource", () => {
     const resource = defineResource({ id: "res.dep" });
-    const mw2 = middleware
-      .resource({
-        id: "mw2",
-        dependencies: { r: resource },
-        run: async ({ next, resource }) => next(resource?.config),
-      })
-      .everywhere(true);
+    const mw2 = defineResourceMiddleware({
+      id: "mw2",
+      dependencies: { r: resource },
+      run: async ({ next, resource }) => next(resource?.config),
+    }).everywhere(true);
     store.storeGenericItem(mw2);
     const res = manager.getEverywhereMiddlewareForResources(resource);
     expect(res).toHaveLength(0);

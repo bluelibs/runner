@@ -8,7 +8,7 @@ import {
   symbolFilePath,
   symbolOptionalDependency,
   IOptionalDependency,
-  TaskMiddlewareAttachments,
+  TaskMiddlewareAttachmentType,
 } from "../defs";
 import { getCallerFile } from "../tools/getCallerFile";
 
@@ -31,7 +31,7 @@ export function defineTask<
   Deps extends DependencyMapType = any,
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachments[] = TaskMiddlewareAttachments[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
 >(
   taskConfig: ITaskDefinition<Input, Output, Deps, TMeta, TTags, TMiddleware>,
 ): ITask<Input, Output, Deps, TMeta, TTags, TMiddleware> {

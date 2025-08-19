@@ -1,5 +1,7 @@
 // Solution to enforce input,output contracts from 'tags' and 'middleware'
 
+import { TagType } from "./tag";
+
 // A unique symbol key used only for typing (no runtime cost needed)
 export declare const CONTRACT: unique symbol;
 export type CONTRACT = typeof CONTRACT;
@@ -21,11 +23,6 @@ export interface ITag<TConfig = any, TOutput = void>
 
 export interface IMiddleware<TConfig = any, TInput = void, TOutput = void>
   extends IContractable<TConfig, TInput, TOutput> {}
-
-// Convenience aliases
-export type TagType = ITag<any, any>;
-export type MiddlewareType = IMiddleware<any, any, any>;
-export type ContractableType = IContractable<any, any, any>;
 
 // Helpers
 type NonVoid<T> = [T] extends [void] ? never : T;

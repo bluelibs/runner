@@ -3,11 +3,12 @@ import {
   defineResource,
   defineEvent,
   defineOverride,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
 } from "../../define";
 import { DependencyNotFoundError } from "../../errors";
 import { run } from "../../run";
 import * as definitions from "../../defs";
-import { middleware } from "../../index";
 
 describe("run.overrides", () => {
   // Tasks
@@ -174,14 +175,14 @@ describe("run.overrides", () => {
   });
 
   it("should work overriding a middleware (task and resource)", async () => {
-    const mw = middleware.task({
+    const mw = defineTaskMiddleware({
       id: "middleware.task",
       run: async ({ next }) => {
         return `Middleware: ${await next()}`;
       },
     });
 
-    const mwr = middleware.resource({
+    const mwr = defineResourceMiddleware({
       id: "middleware.resource",
       run: async ({ next }) => {
         return `Middleware: ${await next()}`;

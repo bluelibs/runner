@@ -38,13 +38,6 @@ export {
   createTestResource,
 };
 
-// Convenience export for easy API: middleware.task / middleware.resource
-// or taskMiddleware / resourceMiddleware
-export const middleware = {
-  task: defineTaskMiddleware,
-  resource: defineResourceMiddleware,
-};
-
 export * as definitions from "./defs";
 export * from "./models";
 export * from "./globals/types";

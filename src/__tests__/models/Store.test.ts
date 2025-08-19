@@ -5,9 +5,9 @@ import {
   defineTask,
   defineEvent,
   defineTag,
+  defineTaskMiddleware,
 } from "../../define";
-import { middleware } from "../../index";
-import { Logger, OnUnhandledError, PrintStrategy } from "../../models";
+import { Logger, OnUnhandledError } from "../../models";
 
 describe("Store", () => {
   let eventManager: EventManager;
@@ -70,7 +70,7 @@ describe("Store", () => {
   });
 
   it("should store a middleware and retrieve it", () => {
-    const testMiddleware = middleware.task({
+    const testMiddleware = defineTaskMiddleware({
       id: "test.middleware",
       run: async ({ next }) => {
         return `Middleware: ${await next()}`;

@@ -1,5 +1,9 @@
-import { defineEvent, defineResource, defineTask } from "../../define";
-import { middleware } from "../..";
+import {
+  defineEvent,
+  defineResource,
+  defineTask,
+  defineTaskMiddleware,
+} from "../../define";
 import { run } from "../../run";
 import { globalEvents } from "../../globals/globalEvents";
 import { debugResource } from "../../globals/resources/debug/debug.resource";
@@ -71,7 +75,7 @@ describe("globals.resources.debug", () => {
       },
     });
 
-    const localMiddleware = middleware.task({
+    const localMiddleware = defineTaskMiddleware({
       id: "tests.local.middleware",
       async run({ next }) {
         return next();

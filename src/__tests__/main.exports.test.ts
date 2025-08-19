@@ -10,7 +10,6 @@ describe("main exports", () => {
     expect(typeof mainExports.resourceMiddleware).toBe("function");
     expect(typeof mainExports.taskMiddleware).toBe("function");
     expect(typeof mainExports.event).toBe("function");
-    expect(typeof mainExports.middleware).toBe("object");
     expect(typeof mainExports.hook).toBe("function");
     expect(typeof mainExports.tag).toBe("function");
     expect(typeof mainExports.run).toBe("function");

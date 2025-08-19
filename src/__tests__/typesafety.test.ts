@@ -5,11 +5,12 @@ import {
   defineOverride,
   defineTag,
   defineHook,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
 } from "../define";
 import { IMeta, TagType } from "../defs";
 import { run } from "..";
 import z from "zod";
-import { middleware } from "..";
 
 // This is skipped because we mostly check typesafety.
 describe.skip("typesafety", () => {
@@ -18,7 +19,7 @@ describe.skip("typesafety", () => {
       message: string;
     };
 
-    const middlewareTaskOnly = middleware.task({
+    const middlewareTaskOnly = defineTaskMiddleware({
       id: "middleware",
       run: async (input, deps) => {
         return input;
@@ -33,14 +34,14 @@ describe.skip("typesafety", () => {
       message?: string;
     };
 
-    const middlewareWithConfig = middleware.task({
+    const middlewareWithConfig = defineTaskMiddleware({
       id: "middleware.config",
       run: async (input, deps, config: MiddlewareConfig) => {
         return input;
       },
     });
 
-    const middlewareWithOptionalConfig = middleware.task({
+    const middlewareWithOptionalConfig = defineTaskMiddleware({
       id: "middleware.optional.config",
       run: async (input, deps, config: MiddlewareOptionalConfig) => {
         return input;
@@ -261,7 +262,7 @@ describe.skip("typesafety", () => {
       init: async () => 123, // bad type
     });
 
-    const mwTask = middleware.task({
+    const mwTask = defineTaskMiddleware({
       id: "middleware",
       run: async () => "Middleware executed",
     });
@@ -349,7 +350,23 @@ describe.skip("typesafety", () => {
   });
 
   it("should have contractable middleware", async () => {
-    const mw = middleware.task<void, { input: string }, { output: number }>({
+    const mw = defineTaskMiddleware<
+      void,
+      { input: string },
+      { output: number }
+    >({
+      id: "middleware",
+      run: async ({ next }, deps, config) => {
+        return {
+          output: 123,
+        };
+      },
+    });
+    const mwWithConfig = defineTaskMiddleware<
+      { ttl: number },
+      { input: string },
+      { output: number }
+    >({
       id: "middleware",
       run: async ({ next }, deps, config) => {
         return {
@@ -358,7 +375,7 @@ describe.skip("typesafety", () => {
       },
     });
 
-    const mwr = middleware.resource<
+    const mwr = defineResourceMiddleware<
       void,
       { input: string },
       { output: number }
@@ -367,7 +384,16 @@ describe.skip("typesafety", () => {
       run: async ({ next }, deps, config) => {},
     });
 
-    const mw2 = middleware.task<void, { input: string }, void>({
+    const mwrWithConfig = defineResourceMiddleware<
+      { ttl: number },
+      { input: string },
+      { output: number }
+    >({
+      id: "middleware",
+      run: async ({ next }, deps, config) => {},
+    });
+
+    const mw2 = defineTaskMiddleware<void, { input: string }, void>({
       id: "middleware2",
       run: async ({ next }, deps, config) => {
         return {
@@ -376,7 +402,7 @@ describe.skip("typesafety", () => {
       },
     });
 
-    const mwr2 = middleware.resource<void, { input: string }, void>({
+    const mwr2 = defineResourceMiddleware<void, { input: string }, void>({
       id: "middleware2",
       run: async ({ next }, deps, config) => {},
     });
@@ -407,6 +433,40 @@ describe.skip("typesafety", () => {
         return {
           output: 123,
         };
+      },
+    });
+
+    const taskWithConfig = defineTask({
+      id: "task",
+      middleware: [
+        // @ts-expect-error
+        mwWithConfig,
+        mwWithConfig.with({ ttl: 123 }),
+        // @ts-expect-error
+        mwWithConfig.with({ ttl: "123" }),
+      ],
+      run: async (input) => {
+        input;
+        // @ts-expect-error
+        input.a;
+
+        return {
+          output: 123,
+        };
+      },
+    });
+
+    const resourceWithConfig = defineResource<{ input: string }>({
+      id: "resource",
+      middleware: [
+        // @ts-expect-error
+        mwrWithConfig,
+        mwrWithConfig.with({ ttl: 123 }),
+        // @ts-expect-error
+        mwrWithConfig.with({ ttl: "123" }),
+      ],
+      init: async (config) => {
+        config.input;
       },
     });
   });
@@ -474,7 +534,7 @@ describe.skip("typesafety", () => {
       },
     });
 
-    const mw = middleware.task({
+    const mw = defineTaskMiddleware({
       id: "middleware",
       configSchema: z.object({ ttl: z.number().positive() }),
       run: async ({ next }, deps, config) => {

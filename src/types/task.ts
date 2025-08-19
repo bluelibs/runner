@@ -4,7 +4,7 @@ import {
   IOptionalDependency,
   ITaskMiddleware,
   IValidationSchema,
-  TaskMiddlewareAttachments,
+  TaskMiddlewareAttachmentType,
 } from "../defs";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
@@ -22,7 +22,7 @@ export interface ITaskDefinition<
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachments[] = TaskMiddlewareAttachments[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
 > {
   id: string;
   /**
@@ -67,7 +67,7 @@ export interface ITask<
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachments[] = TaskMiddlewareAttachments[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
 > extends ITaskDefinition<
     TInput,
     TOutput,

@@ -1,13 +1,10 @@
+import { definitions, task, resource, override, run } from "..";
 import {
-  definitions,
-  task,
-  resource,
-  middleware,
-  override,
-  hook,
-  run,
-} from "..";
-import { defineEvent, defineHook, defineResource } from "../define";
+  defineEvent,
+  defineHook,
+  defineResource,
+  defineTaskMiddleware,
+} from "../define";
 
 describe("override() helper", () => {
   it("should preserve id and override run for tasks", async () => {
@@ -57,7 +54,7 @@ describe("override() helper", () => {
   });
 
   it("should preserve id and override run for task middleware", async () => {
-    const mw = middleware.task({
+    const mw = defineTaskMiddleware({
       id: "test.middleware",
       run: async ({ next }) => {
         return next();
@@ -88,7 +85,10 @@ describe("override() helper", () => {
   it("should be type-safe: cannot override id on task/resource/middleware", () => {
     const t = task({ id: "tt", run: async () => undefined });
     const r = resource({ id: "rr", init: async () => undefined });
-    const m = middleware.task({ id: "mm", run: async ({ next }) => next() });
+    const m = defineTaskMiddleware({
+      id: "mm",
+      run: async ({ next }) => next(),
+    });
 
     // @ts-expect-error id cannot be overridden
     override(t, { id: "new" });

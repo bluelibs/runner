@@ -444,3 +444,47 @@ export type DebugConfig = {
 };
 // It's like having 17 different volume knobs for your debugging orchestra! 🎼
 ```
+
+### 🏷️ Type Contracts for Middleware and Tags
+
+We've enhanced the type system to support stronger contracts:
+
+**Middleware Type Contracts:**
+```ts
+// Middleware now supports <Config, Input, Output> type contracts
+const authMiddleware = taskMiddleware<
+  { role: string },           // Config
+  { user: { role: string } }, // Input type enforcement
+  { user: { role: string; verified: boolean } } // Output type enforcement
+>({
+  id: "app.middleware.auth",
+  run: async ({ task, next }, _, config) => {
+    if (task.input.user.role !== config.role) {
+      throw new Error("Unauthorized");
+    }
+    const result = await next(task.input);
+    return { user: { ...task.input.user, verified: true } };
+  },
+});
+
+// Resource middleware follows the same pattern
+const resourceMiddleware = resourceMiddleware<Config, Input, Output>({
+  // ...
+});
+```
+
+**Tag Contracts:**
+```ts
+// Tags now use <Config, Unused, Output> for return type enforcement
+const userContract = tag<void, void, { name: string }>({ id: "contract.user" });
+const ageContract = tag<void, void, { age: number }>({ id: "contract.age" });
+
+// Tasks must return data matching all tag contracts
+const getProfile = task({
+  id: "app.tasks.getProfile", 
+  tags: [userContract, ageContract],
+  run: async () => ({ name: "Ada", age: 37 }), // Must satisfy both contracts
+});
+```
+
+**Migration:** Update existing middleware and tags to use the new type parameters for stronger type safety.

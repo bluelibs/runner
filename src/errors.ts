@@ -43,6 +43,16 @@ export class UnknownItemTypeError extends RuntimeError {
 }
 
 /**
+ * Error thrown whenever a requested context is not available.
+ */
+export class ContextError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ContextError";
+  }
+}
+
+/**
  * Error thrown when circular dependencies are detected
  */
 export class CircularDependenciesError extends RuntimeError {

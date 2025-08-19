@@ -7,6 +7,7 @@ import {
   symbolResourceMiddleware,
   symbolMiddlewareConfigured,
   symbolMiddlewareEverywhereResources,
+  IResourceMiddlewareConfigured,
 } from "../defs";
 import { MiddlewareAlreadyGlobalError, ValidationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
@@ -50,7 +51,9 @@ export function defineResourceMiddleware<
       TEnforceInputContract,
       TEnforceOutputContract,
       TDependencies
-    >,
+    > & {
+      [symbolMiddlewareConfigured]?: true;
+    },
   ): IResourceMiddleware<
     TConfig,
     TEnforceInputContract,
@@ -78,7 +81,7 @@ export function defineResourceMiddleware<
             ...(obj.config as TConfig),
             ...config,
           },
-        } satisfies IResourceMiddleware<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
+        } satisfies IResourceMiddlewareConfigured<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
       },
       everywhere(
         filter:

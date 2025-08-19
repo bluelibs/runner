@@ -1,10 +1,7 @@
 import { IResource, IResourceWithConfig } from "./resource";
 import { ITask } from "./task";
-import { ITaskMiddleware, ITaskMiddlewareConfigured } from "./taskMiddleware";
-import {
-  IResourceMiddleware,
-  IResourceMiddlewareConfigured,
-} from "./resourceMiddleware";
+import { ITaskMiddleware } from "./taskMiddleware";
+import { IResourceMiddleware } from "./resourceMiddleware";
 import { IHook } from "./hook";
 import { IEvent, IEventDefinition } from "./event";
 import { ITag } from "./tag";
@@ -170,13 +167,3 @@ export type RegisterableItems<T = any> =
   | IResourceMiddleware<any>
   | IEvent<any>
   | ITag<any, any>;
-
-export type TaskMiddlewareAttachments =
-  | ITaskMiddleware<void, void, void, any>
-  | ITaskMiddleware<{ [K in any]?: any }, any, any, any>
-  | ITaskMiddlewareConfigured<any, any, any, any>;
-
-export type ResourceMiddlewareAttachments =
-  | IResourceMiddleware<void, any, any, any>
-  | IResourceMiddleware<{ [K in any]?: any }, any, any, any>
-  | IResourceMiddlewareConfigured<any, any, any, any>;

@@ -1,5 +1,9 @@
-import { defineTask, defineResource } from "../../define";
-import { middleware } from "../..";
+import {
+  defineTask,
+  defineResource,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
+} from "../../define";
 import { run } from "../../run";
 import { IValidationSchema } from "../../defs";
 
@@ -81,7 +85,7 @@ describe("Result Schema Validation", () => {
         return v as { ok: boolean };
       });
 
-      const mw = middleware.task({
+      const mw = defineTaskMiddleware({
         id: "tests.result.mw.task",
         async run({ next }) {
           const base = await next();
@@ -176,7 +180,7 @@ describe("Result Schema Validation", () => {
         return v as { connected: boolean };
       });
 
-      const mw = middleware.resource({
+      const mw = defineResourceMiddleware({
         id: "tests.result.mw.resource",
         async run({ next }) {
           const base = await next();

@@ -307,4 +307,13 @@ describe("Logger", () => {
       }
     }
   });
+
+  it("prints errors with stack", async () => {
+    const logger = createLogger({ threshold: "trace" });
+    const err = new Error("WithStack");
+    (err as any).stack = "stack";
+    await logger.error("oops", { error: err });
+    const outputs = gather();
+    expect(outputs).toContain("Error: WithStack");
+  });
 });

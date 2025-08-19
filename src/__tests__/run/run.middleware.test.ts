@@ -3,10 +3,11 @@ import {
   defineResource,
   defineEvent,
   defineHook,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
 } from "../../define";
 import { run } from "../../run";
 import { globalEvents } from "../../globals/globalEvents";
-import { middleware } from "../../index";
 import {
   DuplicateRegistrationError,
   MiddlewareNotRegisteredError,
@@ -16,7 +17,7 @@ import z from "zod";
 
 describe("Middleware", () => {
   it("should be able to register the middleware and execute it", async () => {
-    const testMiddleware = middleware.task({
+    const testMiddleware = defineTaskMiddleware({
       id: "test.middleware",
       run: async ({ next }) => {
         const result = await next();
@@ -44,7 +45,7 @@ describe("Middleware", () => {
   });
 
   it("should work with global middleware", async () => {
-    const globalMiddleware = middleware.task({
+    const globalMiddleware = defineTaskMiddleware({
       id: "global.middleware",
       run: async ({ next }) => {
         const result = await next();
@@ -52,7 +53,7 @@ describe("Middleware", () => {
       },
     });
 
-    const testMiddleware = middleware.task({
+    const testMiddleware = defineTaskMiddleware({
       id: "test.middleware",
       run: async ({ next }) => {
         const result = await next();
@@ -81,7 +82,7 @@ describe("Middleware", () => {
 
   it("should work with global middleware but local one should have priority", async () => {
     const createMiddleware = (id: string) =>
-      middleware.task({
+      defineTaskMiddleware({
         id: "middleware",
         run: async ({ next }) => {
           const result = await next();
@@ -90,7 +91,7 @@ describe("Middleware", () => {
       });
     const globalMiddleware = createMiddleware("global.middleware");
 
-    const testMiddleware = middleware.task({
+    const testMiddleware = defineTaskMiddleware({
       id: "test.middleware",
       run: async ({ next }) => {
         const result = await next();
@@ -122,7 +123,7 @@ describe("Middleware", () => {
       run: async () => "Task executed",
     });
 
-    const testMiddleware = middleware.task({
+    const testMiddleware = defineTaskMiddleware({
       id: "test.middleware",
       dependencies: () => ({ task }),
       run: async ({ next }, { task }) => {
@@ -156,7 +157,7 @@ describe("Middleware", () => {
   });
 
   it("Should not work with a non-existing middleware", async () => {
-    const nonExistentMw = middleware.task({
+    const nonExistentMw = defineTaskMiddleware({
       id: "middlewareId",
       run: async ({ next }) => {
         const result = await next();
@@ -186,7 +187,7 @@ describe("Middleware", () => {
   });
 
   it("Should work with resources", async () => {
-    const mw = middleware.resource({
+    const mw = defineResourceMiddleware({
       id: "middleware",
       run: async ({ resource, next }) => {
         const result = await next();
@@ -207,7 +208,7 @@ describe("Middleware", () => {
   });
 
   it("Should work with global middleware", async () => {
-    const mw = middleware.resource({
+    const mw = defineResourceMiddleware({
       id: "middleware",
       run: async ({ resource, next }) => {
         const result = await next({});
@@ -238,7 +239,7 @@ describe("Middleware", () => {
   });
 
   it("Should prevent circular dependencies when middleware depends on the same task", async () => {
-    const mw: any = middleware.task({
+    const mw: any = defineTaskMiddleware({
       id: "middleware",
       dependencies: (): any => ({ task }),
       run: async (_: any, { task }: any) => {},
@@ -265,7 +266,7 @@ describe("Middleware", () => {
 describe("Configurable Middleware (.with)", () => {
   it("should allow using middleware usage in a task and pass config to run", async () => {
     let receivedConfig: any;
-    const validate = middleware.task({
+    const validate = defineTaskMiddleware({
       id: "validate",
       run: async ({ next }, deps, config: { schema: string }) => {
         receivedConfig = config;
@@ -293,7 +294,7 @@ describe("Configurable Middleware (.with)", () => {
 
   it("should allow multiple usages of the same middleware definition with different configs", async () => {
     const calls: (string | undefined)[] = [];
-    const validate = middleware.task({
+    const validate = defineTaskMiddleware({
       id: "validate",
       run: async ({ next }, deps, config: { schema: string }) => {
         calls.push(config.schema);
@@ -327,14 +328,14 @@ describe("Configurable Middleware (.with)", () => {
 
   it("should work in an integration scenario with global and per-task middleware", async () => {
     const calls: string[] = [];
-    const log = middleware.task({
+    const log = defineTaskMiddleware({
       id: "log",
       run: async ({ next }) => {
         calls.push("global");
         return next();
       },
     });
-    const validate = middleware.task({
+    const validate = defineTaskMiddleware({
       id: "validate",
       run: async ({ next }, deps, config: { schema: string }) => {
         expect(config).toBeDefined();
@@ -363,7 +364,7 @@ describe("Configurable Middleware (.with)", () => {
   });
 
   it("should enforce type safety for config in .with()", () => {
-    const validate = middleware.task({
+    const validate = defineTaskMiddleware({
       id: "validate",
       run: async ({ next }, deps, config: { schema: string }) => next(),
     });
@@ -374,7 +375,7 @@ describe("Configurable Middleware (.with)", () => {
   });
 
   it("should modify task outputs independently based on middleware configs", async () => {
-    const prefixMiddleware = middleware.task({
+    const prefixMiddleware = defineTaskMiddleware({
       id: "prefixer",
       run: async ({ next }, deps, config: { prefix: string }) => {
         const result = await next();
@@ -412,7 +413,7 @@ describe("Configurable Middleware (.with)", () => {
 
   it("should allow configured middleware to be global for tasks", async () => {
     const calls: string[] = [];
-    const validate = middleware.task<{ schema: string }>({
+    const validate = defineTaskMiddleware<{ schema: string }>({
       id: "validate.global.tasks",
       run: async ({ next }, _deps, config) => {
         calls.push(`global:${config.schema}`);
@@ -441,7 +442,7 @@ describe("Configurable Middleware (.with)", () => {
 
   it("should allow configured middleware to be global for resources", async () => {
     const calls: string[] = [];
-    const m = middleware.resource<{ flag: string }>({
+    const m = defineResourceMiddleware<{ flag: string }>({
       id: "validate.global.resources",
       run: async ({ next, resource }, _deps, config) => {
         if (resource) {
@@ -478,7 +479,7 @@ describe("Middleware behavior (no lifecycle)", () => {
   it("should execute middleware around tasks", async () => {
     const calls: string[] = [];
 
-    const mw = middleware.task({
+    const mw = defineTaskMiddleware({
       id: "mw.events",
       run: async ({ next }) => {
         return next();
@@ -507,7 +508,7 @@ describe("Middleware behavior (no lifecycle)", () => {
   });
 
   it("should throw middleware errors", async () => {
-    const mw = middleware.task({
+    const mw = defineTaskMiddleware({
       id: "mw.error",
       run: async () => {
         throw new Error("boom");
@@ -536,7 +537,7 @@ describe("Middleware behavior (no lifecycle)", () => {
   });
 
   it("global event hooks should not run middleware (no errors thrown)", async () => {
-    const mw = middleware.task({
+    const mw = defineTaskMiddleware({
       id: "mw.error.global.listener",
       run: async () => {
         throw new Error("boom-global");
@@ -587,7 +588,7 @@ describe("Middleware behavior (no lifecycle)", () => {
       },
     });
 
-    const mw = middleware.task({
+    const mw = defineTaskMiddleware({
       id: "mw.events.task",
       run: async ({ next }) => next(),
     });
@@ -624,7 +625,7 @@ describe("Middleware behavior (no lifecycle)", () => {
       },
     });
 
-    const mw = middleware.resource({
+    const mw = defineResourceMiddleware({
       id: "mw.events.res.local",
       run: async ({ next }) => next({}),
     });
@@ -654,8 +655,8 @@ describe("Middleware behavior (no lifecycle)", () => {
 describe("Middleware.everywhere()", () => {
   it("should work with { tasks: true, resources: true }", async () => {
     const calls: string[] = [];
-    const everywhereMiddlewareTask = middleware.task({
-      id: "everywhere.middleware.task",
+    const everywhereMiddlewareTask = defineTaskMiddleware({
+      id: "everywhere.defineTaskMiddleware",
       run: async ({ next, task }) => {
         if (task) {
           calls.push(`task:${String(task.definition.id)}`);
@@ -663,8 +664,8 @@ describe("Middleware.everywhere()", () => {
         return next();
       },
     });
-    const everywhereMiddlewareRes = middleware.resource({
-      id: "everywhere.middleware.resource",
+    const everywhereMiddlewareRes = defineResourceMiddleware({
+      id: "everywhere.defineResourceMiddleware",
       run: async ({ next, resource }) => {
         if (resource) {
           calls.push(`resource:${String(resource.definition.id)}`);
@@ -708,8 +709,8 @@ describe("Middleware.everywhere()", () => {
 
   it("should work with { tasks: true, resources: false }", async () => {
     const calls: string[] = [];
-    const everywhereMiddlewareTask = middleware.task({
-      id: "everywhere.middleware.task",
+    const everywhereMiddlewareTask = defineTaskMiddleware({
+      id: "everywhere.defineTaskMiddleware",
       run: async ({ next, task }) => {
         if (task) {
           calls.push(`task:${String(task.definition.id)}`);
@@ -752,8 +753,8 @@ describe("Middleware.everywhere()", () => {
 
   it("should work with { tasks: false, resources: true }", async () => {
     const calls: string[] = [];
-    const everywhereMiddlewareRes = middleware.resource({
-      id: "everywhere.middleware.resource",
+    const everywhereMiddlewareRes = defineResourceMiddleware({
+      id: "everywhere.defineResourceMiddleware",
       run: async ({ next, resource }) => {
         if (resource) {
           calls.push(`resource:${String(resource.definition.id)}`);
@@ -796,7 +797,7 @@ describe("Middleware.everywhere()", () => {
 
   it("should work with filterable task middleware", async () => {
     const calls: string[] = [];
-    const everywhereMiddleware = middleware.task({
+    const everywhereMiddleware = defineTaskMiddleware({
       id: "everywhere.middleware",
       run: async ({ next, task }) => {
         if (task) {
@@ -836,21 +837,21 @@ describe("Middleware.everywhere()", () => {
   });
 
   it("should throw if there is another middleware with the same id", () => {
-    const mw = middleware.task({
+    const mw = defineTaskMiddleware({
       id: "everywhere.middleware",
       run: async ({ next }) => next(),
     });
-    const m2w = middleware.task({
+    const m2w = defineTaskMiddleware({
       id: "everywhere.middleware",
       run: async ({ next }) => next(),
     });
 
-    const mwr = middleware.resource({
-      id: "everywhere.middleware.resource",
+    const mwr = defineResourceMiddleware({
+      id: "everywhere.defineResourceMiddleware",
       run: async ({ next }) => next(),
     });
-    const mwr2 = middleware.resource({
-      id: "everywhere.middleware.resource",
+    const mwr2 = defineResourceMiddleware({
+      id: "everywhere.defineResourceMiddleware",
       run: async ({ next }) => next(),
     });
     const app = defineResource({
@@ -868,14 +869,14 @@ describe("Middleware.everywhere()", () => {
     expect(run(app2)).rejects.toThrow(
       new DuplicateRegistrationError(
         "Middleware",
-        "everywhere.middleware.resource",
+        "everywhere.defineResourceMiddleware",
       ),
     );
   });
 
   it("should ensure that the local middleware has priority over the global middleware in terms of configuration", async () => {
     const calls: string[] = [];
-    const mw = middleware.task<{ flag: string }>({
+    const mw = defineTaskMiddleware<{ flag: string }>({
       id: "everywhere.middleware",
       run: async ({ task, next }, _deps, config) => {
         if (task) {
@@ -885,12 +886,10 @@ describe("Middleware.everywhere()", () => {
       },
     });
 
-    const mwr = middleware
-      .resource<{ flag: string }>({
-        id: "res.local",
-        run: async ({ next }) => next(),
-      })
-      .with({ flag: "local-resource" });
+    const mwr = defineResourceMiddleware<{ flag: string }>({
+      id: "res.local",
+      run: async ({ next }) => next(),
+    }).with({ flag: "local-resource" });
 
     const resource1 = defineResource({
       id: "resource1",
@@ -935,13 +934,13 @@ describe("Middleware.everywhere()", () => {
       const sr = z.object({
         name: z.string(),
       });
-      const mwt = middleware.task({
-        id: "everywhere.middleware.task",
+      const mwt = defineTaskMiddleware({
+        id: "everywhere.defineTaskMiddleware",
         configSchema: st,
         run: async ({ next }) => next(),
       });
-      const mwr = middleware.resource({
-        id: "everywhere.middleware.resource",
+      const mwr = defineResourceMiddleware({
+        id: "everywhere.defineResourceMiddleware",
         configSchema: sr,
         run: async ({ next }) => next(),
       });

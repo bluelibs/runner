@@ -408,7 +408,7 @@ import { middleware } from "@bluelibs/runner";
 type AuthMiddlewareConfig = { requiredRole: string };
 const authMiddleware = taskMiddleware<AuthMiddlewareConfig>({
   id: "app.middleware.auth",
-  run: async ({ task, next }, _deps, config: Config) => {
+  run: async ({ task, next }, _deps, config) => {
     // Must return the value
     return await next(task.input);
   },
@@ -421,25 +421,49 @@ const adminTask = task({
 });
 ```
 
-And now for resources:
+For middleware with input/output contracts:
 
-```ts
-import { middleware } from "@bluelibs/runner";
+```typescript
+// Middleware that enforces specific input and output types
+type AuthConfig = { requiredRole: string };
+type AuthInput = { user: { role: string } };
+type AuthOutput = { user: { role: string; verified: boolean } };
 
-// Task middleware with config
-type AuthMiddlewareConfig = { requiredRole: string };
-const authMiddleware = taskMiddleware<AuthMiddlewareConfig>({
+const authMiddleware = taskMiddleware<AuthConfig, AuthInput, AuthOutput>({
   id: "app.middleware.auth",
-  run: async ({ task, next }, _deps, config: Config) => {
-    // Must return the value
-    return await next(task.input);
+  run: async ({ task, next }, _deps, config) => {
+    if (task.input.user.role !== config.requiredRole) {
+      throw new Error("Insufficient permissions");
+    }
+    const result = await next(task.input);
+    return {
+      user: {
+        ...task.input.user,
+        verified: true,
+      },
+    };
+  },
+});
+
+// For resources
+const resourceAuthMiddleware = resourceMiddleware<
+  AuthConfig,
+  AuthInput,
+  AuthOutput
+>({
+  id: "app.middleware.resource.auth",
+  run: async ({ next }, _deps, config) => {
+    // Resource middleware logic
+    return await next();
   },
 });
 
 const adminTask = task({
   id: "app.tasks.adminOnly",
   middleware: [authMiddleware.with({ requiredRole: "admin" })],
-  run: async (input: { user: User }) => "Secret admin data",
+  run: async (input: { user: { role: string } }) => ({
+    user: { role: input.user.role, verified: true },
+  }),
 });
 ```
 
@@ -473,6 +497,33 @@ const app = resource({
 ```
 
 **Note:** A global middleware can depend on resources or tasks. However, any such resources or tasks will be excluded from the dependency tree (Task -> Middleware), and the middleware will not run for those specific tasks or resources. This approach gives middleware true flexibility and control.
+
+#### Middleware Type Contracts
+
+Middleware can now enforce type contracts using the `<Config, Input, Output>` signature:
+
+```typescript
+// Middleware that transforms input and output types
+type LogConfig = { includeTimestamp: boolean };
+type LogInput = { data: any };
+type LogOutput = { data: any; logged: boolean };
+
+const loggingMiddleware = taskMiddleware<LogConfig, LogInput, LogOutput>({
+  id: "app.middleware.logging",
+  run: async ({ task, next }, _deps, config) => {
+    console.log(config.includeTimestamp ? new Date() : "", task.input.data);
+    const result = await next(task.input);
+    return { ...result, logged: true };
+  },
+});
+
+// Tasks using this middleware must conform to the Input/Output types
+const loggedTask = task({
+  id: "app.tasks.logged",
+  middleware: [loggingMiddleware.with({ includeTimestamp: true })],
+  run: async (input: { data: string }) => ({ data: input.data.toUpperCase() }),
+});
+```
 
 Local middleware overrides global middleware. If you want to apply your global middleware for a specific task, but with different config:
 
@@ -1699,21 +1750,23 @@ const performanceMiddleware = middleware.task({
 
 #### Contract Tags
 
-You can attach contracts to tags to enforce the shape of a task's returned value and a resource's `init()` value at compile time. Contracts are specified via the second generic of `defineTag<TConfig, TContract>`.
+You can attach contracts to tags to enforce the shape of a task's returned value and a resource's `init()` value at compile time. Contracts are specified via the third generic of `defineTag<TConfig, TUnused, TOutput>`.
 
 ```typescript
 // A tag that enforces the returned value to include { name: string }
-const userContract = tag<void, { name: string }>({ id: "contract.user" });
+const userContract = tag<void, void, { name: string }>({ id: "contract.user" });
 
 // Another tag that enforces { age: number }
-const ageContract = tag<void, { age: number }>({ id: "contract.age" });
+const ageContract = tag<void, void, { age: number }>({ id: "contract.age" });
 
 // Works with configured tags too
-const preferenceContract = tag<{ locale: string }, { preferredLocale: string }>(
-  {
-    id: "contract.preferences",
-  },
-);
+const preferenceContract = tag<
+  { locale: string },
+  void,
+  { preferredLocale: string }
+>({
+  id: "contract.preferences",
+});
 ```
 
 The return value must return a union of all tags with return contracts.
@@ -2648,8 +2701,11 @@ const harness = resource({
 // A task you want to drive in your tests
 const registerUser = task({ id: "app.tasks.registerUser" /* ... */ });
 
-// Boom: full ecosystem run (middleware, events, overrides) with a tiny driver
+// Boom: full ecosystem
 const { value: t, dispose } = await run(harness);
+
+// You have 3 ways to interact with the system, run tasks, get resource values and emit events
+
 const result = await t.runTask(registerUser, { email: "x@y.z" });
 const value = t.getResourceValue(testDb); // since the resolution is done by id, this will return the exact same result as t.getResourceValue(actualDb)
 t.emitEvent(id | event, payload);

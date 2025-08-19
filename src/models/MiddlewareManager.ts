@@ -6,7 +6,7 @@ import {
   ITaskMiddleware,
   symbolMiddlewareEverywhereTasks,
   symbolMiddlewareEverywhereResources,
-  ResourceMiddlewareAttachments,
+  ResourceMiddlewareAttachmentType,
   TagType,
 } from "../defs";
 import { EventManager } from "./EventManager";
@@ -266,7 +266,7 @@ export class MiddlewareManager {
       TContext,
       any,
       TagType[],
-      ResourceMiddlewareAttachments[]
+      ResourceMiddlewareAttachmentType[]
     >,
   ) {
     await this.eventManager.emit(
@@ -294,7 +294,7 @@ export class MiddlewareManager {
       TContext,
       any,
       TagType[],
-      ResourceMiddlewareAttachments[]
+      ResourceMiddlewareAttachmentType[]
     >,
   ) {
     await this.eventManager.emit(

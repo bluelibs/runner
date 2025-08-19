@@ -32,7 +32,7 @@ export interface ITaskMiddlewareDefinition<
    * The middleware body, called with task execution input.
    */
   run: (
-    input: ITaskMiddlewareExecutionInput,
+    input: ITaskMiddlewareExecutionInput<any>,
     dependencies: DependencyValuesType<TDependencies>,
     config: TConfig,
   ) => Promise<any>;
@@ -53,7 +53,6 @@ export interface ITaskMiddleware<
     >,
     IContractable<TConfig, TEnforceInputContract, TEnforceOutputContract> {
   [symbolTaskMiddleware]: true;
-  [symbolMiddlewareConfigured]: true;
   [symbolMiddlewareEverywhereTasks]?:
     | boolean
     | ((task: ITask<any, any, any, any>) => boolean);
@@ -99,13 +98,6 @@ export interface ITaskMiddlewareConfigured<
   config: TConfig;
 }
 
-export interface ITaskMiddlewareDefinitionConfigured<
-  C extends Record<string, any> = {},
-> {
-  middleware: ITaskMiddleware<C>;
-  config?: C;
-}
-
 export interface ITaskMiddlewareExecutionInput<TTaskInput = any> {
   /** Task hook */
   task: {
@@ -114,3 +106,8 @@ export interface ITaskMiddlewareExecutionInput<TTaskInput = any> {
   };
   next: (taskInput?: TTaskInput) => Promise<any>;
 }
+
+export type TaskMiddlewareAttachmentType =
+  | ITaskMiddleware<void, any, any, any>
+  | ITaskMiddleware<{ [K in any]?: any }, any, any, any>
+  | ITaskMiddlewareConfigured<any, any, any, any>;

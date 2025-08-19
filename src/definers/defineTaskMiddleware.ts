@@ -52,7 +52,9 @@ export function defineTaskMiddleware<
       TEnforceInputContract,
       TEnforceOutputContract,
       TDependencies
-    >,
+    > & {
+      [symbolMiddlewareConfigured]?: true;
+    },
   ): ITaskMiddleware<
     TConfig,
     TEnforceInputContract,
@@ -93,7 +95,7 @@ export function defineTaskMiddleware<
           [symbolMiddlewareEverywhereTasks]: filter,
         } as ITaskMiddleware<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
       },
-    } satisfies ITaskMiddleware<
+    } as ITaskMiddleware<
       TConfig,
       TEnforceInputContract,
       TEnforceOutputContract,

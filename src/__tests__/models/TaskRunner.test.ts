@@ -1,11 +1,8 @@
 import { TaskRunner } from "../../models/TaskRunner";
 import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
-import { defineTask, defineResource } from "../../define";
-import { middleware } from "../../index";
-import { ITask } from "../../defs";
+import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
 import { Logger } from "../../models";
-import { globalEvents } from "../../globals/globalEvents";
 
 describe("TaskRunner", () => {
   let store: Store;
@@ -47,7 +44,7 @@ describe("TaskRunner", () => {
   });
 
   it("should run an task with middleware", async () => {
-    const middleware1 = middleware.task({
+    const middleware1 = defineTaskMiddleware({
       id: "middleware1",
       run: async ({ next, task }) => {
         const result = await next(task?.input);
@@ -55,7 +52,7 @@ describe("TaskRunner", () => {
       },
     });
 
-    const middleware2 = middleware.task({
+    const middleware2 = defineTaskMiddleware({
       id: "middleware2",
       run: async ({ task, next }, deps, config) => {
         const result = await next(task?.input);

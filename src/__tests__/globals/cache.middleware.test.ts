@@ -7,7 +7,6 @@ import {
   ICacheInstance,
 } from "../../globals/middleware/cache.middleware";
 import { globals } from "../..";
-import { middleware } from "../..";
 import { LRUCache } from "lru-cache";
 
 describe("Caching System", () => {

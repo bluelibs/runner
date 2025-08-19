@@ -6,7 +6,7 @@ import {
   OverridableElements,
   RegisterableItems,
   ResourceDependencyValuesType,
-  ResourceMiddlewareAttachments,
+  ResourceMiddlewareAttachmentType,
 } from "../defs";
 import { TagType } from "./tag";
 import { IResourceMeta } from "./meta";
@@ -14,6 +14,7 @@ import {
   symbolFilePath,
   symbolIndexResource,
   symbolResource,
+  symbolResourceWithConfig,
 } from "./utilities";
 import {
   EnsureInputSatisfiesContracts,
@@ -31,7 +32,7 @@ export interface IResourceDefinition<
   TRegisterableItems = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends ResourceMiddlewareAttachments[] = ResourceMiddlewareAttachments[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
 > {
   /** Stable identifier. */
   id: string;
@@ -116,7 +117,7 @@ export interface IResource<
   TContext = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends ResourceMiddlewareAttachments[] = ResourceMiddlewareAttachments[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
 > extends IResourceDefinition<
     TConfig,
     TValue,
@@ -177,6 +178,7 @@ export interface IResourceWithConfig<
     any
   >[] = IResourceMiddleware[],
 > {
+  [symbolResourceWithConfig]: true;
   /** The id of the underlying resource. */
   id: string;
   /** The underlying resource definition. */

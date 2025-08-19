@@ -1,17 +1,9 @@
 import { AsyncLocalStorage } from "async_hooks";
 import { ITaskMiddlewareConfigured } from "./defs";
 import { requireContextTaskMiddleware } from "./globals/middleware/requireContext.middleware";
+import { ContextError } from "./errors";
 
-/**
- * Error thrown whenever a requested context is not available.
- */
-export class ContextError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ContextError";
-  }
-}
-
+export { ContextError };
 /**
  * The generic Context object returned by `createContext`.
  */

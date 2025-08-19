@@ -6,7 +6,7 @@ import {
   defineTask,
   defineTaskMiddleware,
 } from "../define";
-import { resource, task, run, middleware, event, definitions } from "../index";
+import { resource, task, run, event, definitions } from "../index";
 
 describe("Optional dependencies", () => {
   test("task.optional() missing should resolve to undefined in resource deps", async () => {
@@ -124,17 +124,15 @@ describe("Optional dependencies", () => {
       },
     });
 
-    const mw = middleware
-      .task({
-        id: "tests.optional.middleware",
-        dependencies: {
-          target: target.optional(),
-        },
-        async run({ next }) {
-          return next();
-        },
-      })
-      .everywhere(true);
+    const mw = defineTaskMiddleware({
+      id: "tests.optional.middleware",
+      dependencies: {
+        target: target.optional(),
+      },
+      async run({ next }) {
+        return next();
+      },
+    }).everywhere(true);
 
     const app = resource({
       id: "tests.optional.middleware.app",

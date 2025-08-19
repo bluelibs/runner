@@ -3,8 +3,8 @@ import {
   defineResource,
   defineEvent,
   defineHook,
+  defineTaskMiddleware,
 } from "../../define";
-import { middleware } from "../../index";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
 
@@ -142,7 +142,7 @@ describe("run", () => {
     it("should be able to register an task with middleware and execute it, ensuring the middleware is called in the correct order", async () => {
       const order: string[] = [];
 
-      const testMiddleware1 = middleware.task({
+      const testMiddleware1 = defineTaskMiddleware({
         id: "test.middleware1",
         run: async ({ next }) => {
           order.push("middleware1 before");
@@ -152,7 +152,7 @@ describe("run", () => {
         },
       });
 
-      const testMiddleware2 = middleware.task({
+      const testMiddleware2 = defineTaskMiddleware({
         id: "test.middleware2",
         run: async ({ next }) => {
           order.push("middleware2 before");
@@ -197,7 +197,7 @@ describe("run", () => {
         init: async () => "Dependency Value",
       });
 
-      const testMiddleware = middleware.task({
+      const testMiddleware = defineTaskMiddleware({
         id: "test.middleware",
         dependencies: { dependencyResource },
         run: async ({ next }, { dependencyResource }) => {
