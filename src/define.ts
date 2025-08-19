@@ -12,10 +12,12 @@ import {
   IResourceWithConfig,
   IResourceDefinition,
   IEventDefinition,
-  IMiddlewareDefinition,
+  ITaskMiddlewareDefinition,
+  IResourceMiddlewareDefinition,
   DependencyMapType,
   DependencyValuesType,
-  IMiddleware,
+  ITaskMiddleware,
+  IResourceMiddleware,
   IEvent,
   symbolEvent,
   RegisterableItems,
@@ -32,7 +34,8 @@ import {
   symbolMiddlewareEverywhereResources,
   symbolResourceWithConfig,
   symbolResource,
-  symbolMiddleware,
+  symbolTaskMiddleware,
+  symbolResourceMiddleware,
   ITaskMeta,
   IResourceMeta,
   IHook,
@@ -236,16 +239,7 @@ export function defineEvent<TPayload = void>(
   };
 }
 
-export type MiddlewareEverywhereOptions = {
-  /**
-   * Attach to all tasks. Default is true. Can be a boolean or a predicate that receives the task for filtering. If the function returns false, the middleware is **not** attached to the task.
-   */
-  tasks?: boolean | ((task: ITask<any, any, any, any>) => boolean);
-  /**
-   * Attach to all resources. Default is true.
-   */
-  resources?: boolean;
-};
+// legacy global options removed in favor of per-kind everywhere()
 
 /**
  * Define a middleware.
@@ -260,30 +254,28 @@ export type MiddlewareEverywhereOptions = {
  * @param middlewareDef - The middleware definition config.
  * @returns A branded middleware definition usable by the runner.
  */
-export function defineMiddleware<
+export function defineTaskMiddleware<
   TConfig extends Record<string, any> = any,
   TDependencies extends DependencyMapType = any,
 >(
-  middlewareDef: IMiddlewareDefinition<TConfig, TDependencies>,
-): IMiddleware<TConfig, TDependencies> {
+  middlewareDef: ITaskMiddlewareDefinition<TConfig, TDependencies>,
+): ITaskMiddleware<TConfig, TDependencies> {
   const filePath = getCallerFile();
   const base = {
     [symbolFilePath]: filePath,
-    [symbolMiddleware]: true,
+    [symbolTaskMiddleware]: true,
     config: {} as TConfig,
     configSchema: middlewareDef.configSchema,
     ...middlewareDef,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
-  } as IMiddleware<TConfig, TDependencies>;
+  } as ITaskMiddleware<TConfig, TDependencies>;
 
-  // Wrap an object to ensure we always return chainable helpers
   const wrap = (
-    obj: IMiddleware<TConfig, TDependencies>,
-  ): IMiddleware<TConfig, TDependencies> => {
+    obj: ITaskMiddleware<TConfig, TDependencies>,
+  ): ITaskMiddleware<TConfig, TDependencies> => {
     return {
       ...obj,
       with: (config: TConfig) => {
-        // Validate config with schema if provided (fail fast)
         if (obj.configSchema) {
           try {
             config = obj.configSchema.parse(config);
@@ -295,7 +287,6 @@ export function defineMiddleware<
             );
           }
         }
-
         return wrap({
           ...obj,
           [symbolMiddlewareConfigured]: true,
@@ -303,26 +294,81 @@ export function defineMiddleware<
             ...(obj.config as TConfig),
             ...config,
           },
-        } as IMiddleware<TConfig, TDependencies>);
+        } as ITaskMiddleware<TConfig, TDependencies>);
       },
-      everywhere(options: MiddlewareEverywhereOptions = {}) {
-        const { tasks = true, resources = true } = options;
-
-        // If already global, prevent calling again
-        if (
-          obj[symbolMiddlewareEverywhereTasks] ||
-          obj[symbolMiddlewareEverywhereResources]
-        ) {
+      everywhere(
+        filter: boolean | ((task: ITask<any, any, any, any>) => boolean) = true,
+      ) {
+        if (obj[symbolMiddlewareEverywhereTasks]) {
           throw new MiddlewareAlreadyGlobalError(obj.id);
         }
-
         return wrap({
           ...obj,
-          [symbolMiddlewareEverywhereTasks]: tasks,
-          [symbolMiddlewareEverywhereResources]: resources,
-        } as IMiddleware<TConfig, TDependencies>);
+          [symbolMiddlewareEverywhereTasks]: filter,
+        } as ITaskMiddleware<TConfig, TDependencies>);
       },
-    } as IMiddleware<TConfig, TDependencies>;
+    } as ITaskMiddleware<TConfig, TDependencies>;
+  };
+
+  return wrap(base);
+}
+
+export function defineResourceMiddleware<
+  TConfig extends Record<string, any> = any,
+  TDependencies extends DependencyMapType = any,
+>(
+  middlewareDef: IResourceMiddlewareDefinition<TConfig, TDependencies>,
+): IResourceMiddleware<TConfig, TDependencies> {
+  const filePath = getCallerFile();
+  const base = {
+    [symbolFilePath]: filePath,
+    [symbolResourceMiddleware]: true,
+    config: {} as TConfig,
+    configSchema: middlewareDef.configSchema,
+    ...middlewareDef,
+    dependencies: middlewareDef.dependencies || ({} as TDependencies),
+  } as IResourceMiddleware<TConfig, TDependencies>;
+
+  const wrap = (
+    obj: IResourceMiddleware<TConfig, TDependencies>,
+  ): IResourceMiddleware<TConfig, TDependencies> => {
+    return {
+      ...obj,
+      with: (config: TConfig) => {
+        if (obj.configSchema) {
+          try {
+            config = obj.configSchema.parse(config);
+          } catch (error) {
+            throw new ValidationError(
+              "Middleware config",
+              obj.id,
+              error as Error,
+            );
+          }
+        }
+        return wrap({
+          ...obj,
+          [symbolMiddlewareConfigured]: true,
+          config: {
+            ...(obj.config as TConfig),
+            ...config,
+          },
+        } as IResourceMiddleware<TConfig, TDependencies>);
+      },
+      everywhere(
+        filter:
+          | boolean
+          | ((resource: IResource<any, any, any, any, any>) => boolean) = true,
+      ) {
+        if (obj[symbolMiddlewareEverywhereResources]) {
+          throw new MiddlewareAlreadyGlobalError(obj.id);
+        }
+        return wrap({
+          ...obj,
+          [symbolMiddlewareEverywhereResources]: filter,
+        } as IResourceMiddleware<TConfig, TDependencies>);
+      },
+    } as IResourceMiddleware<TConfig, TDependencies>;
   };
 
   return wrap(base);
@@ -376,8 +422,16 @@ export function isHook(definition: any): definition is IHook {
  * @param definition - Any value to test.
  * @returns True when `definition` is a branded Middleware.
  */
-export function isMiddleware(definition: any): definition is IMiddleware {
-  return definition && definition[symbolMiddleware];
+export function isTaskMiddleware(
+  definition: any,
+): definition is ITaskMiddleware {
+  return definition && definition[symbolTaskMiddleware];
+}
+
+export function isResourceMiddleware(
+  definition: any,
+): definition is IResourceMiddleware {
+  return definition && definition[symbolResourceMiddleware];
 }
 
 /**
@@ -404,23 +458,31 @@ export function isOptional(
  * @param patch - Properties to override (except `id`).
  * @returns A definition of the same kind with overrides applied.
  */
-export function defineOverride<T extends ITask<any, any, any, any>>(
+export function defineOverride<T extends ITask<any, any, any, any, any>>(
   base: T,
-  patch: Omit<Partial<T>, "id">,
+  patch: Omit<Partial<T>, "id"> & Pick<T, "run">,
 ): T;
-export function defineOverride<T extends IResource<any, any, any, any>>(
+export function defineOverride<T extends IResource<any, any, any, any, any>>(
   base: T,
-  patch: Omit<Partial<T>, "id">,
+  patch: Omit<Partial<T>, "id"> & Pick<T, "init">,
 ): T;
-export function defineOverride<T extends IMiddleware<any, any>>(
+export function defineOverride<T extends ITaskMiddleware<any, any>>(
   base: T,
-  patch: Omit<Partial<T>, "id">,
+  patch: Omit<Partial<T>, "id"> & Pick<T, "run">,
+): T;
+export function defineOverride<T extends IResourceMiddleware<any, any>>(
+  base: T,
+  patch: Omit<Partial<T>, "id"> & Pick<T, "run">,
+): T;
+export function defineOverride<T extends IHook<any, any, any>>(
+  base: T,
+  patch: Omit<Partial<T>, "id" | "on"> & Pick<T, "run">,
 ): T;
 export function defineOverride(
-  base: ITask | IResource | IMiddleware,
+  base: ITask | IResource | ITaskMiddleware | IResourceMiddleware,
   patch: Record<string, unknown>,
-): ITask | IResource | IMiddleware {
-  const { id: _ignored, ...rest } = (patch || {}) as any;
+): ITask | IResource | ITaskMiddleware | IResourceMiddleware {
+  const { id: _ignored, ...rest } = patch;
   // Ensure we never change the id, and merge overrides last
   return {
     ...(base as any),

@@ -3,16 +3,17 @@ import { EventManager } from "../../models/EventManager";
 import {
   defineResource,
   defineTask,
-  defineMiddleware,
   defineEvent,
   defineTag,
 } from "../../define";
-import { Logger, PrintStrategy } from "../../models";
+import { middleware } from "../../index";
+import { Logger, OnUnhandledError, PrintStrategy } from "../../models";
 
 describe("Store", () => {
   let eventManager: EventManager;
   let store: Store;
   let logger: Logger;
+  let onUnhandledError: OnUnhandledError;
 
   beforeEach(() => {
     eventManager = new EventManager();
@@ -21,7 +22,8 @@ describe("Store", () => {
       printStrategy: "pretty",
       bufferLogs: false,
     });
-    store = new Store(eventManager, logger);
+    onUnhandledError = jest.fn();
+    store = new Store(eventManager, logger, onUnhandledError);
   });
 
   it("should initialize the store with a root resource", () => {
@@ -68,7 +70,7 @@ describe("Store", () => {
   });
 
   it("should store a middleware and retrieve it", () => {
-    const testMiddleware = defineMiddleware({
+    const testMiddleware = middleware.task({
       id: "test.middleware",
       run: async ({ next }) => {
         return `Middleware: ${await next()}`;
@@ -76,8 +78,7 @@ describe("Store", () => {
     });
 
     store.storeGenericItem(testMiddleware);
-
-    expect(store.middlewares.has("test.middleware")).toBe(true);
+    expect(store.taskMiddlewares.has("test.middleware")).toBe(true);
   });
 
   it("should store an event and retrieve it", () => {
@@ -250,7 +251,7 @@ describe("Store", () => {
     const mw: any = { id: "mw", dependencies: { t: task } };
     // mark middleware as everywhere for tasks via the internal symbol
     (mw as any)[Symbol.for("middleware.everywhere.tasks")] = true;
-    (store as any).registry.middlewares.set("mw", {
+    (store as any).registry.taskMiddlewares.set("mw", {
       middleware: mw,
       computedDependencies: {},
     });
@@ -262,7 +263,7 @@ describe("Store", () => {
     const resource: any = { id: "res.dep", middleware: [], dependencies: {} };
     const mw: any = { id: "mw2", dependencies: { r: resource } };
     (mw as any)[Symbol.for("middleware.everywhere.resources")] = true;
-    (store as any).registry.middlewares.set("mw2", {
+    (store as any).registry.resourceMiddlewares.set("mw2", {
       middleware: mw,
       computedDependencies: {},
     });

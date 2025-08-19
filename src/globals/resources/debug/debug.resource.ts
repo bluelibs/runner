@@ -2,7 +2,10 @@ import { defineResource } from "../../../define";
 import { debugConfig } from "./debugConfig.resource";
 import { DebugFriendlyConfig } from "./types";
 import { globalEventListener } from "./globalEvent.hook";
-import { tasksAndResourcesTrackerMiddleware } from "./executionTracker.middleware";
+import {
+  tasksTrackerMiddleware,
+  resourcesTrackerMiddleware,
+} from "./executionTracker.middleware";
 import { globalTags } from "../../globalTags";
 import { hookCompletedListener, hookTriggeredListener } from "./hook.hook";
 import {
@@ -20,7 +23,8 @@ export const debugResource = defineResource({
       hookCompletedListener,
       middlewareTriggeredListener,
       middlewareCompletedListener,
-      tasksAndResourcesTrackerMiddleware.everywhere(),
+      tasksTrackerMiddleware.everywhere(),
+      resourcesTrackerMiddleware.everywhere(),
     ];
   },
   meta: {

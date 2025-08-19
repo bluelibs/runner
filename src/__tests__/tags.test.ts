@@ -1,14 +1,9 @@
-import {
-  defineTag,
-  defineTask,
-  defineResource,
-  defineEvent,
-  defineMiddleware,
-} from "../define";
+import { defineTag, defineTask, defineResource, defineEvent } from "../define";
 import { run } from "../run";
 import { TagType } from "../defs";
 import { globalResources } from "../globals/globalResources";
 import { globalTags } from "../globals/globalTags";
+import { middleware } from "../index";
 
 describe("Configurable Tags", () => {
   describe("Tag Definition", () => {
@@ -186,7 +181,7 @@ describe("Configurable Tags", () => {
 
       const middlewareExecutions: Array<{ taskId: string; config: any }> = [];
 
-      const performanceMiddleware = defineMiddleware({
+      const performanceMiddleware = middleware.task({
         id: "performance.middleware",
         run: async ({ task, next }) => {
           if (task?.definition.tags) {
@@ -282,7 +277,7 @@ describe("Configurable Tags", () => {
         id: "rate-limit",
       });
 
-      const rateLimitMiddleware = defineMiddleware({
+      const rateLimitMiddleware = middleware.task({
         id: "rate.limit.middleware",
         tags: [rateLimitTag.with({ requestsPerMinute: 60 })],
         run: async ({ next, task }) => {

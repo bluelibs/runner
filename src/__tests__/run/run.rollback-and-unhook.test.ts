@@ -1,5 +1,5 @@
-import { defineResource } from "../define";
-import { run } from "../run";
+import { defineResource } from "../../define";
+import { run } from "../../run";
 
 describe("run.ts rollback and unhooking", () => {
   it("rolls back initialized resources on init error and skips uninitialized", async () => {

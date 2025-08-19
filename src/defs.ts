@@ -14,7 +14,7 @@
  * - Safe overrides and strong typing around config and register mechanics
  */
 
-import { MiddlewareEverywhereOptions } from "./define";
+// no import from define to avoid circular types after refactor
 import {
   EnsureResponseSatisfiesContracts,
   HasContracts,
@@ -52,6 +52,13 @@ export const symbolResourceWithConfig: unique symbol = Symbol(
 );
 export const symbolEvent: unique symbol = Symbol("runner.event");
 export const symbolMiddleware: unique symbol = Symbol("runner.middleware");
+/** New brands for separated middleware kinds */
+export const symbolTaskMiddleware: unique symbol = Symbol(
+  "runner.taskMiddleware",
+);
+export const symbolResourceMiddleware: unique symbol = Symbol(
+  "runner.resourceMiddleware",
+);
 export const symbolMiddlewareConfigured: unique symbol = Symbol(
   "runner.middlewareConfigured",
 );
@@ -125,6 +132,14 @@ export interface ITag<TConfig = void, TEnforceContract = void>
   [symbolFilePath]: string;
   [symbolTag]: true;
 }
+
+type OverridableElements =
+  | IResource<any, any, any, any, any>
+  | ITask<any, any, any, any>
+  | ITaskMiddleware<any>
+  | IResourceMiddleware<any, any>
+  | IResourceWithConfig<any, any, any>
+  | IHook<any, any>;
 
 type ITagWithOptionalConfig<TValue> = ITag<any, TValue> & {
   readonly __configHasOnlyOptionalKeys: true;
@@ -275,14 +290,20 @@ export type RegisterableItems<T = any> =
   | IResource<{ [K in any]?: any }, any, any, any> // For optional config
   | ITask<any, any, any, any>
   | IHook<any, any>
-  | IMiddleware<any>
+  | ITaskMiddleware<any>
+  | IResourceMiddleware<any>
   | IEvent<any>
   | ITag<any, any>;
 
-export type MiddlewareAttachments =
-  | IMiddleware<void>
-  | IMiddleware<{ [K in any]?: any }>
-  | IMiddlewareConfigured<any>;
+export type TaskMiddlewareAttachments =
+  | ITaskMiddleware<void>
+  | ITaskMiddleware<{ [K in any]?: any }>
+  | ITaskMiddlewareConfigured<any>;
+
+export type ResourceMiddlewareAttachments =
+  | IResourceMiddleware<void>
+  | IResourceMiddleware<{ [K in any]?: any }>
+  | IResourceMiddlewareConfigured<any>;
 
 export interface ITaskDefinition<
   TInput = undefined,
@@ -298,7 +319,7 @@ export interface ITaskDefinition<
    */
   dependencies?: TDependencies | (() => TDependencies);
   /** Middleware applied around task execution. */
-  middleware?: MiddlewareAttachments[];
+  middleware?: TaskMiddlewareAttachments[];
   /** Optional metadata used for docs, filtering and tooling. */
   meta?: TMeta;
   /**
@@ -343,7 +364,7 @@ export interface ITask<
   id: string;
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
-  middleware: MiddlewareAttachments[];
+  middleware: TaskMiddlewareAttachments[];
   [symbolFilePath]: string;
   [symbolTask]: true;
   /** Return an optional dependency wrapper for this task. */
@@ -381,7 +402,6 @@ export interface IHook<
 > extends IHookDefinition<TDependencies, TOn, TMeta> {
   id: string;
   dependencies: TDependencies | (() => TDependencies);
-  computedDependencies?: DependencyValuesType<TDependencies>;
   [symbolFilePath]: string;
   [symbolHook]: true;
   tags: TagType[];
@@ -452,9 +472,9 @@ export interface IResourceDefinition<
    * Safe overrides to swap behavior while preserving identities. See
    * README: Overrides.
    */
-  overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
+  overrides?: Array<OverridableElements>;
   /** Middleware applied around init/dispose. */
-  middleware?: MiddlewareAttachments[];
+  middleware?: ResourceMiddlewareAttachments[];
   /**
    * Create a private, mutable context shared between `init` and `dispose`.
    */
@@ -493,8 +513,8 @@ export interface IResource<
   register:
     | Array<RegisterableItems>
     | ((config: TConfig) => Array<RegisterableItems>);
-  overrides: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
-  middleware: MiddlewareAttachments[];
+  overrides: Array<OverridableElements>;
+  middleware: ResourceMiddlewareAttachments[];
   [symbolFilePath]: string;
   [symbolIndexResource]: boolean;
   [symbolResource]: true;
@@ -588,7 +608,7 @@ export interface IEventEmission<TPayload = any> {
   tags: TagType[];
 }
 
-export interface IMiddlewareDefinition<
+export interface ITaskMiddlewareDefinition<
   TConfig = any,
   TDependencies extends DependencyMapType = any,
 > {
@@ -601,11 +621,10 @@ export interface IMiddlewareDefinition<
    */
   configSchema?: IValidationSchema<TConfig>;
   /**
-   * The middleware body, called with task/resource execution input.
-   * The response of the middleware should be void, but we allow any to be returned for convenience.
+   * The middleware body, called with task execution input.
    */
   run: (
-    input: IMiddlewareExecutionInput,
+    input: ITaskMiddlewareExecutionInput,
     dependencies: DependencyValuesType<TDependencies>,
     config: TConfig,
   ) => Promise<any>;
@@ -613,80 +632,124 @@ export interface IMiddlewareDefinition<
   tags?: TagType[];
 }
 
-export type MiddlewareInputMaybeTaskOrResource =
-  | {
-      task: {
-        definition: ITask<any, any, any, any>;
-        input: any;
-      };
-      resource?: never;
-    }
-  | {
-      resource: {
-        definition: IResource<any, any, any, any, any>;
-        config: any;
-      };
-      task?: never;
-    };
-
-export interface IMiddleware<
+export interface IResourceMiddlewareDefinition<
   TConfig = any,
   TDependencies extends DependencyMapType = any,
-> extends IMiddlewareDefinition<TConfig, TDependencies> {
-  [symbolMiddleware]: true;
+> {
+  id: string;
+  /** Static or lazy dependency map. */
+  dependencies?: TDependencies | ((config: TConfig) => TDependencies);
+  /**
+   * Optional validation schema for runtime config validation.
+   * When provided, middleware config will be validated when .with() is called.
+   */
+  configSchema?: IValidationSchema<TConfig>;
+  /**
+   * The middleware body, called with resource execution input.
+   */
+  run: (
+    input: IResourceMiddlewareExecutionInput,
+    dependencies: DependencyValuesType<TDependencies>,
+    config: TConfig,
+  ) => Promise<any>;
+  meta?: IMiddlewareMeta;
+  tags?: TagType[];
+}
+
+export interface ITaskMiddleware<
+  TConfig = any,
+  TDependencies extends DependencyMapType = any,
+> extends ITaskMiddlewareDefinition<TConfig, TDependencies> {
+  [symbolTaskMiddleware]: true;
   [symbolMiddlewareConfigured]?: boolean;
   [symbolMiddlewareEverywhereTasks]?:
     | boolean
     | ((task: ITask<any, any, any, any>) => boolean);
-  [symbolMiddlewareEverywhereResources]?: boolean;
 
   id: string;
   dependencies: TDependencies | (() => TDependencies);
-  /**
-   * Attach this middleware globally. Use options to scope to tasks/resources. This only works in `register: []` for resources.
-   * You cannot declare a middleware as global in the middleware definition of a `task` or `resource`.
-   */
-  everywhere(
-    config?: MiddlewareEverywhereOptions,
-  ): IMiddleware<TConfig, TDependencies>;
   /** Current configuration object (empty by default). */
   config: TConfig;
   /** Configure the middleware and return a marked, configured instance. */
-  with: (config: TConfig) => IMiddlewareConfigured<TConfig, TDependencies>;
+  with: (config: TConfig) => ITaskMiddlewareConfigured<TConfig, TDependencies>;
+  /** Attach globally to all tasks or filtered tasks. */
+  everywhere(
+    filter?: boolean | ((task: ITask<any, any, any, any>) => boolean),
+  ): ITaskMiddleware<TConfig, TDependencies>;
   [symbolFilePath]: string;
-  [symbolMiddleware]: true;
   tags: TagType[];
 }
 
-export interface IMiddlewareConfigured<
+export interface IResourceMiddleware<
   TConfig = any,
   TDependencies extends DependencyMapType = any,
-> extends IMiddleware<TConfig, TDependencies> {
+> extends IResourceMiddlewareDefinition<TConfig, TDependencies> {
+  [symbolResourceMiddleware]: true;
+  [symbolMiddlewareConfigured]?: boolean;
+  [symbolMiddlewareEverywhereResources]?:
+    | boolean
+    | ((resource: IResource<any, any, any, any, any>) => boolean);
+
+  id: string;
+  dependencies: TDependencies | (() => TDependencies);
+  /** Current configuration object (empty by default). */
+  config: TConfig;
+  /** Configure the middleware and return a marked, configured instance. */
+  with: (
+    config: TConfig,
+  ) => IResourceMiddlewareConfigured<TConfig, TDependencies>;
+  /** Attach globally to all resources or filtered resources. */
+  everywhere(
+    filter?:
+      | boolean
+      | ((resource: IResource<any, any, any, any, any>) => boolean),
+  ): IResourceMiddleware<TConfig, TDependencies>;
+  [symbolFilePath]: string;
+  tags: TagType[];
+}
+
+export interface ITaskMiddlewareConfigured<
+  TConfig = any,
+  TDependencies extends DependencyMapType = any,
+> extends ITaskMiddleware<TConfig, TDependencies> {
   [symbolMiddlewareConfigured]: true;
 }
 
-export interface IMiddlewareDefinitionConfigured<
+export interface IResourceMiddlewareConfigured<
+  TConfig = any,
+  TDependencies extends DependencyMapType = any,
+> extends IResourceMiddleware<TConfig, TDependencies> {
+  [symbolMiddlewareConfigured]: true;
+}
+
+export interface ITaskMiddlewareDefinitionConfigured<
   C extends Record<string, any> = {},
 > {
-  middleware: IMiddleware<C>;
+  middleware: ITaskMiddleware<C>;
   config?: C;
 }
 
-export interface IMiddlewareExecutionInput<
-  TTaskInput = any,
-  TResourceConfig = any,
+export interface IResourceMiddlewareDefinitionConfigured<
+  C extends Record<string, any> = {},
 > {
-  /** Task hook: present when wrapping a task run. */
-  task?: {
+  middleware: IResourceMiddleware<C>;
+  config?: C;
+}
+
+export interface ITaskMiddlewareExecutionInput<TTaskInput = any> {
+  /** Task hook */
+  task: {
     definition: ITask<TTaskInput, any, any, any>;
     input: TTaskInput;
   };
-  /** Resource hook: present when wrapping init/dispose. */
-  resource?: {
+  next: (taskInput?: TTaskInput) => Promise<any>;
+}
+
+export interface IResourceMiddlewareExecutionInput<TResourceConfig = any> {
+  /** Resource hook */
+  resource: {
     definition: IResource<TResourceConfig, any, any, any, any>;
     config: TResourceConfig;
   };
-  next: (
-    taskInputOrResourceConfig?: TTaskInput | TResourceConfig,
-  ) => Promise<any>;
+  next: (resourceConfig?: TResourceConfig) => Promise<any>;
 }

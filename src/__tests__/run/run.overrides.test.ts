@@ -1,13 +1,13 @@
-import { definitions } from "..";
 import {
   defineTask,
   defineResource,
   defineEvent,
-  defineMiddleware,
   defineOverride,
-} from "../define";
-import { DependencyNotFoundError } from "../errors";
-import { run } from "../run";
+} from "../../define";
+import { DependencyNotFoundError } from "../../errors";
+import { run } from "../../run";
+import * as definitions from "../../defs";
+import { middleware } from "../../index";
 
 describe("run.overrides", () => {
   // Tasks
@@ -173,38 +173,63 @@ describe("run.overrides", () => {
     expect(result.value).toBe("Task overridden");
   });
 
-  it("should work overriding a middleware", async () => {
-    const middleware = defineMiddleware({
-      id: "middleware",
+  it("should work overriding a middleware (task and resource)", async () => {
+    const mw = middleware.task({
+      id: "middleware.task",
       run: async ({ next }) => {
         return `Middleware: ${await next()}`;
       },
     });
 
-    const middlewareOverride = defineOverride(middleware, {
+    const mwr = middleware.resource({
+      id: "middleware.resource",
       run: async ({ next }) => {
-        return `Override: ${await next()}`;
+        return `Middleware: ${await next()}`;
+      },
+    });
+
+    const overrideMiddlewareTask = defineOverride(mw, {
+      run: async ({ next }) => {
+        return `Overridden Middleware: ${await next()}`;
+      },
+    });
+
+    const overrideMiddlewareResource = defineOverride(mwr, {
+      run: async ({ next }) => {
+        return `Overridden Middleware: ${await next()}`;
       },
     });
 
     const task = defineTask({
       id: "task",
-      middleware: [middleware],
+      middleware: [mw],
       run: async () => "Task executed",
     });
 
-    const resource = defineResource({
-      id: "resource",
-      register: [middleware, task],
+    const app = defineResource({
+      id: "app",
+      register: [mw, task, mwr],
+      middleware: [mwr],
       dependencies: { task },
-      overrides: [middlewareOverride],
-      async init(_, deps) {
-        return deps.task();
+      async init(_, { task }) {
+        const result = await task();
+        expect(result).toBe("Overridden Middleware: Task executed");
+        return "Resource initialized";
       },
     });
 
-    const result = await run(resource);
-    expect(result.value).toBe("Override: Task executed");
+    const wrapper = defineResource({
+      id: "wrapper",
+      register: [app],
+      overrides: [overrideMiddlewareTask, overrideMiddlewareResource],
+      dependencies: { app },
+      async init(_, deps) {
+        return deps.app;
+      },
+    });
+
+    const result = await run(wrapper);
+    expect(result.value).toBe("Overridden Middleware: Resource initialized");
   });
 
   it("should throw, when you try to override something unregistered", async () => {

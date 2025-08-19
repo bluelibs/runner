@@ -1,4 +1,13 @@
-import { definitions, task, resource, middleware, override } from "..";
+import {
+  definitions,
+  task,
+  resource,
+  middleware,
+  override,
+  hook,
+  run,
+} from "..";
+import { defineEvent, defineHook, defineResource } from "../define";
 
 describe("override() helper", () => {
   it("should preserve id and override run for tasks", async () => {
@@ -47,8 +56,8 @@ describe("override() helper", () => {
     expect(changed.meta?.description).toBe("Updated");
   });
 
-  it("should preserve id and override run for middleware", async () => {
-    const mw = middleware({
+  it("should preserve id and override run for task middleware", async () => {
+    const mw = middleware.task({
       id: "test.middleware",
       run: async ({ next }) => {
         return next();
@@ -65,10 +74,10 @@ describe("override() helper", () => {
     expect(changed).not.toBe(mw);
     expect(changed.id).toBe(mw.id);
 
-    const input = {
+    const input: definitions.ITaskMiddlewareExecutionInput<any> = {
       task: { definition: undefined as any, input: 123 },
       next: async () => 456,
-    } as definitions.IMiddlewareExecutionInput<any, any>;
+    } as any;
 
     const baseResult = await mw.run(input, {} as any, undefined as any);
     const changedResult = await changed.run(input, {} as any, undefined as any);
@@ -79,7 +88,7 @@ describe("override() helper", () => {
   it("should be type-safe: cannot override id on task/resource/middleware", () => {
     const t = task({ id: "tt", run: async () => undefined });
     const r = resource({ id: "rr", init: async () => undefined });
-    const m = middleware({ id: "mm", run: async ({ next }) => next() });
+    const m = middleware.task({ id: "mm", run: async ({ next }) => next() });
 
     // @ts-expect-error id cannot be overridden
     override(t, { id: "new" });
@@ -93,12 +102,41 @@ describe("override() helper", () => {
     expect(true).toBe(true);
   });
 
-  it("should handle undefined patch (robustness)", () => {
-    const base = task({ id: "robust.task", run: async () => 1 });
-    const changed = (override as any)(base, undefined);
+  it("should work correctly with hook overrides", async () => {
+    const myEvent = defineEvent({ id: "test.event" });
 
-    expect(changed).not.toBe(base);
-    expect(changed.id).toBe(base.id);
-    expect(changed.run).toBe(base.run);
+    let value = 0;
+    const hook = defineHook({
+      id: "test.hook",
+      on: myEvent,
+      run: async () => (value = 1),
+    });
+
+    const changed = override(hook, {
+      run: async () => (value = 2),
+      meta: {
+        title: "Updated",
+      },
+    });
+
+    expect(changed).not.toBe(hook);
+    expect(changed.id).toBe(hook.id);
+    const app = defineResource({
+      id: "app",
+      register: [hook, myEvent],
+      dependencies: { myEvent },
+      async init(_, { myEvent }) {
+        await myEvent();
+      },
+    });
+
+    const wrap = defineResource({
+      id: "wrap",
+      register: [app],
+      overrides: [changed],
+    });
+
+    await run(wrap);
+    expect(value).toBe(2);
   });
 });

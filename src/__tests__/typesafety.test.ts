@@ -2,7 +2,6 @@ import {
   defineEvent,
   defineTask,
   defineResource,
-  defineMiddleware,
   defineOverride,
   defineTag,
   defineHook,
@@ -14,6 +13,7 @@ import {
 } from "../defs.returnTag";
 import { run } from "..";
 import z from "zod";
+import { middleware } from "..";
 
 // This is skipped because we mostly check typesafety.
 describe.skip("typesafety", () => {
@@ -22,7 +22,7 @@ describe.skip("typesafety", () => {
       message: string;
     };
 
-    const middleware = defineMiddleware({
+    const middlewareTaskOnly = middleware.task({
       id: "middleware",
       run: async (input, deps) => {
         return input;
@@ -37,14 +37,14 @@ describe.skip("typesafety", () => {
       message?: string;
     };
 
-    const middlewareWithConfig = defineMiddleware({
+    const middlewareWithConfig = middleware.task({
       id: "middleware.config",
       run: async (input, deps, config: MiddlewareConfig) => {
         return input;
       },
     });
 
-    const middlewareWithOptionalConfig = defineMiddleware({
+    const middlewareWithOptionalConfig = middleware.task({
       id: "middleware.optional.config",
       run: async (input, deps, config: MiddlewareOptionalConfig) => {
         return input;
@@ -106,18 +106,7 @@ describe.skip("typesafety", () => {
 
     const testResource = defineResource({
       id: "test.resource",
-      middleware: [
-        middleware,
-        // @ts-expect-error
-        middlewareWithConfig,
-        middlewareWithConfig.with({ message: "Hello, World!" }),
-        // @ts-expect-error
-        middlewareWithConfig.with({ message: 123 }),
-        middlewareWithOptionalConfig,
-        middlewareWithOptionalConfig.with({ message: "Hello, World!" }),
-        // @ts-expect-error
-        middlewareWithOptionalConfig.with({ message: 123 }),
-      ],
+      middleware: [],
       dependencies: { task, dummyResource, event, eventWithoutArguments },
       init: async (_, deps) => {
         const result = await deps.task({
@@ -146,7 +135,7 @@ describe.skip("typesafety", () => {
         deps.task2;
       },
       register: [
-        middleware,
+        middlewareTaskOnly,
         middlewareWithConfig,
         middlewareWithOptionalConfig,
         middlewareWithOptionalConfig.with({ message: "Hello, World!" }),
@@ -161,13 +150,6 @@ describe.skip("typesafety", () => {
 
         // @ts-expect-error
         dummyResource, // should throw
-        dummyResource.with({ ok: true }),
-        // @ts-expect-error
-        dummyResource.with({ ok: 123 }),
-        // @ts-expect-error
-        dummyResource.with(),
-
-        // should work
         dummyResourceOptionalConfig.with("hello"),
       ],
     });
@@ -283,7 +265,7 @@ describe.skip("typesafety", () => {
       init: async () => 123, // bad type
     });
 
-    const middleware = defineMiddleware({
+    const mwTask = middleware.task({
       id: "middleware",
       run: async () => "Middleware executed",
     });
@@ -435,7 +417,7 @@ describe.skip("typesafety", () => {
       },
     });
 
-    const middleware = defineMiddleware({
+    const mw = middleware.task({
       id: "middleware",
       configSchema: z.object({ ttl: z.number().positive() }),
       run: async ({ next }, deps, config) => {

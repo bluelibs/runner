@@ -55,8 +55,8 @@ export const routeRegistrationHook = hook({
 
     allTasks.forEach((taskElement) => {
       const task = taskElement.task;
-      const extracted = httpTag.extract(task.meta?.tags || []);
-      if (!extracted?.config) return;
+      const config = httpTag.extract(task);
+      if (!config) return;
 
       const {
         method,
@@ -69,7 +69,7 @@ export const routeRegistrationHook = hook({
         querySchema,
         requestBodySchema,
         responseSchema,
-      } = extracted.config;
+      } = config;
 
       if (!method || !path) return;
 

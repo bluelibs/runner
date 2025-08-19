@@ -1,6 +1,5 @@
 import { AsyncLocalStorage } from "async_hooks";
-import { defineMiddleware } from "./define";
-import { IMiddleware, IMiddlewareConfigured } from "./defs";
+import { ITaskMiddlewareConfigured } from "./defs";
 import { requireContextMiddleware } from "./globals/middleware/requireContext.middleware";
 
 /**
@@ -31,7 +30,7 @@ export interface Context<T> {
    */
   require<K extends keyof T = never>(
     keys?: K[],
-  ): IMiddlewareConfigured<{ context: Context<T> }>;
+  ): ITaskMiddlewareConfigured<{ context: Context<T> }>;
 }
 
 // The internal storage maps Context identifiers (symbols) to their values
@@ -73,7 +72,7 @@ export function createContext<T>(name: string = "runner.context"): Context<T> {
    * Generates a middleware that guarantees the context exists (and optionally
    * enforces that certain keys are present on the context object).
    */
-  function require(): IMiddlewareConfigured {
+  function require(): ITaskMiddlewareConfigured {
     return requireContextMiddleware.with({ context: this as Context<T> });
   }
 

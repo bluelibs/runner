@@ -37,8 +37,6 @@ export const middlewareCompletedListener = defineHook({
     debugConfig,
   },
   run: async (event, deps) => {
-    if (!deps) return;
-
     if (hasSystemTag(event.data.middleware)) {
       return;
     }

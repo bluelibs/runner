@@ -1,9 +1,11 @@
 import {
   IResource,
-  IMiddleware,
+  ITaskMiddleware,
+  IResourceMiddleware,
   ITask,
   IResourceWithConfig,
   RegisterableItems,
+  IHook,
 } from "../defs";
 import * as utils from "../define";
 import { DependencyNotFoundError } from "../errors";
@@ -12,7 +14,12 @@ import { StoreRegistry } from "./StoreRegistry";
 export class OverrideManager {
   public overrides: Map<
     string,
-    IResource | IMiddleware | ITask | IResourceWithConfig
+    | IResource
+    | ITaskMiddleware
+    | IResourceMiddleware
+    | ITask
+    | IResourceWithConfig
+    | IHook
   > = new Map();
 
   public overrideRequests: Set<{
@@ -49,10 +56,14 @@ export class OverrideManager {
         hasAnyItem = this.registry.tasks.has(override.id);
       } else if (utils.isResource(override)) {
         hasAnyItem = this.registry.resources.has(override.id);
-      } else if (utils.isMiddleware(override)) {
-        hasAnyItem = this.registry.middlewares.has(override.id);
+      } else if (utils.isTaskMiddleware(override)) {
+        hasAnyItem = this.registry.taskMiddlewares.has(override.id);
+      } else if (utils.isResourceMiddleware(override)) {
+        hasAnyItem = this.registry.resourceMiddlewares.has(override.id);
       } else if (utils.isResourceWithConfig(override)) {
         hasAnyItem = this.registry.resources.has(override.resource.id);
+      } else if (utils.isHook(override)) {
+        hasAnyItem = this.registry.hooks.has(override.id);
       }
 
       if (!hasAnyItem) {
@@ -66,13 +77,17 @@ export class OverrideManager {
 
     for (const override of this.overrides.values()) {
       if (utils.isTask(override)) {
-        this.registry.storeTask(override, false);
+        this.registry.storeTask(override, "override");
       } else if (utils.isResource(override)) {
-        this.registry.storeResource(override, false);
-      } else if (utils.isMiddleware(override)) {
-        this.registry.storeMiddleware(override, false);
+        this.registry.storeResource(override, "override");
+      } else if (utils.isTaskMiddleware(override)) {
+        this.registry.storeTaskMiddleware(override, "override");
+      } else if (utils.isResourceMiddleware(override)) {
+        this.registry.storeResourceMiddleware(override, "override");
       } else if (utils.isResourceWithConfig(override)) {
-        this.registry.storeResourceWithConfig(override, false);
+        this.registry.storeResourceWithConfig(override, "override");
+      } else if (utils.isHook(override)) {
+        this.registry.storeHook(override, "override");
       }
     }
   }

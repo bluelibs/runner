@@ -1,5 +1,5 @@
-import { defineResource } from "../define";
-import { run } from "../run";
+import { defineResource } from "../../define";
+import { run } from "../../run";
 
 describe("run.ts shutdown hooks & error boundary", () => {
   it("installs process safety nets and calls onUnhandledError for uncaughtException", async () => {

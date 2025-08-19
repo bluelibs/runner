@@ -1,9 +1,5 @@
-import {
-  defineTask,
-  defineResource,
-  defineMiddleware,
-  defineEvent,
-} from "../../define";
+import { defineTask, defineResource, defineEvent } from "../../define";
+import { middleware } from "../../index";
 import { symbolFilePath } from "../../defs";
 import { getCallerFile } from "../../tools/getCallerFile";
 
@@ -29,7 +25,7 @@ describe("getCallerFile", () => {
       init: async () => {},
     });
 
-    const middleware = defineMiddleware({
+    const mw = middleware.task({
       id: "middleware",
       run: async () => {},
     });
@@ -40,12 +36,12 @@ describe("getCallerFile", () => {
 
     expect((task as any)[symbolFilePath]).toBeDefined();
     expect((resource as any)[symbolFilePath]).toBeDefined();
-    expect((middleware as any)[symbolFilePath]).toBeDefined();
+    expect((mw as any)[symbolFilePath]).toBeDefined();
     expect((event as any)[symbolFilePath]).toBeDefined();
 
     expect((task as any)[symbolFilePath]).toContain("getCallerFile.test");
     expect((resource as any)[symbolFilePath]).toContain("getCallerFile.test");
-    expect((middleware as any)[symbolFilePath]).toContain("getCallerFile.test");
+    expect((mw as any)[symbolFilePath]).toContain("getCallerFile.test");
     expect((event as any)[symbolFilePath]).toContain("getCallerFile.test");
   });
 });

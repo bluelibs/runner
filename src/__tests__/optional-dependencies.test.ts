@@ -1,3 +1,11 @@
+import {
+  defineEvent,
+  defineHook,
+  defineResource,
+  defineResourceMiddleware,
+  defineTask,
+  defineTaskMiddleware,
+} from "../define";
 import { resource, task, run, middleware, event, definitions } from "../index";
 
 describe("Optional dependencies", () => {
@@ -116,15 +124,17 @@ describe("Optional dependencies", () => {
       },
     });
 
-    const mw = middleware({
-      id: "tests.optional.middleware",
-      dependencies: {
-        target: target.optional(),
-      },
-      async run(input) {
-        return input.next();
-      },
-    }).everywhere({ tasks: true, resources: false });
+    const mw = middleware
+      .task({
+        id: "tests.optional.middleware",
+        dependencies: {
+          target: target.optional(),
+        },
+        async run({ next }) {
+          return next();
+        },
+      })
+      .everywhere(true);
 
     const app = resource({
       id: "tests.optional.middleware.app",
@@ -245,5 +255,162 @@ describe("Optional dependencies", () => {
     expect(typeof rr.runTask).toBe("function");
     // We still validate by running a no-op task without throwing
     await rr.runTask(usesTask);
+  });
+
+  it("task middleware should be able to depend on optional dependencies", async () => {
+    const nonRegisteredResource = defineResource({
+      id: "non.registered.resource",
+      init: async () => true,
+    });
+    const nonRegisteredTask = defineTask({
+      id: "non.registered.task",
+      run: async () => "Task executed",
+    });
+
+    const registeredResource = defineResource({
+      id: "registered.resource",
+      init: async () => true,
+    });
+    const registeredTask = defineTask({
+      id: "registered.task",
+      run: async () => "Task executed",
+    });
+
+    const mw = defineTaskMiddleware({
+      id: "everywhere.middleware",
+      dependencies: {
+        registeredResource,
+        registeredTask,
+        nonRegisteredResource: nonRegisteredResource.optional(),
+        nonRegisteredTask: nonRegisteredTask.optional(),
+      },
+      run: async ({ next, task }, deps) => {
+        expect(deps.registeredResource).toBeDefined();
+        expect(deps.registeredTask).toBeDefined();
+        expect(deps.nonRegisteredResource).toBeUndefined();
+        expect(deps.nonRegisteredTask).toBeUndefined();
+        return "Intercepted: " + (await next(task.input));
+      },
+    });
+
+    const middlewarableTask = defineTask({
+      id: "middlewarable.task",
+      run: async (input: string) => input,
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [
+        mw.everywhere(true),
+        registeredTask,
+        registeredResource,
+        middlewarableTask,
+      ],
+    });
+
+    const r = await run(app);
+    const result = await r.runTask(middlewarableTask, "Task executed");
+    expect(result).toBe("Intercepted: Task executed");
+  });
+
+  it("resource middleware should be able to depend on optional dependencies", async () => {
+    const nonRegisteredResource = defineResource({
+      id: "non.registered.resource",
+      init: async () => true,
+    });
+    const nonRegisteredTask = defineTask({
+      id: "non.registered.task",
+      run: async () => "Task executed",
+    });
+
+    const registeredResource = defineResource({
+      id: "registered.resource",
+      init: async () => true,
+    });
+    const registeredTask = defineTask({
+      id: "registered.task",
+      run: async () => "Task executed",
+    });
+
+    const mw = defineResourceMiddleware({
+      id: "everywhere.middleware",
+      dependencies: {
+        registeredResource,
+        registeredTask,
+        nonRegisteredResource: nonRegisteredResource.optional(),
+        nonRegisteredTask: nonRegisteredTask.optional(),
+      },
+      run: async ({ next, resource }, deps) => {
+        expect(deps.registeredResource).toBeDefined();
+        expect(deps.registeredTask).toBeDefined();
+        expect(deps.nonRegisteredResource).toBeUndefined();
+        expect(deps.nonRegisteredTask).toBeUndefined();
+        return "Intercepted: " + (await next());
+      },
+    });
+
+    const middlewarableResource = defineResource({
+      id: "middlewarable.resource",
+      init: async () => "Hello",
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [
+        mw.everywhere(true),
+        registeredTask,
+        registeredResource,
+        middlewarableResource,
+      ],
+    });
+
+    const r = await run(app);
+    const result = await r.getResourceValue(middlewarableResource);
+    expect(result).toBe("Intercepted: Hello");
+  });
+
+  it("hooks should be able to depend on optional dependencies", async () => {
+    const nonRegisteredResource = defineResource({
+      id: "non.registered.resource",
+      init: async () => true,
+    });
+
+    const registeredResource = defineResource({
+      id: "registered.resource",
+      init: async () => true,
+    });
+
+    const event = defineEvent({
+      id: "event",
+    });
+
+    let inHook = false;
+    const hook = defineHook({
+      id: "hook",
+      on: event,
+      dependencies: {
+        registeredResource: registeredResource,
+        nonRegisteredResource: nonRegisteredResource.optional(),
+      },
+      run: async (event, deps) => {
+        expect(deps.registeredResource).toBeDefined();
+        expect(deps.nonRegisteredResource).toBeUndefined();
+        inHook = true;
+      },
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [hook, registeredResource, event],
+      dependencies: {
+        event,
+      },
+      async init(_, { event }) {
+        await event();
+      },
+    });
+
+    const r = await run(app);
+    expect(inHook).toBe(true);
   });
 });

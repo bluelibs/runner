@@ -1,7 +1,10 @@
 import { DependencyMapType, ITask, IResource } from "../defs";
 import { EventManager } from "./EventManager";
 import { Store } from "./Store";
-import { MiddlewareStoreElementType } from "./StoreTypes";
+import {
+  TaskMiddlewareStoreElementType,
+  ResourceMiddlewareStoreElementType,
+} from "./StoreTypes";
 import { Logger } from "./Logger";
 import { globalEvents } from "../globals/globalEvents";
 import { ValidationError } from "../errors";
@@ -55,7 +58,7 @@ export class MiddlewareManager {
         return rawResult;
       } catch (error: unknown) {
         try {
-          await this.store.onUnhandledError?.({
+          await this.store.onUnhandledError({
             error,
             kind: "task",
             source: task.id,
@@ -82,9 +85,7 @@ export class MiddlewareManager {
     // layer task middlewares (global first, then local), closest to the task runs last
     for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
       const middleware = createdMiddlewares[i];
-      const storeMiddleware = this.store.middlewares.get(
-        middleware.id,
-      ) as MiddlewareStoreElementType;
+      const storeMiddleware = this.store.taskMiddlewares.get(middleware.id)!;
 
       const nextFunction = next;
       next = async (input) => {
@@ -99,6 +100,8 @@ export class MiddlewareManager {
             },
             middleware.id,
           );
+          // Attention: we use the store middleware run, because it might have been overidden.
+          // All middleware run() functions should be common accross all tasks.
           result = await storeMiddleware.middleware.run(
             {
               task: {
@@ -107,22 +110,22 @@ export class MiddlewareManager {
               },
               next: nextFunction,
             },
-            storeMiddleware.computedDependencies,
+            storeMiddleware?.computedDependencies as DependencyMapType,
             middleware.config,
           );
           await this.eventManager.emit(
             globalEvents.middlewareCompleted,
             {
               kind: "task",
-              middleware: middleware as any,
-              targetId: task.id as any,
+              middleware: middleware,
+              targetId: task.id,
             },
             middleware.id,
           );
           return result;
         } catch (error: unknown) {
           try {
-            await this.store.onUnhandledError?.({
+            await this.store.onUnhandledError({
               error,
               kind: "middleware",
               source: middleware.id,
@@ -185,9 +188,9 @@ export class MiddlewareManager {
     const createdMiddlewares = this.getApplicableResourceMiddlewares(resource);
     for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
       const middleware = createdMiddlewares[i];
-      const storeMiddleware = this.store.middlewares.get(
+      const storeMiddleware = this.store.resourceMiddlewares.get(
         middleware.id,
-      ) as MiddlewareStoreElementType;
+      )!;
 
       const nextFunction = next;
       next = async (cfg: C) => {
@@ -224,7 +227,7 @@ export class MiddlewareManager {
           return result as any;
         } catch (error: unknown) {
           try {
-            await this.store.onUnhandledError?.({
+            await this.store.onUnhandledError({
               error,
               kind: "resourceInit",
               source: resource.id,

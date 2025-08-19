@@ -2,12 +2,13 @@ import {
   defineTask,
   defineResource,
   defineEvent,
-  defineMiddleware,
   defineHook,
   defineTag,
 } from "../define";
+import { middleware, task } from "..";
 import { run } from "../run";
 import { Errors } from "..";
+import { MiddlewareNotRegisteredError } from "../errors";
 
 const {
   RuntimeError,
@@ -215,12 +216,11 @@ describe("Errors", () => {
   });
 
   it("Should throw duplicate error for middlewares with the same id", async () => {
-    const middleware1 = defineMiddleware({
+    const middleware1 = middleware.task({
       id: "middlewarex",
       run: async () => {},
     });
-
-    const middleware2 = defineMiddleware({
+    const middleware2 = middleware.task({
       id: "middlewarex",
       run: async () => {},
     });
@@ -310,12 +310,54 @@ describe("Errors", () => {
     );
   });
 
-  it("should throw error, when a double global() is used on a middleware", async () => {
-    const first = defineMiddleware({
-      id: "x",
+  it("should throw error when a task depends on a non-registered middleware", async () => {
+    const mw = middleware.task({ id: "mw", run: async () => {} });
+    const task = defineTask({
+      id: "test.task",
+      middleware: [mw],
       run: async () => {},
-    }).everywhere();
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await task();
+      },
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      new MiddlewareNotRegisteredError("task", "test.task", "mw").message,
+    );
+  });
+
+  it("should throw error when a resource depends on a non-registered middleware", async () => {
+    const mw = middleware.resource({ id: "mw", run: async () => {} });
+
+    const app = defineResource({
+      id: "app",
+      middleware: [mw],
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      new MiddlewareNotRegisteredError("resource", "app", "mw").message,
+    );
+  });
+
+  it("should throw error, when a double global() is used on a middleware", async () => {
+    const first = middleware
+      .task({ id: "x", run: async () => {} })
+      .everywhere();
     expect(() => first.everywhere()).toThrow(
+      new MiddlewareAlreadyGlobalError("x").message,
+    );
+
+    const resourceMiddleware = middleware
+      .resource({ id: "x", run: async () => {} })
+      .everywhere();
+
+    expect(() => resourceMiddleware.everywhere()).toThrow(
       new MiddlewareAlreadyGlobalError("x").message,
     );
   });

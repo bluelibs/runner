@@ -101,6 +101,16 @@ export class MiddlewareAlreadyGlobalError extends RuntimeError {
   }
 }
 
+export class MiddlewareNotRegisteredError extends RuntimeError {
+  constructor(type: "task" | "resource", source: string, middlewareId: string) {
+    super(
+      `Middleware inside ${type} "${source}" depends on "${middlewareId}" but it's not registered. Did you forget to register it?`,
+    );
+
+    this.name = `MiddlewareNotRegisteredError: ${type} ${source} ${middlewareId}`;
+  }
+}
+
 /**
  * Error thrown when a tag is not found in the registry
  */

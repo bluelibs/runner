@@ -2,7 +2,8 @@ import { MiddlewareManager } from "../../models/MiddlewareManager";
 import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { Logger } from "../../models/Logger";
-import { defineTask, defineMiddleware, defineResource } from "../../define";
+import { defineTask, defineResource } from "../../define";
+import { middleware, OnUnhandledError } from "../../index";
 import { globalEvents } from "../../globals/globalEvents";
 
 describe("MiddlewareManager", () => {
@@ -10,7 +11,7 @@ describe("MiddlewareManager", () => {
   let eventManager: EventManager;
   let logger: Logger;
   let manager: MiddlewareManager;
-
+  let onUnhandledError: OnUnhandledError;
   beforeEach(() => {
     eventManager = new EventManager();
     logger = new Logger({
@@ -18,14 +19,15 @@ describe("MiddlewareManager", () => {
       printStrategy: "pretty",
       bufferLogs: false,
     });
-    store = new Store(eventManager, logger);
+    onUnhandledError = jest.fn();
+    store = new Store(eventManager, logger, onUnhandledError);
     manager = new MiddlewareManager(store, eventManager, logger);
   });
 
   it("composes task runner with interceptors inside middleware and preserves order", async () => {
     const order: string[] = [];
 
-    const m1 = defineMiddleware({
+    const m1 = middleware.task({
       id: "m1",
       run: async ({ next, task }) => {
         order.push("m1:before");
@@ -35,7 +37,7 @@ describe("MiddlewareManager", () => {
       },
     });
 
-    const m2 = defineMiddleware({
+    const m2 = middleware.task({
       id: "m2",
       run: async ({ next, task }) => {
         order.push("m2:before");
@@ -65,8 +67,14 @@ describe("MiddlewareManager", () => {
         },
       ],
     });
-    store.middlewares.set(m1.id, { middleware: m1, computedDependencies: {} });
-    store.middlewares.set(m2.id, { middleware: m2, computedDependencies: {} });
+    store.taskMiddlewares.set(m1.id, {
+      middleware: m1,
+      computedDependencies: {},
+    } as any);
+    store.taskMiddlewares.set(m2.id, {
+      middleware: m2,
+      computedDependencies: {},
+    } as any);
 
     const runner = manager.composeTaskRunner(task);
     const result = await runner(1);
@@ -97,21 +105,21 @@ describe("MiddlewareManager", () => {
       calls.push("completed");
     });
 
-    const mLocal = defineMiddleware({
+    const mLocal = middleware.task({
       id: "shared",
       run: async ({ next, task }) => {
         const res = await next(task?.input);
         return (res as number) + 3;
       },
     });
-    const mOther = defineMiddleware({
+    const mOther = middleware.task({
       id: "other",
       run: async ({ next, task }) => {
         const res = await next(task?.input);
         return (res as number) * 2;
       },
     });
-    const mGlobalSameId = defineMiddleware({
+    const mGlobalSameId = middleware.task({
       id: "shared",
       run: async ({ next, task }) => next(task?.input),
     });
@@ -128,14 +136,14 @@ describe("MiddlewareManager", () => {
       computedDependencies: {},
       isInitialized: true,
     });
-    store.middlewares.set(mLocal.id, {
+    store.taskMiddlewares.set(mLocal.id, {
       middleware: mLocal,
       computedDependencies: {},
-    });
-    store.middlewares.set(mOther.id, {
+    } as any);
+    store.taskMiddlewares.set(mOther.id, {
       middleware: mOther,
       computedDependencies: {},
-    });
+    } as any);
 
     // Stub global middleware provider to return one with same id as local; manager should dedupe it
     const spy = jest
@@ -160,16 +168,17 @@ describe("MiddlewareManager", () => {
 
   it("routes errors from failing middleware and still emits completed with error", async () => {
     const errors: any[] = [];
-    store.onUnhandledError = async (e) => {
+    const store = new Store(eventManager, logger, (e) => {
       errors.push(e);
-    };
+    });
+    const manager = new MiddlewareManager(store, eventManager, logger);
 
     const calls: Array<{ kind: string; error?: any }> = [];
     eventManager.addListener(globalEvents.middlewareCompleted, async (e) => {
       calls.push({ kind: (e.data as any).kind, error: (e.data as any).error });
     });
 
-    const failing = defineMiddleware({
+    const failing = middleware.task({
       id: "failing",
       run: async () => {
         throw new Error("boom");
@@ -185,10 +194,10 @@ describe("MiddlewareManager", () => {
       computedDependencies: {},
       isInitialized: true,
     });
-    store.middlewares.set(failing.id, {
+    store.taskMiddlewares.set(failing.id, {
       middleware: failing,
       computedDependencies: {},
-    });
+    } as any);
 
     const runner = manager.composeTaskRunner(task);
     await expect(runner(undefined as any)).rejects.toThrow("boom");
@@ -204,7 +213,7 @@ describe("MiddlewareManager", () => {
   });
 
   it("wraps resource init with middleware and returns modified result", async () => {
-    const m = defineMiddleware({
+    const m = middleware.resource({
       id: "rm",
       run: async ({ next, resource }) => {
         const result = await next(resource?.config);
@@ -218,7 +227,10 @@ describe("MiddlewareManager", () => {
       init: async (cfg) => cfg.n * 2,
     });
 
-    store.middlewares.set(m.id, { middleware: m, computedDependencies: {} });
+    store.resourceMiddlewares.set(m.id, {
+      middleware: m,
+      computedDependencies: {},
+    } as any);
 
     const result = await manager.runResourceInit(resource, { n: 5 }, {}, {});
     // base = 10, middleware adds 10 => 20

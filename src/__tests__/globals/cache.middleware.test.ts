@@ -1,11 +1,13 @@
-import { defineTask, defineResource } from "../../define";
+import { defineResource, defineTask } from "../../define";
 import { run } from "../../run";
 import {
   cacheResource,
-  cacheMiddleware,
   cacheFactoryTask,
+  cacheMiddleware,
   ICacheInstance,
 } from "../../globals/middleware/cache.middleware";
+import { globals } from "../..";
+import { middleware } from "../..";
 import { LRUCache } from "lru-cache";
 
 describe("Caching System", () => {
@@ -741,29 +743,6 @@ describe("Caching System", () => {
       });
 
       await expect(run(app)).rejects.toThrow();
-    });
-  });
-
-  describe("Validation", () => {
-    it("should throw error when used without task context", async () => {
-      const invalidResource = defineResource({
-        id: "invalid.resource",
-        middleware: [cacheMiddleware],
-        init: async () => "test",
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [cacheResource, cacheMiddleware, invalidResource],
-        dependencies: { invalidResource },
-        async init(_, { invalidResource }) {
-          // Should throw during initialization
-        },
-      });
-
-      await expect(run(app)).rejects.toThrow(
-        "Cache middleware can only be used in tasks",
-      );
     });
   });
 });

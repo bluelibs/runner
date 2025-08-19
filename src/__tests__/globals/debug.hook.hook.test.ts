@@ -40,7 +40,7 @@ describe("globals.resources.debug.hook listeners", () => {
         logEventEmissionInput: true,
       },
     });
-    console.log(logs);
+
     await result.emitEvent(event, { value: "test" });
     const logsOfInterest = logs.filter(
       (log) => log.source === globalEventListener.id,

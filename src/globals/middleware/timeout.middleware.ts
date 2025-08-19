@@ -1,4 +1,4 @@
-import { defineMiddleware } from "../../define";
+import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
 
 export interface TimeoutMiddlewareConfig {
   /**
@@ -8,10 +8,10 @@ export interface TimeoutMiddlewareConfig {
   ttl: number;
 }
 
-export const timeoutMiddleware = defineMiddleware({
-  id: "globals.middleware.timeout",
-  async run({ task, resource, next }, _deps, config: TimeoutMiddlewareConfig) {
-    const input = task ? task.input : resource?.config;
+export const timeoutTaskMiddleware = defineTaskMiddleware({
+  id: "globals.middleware.timeout.task",
+  async run({ task, next }, _deps, config: TimeoutMiddlewareConfig) {
+    const input = task?.input;
 
     const ttl = Math.max(0, config.ttl);
     const message = `Operation timed out after ${ttl}ms`;
@@ -41,6 +41,33 @@ export const timeoutMiddleware = defineMiddleware({
     });
 
     // Race between the actual operation and the timeout
-    return Promise.race([next(input), timeoutPromise]);
+    return Promise.race([next(input as any), timeoutPromise]);
+  },
+});
+
+export const timeoutResourceMiddleware = defineResourceMiddleware({
+  id: "globals.middleware.timeout.resource",
+  async run({ resource, next }, _deps, config: TimeoutMiddlewareConfig) {
+    const input = resource?.config;
+    const ttl = Math.max(0, config.ttl);
+    const message = `Operation timed out after ${ttl}ms`;
+    if (ttl === 0) {
+      const error = new Error(message);
+      (error as any).name = "TimeoutError";
+      throw error;
+    }
+    const controller = new AbortController();
+    const timeoutPromise = new Promise((_, reject) => {
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+        const error = new Error(message);
+        (error as any).name = "TimeoutError";
+        reject(error);
+      }, ttl);
+      controller.signal.addEventListener("abort", () => {
+        clearTimeout(timeoutId);
+      });
+    });
+    return Promise.race([next(input as any), timeoutPromise]);
   },
 });

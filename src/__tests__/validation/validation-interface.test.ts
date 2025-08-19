@@ -2,11 +2,11 @@ import {
   defineTask,
   defineResource,
   defineEvent,
-  defineMiddleware,
   defineHook,
-} from "../define";
-import { run } from "../run";
-import { IValidationSchema } from "../defs";
+  defineTaskMiddleware,
+} from "../../define";
+import { run } from "../../run";
+import { IValidationSchema } from "../../defs";
 
 // Simple mock validation schemas for testing the interface
 class MockValidationSchema<T> implements IValidationSchema<T> {
@@ -333,7 +333,7 @@ describe("Generic Validation Interface", () => {
         return obj;
       });
 
-      const timingMiddleware = defineMiddleware({
+      const timingMiddleware = defineTaskMiddleware({
         id: "middleware.timing",
         configSchema: configSchema,
         run: async ({ next }, _, config) => {
@@ -356,7 +356,7 @@ describe("Generic Validation Interface", () => {
         timeout: "number",
       });
 
-      const timingMiddleware = defineMiddleware({
+      const timingMiddleware = defineTaskMiddleware({
         id: "middleware.timing.valid",
         configSchema: configSchema,
         run: async ({ next }, _, config) => {
@@ -411,7 +411,7 @@ describe("Generic Validation Interface", () => {
         id: "event.noValidation",
       });
 
-      const middleware = defineMiddleware({
+      const middleware = defineTaskMiddleware({
         id: "middleware.noValidation",
         run: async ({ next }) => next(),
       });

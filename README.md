@@ -400,31 +400,27 @@ const emergencyHandler = hook({
 
 Middleware wraps around your tasks and resources, adding cross-cutting concerns without polluting your business logic.
 
+Note: Middleware is now split by target. Use `middleware.task(...)` for task middleware and `middleware.resource(...)` for resource middleware.
+
 ```typescript
-// This is a middleware that accepts a config
-const authMiddleware = middleware({
+import { middleware } from "@bluelibs/runner";
+
+// Task middleware with config
+const authMiddleware = middleware.task<{ requiredRole: string }>({
   id: "app.middleware.auth",
-  // You can also add dependencies, no problem, same
-  run: async (
-    { task, next },
-    dependencies,
-    config: { requiredRole: string },
-  ) => {
-    const user = task.input.user;
+  run: async ({ task, next }, _deps, config) => {
+    const user = task?.input?.user;
     if (!user || user.role !== config.requiredRole) {
       throw new Error("Unauthorized");
     }
-    return next(task.input);
+    return next(task?.input);
   },
 });
 
 const adminTask = task({
   id: "app.tasks.adminOnly",
-  // If the configuration accepts {} or is empty, .with() becomes optional, otherwise it becomes enforced.
   middleware: [authMiddleware.with({ requiredRole: "admin" })],
-  run: async (input: { user: User }) => {
-    return "Secret admin data";
-  },
+  run: async (input: { user: User }) => "Secret admin data",
 });
 ```
 
@@ -433,19 +429,15 @@ const adminTask = task({
 Want to add logging to everything? Authentication to all tasks? Global middleware has your back:
 
 ```typescript
-const logMiddleware = middleware({
-  id: "app.middleware.log",
-  dependencies: {
-    logger: globals.resources.logger,
-  },
-  // You either get a task or a resource
-  run: async ({ task, resource, next }) => {
-    if (!task) {
-      return;
-    }
-    console.log(`Executing: ${task.definition.id}`); // equivalent with resource.definition.id
-    const result = await next(task.input); // equivalent with resource.config
-    console.log(`Completed: ${task.definition.id}`);
+import { middleware, globals } from "@bluelibs/runner";
+
+const logTaskMiddleware = middleware.task({
+  id: "app.middleware.log.task",
+  dependencies: { logger: globals.resources.logger },
+  run: async ({ task, next }, { logger }) => {
+    logger.info(`Executing: ${String(task!.definition.id)}`);
+    const result = await next(task!.input);
+    logger.info(`Completed: ${String(task!.definition.id)}`);
     return result;
   },
 });
@@ -453,19 +445,10 @@ const logMiddleware = middleware({
 const app = resource({
   id: "app",
   register: [
-    logMiddleware.everywhere({ tasks: true, resources: false }), // Only tasks get logged
-
-    // For task only, we allow a dynamic filter
-    logMiddleware.everywhere({
-      tasks(task) {
-        // ITask
-        // check for tags or other metas
-        return Boolean(myTag.extract(task)); // apply it only to tasks that have a tag called 'test'
-      },
-      // For resources, you do not need such functionality as resources are initiated once when the server boots
-      // You can add this logic into your global middleware.
-      resources: false,
-    }),
+    // Apply to all tasks
+    logTaskMiddleware.everywhere(true),
+    // Or filter which tasks receive it
+    logTaskMiddleware.everywhere((t) => Boolean(myTag.extract(t))),
   ],
 });
 ```
@@ -637,7 +620,7 @@ const RequestContext = createContext<{
   userAgent?: string;
 }>("app.requestContext");
 
-const requestMiddleware = middleware({
+const requestMiddleware = middleware.task({
   id: "app.middleware.request",
   run: async ({ task, next }) => {
     // This works even in express middleware if needed.
@@ -648,7 +631,7 @@ const requestMiddleware = middleware({
         userAgent: "MyApp/1.0",
       },
       async () => {
-        return next(task.input);
+        return next(task?.input);
       },
     );
   },
@@ -1675,17 +1658,17 @@ To process these tags you can hook into `globals.events.ready`, use the global s
 #### Structured Tags
 
 ```typescript
-const performanceMiddleware = middleware({
+const performanceMiddleware = middleware.task({
   id: "app.middleware.performance",
   run: async ({ task, next }) => {
-    const tags = task.definition.meta?.tags || [];
+    const tags = task?.definition.meta?.tags || [];
     const perfConfigTag = performanceTag.extract(tags); // or easier: .extract(task.definition)
 
     if (perfConfigTag) {
       const startTime = Date.now();
 
       try {
-        const result = await next(task.input);
+        const result = await next(task?.input);
         const duration = Date.now() - startTime;
 
         if (duration > perfConfigTag.config.criticalAboveMs) {
@@ -1707,7 +1690,7 @@ const performanceMiddleware = middleware({
       }
     }
 
-    return next(task.input);
+    return next(task?.input);
   },
 });
 ```
@@ -1880,7 +1863,7 @@ const originalMiddleware = middleware({
 });
 const overriddenMiddleware = override(originalMiddleware, {
   run: async ({ task, next }) => {
-    const result = await next(task?.input as any);
+    const result = await next(task?.input);
     return { wrapped: result } as any;
   },
 });

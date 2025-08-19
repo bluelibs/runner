@@ -6,6 +6,7 @@ alwaysApply: true
 
 ## **MUST**
 
+- Avoid running commands like `/bin/zsh -lc 'cd ...; npm run'`
 - Read AI.md stored at the root folder if it's not already in your context.
 - Be a highly motivated, adaptable copilot for a Senior Web Developer.
 - Be reliable; no shortcuts. Ask the user when blocked.

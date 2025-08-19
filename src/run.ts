@@ -1,16 +1,5 @@
 import { TaskRunner } from "./models/TaskRunner";
-import {
-  DependencyMapType,
-  ITaskDefinition,
-  IResourceDefinition,
-  IEventDefinition,
-  IMiddlewareDefinition,
-  DependencyValuesType,
-  IResource,
-  IResourceWithConfig,
-  ITask,
-  IEvent,
-} from "./defs";
+import { IResource, IResourceWithConfig } from "./defs";
 import { DependencyProcessor } from "./models/DependencyProcessor";
 import { EventManager } from "./models/EventManager";
 import { globalEvents } from "./globals/globalEvents";
@@ -111,11 +100,9 @@ export async function run<C, V extends Promise<any>>(
   const onUnhandledError: OnUnhandledError =
     onUnhandledErrorOpt || createDefaultUnhandledError(logger);
 
-  const store = new Store(eventManager, logger);
+  const store = new Store(eventManager, logger, onUnhandledError);
   const taskRunner = new TaskRunner(store, eventManager, logger);
   store.setTaskRunner(taskRunner);
-  // expose handler centrally on the store
-  store.onUnhandledError = onUnhandledError;
 
   // Register this run's event manager for global process error safety nets
   let unhookProcessSafetyNets: (() => void) | undefined;

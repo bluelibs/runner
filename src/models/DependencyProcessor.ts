@@ -9,6 +9,8 @@ import {
   TaskLocalInterceptor,
   ResourceDependencyValuesType,
   TaskDependencyWithIntercept,
+  IResourceMiddleware,
+  ITaskMiddleware,
 } from "../defs";
 import { Store } from "./Store";
 import { symbolHook } from "../defs";
@@ -20,6 +22,7 @@ import { TaskRunner } from "./TaskRunner";
 import {
   DependencyNotFoundError,
   EventNotFoundError,
+  MiddlewareNotRegisteredError,
   UnknownItemTypeError,
 } from "../errors";
 import { Logger } from "./Logger";
@@ -49,7 +52,7 @@ export class DependencyProcessor {
    * This function is going to go through all the resources, tasks and middleware to compute their required dependencies.
    */
   async computeAllDependencies() {
-    for (const middleware of this.store.middlewares.values()) {
+    for (const middleware of this.store.taskMiddlewares.values()) {
       const deps = middleware.middleware.dependencies as DependencyMapType;
       middleware.computedDependencies = await this.extractDependencies(
         deps,
@@ -57,6 +60,13 @@ export class DependencyProcessor {
       );
     }
 
+    for (const middleware of this.store.resourceMiddlewares.values()) {
+      const deps = middleware.middleware.dependencies as DependencyMapType;
+      middleware.computedDependencies = await this.extractDependencies(
+        deps,
+        middleware.middleware.id,
+      );
+    }
     for (const resource of this.store.resources.values()) {
       await this.processResourceDependencies(resource);
     }
@@ -66,9 +76,13 @@ export class DependencyProcessor {
     }
 
     // Compute hook dependencies (hooks cannot be dependencies themselves)
-    for (const hook of this.store.hooks.values()) {
+    for (const hookStoreElement of this.store.hooks.values()) {
+      const hook = hookStoreElement.hook;
       const deps = hook.dependencies as DependencyMapType;
-      hook.computedDependencies = await this.extractDependencies(deps, hook.id);
+      hookStoreElement.computedDependencies = await this.extractDependencies(
+        deps,
+        hook.id,
+      );
     }
 
     // leftovers that were registered but not depended upon, except root
@@ -200,7 +214,8 @@ export class DependencyProcessor {
    */
   public attachListeners() {
     // Attach listeners for dedicated hooks map
-    for (const hook of this.store.hooks.values()) {
+    for (const hookStoreElement of this.store.hooks.values()) {
+      const hook = hookStoreElement.hook;
       if (hook.on) {
         const eventDefinition = hook.on;
 
@@ -306,6 +321,7 @@ export class DependencyProcessor {
     }
 
     const { resource, config } = storeResource;
+
     if (storeResource.isInitialized) {
       return storeResource.value;
     } else {

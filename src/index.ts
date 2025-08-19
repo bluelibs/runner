@@ -2,7 +2,8 @@ import {
   defineTask,
   defineResource,
   defineEvent,
-  defineMiddleware,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
   defineTag,
   defineOverride,
   defineHook,
@@ -27,13 +28,20 @@ export {
   defineTask as task,
   defineResource as resource,
   defineEvent as event,
-  defineMiddleware as middleware,
+  defineTaskMiddleware as taskMiddleware,
+  defineResourceMiddleware as resourceMiddleware,
   defineTag as tag,
   defineOverride as override,
   defineHook as hook,
   run,
   createContext,
   createTestResource,
+};
+
+// Convenience export for easy API: middleware.task / middleware.resource
+export const middleware = {
+  task: defineTaskMiddleware,
+  resource: defineResourceMiddleware,
 };
 
 export * as definitions from "./defs";

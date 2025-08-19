@@ -1,17 +1,13 @@
 import { Context, ContextError } from "../../context";
-import { defineMiddleware } from "../../define";
+import { defineTaskMiddleware } from "../../define";
 
 type RequireContextMiddlewareConfig = {
   context: Context<any>;
 };
 
-export const requireContextMiddleware = defineMiddleware({
+export const requireContextMiddleware = defineTaskMiddleware({
   id: "globals.middleware.requireContext",
-  async run(
-    { task, resource, next },
-    deps,
-    config: RequireContextMiddlewareConfig,
-  ) {
+  async run({ task, next }, deps, config: RequireContextMiddlewareConfig) {
     if (!config.context) {
       throw new Error(
         "Context not available. Did you forget to pass 'context' to the middleware?",
@@ -21,13 +17,6 @@ export const requireContextMiddleware = defineMiddleware({
     // This will throw if the context is not available
     const ctx = config.context.use();
 
-    if (task) {
-      return next(task.input);
-    }
-    if (resource) {
-      return next(resource.config);
-    }
-
-    return next();
+    return next(task?.input);
   },
 });

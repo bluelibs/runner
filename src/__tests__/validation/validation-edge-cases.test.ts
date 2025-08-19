@@ -2,12 +2,12 @@ import {
   defineTask,
   defineResource,
   defineEvent,
-  defineMiddleware,
   defineHook,
-} from "../define";
-import { run } from "../run";
-import { ValidationError } from "../errors";
-import { IValidationSchema } from "../defs";
+  defineTaskMiddleware,
+} from "../../define";
+import { run } from "../../run";
+import { ValidationError } from "../../errors";
+import { IValidationSchema } from "../../defs";
 
 // Mock validation schema similar to the existing pattern
 class MockValidationSchema<T> implements IValidationSchema<T> {
@@ -72,7 +72,7 @@ describe("Validation Edge Cases", () => {
       throw "Middleware config error string";
     });
 
-    const middleware = defineMiddleware({
+    const middleware = defineTaskMiddleware({
       id: "middleware.nonErrorValidation",
       configSchema: configSchema,
       run: async ({ next }) => next(),

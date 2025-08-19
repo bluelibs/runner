@@ -2,7 +2,7 @@ import { ResourceInitializer } from "../../models/ResourceInitializer";
 import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { defineResource } from "../../define";
-import { Logger } from "../../models";
+import { Logger, OnUnhandledError } from "../../models";
 import { globalResources } from "../../globals/globalResources";
 
 describe("ResourceInitializer", () => {
@@ -10,6 +10,7 @@ describe("ResourceInitializer", () => {
   let eventManager: EventManager;
   let logger: Logger;
   let resourceInitializer: ResourceInitializer;
+  let onUnhandledError: OnUnhandledError;
 
   beforeEach(() => {
     eventManager = new EventManager();
@@ -18,7 +19,8 @@ describe("ResourceInitializer", () => {
       printStrategy: "pretty",
       bufferLogs: false,
     });
-    store = new Store(eventManager, logger);
+    onUnhandledError = jest.fn();
+    store = new Store(eventManager, logger, onUnhandledError);
     resourceInitializer = new ResourceInitializer(store, eventManager, logger);
   });
 

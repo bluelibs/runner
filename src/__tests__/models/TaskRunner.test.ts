@@ -1,7 +1,8 @@
 import { TaskRunner } from "../../models/TaskRunner";
 import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
-import { defineTask, defineResource, defineMiddleware } from "../../define";
+import { defineTask, defineResource } from "../../define";
+import { middleware } from "../../index";
 import { ITask } from "../../defs";
 import { Logger } from "../../models";
 import { globalEvents } from "../../globals/globalEvents";
@@ -19,7 +20,8 @@ describe("TaskRunner", () => {
       printStrategy: "pretty",
       bufferLogs: false,
     });
-    store = new Store(eventManager, logger);
+    const onUnhandledError = jest.fn();
+    store = new Store(eventManager, logger, onUnhandledError);
     taskRunner = new TaskRunner(store, eventManager, logger);
   });
 
@@ -45,7 +47,7 @@ describe("TaskRunner", () => {
   });
 
   it("should run an task with middleware", async () => {
-    const middleware1 = defineMiddleware({
+    const middleware1 = middleware.task({
       id: "middleware1",
       run: async ({ next, task }) => {
         const result = await next(task?.input);
@@ -53,7 +55,7 @@ describe("TaskRunner", () => {
       },
     });
 
-    const middleware2 = defineMiddleware({
+    const middleware2 = middleware.task({
       id: "middleware2",
       run: async ({ task, next }, deps, config) => {
         const result = await next(task?.input);
@@ -72,14 +74,14 @@ describe("TaskRunner", () => {
       computedDependencies: {},
       isInitialized: true,
     });
-    store.middlewares.set(middleware1.id, {
+    store.taskMiddlewares.set(middleware1.id, {
       middleware: middleware1,
       computedDependencies: {},
-    });
-    store.middlewares.set(middleware2.id, {
+    } as any);
+    store.taskMiddlewares.set(middleware2.id, {
       middleware: middleware2,
       computedDependencies: {},
-    });
+    } as any);
 
     const result = await taskRunner.run(task, 5);
     expect(result).toBe(21); // ((5 + 5) * 2) + 1

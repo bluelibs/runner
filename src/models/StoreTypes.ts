@@ -1,14 +1,12 @@
 import {
   DependencyMapType,
   DependencyValuesType,
-  IMiddlewareDefinition,
   IEventDefinition,
   IResource,
   ITask,
   IHook,
-  IResourceWithConfig,
-  RegisterableItems,
-  IMiddleware,
+  ITaskMiddleware,
+  IResourceMiddleware,
   IEvent,
   TaskLocalInterceptor,
   ResourceDependencyValuesType,
@@ -45,14 +43,21 @@ export type HookStoreElementType<
 > = {
   hook: IHook<D, TOn>;
   computedDependencies: DependencyValuesType<D>;
-  isInitialized: boolean;
 };
 
-export type MiddlewareStoreElementType<TDeps extends DependencyMapType = any> =
-  {
-    middleware: IMiddleware<TDeps>;
-    computedDependencies: DependencyValuesType<TDeps>;
-  };
+export type TaskMiddlewareStoreElementType<
+  TDeps extends DependencyMapType = any,
+> = {
+  middleware: ITaskMiddleware<any, TDeps>;
+  computedDependencies: DependencyValuesType<TDeps>;
+};
+
+export type ResourceMiddlewareStoreElementType<
+  TDeps extends DependencyMapType = any,
+> = {
+  middleware: IResourceMiddleware<any, TDeps>;
+  computedDependencies: DependencyValuesType<TDeps>;
+};
 
 export type EventStoreElementType = {
   event: IEvent<any>;

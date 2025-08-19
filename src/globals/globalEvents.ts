@@ -1,5 +1,11 @@
 import { defineEvent } from "../define";
-import { IEvent, IResource, IHook, IMiddleware } from "../defs";
+import {
+  IEvent,
+  IResource,
+  IHook,
+  ITaskMiddleware,
+  IResourceMiddleware,
+} from "../defs";
 import { globalTags } from "./globalTags";
 
 const systemTag = globalTags.system;
@@ -25,7 +31,7 @@ export const globalEvents = {
    */
   middlewareTriggered: defineEvent<{
     kind: "task" | "resource";
-    middleware: IMiddleware<any, any>;
+    middleware: ITaskMiddleware<any, any> | IResourceMiddleware<any, any>;
     targetId: string;
   }>({
     id: "globals.events.middlewareTriggered",
@@ -41,7 +47,7 @@ export const globalEvents = {
    */
   middlewareCompleted: defineEvent<{
     kind: "task" | "resource";
-    middleware: IMiddleware<any, any>;
+    middleware: ITaskMiddleware<any, any> | IResourceMiddleware<any, any>;
     targetId: string;
     error?: Error;
   }>({

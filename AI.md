@@ -175,12 +175,18 @@ const logsExtension = resource({
 ```ts
 import { middleware, resource, task, globals } from "@bluelibs/runner";
 
-// Custom middleware
-const auth = middleware<{ role: string }>({
+// Custom task middleware.
+const auth = middleware.task<{ role: string }>({
   id: "app.middleware.auth",
   run: async ({ task, next }, _, cfg) => {
     if (task.input?.user?.role !== cfg.role) throw new Error("Unauthorized");
     return next(task.input);
+  },
+});
+const decorateResource = middleware.resource<{ role: string }>({
+  id: "app.middleware.auth",
+  run: async ({ resource, next }, _, cfg) => {
+    return next(resource.config);
   },
 });
 
@@ -216,7 +222,7 @@ const appWithGlobal = resource({
   id: "app",
   // Note: To prevent deadlocks, a global middleware that depends on a resource
   // will be silently excluded from running on that specific resource.
-  register: [auth.everywhere({ tasks: true, resources: false })],
+  register: [auth.everywhere(true)],
   // you can also opt-in for filters: tasks(task) { return true; }
 });
 ```

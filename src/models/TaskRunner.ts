@@ -68,7 +68,7 @@ export class TaskRunner {
     emission: IEventEmission<TPayload>,
   ): Promise<any> {
     // Hooks are stored in `store.hooks`; use their computed deps
-    const deps = this.store.hooks.get(hook.id)?.computedDependencies as any;
+    const deps = this.store.hooks.get(hook.id)!.computedDependencies;
     // Internal observability events are tagged to be excluded from global listeners.
     // We detect them by tag so we don't double-wrap them with our own hookTriggered/hookCompleted.
     const isObservabilityEvent =
@@ -95,7 +95,7 @@ export class TaskRunner {
       return result;
     } catch (err: unknown) {
       try {
-        await this.store.onUnhandledError?.({
+        await this.store.onUnhandledError({
           error: err,
           kind: "hook",
           source: hook.id,

@@ -1,6 +1,6 @@
-import { defineTask, defineResource, defineMiddleware } from "../define";
-import { globalResources } from "../globals/globalResources";
-import { run } from "../run";
+import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
+import { globalResources } from "../../globals/globalResources";
+import { run } from "../../run";
 
 describe("Dynamic Register and Dependencies", () => {
   describe("Dynamic Dependencies", () => {
@@ -399,7 +399,7 @@ describe("Dynamic Register and Dependencies", () => {
         }),
       });
 
-      const validationMiddleware = defineMiddleware({
+      const validationMiddleware = defineTaskMiddleware({
         id: "middleware.validation",
         dependencies: {
           logger: loggerResource,
@@ -437,7 +437,7 @@ describe("Dynamic Register and Dependencies", () => {
     it("should support dynamic middleware configurations", async () => {
       type RetryConfig = { maxAttempts: number; delay: number };
 
-      const retryMiddleware = defineMiddleware({
+      const retryMiddleware = defineTaskMiddleware({
         id: "middleware.retry",
         run: async ({ next }, _, config: RetryConfig) => {
           let attempts = 0;
@@ -508,7 +508,7 @@ describe("Dynamic Register and Dependencies", () => {
         }),
       });
 
-      const cachingMiddleware = defineMiddleware({
+      const cachingMiddleware = defineTaskMiddleware({
         id: "middleware.caching",
         dependencies: { cache, logger },
         run: async (
@@ -884,7 +884,7 @@ describe("Dynamic Register and Dependencies", () => {
         }),
       });
 
-      const authMiddleware = defineMiddleware({
+      const authMiddleware = defineTaskMiddleware({
         id: "middleware.auth",
         dependencies: (config: {
           auditEnabled: boolean;
@@ -895,7 +895,7 @@ describe("Dynamic Register and Dependencies", () => {
         }),
         run: async (
           { task, next },
-          deps: any,
+          deps,
           config: { auditEnabled: boolean; requiredRole: string },
         ) => {
           const userRole = task?.input?.userRole || "guest";

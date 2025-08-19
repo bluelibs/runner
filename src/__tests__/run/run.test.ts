@@ -2,65 +2,35 @@ import {
   defineTask,
   defineResource,
   defineEvent,
-  defineMiddleware,
   defineHook,
-} from "../define";
-import { run } from "../run";
-import { globalResources } from "../globals/globalResources";
-
-describe("main exports", () => {
-  it("should export all public APIs correctly", async () => {
-    // Test main index exports for 100% coverage
-    const mainExports = await import("../index");
-
-    expect(typeof mainExports.task).toBe("function");
-    expect(typeof mainExports.resource).toBe("function");
-    expect(typeof mainExports.event).toBe("function");
-    expect(typeof mainExports.middleware).toBe("function");
-    expect(typeof mainExports.hook).toBe("function");
-    expect(typeof mainExports.tag).toBe("function");
-    expect(typeof mainExports.run).toBe("function");
-    expect(typeof mainExports.createContext).toBe("function");
-    expect(typeof mainExports.globals).toBe("object");
-    expect(typeof mainExports.definitions).toBe("object");
-    expect(typeof mainExports.Store).toBe("function");
-    expect(typeof mainExports.EventManager).toBe("function");
-    expect(typeof mainExports.TaskRunner).toBe("function");
-    expect(typeof mainExports.Queue).toBe("function");
-    expect(typeof mainExports.Semaphore).toBe("function");
-
-    // Test that aliases work the same as direct imports
-    const directTask = defineTask({ id: "test", run: async () => "direct" });
-    const aliasTask = mainExports.task({
-      id: "test2",
-      run: async () => "alias",
-    });
-
-    expect(directTask.id).toBe("test");
-    expect(aliasTask.id).toBe("test2");
-
-    // Test tag exports work
-    const testTag = mainExports.tag<{ value: number }>({ id: "test.tag" });
-    const testTag2 = mainExports.tag<{ name: string }>({ id: "test.tag2" });
-
-    expect(testTag.id).toBe("test.tag");
-    expect(testTag2.id).toBe("test.tag2");
-    expect(typeof testTag.with).toBe("function");
-    expect(typeof testTag2.extract).toBe("function");
-
-    // Test createContext export
-    const TestContext = mainExports.createContext<string>("test.context");
-    expect(typeof TestContext.provide).toBe("function");
-    expect(typeof TestContext.use).toBe("function");
-
-    // Test globals sub-properties for complete coverage
-    expect(typeof mainExports.globals.events).toBe("object");
-    expect(typeof mainExports.globals.resources).toBe("object");
-    expect(typeof mainExports.globals.middleware).toBe("object");
-  });
-});
+} from "../../define";
+import { middleware } from "../../index";
+import { run } from "../../run";
+import { globalResources } from "../../globals/globalResources";
 
 describe("run", () => {
+  // Initial run
+  it("should be able to instantiate with or without config", async () => {
+    const testResource = defineResource({
+      id: "test.resource",
+      init: async () => "Resource Value",
+    });
+
+    type TestResource2Config = {
+      name: string;
+    };
+    const testResource2 = defineResource({
+      id: "test.resource2",
+      init: async (_: TestResource2Config) => "Resource Value",
+    });
+
+    const run1 = await run(testResource);
+    const run2 = await run(testResource2.with({ name: "test" }));
+
+    expect(run1.value).toBe("Resource Value");
+    expect(run2.value).toBe("Resource Value");
+  });
+
   // Tasks
   describe("Tasks", () => {
     it("should be able to register an task and execute it", async () => {
@@ -172,7 +142,7 @@ describe("run", () => {
     it("should be able to register an task with middleware and execute it, ensuring the middleware is called in the correct order", async () => {
       const order: string[] = [];
 
-      const testMiddleware1 = defineMiddleware({
+      const testMiddleware1 = middleware.task({
         id: "test.middleware1",
         run: async ({ next }) => {
           order.push("middleware1 before");
@@ -182,7 +152,7 @@ describe("run", () => {
         },
       });
 
-      const testMiddleware2 = defineMiddleware({
+      const testMiddleware2 = middleware.task({
         id: "test.middleware2",
         run: async ({ next }) => {
           order.push("middleware2 before");
@@ -227,7 +197,7 @@ describe("run", () => {
         init: async () => "Dependency Value",
       });
 
-      const testMiddleware = defineMiddleware({
+      const testMiddleware = middleware.task({
         id: "test.middleware",
         dependencies: { dependencyResource },
         run: async ({ next }, { dependencyResource }) => {
@@ -356,7 +326,7 @@ describe("run", () => {
         init: async () => "dummy",
       });
       const task = defineHook({
-        id: "app",
+        id: "app.hook",
         on: "*",
         dependencies: { dummyResource },
         async run(event, { dummyResource }) {
@@ -383,7 +353,7 @@ describe("run", () => {
     });
 
     it("emits hookTriggered and hookCompleted around hook execution (success)", async () => {
-      const { globalEvents } = await import("../globals/globalEvents");
+      const { globalEvents } = await import("../../globals/globalEvents");
 
       const testEvent = defineEvent<{ value: number }>({
         id: "hooks.test.event",
@@ -473,7 +443,7 @@ describe("run", () => {
     });
 
     it("emits hookCompleted with error when hook throws", async () => {
-      const { globalEvents } = await import("../globals/globalEvents");
+      const { globalEvents } = await import("../../globals/globalEvents");
 
       const testEvent = defineEvent<{ value: number }>({
         id: "hooks.test.event.error",
@@ -1134,7 +1104,7 @@ describe("run", () => {
 
   describe("system ready event", () => {
     it("should allow listeners to hook into globalEvents.ready and be called when the system is ready", async () => {
-      const { globalEvents } = await import("../globals/globalEvents");
+      const { globalEvents } = await import("../../globals/globalEvents");
       const handler = jest.fn();
       const readyListener = defineHook({
         id: "ready.listener",

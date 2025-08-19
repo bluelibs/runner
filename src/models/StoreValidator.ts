@@ -1,20 +1,11 @@
-import {
-  HookStoreElementType,
-  ITag,
-  symbolMiddlewareEverywhereResources,
-} from "../defs";
+import { HookStoreElementType, ITag } from "../defs";
 import {
   DependencyNotFoundError,
   DuplicateRegistrationError,
+  MiddlewareNotRegisteredError,
   TagNotFoundError,
 } from "../errors";
-import {
-  TaskStoreElementType,
-  MiddlewareStoreElementType,
-  ResourceStoreElementType,
-  EventStoreElementType,
-  ITaggable,
-} from "../defs";
+import { ITaggable } from "../defs";
 import { Store } from "./Store";
 import { StoreRegistry } from "./StoreRegistry";
 
@@ -31,7 +22,10 @@ export class StoreValidator {
     if (this.registry.events.has(id)) {
       throw new DuplicateRegistrationError("Event", id);
     }
-    if (this.registry.middlewares.has(id)) {
+    if (this.registry.taskMiddlewares.has(id)) {
+      throw new DuplicateRegistrationError("Middleware", id);
+    }
+    if (this.registry.resourceMiddlewares.has(id)) {
       throw new DuplicateRegistrationError("Middleware", id);
     }
     if (this.registry.tags.has(id)) {
@@ -46,9 +40,24 @@ export class StoreValidator {
     for (const task of this.registry.tasks.values()) {
       const middlewares = task.task.middleware;
       middlewares.forEach((middlewareAttachment) => {
-        if (!this.registry.middlewares.has(middlewareAttachment.id)) {
-          throw new DependencyNotFoundError(
-            `Middleware ${middlewareAttachment.id} in Task ${task.task.id}`,
+        if (!this.registry.taskMiddlewares.has(middlewareAttachment.id)) {
+          throw new MiddlewareNotRegisteredError(
+            "task",
+            task.task.id,
+            middlewareAttachment.id,
+          );
+        }
+      });
+    }
+
+    for (const resource of this.registry.resources.values()) {
+      const middlewares = resource.resource.middleware;
+      middlewares.forEach((middlewareAttachment) => {
+        if (!this.registry.resourceMiddlewares.has(middlewareAttachment.id)) {
+          throw new MiddlewareNotRegisteredError(
+            "resource",
+            resource.resource.id,
+            middlewareAttachment.id,
           );
         }
       });
@@ -62,10 +71,13 @@ export class StoreValidator {
       ...Array.from(this.registry.tasks.values()).map((x) => x.task),
       ...Array.from(this.registry.resources.values()).map((x) => x.resource),
       ...Array.from(this.registry.events.values()).map((x) => x.event),
-      ...Array.from(this.registry.middlewares.values()).map(
+      ...Array.from(this.registry.taskMiddlewares.values()).map(
         (x) => x.middleware,
       ),
-      ...Array.from(this.registry.hooks.values()).map((x) => x),
+      ...Array.from(this.registry.resourceMiddlewares.values()).map(
+        (x) => x.middleware,
+      ),
+      ...Array.from(this.registry.hooks.values()).map((x) => x.hook),
     ];
 
     for (const taggable of taggables) {
