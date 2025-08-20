@@ -7,7 +7,13 @@ import {
   defineTag,
   defineTaskMiddleware,
 } from "../../define";
-import { Logger, OnUnhandledError } from "../../models";
+import {
+  Logger,
+  MiddlewareManager,
+  OnUnhandledError,
+  TaskRunner,
+} from "../../models";
+import { StoreRegistry } from "../../models/StoreRegistry";
 
 describe("Store", () => {
   let eventManager: EventManager;
@@ -24,6 +30,10 @@ describe("Store", () => {
     });
     onUnhandledError = jest.fn();
     store = new Store(eventManager, logger, onUnhandledError);
+  });
+
+  it("should expose some helpers", () => {
+    expect(store.getMiddlewareManager()).toBeInstanceOf(MiddlewareManager);
   });
 
   it("should initialize the store with a root resource", () => {

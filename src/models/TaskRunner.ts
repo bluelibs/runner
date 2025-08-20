@@ -17,11 +17,9 @@ export class TaskRunner {
     protected readonly eventManager: EventManager,
     protected readonly logger: Logger,
   ) {
-    this.middlewareManager = new MiddlewareManager(
-      this.store,
-      this.eventManager,
-      this.logger,
-    );
+    // Use the same MiddlewareManager instance from the Store so that
+    // any interceptors registered via resources (like debug) affect task runs.
+    this.middlewareManager = this.store.getMiddlewareManager();
   }
 
   private readonly middlewareManager: MiddlewareManager;
@@ -48,70 +46,6 @@ export class TaskRunner {
     }
 
     return await runner(input);
-  }
-
-  // Lifecycle emissions removed
-
-  /**
-   * Runs a hook (event listener) without any middleware.
-   * Ensures dependencies are resolved from the hooks registry.
-   *
-   * Emits two internal observability events around the hook execution:
-   * - globals.events.hookTriggered (before)
-   * - globals.events.hookCompleted (after, with optional error)
-   *
-   * These observability events are tagged to be ignored by global listeners
-   * and are not re-emitted for their own handlers to avoid recursion.
-   */
-  public async runHook<TPayload, TDeps extends DependencyMapType = {}>(
-    hook: IHook<TDeps, any>,
-    emission: IEventEmission<TPayload>,
-  ): Promise<any> {
-    // Hooks are stored in `store.hooks`; use their computed deps
-    const deps = this.store.hooks.get(hook.id)!.computedDependencies;
-    // Internal observability events are tagged to be excluded from global listeners.
-    // We detect them by tag so we don't double-wrap them with our own hookTriggered/hookCompleted.
-    const isObservabilityEvent =
-      globalTags.excludeFromGlobalHooks.exists(emission);
-
-    // The logic here is that we don't want to have lifecycle events for the events that are excluded from global ones.
-    if (isObservabilityEvent) {
-      return hook.run(emission as any, deps);
-    }
-    // Emit hookTriggered (excluded from global listeners)
-    await this.eventManager.emit(
-      globalEvents.hookTriggered,
-      { hook, eventId: emission.id },
-      hook.id,
-    );
-
-    try {
-      const result = await hook.run(emission as any, deps);
-      await this.eventManager.emit(
-        globalEvents.hookCompleted,
-        { hook, eventId: emission.id },
-        hook.id,
-      );
-      return result;
-    } catch (err: unknown) {
-      try {
-        await this.store.onUnhandledError({
-          error: err,
-          kind: "hook",
-          source: hook.id,
-        });
-      } catch (_) {}
-      await this.eventManager.emit(
-        globalEvents.hookCompleted,
-        {
-          hook,
-          eventId: emission.id,
-          error: err as any,
-        },
-        hook.id,
-      );
-      throw err;
-    }
   }
 
   /**

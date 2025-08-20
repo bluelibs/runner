@@ -31,6 +31,8 @@ import {
   UnknownItemTypeError,
 } from "../errors";
 import { Logger } from "./Logger";
+import { globalEvents } from "../globals/globalEvents";
+import { globalTags } from "../globals/globalTags";
 
 /**
  * This class is responsible of setting up dependencies with their respective computedValues.
@@ -234,7 +236,11 @@ export class DependencyProcessor {
           if (receivedEvent.source === hook.id) {
             return;
           }
-          return this.taskRunner.runHook(hook, receivedEvent);
+          return this.eventManager.executeHookWithInterceptors(
+            hook,
+            receivedEvent,
+            hookStoreElement.computedDependencies,
+          );
         };
 
         const order = hook.order ?? 0;

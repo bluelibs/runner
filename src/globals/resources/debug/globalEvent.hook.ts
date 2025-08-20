@@ -24,7 +24,7 @@ export const globalEventListener = defineHook({
       await logger.info(message, {
         source: "debug.catchAllHook",
         data: debugConfig.logEventEmissionInput
-          ? { payload: event!.data }
+          ? { data: event!.data }
           : undefined,
       });
     }

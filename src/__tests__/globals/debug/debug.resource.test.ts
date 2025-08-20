@@ -109,12 +109,12 @@ describe("globals.resources.debug", () => {
       ],
       dependencies: { testTask, subResource },
       async init(_, { testTask }) {
-        await testTask();
         return "done";
       },
     });
 
-    await run(app);
+    const result = await run(app, {});
+    await result.runTask(testTask);
 
     // Task/resource tracker messages (assert present during boot)
     expect(messages.some((m) => m.includes("Task tests.task is running"))).toBe(
@@ -126,6 +126,7 @@ describe("globals.resources.debug", () => {
     // Middleware observability messages
     // Allow for either ordering due to interleaving; just assert presence
     const joined = messages.join("\n");
+    console.log(messages);
     expect(joined.includes("Middleware triggered for task tests.task")).toBe(
       true,
     );

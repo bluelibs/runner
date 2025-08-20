@@ -6,6 +6,7 @@ import { TaskRunner } from "../models/TaskRunner";
 import { cacheResource } from "./middleware/cache.middleware";
 import { queueResource } from "./resources/queue.resource";
 import { globalTags } from "./globalTags";
+import { MiddlewareManager } from "../models/MiddlewareManager";
 
 const systemTag = globalTags.system;
 
@@ -21,6 +22,14 @@ const store = defineResource<void, Promise<Store>>({
 
 export const globalResources = {
   store,
+  middlewareManager: defineResource<void, Promise<MiddlewareManager>>({
+    id: "globals.resources.middlewareManager",
+    meta: {
+      title: "Middleware Manager",
+      description: "Manages all middleware and middleware interceptors.",
+    },
+    tags: [systemTag],
+  }),
   eventManager: defineResource<void, Promise<EventManager>>({
     id: "globals.resources.eventManager",
     meta: {

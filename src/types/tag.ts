@@ -9,7 +9,7 @@ import {
 } from "./utilities";
 
 export interface ITaggable {
-  tags?: TagType[];
+  tags: TagType[];
 }
 
 export interface ITagDefinition<

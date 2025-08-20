@@ -90,7 +90,7 @@ export function defineTag<
       if (Array.isArray(target)) {
         currentTags = target;
       } else {
-        currentTags = target.tags || [];
+        currentTags = target.tags;
       }
 
       for (const candidate of currentTags) {

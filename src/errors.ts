@@ -14,7 +14,7 @@ export class RuntimeError extends Error {
 export class DuplicateRegistrationError extends RuntimeError {
   constructor(type: string, id: string) {
     super(
-      `${type} "${id.toString()}" already registered. Did you use the same 'id' in two different components? Keep in mind, that all TERM elements need unique ids.`,
+      `${type} "${id.toString()}" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.`,
     );
     this.name = "DuplicateRegistrationError";
   }

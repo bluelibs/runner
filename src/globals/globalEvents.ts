@@ -27,69 +27,6 @@ export const globalEvents = {
     },
   }),
   /**
-   * Emitted right before a middleware's run executes (for tasks/resources).
-   */
-  middlewareTriggered: defineEvent<{
-    kind: "task" | "resource";
-    middleware: ITaskMiddleware<any, any> | IResourceMiddleware<any, any>;
-    targetId: string;
-  }>({
-    id: "globals.events.middlewareTriggered",
-    meta: {
-      title: "Middleware Triggered",
-      description:
-        "Emitted immediately before a middleware starts running for a task or resource.",
-    },
-    tags: [systemTag, globalTags.excludeFromGlobalHooks],
-  }),
-  /**
-   * Emitted after a middleware completes (success or failure). Contains optional error.
-   */
-  middlewareCompleted: defineEvent<{
-    kind: "task" | "resource";
-    middleware: ITaskMiddleware<any, any> | IResourceMiddleware<any, any>;
-    targetId: string;
-    error?: Error;
-  }>({
-    id: "globals.events.middlewareCompleted",
-    meta: {
-      title: "Middleware Completed",
-      description:
-        "Emitted after a middleware finishes running for a task or resource.",
-    },
-    tags: [systemTag, globalTags.excludeFromGlobalHooks],
-  }),
-  /**
-   * Emitted right before a hook's run executes.
-   */
-  hookTriggered: defineEvent<{
-    hook: IHook<any, any>;
-    eventId: string;
-  }>({
-    id: "globals.events.hookTriggered",
-    meta: {
-      title: "Hook Triggered",
-      description:
-        "Emitted immediately before a hook starts running for an event.",
-    },
-    tags: [systemTag, globalTags.excludeFromGlobalHooks],
-  }),
-  /**
-   * Emitted after a hook completes (success or failure). Contains optional error.
-   */
-  hookCompleted: defineEvent<{
-    hook: IHook<any, any>;
-    eventId: string;
-    error?: Error;
-  }>({
-    id: "globals.events.hookCompleted",
-    meta: {
-      title: "Hook Completed",
-      description: "Emitted after a hook finishes running for an event.",
-    },
-    tags: [systemTag, globalTags.excludeFromGlobalHooks],
-  }),
-  /**
    * Central error boundary event for any thrown error across the runner.
    */
   unhandledError: defineEvent<{
@@ -106,10 +43,4 @@ export const globalEvents = {
   }),
 } as const;
 
-export const globalEventsArray: IEvent<any>[] = [
-  globalEvents.ready,
-  globalEvents.hookTriggered,
-  globalEvents.hookCompleted,
-  globalEvents.middlewareTriggered,
-  globalEvents.middlewareCompleted,
-];
+export const globalEventsArray: IEvent<any>[] = [globalEvents.ready];

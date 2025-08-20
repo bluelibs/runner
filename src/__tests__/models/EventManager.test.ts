@@ -6,6 +6,7 @@ import {
 } from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
+import { globalTags } from "../../globals/globalTags";
 
 describe("EventManager", () => {
   let eventManager: EventManager;
@@ -72,23 +73,7 @@ describe("EventManager", () => {
     expect(results).toEqual([0, 1, 2, 3]);
   });
 
-  it("should apply filters correctly", async () => {
-    const handler = jest.fn();
-    const filter = (event: IEventEmission<string>) => event.data === "allowed";
-
-    eventManager.addListener(eventDefinition, handler, { filter });
-
-    await eventManager.emit(eventDefinition, "blocked", "test");
-    expect(handler).not.toHaveBeenCalled();
-
-    await eventManager.emit(eventDefinition, "allowed", "test");
-    expect(handler).toHaveBeenCalledTimes(1);
-    expect(handler).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: "allowed",
-      }),
-    );
-  });
+  // Event-specific filters are no longer supported; filtering remains only for global listeners
 
   it("should add and emit global listener", async () => {
     const handler = jest.fn();
@@ -607,10 +592,432 @@ describe("EventManager", () => {
     ).rejects.toThrow(/Event payload/i);
   });
 
+  it("wraps non-Error thrown by payload schema into ValidationError", async () => {
+    const schemaEvent = defineEvent<any>({
+      id: "schema.event.nonError",
+      payloadSchema: {
+        parse: (_data: any) => {
+          throw "String error";
+        },
+      },
+    });
+
+    await expect(
+      eventManager.emit(schemaEvent, { whatever: true }, "src"),
+    ).rejects.toThrow(/Event payload/);
+  });
+
   it("hasListeners returns true when only global listeners exist and event has empty array", () => {
     const handler = jest.fn();
     eventManager.addGlobalListener(handler);
     (eventManager as any).listeners.set(eventDefinition.id, []);
     expect(eventManager.hasListeners(eventDefinition)).toBe(true);
   });
+
+  describe("interceptEmission", () => {
+    it("should add emission interceptors", () => {
+      const interceptor1 = jest.fn(async (next, event) => next(event));
+      const interceptor2 = jest.fn(async (next, event) => next(event));
+
+      eventManager.intercept(interceptor1);
+      eventManager.intercept(interceptor2);
+
+      expect((eventManager as any).emissionInterceptors).toHaveLength(2);
+      expect((eventManager as any).emissionInterceptors[0]).toBe(interceptor1);
+      expect((eventManager as any).emissionInterceptors[1]).toBe(interceptor2);
+    });
+
+    it("should throw error when adding interceptors after lock", () => {
+      const interceptor = jest.fn(async (next, event) => next(event));
+      eventManager.lock();
+
+      expect(() => eventManager.intercept(interceptor)).toThrow("EventManager");
+    });
+
+    it("should execute interceptors in reverse order (LIFO)", async () => {
+      const executionOrder: string[] = [];
+      const interceptor1 = jest.fn(async (next, event) => {
+        executionOrder.push("interceptor1");
+        await next(event);
+        executionOrder.push("interceptor1-end");
+      });
+      const interceptor2 = jest.fn(async (next, event) => {
+        executionOrder.push("interceptor2");
+        await next(event);
+        executionOrder.push("interceptor2-end");
+      });
+
+      eventManager.intercept(interceptor1);
+      eventManager.intercept(interceptor2);
+
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+
+      await eventManager.emit(eventDefinition, "test", "source");
+
+      expect(executionOrder).toEqual([
+        "interceptor1",
+        "interceptor2",
+        "interceptor2-end",
+        "interceptor1-end",
+      ]);
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it("should allow interceptors to modify events", async () => {
+      const interceptor = jest.fn(async (next, event) => {
+        const modifiedEvent = { ...event, data: `${event.data}-modified` };
+        return next(modifiedEvent);
+      });
+
+      eventManager.intercept(interceptor);
+
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+
+      await eventManager.emit(eventDefinition, "original", "source");
+
+      expect(handler).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: "original-modified",
+        }),
+      );
+    });
+
+    it("should allow interceptors to prevent emission", async () => {
+      const interceptor = jest.fn(async (next, event) => {
+        // Don't call next, preventing emission
+        return Promise.resolve();
+      });
+
+      eventManager.intercept(interceptor);
+
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+
+      await eventManager.emit(eventDefinition, "test", "source");
+
+      expect(handler).not.toHaveBeenCalled();
+      expect(interceptor).toHaveBeenCalledTimes(1);
+    });
+
+    it("should work with multiple interceptors preventing emission", async () => {
+      const interceptor1 = jest.fn(async (next, event) => {
+        // Call next but interceptor2 will prevent emission
+        return next(event);
+      });
+      const interceptor2 = jest.fn(async (next, event) => {
+        // Don't call next, preventing emission
+        return Promise.resolve();
+      });
+
+      eventManager.intercept(interceptor1);
+      eventManager.intercept(interceptor2);
+
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+
+      await eventManager.emit(eventDefinition, "test", "source");
+
+      expect(handler).not.toHaveBeenCalled();
+      expect(interceptor1).toHaveBeenCalledTimes(1);
+      expect(interceptor2).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe("interceptHook", () => {
+    it("should add hook interceptors", () => {
+      const interceptor1 = jest.fn(async (next, hook, event) =>
+        next(hook, event),
+      );
+      const interceptor2 = jest.fn(async (next, hook, event) =>
+        next(hook, event),
+      );
+
+      eventManager.interceptHook(interceptor1);
+      eventManager.interceptHook(interceptor2);
+
+      expect((eventManager as any).hookInterceptors).toHaveLength(2);
+      expect((eventManager as any).hookInterceptors[0]).toBe(interceptor1);
+      expect((eventManager as any).hookInterceptors[1]).toBe(interceptor2);
+    });
+
+    it("should throw error when adding hook interceptors after lock", () => {
+      const interceptor = jest.fn(async (next, hook, event) =>
+        next(hook, event),
+      );
+      eventManager.lock();
+
+      expect(() => eventManager.interceptHook(interceptor)).toThrow(
+        "EventManager",
+      );
+    });
+  });
+
+  describe("executeHookWithInterceptors", () => {
+    it("should execute hook without interceptors", async () => {
+      const mockHook = {
+        id: "testHook",
+        run: jest.fn().mockResolvedValue("hookResult"),
+      };
+
+      const mockEvent = {
+        id: "testEvent",
+        data: "testData",
+        timestamp: new Date(),
+        source: "testSource",
+        tags: [],
+      };
+
+      const result = await eventManager.executeHookWithInterceptors(
+        mockHook as any,
+        mockEvent as any,
+        {},
+      );
+
+      expect(result).toBe("hookResult");
+      expect(mockHook.run).toHaveBeenCalledWith(mockEvent, {});
+    });
+
+    it("should execute hook interceptors in reverse order (LIFO)", async () => {
+      const executionOrder: string[] = [];
+      const interceptor1 = jest.fn(async (next, hook, event) => {
+        executionOrder.push("interceptor1");
+        const result = await next(hook, event);
+        executionOrder.push("interceptor1-end");
+        return result;
+      });
+      const interceptor2 = jest.fn(async (next, hook, event) => {
+        executionOrder.push("interceptor2");
+        const result = await next(hook, event);
+        executionOrder.push("interceptor2-end");
+        return result;
+      });
+
+      eventManager.interceptHook(interceptor1);
+      eventManager.interceptHook(interceptor2);
+
+      const mockHook = {
+        id: "testHook",
+        run: jest.fn().mockResolvedValue("hookResult"),
+      };
+
+      const mockEvent = {
+        id: "testEvent",
+        data: "testData",
+        timestamp: new Date(),
+        source: "testSource",
+        tags: [],
+      };
+
+      await eventManager.executeHookWithInterceptors(
+        mockHook as any,
+        mockEvent as any,
+        {},
+      );
+
+      expect(executionOrder).toEqual([
+        "interceptor1",
+        "interceptor2",
+        "interceptor2-end",
+        "interceptor1-end",
+      ]);
+    });
+
+    it("should allow hook interceptors to modify hook or event", async () => {
+      const interceptor = jest.fn(async (next, hook, event) => {
+        const modifiedEvent = { ...event, data: `${event.data}-modified` };
+        return next(hook, modifiedEvent);
+      });
+
+      eventManager.interceptHook(interceptor);
+
+      const mockHook = {
+        id: "testHook",
+        run: jest.fn().mockResolvedValue("hookResult"),
+      };
+
+      const mockEvent = {
+        id: "testEvent",
+        data: "original",
+        timestamp: new Date(),
+        source: "testSource",
+        tags: [],
+      };
+
+      await eventManager.executeHookWithInterceptors(
+        mockHook as any,
+        mockEvent as any,
+        {},
+      );
+
+      expect(mockHook.run).toHaveBeenCalledWith(
+        expect.objectContaining({ data: "original-modified" }),
+        {},
+      );
+    });
+
+    it("should allow hook interceptors to prevent hook execution", async () => {
+      const interceptor = jest.fn(async (next, hook, event) => {
+        // Don't call next, preventing hook execution
+        return "interceptorResult";
+      });
+
+      eventManager.interceptHook(interceptor);
+
+      const mockHook = {
+        id: "testHook",
+        run: jest.fn().mockResolvedValue("hookResult"),
+      };
+
+      const mockEvent = {
+        id: "testEvent",
+        data: "testData",
+        timestamp: new Date(),
+        source: "testSource",
+        tags: [],
+      };
+
+      const result = await eventManager.executeHookWithInterceptors(
+        mockHook as any,
+        mockEvent as any,
+        {},
+      );
+
+      expect(result).toBe("interceptorResult");
+      expect(mockHook.run).not.toHaveBeenCalled();
+    });
+
+    it("executes hook directly when event is tagged excludeFromGlobalHooks (observability)", async () => {
+      const mockHook = {
+        id: "observHook",
+        run: jest.fn().mockResolvedValue("ok"),
+      };
+
+      const mockEvent = {
+        id: "evt",
+        data: "x",
+        timestamp: new Date(),
+        source: "s",
+        meta: {},
+        stopPropagation: () => {},
+        isPropagationStopped: () => false,
+        tags: [globalTags.excludeFromGlobalHooks],
+      } as any;
+
+      const result = await eventManager.executeHookWithInterceptors(
+        mockHook as any,
+        mockEvent as any,
+        {},
+      );
+
+      expect(result).toBe("ok");
+      expect(mockHook.run).toHaveBeenCalledWith(mockEvent, {});
+    });
+
+    it("rethrows errors from hook.run in non-observability case", async () => {
+      const mockHook = {
+        id: "failingHook",
+        run: jest.fn().mockRejectedValue(new Error("boom")),
+      };
+
+      const mockEvent = {
+        id: "evt",
+        data: "x",
+        timestamp: new Date(),
+        source: "s",
+        meta: {},
+        stopPropagation: () => {},
+        isPropagationStopped: () => false,
+        tags: [],
+      } as any;
+
+      await expect(
+        eventManager.executeHookWithInterceptors(
+          mockHook as any,
+          mockEvent as any,
+          {},
+        ),
+      ).rejects.toThrow("boom");
+      expect(mockHook.run).toHaveBeenCalled();
+    });
+  });
+
+  describe("integration with emit", () => {
+    it("should handle empty interceptors gracefully", async () => {
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+
+      await eventManager.emit(eventDefinition, "test", "source");
+
+      expect(handler).toHaveBeenCalledTimes(1);
+    });
+
+    it("should handle interceptors that throw errors", async () => {
+      const interceptor = jest.fn(async (next, event) => {
+        throw new Error("Interceptor error");
+      });
+
+      eventManager.intercept(interceptor);
+
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+
+      await expect(
+        eventManager.emit(eventDefinition, "test", "source"),
+      ).rejects.toThrow("Interceptor error");
+      expect(handler).not.toHaveBeenCalled();
+    });
+
+    it("should handle hook interceptors that throw errors", async () => {
+      const interceptor = jest.fn(async (next, hook, event) => {
+        throw new Error("Hook interceptor error");
+      });
+
+      eventManager.interceptHook(interceptor);
+
+      const mockHook = {
+        id: "testHook",
+        run: jest.fn().mockResolvedValue("hookResult"),
+      };
+
+      const mockEvent = {
+        id: "testEvent",
+        data: "testData",
+        timestamp: new Date(),
+        source: "testSource",
+        tags: [],
+      };
+
+      await expect(
+        eventManager.executeHookWithInterceptors(
+          mockHook as any,
+          mockEvent as any,
+          {},
+        ),
+      ).rejects.toThrow("Hook interceptor error");
+      expect(mockHook.run).not.toHaveBeenCalled();
+    });
+  });
+
+  it("should exclude global listeners when event has excludeFromGlobalHooks tag", async () => {
+    const { globalTags } = await import("../../globals/globalTags");
+    const handlerEvent = jest.fn();
+    const handlerGlobal = jest.fn();
+
+    const taggedEvent = defineEvent<string>({
+      id: "taggedEvent",
+      tags: [globalTags.excludeFromGlobalHooks],
+    });
+
+    eventManager.addListener(taggedEvent, handlerEvent);
+    eventManager.addGlobalListener(handlerGlobal);
+
+    await eventManager.emit(taggedEvent, "data", "test");
+
+    expect(handlerEvent).toHaveBeenCalledTimes(1);
+    expect(handlerGlobal).not.toHaveBeenCalled();
+  });
+
+  // Hook lifecycle events are no longer emitted by EventManager; related tests removed
 });

@@ -104,6 +104,12 @@ export class Store {
     return this.overrideManager.overrideRequests;
   }
 
+  // Expose the shared MiddlewareManager instance so other components (like TaskRunner)
+  // can compose runners using the same interceptor configuration.
+  public getMiddlewareManager(): MiddlewareManager {
+    return this.middlewareManager;
+  }
+
   get isLocked() {
     return this.#isLocked;
   }
@@ -127,6 +133,11 @@ export class Store {
     builtInResourcesMap.set(globalResources.eventManager, this.eventManager);
     builtInResourcesMap.set(globalResources.logger, this.logger);
     builtInResourcesMap.set(globalResources.taskRunner, this.taskRunner!);
+    builtInResourcesMap.set(
+      globalResources.middlewareManager,
+      this.middlewareManager,
+    );
+
     this.registry.storeGenericItem(globalResources.queue);
 
     for (const [resource, value] of builtInResourcesMap.entries()) {

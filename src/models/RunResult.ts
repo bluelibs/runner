@@ -11,7 +11,7 @@ export class RunResult<V> {
   constructor(
     public readonly value: V,
     public readonly logger: Logger,
-    private readonly store: Store,
+    public readonly store: Store,
     private readonly eventManager: EventManager,
     private readonly taskRunner: TaskRunner,
     private readonly disposeFn: () => Promise<void>,
