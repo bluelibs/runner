@@ -17,6 +17,7 @@
 - 🎭 **The Great Middleware Split of 2025** - middleware finally figured out what they want to be when they grow up
 - 🏷️ **Tags got promoted!** - no more living in meta's basement, they're top-level citizens now
 - 🧅 **Middleware `everywhere` is now an option, not a builder!** No more `.everywhere(...)` chaining—just use the `everywhere` property directly in your middleware definition for global application.
+- 🎯 **Lifecycle hooks** Replacing lifecycle events with interception chains for precise control and zero noise
 
 ### 🏃‍♂️ Running Your App (The New Way)
 
@@ -458,6 +459,17 @@ export type DebugConfig = {
 };
 // It's like having 17 different volume knobs for your debugging orchestra! 🎼
 ```
+
+### 🧵 Interception APIs
+
+Runner replaces hook/middleware lifecycle events with interception chains for precise control and zero noise:
+
+- `eventManager.intercept((next, event) => Promise<void>)` — intercept event emission
+- `eventManager.interceptHook((next, hook, event) => Promise<any>)` — intercept hook execution
+- `middlewareManager.intercept("task" | "resource", (next, input) => Promise<any>)` — intercept middleware execution
+- `middlewareManager.interceptMiddleware(middleware, interceptor)` — per-middleware interception
+
+Use these for observability, tracing, or policy enforcement. Prefer `task.intercept()` for app-level behavior.
 
 ### 🏷️ Type Contracts for Middleware and Tags
 

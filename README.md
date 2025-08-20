@@ -26,7 +26,7 @@ BlueLibs Runner is a TypeScript-first framework that embraces functional program
 - **Resources are singletons** - Database connections, configs, services - the usual suspects
 - **Events are just events** - Revolutionary concept, we know
 - **Hooks are lightweight listeners** - Event handling without the task overhead
-- **Middleware with lifecycle events** - Cross-cutting concerns with full observability
+- **Middleware with lifecycle interception** - Cross-cutting concerns with full observability
 - **Everything is async** - Because it's 2025 and blocking code is so 2005
 - **Explicit beats implicit** - No magic, no surprises, no "how the hell does this work?"
 - **Optional dependencies** - Graceful degradation when services aren't available
@@ -322,9 +322,9 @@ Hooks are perfect for:
 - Lighter weight - no middleware support
 - Designed specifically for event handling
 
-#### Global Events
+#### System Event
 
-The framework provides a simplified set of global events for system observability:
+The framework exposes a minimal system-level event for observability:
 
 ```typescript
 import { globals } from "@bluelibs/runner";
@@ -332,30 +332,16 @@ import { globals } from "@bluelibs/runner";
 const systemReadyHook = hook({
   id: "app.hooks.systemReady",
   on: globals.events.ready,
-  run: async (event) => {
+  run: async () => {
     console.log("🚀 System is ready and operational!");
-  },
-});
-
-const hookObserver = hook({
-  id: "app.hooks.hookObserver",
-  on: globals.events.hookTriggered,
-  run: async (event) => {
-    console.log(
-      `🪝 Hook ${event.data.hook.id} triggered for ${event.data.eventId}`,
-    );
   },
 });
 ```
 
-**Available Global Events:**
+Available system event:
 
 - `globals.events.ready` - System has completed initialization
-  // Note: global unhandled error event was removed. Use run({ onUnhandledError })
-- `globals.events.hookTriggered` - Before a hook executes
-- `globals.events.hookCompleted` - After a hook finishes
-- `globals.events.middlewareTriggered` - Before a middleware executes
-- `globals.events.middlewareCompleted` - After a middleware finishes
+  // Note: use run({ onUnhandledError }) for unhandled error handling
 
 #### stopPropagation()
 
@@ -492,6 +478,18 @@ const logTaskMiddleware = taskMiddleware({
 ```
 
 **Note:** A global middleware can depend on resources or tasks. However, any such resources or tasks will be excluded from the dependency tree (Task -> Middleware), and the middleware will not run for those specific tasks or resources. This approach gives middleware true flexibility and control.
+
+#### Interception (advanced)
+
+For advanced scenarios, you can intercept framework execution without relying on events:
+
+- Event emissions: `eventManager.intercept((next, event) => Promise<void>)`
+- Hook execution: `eventManager.interceptHook((next, hook, event) => Promise<any>)`
+- Task middleware execution: `middlewareManager.intercept("task", (next, input) => Promise<any>)`
+- Resource middleware execution: `middlewareManager.intercept("resource", (next, input) => Promise<any>)`
+- Per-middleware interception: `middlewareManager.interceptMiddleware(mw, interceptor)`
+
+Access `eventManager` via `globals.resources.eventManager` if needed.
 
 #### Middleware Type Contracts
 
@@ -1433,8 +1431,7 @@ const app = resource({
       logResourceResult: false,
       logEventEmissionOnRun: true,
       logEventEmissionInput: false,
-      logHookTriggered: true,
-      logHookCompleted: false,
+      // Hook/middleware lifecycle visibility is available via interceptors
       // ... other fine-grained options
     }),
   ],

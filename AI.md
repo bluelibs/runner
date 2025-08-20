@@ -102,6 +102,17 @@ const internal = event({
 });
 ```
 
+### Interception APIs
+
+Low-level interception is available for advanced observability and control:
+
+- `eventManager.intercept((next, event) => Promise<void>)` — wraps event emission
+- `eventManager.interceptHook((next, hook, event) => Promise<any>)` — wraps hook execution
+- `middlewareManager.intercept("task" | "resource", (next, input) => Promise<any>)` — wraps middleware execution
+- `middlewareManager.interceptMiddleware(middleware, interceptor)` — per-middleware interception
+
+Prefer task-level `task.intercept()` for application logic; use the above for cross-cutting concerns.
+
 ## Unhandled Errors
 
 By default, unhandled errors are just logged. You can customize this via `run(app, { onUnhandledError })`:
@@ -323,7 +334,7 @@ const { dispose } = await run(app, {
 
 Note: `globals` is a convenience object exposing framework internals:
 
-- `globals.events` (ready, hookTriggered, hookCompleted, middlewareTriggered, middlewareCompleted)
+- `globals.events` (ready)
 - `globals.resources` (store, taskRunner, eventManager, logger, cache, queue)
 - `globals.middleware` (retry, cache, timeout, requireContext)
 - `globals.tags` (system, debug, excludeFromGlobalHooks)
