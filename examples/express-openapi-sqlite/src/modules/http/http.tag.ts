@@ -5,7 +5,7 @@ import { ApiResponse, HttpRouteConfig } from "../types";
  * HTTP tag for marking tasks as HTTP endpoints.
  * Contains route configuration including method, path, auth requirements, etc.
  */
-export const httpTag = tag<HttpRouteConfig, ApiResponse>({
+export const httpTag = tag<HttpRouteConfig, void, ApiResponse>({
   id: "http.route",
 });
 

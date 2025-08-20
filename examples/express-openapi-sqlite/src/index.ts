@@ -7,7 +7,7 @@ import { app } from "./modules";
 async function startApp() {
   try {
     const { value: appInstance, dispose } = await run(app, {
-      debug: "normal",
+      debug: "verbose",
     });
     return appInstance;
   } catch (error) {

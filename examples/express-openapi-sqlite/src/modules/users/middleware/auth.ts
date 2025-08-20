@@ -1,4 +1,4 @@
-import { middleware } from "@bluelibs/runner";
+import { taskMiddleware } from "@bluelibs/runner";
 import jwt from "jsonwebtoken";
 import { UserContext } from "../user.context";
 import { usersRepository } from "../repository/users.repository";
@@ -9,7 +9,7 @@ export interface AuthMiddlewareConfig {
   requiresAuth?: boolean;
 }
 
-export const authMiddleware = middleware({
+export const authMiddleware = taskMiddleware({
   id: "app.middleware.auth",
   dependencies: { userService: usersRepository, appConfig },
   run: async (

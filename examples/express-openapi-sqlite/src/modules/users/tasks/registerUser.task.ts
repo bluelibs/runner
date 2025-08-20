@@ -25,28 +25,26 @@ const registerSchema = z.object({
 export const registerUserTask = task({
   id: "app.tasks.auth.register",
   dependencies: { appConfig, createUserTask },
-  meta: {
-    tags: [
-      httpRoute.post("/api/auth/register", {
-        summary: "Register a new user",
-        description: "Create a new user account",
-        tags: ["Authentication"],
-        requiresAuth: false,
-        requestBodySchema: registerSchema,
-        responseSchema: z.object({
-          success: z.boolean(),
-          data: z.object({
-            token: z.string(),
-            user: UserSchema,
-          }),
+  tags: [
+    httpRoute.post("/api/auth/register", {
+      summary: "Register a new user",
+      description: "Create a new user account",
+      tags: ["Authentication"],
+      requiresAuth: false,
+      requestBodySchema: registerSchema,
+      responseSchema: z.object({
+        success: z.boolean(),
+        data: z.object({
+          token: z.string(),
+          user: UserSchema,
         }),
       }),
-    ],
-  },
+    }),
+  ],
   inputSchema: registerSchema,
   run: async (
     userData: RegisterRequest,
-    { appConfig, createUserTask }
+    { appConfig, createUserTask },
   ): Promise<ApiResponse<LoginResponse>> => {
     try {
       // Create user
