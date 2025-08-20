@@ -2,8 +2,8 @@ import {
   defineTask,
   defineResource,
   defineEvent,
-  defineMiddleware,
   defineHook,
+  defineTaskMiddleware,
 } from "../../define";
 import { run } from "../../run";
 import { globals } from "../../index";
@@ -61,7 +61,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     const middlewareCount = 5;
 
     const middlewares = Array.from({ length: middlewareCount }, (_, idx) =>
-      defineMiddleware({
+      defineTaskMiddleware({
         id: `benchmark.middleware.${idx}`,
         run: async ({ next, task }) => {
           // Simple pass-through with minimal overhead
@@ -281,7 +281,7 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const expensiveTask = defineTask({
       id: "benchmark.cache.expensive",
-      middleware: [globals.middleware.cache.with({ ttl: 5000 })],
+      middleware: [globals.middleware.task.cache.with({ ttl: 5000 })],
       run: async (n: number) => {
         // Simulate expensive computation
         let result = 0;
@@ -296,7 +296,7 @@ describe("Comprehensive Performance Benchmarks", () => {
       id: "benchmark.cache.app",
       register: [
         expensiveTask,
-        globals.middleware.cache,
+        globals.middleware.task.cache,
         globals.resources.cache,
       ],
       dependencies: { expensiveTask },

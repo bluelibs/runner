@@ -163,7 +163,7 @@ export type RegisterableItems<T = any> =
   | IResource<{ [K in any]?: any }, any, any, any, any, any, any> // For optional config
   | ITask<any, any, any, any>
   | IHook<any, any>
-  | ITaskMiddleware<any>
-  | IResourceMiddleware<any>
+  | ITaskMiddleware<any, any, any, any>
+  | IResourceMiddleware<any, any, any, any>
   | IEvent<any>
-  | ITag<any, any>;
+  | ITag<any, any, any>;

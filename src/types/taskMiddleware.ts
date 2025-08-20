@@ -10,7 +10,6 @@ import {
   symbolFilePath,
   symbolMiddlewareConfigured,
   symbolTaskMiddleware,
-  symbolMiddlewareEverywhereTasks,
 } from "./symbols";
 import { IContractable } from "./contracts";
 
@@ -38,6 +37,7 @@ export interface ITaskMiddlewareDefinition<
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
   tags?: TagType[];
+  everywhere?: boolean | ((task: ITask<any, any, any, any>) => boolean);
 }
 
 export interface ITaskMiddleware<
@@ -53,10 +53,7 @@ export interface ITaskMiddleware<
     >,
     IContractable<TConfig, TEnforceInputContract, TEnforceOutputContract> {
   [symbolTaskMiddleware]: true;
-  [symbolMiddlewareEverywhereTasks]?:
-    | boolean
-    | ((task: ITask<any, any, any, any>) => boolean);
-
+  [symbolFilePath]: string;
   id: string;
   dependencies: TDependencies | (() => TDependencies);
   /** Current configuration object (empty by default). */
@@ -70,16 +67,6 @@ export interface ITaskMiddleware<
     TEnforceOutputContract,
     TDependencies
   >;
-  /** Attach globally to all tasks or filtered tasks. */
-  everywhere(
-    filter?: boolean | ((task: ITask<any, any, any, any>) => boolean),
-  ): ITaskMiddleware<
-    TConfig,
-    TEnforceInputContract,
-    TEnforceOutputContract,
-    TDependencies
-  >;
-  [symbolFilePath]: string;
   tags: TagType[];
 }
 

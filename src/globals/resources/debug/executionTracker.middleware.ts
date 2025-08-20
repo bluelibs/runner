@@ -10,6 +10,7 @@ import { getConfig } from "./types";
 
 export const tasksTrackerMiddleware = defineTaskMiddleware({
   id: "debug.middleware.tracker.task",
+  everywhere: (task) => !globalTags.system.exists(task),
   dependencies: {
     logger: globalResources.logger,
     debugConfig,
@@ -57,15 +58,17 @@ export const resourcesTrackerMiddleware = defineResourceMiddleware({
     debugConfig,
     store: globalResources.store,
   },
+  everywhere: (resource) => !globalTags.system.exists(resource),
   run: async ({ resource, next }, { logger, debugConfig, store }) => {
     const start = Date.now();
     debugConfig = getConfig(debugConfig, resource?.definition);
     const resourceStartMessage = `Resource ${
       resource!.definition.id
     } is initializing...`;
-    const shouldShowConfig =
-      debugConfig.logResourceConfig &&
-      Object.keys(resource!.config || {}).length > 0;
+
+    const isConfigEmpty = Object.keys(resource!.config || {}).length === 0;
+    const shouldShowConfig = debugConfig.logResourceConfig && !isConfigEmpty;
+
     await logger.info(resourceStartMessage, {
       data: shouldShowConfig ? { config: resource!.config } : undefined,
       source: "debug.middleware.tracker",

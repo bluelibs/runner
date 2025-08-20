@@ -7,9 +7,15 @@ import {
   IResourceMiddleware,
   ITag,
 } from "../defs";
-import { IDependentNode } from "../tools/findCircularDependencies";
+import {
+  findCircularDependencies,
+  IDependentNode,
+} from "./utils/findCircularDependencies";
 import { globalEventsArray } from "../globals/globalEvents";
-import { StoreAlreadyInitializedError } from "../errors";
+import {
+  CircularDependenciesError,
+  StoreAlreadyInitializedError,
+} from "../errors";
 import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
 import { StoreRegistry } from "./StoreRegistry";
@@ -63,7 +69,7 @@ export class Store {
     protected readonly logger: Logger,
     public readonly onUnhandledError: OnUnhandledError,
   ) {
-    this.registry = new StoreRegistry();
+    this.registry = new StoreRegistry(this);
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
     this.middlewareManager = new MiddlewareManager(this, eventManager, logger);
@@ -193,7 +199,19 @@ export class Store {
     this.registry.resources.set(root.id, this.root);
   }
 
-  initializeStore(root: IResource<any, any, any, any, any>, config: any) {
+  public validateDependencyGraph() {
+    // We verify that there isn't any circular dependencies before we begin computing the dependencies
+    const dependentNodes = this.registry.getDependentNodes();
+    const circularDependencies = findCircularDependencies(dependentNodes);
+    if (circularDependencies.cycles.length > 0) {
+      throw new CircularDependenciesError(circularDependencies.cycles);
+    }
+  }
+
+  public initializeStore(
+    root: IResource<any, any, any, any, any>,
+    config: any,
+  ) {
     if (this.#isInitialized) {
       throw new StoreAlreadyInitializedError();
     }
@@ -245,9 +263,5 @@ export class Store {
 
   public getResourcesWithTag(tag: string | ITag) {
     return this.registry.getResourcesWithTag(tag);
-  }
-
-  getDependentNodes(): IDependentNode[] {
-    return this.registry.getDependentNodes();
   }
 }

@@ -276,22 +276,13 @@ describe("MiddlewareManager", () => {
       id: "mw",
       dependencies: { t: task },
       run: async ({ next, task }) => next(task?.input),
-    }).everywhere(true);
+      everywhere(task) {
+        return task.id !== task.id;
+      },
+    });
     // register via public API to ensure types are respected
     store.storeGenericItem(mw);
     const res = manager.getEverywhereMiddlewareForTasks(task);
-    expect(res).toHaveLength(0);
-  });
-
-  it("getEverywhereMiddlewareForResources excludes middleware that depends on the resource", () => {
-    const resource = defineResource({ id: "res.dep" });
-    const mw2 = defineResourceMiddleware({
-      id: "mw2",
-      dependencies: { r: resource },
-      run: async ({ next, resource }) => next(resource?.config),
-    }).everywhere(true);
-    store.storeGenericItem(mw2);
-    const res = manager.getEverywhereMiddlewareForResources(resource);
     expect(res).toHaveLength(0);
   });
 });

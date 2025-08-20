@@ -3,13 +3,14 @@ import {
   defineResource,
   defineTask,
   defineTaskMiddleware,
-} from "../../define";
-import { run } from "../../run";
-import { globalEvents } from "../../globals/globalEvents";
-import { debugResource } from "../../globals/resources/debug/debug.resource";
+} from "../../../define";
+import { run } from "../../../run";
+import { globalEvents } from "../../../globals/globalEvents";
+import { debugResource } from "../../../globals/resources/debug/debug.resource";
 
-import { globalResources } from "../../globals/globalResources";
-import { levelVerbose } from "../../globals/resources/debug";
+import { globalResources } from "../../../globals/globalResources";
+import { levelVerbose } from "../../../globals/resources/debug";
+import { ILog } from "../../../models";
 
 Error.stackTraceLimit = Infinity;
 
@@ -185,6 +186,48 @@ describe("globals.resources.debug", () => {
     expect(
       infoLogs.some((m) => m.includes("Event tests.event.options emitted")),
     ).toBe(true);
+  });
+
+  it("should ensure that the config of the resource is printted if the conig exists", async () => {
+    const logs: ILog[] = [];
+    const collector = defineResource({
+      id: "tests.collector.options.debug",
+      dependencies: { logger: globalResources.logger },
+      async init(_, { logger }) {
+        logger.onLog((log) => {
+          logs.push(log);
+        });
+        return logs;
+      },
+    });
+
+    const myResourceWithConfig = defineResource({
+      id: "tests.resource.with.config",
+      async init(c: { name: string }) {
+        return c.name;
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.options",
+      register: [
+        collector,
+        debugResource.with("verbose"),
+        myResourceWithConfig.with({ name: "test" }),
+      ],
+      async init() {
+        return "done";
+      },
+    });
+
+    await run(app);
+
+    console.log(logs);
+    const resourceLogs = logs.filter((l) =>
+      l.message.includes("Resource tests.resource.with.config"),
+    );
+    expect(resourceLogs).toHaveLength(2);
+    expect(resourceLogs[0].data).toEqual({ config: { name: "test" } });
   });
 
   it("log the error when a task fails", async () => {

@@ -151,31 +151,9 @@ describe("Store", () => {
     expect(() => store.processOverrides()).not.toThrow();
   });
 
-  it("getDependentNodes handles empty middleware and task middleware arrays (branches)", () => {
-    const root = defineResource({ id: "root.dep.nodes", register: [] });
-    store.initializeStore(root, {});
-    // add a task with empty middleware
-    const t = defineTask({
-      id: "t.empty.mw",
-      middleware: [],
-      async run() {
-        return 1;
-      },
-    });
-    store.storeGenericItem(t);
-    const nodes = store.getDependentNodes();
-    expect(Array.isArray(nodes)).toBe(true);
-  });
-
   it("should call storeEventsForAllTasks method", () => {
     // Test storeEventsForAllTasks method (line 165)
     expect(() => store.storeEventsForAllTRM()).not.toThrow();
-  });
-
-  it("should call getDependentNodes method", () => {
-    // Test getDependentNodes method (line 169)
-    const result = store.getDependentNodes();
-    expect(Array.isArray(result)).toBe(true);
   });
 
   it("should call getTasksWithTag method", () => {

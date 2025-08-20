@@ -23,13 +23,13 @@ export const debugResource = defineResource({
       hookCompletedListener,
       middlewareTriggeredListener,
       middlewareCompletedListener,
-      tasksTrackerMiddleware.everywhere(),
-      resourcesTrackerMiddleware.everywhere(),
+      tasksTrackerMiddleware,
+      resourcesTrackerMiddleware,
     ];
   },
   meta: {
     title: "Debug",
     description: "Debug resource. This is used to debug the system.",
-    tags: [globalTags.system],
   },
+  tags: [globalTags.system],
 });

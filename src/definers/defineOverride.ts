@@ -14,22 +14,20 @@ import {
  * @param patch - Properties to override (except `id`).
  * @returns A definition of the same kind with overrides applied.
  */
-export function defineOverride<T extends ITask<any, any, any, any, any>>(
+export function defineOverride<T extends ITask<any, any, any, any, any, any>>(
   base: T,
   patch: Omit<Partial<T>, "id"> & Pick<T, "run">,
 ): T;
-export function defineOverride<T extends IResource<any, any, any, any, any>>(
+export function defineOverride<
+  T extends IResource<any, any, any, any, any, any>,
+>(base: T, patch: Omit<Partial<T>, "id"> & Pick<T, "init">): T;
+export function defineOverride<T extends ITaskMiddleware<any, any, any, any>>(
   base: T,
-  patch: Omit<Partial<T>, "id"> & Pick<T, "init">,
+  patch: Omit<Partial<T>, "id">,
 ): T;
-export function defineOverride<T extends ITaskMiddleware<any, any>>(
-  base: T,
-  patch: Omit<Partial<T>, "id"> & Pick<T, "run">,
-): T;
-export function defineOverride<T extends IResourceMiddleware<any, any>>(
-  base: T,
-  patch: Omit<Partial<T>, "id"> & Pick<T, "run">,
-): T;
+export function defineOverride<
+  T extends IResourceMiddleware<any, any, any, any>,
+>(base: T, patch: Omit<Partial<T>, "id"> & Pick<T, "run">): T;
 export function defineOverride<T extends IHook<any, any, any>>(
   base: T,
   patch: Omit<Partial<T>, "id" | "on"> & Pick<T, "run">,

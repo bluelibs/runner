@@ -67,7 +67,7 @@ export class CircularDependenciesError extends RuntimeError {
 
     if (hasMiddleware) {
       guidance +=
-        "\n  • For middleware: avoid depending on resources that use the same middleware";
+        "\n  • For middleware: you can filter out tasks/resources using everywhere(fn)";
       guidance +=
         "\n  • Consider using events for communication instead of direct dependencies";
     }
@@ -96,18 +96,6 @@ export class ResourceNotFoundError extends RuntimeError {
       `Resource "${id.toString()}" not found. Did you forget to register it or are you using the correct id?`,
     );
     this.name = "ResourceNotFoundError";
-  }
-}
-
-/**
- * Error thrown when attempting to make a middleware global when it's already global
- */
-export class MiddlewareAlreadyGlobalError extends RuntimeError {
-  constructor(id: string) {
-    super(
-      `Cannot call .everywhere() on an already global middleware. It's enough to call everywhere() only once: ${id.toString()}`,
-    );
-    this.name = "MiddlewareAlreadyGlobalError";
   }
 }
 

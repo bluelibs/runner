@@ -1,12 +1,12 @@
-import { defineEvent, defineHook, defineResource } from "../../define";
-import { globalResources } from "../../globals/globalResources";
-import { globalEventListener } from "../../globals/resources/debug";
+import { defineEvent, defineHook, defineResource } from "../../../define";
+import { globalResources } from "../../../globals/globalResources";
+import { globalEventListener } from "../../../globals/resources/debug";
 import {
   hookTriggeredListener,
   hookCompletedListener,
-} from "../../globals/resources/debug/hook.hook";
-import { ILog } from "../../models";
-import { run } from "../../run";
+} from "../../../globals/resources/debug/hook.hook";
+import { ILog } from "../../../models";
+import { run } from "../../../run";
 
 describe("globals.resources.debug.hook listeners", () => {
   it("Should log emission input when enabled", async () => {

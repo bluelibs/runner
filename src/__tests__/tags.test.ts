@@ -188,6 +188,7 @@ describe("Configurable Tags", () => {
 
       const performanceMiddleware = defineTaskMiddleware({
         id: "performance.middleware",
+        everywhere: true,
         run: async ({ task, next }) => {
           if (task?.definition.tags) {
             const extracted = performanceTag.extract(task.definition.tags);
@@ -216,12 +217,7 @@ describe("Configurable Tags", () => {
 
       const app = defineResource({
         id: "test.app",
-        register: [
-          fastTask,
-          slowTask,
-          performanceMiddleware.everywhere(),
-          performanceTag,
-        ],
+        register: [fastTask, slowTask, performanceMiddleware, performanceTag],
         dependencies: { fastTask, slowTask },
         init: async (_, { fastTask, slowTask }) => {
           await fastTask();

@@ -4,8 +4,6 @@ import {
   IResource,
   IResourceMiddleware,
   ITaskMiddleware,
-  symbolMiddlewareEverywhereTasks,
-  symbolMiddlewareEverywhereResources,
   ResourceMiddlewareAttachmentType,
   TagType,
 } from "../defs";
@@ -19,6 +17,7 @@ import { Logger } from "./Logger";
 import { globalEvents } from "../globals/globalEvents";
 import { ValidationError } from "../errors";
 import * as utils from "../define";
+import { symbol } from "zod";
 
 /**
  * Centralizes middleware composition and execution for both tasks and resources.
@@ -203,13 +202,6 @@ export class MiddlewareManager {
         middleware.id,
       )!;
 
-      // We no longer wrap, most likely it's global middleware running on the 'resource' it tries to register.
-      // This might collide with the functionality of middleware's dependencies, maybe fix it later.
-      if (!storeMiddleware.isInitialized) {
-        // Maybe this resource registers too early, and to avoid deadlocks, this is an elegant solution
-        continue;
-      }
-
       const nextFunction = next;
       next = async (cfg: C) => {
         await this.emitMiddlewareBeforeRun<C, V, D, TContext>(
@@ -350,19 +342,13 @@ export class MiddlewareManager {
     task: ITask<any, any, any, any>,
   ): ITaskMiddleware[] {
     return Array.from(this.store.taskMiddlewares.values())
+      .filter((x) => Boolean(x.middleware.everywhere))
       .filter((x) => {
-        const flag = x.middleware[symbolMiddlewareEverywhereTasks];
-        if (!flag) return false;
-
-        const deps = x.middleware.dependencies as DependencyMapType;
-        const isDependency = this.idExistsAsMiddlewareDependency(task.id, deps);
-        // If the middleware depends on the task, it should not be applied to the task, we exclude it.
-        if (isDependency) return false;
-
-        if (typeof flag === "function") {
-          return flag(task);
+        if (typeof x.middleware.everywhere === "function") {
+          return x.middleware.everywhere!(task);
         }
-        return Boolean(flag);
+
+        return true;
       })
       .map((x) => x.middleware);
   }
@@ -374,25 +360,14 @@ export class MiddlewareManager {
     target: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
     return Array.from(this.store.resourceMiddlewares.values())
+      .filter((x) => Boolean(x.middleware.everywhere))
       .filter((x) => {
-        const flag = x.middleware[symbolMiddlewareEverywhereResources];
-        if (!flag) return false;
+        if (typeof x.middleware.everywhere === "function") {
+          return x.middleware.everywhere!(target);
+        }
 
-        // If the middleware depends on the target resource, it should not be applied to the target resource
-        const isDependency = this.idExistsAsMiddlewareDependency(
-          target.id,
-          x.middleware.dependencies,
-        );
-        // If it's a direct dependency we exclude it.
-        return !isDependency;
+        return true;
       })
       .map((x) => x.middleware);
-  }
-
-  private idExistsAsMiddlewareDependency(id: string, deps: DependencyMapType) {
-    return Object.values(deps).some((x: any) => {
-      const candidate = utils.isOptional(x) ? (x as any).inner : x;
-      return (candidate as any)?.id === id;
-    });
   }
 }

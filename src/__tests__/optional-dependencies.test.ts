@@ -126,13 +126,16 @@ describe("Optional dependencies", () => {
 
     const mw = defineTaskMiddleware({
       id: "tests.optional.middleware",
+      everywhere(resource) {
+        return resource.id !== target.id;
+      },
       dependencies: {
         target: target.optional(),
       },
       async run({ next }) {
         return next();
       },
-    }).everywhere(true);
+    });
 
     const app = resource({
       id: "tests.optional.middleware.app",
@@ -276,6 +279,11 @@ describe("Optional dependencies", () => {
 
     const mw = defineTaskMiddleware({
       id: "everywhere.middleware",
+      everywhere(task) {
+        return ![registeredTask, nonRegisteredTask].some(
+          (t) => t.id === task.id,
+        );
+      },
       dependencies: {
         registeredResource,
         registeredTask,
@@ -298,12 +306,7 @@ describe("Optional dependencies", () => {
 
     const app = defineResource({
       id: "app",
-      register: [
-        mw.everywhere(true),
-        registeredTask,
-        registeredResource,
-        middlewarableTask,
-      ],
+      register: [mw, registeredTask, registeredResource, middlewarableTask],
     });
 
     const r = await run(app);
@@ -332,6 +335,11 @@ describe("Optional dependencies", () => {
 
     const mw = defineResourceMiddleware({
       id: "everywhere.middleware",
+      everywhere(task) {
+        return ![registeredResource, nonRegisteredResource].some(
+          (t) => t.id === task.id,
+        );
+      },
       dependencies: {
         registeredResource,
         registeredTask,
@@ -354,12 +362,7 @@ describe("Optional dependencies", () => {
 
     const app = defineResource({
       id: "app",
-      register: [
-        mw.everywhere(true),
-        registeredTask,
-        registeredResource,
-        middlewarableResource,
-      ],
+      register: [mw, registeredTask, registeredResource, middlewarableResource],
     });
 
     const r = await run(app);

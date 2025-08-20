@@ -2,14 +2,12 @@ import {
   IResourceMiddleware,
   IResourceMiddlewareDefinition,
   DependencyMapType,
-  IResource,
   symbolFilePath,
   symbolResourceMiddleware,
   symbolMiddlewareConfigured,
-  symbolMiddlewareEverywhereResources,
   IResourceMiddlewareConfigured,
 } from "../defs";
-import { MiddlewareAlreadyGlobalError, ValidationError } from "../errors";
+import { ValidationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 
 export function defineResourceMiddleware<
@@ -82,19 +80,6 @@ export function defineResourceMiddleware<
             ...config,
           },
         } satisfies IResourceMiddlewareConfigured<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
-      },
-      everywhere(
-        filter:
-          | boolean
-          | ((resource: IResource<any, any, any, any, any>) => boolean) = true,
-      ) {
-        if (obj[symbolMiddlewareEverywhereResources]) {
-          throw new MiddlewareAlreadyGlobalError(obj.id);
-        }
-        return wrap({
-          ...obj,
-          [symbolMiddlewareEverywhereResources]: filter,
-        } satisfies IResourceMiddleware<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
       },
     } as IResourceMiddleware<
       TConfig,

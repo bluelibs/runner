@@ -10,7 +10,6 @@ import {
   symbolFilePath,
   symbolMiddlewareConfigured,
   symbolResourceMiddleware,
-  symbolMiddlewareEverywhereResources,
 } from "./symbols";
 import { IContractable } from "./contracts";
 
@@ -38,6 +37,9 @@ export interface IResourceMiddlewareDefinition<
   ) => Promise<any>;
   meta?: IMiddlewareMeta;
   tags?: TagType[];
+  everywhere?:
+    | boolean
+    | ((resource: IResource<any, any, any, any, any>) => boolean);
 }
 
 export interface IResourceMiddleware<
@@ -53,9 +55,6 @@ export interface IResourceMiddleware<
     >,
     IContractable<TConfig, TEnforceInputContract, TEnforceOutputContract> {
   [symbolResourceMiddleware]: true;
-  [symbolMiddlewareEverywhereResources]?:
-    | boolean
-    | ((resource: IResource<any, any, any, any, any>) => boolean);
 
   id: string;
   dependencies: TDependencies | (() => TDependencies);
@@ -65,17 +64,6 @@ export interface IResourceMiddleware<
   with: (
     config: TConfig,
   ) => IResourceMiddlewareConfigured<
-    TConfig,
-    TEnforceInputContract,
-    TEnforceOutputContract,
-    TDependencies
-  >;
-  /** Attach globally to all resources or filtered resources. */
-  everywhere(
-    filter?:
-      | boolean
-      | ((resource: IResource<any, any, any, any, any>) => boolean),
-  ): IResourceMiddleware<
     TConfig,
     TEnforceInputContract,
     TEnforceOutputContract,

@@ -15,8 +15,8 @@ const store = defineResource<void, Promise<Store>>({
     title: "Store",
     description:
       "A global store that can be used to store and retrieve tasks, resources, events and middleware",
-    tags: [systemTag],
   },
+  tags: [systemTag],
 });
 
 export const globalResources = {
@@ -27,8 +27,8 @@ export const globalResources = {
       title: "Event Manager",
       description:
         "Manages all events and event listeners. This is meant to be used internally for most use-cases.",
-      tags: [systemTag],
     },
+    tags: [systemTag],
   }),
   taskRunner: defineResource<void, Promise<TaskRunner>>({
     id: "globals.resources.taskRunner",
@@ -36,8 +36,8 @@ export const globalResources = {
       title: "Task Runner",
       description:
         "Manages the execution of tasks and task dependencies. This is meant to be used internally for most use-cases.",
-      tags: [systemTag],
     },
+    tags: [systemTag],
   }),
   logger: defineResource<void, Promise<Logger>>({
     id: "globals.resources.logger",
@@ -47,6 +47,7 @@ export const globalResources = {
       description:
         "Logs all events and errors. This is meant to be used internally for most use-cases. Emits a globals.log event for each log.",
     },
+    tags: [systemTag],
   }),
   cache: cacheResource,
   queue: queueResource,

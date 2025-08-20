@@ -18,7 +18,6 @@ const {
   UnknownItemTypeError,
   CircularDependenciesError,
   EventNotFoundError,
-  MiddlewareAlreadyGlobalError,
   LockedError,
   StoreAlreadyInitializedError,
   ValidationError,
@@ -346,25 +345,6 @@ describe("Errors", () => {
     );
   });
 
-  it("should throw error, when a double global() is used on a middleware", async () => {
-    const first = defineTaskMiddleware({
-      id: "x",
-      run: async () => {},
-    }).everywhere();
-    expect(() => first.everywhere()).toThrow(
-      new MiddlewareAlreadyGlobalError("x").message,
-    );
-
-    const resourceMiddleware = defineResourceMiddleware({
-      id: "x",
-      run: async () => {},
-    }).everywhere();
-
-    expect(() => resourceMiddleware.everywhere()).toThrow(
-      new MiddlewareAlreadyGlobalError("x").message,
-    );
-  });
-
   describe("Error Classes", () => {
     it("should have correct error names and inheritance", () => {
       // Test base RuntimeError
@@ -399,11 +379,6 @@ describe("Errors", () => {
       const eventError = new EventNotFoundError("test");
       expect(eventError.name).toBe("EventNotFoundError");
       expect(eventError).toBeInstanceOf(RuntimeError);
-
-      // Test MiddlewareAlreadyGlobalError
-      const middlewareError = new MiddlewareAlreadyGlobalError("test");
-      expect(middlewareError.name).toBe("MiddlewareAlreadyGlobalError");
-      expect(middlewareError).toBeInstanceOf(RuntimeError);
 
       // Test LockedError
       const lockedError = new LockedError("test");

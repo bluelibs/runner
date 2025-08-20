@@ -1,10 +1,10 @@
-import { defineResource, defineTask } from "../../define";
-import { run } from "../../run";
-import { debugResource } from "../../globals/resources/debug";
-import { globalEvents } from "../../globals/globalEvents";
-import { globalResources } from "../../globals/globalResources";
-import { globalTags } from "../../globals/globalTags";
-import { defineEvent, defineHook } from "../../define";
+import { defineResource, defineTask } from "../../../define";
+import { run } from "../../../run";
+import { debugResource } from "../../../globals/resources/debug";
+import { globalEvents } from "../../../globals/globalEvents";
+import { globalResources } from "../../../globals/globalResources";
+import { globalTags } from "../../../globals/globalTags";
+import { defineEvent, defineHook } from "../../../define";
 
 describe("debug resource - ignored system/lifecycle events", () => {
   it("does not log system/lifecycle events from global listener", async () => {

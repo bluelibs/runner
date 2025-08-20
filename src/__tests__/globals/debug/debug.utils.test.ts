@@ -1,16 +1,16 @@
-import { hasSystemTag } from "../../globals/resources/debug/utils";
+import { hasSystemTag } from "../../../globals/resources/debug/utils";
 import {
   getConfig,
   levelNormal,
   levelVerbose,
-} from "../../globals/resources/debug/types";
-import { debugTag } from "../../globals/resources/debug/debug.tag";
-import { globalTags } from "../../globals/globalTags";
-import { defineResource } from "../../define";
-import { run } from "../../run";
-import { debugConfig } from "../../globals/resources/debug/debugConfig.resource";
-import { safeStringify } from "../../models/utils/safeStringify";
-import { ITaggable } from "../../defs";
+} from "../../../globals/resources/debug/types";
+import { debugTag } from "../../../globals/resources/debug/debug.tag";
+import { globalTags } from "../../../globals/globalTags";
+import { defineResource } from "../../../define";
+import { run } from "../../../run";
+import { debugConfig } from "../../../globals/resources/debug/debugConfig.resource";
+import { safeStringify } from "../../../models/utils/safeStringify";
+import { ITaggable } from "../../../defs";
 
 describe("debug utils and types", () => {
   it("safeStringify handles circular structures without throwing", () => {

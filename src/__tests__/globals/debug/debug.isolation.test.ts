@@ -1,8 +1,8 @@
-import { defineResource, defineTask } from "../../define";
-import { run } from "../../run";
-import { globalResources } from "../../globals/globalResources";
-import { debugResource } from "../../globals/resources/debug/debug.resource";
-import { levelNormal } from "../../globals/resources/debug/types";
+import { defineResource, defineTask } from "../../../define";
+import { run } from "../../../run";
+import { globalResources } from "../../../globals/globalResources";
+import { debugResource } from "../../../globals/resources/debug/debug.resource";
+import { levelNormal } from "../../../globals/resources/debug/types";
 
 Error.stackTraceLimit = Infinity;
 

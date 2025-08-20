@@ -6,10 +6,9 @@ import {
   symbolFilePath,
   symbolTaskMiddleware,
   symbolMiddlewareConfigured,
-  symbolMiddlewareEverywhereTasks,
   ITaskMiddlewareConfigured,
 } from "../defs";
-import { MiddlewareAlreadyGlobalError, ValidationError } from "../errors";
+import { ValidationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 
 export function defineTaskMiddleware<
@@ -83,17 +82,6 @@ export function defineTaskMiddleware<
             ...config,
           },
         } satisfies ITaskMiddlewareConfigured<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
-      },
-      everywhere(
-        filter: boolean | ((task: ITask<any, any, any, any>) => boolean) = true,
-      ) {
-        if (obj[symbolMiddlewareEverywhereTasks]) {
-          throw new MiddlewareAlreadyGlobalError(obj.id);
-        }
-        return wrap({
-          ...obj,
-          [symbolMiddlewareEverywhereTasks]: filter,
-        } as ITaskMiddleware<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
       },
     } as ITaskMiddleware<
       TConfig,

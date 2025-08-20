@@ -23,15 +23,12 @@ export const symbolMiddlewareConfigured: unique symbol = Symbol(
 );
 /** @internal Marks hook definitions (event listeners without middleware) */
 export const symbolHook: unique symbol = Symbol("runner.hook");
-export const symbolMiddlewareGlobal: unique symbol = Symbol(
-  "runner.middlewareGlobal",
-);
-export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol(
-  "runner.middlewareGlobalTasks",
-);
-export const symbolMiddlewareEverywhereResources: unique symbol = Symbol(
-  "runner.middlewareGlobalResources",
-);
+// export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol(
+//   "runner.middlewareGlobalTasks",
+// );
+// export const symbolMiddlewareEverywhereResources: unique symbol = Symbol(
+//   "runner.middlewareGlobalResources",
+// );
 /** @internal Marks a tag definition */
 export const symbolTag: unique symbol = Symbol("runner.tag");
 export const symbolTagConfigured: unique symbol = Symbol(

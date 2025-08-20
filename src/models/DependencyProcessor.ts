@@ -269,11 +269,13 @@ export class DependencyProcessor {
         throw e;
       }
     }
+    this.logger.trace(`Finished computing dependencies for source: ${source}`);
 
     return object;
   }
 
   async extractDependency(object: any, source: string) {
+    this.logger.trace(`Extracting dependency -> ${source} -> ${object?.id}`);
     if (utils.isOptional(object)) {
       const inner = object.inner;
       if (utils.isResource(inner)) {
