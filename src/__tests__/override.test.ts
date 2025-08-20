@@ -139,4 +139,25 @@ describe("override() helper", () => {
     await run(wrap);
     expect(value).toBe(2);
   });
+
+  it("should just ignore and allow null and undefined overrides", async () => {
+    const base = task({
+      id: "test.task",
+      run: async () => "base",
+    });
+
+    const changed = override(base, {
+      run: async () => "changed",
+      meta: { title: "Updated" },
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [base],
+      overrides: [changed, null, undefined],
+    });
+
+    const result = await run(app);
+    await expect(result.runTask(base)).resolves.toBe("base");
+  });
 });

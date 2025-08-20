@@ -290,21 +290,11 @@ export class EventManager {
     event: IEventEmission<any>,
     computedDependencies: DependencyValuesType<any>,
   ): Promise<any> {
-    // Internal observability events are tagged to be excluded from global listeners.
-    // We detect them by tag so we don't double-wrap them with our own hookTriggered/hookCompleted.
-    const isObservabilityEvent =
-      globalTags?.excludeFromGlobalHooks?.exists(event);
-
     // Base hook execution function
     const baseExecute = async (
       hookToExecute: IHook<any, any>,
       eventForHook: IEventEmission<any>,
     ): Promise<any> => {
-      // The logic here is that we don't want to have lifecycle events for the events that are excluded from global ones.
-      if (isObservabilityEvent) {
-        return hookToExecute.run(eventForHook, computedDependencies);
-      }
-
       try {
         const result = await hookToExecute.run(
           eventForHook,

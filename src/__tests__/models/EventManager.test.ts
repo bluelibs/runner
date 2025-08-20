@@ -1019,5 +1019,83 @@ describe("EventManager", () => {
     expect(handlerGlobal).not.toHaveBeenCalled();
   });
 
+  it("should still run emission interceptors for events tagged excludeFromGlobalHooks", async () => {
+    const taggedEvent = defineEvent<string>({
+      id: "observ.event",
+      tags: [globalTags.excludeFromGlobalHooks],
+    });
+
+    const executionOrder: string[] = [];
+    const interceptor = jest.fn(async (next, event) => {
+      executionOrder.push("interceptor");
+      await next(event);
+      executionOrder.push("interceptor-end");
+    });
+
+    const handlerEvent = jest.fn(() => executionOrder.push("event-listener"));
+    const handlerGlobal = jest.fn(() => executionOrder.push("global-listener"));
+
+    eventManager.intercept(interceptor);
+    eventManager.addListener(taggedEvent, handlerEvent);
+    eventManager.addGlobalListener(handlerGlobal);
+
+    await eventManager.emit(taggedEvent, "data", "src");
+
+    expect(interceptor).toHaveBeenCalledTimes(1);
+    expect(handlerEvent).toHaveBeenCalledTimes(1);
+    expect(handlerGlobal).not.toHaveBeenCalled();
+    expect(executionOrder).toEqual([
+      "interceptor",
+      "event-listener",
+      "interceptor-end",
+    ]);
+  });
+
+  it("should still run hook interceptors for events tagged excludeFromGlobalHooks", async () => {
+    const executionOrder: string[] = [];
+    const hookInterceptor = jest.fn(async (next, hook, event) => {
+      executionOrder.push("hook-interceptor");
+      const result = await next(hook, event);
+      executionOrder.push("hook-interceptor-end");
+      return result;
+    });
+
+    eventManager.interceptHook(hookInterceptor);
+
+    const mockHook = {
+      id: "observHook",
+      run: jest.fn(async () => {
+        executionOrder.push("hook-run");
+        return "ok";
+      }),
+    } as any;
+
+    const mockEvent = {
+      id: "evt",
+      data: "x",
+      timestamp: new Date(),
+      source: "s",
+      meta: {},
+      stopPropagation: () => {},
+      isPropagationStopped: () => false,
+      tags: [globalTags.excludeFromGlobalHooks],
+    } as any;
+
+    const result = await eventManager.executeHookWithInterceptors(
+      mockHook,
+      mockEvent,
+      {},
+    );
+
+    expect(result).toBe("ok");
+    expect(hookInterceptor).toHaveBeenCalledTimes(1);
+    expect(mockHook.run).toHaveBeenCalledWith(mockEvent, {});
+    expect(executionOrder).toEqual([
+      "hook-interceptor",
+      "hook-run",
+      "hook-interceptor-end",
+    ]);
+  });
+
   // Hook lifecycle events are no longer emitted by EventManager; related tests removed
 });
