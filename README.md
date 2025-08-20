@@ -10,8 +10,9 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 </p>
 
 - [UX Friendly Docs](https://bluelibs.github.io/runner/)
-- [AI Friendly Docs (<4000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)
+- [AI Friendly Docs (<4500 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)
 - [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)
+- [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)
 - [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite)
 
 Welcome to BlueLibs Runner, where we've taken the chaos of modern application architecture and turned it into something that won't make you question your life choices at 3am. This isn't just another framework – it's your new best friend who actually understands that code should be readable, testable, and not require a PhD in abstract nonsense to maintain.
@@ -22,14 +23,14 @@ BlueLibs Runner is a TypeScript-first framework that embraces functional program
 
 ### The Core
 
-- **Tasks are functions** - Not classes with 47 methods you'll never use
+- **Tasks are functions** - Not classes with 47 methods you swear you'll refactor
 - **Resources are singletons** - Database connections, configs, services - the usual suspects
 - **Events are just events** - Revolutionary concept, we know
 - **Hooks are lightweight listeners** - Event handling without the task overhead
 - **Middleware with lifecycle interception** - Cross-cutting concerns with full observability
 - **Everything is async** - Because it's 2025 and blocking code is so 2005
 - **Explicit beats implicit** - No magic, no surprises, no "how the hell does this work?"
-- **Optional dependencies** - Graceful degradation when services aren't available
+- **No compromise on type-safety** - Everything is and will be type-enforced. Catch mistakes before they catch you.
 
 ## Quick Start
 
