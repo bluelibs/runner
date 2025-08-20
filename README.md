@@ -472,10 +472,15 @@ const adminTask = task({
 Want to add logging to everything? Authentication to all tasks? Global middleware has your back:
 
 ```typescript
-import { middleware, globals } from "@bluelibs/runner";
+import { taskMiddleware, globals } from "@bluelibs/runner";
 
-const logTaskMiddleware = middleware.task({
+const logTaskMiddleware = taskMiddleware({
   id: "app.middleware.log.task",
+  everywhere: true,
+  // or use a filter if you want to depend on certain tasks to exclude them from getting the middleware applied
+  everywhere(task) {
+    return true;
+  }, // true means it gets included.
   dependencies: { logger: globals.resources.logger },
   run: async ({ task, next }, { logger }) => {
     logger.info(`Executing: ${String(task!.definition.id)}`);
@@ -483,16 +488,6 @@ const logTaskMiddleware = middleware.task({
     logger.info(`Completed: ${String(task!.definition.id)}`);
     return result;
   },
-});
-
-const app = resource({
-  id: "app",
-  register: [
-    // Apply to all tasks
-    logTaskMiddleware.everywhere(true),
-    // Or filter which tasks receive it
-    logTaskMiddleware.everywhere((t) => Boolean(myTag.extract(t))),
-  ],
 });
 ```
 

@@ -4,6 +4,7 @@ import {
   defineEvent,
   defineHook,
   defineTaskMiddleware,
+  defineResourceMiddleware,
 } from "../../define";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
@@ -1121,5 +1122,50 @@ describe("run", () => {
       await run(app);
       expect(handler).toHaveBeenCalled();
     });
+  });
+
+  it("should ensure that register.init() is called more than once", async () => {
+    const init = jest.fn();
+    const frequentlyUsedResource = defineResource({
+      id: "frequently.used.resource",
+      init,
+    });
+
+    const middleware = defineResourceMiddleware({
+      id: "middleware",
+      everywhere: true,
+      run: async ({ next }) => {
+        return next();
+      },
+    });
+
+    const r1 = defineResource({
+      id: "r1",
+      dependencies: { frequentlyUsedResource },
+      async init(_, { frequentlyUsedResource }) {
+        return frequentlyUsedResource;
+      },
+    });
+
+    const r2 = defineResource({
+      id: "r2",
+      register: [r1],
+      dependencies: { r1 },
+      async init(_, { r1 }) {
+        return r1;
+      },
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [r2, frequentlyUsedResource, middleware],
+      dependencies: { r2 },
+      async init(_, { r2 }) {
+        return r2;
+      },
+    });
+
+    await run(app);
+    expect(init).toHaveBeenCalledTimes(1);
   });
 });

@@ -267,16 +267,14 @@ const resilientTask = task({
 });
 
 // Global middleware
-const appWithGlobal = resource({
-  id: "app",
-  // Note: To prevent deadlocks, a global middleware that depends on a resource
-  // will be silently excluded from running on that specific resource.
-  register: [
-    // Same logic for task, task allowing you to add a filter function.
-    auth.everywhere(),
-    auth.everywhere((resource) => true), // filter easily, most likely via tags, but you have control
-  ],
+const globalTaskMiddleware = taskMiddleware({
+  id: "...",
+  everywhere: true, // Use everywhere: (task) => boolean, where true means it gets applied
+  // ... rest as usual ...
+  // if you have dependencies as task, exclude them via everywhere filter.
 });
+
+// Similar behavior for resourceMiddleware({ ... });
 ```
 
 ## Context (request-scoped values)

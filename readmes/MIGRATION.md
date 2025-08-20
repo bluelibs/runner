@@ -5,7 +5,7 @@
 - 🎣 **Hook system got its own apartment!** No more living with tasks - they're officially separated
 - 🤫 **Invisible events with `globals.tags.excludeFromGlobalHooks`** - because sometimes events need privacy too
   - Perfect for avoiding those awkward deadlock situations when your global events get a little too chatty with side-effects
-- 🏷️ **System tagging with `globals.tags.system`** - like putting a "Do Not Disturb" sign on your runner internals
+- 🏷️ **System tagging with `globals.tags.system`** - like putting a "Do Not Disturb" sign on your runner internals.
 - 🎯 **Task interception powers** - resources can now be nosy neighbors to specific tasks
 - 🤷‍♀️ **Optional dependencies with `.optional()`** - for when you want dependencies but they might ghost you
 - 🛡️ **Result schema validation** - because trust is good, but validation is better
@@ -16,6 +16,7 @@
 - 🧪 **Simpler testing with `RunResult`** - `createTestResource` is deprecated; use `run()` and the returned `RunResult` helpers
 - 🎭 **The Great Middleware Split of 2025** - middleware finally figured out what they want to be when they grow up
 - 🏷️ **Tags got promoted!** - no more living in meta's basement, they're top-level citizens now
+- 🧅 **Middleware `everywhere` is now an option, not a builder!** No more `.everywhere(...)` chaining—just use the `everywhere` property directly in your middleware definition for global application.
 
 ### 🏃‍♂️ Running Your App (The New Way)
 
@@ -67,8 +68,9 @@ const app = resource({
 });
 
 const r = await run(app);
-const kind = await r.runTask(getDbKind);
-const dbValue = r.getResourceValue("db");
+const kind = await r.runTask(getDbKind); // use the objects for typesafety
+const dbValue = r.getResourceValue("db"); // use objects for typesafety
+const emission = r.emitEvent(event, payload);
 await r.dispose();
 ```
 
@@ -263,16 +265,28 @@ const resourceSpecialist = resourceMiddleware({
 });
 ```
 
-**The `.everywhere()` pattern got smarter too:**
+### 🧅 Middleware: `everywhere` is now an option, not a builder
+
+Previously, you could use the builder pattern to apply middleware everywhere, like this:
 
 ```ts
-// Before: One middleware trying to do it all
-middleware.everywhere({ tasks: true, resources: true });
-
-// After: Each knows their lane
-taskSpecialist.everywhere(); // Only applies to tasks, duh!
-resourceSpecialist.everywhere(); // Resources only, thank you very much
+const globalTaskMiddleware = taskMiddleware({ id: "..." }).everywhere(
+  (task) => true,
+);
 ```
+
+**Now:**  
+The `everywhere` property is a direct option on the middleware definition object:
+
+```ts
+const globalTaskMiddleware = taskMiddleware({
+  id: "...",
+  everywhere: true, // or a function: (task) => boolean
+  // ...rest as usual
+});
+```
+
+This change makes the API more consistent and type-safe. Update your middleware definitions accordingly.
 
 ### 🏷️ Tags Got Promoted! (No More Living in Meta's Basement)
 
@@ -450,10 +464,11 @@ export type DebugConfig = {
 We've enhanced the type system to support stronger contracts:
 
 **Middleware Type Contracts:**
+
 ```ts
 // Middleware now supports <Config, Input, Output> type contracts
 const authMiddleware = taskMiddleware<
-  { role: string },           // Config
+  { role: string }, // Config
   { user: { role: string } }, // Input type enforcement
   { user: { role: string; verified: boolean } } // Output type enforcement
 >({
@@ -474,6 +489,7 @@ const resourceMiddleware = resourceMiddleware<Config, Input, Output>({
 ```
 
 **Tag Contracts:**
+
 ```ts
 // Tags now use <Config, Unused, Output> for return type enforcement
 const userContract = tag<void, void, { name: string }>({ id: "contract.user" });
@@ -481,7 +497,7 @@ const ageContract = tag<void, void, { age: number }>({ id: "contract.age" });
 
 // Tasks must return data matching all tag contracts
 const getProfile = task({
-  id: "app.tasks.getProfile", 
+  id: "app.tasks.getProfile",
   tags: [userContract, ageContract],
   run: async () => ({ name: "Ada", age: 37 }), // Must satisfy both contracts
 });
