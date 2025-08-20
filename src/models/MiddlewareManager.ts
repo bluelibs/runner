@@ -204,7 +204,11 @@ export class MiddlewareManager {
       )!;
 
       // We no longer wrap, most likely it's global middleware running on the 'resource' it tries to register.
-      if (!storeMiddleware.isInitialized) continue;
+      // This might collide with the functionality of middleware's dependencies, maybe fix it later.
+      if (!storeMiddleware.isInitialized) {
+        // Maybe this resource registers too early, and to avoid deadlocks, this is an elegant solution
+        continue;
+      }
 
       const nextFunction = next;
       next = async (cfg: C) => {

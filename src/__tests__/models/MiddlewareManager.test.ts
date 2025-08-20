@@ -75,11 +75,13 @@ describe("MiddlewareManager", () => {
     store.taskMiddlewares.set(m1.id, {
       middleware: m1,
       computedDependencies: {},
-    } as any);
+      isInitialized: true,
+    });
     store.taskMiddlewares.set(m2.id, {
       middleware: m2,
       computedDependencies: {},
-    } as any);
+      isInitialized: true,
+    });
 
     const runner = manager.composeTaskRunner(task);
     const result = await runner(1);
@@ -235,6 +237,7 @@ describe("MiddlewareManager", () => {
     store.resourceMiddlewares.set(m.id, {
       middleware: m,
       computedDependencies: {},
+      isInitialized: true,
     } as any);
 
     const result = await manager.runResourceInit(resource, { n: 5 }, {}, {});

@@ -64,6 +64,7 @@ export class DependencyProcessor {
       );
 
       middleware.computedDependencies = computedDependencies;
+      middleware.isInitialized = true;
     }
 
     for (const middleware of this.store.taskMiddlewares.values()) {
@@ -73,6 +74,7 @@ export class DependencyProcessor {
       );
 
       middleware.computedDependencies = computedDependencies;
+      middleware.isInitialized = true;
     }
 
     for (const resource of this.store.resources.values()) {
@@ -147,6 +149,7 @@ export class DependencyProcessor {
       deps,
       extracted,
     );
+    // resource.isInitialized = true;
   }
 
   private wrapResourceDependencies<TD extends DependencyMapType>(
@@ -255,7 +258,16 @@ export class DependencyProcessor {
     const object = {} as DependencyValuesType<T>;
 
     for (const key in map) {
-      object[key] = await this.extractDependency(map[key], source);
+      try {
+        object[key] = await this.extractDependency(map[key], source);
+      } catch (e) {
+        const errorMessage = String(e);
+        this.logger.error(
+          `Failed to extract dependency from source: ${source} -> ${key} with error: ${errorMessage}`,
+        );
+
+        throw e;
+      }
     }
 
     return object;
@@ -305,8 +317,6 @@ export class DependencyProcessor {
     }
 
     if (!storeTask.isInitialized) {
-      storeTask.isInitialized = true;
-
       // it's sanitised
       const dependencies = object.dependencies as DependencyMapType;
 
@@ -314,6 +324,7 @@ export class DependencyProcessor {
         dependencies,
         storeTask.task.id,
       );
+      storeTask.isInitialized = true;
     }
 
     return (input: unknown) => {

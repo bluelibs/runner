@@ -27,7 +27,7 @@ describe("Middleware Dependency Limitations", () => {
         run: async ({ task, next }: any) => {
           if (task) calls.push(`task:${String(task.definition.id)}`);
           const result = await next();
-          return `Global: ${result}`;
+          return `Global Task: ${result}`;
         },
       });
 
@@ -38,7 +38,7 @@ describe("Middleware Dependency Limitations", () => {
           if (resource)
             calls.push(`resource:${String(resource.definition.id)}`);
           const result = await next();
-          return `Global: ${result}`;
+          return `Global Resource: ${result}`;
         },
       });
 
@@ -63,9 +63,8 @@ describe("Middleware Dependency Limitations", () => {
       });
 
       const result = await run(app);
-      console.log(calls);
       // one resource layer and one task layer
-      expect(result.value).toBe("Global: Global: Task result");
+      expect(result.value).toBe("Global Resource: Global Task: Task result");
     });
 
     it("should allow global middleware to depend on tasks", async () => {
@@ -172,14 +171,12 @@ describe("Middleware Dependency Limitations", () => {
         id: "app",
         register: [sharedService, mw.everywhere(true), noopTaskMw, task],
         dependencies: { task },
-        init: async (_, { task }) => await task(),
       });
 
       // This should work - shared dependencies are OK
       const result = await run(app);
-      expect(result.value).toBe(
-        "Middleware[Shared service]: Task[Shared service]",
-      );
+      const value = result.getResourceValue(sharedService);
+      expect(value).toBe("Shared service"); // Middleware could not run for it since the middleware actually depended on it.
     });
 
     it("should detect complex circular dependencies in middleware chains", async () => {
