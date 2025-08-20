@@ -50,6 +50,7 @@ export type TaskMiddlewareStoreElementType<
 > = {
   middleware: ITaskMiddleware<any, TDeps>;
   computedDependencies: DependencyValuesType<TDeps>;
+  isInitialized: boolean;
 };
 
 export type ResourceMiddlewareStoreElementType<
@@ -57,6 +58,7 @@ export type ResourceMiddlewareStoreElementType<
 > = {
   middleware: IResourceMiddleware<any, TDeps>;
   computedDependencies: DependencyValuesType<TDeps>;
+  isInitialized: boolean;
 };
 
 export type EventStoreElementType = {

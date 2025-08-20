@@ -11,7 +11,7 @@ import {
   symbolMiddlewareConfigured,
   symbolResourceMiddleware,
   symbolMiddlewareEverywhereResources,
-} from "./utilities";
+} from "./symbols";
 import { IContractable } from "./contracts";
 
 export interface IResourceMiddlewareDefinition<

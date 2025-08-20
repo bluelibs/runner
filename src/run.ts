@@ -165,6 +165,7 @@ export async function run<C, V extends Promise<any>>(
     );
   } catch (err) {
     // Rollback initialized resources
+    onUnhandledError({ error: err, kind: "resourceInit", source: resource.id });
     await disposeAll();
     throw err;
   }

@@ -15,7 +15,7 @@
  * - Safe overrides and strong typing around config and register mechanics
  */
 export * from "./types/utilities";
-
+export * from "./types/symbols";
 export * from "./types/tag";
 export * from "./types/hook";
 export * from "./types/resource";

@@ -56,12 +56,12 @@ export class MiddlewareManager {
         }
       }
 
-      const deps = storeTask?.computedDependencies as any;
+      const deps = storeTask.computedDependencies;
       try {
         const rawResult = await task.run.call(null, input, deps);
         if (task.resultSchema) {
           try {
-            return task.resultSchema.parse(rawResult as any);
+            return task.resultSchema.parse(rawResult);
           } catch (error) {
             throw new ValidationError("Task result", task.id, error as any);
           }
@@ -121,7 +121,7 @@ export class MiddlewareManager {
               },
               next: nextFunction,
             },
-            storeMiddleware?.computedDependencies as DependencyMapType,
+            storeMiddleware.computedDependencies,
             middleware.config,
           );
           await this.eventManager.emit(
@@ -202,6 +202,9 @@ export class MiddlewareManager {
       const storeMiddleware = this.store.resourceMiddlewares.get(
         middleware.id,
       )!;
+
+      // We no longer wrap, most likely it's global middleware running on the 'resource' it tries to register.
+      if (!storeMiddleware.isInitialized) continue;
 
       const nextFunction = next;
       next = async (cfg: C) => {

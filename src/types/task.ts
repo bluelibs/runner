@@ -8,7 +8,7 @@ import {
 } from "../defs";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
-import { symbolFilePath, symbolTask } from "./utilities";
+import { symbolFilePath, symbolTask } from "./symbols";
 import {
   EnsureInputSatisfiesContracts,
   EnsureOutputSatisfiesContracts,

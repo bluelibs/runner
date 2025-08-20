@@ -14,6 +14,8 @@ import {
   ValidationError,
 } from "../../errors";
 import z from "zod";
+import { globalResources } from "../../globals/globalResources";
+import { Logger } from "../../models";
 
 describe("Middleware", () => {
   it("should be able to register the middleware and execute it", async () => {
@@ -627,7 +629,13 @@ describe("Middleware behavior (no lifecycle)", () => {
 
     const mw = defineResourceMiddleware({
       id: "mw.events.res.local",
-      run: async ({ next }) => next({}),
+      dependencies: {
+        logger: globalResources.logger,
+      },
+      run: async ({ next }, { logger }) => {
+        expect(logger).toBeInstanceOf(Logger);
+        return next();
+      },
     });
     const sub = defineResource({
       id: "sub.res",

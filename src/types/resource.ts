@@ -15,7 +15,7 @@ import {
   symbolIndexResource,
   symbolResource,
   symbolResourceWithConfig,
-} from "./utilities";
+} from "./symbols";
 import {
   EnsureInputSatisfiesContracts,
   EnsureOutputSatisfiesContracts,

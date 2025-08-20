@@ -11,7 +11,7 @@ import {
   symbolMiddlewareConfigured,
   symbolTaskMiddleware,
   symbolMiddlewareEverywhereTasks,
-} from "./utilities";
+} from "./symbols";
 import { IContractable } from "./contracts";
 
 export interface ITaskMiddlewareDefinition<

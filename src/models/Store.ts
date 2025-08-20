@@ -153,6 +153,7 @@ export class Store {
       this.registry.taskMiddlewares.set(middleware.id, {
         middleware: middleware as any,
         computedDependencies: {},
+        isInitialized: false,
       });
     });
 
@@ -164,6 +165,7 @@ export class Store {
       this.registry.resourceMiddlewares.set(middleware.id, {
         middleware: middleware as any,
         computedDependencies: {},
+        isInitialized: false,
       });
     });
   }

@@ -85,7 +85,7 @@ export class StoreRegistry {
     // store separately
     this.hooks.set(hook.id, {
       hook,
-      computedDependencies: hook.dependencies,
+      computedDependencies: {},
     });
   }
 
@@ -104,7 +104,8 @@ export class StoreRegistry {
 
     this.taskMiddlewares.set(item.id, {
       middleware,
-      computedDependencies: middleware.dependencies,
+      computedDependencies: {},
+      isInitialized: false,
     });
   }
 
@@ -122,7 +123,8 @@ export class StoreRegistry {
 
     this.resourceMiddlewares.set(item.id, {
       middleware,
-      computedDependencies: middleware.dependencies,
+      computedDependencies: {},
+      isInitialized: false,
     });
   }
 
