@@ -8,6 +8,9 @@ async function startApp() {
   try {
     const { value: appInstance, dispose } = await run(app, {
       debug: "verbose",
+      logs: {
+        printThreshold: "debug",
+      },
     });
     return appInstance;
   } catch (error) {
@@ -16,6 +19,7 @@ async function startApp() {
 }
 
 // Start the app if this file is run directly
+// This is to allow the tests to run the app without having to run the startApp function.
 if (require.main === module) {
   startApp();
 }

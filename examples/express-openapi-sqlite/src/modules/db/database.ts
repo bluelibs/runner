@@ -48,7 +48,7 @@ export const db = resource({
 
     const get = <T = any>(
       sql: string,
-      params?: any[]
+      params?: any[],
     ): Promise<T | undefined> => {
       return new Promise((resolve, reject) => {
         db.get(sql, params || [], (err, row) => {

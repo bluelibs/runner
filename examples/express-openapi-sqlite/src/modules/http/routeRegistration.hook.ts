@@ -135,6 +135,8 @@ export const routeRegistrationHook = hook({
       paths,
     });
 
+    logger.info(`🔗 Registered a total of ${routesRegistered} routes`);
+
     app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openApiSpec));
     logger.info(`🔗 Swagger UI available at http://localhost:${port}/api-docs`);
 

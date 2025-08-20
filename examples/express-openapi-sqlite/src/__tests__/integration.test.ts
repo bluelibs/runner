@@ -28,6 +28,7 @@ describe("Express OpenAPI SQLite Integration", () => {
         }),
       ],
     });
+
     const rr = await run(testApp);
     appInstance = rr.value;
     dispose = rr.dispose;
