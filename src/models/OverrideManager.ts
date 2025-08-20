@@ -31,6 +31,10 @@ export class OverrideManager {
 
   storeOverridesDeeply<C>(element: IResource<C, any, any>) {
     element.overrides.forEach((override) => {
+      if (!override) {
+        return;
+      }
+
       if (utils.isResource(override)) {
         this.storeOverridesDeeply(override);
       }

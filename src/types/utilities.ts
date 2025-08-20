@@ -42,13 +42,21 @@ export type RequiredKeys<T> = {
   [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
 }[keyof T];
 
+/**
+ * The reason we accept null and undefined is because we want to be able to offer beautiful DX:
+ * overrides: [
+ *    process.env.NODE_ENV === 'production' ? prodEmailer : null,
+ * ]
+ */
 export type OverridableElements =
   | IResource<any, any, any, any, any>
   | ITask<any, any, any, any>
   | ITaskMiddleware<any>
   | IResourceMiddleware<any, any>
   | IResourceWithConfig<any, any, any>
-  | IHook<any, any>;
+  | IHook<any, any>
+  | undefined
+  | null;
 
 /**
  * A mapping of dependency keys to Runner definitions. Used in `dependencies`
