@@ -44,14 +44,14 @@ async function demonstrateInterceptors() {
   const eventManager = new EventManager();
 
   console.log("1. Adding emission interceptors:");
-  eventManager.interceptEmission(async (next, event) => {
+  eventManager.intercept(async (next, event) => {
     console.log(`[Interceptor 1] Event about to be emitted: ${event.id}`);
     const result = await next(event);
     console.log(`[Interceptor 1] Event emission completed: ${event.id}`);
     return result;
   });
 
-  eventManager.interceptEmission(async (next, event) => {
+  eventManager.intercept(async (next, event) => {
     console.log(`[Interceptor 2] Event about to be emitted: ${event.id}`);
     const result = await next(event);
     console.log(`[Interceptor 2] Event emission completed: ${event.id}`);
@@ -104,7 +104,7 @@ async function demonstrateInterceptors() {
     isPropagationStopped: () => false,
   };
 
-  await eventManager.executeHookWithInterceptors(userActionHook, mockEvent);
+  await eventManager.executeHookWithInterceptors(userActionHook, mockEvent, {});
 
   console.log("\n=== Example completed ===");
 }
