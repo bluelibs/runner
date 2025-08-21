@@ -19,15 +19,9 @@ When you're building something that matters - something your customers depend on
 
 **Version 4.x LTS** (Current)
 
-- Released: January 2024
+- Released: August 2025
 - Active support until: January 2027
 - Security patches until: January 2029
-
-**Version 3.x LTS** (Legacy)
-
-- Released: July 2022
-- Active support until: July 2025
-- Security patches until: July 2027
 
 ### What You Get
 
