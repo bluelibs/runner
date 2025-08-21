@@ -11,7 +11,7 @@ export class RunResult<V> {
   constructor(
     public readonly value: V,
     public readonly logger: Logger,
-    private readonly store: Store,
+    public readonly store: Store,
     private readonly eventManager: EventManager,
     private readonly taskRunner: TaskRunner,
     private readonly disposeFn: () => Promise<void>,
@@ -68,12 +68,10 @@ export class RunResult<V> {
    */
   public getResourceValue = <Output extends Promise<any>>(
     resource: string | IResource<any, Output, any, any, any>,
-  ) => {
+  ): Output extends Promise<infer U> ? U : Output => {
     const resourceId = typeof resource === "string" ? resource : resource.id;
     if (!this.store.resources.has(resourceId)) {
-      throw new ResourceNotFoundError(
-        `Resource "${resourceId}" not found. Did you forget to register it or are you using the correct id?`,
-      );
+      throw new ResourceNotFoundError(resourceId);
     }
 
     return this.store.resources.get(resourceId)!.value;

@@ -8,7 +8,8 @@
     "dev": "ts-node-dev --respawn src/index.ts",
     "build": "tsc",
     "test": "jest",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "mcp": "runner-dev mcp"
   },
   "dependencies": {
     "@bluelibs/runner": "file:../..",
@@ -43,6 +44,7 @@
     "ts-jest": "^29.1.2",
     "ts-node": "^10.9.2",
     "ts-node-dev": "^2.0.0",
-    "typescript": "^5.4.5"
+    "typescript": "^5.4.5",
+    "why-is-node-running": "^3.2.2"
   }
 }

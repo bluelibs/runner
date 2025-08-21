@@ -28,8 +28,8 @@ export class Queue {
     if (this.executionContext.getStore()) {
       return Promise.reject(
         new Error(
-          "Dead‑lock detected: a queued task attempted to queue another task"
-        )
+          "Dead‑lock detected: a queued task attempted to queue another task",
+        ),
       );
     }
 
@@ -37,7 +37,7 @@ export class Queue {
 
     // 3. chain task after the current tail
     const result = this.tail.then(() =>
-      this.executionContext.run(true, () => task(signal))
+      this.executionContext.run(true, () => task(signal)),
     );
 
     // 4. preserve the chain even if the task rejects (swallow internally)

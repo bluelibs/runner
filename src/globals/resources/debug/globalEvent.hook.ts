@@ -24,7 +24,7 @@ export const globalEventListener = defineHook({
       await logger.info(message, {
         source: "debug.catchAllHook",
         data: debugConfig.logEventEmissionInput
-          ? { payload: event!.data }
+          ? { data: event!.data }
           : undefined,
       });
     }
@@ -32,6 +32,6 @@ export const globalEventListener = defineHook({
   meta: {
     title: "Non-system Event Logger",
     description: "Logs all non-system events.",
-    tags: [globalTags.system],
   },
+  tags: [globalTags.system],
 });

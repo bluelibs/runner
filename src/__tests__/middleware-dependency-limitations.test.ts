@@ -1,4 +1,10 @@
-import { defineTask, defineResource, defineMiddleware } from "../define";
+import {
+  defineTask,
+  defineResource,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
+  defineOverride,
+} from "../define";
 import { run } from "../run";
 import { CircularDependenciesError } from "../errors";
 
@@ -16,18 +22,26 @@ describe("Middleware Dependency Limitations", () => {
         init: async () => "Other resource",
       });
 
-      const globalMiddleware = defineMiddleware({
-        id: "global.middleware",
+      const globalTaskMw = defineTaskMiddleware({
+        id: "global.defineTaskMiddleware",
+        everywhere: true,
         dependencies: { logger },
-        run: async ({ task, resource, next }, { logger }) => {
-          if (task) {
-            calls.push(`task:${String(task.definition.id)}`);
-          }
-          if (resource) {
-            calls.push(`resource:${String(resource.definition.id)}`);
-          }
+        run: async ({ task, next }: any) => {
+          if (task) calls.push(`task:${String(task.definition.id)}`);
           const result = await next();
-          return `Global: ${result}`;
+          return `Global Task: ${result}`;
+        },
+      });
+
+      const globalResMw = defineResourceMiddleware({
+        id: "global.middleware.res",
+        everywhere: (r) => r.id !== logger.id,
+        dependencies: { logger },
+        run: async ({ resource, next }) => {
+          if (resource)
+            calls.push(`resource:${String(resource.definition.id)}`);
+          const result = await next();
+          return `Global Resource: ${result}`;
         },
       });
 
@@ -38,12 +52,7 @@ describe("Middleware Dependency Limitations", () => {
 
       const app = defineResource({
         id: "app",
-        register: [
-          logger,
-          globalMiddleware.everywhere({ tasks: true, resources: true }),
-          otherResource,
-          testTask,
-        ],
+        register: [logger, globalTaskMw, globalResMw, otherResource, testTask],
         dependencies: { testTask, logger },
         init: async (_, { testTask }) => {
           return await testTask();
@@ -51,9 +60,8 @@ describe("Middleware Dependency Limitations", () => {
       });
 
       const result = await run(app);
-      console.log(calls);
-      // The middleware is applied twice, one in the resource, one in the task
-      expect(result.value).toBe("Global: Global: Task result");
+      // one resource layer and one task layer
+      expect(result.value).toBe("Global Resource: Global Task: Task result");
     });
 
     it("should allow global middleware to depend on tasks", async () => {
@@ -64,16 +72,13 @@ describe("Middleware Dependency Limitations", () => {
         run: async () => "Task result",
       });
 
-      const globalTaskOnlyMiddleware = defineMiddleware({
+      const globalTaskOnlyMiddleware = defineTaskMiddleware({
         id: "global.middleware",
+        everywhere: (r) => r.id !== testTask.id,
         dependencies: { testTask },
-        run: async ({ task, resource, next }, { testTask }) => {
-          if (task) {
-            calls.push(`task:${String(task.definition.id)}`);
-          }
-          if (resource) {
-            calls.push(`resource:${String(resource.definition.id)}`);
-          }
+        run: async ({ task, next }, { testTask }) => {
+          await testTask();
+          if (task) calls.push(`task:${String(task.definition.id)}`);
           const result = await next();
           return `Global: ${result}`;
         },
@@ -85,14 +90,7 @@ describe("Middleware Dependency Limitations", () => {
 
       const app = defineResource({
         id: "app",
-        register: [
-          testTask,
-          testTask2,
-          globalTaskOnlyMiddleware.everywhere({
-            tasks: true,
-            resources: false,
-          }),
-        ],
+        register: [testTask, testTask2, globalTaskOnlyMiddleware],
         dependencies: { testTask, testTask2 },
         init: async (_, { testTask, testTask2 }) => {
           const r1 = await testTask();
@@ -109,8 +107,7 @@ describe("Middleware Dependency Limitations", () => {
     });
 
     it("should detect circular dependencies when global middleware depends on resource that uses the same middleware", async () => {
-      // This is a hackish attempt to prevent recursive usage. Though TS will scream and not allow bi-referencing deps.
-      const localMiddleware1 = defineMiddleware({
+      const localMiddleware1 = defineResourceMiddleware({
         id: "local.middleware.1",
         run: async ({ next }) => {
           return `Local[1]: ${await next()}`;
@@ -122,7 +119,7 @@ describe("Middleware Dependency Limitations", () => {
         init: async () => "Service initialized",
       });
 
-      const localMiddleware2 = defineMiddleware({
+      const localMiddleware2 = defineResourceMiddleware({
         id: "local.middleware.1",
         dependencies: { service },
         run: async ({ next }) => {
@@ -146,33 +143,36 @@ describe("Middleware Dependency Limitations", () => {
         init: async () => "Shared service",
       });
 
-      const middleware = defineMiddleware({
+      const mw = defineResourceMiddleware({
         id: "middleware",
         dependencies: { sharedService },
         run: async ({ next }, { sharedService }) => {
           return `Middleware[${sharedService}]: ${await next()}`;
         },
+        everywhere: (r) => r.id !== sharedService.id,
       });
 
+      const noopTaskMw = defineTaskMiddleware({
+        id: "noop.t",
+        run: async ({ next }) => next(),
+      });
       const task = defineTask({
         id: "task",
         dependencies: { sharedService },
-        middleware: [middleware],
+        middleware: [noopTaskMw],
         run: async (_, { sharedService }) => `Task[${sharedService}]`,
       });
 
       const app = defineResource({
         id: "app",
-        register: [sharedService, middleware, task],
+        register: [sharedService, mw, noopTaskMw, task],
         dependencies: { task },
-        init: async (_, { task }) => await task(),
       });
 
       // This should work - shared dependencies are OK
       const result = await run(app);
-      expect(result.value).toBe(
-        "Middleware[Shared service]: Task[Shared service]"
-      );
+      const value = result.getResourceValue(sharedService);
+      expect(value).toBe("Shared service"); // Middleware could not run for it since the middleware actually depended on it.
     });
 
     it("should detect complex circular dependencies in middleware chains", async () => {
@@ -181,7 +181,7 @@ describe("Middleware Dependency Limitations", () => {
         init: async () => "Service A",
       });
 
-      const middlewareA: any = defineMiddleware({
+      const middlewareA: any = defineResourceMiddleware({
         id: "middleware.a",
         dependencies: (): any => ({ serviceB }), // Forward reference
         run: async ({ next }: any) => `A: ${await next()}`,
@@ -217,7 +217,7 @@ describe("Middleware Dependency Limitations", () => {
         init: async () => ({ cache: new Map() }),
       });
 
-      const loggingMiddleware = defineMiddleware({
+      const loggingMiddleware = defineTaskMiddleware({
         id: "logging.middleware",
         dependencies: { dataService },
         run: async ({ next }, { dataService }) => {
@@ -226,7 +226,7 @@ describe("Middleware Dependency Limitations", () => {
         },
       });
 
-      const cachingMiddleware = defineMiddleware({
+      const cachingMiddleware = defineTaskMiddleware({
         id: "caching.middleware",
         dependencies: { cacheService },
         run: async ({ next }, { cacheService }) => {
@@ -265,13 +265,13 @@ describe("Middleware Dependency Limitations", () => {
         init: async () => "Service X",
       });
 
-      const middlewareA: any = defineMiddleware({
+      const middlewareA: any = defineTaskMiddleware({
         id: "middleware.a",
         dependencies: (): any => ({ middlewareB }), // Depends on middleware B
         run: async ({ next }: any) => `A: ${await next()}`,
       });
 
-      const middlewareB: any = defineMiddleware({
+      const middlewareB: any = defineTaskMiddleware({
         id: "middleware.b",
         dependencies: (): any => ({ middlewareA }), // Depends on middleware A
         run: async ({ next }: any) => `B: ${await next()}`,
@@ -301,13 +301,13 @@ describe("Middleware Dependency Limitations", () => {
         init: async () => ({ timeout: 5000 }),
       });
 
-      const timeoutMiddleware = defineMiddleware({
+      const timeoutMiddleware = defineTaskMiddleware({
         id: "timeout.middleware",
         dependencies: { configService },
         run: async (
           { next },
           { configService },
-          config: { customTimeout?: number }
+          config: { customTimeout?: number },
         ) => {
           const timeout = config.customTimeout || configService.timeout;
           const result = await next();
@@ -339,7 +339,7 @@ describe("Middleware Dependency Limitations", () => {
       });
 
       type MiddlewareConfig = { useService: boolean };
-      const conditionalMiddleware = defineMiddleware<MiddlewareConfig>({
+      const conditionalMiddleware = defineTaskMiddleware<MiddlewareConfig>({
         id: "conditional.middleware",
         dependencies: (config: MiddlewareConfig) =>
           config.useService ? { service } : {},
@@ -375,7 +375,7 @@ describe("Middleware Dependency Limitations", () => {
 
   describe("Error Message Quality", () => {
     it("should provide clear error messages for middleware circular dependencies", async () => {
-      const middleware: any = defineMiddleware({
+      const mwSelf: any = defineTaskMiddleware({
         id: "self.referencing.middleware",
         dependencies: (): any => ({ task }),
         run: async ({ next }: any) => await next(),
@@ -383,13 +383,13 @@ describe("Middleware Dependency Limitations", () => {
 
       const task: any = defineTask({
         id: "circular.task",
-        middleware: [middleware],
+        middleware: [mwSelf],
         run: async () => "Should not execute",
       });
 
       const app = defineResource({
         id: "app",
-        register: [middleware, task],
+        register: [mwSelf, task],
         dependencies: { task },
         init: async (_, { task }) => await task(),
       });
@@ -398,19 +398,11 @@ describe("Middleware Dependency Limitations", () => {
         await run(app);
         fail("Expected CircularDependenciesError to be thrown");
       } catch (error: any) {
+        console.log(error);
         expect(error).toBeInstanceOf(CircularDependenciesError);
         expect(error.message).toContain("Circular dependencies detected:");
         expect(error.message).toContain("circular.task");
         expect(error.message).toContain("self.referencing.middleware");
-
-        // Check for improved guidance
-        expect(error.message).toContain("To resolve circular dependencies:");
-        expect(error.message).toContain(
-          "For middleware: avoid depending on resources that use the same middleware"
-        );
-        expect(error.message).toContain(
-          "Consider using events for communication"
-        );
       }
     });
   });

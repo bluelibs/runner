@@ -2,7 +2,8 @@ import {
   defineTask,
   defineResource,
   defineEvent,
-  defineMiddleware,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
   defineTag,
   defineOverride,
   defineHook,
@@ -27,7 +28,8 @@ export {
   defineTask as task,
   defineResource as resource,
   defineEvent as event,
-  defineMiddleware as middleware,
+  defineTaskMiddleware as taskMiddleware,
+  defineResourceMiddleware as resourceMiddleware,
   defineTag as tag,
   defineOverride as override,
   defineHook as hook,
@@ -40,5 +42,4 @@ export * as definitions from "./defs";
 export * from "./models";
 export * from "./globals/types";
 export * as Errors from "./errors";
-export { RunOptions } from "./run";
 export { Context } from "./context";

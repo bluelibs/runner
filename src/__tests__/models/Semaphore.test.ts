@@ -25,10 +25,10 @@ describe("Semaphore", () => {
 
     it("should throw error for invalid maxPermits", () => {
       expect(() => new Semaphore(0)).toThrow(
-        "maxPermits must be greater than 0"
+        "maxPermits must be greater than 0",
       );
       expect(() => new Semaphore(-1)).toThrow(
-        "maxPermits must be greater than 0"
+        "maxPermits must be greater than 0",
       );
     });
   });
@@ -173,7 +173,7 @@ describe("Semaphore", () => {
       const startTime = Date.now();
 
       await expect(semaphore.acquire({ timeout: 100 })).rejects.toThrow(
-        "Semaphore acquire timeout after 100ms"
+        "Semaphore acquire timeout after 100ms",
       );
 
       const elapsed = Date.now() - startTime;
@@ -187,7 +187,7 @@ describe("Semaphore", () => {
       await semaphore.acquire();
 
       await expect(
-        semaphore.withPermit(async () => "never executed", { timeout: 100 })
+        semaphore.withPermit(async () => "never executed", { timeout: 100 }),
       ).rejects.toThrow("Semaphore acquire timeout after 100ms");
     });
 
@@ -256,7 +256,7 @@ describe("Semaphore", () => {
       const controller = new AbortController();
       const operationPromise = semaphore.withPermit(
         async () => "never executed",
-        { signal: controller.signal }
+        { signal: controller.signal },
       );
 
       controller.abort();
@@ -269,7 +269,7 @@ describe("Semaphore", () => {
       controller.abort();
 
       await expect(
-        semaphore.acquire({ signal: controller.signal })
+        semaphore.acquire({ signal: controller.signal }),
       ).rejects.toThrow("Operation was aborted");
     });
 
@@ -370,10 +370,10 @@ describe("Semaphore", () => {
       semaphore.dispose();
 
       await expect(semaphore.acquire()).rejects.toThrow(
-        "Semaphore has been disposed"
+        "Semaphore has been disposed",
       );
       await expect(
-        semaphore.withPermit(async () => "never executed")
+        semaphore.withPermit(async () => "never executed"),
       ).rejects.toThrow("Semaphore has been disposed");
     });
 
@@ -405,7 +405,7 @@ describe("Semaphore", () => {
       semaphore.dispose();
 
       await expect(operationPromise).rejects.toThrow(
-        "Semaphore has been disposed"
+        "Semaphore has been disposed",
       );
     });
 
@@ -424,7 +424,7 @@ describe("Semaphore", () => {
       semaphore.dispose();
 
       await expect(queuedOperation).rejects.toThrow(
-        "Semaphore has been disposed"
+        "Semaphore has been disposed",
       );
 
       expect(semaphore.getWaitingCount()).toBe(0);
@@ -505,7 +505,7 @@ describe("Semaphore", () => {
             // Simulate quick work
             await new Promise((resolve) => setTimeout(resolve, 1));
             return i;
-          })
+          }),
         );
       }
 
@@ -569,10 +569,10 @@ describe("Semaphore", () => {
           semaphore.withPermit(async () => {
             // Random delay to create timing variations
             await new Promise((resolve) =>
-              setTimeout(resolve, Math.random() * 10)
+              setTimeout(resolve, Math.random() * 10),
             );
             return i;
-          })
+          }),
         );
       }
 
@@ -595,7 +595,7 @@ describe("Semaphore", () => {
           return dbSemaphore.withPermit(async () => {
             this.activeConnections++;
             expect(this.activeConnections).toBeLessThanOrEqual(
-              this.maxConnections
+              this.maxConnections,
             );
 
             // Simulate query time
@@ -609,7 +609,7 @@ describe("Semaphore", () => {
 
       // Fire many concurrent queries
       const queries = Array.from({ length: 10 }, (_, i) =>
-        connectionPool.query(`SELECT * FROM users WHERE id = ${i}`)
+        connectionPool.query(`SELECT * FROM users WHERE id = ${i}`),
       );
 
       const results = await Promise.all(queries);
@@ -636,7 +636,7 @@ describe("Semaphore", () => {
               activeCalls--;
               return { id, name: `User ${id}` };
             },
-            { signal }
+            { signal },
           );
         },
       };
@@ -690,11 +690,11 @@ describe("Semaphore", () => {
             // Track progress
             const metrics = batchSemaphore.getMetrics();
             expect(
-              metrics.maxPermits - metrics.availablePermits
+              metrics.maxPermits - metrics.availablePermits,
             ).toBeLessThanOrEqual(3);
 
             return result;
-          })
+          }),
         );
 
         return Promise.all(promises);

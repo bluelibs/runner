@@ -22,6 +22,7 @@ export const expressServerResource = resource({
     appConfig,
     logger: globals.resources.logger,
   },
+  register: [httpTag],
   init: async (_, { appConfig, logger }): Promise<ExpressServer> => {
     const { port } = appConfig;
 

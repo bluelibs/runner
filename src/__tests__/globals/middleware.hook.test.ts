@@ -1,77 +1,76 @@
-import {
-  middlewareCompletedListener,
-  middlewareTriggeredListener,
-} from "../../globals/resources/debug/middleware.hook";
+import { middlewareInterceptorResource } from "../../globals/resources/debug/middleware.hook";
 
-describe("globals.resources.debug.middleware listeners", () => {
-  it("logs for middleware triggered/completed when enabled", async () => {
-    const infos: string[] = [];
+describe("globals.resources.debug.middlewareInterceptorResource (unit)", () => {
+  it("logs before and after for resource and task middleware via interceptors", async () => {
+    const messages: string[] = [];
+
     const logger = {
-      info: async (msg: string) => infos.push(String(msg)),
-    };
-    const event = {
-      id: "global.events.middlewareTriggered",
-      data: { middleware: { id: "m" }, kind: "task", targetId: "t" },
+      info: async (message: string) => {
+        messages.push(String(message));
+      },
     } as any;
 
-    await middlewareTriggeredListener.run(event as any, {
-      logger: logger as any,
-      debugConfig: { logMiddlewareBeforeRun: true } as any,
-    });
+    const interceptCalls: Array<{
+      kind: "task" | "resource";
+    }> = [];
 
-    const completed = {
-      id: "global.events.middlewareCompleted",
-      data: { middleware: { id: "m" }, kind: "task", targetId: "t" },
+    // Fake middlewareManager that immediately invokes provided interceptor with a sample input
+    const middlewareManager = {
+      intercept: (kind: "task" | "resource", interceptor: any) => {
+        interceptCalls.push({ kind });
+        if (kind === "resource") {
+          return interceptor(
+            async (_input: any) =>
+              new Promise((resolve) => setTimeout(() => resolve(undefined), 0)),
+            {
+              resource: { definition: { id: "tests.resource" }, config: {} },
+              next: async () => undefined,
+            },
+          );
+        } else {
+          return interceptor(
+            async (_input: any) =>
+              new Promise((resolve) => setTimeout(() => resolve(undefined), 0)),
+            {
+              task: { definition: { id: "tests.task" }, input: {} },
+              next: async () => undefined,
+            },
+          );
+        }
+      },
     } as any;
-    await middlewareCompletedListener.run(completed as any, {
-      logger: logger as any,
-      debugConfig: { logMiddlewareAfterRun: true } as any,
-    });
 
+    // Pass verbose config so before/after flags are true
+    await middlewareInterceptorResource.init?.(
+      undefined as any,
+      {
+        logger,
+        debugConfig: "verbose",
+        middlewareManager,
+      } as any,
+      undefined as any,
+    );
+
+    // Allow async interceptor to finish and log "completed" messages
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    const joined = messages.join("\n");
+    console.log(messages);
+    expect(joined.includes("Middleware triggered for task tests.task")).toBe(
+      true,
+    );
+    expect(joined.includes("Middleware completed for task tests.task")).toBe(
+      true,
+    );
     expect(
-      infos.some((m) => m.includes("Middleware triggered for task t")),
+      joined.includes("Middleware triggered for resource tests.resource"),
     ).toBe(true);
     expect(
-      infos.some((m) => m.includes("Middleware completed for task t")),
+      joined.includes("Middleware completed for resource tests.resource"),
     ).toBe(true);
-  });
 
-  it("does not log when flags disabled", async () => {
-    const infos: string[] = [];
-    const logger = {
-      info: async (msg: string) => infos.push(String(msg)),
-    };
-    const cfg = {
-      logMiddlewareBeforeRun: false,
-      logMiddlewareAfterRun: false,
-    };
-    const triggered = {
-      id: "global.events.middlewareTriggered",
-      data: { middleware: { id: "m" }, kind: "resource", targetId: "r" },
-    } as any;
-    await middlewareTriggeredListener.run(triggered as any, {
-      logger: logger as any,
-      debugConfig: cfg as any,
-    });
-
-    const completed = {
-      id: "global.events.middlewareCompleted",
-      data: { middleware: { id: "m" }, kind: "resource", targetId: "r" },
-    } as any;
-    await middlewareCompletedListener.run(completed as any, {
-      logger: logger as any,
-      debugConfig: cfg as any,
-    });
-
-    expect(infos.length).toBe(0);
-  });
-
-  it("returns early when deps missing (defensive branch)", async () => {
-    const event = {
-      id: "global.events.middlewareTriggered",
-      data: { middleware: { id: "m" }, kind: "task", targetId: "t" },
-    } as any;
-    // Should not throw
-    await middlewareTriggeredListener.run(event as any, undefined as any);
+    // Ensure both intercept registrations were attempted
+    expect(interceptCalls.some((c) => c.kind === "task")).toBe(true);
+    expect(interceptCalls.some((c) => c.kind === "resource")).toBe(true);
   });
 });

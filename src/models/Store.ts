@@ -3,12 +3,19 @@ import {
   IResource,
   ITask,
   RegisterableItems,
-  IMiddleware,
+  ITaskMiddleware,
+  IResourceMiddleware,
   ITag,
 } from "../defs";
-import { IDependentNode } from "../tools/findCircularDependencies";
+import {
+  findCircularDependencies,
+  IDependentNode,
+} from "./utils/findCircularDependencies";
 import { globalEventsArray } from "../globals/globalEvents";
-import { StoreAlreadyInitializedError } from "../errors";
+import {
+  CircularDependenciesError,
+  StoreAlreadyInitializedError,
+} from "../errors";
 import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
 import { StoreRegistry } from "./StoreRegistry";
@@ -17,21 +24,29 @@ import { StoreValidator } from "./StoreValidator";
 import {
   ResourceStoreElementType,
   TaskStoreElementType,
-  MiddlewareStoreElementType,
+  TaskMiddlewareStoreElementType,
+  ResourceMiddlewareStoreElementType,
   EventStoreElementType,
-} from "./StoreTypes";
+} from "../types/storeTypes";
 import { TaskRunner } from "./TaskRunner";
 import { globalResources } from "../globals/globalResources";
-import { requireContextMiddleware } from "../globals/middleware/requireContext.middleware";
-import { retryMiddleware } from "../globals/middleware/retry.middleware";
-import { timeoutMiddleware } from "../globals/middleware/timeout.middleware";
+import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
+import {
+  retryTaskMiddleware,
+  retryResourceMiddleware,
+} from "../globals/middleware/retry.middleware";
+import {
+  timeoutTaskMiddleware,
+  timeoutResourceMiddleware,
+} from "../globals/middleware/timeout.middleware";
 import { OnUnhandledError } from "./UnhandledError";
+import { globalTags } from "../globals/globalTags";
+import { MiddlewareManager } from "./MiddlewareManager";
 
 // Re-export types for backward compatibility
 export {
   ResourceStoreElementType,
   TaskStoreElementType,
-  MiddlewareStoreElementType,
   EventStoreElementType,
 };
 
@@ -44,18 +59,20 @@ export class Store {
   private overrideManager: OverrideManager;
   private validator: StoreValidator;
   private taskRunner?: TaskRunner;
-  public onUnhandledError?: OnUnhandledError;
+  private middlewareManager!: MiddlewareManager;
 
   #isLocked = false;
   #isInitialized = false;
 
   constructor(
     protected readonly eventManager: EventManager,
-    protected readonly logger: Logger
+    protected readonly logger: Logger,
+    public readonly onUnhandledError: OnUnhandledError,
   ) {
-    this.registry = new StoreRegistry();
+    this.registry = new StoreRegistry(this);
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
+    this.middlewareManager = new MiddlewareManager(this, eventManager, logger);
   }
 
   // Delegate properties to registry
@@ -71,14 +88,26 @@ export class Store {
   get events() {
     return this.registry.events;
   }
-  get middlewares() {
-    return this.registry.middlewares;
+  get taskMiddlewares() {
+    return this.registry.taskMiddlewares;
+  }
+  get resourceMiddlewares() {
+    return this.registry.resourceMiddlewares;
+  }
+  get tags() {
+    return this.registry.tags;
   }
   get overrides() {
     return this.overrideManager.overrides;
   }
   get overrideRequests() {
     return this.overrideManager.overrideRequests;
+  }
+
+  // Expose the shared MiddlewareManager instance so other components (like TaskRunner)
+  // can compose runners using the same interceptor configuration.
+  public getMiddlewareManager(): MiddlewareManager {
+    return this.middlewareManager;
   }
 
   get isLocked() {
@@ -104,6 +133,11 @@ export class Store {
     builtInResourcesMap.set(globalResources.eventManager, this.eventManager);
     builtInResourcesMap.set(globalResources.logger, this.logger);
     builtInResourcesMap.set(globalResources.taskRunner, this.taskRunner!);
+    builtInResourcesMap.set(
+      globalResources.middlewareManager,
+      this.middlewareManager,
+    );
+
     this.registry.storeGenericItem(globalResources.queue);
 
     for (const [resource, value] of builtInResourcesMap.entries()) {
@@ -115,21 +149,40 @@ export class Store {
       }
     }
 
+    // Register global tags
+    Object.values(globalTags).forEach((tag) => {
+      this.registry.storeTag(tag);
+    });
+
     // Register global events
     globalEventsArray.forEach((event) => {
       this.registry.storeEvent(event);
     });
 
     // Register built-in middlewares
-    const builtInMiddlewares = [
-      requireContextMiddleware,
-      retryMiddleware,
-      timeoutMiddleware,
+    // Built-in middlewares currently target tasks only; adjust as needed per kind
+    const builtInTaskMiddlewares = [
+      requireContextTaskMiddleware,
+      retryTaskMiddleware,
+      timeoutTaskMiddleware,
     ];
-    builtInMiddlewares.forEach((middleware) => {
-      this.registry.middlewares.set(middleware.id, {
-        middleware,
+    builtInTaskMiddlewares.forEach((middleware) => {
+      this.registry.taskMiddlewares.set(middleware.id, {
+        middleware: middleware as any,
         computedDependencies: {},
+        isInitialized: false,
+      });
+    });
+
+    const builtInResourceMiddlewares = [
+      retryResourceMiddleware,
+      timeoutResourceMiddleware,
+    ];
+    builtInResourceMiddlewares.forEach((middleware) => {
+      this.registry.resourceMiddlewares.set(middleware.id, {
+        middleware: middleware as any,
+        computedDependencies: {},
+        isInitialized: false,
       });
     });
   }
@@ -157,7 +210,19 @@ export class Store {
     this.registry.resources.set(root.id, this.root);
   }
 
-  initializeStore(root: IResource<any, any, any, any, any>, config: any) {
+  public validateDependencyGraph() {
+    // We verify that there isn't any circular dependencies before we begin computing the dependencies
+    const dependentNodes = this.registry.getDependentNodes();
+    const circularDependencies = findCircularDependencies(dependentNodes);
+    if (circularDependencies.cycles.length > 0) {
+      throw new CircularDependenciesError(circularDependencies.cycles);
+    }
+  }
+
+  public initializeStore(
+    root: IResource<any, any, any, any, any>,
+    config: any,
+  ) {
     if (this.#isInitialized) {
       throw new StoreAlreadyInitializedError();
     }
@@ -180,7 +245,7 @@ export class Store {
           resource.value,
           resource.config,
           resource.computedDependencies as any,
-          resource.context
+          resource.context,
         );
       }
     }
@@ -188,18 +253,6 @@ export class Store {
 
   public processOverrides() {
     this.overrideManager.processOverrides();
-  }
-
-  public getEverywhereMiddlewareForTasks(
-    task: ITask<any, any, any, any>
-  ): IMiddleware[] {
-    return this.registry.getEverywhereMiddlewareForTasks(task);
-  }
-
-  public getEverywhereMiddlewareForResources(
-    resource: IResource<any, any, any, any>
-  ): IMiddleware[] {
-    return this.registry.getEverywhereMiddlewareForResources(resource);
   }
 
   public storeGenericItem<C>(item: RegisterableItems) {
@@ -221,9 +274,5 @@ export class Store {
 
   public getResourcesWithTag(tag: string | ITag) {
     return this.registry.getResourcesWithTag(tag);
-  }
-
-  getDependentNodes(): IDependentNode[] {
-    return this.registry.getDependentNodes();
   }
 }

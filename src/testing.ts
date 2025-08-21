@@ -3,7 +3,8 @@ import { globalResources } from "./globals/globalResources";
 import {
   IResource,
   IResourceWithConfig,
-  IMiddleware,
+  ITaskMiddleware,
+  IResourceMiddleware,
   ITask,
   RegisterableItems,
   IEvent,
@@ -25,7 +26,13 @@ let testResourceCounter = 0;
 export function createTestResource(
   root: RegisterableItems,
   options?: {
-    overrides?: Array<IResource | ITask | IMiddleware | IResourceWithConfig>;
+    overrides?: Array<
+      | IResource
+      | ITask
+      | ITaskMiddleware
+      | IResourceMiddleware
+      | IResourceWithConfig
+    >;
   },
 ): IResource<void, Promise<ReturnType<typeof buildTestFacade>>> {
   return defineResource({

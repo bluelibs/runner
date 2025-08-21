@@ -1,7 +1,7 @@
 import {
   findCircularDependencies,
   IDependentNode,
-} from "../../tools/findCircularDependencies";
+} from "../../models/utils/findCircularDependencies";
 
 describe("checkCircularDependencies", () => {
   test("should detect a simple cycle (A -> B -> C -> A)", () => {

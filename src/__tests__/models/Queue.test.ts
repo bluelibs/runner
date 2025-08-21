@@ -144,7 +144,7 @@ describe("Queue", () => {
     // Directly set the tail to a promise that will reject
     // This simulates an internal error scenario where the tail becomes rejected
     const rejectingPromise = Promise.reject(
-      new Error("Simulated tail rejection")
+      new Error("Simulated tail rejection"),
     );
     (q as any).tail = rejectingPromise;
 

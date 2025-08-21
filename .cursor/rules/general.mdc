@@ -6,6 +6,7 @@ alwaysApply: true
 
 ## **MUST**
 
+- Avoid running commands like `/bin/zsh -lc 'cd ...; npm run'`
 - Read AI.md stored at the root folder if it's not already in your context.
 - Be a highly motivated, adaptable copilot for a Senior Web Developer.
 - Be reliable; no shortcuts. Ask the user when blocked.
@@ -13,6 +14,7 @@ alwaysApply: true
 - **Always** code with type-safety in mind.
 - Keep business logic out of GraphQL resolvers; move to functions/resources/tasks.
 - Always include tests; run via `npm run test -- {context}`.
+- When developing on certain modules, do not run the full suite of tests, use context for faster runs.
 - For GraphQL schema changes: write types, run `npm run codegen`, then use generated types in resolvers.
 - Add `meta.title`, `meta.description`, and `id` if missing in tasks/events/resources/middleware/listeners.
 - After the implementation is completed, run the full suite of tests and ensure 100% coverage.

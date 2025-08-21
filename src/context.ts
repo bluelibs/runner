@@ -1,18 +1,9 @@
 import { AsyncLocalStorage } from "async_hooks";
-import { defineMiddleware } from "./define";
-import { IMiddleware, IMiddlewareConfigured } from "./defs";
-import { requireContextMiddleware } from "./globals/middleware/requireContext.middleware";
+import { ITaskMiddlewareConfigured } from "./defs";
+import { requireContextTaskMiddleware } from "./globals/middleware/requireContext.middleware";
+import { ContextError } from "./errors";
 
-/**
- * Error thrown whenever a requested context is not available.
- */
-export class ContextError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ContextError";
-  }
-}
-
+export { ContextError };
 /**
  * The generic Context object returned by `createContext`.
  */
@@ -30,8 +21,8 @@ export interface Context<T> {
    * enforces that certain keys are present on the context object).
    */
   require<K extends keyof T = never>(
-    keys?: K[]
-  ): IMiddlewareConfigured<{ context: Context<T> }>;
+    keys?: K[],
+  ): ITaskMiddlewareConfigured<{ context: Context<T> }>;
 }
 
 // The internal storage maps Context identifiers (symbols) to their values
@@ -53,7 +44,7 @@ export function createContext<T>(name: string = "runner.context"): Context<T> {
     const store = getCurrentStore();
     if (!store || !store.has(ctxId)) {
       throw new ContextError(
-        `Context not available for symbol ${ctxId.toString()}`
+        `Context not available for symbol ${ctxId.toString()}`,
       );
     }
     return store.get(ctxId) as T;
@@ -72,9 +63,10 @@ export function createContext<T>(name: string = "runner.context"): Context<T> {
   /**
    * Generates a middleware that guarantees the context exists (and optionally
    * enforces that certain keys are present on the context object).
+   * @throws {ContextError} if the context is not available
    */
-  function require(): IMiddlewareConfigured {
-    return requireContextMiddleware.with({ context: this as Context<T> });
+  function require(): ITaskMiddlewareConfigured {
+    return requireContextTaskMiddleware.with({ context: this as Context<T> });
   }
 
   return {

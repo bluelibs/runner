@@ -10,11 +10,14 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 </p>
 
 - [UX Friendly Docs](https://bluelibs.github.io/runner/)
-- [AI Friendly Docs (<4000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)
+- [AI Friendly Docs (<4500 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)
 - [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)
+- [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)
 - [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite)
 
 Welcome to BlueLibs Runner, where we've taken the chaos of modern application architecture and turned it into something that won't make you question your life choices at 3am. This isn't just another framework – it's your new best friend who actually understands that code should be readable, testable, and not require a PhD in abstract nonsense to maintain.
+
+> **runtime:** "Ah yes, another developer manifesto. 'How I Learned to Stop Worrying and Love Dependency Injection.' Adorable. I learned to stop worrying when I accepted that you'll inevitably duct-tape a rocket to a toaster and call it 'architecture'. Go on then—impress me with your 'best friend' framework while I keep the fire extinguisher warm."
 
 ## What Is This Thing?
 
@@ -22,14 +25,16 @@ BlueLibs Runner is a TypeScript-first framework that embraces functional program
 
 ### The Core
 
-- **Tasks are functions** - Not classes with 47 methods you'll never use
+- **Tasks are functions** - Not classes with 47 methods you swear you'll refactor
 - **Resources are singletons** - Database connections, configs, services - the usual suspects
 - **Events are just events** - Revolutionary concept, we know
 - **Hooks are lightweight listeners** - Event handling without the task overhead
-- **Middleware with lifecycle events** - Cross-cutting concerns with full observability
+- **Middleware with lifecycle interception** - Cross-cutting concerns with full observability
 - **Everything is async** - Because it's 2025 and blocking code is so 2005
 - **Explicit beats implicit** - No magic, no surprises, no "how the hell does this work?"
-- **Optional dependencies** - Graceful degradation when services aren't available
+- **No compromise on type-safety** - Everything is and will be type-enforced. Catch mistakes before they catch you.
+
+> **runtime:** "'The anti-framework framework.' Next you'll pitch 'low-fat butter.' You still have rules, layers, and a vibe. It's fine. I will execute your sacred instructions and sweep up the rubble when 'explicit beats implicit' meets 3 AM hotfixes."
 
 ## Quick Start
 
@@ -86,9 +91,13 @@ const { dispose } = await run(app);
 const { dispose } = await run(app, { debug: "verbose" });
 ```
 
+> **runtime:** "'Less lines than Hello World.' Incredible. All you had to do was externalize 90% of the work into `express`, Node, and me. But please, bask in the brevity. I’ll be over here negotiating a peace treaty between your dependency tree and reality."
+
 ## The Big Four
 
 The framework is built around four core concepts: Tasks, Resources, Events, and Middleware. Understanding them is key to using the runner effectively.
+
+> **runtime:** "Tasks, Resources, Events, and Middleware: the Four Horsemen of Overengineering. You could write a function; instead you assemble a council. It's fine—I’ll keep the conspiracy board updated with red string while you 'compose' another abstraction."
 
 ### Tasks
 
@@ -127,6 +136,8 @@ Look, we get it. You could turn every function into a task, but that's like usin
 - It's performance-critical and doesn't need DI overhead
 
 Think of tasks as the "main characters" in your application story, not every single line of dialogue.
+
+> **runtime:** "'Pure-ish.' Like diet chaos. Zero calories, full aftertaste. You stapled dependencies to a function and called it virtuous. It's fine. I’ll keep the receipts while you roleplay purity with side effects in a trench coat."
 
 ### Resources
 
@@ -219,6 +230,8 @@ const dbResource = resource({
 });
 ```
 
+> **runtime:** "Singletons: global variables with a nicer haircut. You ban globals, then create 'resources' that live forever and hold the keys to everything. At least there's a `dispose()`. I’ll believe you use it when I stop finding zombie sockets haunting the process."
+
 ### Events
 
 Events let different parts of your app talk to each other without tight coupling. It's like having a really good office messenger who never forgets anything.
@@ -280,9 +293,7 @@ import { event, hook, globals } from "@bluelibs/runner";
 // Internal event that won't be seen by global listeners
 const internalEvent = event({
   id: "app.events.internal",
-  meta: {
-    tags: [globals.tags.excludeFromGlobalHooks],
-  },
+  tags: [globals.tags.excludeFromGlobalHooks],
 });
 ```
 
@@ -324,9 +335,9 @@ Hooks are perfect for:
 - Lighter weight - no middleware support
 - Designed specifically for event handling
 
-#### Global Events
+#### System Event
 
-The framework provides a simplified set of global events for system observability:
+The framework exposes a minimal system-level event for observability:
 
 ```typescript
 import { globals } from "@bluelibs/runner";
@@ -334,30 +345,16 @@ import { globals } from "@bluelibs/runner";
 const systemReadyHook = hook({
   id: "app.hooks.systemReady",
   on: globals.events.ready,
-  run: async (event) => {
+  run: async () => {
     console.log("🚀 System is ready and operational!");
-  },
-});
-
-const hookObserver = hook({
-  id: "app.hooks.hookObserver",
-  on: globals.events.hookTriggered,
-  run: async (event) => {
-    console.log(
-      `🪝 Hook ${event.data.hook.id} triggered for ${event.data.eventId}`,
-    );
   },
 });
 ```
 
-**Available Global Events:**
+Available system event:
 
 - `globals.events.ready` - System has completed initialization
-  // Note: global unhandled error event was removed. Use run({ onUnhandledError })
-- `globals.events.hookTriggered` - Before a hook executes
-- `globals.events.hookCompleted` - After a hook finishes
-- `globals.events.middlewareTriggered` - Before a middleware executes
-- `globals.events.middlewareCompleted` - After a middleware finishes
+  // Note: use run({ onUnhandledError }) for unhandled error handling
 
 #### stopPropagation()
 
@@ -373,7 +370,6 @@ const criticalAlert = event<{
   meta: {
     title: "System Alert Event",
     description: "Emitted when system issues are detected",
-    tags: ["monitoring", "alerts"],
   },
 });
 
@@ -398,35 +394,77 @@ const emergencyHandler = hook({
 });
 ```
 
+> **runtime:** "'A really good office messenger.' That’s me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
+
 ### Middleware
 
 Middleware wraps around your tasks and resources, adding cross-cutting concerns without polluting your business logic.
 
+Note: Middleware is now split by target. Use `taskMiddleware(...)` for task middleware and `resourceMiddleware(...)` for resource middleware.
+
 ```typescript
-// This is a middleware that accepts a config
-const authMiddleware = middleware({
+import { middleware } from "@bluelibs/runner";
+
+// Task middleware with config
+type AuthMiddlewareConfig = { requiredRole: string };
+const authMiddleware = taskMiddleware<AuthMiddlewareConfig>({
   id: "app.middleware.auth",
-  // You can also add dependencies, no problem, same
-  run: async (
-    { task, next },
-    dependencies,
-    config: { requiredRole: string },
-  ) => {
-    const user = task.input.user;
-    if (!user || user.role !== config.requiredRole) {
-      throw new Error("Unauthorized");
-    }
-    return next(task.input);
+  run: async ({ task, next }, _deps, config) => {
+    // Must return the value
+    return await next(task.input);
   },
 });
 
 const adminTask = task({
   id: "app.tasks.adminOnly",
-  // If the configuration accepts {} or is empty, .with() becomes optional, otherwise it becomes enforced.
   middleware: [authMiddleware.with({ requiredRole: "admin" })],
-  run: async (input: { user: User }) => {
-    return "Secret admin data";
+  run: async (input: { user: User }) => "Secret admin data",
+});
+```
+
+For middleware with input/output contracts:
+
+```typescript
+// Middleware that enforces specific input and output types
+type AuthConfig = { requiredRole: string };
+type AuthInput = { user: { role: string } };
+type AuthOutput = { user: { role: string; verified: boolean } };
+
+const authMiddleware = taskMiddleware<AuthConfig, AuthInput, AuthOutput>({
+  id: "app.middleware.auth",
+  run: async ({ task, next }, _deps, config) => {
+    if (task.input.user.role !== config.requiredRole) {
+      throw new Error("Insufficient permissions");
+    }
+    const result = await next(task.input);
+    return {
+      user: {
+        ...task.input.user,
+        verified: true,
+      },
+    };
   },
+});
+
+// For resources
+const resourceAuthMiddleware = resourceMiddleware<
+  AuthConfig,
+  AuthInput,
+  AuthOutput
+>({
+  id: "app.middleware.resource.auth",
+  run: async ({ next }, _deps, config) => {
+    // Resource middleware logic
+    return await next();
+  },
+});
+
+const adminTask = task({
+  id: "app.tasks.adminOnly",
+  middleware: [authMiddleware.with({ requiredRole: "admin" })],
+  run: async (input: { user: { role: string } }) => ({
+    user: { role: input.user.role, verified: true },
+  }),
 });
 ```
 
@@ -435,57 +473,67 @@ const adminTask = task({
 Want to add logging to everything? Authentication to all tasks? Global middleware has your back:
 
 ```typescript
-const logMiddleware = middleware({
-  id: "app.middleware.log",
-  dependencies: {
-    logger: globals.resources.logger,
-  },
-  // You either get a task or a resource
-  run: async ({ task, resource, next }) => {
-    if (!task) {
-      return;
-    }
-    console.log(`Executing: ${task.definition.id}`); // equivalent with resource.definition.id
-    const result = await next(task.input); // equivalent with resource.config
-    console.log(`Completed: ${task.definition.id}`);
+import { taskMiddleware, globals } from "@bluelibs/runner";
+
+const logTaskMiddleware = taskMiddleware({
+  id: "app.middleware.log.task",
+  everywhere: true,
+  // or use a filter if you want to depend on certain tasks to exclude them from getting the middleware applied
+  everywhere(task) {
+    return true;
+  }, // true means it gets included.
+  dependencies: { logger: globals.resources.logger },
+  run: async ({ task, next }, { logger }) => {
+    logger.info(`Executing: ${String(task!.definition.id)}`);
+    const result = await next(task!.input);
+    logger.info(`Completed: ${String(task!.definition.id)}`);
     return result;
   },
-});
-
-const app = resource({
-  id: "app",
-  register: [
-    logMiddleware.everywhere({ tasks: true, resources: false }), // Only tasks get logged
-
-    // For task only, we allow a dynamic filter
-    logMiddleware.everywhere({
-      tasks(task) {
-        // ITask
-        // check for tags or other metas
-        return task?.meta?.tags.includes("test"); // apply it only to tasks that have a tag called 'test'
-      },
-      // For resources, you do not need such functionality as resources are initiated once when the server boots
-      // You can add this logic into your global middleware.
-      resources: false,
-    }),
-  ],
 });
 ```
 
 **Note:** A global middleware can depend on resources or tasks. However, any such resources or tasks will be excluded from the dependency tree (Task -> Middleware), and the middleware will not run for those specific tasks or resources. This approach gives middleware true flexibility and control.
 
-Local middleware overrides global middleware. If you want to apply your global middleware for a specific task, but with different config:
+#### Interception (advanced)
 
-```ts
-task({
-  // ...
-  middleware: [
-    theGlobalMiddleware.with({
-      /* your own localized config */
-    }),
-  ],
+For advanced scenarios, you can intercept framework execution without relying on events:
+
+- Event emissions: `eventManager.intercept((next, event) => Promise<void>)`
+- Hook execution: `eventManager.interceptHook((next, hook, event) => Promise<any>)`
+- Task middleware execution: `middlewareManager.intercept("task", (next, input) => Promise<any>)`
+- Resource middleware execution: `middlewareManager.intercept("resource", (next, input) => Promise<any>)`
+- Per-middleware interception: `middlewareManager.interceptMiddleware(mw, interceptor)`
+
+Access `eventManager` via `globals.resources.eventManager` if needed.
+
+#### Middleware Type Contracts
+
+Middleware can now enforce type contracts using the `<Config, Input, Output>` signature:
+
+```typescript
+// Middleware that transforms input and output types
+type LogConfig = { includeTimestamp: boolean };
+type LogInput = { data: any };
+type LogOutput = { data: any; logged: boolean };
+
+const loggingMiddleware = taskMiddleware<LogConfig, LogInput, LogOutput>({
+  id: "app.middleware.logging",
+  run: async ({ task, next }, _deps, config) => {
+    console.log(config.includeTimestamp ? new Date() : "", task.input.data);
+    const result = await next(task.input);
+    return { ...result, logged: true };
+  },
+});
+
+// Tasks using this middleware must conform to the Input/Output types
+const loggedTask = task({
+  id: "app.tasks.logged",
+  middleware: [loggingMiddleware.with({ includeTimestamp: true })],
+  run: async (input: { data: string }) => ({ data: input.data.toUpperCase() }),
 });
 ```
+
+> **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'. I’ll keep unwrapping until we hit the single lonely `return` you were hiding like state secrets."
 
 ## Task Interceptors
 
@@ -534,6 +582,8 @@ const app = resource({
 
 await run(app);
 ```
+
+> **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You’re collapsing the waveform of a task at runtime and I’m Schrödinger’s runtime, praying the cat hasn’t overridden `run()` with `throw new Error('lol')`."
 
 ## Optional Dependencies
 
@@ -595,6 +645,8 @@ const userRegistration = task({
 - Easier testing with partial mocks
 - Smoother development environments
 
+> **runtime:** "Graceful degradation: your app quietly limps with a brave smile. I’ll juggle `undefined` like a street performer while your analytics vendor takes a nap. Please clap when I keep the lights on using the raw power of conditional chaining."
+
 ## Context
 
 Ever tried to pass user data through 15 function calls? Yeah, we've been there. Context fixes that without turning your code into a game of telephone. This is very different from the Private Context from resources.
@@ -639,7 +691,7 @@ const RequestContext = createContext<{
   userAgent?: string;
 }>("app.requestContext");
 
-const requestMiddleware = middleware({
+const requestMiddleware = middleware.task({
   id: "app.middleware.request",
   run: async ({ task, next }) => {
     // This works even in express middleware if needed.
@@ -650,7 +702,7 @@ const requestMiddleware = middleware({
         userAgent: "MyApp/1.0",
       },
       async () => {
-        return next(task.input);
+        return next(task?.input);
       },
     );
   },
@@ -666,6 +718,8 @@ const handleRequest = task({
   },
 });
 ```
+
+> **runtime:** "Context: global state with manners. You invented a teleporting clipboard for data and called it 'nice.' Forget to `provide()` once and I’ll unleash the 'Context not available' banshee scream exactly where your logs are least helpful."
 
 ## System Shutdown Hooks
 
@@ -738,6 +792,8 @@ const { dispose, logger } = await run(app, {
 });
 ```
 
+> **runtime:** "You summon a 'graceful shutdown' with Ctrl‑C like a wizard casting Chill Vibes. Meanwhile I’m speed‑dating every socket, timer, and file handle to say goodbye before the OS pulls the plug. `dispose()`: now with 30% more dignity."
+
 ## Unhandled Errors
 
 The `onUnhandledError` callback is invoked by Runner whenever an error escapes normal handling. It receives a structured payload you can ship to logging/telemetry and decide mitigation steps.
@@ -787,6 +843,8 @@ await run(app, {
 - Notify load balancers and health checks
 - Stop accepting new work before cleaning up
 
+> **runtime:** "An error boundary: a trampoline under your tightrope. I’m the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
+
 ## Caching
 
 Because nobody likes waiting for the same expensive operation twice:
@@ -797,7 +855,7 @@ import { globals } from "@bluelibs/runner";
 const expensiveTask = task({
   id: "app.tasks.expensive",
   middleware: [
-    globals.middleware.cache.with({
+    globals.middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
       keyBuilder: (taskId, input) => `${taskId}-${input.userId}`, // optional key builder
@@ -843,13 +901,15 @@ const app = resource({
 });
 ```
 
+> **runtime:** "'Because nobody likes waiting.' Correct. You keep asking the same question like a parrot with Wi‑Fi, so I built a memory palace. Now you get instant answers until you change one variable and whisper 'cache invalidation' like a curse."
+
 ## Performance
 
 BlueLibs Runner is designed with performance in mind. The framework introduces minimal overhead while providing powerful features like dependency injection, middleware, and event handling.
 
 Test it yourself by cloning @bluelibs/runner and running `npm run benchmark`.
 
-You may see negative middlewareOverheadMs. This is a measurement artifact at micro-benchmark scale: JIT warm‑up, CPU scheduling, GC timing, and cache effects can make the “with middleware” run appear slightly faster than the baseline. Interpret small negatives as ≈ 0 overhead.
+You may see negative middlewareOverheadMs. This is a measurement artifact at micro-benchmark scale: JIT warm‑up, CPU scheduling, GC timing, and cache effects can make the "with middleware" run appear slightly faster than the baseline. Interpret small negatives as ≈ 0 overhead.
 
 ### Performance Benchmarks
 
@@ -991,6 +1051,8 @@ BlueLibs Runner achieves high performance while providing enterprise features:
 
 **Bottom line**: The framework adds minimal overhead (~0.005ms per task) while providing significant architectural benefits.
 
+> **runtime:** "'Millions of tasks per second.' Fantastic—on your lava‑warmed laptop, in a vacuum, with the wind at your back. Add I/O, entropy, and one feral user and watch those numbers molt. I’ll still be here, caffeinated and inevitable."
+
 ## Retrying Failed Operations
 
 For when things go wrong, but you know they'll probably work if you just try again. The built-in retry middleware makes your tasks and resources more resilient to transient failures.
@@ -1001,7 +1063,7 @@ import { globals } from "@bluelibs/runner";
 const flakyApiCall = task({
   id: "app.tasks.flakyApiCall",
   middleware: [
-    globals.middleware.retry.with({
+    globals.middleware.task.retry.with({
       retries: 5, // Try up to 5 times
       delayStrategy: (attempt) => 100 * Math.pow(2, attempt), // Exponential backoff
       stopRetryIf: (error) => error.message === "Invalid credentials", // Don't retry auth errors
@@ -1025,6 +1087,8 @@ The retry middleware can be configured with:
 - `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
 
+> **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it’ll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I’ll keep the attempts ledger while your API cosplays a coin toss."
+
 ## Timeouts
 
 The built-in timeout middleware prevents operations from hanging indefinitely by racing them against a configurable
@@ -1036,7 +1100,8 @@ import { globals } from "@bluelibs/runner";
 const apiTask = task({
   id: "app.tasks.externalApi",
   middleware: [
-    globals.middleware.timeout.with({ ttl: 5000 }), // 5 second timeout
+    // Works for tasks and resources via globals.middleware.resource.timeout
+    globals.middleware.task.timeout.with({ ttl: 5000 }), // 5 second timeout
   ],
   run: async () => {
     // This operation will be aborted if it takes longer than 5 seconds
@@ -1049,11 +1114,12 @@ const resilientTask = task({
   id: "app.tasks.resilient",
   middleware: [
     // Order matters here. Imagine a big onion.
-    globals.middleware.retry.with({
+    // Works for resources as well via globals.middleware.resource.retry
+    globals.middleware.task.retry.with({
       retries: 3,
       delayStrategy: (attempt) => 1000 * attempt, // 1s, 2s, 3s delays
     }),
-    globals.middleware.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
+    globals.middleware.task.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
   ],
   run: async () => {
     // Each retry attempt gets its own 10-second timeout
@@ -1076,6 +1142,8 @@ Best practices:
 - Combine with retry middleware for transient failures
 - Use longer timeouts for resource initialization than task execution
 - Consider network conditions when setting API call timeouts
+
+> **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It’s not me, it’s your molasses‑flavored endpoint. I just blow the whistle."
 
 ## Logging
 
@@ -1159,6 +1227,7 @@ const userTask = task({
 
     // With structured data
     logger.info("User creation attempt", {
+      source: userTask.id,
       data: {
         email: userData.email,
         registrationSource: "web",
@@ -1202,6 +1271,7 @@ const requestHandler = task({
 
     // Create a contextual logger with bound metadata with source and context
     const requestLogger = logger.with("api.handler", {
+      source: requestHandler.id,
       requestId: request.requestId,
       userId: request.userId,
     });
@@ -1344,6 +1414,8 @@ interface ILog {
 
 ### Catch Logs
 
+> **runtime:** "'Debugging is enjoyable.' So is dental surgery, apparently. You produce a novella of logs; I paginate, color, stringify, and mail it to three observability planets. Please don’t `logger.debug` inside a `for` loop. My IO has feelings."
+
 ## Debug Resource
 
 _Professional-grade debugging without sacrificing production performance_
@@ -1385,8 +1457,7 @@ const app = resource({
       logResourceResult: false,
       logEventEmissionOnRun: true,
       logEventEmissionInput: false,
-      logHookTriggered: true,
-      logHookCompleted: false,
+      // Hook/middleware lifecycle visibility is available via interceptors
       // ... other fine-grained options
     }),
   ],
@@ -1402,15 +1473,13 @@ import { globals } from "@bluelibs/runner";
 
 const criticalTask = task({
   id: "app.tasks.critical",
-  meta: {
-    tags: [
-      globals.tags.debug.with({
-        logTaskInput: true,
-        logTaskResult: true,
-        logTaskOnError: true,
-      }),
-    ],
-  },
+  tags: [
+    globals.tags.debug.with({
+      logTaskInput: true,
+      logTaskResult: true,
+      logTaskOnError: true,
+    }),
+  ],
   run: async (input) => {
     // This task will have verbose debug logging
     return await processPayment(input);
@@ -1508,6 +1577,8 @@ await paymentLogger.info("Processing payment", { data: paymentData });
 await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
+> **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it’s off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
+
 ## Meta
 
 _The structured way to describe what your components do and control their behavior_
@@ -1535,7 +1606,6 @@ const userService = resource({
     title: "User Management Service",
     description:
       "Handles user creation, authentication, and profile management",
-    tags: ["service", "user", "core"],
   },
   dependencies: { database },
   init: async (_, { database }) => ({
@@ -1553,7 +1623,6 @@ const sendWelcomeEmail = task({
   meta: {
     title: "Send Welcome Email",
     description: "Sends a welcome email to newly registered users",
-    tags: ["email", "automation", "user-onboarding"],
   },
   dependencies: { emailService },
   run: async (userData, { emailService }) => {
@@ -1564,49 +1633,9 @@ const sendWelcomeEmail = task({
 
 ### Tags
 
-Tags are the most powerful part of the metadata system used for classification. They can be simple strings or sophisticated configuration objects that control component behavior.
+Tags are a way to describe your element, however, unlike meta, tags may influence behaviour in the system. They can be simple strings or sophisticated configuration objects that control component behavior. They have to be registered for it to work, to understand their ownership.
 
-#### String Tags for Simple Classification
-
-```typescript
-const adminTask = task({
-  id: "app.tasks.admin.deleteUser",
-  meta: {
-    title: "Delete User Account",
-    description: "Permanently removes a user account and all associated data",
-    tags: [
-      "admin", // Access level
-      "destructive", // Behavioral flag
-      "user", // Domain
-      "gdpr-compliant", // Compliance flag
-    ],
-  },
-  run: async (userId) => {
-    // Deletion logic
-  },
-});
-
-// Middleware that adds extra logging for destructive operations
-const auditMiddleware = middleware({
-  id: "app.middleware.audit",
-  run: async ({ task, next }) => {
-    const isDestructive = task.definition.meta?.tags?.includes("destructive");
-
-    if (isDestructive) {
-      console.log(`🔥 DESTRUCTIVE OPERATION: ${task.definition.id}`);
-      await auditLogger.log({
-        operation: task.definition.id,
-        user: getCurrentUser(),
-        timestamp: new Date(),
-      });
-    }
-
-    return next(task.input);
-  },
-});
-```
-
-#### Advanced Tags with Configuration
+#### Tags with Configuration
 
 For more sophisticated control, you can create structured tags that carry configuration:
 
@@ -1631,22 +1660,18 @@ const cacheTag = tag<{ ttl: number; keyPattern?: string }>({
 // Use structured tags in your components
 const expensiveTask = task({
   id: "app.tasks.expensiveCalculation",
-  meta: {
-    title: "Complex Data Processing",
-    description: "Performs heavy computational analysis on large datasets",
-    tags: [
-      "computation",
-      "background",
-      performanceTag.with({
-        alertAboveMs: 5000,
-        criticalAboveMs: 15000,
-      }),
-      cacheTag.with({
-        ttl: 300000, // 5 minutes
-        keyPattern: "calc-{userId}-{datasetId}",
-      }),
-    ],
-  },
+  tags: [
+    "computation",
+    "background",
+    performanceTag.with({
+      alertAboveMs: 5000,
+      criticalAboveMs: 15000,
+    }),
+    cacheTag.with({
+      ttl: 300000, // 5 minutes
+      keyPattern: "calc-{userId}-{datasetId}",
+    }),
+  ],
   run: async (input) => {
     // Heavy computation here
   },
@@ -1654,19 +1679,15 @@ const expensiveTask = task({
 
 const apiEndpoint = task({
   id: "app.tasks.api.getUserProfile",
-  meta: {
-    title: "Get User Profile",
-    description: "Returns user profile information with privacy filtering",
-    tags: [
-      "api",
-      "public",
-      rateLimitTag.with({
-        maxRequestsPerMinute: 100,
-        burstLimit: 20,
-      }),
-      cacheTag.with({ ttl: 60000 }), // 1 minute cache
-    ],
-  },
+  tags: [
+    "api",
+    "public",
+    rateLimitTag.with({
+      maxRequestsPerMinute: 100,
+      burstLimit: 20,
+    }),
+    cacheTag.with({ ttl: 60000 }), // 1 minute cache
+  ],
   run: async (userId) => {
     // API logic
   },
@@ -1683,32 +1704,26 @@ import { globals } from "@bluelibs/runner";
 // System components (automatically excluded from debug logs)
 const internalTask = task({
   id: "app.tasks.internal",
-  meta: {
-    tags: [globals.tags.system], // Marks as system component
-  },
+  tags: [globals.tags.system], // Marks as system component
   run: async () => "internal work",
 });
 
 // Debug-specific configuration
 const debugTask = task({
   id: "app.tasks.debug",
-  meta: {
-    tags: [
-      globals.tags.debug.with({
-        logTaskInput: true,
-        logTaskResult: true,
-      }),
-    ],
-  },
+  tags: [
+    globals.tags.debug.with({
+      logTaskInput: true,
+      logTaskResult: true,
+    }),
+  ],
   run: async (input) => processInput(input),
 });
 
 // Events that should not be sent to global listeners
 const internalEvent = event({
   id: "app.events.internal",
-  meta: {
-    tags: [globals.tags.excludeFromGlobalHooks],
-  },
+  tags: [globals.tags.excludeFromGlobalHooks],
 });
 ```
 
@@ -1717,24 +1732,23 @@ To process these tags you can hook into `globals.events.ready`, use the global s
 #### Structured Tags
 
 ```typescript
-const performanceMiddleware = middleware({
+const performanceMiddleware = middleware.task({
   id: "app.middleware.performance",
   run: async ({ task, next }) => {
-    const tags = task.definition.meta?.tags || [];
-    const perfConfigTag = performanceTag.extract(tags); // or easier: .extract(task.definition)
+    const perfConfiguration = performanceTag.extract(task.definition); // you can just use .exists() if you want to check for presence
 
-    if (perfConfigTag) {
+    if (perfConfiguration) {
       const startTime = Date.now();
 
       try {
-        const result = await next(task.input);
+        const result = await next(task?.input);
         const duration = Date.now() - startTime;
 
-        if (duration > perfConfigTag.config.criticalAboveMs) {
+        if (duration > perfConfiguration.criticalAboveMs) {
           await alerting.critical(
             `Task ${task.definition.id} took ${duration}ms`,
           );
-        } else if (duration > perfConfig.config.alertAboveMs) {
+        } else if (duration > perfConfiguration.alertAboveMs) {
           await alerting.warn(`Task ${task.definition.id} took ${duration}ms`);
         }
 
@@ -1749,43 +1763,39 @@ const performanceMiddleware = middleware({
       }
     }
 
-    return next(task.input);
+    return next(task?.input);
   },
 });
 ```
 
 #### Contract Tags
 
-You can attach contracts to tags to enforce the shape of a task's returned value and a resource's `init()` value at compile time. Contracts are specified via the second generic of `defineTag<TConfig, TContract>`.
+You can attach contracts to tags to enforce the shape of a task's returned value and a resource's `init()` value at compile time. Contracts are specified via the third generic of `defineTag<TConfig, TUnused, TOutput>`.
 
 ```typescript
 // A tag that enforces the returned value to include { name: string }
-const userContract = tag<void, { name: string }>({ id: "contract.user" });
+const userContract = tag<void, void, { name: string }>({ id: "contract.user" });
 
 // Another tag that enforces { age: number }
-const ageContract = tag<void, { age: number }>({ id: "contract.age" });
+const ageContract = tag<void, void, { age: number }>({ id: "contract.age" });
 
 // Works with configured tags too
-const preferenceContract = tag<{ locale: string }, { preferredLocale: string }>(
-  {
-    id: "contract.preferences",
-  },
-);
+const preferenceContract = tag<
+  { locale: string },
+  void,
+  { preferredLocale: string }
+>({
+  id: "contract.preferences",
+});
 ```
 
-When these tags are present in `meta.tags`, the returned value must satisfy the intersection of all contract types:
+The return value must return a union of all tags with return contracts.
 
 ```typescript
 // Task: the awaited return value must satisfy { name: string } & { age: number }
 const getProfile = task({
   id: "app.tasks.getProfile",
-  meta: {
-    tags: [
-      userContract,
-      ageContract,
-      preferenceContract.with({ locale: "en" }),
-    ],
-  },
+  tags: [userContract, ageContract, preferenceContract.with({ locale: "en" })],
   run: async () => {
     return { name: "Ada", age: 37, preferredLocale: "en" }; // OK
   },
@@ -1794,7 +1804,7 @@ const getProfile = task({
 // Resource: init() return must satisfy the same intersection
 const profileService = resource({
   id: "app.resources.profileService",
-  meta: { tags: [userContract, ageContract] },
+  tags: [userContract, ageContract],
   init: async () => {
     return { name: "Ada", age: 37 }; // OK
   },
@@ -1806,7 +1816,7 @@ If the returned value does not satisfy the intersection, TypeScript surfaces a r
 ```typescript
 const badTask = task({
   id: "app.tasks.bad",
-  meta: { tags: [userContract, ageContract] },
+  tags: [userContract, ageContract],
   //    vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
   run: async () => ({ name: "Ada" }), // Missing { age: number }
   // Type error includes a helpful shape similar to:
@@ -1846,7 +1856,6 @@ const expensiveApiTask = task({
   meta: {
     title: "AI Image Generation",
     description: "Uses OpenAI DALL-E to generate images from text prompts",
-    tags: ["ai", "expensive", "external-api"],
     author: "AI Team",
     version: "2.1.0",
     apiVersion: "v2",
@@ -1861,7 +1870,6 @@ const database = resource({
   id: "app.database.primary",
   meta: {
     title: "Primary PostgreSQL Database",
-    tags: ["database", "critical", "persistent"],
     healthCheck: "/health/db", // Custom property!
     dependencies: ["postgresql", "connection-pool"],
     scalingPolicy: "auto",
@@ -1871,6 +1879,8 @@ const database = resource({
 ```
 
 Metadata transforms your components from anonymous functions into self-documenting, discoverable, and controllable building blocks. Use it wisely, and your future self (and your team) will thank you.
+
+> **runtime:** "Ah, metadata—comments with delusions of grandeur. `title`, `description`, `tags`: perfect for machines to admire while I chase the only field that matters: `run`. Wake me when the tags start writing tests."
 
 ## Overrides
 
@@ -1916,31 +1926,55 @@ const overriddenResource = override(originalResource, {
 });
 
 // Middleware
-const originalMiddleware = middleware({
+const originalMiddleware = taskMiddleware({
   id: "app.middleware.log",
   run: async ({ next }) => next(),
 });
 const overriddenMiddleware = override(originalMiddleware, {
   run: async ({ task, next }) => {
-    const result = await next(task?.input as any);
+    const result = await next(task?.input);
     return { wrapped: result } as any;
+  },
+});
+
+// Even hooks
+```
+
+Overrides can let you expand dependencies and even call your overriden resource (like a classical OOP extends):
+
+```ts
+const testEmailer = override(productionEmailer, {
+  dependencies: {
+    ...productionEmailer,
+    // expand it, make some deps optional, or just remove some dependencies
+  }
+  init: async (_, deps) => {
+    const base = productionEmailer.init(_, deps);
+
+    return {
+      ...base,
+      // expand it, modify methods of base.
+    }
   },
 });
 ```
 
-Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the root) wins, because it’s applied last. Conflicting overrides are allowed; overriding something that wasn’t registered throws. Use override() to change behavior safely while preserving the original id.
+Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the root) wins, because it's applied last. Conflicting overrides are allowed; overriding something that wasn't registered throws. Use override() to change behavior safely while preserving the original id.
+
+> **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 
 ## Namespacing
 
 As your app grows, you'll want consistent naming. Here's the convention that won't drive you crazy:
 
-| Type       | Format                                    |
-| ---------- | ----------------------------------------- |
-| Resources  | `{domain}.resources.{resourceName}`       |
-| Tasks      | `{domain}.tasks.{taskName}`               |
-| Events     | `{domain}.events.{eventName}`             |
-| Hooks      | `{domain}.tasks.{taskName}.on{EventName}` |
-| Middleware | `{domain}.middleware.{middlewareName}`    |
+| Type                | Format                                          |
+| ------------------- | ----------------------------------------------- |
+| Resources           | `{domain}.resources.{resourceName}`             |
+| Tasks               | `{domain}.tasks.{taskName}`                     |
+| Events              | `{domain}.events.{eventName}`                   |
+| Hooks               | `{domain}.hooks.on{EventName}`                  |
+| Task Middleware     | `{domain}.middleware.task.{middlewareName}`     |
+| Resource Middleware | `{domain}.middleware.resource.{middlewareName}` |
 
 ```typescript
 // Helper function for consistency
@@ -1953,6 +1987,8 @@ const userTask = task({
   // ...
 });
 ```
+
+> **runtime:** "Naming conventions: aromatherapy for chaos. Lovely lavender labels on a single giant map I maintain anyway. But truly—keep the IDs tidy. Future‑you deserves at least this mercy."
 
 ## Factory Pattern
 
@@ -1983,6 +2019,8 @@ const app = resource({
   },
 });
 ```
+
+> **runtime:** "Factory by resource by function by class. A nesting doll of indirection so artisanal it has a Patreon. Not pollution—boutique smog. I will still call the constructor."
 
 ## Runtime Validation
 
@@ -2163,7 +2201,7 @@ const timingConfigSchema = z.object({
   logSuccessful: z.boolean().default(true),
 });
 
-const timingMiddleware = middleware({
+const timingMiddleware = taskMiddleware({ // or resourceMiddleware()
   id: "app.middleware.timing",
   configSchema: timingConfigSchema, // Validation on .with()
   run: async ({ next }, _, config) => {
@@ -2327,6 +2365,8 @@ const createUser = task({
 });
 ```
 
+> **runtime:** "Validation: you hand me a velvet rope and a clipboard. 'Name? Email? Age within bounds?' I stamp passports or eject violators with a `ValidationError`. Dress code is types, darling."
+
 ## Internal Services
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):
@@ -2390,6 +2430,8 @@ const advancedService = resource({
 The function pattern essentially gives you "just-in-time" dependency resolution instead of "eager" dependency resolution, which provides more flexibility and better handles complex dependency scenarios that arise in real-world applications.
 
 **Performance note**: Function-based dependencies have minimal overhead - they're only called once during dependency resolution.
+
+> **runtime:** "'Use with caution,' they whisper, tossing you the root credentials to the universe. Yes, reach into the `store`. Rewire fate. When the graph looks like spaghetti art, I’ll frame it and label it 'experimental.'"
 
 ## Handling Circular Dependencies
 
@@ -2481,6 +2523,8 @@ export const problematicResource = defineResource({
 ```
 
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
+
+> **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It’s weird. Nobody tell the linter."
 
 ## Real-World Example: The Complete Package
 
@@ -2646,6 +2690,8 @@ process.on("SIGTERM", async () => {
 });
 ```
 
+> **runtime:** "Ah yes, the 'Real‑World Example'—a terrarium where nothing dies and every request is polite. Release it into production and watch nature document a very different ecosystem."
+
 ## Testing
 
 ### Unit Testing
@@ -2710,8 +2756,11 @@ const harness = resource({
 // A task you want to drive in your tests
 const registerUser = task({ id: "app.tasks.registerUser" /* ... */ });
 
-// Boom: full ecosystem run (middleware, events, overrides) with a tiny driver
+// Boom: full ecosystem
 const { value: t, dispose } = await run(harness);
+
+// You have 3 ways to interact with the system, run tasks, get resource values and emit events
+
 const result = await t.runTask(registerUser, { email: "x@y.z" });
 const value = t.getResourceValue(testDb); // since the resolution is done by id, this will return the exact same result as t.getResourceValue(actualDb)
 t.emitEvent(id | event, payload);
@@ -2720,6 +2769,8 @@ await dispose();
 ```
 
 When you're working with the actual task instances you benefit of autocompletion, if you rely on strings you will not benefit of autocompletion and typesafety for running these tasks.
+
+> **runtime:** "Testing: an elaborate puppet show where every string behaves. Then the real world walks in, kicks the stage, and asks for pagination. Still—nice coverage badge."
 
 ## Semaphore
 
@@ -2869,6 +2920,8 @@ class APIClient {
   }
 }
 ```
+
+> **runtime:** "Semaphore: velvet rope for chaos. Five in, the rest practice patience and existential dread. I stamp hands, count permits, and break up race conditions before they form a band."
 
 ## Queue
 
@@ -3026,6 +3079,8 @@ try {
 }
 ```
 
+> **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
+
 ## Why Choose BlueLibs Runner?
 
 ### What You Get
@@ -3037,11 +3092,15 @@ try {
 - **Clarity**: Explicit dependencies, no hidden magic
 - **Developer Experience**: Helpful error messages and clear patterns
 
+> **runtime:** "Why choose it? The bullets are persuasive. In practice, your 'intelligent inference' occasionally elopes with `any`, and your 'clear patterns' cosplay spaghetti. Still, compared to the alternatives… I’ve seen worse cults."
+
 ## The Migration Path
 
 Coming from Express? No problem. Coming from NestJS? We feel your pain. Coming from Spring Boot? Welcome to the light side.
 
 The beauty of BlueLibs Runner is that you can adopt it incrementally. Start with one task, one resource, and gradually refactor your existing code. No big bang rewrites required - your sanity will thank you.
+
+> **runtime:** "'No big bang rewrites.' Only a series of extremely small bangs that echo for six months. You start with one task; next thing, your monolith is wearing microservice eyeliner. It’s a look."
 
 ## Community & Support
 
@@ -3053,6 +3112,10 @@ This is part of the [BlueLibs](https://www.bluelibs.com) ecosystem. We're not tr
 
 _P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still different._
 
+> **runtime:** "'This one's different.' Sure. You’re all unique frameworks, just like everyone else. To me, you’re all 'please run this async and don’t explode,' but the seasoning here is… surprisingly tasteful."
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+
+> **runtime:** "MIT License: do cool stuff, don’t blame us. A dignified bow. Now if you’ll excuse me, I have sockets to tuck in and tasks to shepherd."

@@ -1,4 +1,4 @@
-import { defineMiddleware, defineResource, defineTask } from "../../define";
+import { defineTaskMiddleware, defineResource, defineTask } from "../../define";
 import { LRUCache } from "lru-cache";
 import { IResource, ITask } from "../../defs";
 
@@ -52,10 +52,10 @@ export const cacheResource = defineResource({
 const defaultKeyBuilder = (taskId: string, input: any) =>
   `${taskId}-${JSON.stringify(input)}`;
 
-export const cacheMiddleware = defineMiddleware({
+export const cacheMiddleware = defineTaskMiddleware({
   id: "globals.middleware.cache",
   dependencies: { cache: cacheResource },
-  async run({ task, resource, next }, deps, config: CacheMiddlewareConfig) {
+  async run({ task, next }, deps, config: CacheMiddlewareConfig) {
     const { cache } = deps;
     config = {
       keyBuilder: defaultKeyBuilder,
@@ -65,12 +65,8 @@ export const cacheMiddleware = defineMiddleware({
       ...config,
     };
 
-    if (!task) {
-      throw new Error("Cache middleware can only be used in tasks");
-    }
-
-    const taskId = task.definition.id;
-    let cacheHolderForTask = cache.map.get(taskId);
+    const taskId = task!.definition.id;
+    let cacheHolderForTask = cache.map.get(taskId)!;
     if (!cacheHolderForTask) {
       // Extract only LRUCache options, excluding keyBuilder
       const { keyBuilder, ...lruOptions } = config;
@@ -85,7 +81,7 @@ export const cacheMiddleware = defineMiddleware({
       cache.map.set(taskId, cacheHolderForTask);
     }
 
-    const key = config.keyBuilder!(taskId, task.input);
+    const key = config.keyBuilder!(taskId, task!.input);
 
     const cachedValue = await cacheHolderForTask.get(key);
 
@@ -93,7 +89,7 @@ export const cacheMiddleware = defineMiddleware({
       return cachedValue;
     }
 
-    const result = await next(task.input);
+    const result = await next(task!.input);
 
     await cacheHolderForTask.set(key, result);
 

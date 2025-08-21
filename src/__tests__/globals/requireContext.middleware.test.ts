@@ -1,4 +1,4 @@
-import { requireContextMiddleware } from "../../globals/middleware/requireContext.middleware";
+import { requireContextTaskMiddleware } from "../../globals/middleware/requireContext.middleware";
 import { ContextError } from "../../context";
 
 /**
@@ -26,9 +26,9 @@ describe("requireContextMiddleware", () => {
 
     // Act & Assert
     await expect(
-      requireContextMiddleware.run({ next } as any, {} as any, {} as any)
+      requireContextTaskMiddleware.run({ next } as any, {} as any, {} as any),
     ).rejects.toThrow(
-      "Context not available. Did you forget to pass 'context' to the middleware?"
+      "Context not available. Did you forget to pass 'context' to the middleware?",
     );
   });
 
@@ -36,18 +36,18 @@ describe("requireContextMiddleware", () => {
     // Arrange → a context whose `use` returns undefined, simulating missing provider
     const fakeContext = createFakeContext(() => {
       throw new ContextError(
-        "Context not available. Did you forget to provide the context via ContextName.provide()?"
+        "Context not available. Did you forget to provide the context via ContextName.provide()?",
       );
     });
     const next = jest.fn();
 
     // Act & Assert
     await expect(
-      requireContextMiddleware.run(
+      requireContextTaskMiddleware.run(
         { next } as any,
         {} as any,
-        { context: fakeContext } as any
-      )
+        { context: fakeContext } as any,
+      ),
     ).rejects.toBeInstanceOf(ContextError);
   });
 
@@ -57,10 +57,10 @@ describe("requireContextMiddleware", () => {
     const expectedResult = "task-result";
     const next = jest.fn().mockResolvedValue(expectedResult);
 
-    const result = await requireContextMiddleware.run(
+    const result = await requireContextTaskMiddleware.run(
       { task, next } as any,
       {} as any,
-      { context: fakeContext } as any
+      { context: fakeContext } as any,
     );
 
     expect(next).toHaveBeenCalledTimes(1);
@@ -68,35 +68,5 @@ describe("requireContextMiddleware", () => {
     expect(result).toBe(expectedResult);
   });
 
-  it("passes resource.config to next() and returns its result when called within a resource", async () => {
-    const fakeContext = createFakeContext(() => ({ user: "bob" }));
-    const resource = { config: { url: "https://example.com" } };
-    const expectedResult = "resource-result";
-    const next = jest.fn().mockResolvedValue(expectedResult);
-
-    const result = await requireContextMiddleware.run(
-      { resource, next } as any,
-      {} as any,
-      { context: fakeContext } as any
-    );
-
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(next).toHaveBeenCalledWith(resource.config);
-    expect(result).toBe(expectedResult);
-  });
-
-  it("calls next() with no arguments when neither task nor resource is provided", async () => {
-    const fakeContext = createFakeContext(() => ({ user: "charlie" }));
-    const next = jest.fn().mockResolvedValue("noop-result");
-
-    const result = await requireContextMiddleware.run(
-      { next } as any,
-      {} as any,
-      { context: fakeContext } as any
-    );
-
-    expect(next).toHaveBeenCalledTimes(1);
-    expect(next).toHaveBeenCalledWith();
-    expect(result).toBe("noop-result");
-  });
+  // resource path removed for task-only requireContextMiddleware
 });

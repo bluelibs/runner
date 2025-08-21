@@ -7,8 +7,8 @@ export const debugConfig = defineResource({
   meta: {
     title: "Debug Config",
     description: "Debug config. This is used to debug the system.",
-    tags: [globalTags.system],
   },
+  tags: [globalTags.system],
   init: async (config: DebugFriendlyConfig) => {
     const myConfig = { ...getConfig(config) };
 

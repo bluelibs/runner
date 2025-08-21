@@ -23,27 +23,25 @@ export const loginUserTask = task({
     config: appConfig,
     verifyPasswordTask,
   },
-  meta: {
-    tags: [
-      httpRoute.post("/api/auth/login", {
-        summary: "User login",
-        description: "Authenticate user and return JWT token",
-        tags: ["Authentication"],
-        requiresAuth: false,
-        requestBodySchema: loginSchema,
-        responseSchema: z.object({
-          success: z.boolean(),
-          data: z.object({
-            token: z.string(),
-            user: UserSchema,
-          }),
+  tags: [
+    httpRoute.post("/api/auth/login", {
+      summary: "User login",
+      description: "Authenticate user and return JWT token",
+      tags: ["Authentication"],
+      requiresAuth: false,
+      requestBodySchema: loginSchema,
+      responseSchema: z.object({
+        success: z.boolean(),
+        data: z.object({
+          token: z.string(),
+          user: UserSchema,
         }),
       }),
-    ],
-  },
+    }),
+  ],
   run: async (
     loginData: LoginRequest,
-    { config, verifyPasswordTask }
+    { config, verifyPasswordTask },
   ): Promise<ApiResponse<LoginResponse>> => {
     try {
       // Verify credentials

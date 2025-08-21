@@ -1,5 +1,19 @@
 # Express OpenAPI SQLite Example
 
+```bash
+git clone git@github.com:bluelibs/runner.git
+cd runner
+npm install
+npm run build
+npm run benchmark # if you're brave enough, post results
+
+# Doing it like this because the example requires file-based runner to be able to keep examples working with any change
+cd ./examples/express-openapi-sqlite
+npm install
+PORT=31337 npm run dev
+PORT=31337 npm run test # (integration tests)
+```
+
 A complete Express.js application demonstrating the full power of BlueLibs Runner with:
 
 - 🏷️ **Custom Tags (httpTag)** for route decoration
@@ -18,7 +32,7 @@ The full power and simplicity of Runner.
 
 ```typescript
 // HTTP tag for marking tasks as endpoints
-const registerUserTask = defineTask({
+const registerUserTask = task({
   id: "app.tasks.auth.register",
   meta: {
     tags: [
@@ -40,9 +54,9 @@ const registerUserTask = defineTask({
 
 ```typescript
 // Listens to afterInit event to scan and register routes
-export const routeRegistrationTask = defineTask({
+export const routeRegistrationTask = hook({
   id: "app.tasks.routeRegistration",
-  on: globalEvents.afterInit,
+  on: globals.events.ready,
   run: async () => {
     // Automatically discovers tasks with HTTP tags
     // and registers them as Express routes
@@ -67,7 +81,9 @@ export const authMiddleware = defineMiddleware<AuthConfig>({
   id: "app.middleware.auth",
   run: async ({ task, next }, deps, config) => {
     // JWT verification and user context setup
-    return UserContext.provide(userSession, () => next(task.input));
+    if (task) {
+      return UserContext.provide(userSession, () => next(task.input));
+    }
   },
 });
 ```

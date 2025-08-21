@@ -3,16 +3,23 @@ import { EventManager } from "../../models/EventManager";
 import {
   defineResource,
   defineTask,
-  defineMiddleware,
   defineEvent,
   defineTag,
+  defineTaskMiddleware,
 } from "../../define";
-import { Logger, PrintStrategy } from "../../models";
+import {
+  Logger,
+  MiddlewareManager,
+  OnUnhandledError,
+  TaskRunner,
+} from "../../models";
+import { StoreRegistry } from "../../models/StoreRegistry";
 
 describe("Store", () => {
   let eventManager: EventManager;
   let store: Store;
   let logger: Logger;
+  let onUnhandledError: OnUnhandledError;
 
   beforeEach(() => {
     eventManager = new EventManager();
@@ -21,7 +28,12 @@ describe("Store", () => {
       printStrategy: "pretty",
       bufferLogs: false,
     });
-    store = new Store(eventManager, logger);
+    onUnhandledError = jest.fn();
+    store = new Store(eventManager, logger, onUnhandledError);
+  });
+
+  it("should expose some helpers", () => {
+    expect(store.getMiddlewareManager()).toBeInstanceOf(MiddlewareManager);
   });
 
   it("should initialize the store with a root resource", () => {
@@ -41,7 +53,7 @@ describe("Store", () => {
     expect(store.isLocked).toBe(true);
 
     expect(() => store.checkLock()).toThrow(
-      "Cannot modify the Store when it is locked."
+      "Cannot modify the Store when it is locked.",
     );
   });
 
@@ -68,7 +80,7 @@ describe("Store", () => {
   });
 
   it("should store a middleware and retrieve it", () => {
-    const testMiddleware = defineMiddleware({
+    const testMiddleware = defineTaskMiddleware({
       id: "test.middleware",
       run: async ({ next }) => {
         return `Middleware: ${await next()}`;
@@ -76,8 +88,7 @@ describe("Store", () => {
     });
 
     store.storeGenericItem(testMiddleware);
-
-    expect(store.middlewares.has("test.middleware")).toBe(true);
+    expect(store.taskMiddlewares.has("test.middleware")).toBe(true);
   });
 
   it("should store an event and retrieve it", () => {
@@ -116,7 +127,7 @@ describe("Store", () => {
     store.storeGenericItem(testTask);
 
     expect(() => store.storeGenericItem(testTask)).toThrow(
-      /already registered/i
+      /already registered/i,
     );
   });
 
@@ -129,7 +140,7 @@ describe("Store", () => {
     store.initializeStore(rootResource, {});
 
     expect(() => store.initializeStore(rootResource, {})).toThrow(
-      /Store already initialized/i
+      /Store already initialized/i,
     );
   });
 
@@ -150,43 +161,9 @@ describe("Store", () => {
     expect(() => store.processOverrides()).not.toThrow();
   });
 
-  it("should call getEverywhereMiddlewareForTasks method", () => {
-    // Test getEverywhereMiddlewareForTasks method (lines 152-153)
-    const result = store.getEverywhereMiddlewareForTasks({} as any);
-    expect(Array.isArray(result)).toBe(true);
-  });
-
-  it("should call getEverywhereMiddlewareForResources method", () => {
-    // Test getEverywhereMiddlewareForResources method (lines 156-157)
-    const result = store.getEverywhereMiddlewareForResources({} as any);
-    expect(Array.isArray(result)).toBe(true);
-  });
-
-  it("getDependentNodes handles empty middleware and task middleware arrays (branches)", () => {
-    const root = defineResource({ id: "root.dep.nodes", register: [] });
-    store.initializeStore(root, {});
-    // add a task with empty middleware
-    const t = defineTask({
-      id: "t.empty.mw",
-      middleware: [],
-      async run() {
-        return 1;
-      },
-    });
-    store.storeGenericItem(t);
-    const nodes = store.getDependentNodes();
-    expect(Array.isArray(nodes)).toBe(true);
-  });
-
   it("should call storeEventsForAllTasks method", () => {
     // Test storeEventsForAllTasks method (line 165)
     expect(() => store.storeEventsForAllTRM()).not.toThrow();
-  });
-
-  it("should call getDependentNodes method", () => {
-    // Test getDependentNodes method (line 169)
-    const result = store.getDependentNodes();
-    expect(Array.isArray(result)).toBe(true);
   });
 
   it("should call getTasksWithTag method", () => {
@@ -195,9 +172,7 @@ describe("Store", () => {
     });
     const taskTest = defineTask({
       id: "task.test",
-      meta: {
-        tags: [tag, "test"],
-      },
+      tags: [tag],
       async run() {
         return "OK";
       },
@@ -208,7 +183,7 @@ describe("Store", () => {
     });
     const rootResource = defineResource({
       id: "root",
-      register: [taskTest, unfindableTask],
+      register: [taskTest, unfindableTask, tag],
       init: async () => "Root Value",
     });
 
@@ -216,7 +191,7 @@ describe("Store", () => {
     const result = store.getTasksWithTag(tag);
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
-    const result2 = store.getTasksWithTag("test");
+    const result2 = store.getTasksWithTag("tags.test");
     expect(result2).toHaveLength(1);
   });
 
@@ -226,9 +201,7 @@ describe("Store", () => {
     });
     const resourceTest = defineResource({
       id: "resource.test",
-      meta: {
-        tags: [tag, "test"],
-      },
+      tags: [tag],
     });
 
     const unfindableResource = defineResource({
@@ -237,7 +210,7 @@ describe("Store", () => {
     });
     const rootResource = defineResource({
       id: "root",
-      register: [resourceTest, unfindableResource],
+      register: [resourceTest, unfindableResource, tag],
       init: async () => "Root Value",
     });
 
@@ -245,32 +218,7 @@ describe("Store", () => {
     const result = store.getResourcesWithTag(tag);
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
-    const result2 = store.getResourcesWithTag("test");
+    const result2 = store.getResourcesWithTag("tags.test");
     expect(result2).toHaveLength(1);
-  });
-
-  it("getEverywhereMiddlewareForTasks excludes middleware that depends on the task", () => {
-    const task: any = { id: "task.dep", middleware: [], dependencies: {} };
-    const mw: any = { id: "mw", dependencies: { t: task } };
-    // mark middleware as everywhere for tasks via the internal symbol
-    (mw as any)[Symbol.for("middleware.everywhere.tasks")] = true;
-    (store as any).registry.middlewares.set("mw", {
-      middleware: mw,
-      computedDependencies: {},
-    });
-    const res = store.getEverywhereMiddlewareForTasks(task);
-    expect(res).toHaveLength(0);
-  });
-
-  it("getEverywhereMiddlewareForResources excludes middleware that depends on the resource", () => {
-    const resource: any = { id: "res.dep", middleware: [], dependencies: {} };
-    const mw: any = { id: "mw2", dependencies: { r: resource } };
-    (mw as any)[Symbol.for("middleware.everywhere.resources")] = true;
-    (store as any).registry.middlewares.set("mw2", {
-      middleware: mw,
-      computedDependencies: {},
-    });
-    const res = store.getEverywhereMiddlewareForResources(resource);
-    expect(res).toHaveLength(0);
   });
 });

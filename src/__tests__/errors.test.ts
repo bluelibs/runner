@@ -2,11 +2,14 @@ import {
   defineTask,
   defineResource,
   defineEvent,
-  defineMiddleware,
   defineHook,
+  defineTag,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
 } from "../define";
 import { run } from "../run";
 import { Errors } from "..";
+import { MiddlewareNotRegisteredError } from "../errors";
 
 const {
   RuntimeError,
@@ -15,7 +18,6 @@ const {
   UnknownItemTypeError,
   CircularDependenciesError,
   EventNotFoundError,
-  MiddlewareAlreadyGlobalError,
   LockedError,
   StoreAlreadyInitializedError,
   ValidationError,
@@ -170,13 +172,55 @@ describe("Errors", () => {
     );
   });
 
-  it("Should throw duplicate error for middlewares with the same id", async () => {
-    const middleware1 = defineMiddleware({
-      id: "middlewarex",
+  it("Should throw duplicate error for tags with the same id", async () => {
+    const tag1 = defineTag({
+      id: "tag1",
+    });
+    const tag2 = defineTag({
+      id: "tag1",
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [tag1, tag2],
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      new DuplicateRegistrationError("Tag", "tag1").message,
+    );
+  });
+
+  it("Should throw duplicate error for hooks with the same id", async () => {
+    const event = defineEvent({
+      id: "event1",
+    });
+    const hook1 = defineHook({
+      id: "hook1",
+      on: event,
+      run: async () => {},
+    });
+    const hook2 = defineHook({
+      id: "hook1",
+      on: event,
       run: async () => {},
     });
 
-    const middleware2 = defineMiddleware({
+    const app = defineResource({
+      id: "app",
+      register: [hook1, hook2],
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      new DuplicateRegistrationError("Hook", "hook1").message,
+    );
+  });
+
+  it("Should throw duplicate error for middlewares with the same id", async () => {
+    const middleware1 = defineTaskMiddleware({
+      id: "middlewarex",
+      run: async () => {},
+    });
+    const middleware2 = defineTaskMiddleware({
       id: "middlewarex",
       run: async () => {},
     });
@@ -266,13 +310,38 @@ describe("Errors", () => {
     );
   });
 
-  it("should throw error, when a double global() is used on a middleware", async () => {
-    const first = defineMiddleware({
-      id: "x",
+  it("should throw error when a task depends on a non-registered middleware", async () => {
+    const mw = defineTaskMiddleware({ id: "mw", run: async () => {} });
+    const task = defineTask({
+      id: "test.task",
+      middleware: [mw],
       run: async () => {},
-    }).everywhere();
-    expect(() => first.everywhere()).toThrow(
-      new MiddlewareAlreadyGlobalError("x").message,
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await task();
+      },
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      new MiddlewareNotRegisteredError("task", "test.task", "mw").message,
+    );
+  });
+
+  it("should throw error when a resource depends on a non-registered middleware", async () => {
+    const mw = defineResourceMiddleware({ id: "mw", run: async () => {} });
+
+    const app = defineResource({
+      id: "app",
+      middleware: [mw],
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      new MiddlewareNotRegisteredError("resource", "app", "mw").message,
     );
   });
 
@@ -310,11 +379,6 @@ describe("Errors", () => {
       const eventError = new EventNotFoundError("test");
       expect(eventError.name).toBe("EventNotFoundError");
       expect(eventError).toBeInstanceOf(RuntimeError);
-
-      // Test MiddlewareAlreadyGlobalError
-      const middlewareError = new MiddlewareAlreadyGlobalError("test");
-      expect(middlewareError.name).toBe("MiddlewareAlreadyGlobalError");
-      expect(middlewareError).toBeInstanceOf(RuntimeError);
 
       // Test LockedError
       const lockedError = new LockedError("test");

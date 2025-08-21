@@ -14,7 +14,7 @@ export class RuntimeError extends Error {
 export class DuplicateRegistrationError extends RuntimeError {
   constructor(type: string, id: string) {
     super(
-      `${type} "${id.toString()}" already registered. Did you use the same 'id' in two different components? Keep in mind, that all TERM elements need unique ids.`
+      `${type} "${id.toString()}" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.`,
     );
     this.name = "DuplicateRegistrationError";
   }
@@ -26,7 +26,7 @@ export class DuplicateRegistrationError extends RuntimeError {
 export class DependencyNotFoundError extends RuntimeError {
   constructor(key: string) {
     super(
-      `Dependency ${key.toString()} not found. Did you forget to register it through a resource?`
+      `Dependency ${key.toString()} not found. Did you forget to register it through a resource?`,
     );
     this.name = "DependencyNotFoundError";
   }
@@ -39,6 +39,16 @@ export class UnknownItemTypeError extends RuntimeError {
   constructor(item: any) {
     super(`Unknown item type: ${item}`);
     this.name = "UnknownItemTypeError";
+  }
+}
+
+/**
+ * Error thrown whenever a requested context is not available.
+ */
+export class ContextError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ContextError";
   }
 }
 
@@ -57,7 +67,7 @@ export class CircularDependenciesError extends RuntimeError {
 
     if (hasMiddleware) {
       guidance +=
-        "\n  • For middleware: avoid depending on resources that use the same middleware";
+        "\n  • For middleware: you can filter out tasks/resources using everywhere(fn)";
       guidance +=
         "\n  • Consider using events for communication instead of direct dependencies";
     }
@@ -83,21 +93,31 @@ export class EventNotFoundError extends RuntimeError {
 export class ResourceNotFoundError extends RuntimeError {
   constructor(id: string) {
     super(
-      `Resource "${id.toString()}" not found. Did you forget to register it or are you using the correct id?`
+      `Resource "${id.toString()}" not found. Did you forget to register it or are you using the correct id?`,
     );
     this.name = "ResourceNotFoundError";
   }
 }
 
+export class MiddlewareNotRegisteredError extends RuntimeError {
+  constructor(type: "task" | "resource", source: string, middlewareId: string) {
+    super(
+      `Middleware inside ${type} "${source}" depends on "${middlewareId}" but it's not registered. Did you forget to register it?`,
+    );
+
+    this.name = `MiddlewareNotRegisteredError: ${type} ${source} ${middlewareId}`;
+  }
+}
+
 /**
- * Error thrown when attempting to make a middleware global when it's already global
+ * Error thrown when a tag is not found in the registry
  */
-export class MiddlewareAlreadyGlobalError extends RuntimeError {
+export class TagNotFoundError extends RuntimeError {
   constructor(id: string) {
     super(
-      `Cannot call .everywhere() on an already global middleware. It's enough to call everywhere() only once: ${id.toString()}`
+      `Tag "${id}" not registered. Did you forget to register it inside a resource?`,
     );
-    this.name = "MiddlewareAlreadyGlobalError";
+    this.name = "TagNotRegisteredError";
   }
 }
 

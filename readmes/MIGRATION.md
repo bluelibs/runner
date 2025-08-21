@@ -1,11 +1,11 @@
-## 🚀 Migration Guide: From 3.x.x to 4.x.x
+## 🚀 Migration Guide: From 3.x.x to 4.x.x (Extended Edition)
 
 ### 🎉 What's New & Shiny
 
 - 🎣 **Hook system got its own apartment!** No more living with tasks - they're officially separated
 - 🤫 **Invisible events with `globals.tags.excludeFromGlobalHooks`** - because sometimes events need privacy too
   - Perfect for avoiding those awkward deadlock situations when your global events get a little too chatty with side-effects
-- 🏷️ **System tagging with `globals.tags.system`** - like putting a "Do Not Disturb" sign on your runner internals
+- 🏷️ **System tagging with `globals.tags.system`** - like putting a "Do Not Disturb" sign on your runner internals.
 - 🎯 **Task interception powers** - resources can now be nosy neighbors to specific tasks
 - 🤷‍♀️ **Optional dependencies with `.optional()`** - for when you want dependencies but they might ghost you
 - 🛡️ **Result schema validation** - because trust is good, but validation is better
@@ -14,6 +14,10 @@
 - ⚙️ **Run options galore!** Configure `logs`, `debug`, `shutdownHooks`, and `errorBoundary` to your heart's content
 - 🧯 **Centralized unhandled error handler** via `run({ onUnhandledError })` for consistent error reporting
 - 🧪 **Simpler testing with `RunResult`** - `createTestResource` is deprecated; use `run()` and the returned `RunResult` helpers
+- 🎭 **The Great Middleware Split of 2025** - middleware finally figured out what they want to be when they grow up
+- 🏷️ **Tags got promoted!** - no more living in meta's basement, they're top-level citizens now
+- 🧅 **Middleware `everywhere` is now an option, not a builder!** No more `.everywhere(...)` chaining—just use the `everywhere` property directly in your middleware definition for global application.
+- 🎯 **Lifecycle hooks** Replacing lifecycle events with interception chains for precise control and zero noise
 
 ### 🏃‍♂️ Running Your App (The New Way)
 
@@ -65,8 +69,9 @@ const app = resource({
 });
 
 const r = await run(app);
-const kind = await r.runTask(getDbKind);
-const dbValue = r.getResourceValue("db");
+const kind = await r.runTask(getDbKind); // use the objects for typesafety
+const dbValue = r.getResourceValue("db"); // use objects for typesafety
+const emission = r.emitEvent(event, payload);
 await r.dispose();
 ```
 
@@ -221,6 +226,138 @@ const myHook = hook({
 });
 ```
 
+### 🎭 The Great Middleware Split of 2025
+
+Remember when `middleware()` was trying to be everything to everyone? Like that friend who claims they're "equally good" at both singing AND dancing? Yeah, we fixed that.
+
+**Before** (the identity crisis era):
+
+```ts
+import { middleware } from "@bluelibs/runner";
+
+const confused = middleware({
+  id: "jack-of-all-trades",
+  run: async ({ task, next }) => {
+    // Am I for tasks? Resources? Who knows! 🤷‍♂️
+    // TypeScript is crying in the corner
+  },
+});
+```
+
+**After** (specialized and thriving):
+
+```ts
+import { taskMiddleware, resourceMiddleware } from "@bluelibs/runner";
+
+const taskSpecialist = taskMiddleware({
+  id: "task-whisperer",
+  run: async ({ task, next }, deps, config) => {
+    // I know EXACTLY what I am! task.input, task.id, task.definition
+    // TypeScript is doing a happy dance 💃
+  },
+});
+
+const resourceSpecialist = resourceMiddleware({
+  id: "resource-guardian",
+  run: async ({ resource, next }, deps, config) => {
+    // resource.id, resource.config, resource.definition
+    // Living my best specialized life! ✨
+  },
+});
+```
+
+### 🧅 Middleware: `everywhere` is now an option, not a builder
+
+Previously, you could use the builder pattern to apply middleware everywhere, like this:
+
+```ts
+const globalTaskMiddleware = taskMiddleware({ id: "..." }).everywhere(
+  (task) => true,
+);
+```
+
+**Now:**  
+The `everywhere` property is a direct option on the middleware definition object:
+
+```ts
+const globalTaskMiddleware = taskMiddleware({
+  id: "...",
+  everywhere: true, // or a function: (task) => boolean
+  // ...rest as usual
+});
+```
+
+This change makes the API more consistent and type-safe. Update your middleware definitions accordingly.
+
+### 🏷️ Tags Got Promoted! (No More Living in Meta's Basement)
+
+Tags were tired of being buried in `meta.tags`. They've moved out of their parent's basement and got their own apartment!
+
+**Before** (tags living under meta's roof):
+
+```ts
+const myTask = task({
+  id: "shy-task",
+  meta: {
+    title: "My Task",
+    description: "Does stuff",
+    tags: ["billing", perf.with({ warnAboveMs: 1000 })], // Hidden away like a teenager
+  },
+  run: async () => {},
+});
+
+const myResource = resource({
+  id: "nested-resource",
+  meta: {
+    tags: [globals.tags.system], // Why so deep? 🕳️
+  },
+  init: async () => ({}),
+});
+```
+
+**After** (tags standing proud at the top level):
+
+```ts
+const myTask = task({
+  id: "confident-task",
+  tags: ["billing", perf.with({ warnAboveMs: 1000 })], // BOOM! Right there! 💪
+  meta: {
+    title: "My Task", // Meta is now just for documentation
+    description: "Does stuff", // Not for behavior!
+  },
+  run: async () => {},
+});
+
+const myResource = resource({
+  id: "toplevel-resource",
+  tags: [globals.tags.system], // First-class citizen! 🎩
+  meta: {
+    // Meta is now purely informational, like a business card
+    title: "My Resource",
+    author: "Probably you",
+  },
+  init: async () => ({}),
+});
+```
+
+**Why we did this:**
+
+- Tags affect behavior (contracts, interception, discovery)
+- Meta is just... metadata (documentation, descriptions, your favorite color)
+- Separating church and state, but for code! ⛪️🏛️
+
+**Tag extraction got easier too:**
+
+```ts
+// Before (digging through meta)
+const cfg = perf.extract(task.definition.meta?.tags);
+
+// After (right there on top!)
+const cfg = perf.extract(task.definition.tags);
+// or if you already have the tags
+const cfg = perf.extract(tags);
+```
+
 ### 📝 Logger Got VIP Treatment (No More Event Bus Drama!)
 
 Logger was tired of competing for attention on the event bus. We gave it the special treatment it deserves, now it's got its own direct line!
@@ -322,3 +459,60 @@ export type DebugConfig = {
 };
 // It's like having 17 different volume knobs for your debugging orchestra! 🎼
 ```
+
+### 🧵 Interception APIs
+
+Runner replaces hook/middleware lifecycle events with interception chains for precise control and zero noise:
+
+- `eventManager.intercept((next, event) => Promise<void>)` — intercept event emission
+- `eventManager.interceptHook((next, hook, event) => Promise<any>)` — intercept hook execution
+- `middlewareManager.intercept("task" | "resource", (next, input) => Promise<any>)` — intercept middleware execution
+- `middlewareManager.interceptMiddleware(middleware, interceptor)` — per-middleware interception
+
+Use these for observability, tracing, or policy enforcement. Prefer `task.intercept()` for app-level behavior.
+
+### 🏷️ Type Contracts for Middleware and Tags
+
+We've enhanced the type system to support stronger contracts:
+
+**Middleware Type Contracts:**
+
+```ts
+// Middleware now supports <Config, Input, Output> type contracts
+const authMiddleware = taskMiddleware<
+  { role: string }, // Config
+  { user: { role: string } }, // Input type enforcement
+  { user: { role: string; verified: boolean } } // Output type enforcement
+>({
+  id: "app.middleware.auth",
+  run: async ({ task, next }, _, config) => {
+    if (task.input.user.role !== config.role) {
+      throw new Error("Unauthorized");
+    }
+    const result = await next(task.input);
+    return { user: { ...task.input.user, verified: true } };
+  },
+});
+
+// Resource middleware follows the same pattern
+const resourceMiddleware = resourceMiddleware<Config, Input, Output>({
+  // ...
+});
+```
+
+**Tag Contracts:**
+
+```ts
+// Tags now use <Config, Unused, Output> for return type enforcement
+const userContract = tag<void, void, { name: string }>({ id: "contract.user" });
+const ageContract = tag<void, void, { age: number }>({ id: "contract.age" });
+
+// Tasks must return data matching all tag contracts
+const getProfile = task({
+  id: "app.tasks.getProfile",
+  tags: [userContract, ageContract],
+  run: async () => ({ name: "Ada", age: 37 }), // Must satisfy both contracts
+});
+```
+
+**Migration:** Update existing middleware and tags to use the new type parameters for stronger type safety.

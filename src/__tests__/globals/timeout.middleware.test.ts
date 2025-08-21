@@ -1,6 +1,9 @@
 import { defineResource, defineTask } from "../../define";
 import { run } from "../../run";
-import { timeoutMiddleware } from "../../globals/middleware/timeout.middleware";
+import {
+  timeoutTaskMiddleware as timeoutMiddleware,
+  timeoutResourceMiddleware,
+} from "../../globals/middleware/timeout.middleware";
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -52,7 +55,7 @@ describe("Timeout Middleware", () => {
   it("should timeout resource initialization", async () => {
     const slowResource = defineResource({
       id: "timeout.slowResource",
-      middleware: [timeoutMiddleware.with({ ttl: 20 })],
+      middleware: [timeoutResourceMiddleware.with({ ttl: 20 })],
       async init() {
         await sleep(50);
         return "ready";
@@ -84,5 +87,22 @@ describe("Timeout Middleware", () => {
     });
 
     await run(app);
+  });
+
+  it("should throw immediately when ttl is 0 for resource", async () => {
+    const slowResource = defineResource({
+      id: "timeout.immediate.resource",
+      middleware: [timeoutResourceMiddleware.with({ ttl: 0 })],
+      async init() {
+        return "never";
+      },
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [slowResource],
+    });
+
+    await expect(run(app)).rejects.toThrow(/timed out/i);
   });
 });

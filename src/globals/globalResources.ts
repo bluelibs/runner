@@ -6,6 +6,7 @@ import { TaskRunner } from "../models/TaskRunner";
 import { cacheResource } from "./middleware/cache.middleware";
 import { queueResource } from "./resources/queue.resource";
 import { globalTags } from "./globalTags";
+import { MiddlewareManager } from "../models/MiddlewareManager";
 
 const systemTag = globalTags.system;
 
@@ -15,20 +16,28 @@ const store = defineResource<void, Promise<Store>>({
     title: "Store",
     description:
       "A global store that can be used to store and retrieve tasks, resources, events and middleware",
-    tags: [systemTag],
   },
+  tags: [systemTag],
 });
 
 export const globalResources = {
   store,
+  middlewareManager: defineResource<void, Promise<MiddlewareManager>>({
+    id: "globals.resources.middlewareManager",
+    meta: {
+      title: "Middleware Manager",
+      description: "Manages all middleware and middleware interceptors.",
+    },
+    tags: [systemTag],
+  }),
   eventManager: defineResource<void, Promise<EventManager>>({
     id: "globals.resources.eventManager",
     meta: {
       title: "Event Manager",
       description:
         "Manages all events and event listeners. This is meant to be used internally for most use-cases.",
-      tags: [systemTag],
     },
+    tags: [systemTag],
   }),
   taskRunner: defineResource<void, Promise<TaskRunner>>({
     id: "globals.resources.taskRunner",
@@ -36,8 +45,8 @@ export const globalResources = {
       title: "Task Runner",
       description:
         "Manages the execution of tasks and task dependencies. This is meant to be used internally for most use-cases.",
-      tags: [systemTag],
     },
+    tags: [systemTag],
   }),
   logger: defineResource<void, Promise<Logger>>({
     id: "globals.resources.logger",
@@ -47,6 +56,7 @@ export const globalResources = {
       description:
         "Logs all events and errors. This is meant to be used internally for most use-cases. Emits a globals.log event for each log.",
     },
+    tags: [systemTag],
   }),
   cache: cacheResource,
   queue: queueResource,

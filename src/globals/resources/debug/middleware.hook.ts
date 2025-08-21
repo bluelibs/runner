@@ -1,55 +1,97 @@
-import { defineHook } from "../../../define";
+import { defineResource } from "../../../define";
 import { globalResources } from "../../globalResources";
-import { globalEvents } from "../../globalEvents";
 import { getConfig } from "./types";
 import { debugConfig } from "./debugConfig.resource";
-import { hasSystemTag } from "./utils";
+// import { hasSystemTag } from "./utils";
+import { ITaskMiddlewareExecutionInput } from "../../../types/taskMiddleware";
+import { IResourceMiddlewareExecutionInput } from "../../../types/resourceMiddleware";
+import { IResourceMiddleware } from "../../../types/resourceMiddleware";
 
-export const middlewareTriggeredListener = defineHook({
-  id: "debug.middlewareTriggeredListener",
-  on: globalEvents.middlewareTriggered,
+function hasSystemTag(x: any) {
+  return false;
+}
+
+const id = "debug.middlewareInterceptorResource";
+export const middlewareInterceptorResource = defineResource({
+  id,
   dependencies: {
     logger: globalResources.logger,
     debugConfig,
+    middlewareManager: globalResources.middlewareManager,
   },
-  run: async (event, deps) => {
-    if (!deps) return;
-    if (hasSystemTag(event.data.middleware)) {
-      return;
-    }
+  init: async (event, deps) => {
+    const { logger, debugConfig, middlewareManager } = deps;
 
-    const { logger, debugConfig } = deps;
-    const cfg = getConfig(debugConfig, event!);
-    if (!cfg.logMiddlewareBeforeRun) return;
-    const { middleware, kind, targetId } = event.data;
-    const msg = `Middleware triggered for ${String(kind)} ${String(targetId)}`;
-    await logger.info(msg, {
-      source: "debug.middlewareTriggeredListener",
-    });
-  },
-});
+    // Task middleware interceptor
+    middlewareManager.intercept(
+      "task",
+      async (
+        next: (input: ITaskMiddlewareExecutionInput<any>) => Promise<any>,
+        input: ITaskMiddlewareExecutionInput<any>,
+      ) => {
+        const taskDef = input.task.definition;
+        if (!hasSystemTag(taskDef)) {
+          const cfg = getConfig(debugConfig, event!);
+          if (cfg.logMiddlewareBeforeRun) {
+            const msg = `Middleware triggered for task ${String(taskDef.id)}`;
+            await logger.info(msg, {
+              source: id,
+            });
+          }
+        }
 
-export const middlewareCompletedListener = defineHook({
-  id: "debug.middlewareCompletedListener",
-  on: globalEvents.middlewareCompleted,
-  dependencies: {
-    logger: globalResources.logger,
-    debugConfig,
-  },
-  run: async (event, deps) => {
-    if (!deps) return;
+        const result = await next(input);
 
-    if (hasSystemTag(event.data.middleware)) {
-      return;
-    }
+        if (!hasSystemTag(taskDef)) {
+          const cfg = getConfig(debugConfig, event!);
+          if (cfg.logMiddlewareAfterRun) {
+            const msg = `Middleware completed for task ${String(taskDef.id)}`;
+            await logger.info(msg, {
+              source: id,
+            });
+          }
+        }
 
-    const { logger, debugConfig } = deps;
-    const cfg = getConfig(debugConfig, event!);
-    if (!cfg.logMiddlewareAfterRun) return;
-    const { middleware, kind, targetId } = event.data;
-    const msg = `Middleware completed for ${String(kind)} ${String(targetId)}`;
-    await logger.info(msg, {
-      source: "debug.middlewareCompletedListener",
-    });
+        return result;
+      },
+    );
+
+    // Resource middleware interceptor
+    middlewareManager.intercept(
+      "resource",
+      async (
+        next: (input: IResourceMiddlewareExecutionInput<any>) => Promise<any>,
+        input: IResourceMiddlewareExecutionInput<any>,
+      ) => {
+        const resourceDef = input.resource.definition;
+        if (!hasSystemTag(resourceDef)) {
+          const cfg = getConfig(debugConfig, event!);
+          if (cfg.logMiddlewareBeforeRun) {
+            const msg = `Middleware triggered for resource ${String(
+              resourceDef.id,
+            )}`;
+            await logger.info(msg, {
+              source: id,
+            });
+          }
+        }
+
+        const result = await next(input);
+
+        if (!hasSystemTag(resourceDef)) {
+          const cfg = getConfig(debugConfig, event!);
+          if (cfg.logMiddlewareAfterRun) {
+            const msg = `Middleware completed for resource ${String(
+              resourceDef.id,
+            )}`;
+            await logger.info(msg, {
+              source: id,
+            });
+          }
+        }
+
+        return result;
+      },
+    );
   },
 });

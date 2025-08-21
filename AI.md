@@ -55,6 +55,7 @@ const createUser = task({
 const app = resource({
   id: "app",
   // Resources with configurations must be registered with with() unless the configuration allows all optional
+  // All elements must be registered for them to be used in the system
   register: [server.with({ port: 3000 }), createUser],
   dependencies: { server, createUser },
   init: async (_, { server, createUser }) => {
@@ -97,9 +98,20 @@ const audit = hook({
 // Exclude internal events from "*"
 const internal = event({
   id: "app.events.internal",
-  meta: { tags: [globals.tags.excludeFromGlobalHooks] },
+  tags: [globals.tags.excludeFromGlobalHooks],
 });
 ```
+
+### Interception APIs
+
+Low-level interception is available for advanced observability and control:
+
+- `eventManager.intercept((next, event) => Promise<void>)` — wraps event emission
+- `eventManager.interceptHook((next, hook, event) => Promise<any>)` — wraps hook execution
+- `middlewareManager.intercept("task" | "resource", (next, input) => Promise<any>)` — wraps middleware execution
+- `middlewareManager.interceptMiddleware(middleware, interceptor)` — per-middleware interception
+
+Prefer task-level `task.intercept()` for application logic; use the above for cross-cutting concerns.
 
 ## Unhandled Errors
 
@@ -172,15 +184,50 @@ const logsExtension = resource({
 
 ## Middleware (global or local)
 
-```ts
-import { middleware, resource, task, globals } from "@bluelibs/runner";
+Middleware now supports type contracts with `<Config, Input, Output>` signature:
 
-// Custom middleware
-const auth = middleware<{ role: string }>({
+```ts
+import {
+  taskMiddleware,
+  resourceMiddleware,
+  resource,
+  task,
+  globals,
+} from "@bluelibs/runner";
+
+// Custom task middleware with type contracts
+const auth = taskMiddleware<
+  { role: string },
+  { user: { role: string } },
+  { user: { role: string; verified: boolean } }
+>({
   id: "app.middleware.auth",
   run: async ({ task, next }, _, cfg) => {
     if (task.input?.user?.role !== cfg.role) throw new Error("Unauthorized");
-    return next(task.input);
+    const result = await next(task.input);
+    return { user: { ...task.input.user, verified: true } };
+  },
+});
+
+// Resource middleware can augment a resource's behavior after it's initialized.
+// For example, this `softDelete` middleware intercepts the `delete` method
+// of a resource and replaces it with a non-destructive update.
+const softDelete = resourceMiddleware({
+  id: "app.middleware.softDelete",
+  run: async ({ next }) => {
+    const resourceInstance = await next(); // The original resource instance
+
+    // This example assumes the resource has `update` and `delete` methods.
+    // A more robust implementation would check for their existence.
+
+    // Monkey-patch the 'delete' method
+    const originalDelete = resourceInstance.delete;
+    resourceInstance.delete = async (id: string, ...args) => {
+      // Instead of deleting, call 'update' to mark as deleted
+      return resourceInstance.update(id, { deletedAt: new Date() }, ...args);
+    };
+
+    return resourceInstance;
   },
 });
 
@@ -191,19 +238,38 @@ const adminOnly = task({
 });
 
 // Built-in middleware patterns
+const {
+  task: { retry, timeout, cache },
+  // available: resource: { retry, timeout, cache } as well, same configs.
+} = globals.middleware;
+
+// Example of custom middleware with full type contracts
+const validationMiddleware = taskMiddleware<
+  { strict: boolean },
+  { data: unknown },
+  { data: any; validated: boolean }
+>({
+  id: "app.middleware.validation",
+  run: async ({ task, next }, _, config) => {
+    // Validation logic here
+    const result = await next(task.input);
+    return { ...result, validated: true };
+  },
+});
+
 const resilientTask = task({
   id: "app.tasks.resilient",
   middleware: [
-    // Retry with exponential backoff
-    globals.middleware.retry.with({
+    // Retry with exponential backoff, allow each with timeout
+    retry.with({
       retries: 3,
       delayStrategy: (attempt) => 1000 * attempt,
       stopRetryIf: (error) => error.message === "Invalid credentials",
     }),
-    // Timeout protection
-    globals.middleware.timeout.with({ ttl: 10000 }),
-    // Caching
-    globals.middleware.cache.with({
+    // Timeout protection (propose-timeout)
+    timeout.with({ ttl: 10000 }),
+    // Caching first (onion-level)
+    cache.with({
       ttl: 60000,
       keyBuilder: (taskId, input) => `${taskId}-${JSON.stringify(input)}`,
     }),
@@ -212,13 +278,14 @@ const resilientTask = task({
 });
 
 // Global middleware
-const appWithGlobal = resource({
-  id: "app",
-  // Note: To prevent deadlocks, a global middleware that depends on a resource
-  // will be silently excluded from running on that specific resource.
-  register: [auth.everywhere({ tasks: true, resources: false })],
-  // you can also opt-in for filters: tasks(task) { return true; }
+const globalTaskMiddleware = taskMiddleware({
+  id: "...",
+  everywhere: true, // Use everywhere: (task) => boolean, where true means it gets applied
+  // ... rest as usual ...
+  // if you have dependencies as task, exclude them via everywhere filter.
 });
+
+// Similar behavior for resourceMiddleware({ ... });
 ```
 
 ## Context (request-scoped values)
@@ -238,7 +305,7 @@ const user = UserCtx.use(); // -> { userId: "u1" }
 
 // In a task definition
 const task = {
-  middleware: [UserCtx.require()], // Throws if context is not provided
+  middleware: [UserCtx.require()], // This middleware works only in tasks.
 };
 ```
 
@@ -267,7 +334,7 @@ const { dispose } = await run(app, {
 
 Note: `globals` is a convenience object exposing framework internals:
 
-- `globals.events` (ready, hookTriggered, hookCompleted, middlewareTriggered, middlewareCompleted)
+- `globals.events` (ready)
 - `globals.resources` (store, taskRunner, eventManager, logger, cache, queue)
 - `globals.middleware` (retry, cache, timeout, requireContext)
 - `globals.tags` (system, debug, excludeFromGlobalHooks)
@@ -358,13 +425,14 @@ import { tag, globals, task, resource } from "@bluelibs/runner";
 
 // Simple tags and debug/system globals
 const perf = tag<{ warnAboveMs: number }>({ id: "perf" });
+const contractTag = tag<void, void, { result: string }>({ id: "contract" });
 
 const processPayment = task({
   id: "app.tasks.pay",
+  tags: [perf.with({ warnAboveMs: 1000 })],
   meta: {
     title: "Process Payment",
     description: "Detailed",
-    tags: ["billing", perf.with({ warnAboveMs: 1000 })],
   },
   run: async () => {
     /* ... */
@@ -373,7 +441,8 @@ const processPayment = task({
 
 const internalSvc = resource({
   id: "app.resources.internal",
-  meta: { tags: [globals.tags.system] },
+  register: [perf],
+  tags: [globals.tags.system],
   init: async () => ({}),
 });
 ```
@@ -381,18 +450,18 @@ const internalSvc = resource({
 ### Tag Contracts (type‑enforced returns)
 
 ```ts
-// Contract enforces the awaited return type
-const userContract = tag<void, { name: string }>({ id: "contract.user" });
+// Contract enforces the awaited return type (Config, Input, Output)
+const userContract = tag<void, void, { name: string }>({ id: "contract.user" });
 
 const getProfile = task({
   id: "app.tasks.getProfile",
-  meta: { tags: [userContract] },
+  tags: [userContract],
   run: async () => ({ name: "Ada" }), // must contain { name: string }
 });
 
 const profileService = resource({
   id: "app.resources.profile",
-  meta: { tags: [userContract] },
+  tags: [userContract],
   init: async () => ({ name: "Ada" }),
 });
 ```
@@ -402,12 +471,13 @@ const profileService = resource({
 ```ts
 const perf = tag<{ warnAboveMs: number }>({ id: "perf" });
 
-const perfMiddleware = middleware({
+const perfMiddleware = taskMiddleware({
   id: "app.middleware.perf",
   run: async ({ task, next }) => {
-    const cfg = perf.extract(task.definition); // or perf.extract(task.definition.meta?.tags)
+    const cfg = perf.extract(task.definition);
+    // use perf.exists(task.definition) to check for existence
     if (!cfg) return next(task.input);
-    // performance hooks
+    // performance hooks here ...
   },
 });
 ```

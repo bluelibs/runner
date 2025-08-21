@@ -2,16 +2,13 @@ import {
   defineEvent,
   defineTask,
   defineResource,
-  defineMiddleware,
   defineOverride,
   defineTag,
   defineHook,
+  defineTaskMiddleware,
+  defineResourceMiddleware,
 } from "../define";
-import { IMeta } from "../defs";
-import {
-  EnsureResponseSatisfiesContracts,
-  HasContracts,
-} from "../defs.returnTag";
+import { IMeta, TagType } from "../defs";
 import { run } from "..";
 import z from "zod";
 
@@ -22,7 +19,7 @@ describe.skip("typesafety", () => {
       message: string;
     };
 
-    const middleware = defineMiddleware({
+    const middlewareTaskOnly = defineTaskMiddleware({
       id: "middleware",
       run: async (input, deps) => {
         return input;
@@ -37,14 +34,14 @@ describe.skip("typesafety", () => {
       message?: string;
     };
 
-    const middlewareWithConfig = defineMiddleware({
+    const middlewareWithConfig = defineTaskMiddleware({
       id: "middleware.config",
       run: async (input, deps, config: MiddlewareConfig) => {
         return input;
       },
     });
 
-    const middlewareWithOptionalConfig = defineMiddleware({
+    const middlewareWithOptionalConfig = defineTaskMiddleware({
       id: "middleware.optional.config",
       run: async (input, deps, config: MiddlewareOptionalConfig) => {
         return input;
@@ -106,18 +103,7 @@ describe.skip("typesafety", () => {
 
     const testResource = defineResource({
       id: "test.resource",
-      middleware: [
-        middleware,
-        // @ts-expect-error
-        middlewareWithConfig,
-        middlewareWithConfig.with({ message: "Hello, World!" }),
-        // @ts-expect-error
-        middlewareWithConfig.with({ message: 123 }),
-        middlewareWithOptionalConfig,
-        middlewareWithOptionalConfig.with({ message: "Hello, World!" }),
-        // @ts-expect-error
-        middlewareWithOptionalConfig.with({ message: 123 }),
-      ],
+      middleware: [],
       dependencies: { task, dummyResource, event, eventWithoutArguments },
       init: async (_, deps) => {
         const result = await deps.task({
@@ -146,7 +132,7 @@ describe.skip("typesafety", () => {
         deps.task2;
       },
       register: [
-        middleware,
+        middlewareTaskOnly,
         middlewareWithConfig,
         middlewareWithOptionalConfig,
         middlewareWithOptionalConfig.with({ message: "Hello, World!" }),
@@ -161,13 +147,6 @@ describe.skip("typesafety", () => {
 
         // @ts-expect-error
         dummyResource, // should throw
-        dummyResource.with({ ok: true }),
-        // @ts-expect-error
-        dummyResource.with({ ok: 123 }),
-        // @ts-expect-error
-        dummyResource.with(),
-
-        // should work
         dummyResourceOptionalConfig.with("hello"),
       ],
     });
@@ -283,7 +262,7 @@ describe.skip("typesafety", () => {
       init: async () => 123, // bad type
     });
 
-    const middleware = defineMiddleware({
+    const mwTask = defineTaskMiddleware({
       id: "middleware",
       run: async () => "Middleware executed",
     });
@@ -295,23 +274,23 @@ describe.skip("typesafety", () => {
     const tag = defineTag({ id: "tag" });
     const tag2 = defineTag<{ value: number }>({ id: "tag2" });
     const tag2optional = defineTag<{ value?: number }>({ id: "tag2" });
-
     const tag3 = tag2.with({ value: 123 });
     // @ts-expect-error
     const tag4 = tag.with({ value: 123 });
 
     const task = defineTask({
       id: "task",
-      meta: {
-        tags: [
-          tag,
-          // @ts-expect-error
-          tag2,
-          tag2optional,
-          tag2.with({ value: 123 }),
-          tag3,
-        ],
-      },
+      tags: [
+        tag,
+        // @ts-expect-error
+        tag2,
+        tag2optional,
+        tag2.with({ value: 123 }),
+        // @ts-expect-error
+        tag2.with({ value: "123" }),
+        tag3,
+      ],
+      meta: {},
       run: async (input) => {
         return input;
       },
@@ -329,23 +308,19 @@ describe.skip("typesafety", () => {
       age: number;
     }
 
-    const tag = defineTag<{ value: number }, IUser>({ id: "tag" });
-    const tag2 = defineTag<void, IOther>({ id: "tag2" });
+    const tag = defineTag<{ value: number }, void, IUser>({ id: "tag" });
+    const tag2 = defineTag<void, void, IOther>({ id: "tag2" });
 
-    const meta = {
-      tags: [tag.with({ value: 123 }), tag2, "string"],
-    } satisfies IMeta;
+    const tags = [tag.with({ value: 123 }), tag2] satisfies TagType[];
 
     const response = {
       age: 123,
       name: "123", // intentional
     };
-    type TEST = HasContracts<typeof meta>;
-    type TEST2 = EnsureResponseSatisfiesContracts<typeof meta, typeof response>;
 
     const task = defineTask({
       id: "task",
-      meta,
+      tags,
       run: async (input: { name: string }) => {
         return {
           age: 123,
@@ -355,7 +330,7 @@ describe.skip("typesafety", () => {
     });
     const task2 = defineTask({
       id: "task",
-      meta,
+      tags,
       // @ts-expect-error
       run: async (input: { name: string }) => {
         return {
@@ -366,7 +341,7 @@ describe.skip("typesafety", () => {
 
     const task3 = defineTask({
       id: "task",
-      meta,
+      tags,
       // @ts-expect-error
       run: async (input: { name: string }) => {
         return {};
@@ -374,7 +349,141 @@ describe.skip("typesafety", () => {
     });
   });
 
-  it("should enforce contracts on resources", async () => {
+  it("should have contractable middleware", async () => {
+    const mw = defineTaskMiddleware<
+      void,
+      { input: string },
+      { output: number }
+    >({
+      id: "middleware",
+      run: async ({ next, task }, deps, config) => {
+        task.input;
+        task.input.input;
+        // @ts-expect-error
+        task.input.a;
+        next({ input: "123" });
+        // @ts-expect-error
+        next({ input: 123 });
+        const outputResult = await next({ input: "123" });
+        outputResult.output;
+        // @ts-expect-error
+        outputResult.output2;
+
+        return {
+          output: 123,
+        };
+      },
+    });
+    const mwWithConfig = defineTaskMiddleware<
+      { ttl: number },
+      { input: string },
+      { output: number }
+    >({
+      id: "middleware",
+      run: async ({ next }, deps, config) => {
+        return {
+          output: 123,
+        };
+      },
+    });
+
+    const mwr = defineResourceMiddleware<
+      void,
+      { input: string },
+      { output: number }
+    >({
+      id: "middleware",
+      run: async ({ next }, deps, config) => {},
+    });
+
+    const mwrWithConfig = defineResourceMiddleware<
+      { ttl: number },
+      { input: string },
+      { output: number }
+    >({
+      id: "middleware",
+      run: async ({ next }, deps, config) => {},
+    });
+
+    const mw2 = defineTaskMiddleware<void, { input: string }, void>({
+      id: "middleware2",
+      run: async ({ next }, deps, config) => {
+        return {
+          output: 123,
+        };
+      },
+    });
+
+    const mwr2 = defineResourceMiddleware<void, { input: string }, void>({
+      id: "middleware2",
+      run: async ({ next }, deps, config) => {},
+    });
+
+    const task = defineTask({
+      id: "task",
+      middleware: [mw],
+      // @ts-expect-error
+      run: async (input) => {
+        input;
+        // @ts-expect-error
+        input.a;
+
+        return {
+          output: "str",
+        };
+      },
+    });
+
+    const resource = defineResource<{ input: string }>({
+      id: "resource",
+      middleware: [mwr, mwr2],
+      init: async (config) => {
+        config.input;
+        // @ts-expect-error
+        config.input2;
+
+        return {
+          output: 123,
+        };
+      },
+    });
+
+    const taskWithConfig = defineTask({
+      id: "task",
+      middleware: [
+        // @ts-expect-error
+        mwWithConfig,
+        mwWithConfig.with({ ttl: 123 }),
+        // @ts-expect-error
+        mwWithConfig.with({ ttl: "123" }),
+      ],
+      run: async (input) => {
+        input;
+        // @ts-expect-error
+        input.a;
+
+        return {
+          output: 123,
+        };
+      },
+    });
+
+    const resourceWithConfig = defineResource<{ input: string }>({
+      id: "resource",
+      middleware: [
+        // @ts-expect-error
+        mwrWithConfig,
+        mwrWithConfig.with({ ttl: 123 }),
+        // @ts-expect-error
+        mwrWithConfig.with({ ttl: "123" }),
+      ],
+      init: async (config) => {
+        config.input;
+      },
+    });
+  });
+
+  it("should enforce tags contracts on resources", async () => {
     interface IUser {
       name: string;
     }
@@ -383,16 +492,14 @@ describe.skip("typesafety", () => {
       age: number;
     }
 
-    const tag = defineTag<{ value: number }, IUser>({ id: "tag" });
-    const tag2 = defineTag<void, IOther>({ id: "tag2" });
+    const tag = defineTag<{ value: number }, void, IUser>({ id: "tag" });
+    const tag2 = defineTag<void, void, IOther>({ id: "tag2" });
 
-    const meta = {
-      tags: [tag.with({ value: 123 }), tag2, "string"],
-    } satisfies IMeta;
+    const tags = [tag.with({ value: 123 }), tag2] satisfies TagType[];
 
     const resourceOk = defineResource({
       id: "resource.ok",
-      meta,
+      tags,
       init: async () => {
         return {
           age: 123,
@@ -403,7 +510,7 @@ describe.skip("typesafety", () => {
 
     const resourceBad1 = defineResource({
       id: "resource.bad1",
-      meta,
+      tags,
       // @ts-expect-error
       init: async () => {
         return {
@@ -415,7 +522,7 @@ describe.skip("typesafety", () => {
 
     const resourceBad2 = defineResource({
       id: "resource.bad2",
-      meta,
+      tags,
       // @ts-expect-error
       init: async () => {
         return {};
@@ -439,7 +546,7 @@ describe.skip("typesafety", () => {
       },
     });
 
-    const middleware = defineMiddleware({
+    const mw = defineTaskMiddleware({
       id: "middleware",
       configSchema: z.object({ ttl: z.number().positive() }),
       run: async ({ next }, deps, config) => {

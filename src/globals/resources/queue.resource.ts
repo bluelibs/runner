@@ -13,7 +13,7 @@ export const queueResource = defineResource({
       map,
       run: <T>(
         id: string,
-        task: (signal: AbortSignal) => Promise<T>
+        task: (signal: AbortSignal) => Promise<T>,
       ): Promise<T> => {
         if (!map.has(id)) {
           map.set(id, new Queue());

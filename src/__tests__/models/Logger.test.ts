@@ -307,4 +307,43 @@ describe("Logger", () => {
       }
     }
   });
+
+  it("prints errors with stack", async () => {
+    const logger = createLogger({ threshold: "trace" });
+    const err = new Error("WithStack");
+    (err as any).stack = "stack";
+    await logger.error("oops", { error: err });
+    const outputs = gather();
+    expect(outputs).toContain("Error: WithStack");
+  });
+
+  it("extractErrorInfo returns expected structure for real Error objects", async () => {
+    const logger = createLogger({ threshold: null });
+    let captured: any;
+    logger.onLog((log) => {
+      captured = log;
+    });
+    const err = new Error("RealBoom");
+    (err as any).stack = "STACK_TRACE";
+    await logger.error("trigger", { error: err });
+    expect(captured).toBeDefined();
+    expect(captured.error).toBeDefined();
+    expect(captured.error.name).toBe("Error");
+    expect(captured.error.message).toBe("RealBoom");
+    expect(captured.error.stack).toBe("STACK_TRACE");
+  });
+
+  it("extractErrorInfo handles non-Error values by coercing to string and using UnknownError name", async () => {
+    const logger = createLogger({ threshold: null });
+    let captured: any;
+    logger.onLog((log) => {
+      captured = log;
+    });
+    await logger.error("trigger primitive", { error: "primitive boom" as any });
+    expect(captured).toBeDefined();
+    expect(captured.error).toEqual({
+      name: "UnknownError",
+      message: "primitive boom",
+    });
+  });
 });

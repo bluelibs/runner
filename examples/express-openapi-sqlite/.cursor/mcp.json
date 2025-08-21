@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "runner_dev": {
+      "description": "BlueLibs Runner Dev GraphQL MCP server. For debugging a live running app.",
+      "command": "npm",
+      "args": ["run", "mcp"],
+      "env": {
+        "ENDPOINT": "http://localhost:1337/graphql",
+        "ALLOW_MUTATIONS": "true"
+      }
+    }
+  }
+}

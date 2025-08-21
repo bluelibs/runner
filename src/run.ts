@@ -1,27 +1,14 @@
 import { TaskRunner } from "./models/TaskRunner";
-import {
-  DependencyMapType,
-  ITaskDefinition,
-  IResourceDefinition,
-  IEventDefinition,
-  IMiddlewareDefinition,
-  DependencyValuesType,
-  IResource,
-  IResourceWithConfig,
-  ITask,
-  IEvent,
-} from "./defs";
+import { IResource, IResourceWithConfig } from "./defs";
 import { DependencyProcessor } from "./models/DependencyProcessor";
 import { EventManager } from "./models/EventManager";
 import { globalEvents } from "./globals/globalEvents";
 import { Store } from "./models/Store";
-import { findCircularDependencies } from "./tools/findCircularDependencies";
-import { CircularDependenciesError, RuntimeError } from "./errors";
-import { globalResources } from "./globals/globalResources";
-import { Logger, LogLevels, PrintStrategy } from "./models/Logger";
-import { ResourceNotFoundError } from "./errors";
+import { findCircularDependencies } from "./models/utils/findCircularDependencies";
+import { CircularDependenciesError } from "./errors";
+import { Logger } from "./models/Logger";
 import { isResourceWithConfig } from "./define";
-import { debugResource, DebugFriendlyConfig } from "./globals/resources/debug";
+import { debugResource } from "./globals/resources/debug";
 import {
   registerProcessLevelSafetyNets,
   registerShutdownHook,
@@ -30,44 +17,9 @@ import {
   OnUnhandledError,
   createDefaultUnhandledError,
   bindProcessErrorHandler,
-  safeReportUnhandledError,
 } from "./models/UnhandledError";
 import { RunResult } from "./models/RunResult";
-
-export type RunOptions = {
-  /**
-   * Defaults to undefined. If true, we introduce logging to the console.
-   */
-  debug?: DebugFriendlyConfig;
-  logs?: {
-    /**
-     * Defaults to info. Use null to disable logging.
-     */
-    printThreshold?: null | LogLevels;
-    /**
-     * Defaults to PRETTY. How to print the logs.
-     */
-    printStrategy?: PrintStrategy;
-    /**
-     * Defaults to false. If true, we buffer logs until the root resource is ready.
-     * This provides you with the chance to see the logs before the root resource is ready.
-     */
-    bufferLogs?: boolean;
-  };
-  /**
-   * When true (default), installs a central error boundary that catches uncaught errors
-   * from process-level events and routes them to `onUnhandledError`.
-   */
-  errorBoundary?: boolean;
-  /**
-   * When true (default), installs SIGINT/SIGTERM handlers that call dispose() on the root.
-   */
-  shutdownHooks?: boolean;
-  /**
-   * Custom handler for any unhandled error caught by Runner. Defaults to logging via the created logger.
-   */
-  onUnhandledError?: OnUnhandledError;
-};
+import { RunOptions } from "./types/runner";
 
 /**
  * This is the central function that kicks off you runner. You can run as many resources as you want in a single process, they will run in complete isolation.
@@ -111,11 +63,9 @@ export async function run<C, V extends Promise<any>>(
   const onUnhandledError: OnUnhandledError =
     onUnhandledErrorOpt || createDefaultUnhandledError(logger);
 
-  const store = new Store(eventManager, logger);
+  const store = new Store(eventManager, logger, onUnhandledError);
   const taskRunner = new TaskRunner(store, eventManager, logger);
   store.setTaskRunner(taskRunner);
-  // expose handler centrally on the store
-  store.onUnhandledError = onUnhandledError;
 
   // Register this run's event manager for global process error safety nets
   let unhookProcessSafetyNets: (() => void) | undefined;
@@ -159,15 +109,10 @@ export async function run<C, V extends Promise<any>>(
     // In the registration phase we register deeply all the resources, tasks, middleware and events
     store.initializeStore(resource, config);
 
-    // We verify that there isn't any circular dependencies before we begin computing the dependencies
-    const dependentNodes = store.getDependentNodes();
-    const circularDependencies = findCircularDependencies(dependentNodes);
-    if (circularDependencies.cycles.length > 0) {
-      throw new CircularDependenciesError(circularDependencies.cycles);
-    }
-
     // the overrides that were registered now will override the other registered resources
     await store.processOverrides();
+
+    store.validateDependencyGraph();
 
     // a form of hooking, we create the events for all tasks and store them so they can be referenced
     await store.storeEventsForAllTRM();

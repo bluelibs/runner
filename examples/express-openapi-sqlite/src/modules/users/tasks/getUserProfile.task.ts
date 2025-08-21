@@ -13,20 +13,18 @@ import z from "zod";
 export const getUserProfileTask = task({
   id: "app.tasks.auth.profile",
   middleware: [authMiddleware.with({ requiresAuth: true })],
-  meta: {
-    tags: [
-      httpRoute.get("/api/auth/profile", {
-        summary: "Get current user profile",
-        description: "Get the authenticated user's profile information",
-        tags: ["Authentication", "User"],
-        requiresAuth: true,
-        responseSchema: z.object({
-          success: z.boolean(),
-          data: UserSchema,
-        }),
+  tags: [
+    httpRoute.get("/api/auth/profile", {
+      summary: "Get current user profile",
+      description: "Get the authenticated user's profile information",
+      tags: ["Authentication", "User"],
+      requiresAuth: true,
+      responseSchema: z.object({
+        success: z.boolean(),
+        data: UserSchema,
       }),
-    ],
-  },
+    }),
+  ],
   run: async (): Promise<ApiResponse<User>> => {
     try {
       // Get user from context (set by auth middleware)

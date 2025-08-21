@@ -3,7 +3,6 @@ import {
   DependencyValuesType,
   ITask,
   IResource,
-  IEventDefinition,
   IEvent,
   IEventEmission,
   TaskLocalInterceptor,
@@ -11,8 +10,10 @@ import {
   TaskDependencyWithIntercept,
 } from "../defs";
 import { Store } from "./Store";
-import { symbolHook } from "../defs";
-import { ResourceStoreElementType, TaskStoreElementType } from "./StoreTypes";
+import {
+  ResourceStoreElementType,
+  TaskStoreElementType,
+} from "../types/storeTypes";
 import * as utils from "../define";
 import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";
@@ -49,12 +50,24 @@ export class DependencyProcessor {
    * This function is going to go through all the resources, tasks and middleware to compute their required dependencies.
    */
   async computeAllDependencies() {
-    for (const middleware of this.store.middlewares.values()) {
-      const deps = middleware.middleware.dependencies as DependencyMapType;
-      middleware.computedDependencies = await this.extractDependencies(
-        deps,
+    for (const middleware of this.store.resourceMiddlewares.values()) {
+      const computedDependencies = await this.extractDependencies(
+        middleware.middleware.dependencies,
         middleware.middleware.id,
       );
+
+      middleware.computedDependencies = computedDependencies;
+      middleware.isInitialized = true;
+    }
+
+    for (const middleware of this.store.taskMiddlewares.values()) {
+      const computedDependencies = await this.extractDependencies(
+        middleware.middleware.dependencies,
+        middleware.middleware.id,
+      );
+
+      middleware.computedDependencies = computedDependencies;
+      middleware.isInitialized = true;
     }
 
     for (const resource of this.store.resources.values()) {
@@ -66,9 +79,13 @@ export class DependencyProcessor {
     }
 
     // Compute hook dependencies (hooks cannot be dependencies themselves)
-    for (const hook of this.store.hooks.values()) {
+    for (const hookStoreElement of this.store.hooks.values()) {
+      const hook = hookStoreElement.hook;
       const deps = hook.dependencies as DependencyMapType;
-      hook.computedDependencies = await this.extractDependencies(deps, hook.id);
+      hookStoreElement.computedDependencies = await this.extractDependencies(
+        deps,
+        hook.id,
+      );
     }
 
     // leftovers that were registered but not depended upon, except root
@@ -125,6 +142,7 @@ export class DependencyProcessor {
       deps,
       extracted,
     );
+    // resource.isInitialized = true;
   }
 
   private wrapResourceDependencies<TD extends DependencyMapType>(
@@ -200,7 +218,8 @@ export class DependencyProcessor {
    */
   public attachListeners() {
     // Attach listeners for dedicated hooks map
-    for (const hook of this.store.hooks.values()) {
+    for (const hookStoreElement of this.store.hooks.values()) {
+      const hook = hookStoreElement.hook;
       if (hook.on) {
         const eventDefinition = hook.on;
 
@@ -208,7 +227,11 @@ export class DependencyProcessor {
           if (receivedEvent.source === hook.id) {
             return;
           }
-          return this.taskRunner.runHook(hook, receivedEvent);
+          return this.eventManager.executeHookWithInterceptors(
+            hook,
+            receivedEvent,
+            hookStoreElement.computedDependencies,
+          );
         };
 
         const order = hook.order ?? 0;
@@ -232,13 +255,24 @@ export class DependencyProcessor {
     const object = {} as DependencyValuesType<T>;
 
     for (const key in map) {
-      object[key] = await this.extractDependency(map[key], source);
+      try {
+        object[key] = await this.extractDependency(map[key], source);
+      } catch (e) {
+        const errorMessage = String(e);
+        this.logger.error(
+          `Failed to extract dependency from source: ${source} -> ${key} with error: ${errorMessage}`,
+        );
+
+        throw e;
+      }
     }
+    this.logger.trace(`Finished computing dependencies for source: ${source}`);
 
     return object;
   }
 
   async extractDependency(object: any, source: string) {
+    this.logger.trace(`Extracting dependency -> ${source} -> ${object?.id}`);
     if (utils.isOptional(object)) {
       const inner = object.inner;
       if (utils.isResource(inner)) {
@@ -282,8 +316,6 @@ export class DependencyProcessor {
     }
 
     if (!storeTask.isInitialized) {
-      storeTask.isInitialized = true;
-
       // it's sanitised
       const dependencies = object.dependencies as DependencyMapType;
 
@@ -291,6 +323,7 @@ export class DependencyProcessor {
         dependencies,
         storeTask.task.id,
       );
+      storeTask.isInitialized = true;
     }
 
     return (input: unknown) => {
@@ -306,6 +339,7 @@ export class DependencyProcessor {
     }
 
     const { resource, config } = storeResource;
+
     if (storeResource.isInitialized) {
       return storeResource.value;
     } else {
