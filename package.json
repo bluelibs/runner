@@ -3,6 +3,9 @@
   "version": "4.0.1",
   "description": "BlueLibs Runner",
   "main": "dist/index.js",
+  "bin": {
+    "runner": "./bin/runner-cli.js"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/bluelibs/bluelibs"
@@ -40,6 +43,7 @@
     "reflect-metadata": "^0.2.2",
     "source-map-support": "^0.5.13",
     "ts-jest": "^29.0.0",
+    "ts-node": "^10.9.2",
     "typedoc": "^0.26.7",
     "typedoc-material-theme": "^1.1.0",
     "typedoc-plugin-pages": "^1.1.0",
