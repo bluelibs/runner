@@ -8,6 +8,9 @@ import {
   UserNotFoundError,
   InvalidPasswordResetTokenError,
 } from "../types";
+import { userStoreResource } from "../resources/userStore.resource";
+import { passwordResetServiceResource } from "../resources/passwordResetService.resource";
+import { passwordHasherResource } from "../resources/passwordHasher.resource";
 
 /**
  * Task to initiate password reset process
@@ -16,8 +19,8 @@ import {
 export const initiatePasswordResetTask = defineTask({
   id: "globals.auth.tasks.initiatePasswordReset",
   dependencies: {
-    userStore: "globals.auth.resources.userStore",
-    passwordResetService: "globals.auth.resources.passwordResetService",
+    userStore: userStoreResource,
+    passwordResetService: passwordResetServiceResource,
   },
   async run(
     request: IPasswordResetRequest,
@@ -57,9 +60,9 @@ export const initiatePasswordResetTask = defineTask({
 export const completePasswordResetTask = defineTask({
   id: "globals.auth.tasks.completePasswordReset",
   dependencies: {
-    userStore: "globals.auth.resources.userStore",
-    passwordResetService: "globals.auth.resources.passwordResetService",
-    passwordHasher: "globals.auth.resources.passwordHasher",
+    userStore: userStoreResource,
+    passwordResetService: passwordResetServiceResource,
+    passwordHasher: passwordHasherResource,
   },
   async run(
     completion: IPasswordResetCompletion,
@@ -107,7 +110,7 @@ export const completePasswordResetTask = defineTask({
 export const verifyPasswordResetTokenTask = defineTask({
   id: "globals.auth.tasks.verifyPasswordResetToken",
   dependencies: {
-    passwordResetService: "globals.auth.resources.passwordResetService",
+    passwordResetService: passwordResetServiceResource,
   },
   async run(
     { token }: { token: string },

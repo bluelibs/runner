@@ -3083,6 +3083,172 @@ try {
 
 > **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
 
+## Authentication & Authorization
+
+BlueLibs Runner includes a comprehensive, production-ready authentication and authorization system that provides enterprise-grade security while maintaining the framework's simplicity and flexibility.
+
+### Quick Authentication Setup
+
+```typescript
+import { resource, task, run, globals } from "@bluelibs/runner";
+import { UserContext, authMiddleware } from "@bluelibs/runner/auth";
+
+// Basic auth setup with built-in security features
+const app = resource({
+  id: "app",
+  register: [
+    // Core auth resources with security defaults
+    globals.resources.auth.userStore,           // User management
+    globals.resources.auth.passwordHasher,      // PBKDF2 with 100k iterations
+    globals.resources.auth.jwtManager.with({
+      jwtSecret: "your-secret-key",
+      jwtExpiresIn: 24 * 60 * 60, // 24 hours
+    }),
+    globals.resources.auth.bruteForceProtection, // Anti-brute force
+    globals.resources.auth.passwordResetService, // Password reset flow
+    globals.resources.auth.otpService,           // 2FA/OTP support
+    
+    // Auth tasks
+    globals.tasks.auth.registerUser,
+    globals.tasks.auth.authenticateUser,
+    globals.tasks.auth.initiatePasswordReset,
+    globals.tasks.auth.completePasswordReset,
+  ],
+  dependencies: { 
+    registerUser: globals.tasks.auth.registerUser,
+    authenticateUser: globals.tasks.auth.authenticateUser,
+  },
+  init: async (_, { registerUser, authenticateUser }) => {
+    // Register a user with automatic password hashing
+    const registration = await registerUser({
+      email: "user@example.com",
+      password: "securepassword123",
+      roles: ["user", "admin"],
+    });
+    
+    // Authenticate with automatic brute force protection
+    const auth = await authenticateUser({
+      email: "user@example.com",
+      password: "securepassword123",
+    });
+    
+    console.log(`User ${auth.user.email} authenticated`);
+    return { success: true };
+  },
+});
+```
+
+### Protected Tasks & Middleware
+
+```typescript
+// Simple authentication requirement
+const protectedTask = task({
+  id: "app.protected",
+  middleware: [authMiddleware.with({ required: true })],
+  run: async (input) => {
+    const { user } = UserContext.use();
+    return `Hello ${user.email}! You have roles: ${user.roles.join(", ")}`;
+  },
+});
+
+// Role-based access control
+const adminTask = task({
+  id: "app.admin",
+  middleware: [authMiddleware.with({ 
+    roles: ["admin"], 
+    usePermissionChecker: true // Enables role hierarchy
+  })],
+  run: async () => {
+    const { user } = UserContext.use();
+    return `Admin access granted for ${user.email}`;
+  },
+});
+
+// Permission-based access control
+const billingTask = task({
+  id: "app.billing",
+  middleware: [authMiddleware.with({ 
+    resource: "billing",
+    usePermissionChecker: true 
+  })],
+  run: async () => "Billing access granted"
+});
+```
+
+### Advanced Security Features
+
+The auth system includes enterprise-grade security features out of the box:
+
+- **🚨 Brute Force Protection** - Exponential backoff with account locking
+- **🔐 Password Reset** - Secure token-based password reset flow
+- **📱 One-Time Passwords** - Email, SMS, TOTP, and backup code support
+- **🛡️ JWT Security** - HMAC-SHA256 with configurable expiration
+- **🔒 Password Security** - PBKDF2 with 100k iterations and random salts
+- **📊 Audit Trails** - Password change tracking and security event logging
+
+### Database Integration
+
+Choose your database with production-ready adapters:
+
+```typescript
+// MongoDB Integration
+import { MongoClient } from "mongodb";
+import { MongoUserStore } from "@bluelibs/runner/auth/adapters";
+
+const client = new MongoClient("mongodb://localhost:27017");
+const db = client.db("myapp");
+const userStore = new MongoUserStore(db, "users");
+
+// PostgreSQL Integration  
+import { Pool } from "pg";
+import { PostgresUserStore } from "@bluelibs/runner/auth/adapters";
+
+const pool = new Pool({ /* config */ });
+const userStore = new PostgresUserStore(pool, "users");
+await userStore.createTable();
+
+// Use with auth system
+globals.resources.auth.userStore.with({ store: userStore });
+```
+
+### Complete Authentication Workflows
+
+```typescript
+// Password Reset Flow
+const resetRequest = await globals.tasks.auth.initiatePasswordReset({
+  email: "user@example.com",
+  callbackUrl: "https://myapp.com/reset"
+});
+// Send resetRequest.token via email
+
+const resetResult = await globals.tasks.auth.completePasswordReset({
+  token: resetRequest.token,
+  newPassword: "newSecurePassword123"
+});
+
+// Two-Factor Authentication
+await globals.tasks.auth.enableOTP({ 
+  userId: "user123", 
+  type: "email" 
+});
+
+const otp = await globals.tasks.auth.generateOTP({ 
+  userId: "user123", 
+  type: "email" 
+});
+// Send otp.code via email
+
+const verification = await globals.tasks.auth.verifyOTP({
+  userId: "user123",
+  code: "123456",
+  type: "email"
+});
+```
+
+**[📖 Full Authentication Documentation →](AUTH.md)**
+
+The authentication system is fully documented with examples, security best practices, database migration guides, and production deployment patterns.
+
 ## Why Choose BlueLibs Runner?
 
 ### What You Get

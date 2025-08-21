@@ -8,6 +8,8 @@ import {
   UserNotFoundError,
   InvalidOTPError,
 } from "../types";
+import { otpServiceResource } from "../resources/otpService.resource";
+import { userStoreResource } from "../resources/userStore.resource";
 
 /**
  * Task to generate an OTP for a user
@@ -15,8 +17,8 @@ import {
 export const generateOTPTask = defineTask({
   id: "globals.auth.tasks.generateOTP",
   dependencies: {
-    otpService: "globals.auth.resources.otpService",
-    userStore: "globals.auth.resources.userStore",
+    otpService: otpServiceResource,
+    userStore: userStoreResource,
   },
   async run(
     request: IOTPGenerationRequest,
@@ -62,8 +64,8 @@ export const generateOTPTask = defineTask({
 export const verifyOTPTask = defineTask({
   id: "globals.auth.tasks.verifyOTP",
   dependencies: {
-    otpService: "globals.auth.resources.otpService",
-    userStore: "globals.auth.resources.userStore",
+    otpService: otpServiceResource,
+    userStore: userStoreResource,
   },
   async run(
     request: IOTPVerificationRequest,
@@ -105,8 +107,8 @@ export const verifyOTPTask = defineTask({
 export const enableOTPTask = defineTask({
   id: "globals.auth.tasks.enableOTP",
   dependencies: {
-    otpService: "globals.auth.resources.otpService",
-    userStore: "globals.auth.resources.userStore",
+    otpService: otpServiceResource,
+    userStore: userStoreResource,
   },
   async run(
     { userId, type, metadata }: { userId: string; type: OTPType; metadata?: Record<string, any> },
@@ -144,8 +146,8 @@ export const enableOTPTask = defineTask({
 export const disableOTPTask = defineTask({
   id: "globals.auth.tasks.disableOTP",
   dependencies: {
-    otpService: "globals.auth.resources.otpService",
-    userStore: "globals.auth.resources.userStore",
+    otpService: otpServiceResource,
+    userStore: userStoreResource,
   },
   async run(
     { userId, type }: { userId: string; type: OTPType },
@@ -183,8 +185,8 @@ export const disableOTPTask = defineTask({
 export const getOTPStatusTask = defineTask({
   id: "globals.auth.tasks.getOTPStatus",
   dependencies: {
-    otpService: "globals.auth.resources.otpService",
-    userStore: "globals.auth.resources.userStore",
+    otpService: otpServiceResource,
+    userStore: userStoreResource,
   },
   async run(
     { userId }: { userId: string },

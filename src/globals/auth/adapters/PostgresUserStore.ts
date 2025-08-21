@@ -1,4 +1,6 @@
-import { Pool, Client, PoolClient } from "pg";
+// Note: This adapter requires the 'pg' package to be installed
+// npm install pg @types/pg
+
 import {
   IUser,
   IUserStore,
@@ -20,6 +22,13 @@ interface IUserRow {
   updated_at: Date;
   last_password_changed_at?: Date;
   metadata: Record<string, any>;
+}
+
+/**
+ * PostgreSQL-like pool/client interface for type safety
+ */
+interface IPgConnection {
+  query(text: string, params?: any[]): Promise<{ rows: any[]; rowCount?: number }>;
 }
 
 /**
@@ -47,7 +56,7 @@ interface IUserRow {
  */
 export class PostgresUserStore implements IUserStore {
   constructor(
-    private pool: Pool | Client,
+    private pool: IPgConnection,
     private tableName: string = "users"
   ) {}
 
