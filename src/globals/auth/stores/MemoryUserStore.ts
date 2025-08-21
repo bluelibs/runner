@@ -28,6 +28,7 @@ export class MemoryUserStore implements IUserStore {
       isActive: true,
       createdAt: now,
       updatedAt: now,
+      lastPasswordChangedAt: now, // Set when password is first created
       metadata: userData.metadata || {},
       hashedPassword: userData.hashedPassword || "",
     };
@@ -71,6 +72,27 @@ export class MemoryUserStore implements IUserStore {
     
     // Return user without password
     const { hashedPassword, ...userWithoutPassword } = updatedUser;
+    return userWithoutPassword;
+  }
+
+  async updatePassword(id: string, hashedPassword: string): Promise<IUser> {
+    const user = this.users.get(id);
+    if (!user) {
+      throw new UserNotFoundError(id);
+    }
+
+    const now = new Date();
+    const updatedUser: IUserWithPassword = {
+      ...user,
+      hashedPassword,
+      lastPasswordChangedAt: now,
+      updatedAt: now,
+    };
+
+    this.users.set(id, updatedUser);
+    
+    // Return user without password
+    const { hashedPassword: _, ...userWithoutPassword } = updatedUser;
     return userWithoutPassword;
   }
 

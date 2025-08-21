@@ -12,6 +12,7 @@ export interface IUser {
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
+  lastPasswordChangedAt?: Date;
   metadata?: Record<string, any>;
 }
 
@@ -92,6 +93,11 @@ export interface IUserStore {
    * Update user data
    */
   updateUser(id: string, updates: Partial<IUser>): Promise<IUser>;
+
+  /**
+   * Update user password and track change time
+   */
+  updatePassword(id: string, hashedPassword: string): Promise<IUser>;
 
   /**
    * Delete user
@@ -247,4 +253,215 @@ export class InvalidTokenError extends Error {
     super(message);
     this.name = "InvalidTokenError";
   }
+}
+
+/**
+ * Brute force protection errors
+ */
+export class TooManyAttemptsError extends Error {
+  constructor(public cooldownUntil: Date) {
+    super("Too many failed attempts. Please try again later.");
+    this.name = "TooManyAttemptsError";
+  }
+}
+
+/**
+ * Password reset errors
+ */
+export class InvalidPasswordResetTokenError extends Error {
+  constructor() {
+    super("Invalid or expired password reset token");
+    this.name = "InvalidPasswordResetTokenError";
+  }
+}
+
+/**
+ * OTP errors
+ */
+export class InvalidOTPError extends Error {
+  constructor() {
+    super("Invalid or expired OTP");
+    this.name = "InvalidOTPError";
+  }
+}
+
+export class OTPRequiredError extends Error {
+  constructor() {
+    super("OTP verification required");
+    this.name = "OTPRequiredError";
+  }
+}
+
+/**
+ * Brute force protection tracking
+ */
+export interface IBruteForceAttempt {
+  email: string;
+  attempts: number;
+  lastAttempt: Date;
+  cooldownUntil?: Date;
+}
+
+/**
+ * Brute force protection service interface
+ */
+export interface IBruteForceProtection {
+  /**
+   * Record a failed login attempt
+   */
+  recordFailedAttempt(email: string): Promise<void>;
+
+  /**
+   * Check if an email is currently locked due to too many attempts
+   */
+  isLocked(email: string): Promise<boolean>;
+
+  /**
+   * Get the cooldown period end time for an email
+   */
+  getCooldownUntil(email: string): Promise<Date | null>;
+
+  /**
+   * Reset failed attempts for an email (on successful login)
+   */
+  resetAttempts(email: string): Promise<void>;
+
+  /**
+   * Clear all tracking data (for testing)
+   */
+  clear(): Promise<void>;
+}
+
+/**
+ * Password reset token
+ */
+export interface IPasswordResetToken {
+  token: string;
+  email: string;
+  expiresAt: Date;
+  createdAt: Date;
+  used: boolean;
+}
+
+/**
+ * Password reset service interface
+ */
+export interface IPasswordResetService {
+  /**
+   * Generate a password reset token for a user
+   */
+  generateResetToken(email: string): Promise<IPasswordResetToken>;
+
+  /**
+   * Verify a password reset token
+   */
+  verifyResetToken(token: string): Promise<IPasswordResetToken>;
+
+  /**
+   * Mark a reset token as used
+   */
+  markTokenAsUsed(token: string): Promise<void>;
+
+  /**
+   * Clean up expired tokens
+   */
+  cleanupExpiredTokens(): Promise<void>;
+}
+
+/**
+ * OTP types
+ */
+export type OTPType = "email" | "sms" | "totp" | "backup";
+
+/**
+ * OTP token
+ */
+export interface IOTPToken {
+  id: string;
+  userId: string;
+  type: OTPType;
+  code: string;
+  expiresAt: Date;
+  createdAt: Date;
+  used: boolean;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * OTP verification result
+ */
+export interface IOTPVerificationResult {
+  success: boolean;
+  token?: IOTPToken;
+  remaining?: number; // remaining attempts
+}
+
+/**
+ * OTP service interface
+ */
+export interface IOTPService {
+  /**
+   * Generate an OTP for a user
+   */
+  generateOTP(userId: string, type: OTPType, metadata?: Record<string, any>): Promise<IOTPToken>;
+
+  /**
+   * Verify an OTP code
+   */
+  verifyOTP(userId: string, code: string, type?: OTPType): Promise<IOTPVerificationResult>;
+
+  /**
+   * Check if user has OTP enabled for a specific type
+   */
+  isOTPEnabled(userId: string, type: OTPType): Promise<boolean>;
+
+  /**
+   * Enable OTP for a user
+   */
+  enableOTP(userId: string, type: OTPType, metadata?: Record<string, any>): Promise<void>;
+
+  /**
+   * Disable OTP for a user
+   */
+  disableOTP(userId: string, type: OTPType): Promise<void>;
+
+  /**
+   * Clean up expired OTP tokens
+   */
+  cleanupExpiredTokens(): Promise<void>;
+}
+
+/**
+ * Password reset request data
+ */
+export interface IPasswordResetRequest {
+  email: string;
+  callbackUrl?: string;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * Password reset completion data
+ */
+export interface IPasswordResetCompletion {
+  token: string;
+  newPassword: string;
+}
+
+/**
+ * OTP generation request
+ */
+export interface IOTPGenerationRequest {
+  userId: string;
+  type: OTPType;
+  metadata?: Record<string, any>;
+}
+
+/**
+ * OTP verification request
+ */
+export interface IOTPVerificationRequest {
+  userId: string;
+  code: string;
+  type?: OTPType;
 }

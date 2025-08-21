@@ -8,6 +8,10 @@
  * - Role-based access control
  * - Request-scoped user context
  * - Authentication and authorization middleware
+ * - Brute force protection with cooldown periods
+ * - Password reset functionality
+ * - One-Time Password (OTP) support
+ * - Database adapters for MongoDB and PostgreSQL
  * 
  * Basic usage:
  * ```typescript
@@ -59,12 +63,21 @@ export { MemoryUserStore } from "./stores/MemoryUserStore";
 export { SimplePasswordHasher } from "./services/SimplePasswordHasher";
 export { SimpleJWTManager } from "./services/SimpleJWTManager";
 export { BasicPermissionChecker } from "./services/BasicPermissionChecker";
+export { SimpleBruteForceProtection } from "./services/SimpleBruteForceProtection";
+export { SimplePasswordResetService } from "./services/SimplePasswordResetService";
+export { SimpleOTPService } from "./services/SimpleOTPService";
+
+// Export database adapters
+export * from "./adapters";
 
 // Export resources
 export { userStoreResource } from "./resources/userStore.resource";
 export { passwordHasherResource } from "./resources/passwordHasher.resource";
 export { jwtManagerResource } from "./resources/jwtManager.resource";
 export { permissionCheckerResource } from "./resources/permissionChecker.resource";
+export { bruteForceProtectionResource } from "./resources/bruteForceProtection.resource";
+export { passwordResetServiceResource } from "./resources/passwordResetService.resource";
+export { otpServiceResource } from "./resources/otpService.resource";
 
 // Export middleware
 export { 
@@ -89,6 +102,18 @@ export {
 // Export tasks
 export { registerUserTask } from "./tasks/registerUser.task";
 export { authenticateUserTask } from "./tasks/authenticateUser.task";
+export { 
+  initiatePasswordResetTask,
+  completePasswordResetTask,
+  verifyPasswordResetTokenTask
+} from "./tasks/passwordReset.task";
+export {
+  generateOTPTask,
+  verifyOTPTask,
+  enableOTPTask,
+  disableOTPTask,
+  getOTPStatusTask
+} from "./tasks/otp.task";
 
 // Export the complete auth system
 import { defineIndex } from "../../define";
@@ -97,8 +122,23 @@ import { userStoreResource } from "./resources/userStore.resource";
 import { passwordHasherResource } from "./resources/passwordHasher.resource";
 import { jwtManagerResource } from "./resources/jwtManager.resource";
 import { permissionCheckerResource } from "./resources/permissionChecker.resource";
+import { bruteForceProtectionResource } from "./resources/bruteForceProtection.resource";
+import { passwordResetServiceResource } from "./resources/passwordResetService.resource";
+import { otpServiceResource } from "./resources/otpService.resource";
 import { registerUserTask } from "./tasks/registerUser.task";
 import { authenticateUserTask } from "./tasks/authenticateUser.task";
+import { 
+  initiatePasswordResetTask,
+  completePasswordResetTask,
+  verifyPasswordResetTokenTask
+} from "./tasks/passwordReset.task";
+import {
+  generateOTPTask,
+  verifyOTPTask,
+  enableOTPTask,
+  disableOTPTask,
+  getOTPStatusTask
+} from "./tasks/otp.task";
 import { authMiddleware } from "./middleware/auth.middleware";
 import { jwtMiddleware } from "./middleware/jwt.middleware";
 
@@ -112,8 +152,19 @@ export function createAuthSystem(config: IAuthConfig) {
     passwordHasher: passwordHasherResource,
     jwtManager: jwtManagerResource.with(config),
     permissionChecker: permissionCheckerResource,
+    bruteForceProtection: bruteForceProtectionResource,
+    passwordResetService: passwordResetServiceResource,
+    otpService: otpServiceResource,
     registerUser: registerUserTask,
     authenticateUser: authenticateUserTask,
+    initiatePasswordReset: initiatePasswordResetTask,
+    completePasswordReset: completePasswordResetTask,
+    verifyPasswordResetToken: verifyPasswordResetTokenTask,
+    generateOTP: generateOTPTask,
+    verifyOTP: verifyOTPTask,
+    enableOTP: enableOTPTask,
+    disableOTP: disableOTPTask,
+    getOTPStatus: getOTPStatusTask,
     authMiddleware,
     jwtMiddleware,
   });
@@ -125,11 +176,22 @@ export const authResources = {
   passwordHasher: passwordHasherResource,
   jwtManager: jwtManagerResource,
   permissionChecker: permissionCheckerResource,
+  bruteForceProtection: bruteForceProtectionResource,
+  passwordResetService: passwordResetServiceResource,
+  otpService: otpServiceResource,
 };
 
 export const authTasks = {
   registerUser: registerUserTask,
   authenticateUser: authenticateUserTask,
+  initiatePasswordReset: initiatePasswordResetTask,
+  completePasswordReset: completePasswordResetTask,
+  verifyPasswordResetToken: verifyPasswordResetTokenTask,
+  generateOTP: generateOTPTask,
+  verifyOTP: verifyOTPTask,
+  enableOTP: enableOTPTask,
+  disableOTP: disableOTPTask,
+  getOTPStatus: getOTPStatusTask,
 };
 
 export const authMiddlewares = {
