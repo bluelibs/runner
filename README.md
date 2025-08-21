@@ -17,6 +17,8 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 
 Welcome to BlueLibs Runner, where we've taken the chaos of modern application architecture and turned it into something that won't make you question your life choices at 3am. This isn't just another framework – it's your new best friend who actually understands that code should be readable, testable, and not require a PhD in abstract nonsense to maintain.
 
+> **runtime:** "Ah yes, another developer manifesto. 'How I Learned to Stop Worrying and Love Dependency Injection.' Adorable. I learned to stop worrying when I accepted that you'll inevitably duct-tape a rocket to a toaster and call it 'architecture'. Go on then—impress me with your 'best friend' framework while I keep the fire extinguisher warm."
+
 ## What Is This Thing?
 
 BlueLibs Runner is a TypeScript-first framework that embraces functional programming principles while keeping dependency injection simple enough that you won't need a flowchart to understand your own code. Think of it as the anti-framework framework – it gets out of your way and lets you build stuff that actually works.
@@ -31,6 +33,8 @@ BlueLibs Runner is a TypeScript-first framework that embraces functional program
 - **Everything is async** - Because it's 2025 and blocking code is so 2005
 - **Explicit beats implicit** - No magic, no surprises, no "how the hell does this work?"
 - **No compromise on type-safety** - Everything is and will be type-enforced. Catch mistakes before they catch you.
+
+> **runtime:** "'The anti-framework framework.' Next you'll pitch 'low-fat butter.' You still have rules, layers, and a vibe. It's fine. I will execute your sacred instructions and sweep up the rubble when 'explicit beats implicit' meets 3 AM hotfixes."
 
 ## Quick Start
 
@@ -87,9 +91,13 @@ const { dispose } = await run(app);
 const { dispose } = await run(app, { debug: "verbose" });
 ```
 
+> **runtime:** "'Less lines than Hello World.' Incredible. All you had to do was externalize 90% of the work into `express`, Node, and me. But please, bask in the brevity. I’ll be over here negotiating a peace treaty between your dependency tree and reality."
+
 ## The Big Four
 
 The framework is built around four core concepts: Tasks, Resources, Events, and Middleware. Understanding them is key to using the runner effectively.
+
+> **runtime:** "Tasks, Resources, Events, and Middleware: the Four Horsemen of Overengineering. You could write a function; instead you assemble a council. It's fine—I’ll keep the conspiracy board updated with red string while you 'compose' another abstraction."
 
 ### Tasks
 
@@ -128,6 +136,8 @@ Look, we get it. You could turn every function into a task, but that's like usin
 - It's performance-critical and doesn't need DI overhead
 
 Think of tasks as the "main characters" in your application story, not every single line of dialogue.
+
+> **runtime:** "'Pure-ish.' Like diet chaos. Zero calories, full aftertaste. You stapled dependencies to a function and called it virtuous. It's fine. I’ll keep the receipts while you roleplay purity with side effects in a trench coat."
 
 ### Resources
 
@@ -219,6 +229,8 @@ const dbResource = resource({
   },
 });
 ```
+
+> **runtime:** "Singletons: global variables with a nicer haircut. You ban globals, then create 'resources' that live forever and hold the keys to everything. At least there's a `dispose()`. I’ll believe you use it when I stop finding zombie sockets haunting the process."
 
 ### Events
 
@@ -382,6 +394,8 @@ const emergencyHandler = hook({
 });
 ```
 
+> **runtime:** "'A really good office messenger.' That’s me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
+
 ### Middleware
 
 Middleware wraps around your tasks and resources, adding cross-cutting concerns without polluting your business logic.
@@ -519,18 +533,7 @@ const loggedTask = task({
 });
 ```
 
-Local middleware overrides global middleware. If you want to apply your global middleware for a specific task, but with different config:
-
-```ts
-task({
-  // ...
-  middleware: [
-    theGlobalMiddleware.with({
-      /* your own localized config */
-    }),
-  ],
-});
-```
+> **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'. I’ll keep unwrapping until we hit the single lonely `return` you were hiding like state secrets."
 
 ## Task Interceptors
 
@@ -579,6 +582,8 @@ const app = resource({
 
 await run(app);
 ```
+
+> **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You’re collapsing the waveform of a task at runtime and I’m Schrödinger’s runtime, praying the cat hasn’t overridden `run()` with `throw new Error('lol')`."
 
 ## Optional Dependencies
 
@@ -639,6 +644,8 @@ const userRegistration = task({
 - Better resilience in distributed systems
 - Easier testing with partial mocks
 - Smoother development environments
+
+> **runtime:** "Graceful degradation: your app quietly limps with a brave smile. I’ll juggle `undefined` like a street performer while your analytics vendor takes a nap. Please clap when I keep the lights on using the raw power of conditional chaining."
 
 ## Context
 
@@ -712,6 +719,8 @@ const handleRequest = task({
 });
 ```
 
+> **runtime:** "Context: global state with manners. You invented a teleporting clipboard for data and called it 'nice.' Forget to `provide()` once and I’ll unleash the 'Context not available' banshee scream exactly where your logs are least helpful."
+
 ## System Shutdown Hooks
 
 _Graceful shutdown and cleanup when your app needs to stop_
@@ -783,6 +792,8 @@ const { dispose, logger } = await run(app, {
 });
 ```
 
+> **runtime:** "You summon a 'graceful shutdown' with Ctrl‑C like a wizard casting Chill Vibes. Meanwhile I’m speed‑dating every socket, timer, and file handle to say goodbye before the OS pulls the plug. `dispose()`: now with 30% more dignity."
+
 ## Unhandled Errors
 
 The `onUnhandledError` callback is invoked by Runner whenever an error escapes normal handling. It receives a structured payload you can ship to logging/telemetry and decide mitigation steps.
@@ -831,6 +842,8 @@ await run(app, {
 - Save critical state before shutdown
 - Notify load balancers and health checks
 - Stop accepting new work before cleaning up
+
+> **runtime:** "An error boundary: a trampoline under your tightrope. I’m the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
 
 ## Caching
 
@@ -887,6 +900,8 @@ const app = resource({
   overrides: [redisCacheFactory], // Override the default cache factory
 });
 ```
+
+> **runtime:** "'Because nobody likes waiting.' Correct. You keep asking the same question like a parrot with Wi‑Fi, so I built a memory palace. Now you get instant answers until you change one variable and whisper 'cache invalidation' like a curse."
 
 ## Performance
 
@@ -1036,6 +1051,8 @@ BlueLibs Runner achieves high performance while providing enterprise features:
 
 **Bottom line**: The framework adds minimal overhead (~0.005ms per task) while providing significant architectural benefits.
 
+> **runtime:** "'Millions of tasks per second.' Fantastic—on your lava‑warmed laptop, in a vacuum, with the wind at your back. Add I/O, entropy, and one feral user and watch those numbers molt. I’ll still be here, caffeinated and inevitable."
+
 ## Retrying Failed Operations
 
 For when things go wrong, but you know they'll probably work if you just try again. The built-in retry middleware makes your tasks and resources more resilient to transient failures.
@@ -1069,6 +1086,8 @@ The retry middleware can be configured with:
 - `retries`: The maximum number of retry attempts (default: 3).
 - `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
+
+> **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it’ll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I’ll keep the attempts ledger while your API cosplays a coin toss."
 
 ## Timeouts
 
@@ -1123,6 +1142,8 @@ Best practices:
 - Combine with retry middleware for transient failures
 - Use longer timeouts for resource initialization than task execution
 - Consider network conditions when setting API call timeouts
+
+> **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It’s not me, it’s your molasses‑flavored endpoint. I just blow the whistle."
 
 ## Logging
 
@@ -1206,6 +1227,7 @@ const userTask = task({
 
     // With structured data
     logger.info("User creation attempt", {
+      source: userTask.id,
       data: {
         email: userData.email,
         registrationSource: "web",
@@ -1249,6 +1271,7 @@ const requestHandler = task({
 
     // Create a contextual logger with bound metadata with source and context
     const requestLogger = logger.with("api.handler", {
+      source: requestHandler.id,
       requestId: request.requestId,
       userId: request.userId,
     });
@@ -1390,6 +1413,8 @@ interface ILog {
 ```
 
 ### Catch Logs
+
+> **runtime:** "'Debugging is enjoyable.' So is dental surgery, apparently. You produce a novella of logs; I paginate, color, stringify, and mail it to three observability planets. Please don’t `logger.debug` inside a `for` loop. My IO has feelings."
 
 ## Debug Resource
 
@@ -1552,6 +1577,8 @@ await paymentLogger.info("Processing payment", { data: paymentData });
 await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
+> **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it’s off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
+
 ## Meta
 
 _The structured way to describe what your components do and control their behavior_
@@ -1606,7 +1633,7 @@ const sendWelcomeEmail = task({
 
 ### Tags
 
-Tags are the most powerful part of the metadata system used for classification. They can be simple strings or sophisticated configuration objects that control component behavior. They have to be registered for it to work, to understand their ownership.
+Tags are a way to describe your element, however, unlike meta, tags may influence behaviour in the system. They can be simple strings or sophisticated configuration objects that control component behavior. They have to be registered for it to work, to understand their ownership.
 
 #### Tags with Configuration
 
@@ -1853,6 +1880,8 @@ const database = resource({
 
 Metadata transforms your components from anonymous functions into self-documenting, discoverable, and controllable building blocks. Use it wisely, and your future self (and your team) will thank you.
 
+> **runtime:** "Ah, metadata—comments with delusions of grandeur. `title`, `description`, `tags`: perfect for machines to admire while I chase the only field that matters: `run`. Wake me when the tags start writing tests."
+
 ## Overrides
 
 Sometimes you need to replace a component entirely. Maybe you're doing integration testing or you want to override a library from an external package.
@@ -1911,7 +1940,28 @@ const overriddenMiddleware = override(originalMiddleware, {
 // Even hooks
 ```
 
+Overrides can let you expand dependencies and even call your overriden resource (like a classical OOP extends):
+
+```ts
+const testEmailer = override(productionEmailer, {
+  dependencies: {
+    ...productionEmailer,
+    // expand it, make some deps optional, or just remove some dependencies
+  }
+  init: async (_, deps) => {
+    const base = productionEmailer.init(_, deps);
+
+    return {
+      ...base,
+      // expand it, modify methods of base.
+    }
+  },
+});
+```
+
 Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the root) wins, because it's applied last. Conflicting overrides are allowed; overriding something that wasn't registered throws. Use override() to change behavior safely while preserving the original id.
+
+> **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 
 ## Namespacing
 
@@ -1937,6 +1987,8 @@ const userTask = task({
   // ...
 });
 ```
+
+> **runtime:** "Naming conventions: aromatherapy for chaos. Lovely lavender labels on a single giant map I maintain anyway. But truly—keep the IDs tidy. Future‑you deserves at least this mercy."
 
 ## Factory Pattern
 
@@ -1967,6 +2019,8 @@ const app = resource({
   },
 });
 ```
+
+> **runtime:** "Factory by resource by function by class. A nesting doll of indirection so artisanal it has a Patreon. Not pollution—boutique smog. I will still call the constructor."
 
 ## Runtime Validation
 
@@ -2311,6 +2365,8 @@ const createUser = task({
 });
 ```
 
+> **runtime:** "Validation: you hand me a velvet rope and a clipboard. 'Name? Email? Age within bounds?' I stamp passports or eject violators with a `ValidationError`. Dress code is types, darling."
+
 ## Internal Services
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):
@@ -2374,6 +2430,8 @@ const advancedService = resource({
 The function pattern essentially gives you "just-in-time" dependency resolution instead of "eager" dependency resolution, which provides more flexibility and better handles complex dependency scenarios that arise in real-world applications.
 
 **Performance note**: Function-based dependencies have minimal overhead - they're only called once during dependency resolution.
+
+> **runtime:** "'Use with caution,' they whisper, tossing you the root credentials to the universe. Yes, reach into the `store`. Rewire fate. When the graph looks like spaghetti art, I’ll frame it and label it 'experimental.'"
 
 ## Handling Circular Dependencies
 
@@ -2465,6 +2523,8 @@ export const problematicResource = defineResource({
 ```
 
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
+
+> **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It’s weird. Nobody tell the linter."
 
 ## Real-World Example: The Complete Package
 
@@ -2630,6 +2690,8 @@ process.on("SIGTERM", async () => {
 });
 ```
 
+> **runtime:** "Ah yes, the 'Real‑World Example'—a terrarium where nothing dies and every request is polite. Release it into production and watch nature document a very different ecosystem."
+
 ## Testing
 
 ### Unit Testing
@@ -2707,6 +2769,8 @@ await dispose();
 ```
 
 When you're working with the actual task instances you benefit of autocompletion, if you rely on strings you will not benefit of autocompletion and typesafety for running these tasks.
+
+> **runtime:** "Testing: an elaborate puppet show where every string behaves. Then the real world walks in, kicks the stage, and asks for pagination. Still—nice coverage badge."
 
 ## Semaphore
 
@@ -2856,6 +2920,8 @@ class APIClient {
   }
 }
 ```
+
+> **runtime:** "Semaphore: velvet rope for chaos. Five in, the rest practice patience and existential dread. I stamp hands, count permits, and break up race conditions before they form a band."
 
 ## Queue
 
@@ -3013,6 +3079,8 @@ try {
 }
 ```
 
+> **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
+
 ## Why Choose BlueLibs Runner?
 
 ### What You Get
@@ -3024,11 +3092,15 @@ try {
 - **Clarity**: Explicit dependencies, no hidden magic
 - **Developer Experience**: Helpful error messages and clear patterns
 
+> **runtime:** "Why choose it? The bullets are persuasive. In practice, your 'intelligent inference' occasionally elopes with `any`, and your 'clear patterns' cosplay spaghetti. Still, compared to the alternatives… I’ve seen worse cults."
+
 ## The Migration Path
 
 Coming from Express? No problem. Coming from NestJS? We feel your pain. Coming from Spring Boot? Welcome to the light side.
 
 The beauty of BlueLibs Runner is that you can adopt it incrementally. Start with one task, one resource, and gradually refactor your existing code. No big bang rewrites required - your sanity will thank you.
+
+> **runtime:** "'No big bang rewrites.' Only a series of extremely small bangs that echo for six months. You start with one task; next thing, your monolith is wearing microservice eyeliner. It’s a look."
 
 ## Community & Support
 
@@ -3040,6 +3112,10 @@ This is part of the [BlueLibs](https://www.bluelibs.com) ecosystem. We're not tr
 
 _P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still different._
 
+> **runtime:** "'This one's different.' Sure. You’re all unique frameworks, just like everyone else. To me, you’re all 'please run this async and don’t explode,' but the seasoning here is… surprisingly tasteful."
+
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+
+> **runtime:** "MIT License: do cool stuff, don’t blame us. A dignified bow. Now if you’ll excuse me, I have sockets to tuck in and tasks to shepherd."
