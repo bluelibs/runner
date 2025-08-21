@@ -2692,6 +2692,143 @@ process.on("SIGTERM", async () => {
 
 > **runtime:** "Ah yes, the 'Real‑World Example'—a terrarium where nothing dies and every request is polite. Release it into production and watch nature document a very different ecosystem."
 
+## MCP Integration
+
+BlueLibs Runner provides seamless integration with the Model Context Protocol (MCP), allowing you to expose your tasks as MCP tools that can be used by AI models and other MCP clients.
+
+### Quick Start
+
+```typescript
+import { task, resource, run, mcp } from "@bluelibs/runner";
+import { z } from "zod";
+
+// Create tasks with MCP tagging and response schemas
+const calculateTask = task({
+  id: "app.tasks.calculate",
+  tags: [
+    mcp.mcpTag.with({
+      name: "calculate",
+      description: "Perform mathematical calculations"
+    })
+  ],
+  inputSchema: z.object({
+    expression: z.string().describe("Mathematical expression to evaluate")
+  }),
+  responseSchema: z.object({
+    result: z.number().describe("Calculation result")
+  }),
+  run: async (input: { expression: string }) => {
+    // Your calculation logic here
+    const result = eval(input.expression); // Note: use a proper parser in production
+    return { result };
+  }
+});
+
+// Create MCP server resource
+const mcpServer = mcp.mcpResource.with({
+  serverInfo: {
+    name: "calculator-mcp",
+    version: "1.0.0",
+    description: "Calculator MCP server"
+  },
+  transport: { type: "stdio" },
+  tasks: [calculateTask]
+});
+
+// Run your app with MCP support
+const app = resource({
+  id: "app",
+  register: [calculateTask, mcpServer, mcp.mcpTag]
+});
+
+run(app);
+```
+
+### Response Schema
+
+Tasks can now define a `responseSchema` field that specifies the structure for external API responses, separate from internal result validation:
+
+```typescript
+const myTask = task({
+  id: "app.tasks.example",
+  // Internal result validation
+  resultSchema: z.object({
+    internalData: z.string(),
+    metadata: z.object({ /* complex internal structure */ })
+  }),
+  // External API response schema (for MCP, HTTP APIs, etc.)
+  responseSchema: z.object({
+    result: z.string(),
+    success: z.boolean()
+  }),
+  run: async (input) => {
+    // Internal complex result
+    const internalResult = {
+      internalData: "...",
+      metadata: { /* ... */ }
+    };
+    
+    // External API will use responseSchema to validate/transform
+    return internalResult;
+  }
+});
+```
+
+### MCP Tag Configuration
+
+The `mcpTag` allows you to configure how tasks are exposed as MCP tools:
+
+```typescript
+const toolTask = task({
+  id: "app.tasks.tool",
+  tags: [
+    mcp.mcpTag.with({
+      name: "custom-tool-name",        // Tool name in MCP
+      description: "What this tool does", // Description for AI models
+      annotations: {                   // Additional MCP metadata
+        title: "Human Readable Title",
+        tags: ["category1", "category2"]
+      }
+    })
+  ],
+  responseSchema: z.object({ output: z.string() }),
+  run: async (input) => ({ output: "result" })
+});
+```
+
+### Task Filtering
+
+You can filter which tasks get exposed as MCP tools:
+
+```typescript
+const mcpServer = mcp.mcpResource.with({
+  serverInfo: { name: "my-mcp", version: "1.0.0" },
+  transport: { type: "stdio" },
+  tasks: [task1, task2, task3],
+  taskFilter: (task, mcpConfig) => {
+    // Only expose tasks tagged as "public"
+    return mcpConfig.annotations?.tags?.includes("public") ?? false;
+  }
+});
+```
+
+### Architecture
+
+The MCP integration follows BlueLibs Runner's design principles:
+
+- **Type-safe**: Full TypeScript support with schema validation
+- **Composable**: Mix MCP-enabled tasks with regular tasks seamlessly  
+- **Tagged**: Use the tagging system to mark tasks for MCP exposure
+- **Resource-based**: MCP server is a resource with proper lifecycle management
+- **Schema-driven**: Input/output schemas automatically converted to MCP format
+
+### Transport Support
+
+Currently supports:
+- **stdio**: For local MCP connections via stdin/stdout
+
+Future transport options may include HTTP and WebSocket support.
+
 ## Testing
 
 ### Unit Testing

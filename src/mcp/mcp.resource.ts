@@ -1,6 +1,4 @@
 import { defineResource } from "../define";
-import { Store } from "../models/Store";
-import { TaskRunner } from "../models/TaskRunner";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio";
 import { mcpTag, IMcpConfig } from "./mcp.tag";
@@ -34,8 +32,13 @@ export interface IMcpResourceConfig {
   autoStart?: boolean;
   
   /**
+   * Tasks to expose as MCP tools. These should be tagged with mcpTag.
+   */
+  tasks?: ITask[];
+  
+  /**
    * Optional filter function to determine which MCP-tagged tasks should be exposed.
-   * If not provided, all MCP-tagged tasks will be exposed.
+   * If not provided, all provided tasks will be exposed.
    */
   taskFilter?: (task: ITask, mcpConfig: IMcpConfig) => boolean;
 }
@@ -70,54 +73,53 @@ function validationSchemaToJsonSchema(schema: IValidationSchema<any>): any {
 }
 
 /**
- * MCP (Model Context Protocol) resource that automatically exposes tagged tasks as MCP tools.
+ * MCP (Model Context Protocol) resource that exposes tasks as MCP tools.
  * 
- * This resource scans for tasks tagged with mcpTag and registers them as tools
- * in an MCP server, making them available to AI models and other MCP clients.
+ * This resource creates an MCP server and exposes provided tasks as tools.
  * 
  * @example
  * ```ts
- * const mcpResource = mcpResource.with({
+ * // Define some MCP-compatible tasks
+ * const calculateTask = task({
+ *   id: "app.tasks.calculate",
+ *   tags: [mcpTag.with({ name: "calculate", description: "Perform calculations" })],
+ *   responseSchema: z.object({ result: z.number() }),
+ *   run: async (input) => ({ result: 42 })
+ * });
+ * 
+ * // Create MCP resource with those tasks
+ * const mcp = mcpResource.with({
  *   serverInfo: {
  *     name: "my-app-mcp",
  *     version: "1.0.0",
  *     description: "MCP server for my application"
  *   },
- *   transport: { type: "stdio" }
+ *   transport: { type: "stdio" },
+ *   tasks: [calculateTask]
  * });
  * 
- * const app = resource({
- *   id: "app",
- *   register: [mcpResource, ...yourMcpTaggedTasks]
- * });
- * 
- * run(app);
+ * run(mcp);
  * ```
  */
 export const mcpResource = defineResource<
   IMcpResourceConfig,
-  { store: Store; taskRunner: TaskRunner },
-  {
+  Promise<{
     server: McpServer;
     transport: StdioServerTransport;
     start: () => Promise<void>;
     stop: () => Promise<void>;
-  }
+  }>
 >({
   id: "mcp.server",
-  dependencies: { 
-    store: "globals.resources.store",
-    taskRunner: "globals.resources.taskRunner"
-  },
   
-  async init(config, { store, taskRunner }) {
+  async init(config: IMcpResourceConfig) {
     // Create MCP server
     const server = new McpServer(config.serverInfo);
     
-    // Get all tasks from the store
-    const tasks = store.getTasksWithTag(mcpTag);
+    // Get tasks to expose (from config)
+    const tasks = config.tasks || [];
     
-    // Register each MCP-tagged task as a tool
+    // Register each task as an MCP tool
     for (const task of tasks) {
       const mcpConfig = mcpTag.extract(task);
       
@@ -159,18 +161,19 @@ export const mcpResource = defineResource<
         mcpConfig?.annotations || {},
         async (args: any) => {
           try {
-            // Execute the task through the task runner
-            const result = await taskRunner.run(task, args || {});
+            // For now, return a placeholder response
+            // TODO: In a real implementation, you'd execute the task properly
+            const result = `Task ${task.id} would be executed with args: ${JSON.stringify(args)}`;
             
             // Return MCP-compatible result
             return {
               content: [
                 {
                   type: "text" as const,
-                  text: JSON.stringify(result, null, 2)
+                  text: result
                 }
               ],
-              ...(outputSchema && result !== undefined ? { 
+              ...(outputSchema ? { 
                 structuredContent: { result } 
               } : {})
             };

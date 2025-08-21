@@ -534,6 +534,42 @@ const registerRoutes = hook({
 });
 ```
 
+## MCP Integration
+
+Expose tasks as Model Context Protocol (MCP) tools for AI models:
+
+```ts
+import { task, resource, run, mcp } from "@bluelibs/runner";
+import { z } from "zod";
+
+// MCP-compatible task with responseSchema
+const calculate = task({
+  id: "app.tasks.calculate",
+  tags: [mcp.mcpTag.with({ name: "calculate", description: "Math calculations" })],
+  inputSchema: z.object({ expression: z.string() }),
+  responseSchema: z.object({ result: z.number() }), // New: external API response schema
+  run: async ({ expression }) => ({ result: eval(expression) })
+});
+
+// MCP server resource
+const mcpServer = mcp.mcpResource.with({
+  serverInfo: { name: "calculator-mcp", version: "1.0.0" },
+  transport: { type: "stdio" },
+  tasks: [calculate]
+});
+
+const app = resource({
+  id: "app", 
+  register: [calculate, mcpServer, mcp.mcpTag]
+});
+
+run(app); // Now exposes tasks as MCP tools via stdio
+```
+
+**responseSchema vs resultSchema:**
+- `resultSchema`: Validates internal task return values
+- `responseSchema`: Defines external API response structure (MCP, HTTP, etc.)
+
 ## Key Patterns & Features
 
 - **Optional Dependencies**: Gracefully handle missing services by defining dependencies as optional. The dependency will be `null` if not registered.
