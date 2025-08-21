@@ -270,4 +270,144 @@ describe("Extended Authentication System", () => {
       expect(updatedUser.lastPasswordChangedAt?.getTime()).toBe(originalChangeDate?.getTime());
     });
   });
+
+  describe("Task Coverage", () => {
+    // Test password reset tasks
+    test("should complete password reset flow", async () => {
+      const userStore = new MemoryUserStore();
+      const passwordResetService = new SimplePasswordResetService();
+      
+      // Create a user first
+      const user = await userStore.createUser({
+        email: "reset@example.com",
+        password: "password123",
+        hashedPassword: "hashed-password",
+      });
+
+      // Initiate reset
+      const resetRequest = await passwordResetService.generateResetToken(
+        "reset@example.com"
+      );
+      expect(resetRequest.token).toBeTruthy();
+
+      // Verify token without completing
+      const isValid = await passwordResetService.verifyResetToken(resetRequest.token);
+      expect(isValid.email).toBe("reset@example.com");
+
+      // Complete reset
+      await passwordResetService.markTokenAsUsed(resetRequest.token);
+
+      // Token should be invalid after use
+      try {
+        await passwordResetService.verifyResetToken(resetRequest.token);
+        fail("Should have thrown an error for used token");
+      } catch (error) {
+        expect(error).toBeInstanceOf(InvalidPasswordResetTokenError);
+      }
+    });
+
+    test("should handle invalid password reset tokens", async () => {
+      const passwordResetService = new SimplePasswordResetService();
+      
+      try {
+        await passwordResetService.verifyResetToken("invalid-token");
+        fail("Should have thrown an error for invalid token");
+      } catch (error) {
+        expect(error).toBeInstanceOf(InvalidPasswordResetTokenError);
+      }
+    });
+
+    test("should handle expired password reset tokens", async () => {
+      const passwordResetService = new SimplePasswordResetService({
+        tokenExpirationSeconds: -1, // Expired immediately
+      });
+      
+      const resetRequest = await passwordResetService.generateResetToken(
+        "test@example.com"
+      );
+
+      // Token should be expired
+      try {
+        await passwordResetService.verifyResetToken(resetRequest.token);
+        fail("Should have thrown an error for expired token");
+      } catch (error) {
+        expect(error).toBeInstanceOf(InvalidPasswordResetTokenError);
+      }
+    });
+
+    test("should manage OTP lifecycle", async () => {
+      const otpService = new SimpleOTPService();
+      const userId = "user123";
+
+      // Enable OTP
+      await otpService.enableOTP(userId, "email");
+      const enabledTypes = await otpService.getEnabledTypes(userId);
+      expect(enabledTypes).toContain("email");
+
+      // Generate OTP
+      const otp = await otpService.generateOTP(userId, "email");
+      expect(otp.code).toBeTruthy();
+      expect(otp.expiresAt).toBeTruthy();
+
+      // Verify OTP
+      const verification = await otpService.verifyOTP(userId, otp.code, "email");
+      expect(verification.success).toBe(true);
+
+      // OTP should be invalid after use
+      const secondVerification = await otpService.verifyOTP(userId, otp.code, "email");
+      expect(secondVerification.success).toBe(false);
+
+      // Disable OTP
+      await otpService.disableOTP(userId, "email");
+      const enabledTypesAfter = await otpService.getEnabledTypes(userId);
+      expect(enabledTypesAfter).not.toContain("email");
+    });
+
+    test("should handle invalid OTP verification", async () => {
+      const otpService = new SimpleOTPService();
+      const userId = "user123";
+
+      await otpService.enableOTP(userId, "email");
+      
+      // Try invalid code
+      const invalidResult = await otpService.verifyOTP(userId, "invalid", "email");
+      expect(invalidResult.success).toBe(false);
+
+      // Try disabled type
+      const disabledResult = await otpService.verifyOTP(userId, "123456", "sms");
+      expect(disabledResult.success).toBe(false);
+    });
+
+    test("should handle OTP attempt limits", async () => {
+      const otpService = new SimpleOTPService({
+        maxAttempts: 1, // Only 1 attempt allowed
+      });
+      const userId = "user123";
+
+      await otpService.enableOTP(userId, "email");
+      const otp = await otpService.generateOTP(userId, "email");
+
+      // First failed attempt
+      const attempt1 = await otpService.verifyOTP(userId, "wrong1", "email");
+      expect(attempt1.success).toBe(false);
+
+      // Second attempt should fail due to exceeding max attempts
+      const attempt2 = await otpService.verifyOTP(userId, "wrong2", "email");
+      expect(attempt2.success).toBe(false);
+    });
+
+    test("should handle expired OTP codes", async () => {
+      const otpService = new SimpleOTPService({
+        expirationSeconds: -1, // Expired immediately
+      });
+      const userId = "user123";
+
+      await otpService.enableOTP(userId, "email");
+      const otp = await otpService.generateOTP(userId, "email");
+
+      // OTP should be expired
+      const result = await otpService.verifyOTP(userId, otp.code, "email");
+      expect(result.success).toBe(false);
+    });
+  });
 });

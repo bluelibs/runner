@@ -1,5 +1,10 @@
-// Note: This adapter requires the 'mongodb' package to be installed
-// npm install mongodb @types/mongodb
+// MongoDB User Store Example
+// This is an example implementation showing how to integrate MongoDB with the auth system
+// 
+// To use this in your project:
+// 1. Install MongoDB driver: npm install mongodb @types/mongodb
+// 2. Copy this file to your project
+// 3. Import and configure with your auth system
 
 import {
   IUser,
@@ -8,7 +13,7 @@ import {
   IUserWithPassword,
   UserAlreadyExistsError,
   UserNotFoundError,
-} from "../types";
+} from "@bluelibs/runner/auth";
 
 /**
  * MongoDB document interface
@@ -53,7 +58,8 @@ interface IMongoDb {
  * Usage:
  * ```typescript
  * import { MongoClient } from "mongodb";
- * import { MongoUserStore } from "@bluelibs/runner/auth/adapters";
+ * import { MongoUserStore } from "./path/to/this/file";
+ * import { resource, globals } from "@bluelibs/runner";
  * 
  * const client = new MongoClient("mongodb://localhost:27017");
  * await client.connect();
@@ -62,7 +68,14 @@ interface IMongoDb {
  * const userStore = new MongoUserStore(db, "users");
  * 
  * // Use with auth system
- * globals.resources.auth.userStore.with({ store: userStore })
+ * const app = resource({
+ *   id: "app",
+ *   register: [
+ *     globals.resources.auth.userStore.with({ store: userStore }),
+ *     // ... other auth resources
+ *   ],
+ *   // ... rest of your app
+ * });
  * ```
  */
 export class MongoUserStore implements IUserStore {

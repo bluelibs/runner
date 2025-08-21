@@ -1,5 +1,10 @@
-// Note: This adapter requires the 'pg' package to be installed
-// npm install pg @types/pg
+// PostgreSQL User Store Example
+// This is an example implementation showing how to integrate PostgreSQL with the auth system
+//
+// To use this in your project:
+// 1. Install PostgreSQL driver: npm install pg @types/pg
+// 2. Copy this file to your project
+// 3. Import and configure with your auth system
 
 import {
   IUser,
@@ -7,7 +12,7 @@ import {
   IUserRegistration,
   UserAlreadyExistsError,
   UserNotFoundError,
-} from "../types";
+} from "@bluelibs/runner/auth";
 
 /**
  * PostgreSQL row interface
@@ -37,7 +42,8 @@ interface IPgConnection {
  * Usage:
  * ```typescript
  * import { Pool } from "pg";
- * import { PostgresUserStore } from "@bluelibs/runner/auth/adapters";
+ * import { PostgresUserStore } from "./path/to/this/file";
+ * import { resource, globals } from "@bluelibs/runner";
  * 
  * const pool = new Pool({
  *   host: "localhost",
@@ -51,7 +57,14 @@ interface IPgConnection {
  * await userStore.createTable(); // Create table if it doesn't exist
  * 
  * // Use with auth system
- * globals.resources.auth.userStore.with({ store: userStore })
+ * const app = resource({
+ *   id: "app",
+ *   register: [
+ *     globals.resources.auth.userStore.with({ store: userStore }),
+ *     // ... other auth resources
+ *   ],
+ *   // ... rest of your app
+ * });
  * ```
  */
 export class PostgresUserStore implements IUserStore {

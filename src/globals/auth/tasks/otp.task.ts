@@ -36,7 +36,7 @@ export const generateOTPTask = defineTask({
     // Check if OTP is enabled for this user and type
     const isEnabled = await otpService.isOTPEnabled(request.userId, request.type);
     if (!isEnabled) {
-      throw new Error(`OTP not enabled for user ${request.userId} and type ${request.type}`);
+      throw new InvalidOTPError();
     }
 
     // Generate OTP

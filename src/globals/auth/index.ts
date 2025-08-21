@@ -11,7 +11,7 @@
  * - Brute force protection with cooldown periods
  * - Password reset functionality
  * - One-Time Password (OTP) support
- * - Database adapters for MongoDB and PostgreSQL
+ * - Database adapters: Example implementations for MongoDB and PostgreSQL in examples/ directory
  * 
  * Basic usage:
  * ```typescript
@@ -67,8 +67,7 @@ export { SimpleBruteForceProtection } from "./services/SimpleBruteForceProtectio
 export { SimplePasswordResetService } from "./services/SimplePasswordResetService";
 export { SimpleOTPService } from "./services/SimpleOTPService";
 
-// Export database adapters
-export * from "./adapters";
+// Database adapters are available as examples in the examples/ directory
 
 // Export resources
 export { userStoreResource } from "./resources/userStore.resource";
