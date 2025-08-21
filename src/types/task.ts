@@ -47,6 +47,13 @@ export interface ITaskDefinition<
   resultSchema?: IValidationSchema<
     TOutput extends Promise<infer U> ? U : never
   >;
+  /**
+   * Optional schema for external API responses (e.g., MCP, HTTP APIs).
+   * This defines the structure of responses when the task is exposed 
+   * externally, and may differ from the internal result structure.
+   * Used by integrations like MCP to define tool output schemas.
+   */
+  responseSchema?: IValidationSchema<any>;
   run: (
     input: HasInputContracts<[...TTags, ...TMiddleware]> extends true
       ? EnsureInputSatisfiesContracts<[...TTags, ...TMiddleware], TInput>

@@ -46,6 +46,7 @@ export function defineTask<
     run: taskConfig.run,
     inputSchema: taskConfig.inputSchema,
     resultSchema: taskConfig.resultSchema,
+    responseSchema: taskConfig.responseSchema,
     meta: taskConfig.meta || ({} as TMeta),
     tags: taskConfig.tags || ([] as unknown as TTags),
     // autorun,
