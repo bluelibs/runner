@@ -403,12 +403,12 @@ Middleware wraps around your tasks and resources, adding cross-cutting concerns 
 Note: Middleware is now split by target. Use `taskMiddleware(...)` for task middleware and `resourceMiddleware(...)` for resource middleware.
 
 ```typescript
-import { middleware } from "@bluelibs/runner";
+import { taskMiddleware } from "@bluelibs/runner";
 
 // Task middleware with config
 type AuthMiddlewareConfig = { requiredRole: string };
 const authMiddleware = taskMiddleware<AuthMiddlewareConfig>({
-  id: "app.middleware.auth",
+  id: "app.middleware.task.auth",
   run: async ({ task, next }, _deps, config) => {
     // Must return the value
     return await next(task.input);
@@ -431,7 +431,7 @@ type AuthInput = { user: { role: string } };
 type AuthOutput = { user: { role: string; verified: boolean } };
 
 const authMiddleware = taskMiddleware<AuthConfig, AuthInput, AuthOutput>({
-  id: "app.middleware.auth",
+  id: "app.middleware.task.auth",
   run: async ({ task, next }, _deps, config) => {
     if (task.input.user.role !== config.requiredRole) {
       throw new Error("Insufficient permissions");
@@ -682,7 +682,7 @@ const handleRequest = resource({
 Context shines when combined with middleware for request-scoped data:
 
 ```typescript
-import { createContext, middleware } from "@bluelibs/runner";
+import { createContext, taskMiddleware } from "@bluelibs/runner";
 import { randomUUID } from "crypto";
 
 const RequestContext = createContext<{
@@ -691,7 +691,7 @@ const RequestContext = createContext<{
   userAgent?: string;
 }>("app.requestContext");
 
-const requestMiddleware = middleware.task({
+const requestMiddleware = taskMiddleware({
   id: "app.middleware.request",
   run: async ({ task, next }) => {
     // This works even in express middleware if needed.
@@ -1732,7 +1732,7 @@ To process these tags you can hook into `globals.events.ready`, use the global s
 #### Structured Tags
 
 ```typescript
-const performanceMiddleware = middleware.task({
+const performanceMiddleware = taskMiddleware({
   id: "app.middleware.performance",
   run: async ({ task, next }) => {
     const perfConfiguration = performanceTag.extract(task.definition); // you can just use .exists() if you want to check for presence
@@ -1899,7 +1899,8 @@ const testEmailer = override(productionEmailer, {
   init: async () => new MockEmailer(),
 });
 
-// Option 2: Using spread operator, does not provide type-safety
+// Option 2: The system is really flexible, and override is just bringing in type safety, nothing else under the hood.
+// Using spread operator works the same way but does not provide type-safety.
 const testEmailer = resource({
   ...productionEmailer,
   init: async () => {},
@@ -2157,7 +2158,7 @@ const userActionEvent = event({
   payloadSchema: userActionSchema, // Validates on emit
 });
 
-const notificationTask = task({
+const notificationHook = hook({
   id: "app.tasks.sendNotification",
   on: userActionEvent,
   run: async (eventData) => {
@@ -2168,7 +2169,7 @@ const notificationTask = task({
 
 const app = resource({
   id: "app",
-  register: [userActionEvent, notificationTask],
+  register: [userActionEvent, notificationHook],
   dependencies: { userActionEvent },
   init: async (_, { userActionEvent }) => {
     // This works - valid payload
@@ -2573,8 +2574,8 @@ const userRegistered = event<{ userId: string; email: string }>({
 });
 
 // Middleware
-const authMiddleware = middleware<{ requiredRole?: string }>({
-  id: "app.middleware.auth",
+const authMiddleware = taskMiddleware<{ requiredRole?: string }>({
+  id: "app.middleware.task.auth",
   run: async ({ task, next }, deps, config) => {
     const context = RequestContext.use();
     if (config?.requiredRole && context.role !== config.requiredRole) {
@@ -2760,10 +2761,11 @@ const registerUser = task({ id: "app.tasks.registerUser" /* ... */ });
 const { value: t, dispose } = await run(harness);
 
 // You have 3 ways to interact with the system, run tasks, get resource values and emit events
+// You can run them dynamically with just string ids, but using the created objects gives you type-safety.
 
 const result = await t.runTask(registerUser, { email: "x@y.z" });
 const value = t.getResourceValue(testDb); // since the resolution is done by id, this will return the exact same result as t.getResourceValue(actualDb)
-t.emitEvent(id | event, payload);
+t.emitEvent(event, payload);
 expect(result).toMatchObject({ success: true });
 await dispose();
 ```
