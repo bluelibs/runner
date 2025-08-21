@@ -131,4 +131,4 @@ export const privateRunner = resource({
 
 Runnerception lets you scope complex wiring behind a single resource boundary. You keep your global graph clean while gaining sandboxed composition where needed.
 
-![Mr. X Meme](https://i.kym-cdn.com/photos/images/newsfeed/001/460/247/6e0.jpg)
+![Mr. X Meme](https://i.imgflip.com/5r1uy.jpg?a487416)
