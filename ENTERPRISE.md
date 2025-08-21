@@ -72,13 +72,11 @@ You get full documentation, training for your team, and ongoing support. No blac
 
 ### Investment
 
-Custom work starts at $25,000 for simple integrations and extensions. Complex migrations or performance work typically ranges from $50,000 to $150,000. Strategic architectural consulting runs $2,500 per day.
-
 We'll give you a fixed price upfront - no hourly billing that incentivizes us to take longer.
 
 ## Support Plans
 
-### Professional Support - $12,000/year
+### Professional Support
 
 **For teams that need reliable help**
 
@@ -88,7 +86,7 @@ We'll give you a fixed price upfront - no hourly billing that incentivizes us to
 - Covers one production application
 - Up to 25 developers
 
-### Enterprise Support - $25,000/year
+### Enterprise Support
 
 **For mission-critical applications**
 
