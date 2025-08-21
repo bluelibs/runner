@@ -18,7 +18,7 @@ export type DebugConfig = {
   logHookCompleted: boolean;
 };
 
-export const allFalse: DebugConfig = Object.freeze({
+const allFalse: DebugConfig = Object.freeze({
   logResourceBeforeRun: false,
   logResourceAfterRun: false,
   logMiddlewareBeforeRun: false,
@@ -35,7 +35,7 @@ export const allFalse: DebugConfig = Object.freeze({
   logEventEmissionInput: false,
 });
 
-export const levelNormal: DebugConfig = Object.freeze({
+const levelNormal: DebugConfig = Object.freeze({
   ...allFalse,
   logTaskAfterRun: true,
   logTaskBeforeRun: true,
@@ -50,7 +50,7 @@ export const levelNormal: DebugConfig = Object.freeze({
 
 Object.freeze(levelNormal);
 
-export const levelVerbose: DebugConfig = Object.freeze({
+const levelVerbose: DebugConfig = Object.freeze({
   ...levelNormal,
   logTaskInput: true,
   logTaskOutput: true,
