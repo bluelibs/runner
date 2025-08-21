@@ -3,22 +3,16 @@ import {
   DependencyValuesType,
   ITask,
   IResource,
-  IEventDefinition,
   IEvent,
   IEventEmission,
   TaskLocalInterceptor,
   ResourceDependencyValuesType,
   TaskDependencyWithIntercept,
-  IResourceMiddleware,
-  ITaskMiddleware,
 } from "../defs";
 import { Store } from "./Store";
-import { symbolHook } from "../defs";
 import {
   ResourceStoreElementType,
   TaskStoreElementType,
-  TaskMiddlewareStoreElementType,
-  ResourceMiddlewareStoreElementType,
 } from "../types/storeTypes";
 import * as utils from "../define";
 import { EventManager } from "./EventManager";
@@ -27,12 +21,9 @@ import { TaskRunner } from "./TaskRunner";
 import {
   DependencyNotFoundError,
   EventNotFoundError,
-  MiddlewareNotRegisteredError,
   UnknownItemTypeError,
 } from "../errors";
 import { Logger } from "./Logger";
-import { globalEvents } from "../globals/globalEvents";
-import { globalTags } from "../globals/globalTags";
 
 /**
  * This class is responsible of setting up dependencies with their respective computedValues.

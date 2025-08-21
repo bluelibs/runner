@@ -356,7 +356,19 @@ describe.skip("typesafety", () => {
       { output: number }
     >({
       id: "middleware",
-      run: async ({ next }, deps, config) => {
+      run: async ({ next, task }, deps, config) => {
+        task.input;
+        task.input.input;
+        // @ts-expect-error
+        task.input.a;
+        next({ input: "123" });
+        // @ts-expect-error
+        next({ input: 123 });
+        const outputResult = await next({ input: "123" });
+        outputResult.output;
+        // @ts-expect-error
+        outputResult.output2;
+
         return {
           output: 123,
         };

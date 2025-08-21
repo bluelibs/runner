@@ -31,7 +31,10 @@ export interface ITaskMiddlewareDefinition<
    * The middleware body, called with task execution input.
    */
   run: (
-    input: ITaskMiddlewareExecutionInput<any>,
+    input: ITaskMiddlewareExecutionInput<
+      TEnforceInputContract extends void ? any : TEnforceInputContract,
+      TEnforceOutputContract extends void ? any : TEnforceOutputContract
+    >,
     dependencies: DependencyValuesType<TDependencies>,
     config: TConfig,
   ) => Promise<any>;
@@ -85,13 +88,16 @@ export interface ITaskMiddlewareConfigured<
   config: TConfig;
 }
 
-export interface ITaskMiddlewareExecutionInput<TTaskInput = any> {
+export interface ITaskMiddlewareExecutionInput<
+  TTaskInput = any,
+  TTaskOutput = any,
+> {
   /** Task hook */
   task: {
     definition: ITask<TTaskInput, any, any, any>;
     input: TTaskInput;
   };
-  next: (taskInput?: TTaskInput) => Promise<any>;
+  next: (taskInput?: TTaskInput) => Promise<TTaskOutput>;
 }
 
 export type TaskMiddlewareAttachmentType =

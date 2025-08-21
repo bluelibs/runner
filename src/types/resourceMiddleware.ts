@@ -31,7 +31,10 @@ export interface IResourceMiddlewareDefinition<
    * The middleware body, called with resource execution input.
    */
   run: (
-    input: IResourceMiddlewareExecutionInput,
+    input: IResourceMiddlewareExecutionInput<
+      TEnforceInputContract extends void ? any : TEnforceInputContract,
+      TEnforceOutputContract extends void ? any : TEnforceOutputContract
+    >,
     dependencies: DependencyValuesType<TDependencies>,
     config: TConfig,
   ) => Promise<any>;
@@ -87,13 +90,16 @@ export interface IResourceMiddlewareConfigured<
   [symbolMiddlewareConfigured]: true;
 }
 
-export interface IResourceMiddlewareExecutionInput<TResourceConfig = any> {
+export interface IResourceMiddlewareExecutionInput<
+  TResourceConfig = any,
+  TResourceOutput = any,
+> {
   /** Resource hook */
   resource: {
     definition: IResource<TResourceConfig, any, any, any, any>;
     config: TResourceConfig;
   };
-  next: (resourceConfig?: TResourceConfig) => Promise<any>;
+  next: (resourceConfig?: TResourceConfig) => Promise<TResourceOutput>;
 }
 
 export type ResourceMiddlewareAttachmentType =
