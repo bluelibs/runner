@@ -225,7 +225,10 @@ describe.skip("typesafety", () => {
       on: onAnyOf(e1, e3),
       run: async (ev) => {
         ev.data.a;
+        ev.data.common;
+        // @ts-expect-error c is not common to all
         ev.data.c;
+        // @ts-expect-error d is not common to all
         ev.data.d;
       },
     });

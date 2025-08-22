@@ -1,5 +1,5 @@
 import { defineEvent } from "../define";
-import { isOneOf, IEventEmission } from "../defs";
+import { isOneOf, IEventEmission, onAnyOf } from "../defs";
 
 describe("event helpers", () => {
   it("isOneOf checks membership by id", () => {

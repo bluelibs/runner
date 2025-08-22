@@ -109,10 +109,12 @@ Listen to multiple events with type-safe common fields:
 ```ts
 const h = hook({
   id: "app.hooks.multi",
-  on: onAnyOf(event1, event2),
-  // on: isOneOf(event1, event2, event3)
+  on: [event1, event2, event3],
   run: async (ev) => {
-    ev.data.commonField; // TypeScript knows common fields
+    // helper utility
+    if (isOneOf(ev, [event1, event2])) {
+      // all common fields from event1 and event2, if just event1, it will be just event1
+    }
   },
 });
 ```

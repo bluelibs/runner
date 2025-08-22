@@ -334,7 +334,7 @@ const eGuest = event<{ id: string; guest: true }>({ id: "app.events.guest" });
 // The common field across all three is { id: string }
 const auditUsers = hook({
   id: "app.hooks.auditUsers",
-  on: onAnyOf(eUser, eAdmin, eGuest),
+  on: [eUser, eAdmin, eGuest],
   run: async (ev) => {
     ev.data.id; // OK: common field inferred
     // ev.data.email; // TS error: not common to all
@@ -344,11 +344,10 @@ const auditUsers = hook({
 // Guard usage to refine at runtime (still narrows to common payload)
 const auditSome = hook({
   id: "app.hooks.auditSome",
-  on: [eUser, eAdmin] as const,
+  on: onAnyOf([eUser, eAdmin]), // to get a combined event
   run: async (ev) => {
-    if (isOneOf(ev, [eUser, eAdmin] as const)) {
-      ev.data.id; // common field
-      // ev.data.email; // still not guaranteed; types remain common fields only
+    if (isOneOf(ev, [eUser, eAdmin])) {
+      ev.data.id; // common field of eUser and eAdmin
     }
   },
 });
