@@ -32,8 +32,6 @@ BlueLibs Runner is a TypeScript-first framework that embraces functional program
 - **Explicit beats implicit** - No magic, no surprises, no "how the hell does this work?"
 - **No compromise on type-safety** - Everything is and will be type-enforced. Catch mistakes before they catch you.
 
-> **runtime:** "'The anti-framework framework.' Next you'll pitch 'low-fat butter.' You still have rules, layers, and a vibe. It's fine. I will execute your sacred instructions and sweep up the rubble when 'explicit beats implicit' meets 3 AM hotfixes."
-
 ## Quick Start
 
 ```bash
