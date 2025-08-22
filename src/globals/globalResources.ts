@@ -5,12 +5,9 @@ import { Store } from "../models/Store";
 import { TaskRunner } from "../models/TaskRunner";
 import { cacheResource } from "./middleware/cache.middleware";
 import { queueResource } from "./resources/queue.resource";
-<<<<<<< HEAD
 import { globalTags } from "./globalTags";
 import { MiddlewareManager } from "../models/MiddlewareManager";
-=======
 import { authResources } from "./auth";
->>>>>>> 787204c (Implement complete authentication system with middleware and JWT support)
 
 const systemTag = globalTags.system;
 

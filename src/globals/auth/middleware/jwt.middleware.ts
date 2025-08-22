@@ -1,4 +1,4 @@
-import { defineMiddleware } from "../../../define";
+import { defineTaskMiddleware } from "../../../define";
 import { AuthenticationError, InvalidTokenError } from "../types";
 import { UserContext } from "../context";
 import { userStoreResource } from "../resources/userStore.resource";
@@ -35,15 +35,15 @@ export interface JWTMiddlewareConfig {
 /**
  * JWT authentication middleware that extracts and validates JWT tokens
  * and populates the UserContext with the authenticated user
- * 
+ *
  * Usage:
  * ```typescript
  * const apiTask = task({
  *   id: "api.task",
  *   middleware: [
- *     jwtMiddleware.with({ 
+ *     jwtMiddleware.with({
  *       tokenSource: "input",
- *       tokenProperty: "authorization" 
+ *       tokenProperty: "authorization"
  *     })
  *   ],
  *   run: async (input) => {
@@ -53,19 +53,23 @@ export interface JWTMiddlewareConfig {
  * });
  * ```
  */
-export const jwtMiddleware = defineMiddleware({
+export const jwtMiddleware = defineTaskMiddleware({
   id: "globals.auth.middleware.jwt",
   dependencies: {
     jwtManager: jwtManagerResource,
     userStore: userStoreResource,
   },
-  async run({ task, resource, next }, { jwtManager, userStore }, config: JWTMiddlewareConfig = {}) {
-    const input = task ? task.input : resource?.config;
-    
+  async run(
+    { task, next },
+    { jwtManager, userStore },
+    config: JWTMiddlewareConfig = {},
+  ) {
+    const input = task.input;
+
     // Extract token based on configuration
     let token: string | null = null;
-    
-    if (typeof config.extractToken === 'function') {
+
+    if (typeof config.extractToken === "function") {
       token = config.extractToken(input);
     } else {
       switch (config.tokenSource) {
@@ -78,12 +82,12 @@ export const jwtMiddleware = defineMiddleware({
             }
           }
           break;
-          
+
         case "input":
           const property = config.tokenProperty || "token";
           token = input?.[property] || null;
           break;
-          
+
         case "context":
           try {
             const currentContext = UserContext.use();
@@ -92,7 +96,7 @@ export const jwtMiddleware = defineMiddleware({
             // No existing context
           }
           break;
-          
+
         default:
           // Try common token locations
           if (input?.headers?.authorization?.startsWith("Bearer ")) {
@@ -111,7 +115,7 @@ export const jwtMiddleware = defineMiddleware({
     try {
       // Verify the JWT token
       const payload = await jwtManager.verify(token);
-      
+
       // Get user data
       let user;
       if (config.refreshUser) {
@@ -143,7 +147,6 @@ export const jwtMiddleware = defineMiddleware({
 
       // Provide user context for the duration of the operation
       return await UserContext.provide(userContext, () => next(input));
-      
     } catch (error) {
       if (error instanceof InvalidTokenError) {
         throw new AuthenticationError(`Invalid token: ${error.message}`);
@@ -156,14 +159,14 @@ export const jwtMiddleware = defineMiddleware({
 /**
  * Helper middleware for Bearer token authentication from headers
  */
-export const jwtBearerMiddleware = jwtMiddleware.with({ 
-  tokenSource: "header" 
+export const jwtBearerMiddleware = jwtMiddleware.with({
+  tokenSource: "header",
 });
 
 /**
  * Helper middleware for token authentication from input
  */
-export const jwtInputMiddleware = jwtMiddleware.with({ 
+export const jwtInputMiddleware = jwtMiddleware.with({
   tokenSource: "input",
-  tokenProperty: "token" 
+  tokenProperty: "token",
 });

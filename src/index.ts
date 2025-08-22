@@ -12,24 +12,18 @@ import { createContext } from "./context";
 import { globalEvents } from "./globals/globalEvents";
 import { globalResources } from "./globals/globalResources";
 import { globalMiddlewares } from "./globals/globalMiddleware";
-<<<<<<< HEAD
 import { globalTags } from "./globals/globalTags";
-=======
 import { globalTasks } from "./globals/globalTasks";
->>>>>>> 787204c (Implement complete authentication system with middleware and JWT support)
 import { run } from "./run";
 import { createTestResource } from "./testing";
 
 const globals = {
   events: globalEvents,
   resources: globalResources,
-<<<<<<< HEAD
   middleware: globalMiddlewares,
   tags: globalTags,
-=======
   middlewares: globalMiddlewares,
   tasks: globalTasks,
->>>>>>> 787204c (Implement complete authentication system with middleware and JWT support)
 };
 
 export { globals };
