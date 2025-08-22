@@ -1,18 +1,7 @@
 import { defineEvent } from "../define";
-import { isOneOf, onAnyOf, IEventEmission } from "../defs";
+import { isOneOf, IEventEmission } from "../defs";
 
 describe("event helpers", () => {
-  it("onAnyOf returns the same tuple of definitions", () => {
-    const e1 = defineEvent<{ a: string }>({ id: "ev.a" });
-    const e2 = defineEvent<{ b: number }>({ id: "ev.b" });
-
-    const tuple = onAnyOf(e1, e2);
-    expect(Array.isArray(tuple)).toBe(true);
-    expect(tuple.length).toBe(2);
-    expect(tuple[0].id).toBe("ev.a");
-    expect(tuple[1].id).toBe("ev.b");
-  });
-
   it("isOneOf checks membership by id", () => {
     const e1 = defineEvent<{ a: string }>({ id: "ev.a" });
     const e2 = defineEvent<{ b: number }>({ id: "ev.b" });

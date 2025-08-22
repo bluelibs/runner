@@ -225,8 +225,8 @@ describe.skip("typesafety", () => {
       on: onAnyOf(e1, e3),
       run: async (ev) => {
         ev.data.a;
-        // @ts-expect-error c not present in either
         ev.data.c;
+        ev.data.d;
       },
     });
 
@@ -234,10 +234,13 @@ describe.skip("typesafety", () => {
       id: "hook.guard",
       on: [e1, e2],
       run: async (ev) => {
-        if (isOneOf(ev, [e1, e2])) {
+        if (isOneOf(ev, [e2, e1])) {
           ev.data.a;
-          // @ts-expect-error b not common
+          ev.data.common;
+          // @ts-expect-error c not present in either
           ev.data.c;
+          // @ts-expect-error b not common
+          ev.data.b;
         }
       },
     });

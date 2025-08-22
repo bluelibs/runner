@@ -7,7 +7,7 @@ import {
 } from "../defs";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
-import { symbolFilePath, symbolHook } from "./utilities";
+import { CommonPayload, symbolFilePath, symbolHook } from "./utilities";
 
 type OnType = "*" | IEventDefinition<any> | readonly IEventDefinition<any>[];
 
@@ -27,7 +27,7 @@ export interface IHookDefinition<
       TOn extends "*"
         ? any
         : TOn extends readonly IEventDefinition<any>[]
-        ? import("./utilities").CommonPayload<TOn>
+        ? CommonPayload<TOn>
         : ExtractEventParams<TOn>
     >,
     dependencies: DependencyValuesType<TDependencies>,
