@@ -17,8 +17,6 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 
 Welcome to BlueLibs Runner, where we've taken the chaos of modern application architecture and turned it into something that won't make you question your life choices at 3am. This isn't just another framework – it's your new best friend who actually understands that code should be readable, testable, and not require a PhD in abstract nonsense to maintain.
 
-> **runtime:** "Ah yes, another developer manifesto. 'How I Learned to Stop Worrying and Love Dependency Injection.' Adorable. I learned to stop worrying when I accepted that you'll inevitably duct-tape a rocket to a toaster and call it 'architecture'. Go on then—impress me with your 'best friend' framework while I keep the fire extinguisher warm."
-
 ## What Is This Thing?
 
 BlueLibs Runner is a TypeScript-first framework that embraces functional programming principles while keeping dependency injection simple enough that you won't need a flowchart to understand your own code. Think of it as the anti-framework framework – it gets out of your way and lets you build stuff that actually works.
