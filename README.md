@@ -48,7 +48,7 @@ Here's a complete Express server in less lines than most frameworks need for the
 import express from "express";
 import { resource, task, run } from "@bluelibs/runner";
 
-// A resource is anything you want to share across your app
+// A resource is anything you want to share across your app, a singleton
 const server = resource({
   id: "app.server",
   init: async (config: { port: number }) => {
@@ -63,6 +63,7 @@ const server = resource({
 // Tasks are your business logic - pure-ish, easily testable functions
 const createUser = task({
   id: "app.tasks.createUser",
+  // That's how you depend "value": resource as singleton value, task as function, event as emittor
   dependencies: { server },
   run: async (userData: { name: string }, { server }) => {
     // Your actual business logic here
@@ -84,8 +85,8 @@ const app = resource({
   },
 });
 
-// That's it. No webpack configs, no decorators, no XML.
-const { dispose } = await run(app);
+// That's it. Each run is fully isolated
+const { dispose, getResourceValue, runTask, emitEvent } = await run(app);
 
 // Or with debug logging enabled
 const { dispose } = await run(app, { debug: "verbose" });
@@ -96,8 +97,6 @@ const { dispose } = await run(app, { debug: "verbose" });
 ## The Big Four
 
 The framework is built around four core concepts: Tasks, Resources, Events, and Middleware. Understanding them is key to using the runner effectively.
-
-> **runtime:** "Tasks, Resources, Events, and Middleware: the Four Horsemen of Overengineering. You could write a function; instead you assemble a council. It's fine—I’ll keep the conspiracy board updated with red string while you 'compose' another abstraction."
 
 ### Tasks
 
@@ -254,6 +253,7 @@ const registerUser = task({
 });
 
 // Someone else handles the welcome email using a hook
+// This is great for building very modular apps
 import { hook } from "@bluelibs/runner";
 
 const sendWelcomeEmail = hook({
