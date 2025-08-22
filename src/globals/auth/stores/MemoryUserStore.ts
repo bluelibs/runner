@@ -15,7 +15,7 @@ export class MemoryUserStore implements IUserStore {
   private users: Map<string, IUserWithPassword> = new Map();
   private nextId = 1;
 
-  async createUser(userData: IUserRegistration & { hashedPassword?: string }): Promise<IUser> {
+  async createUser(userData: IUserRegistration & { hashedPassword?: string; isActive?: boolean }): Promise<IUser> {
     if (await this.existsByEmail(userData.email)) {
       throw new UserAlreadyExistsError(userData.email);
     }
@@ -25,7 +25,7 @@ export class MemoryUserStore implements IUserStore {
       id: (this.nextId++).toString(),
       email: userData.email,
       roles: userData.roles || [],
-      isActive: true,
+      isActive: userData.isActive !== undefined ? userData.isActive : true,
       createdAt: now,
       updatedAt: now,
       lastPasswordChangedAt: now, // Set when password is first created
