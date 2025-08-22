@@ -1,11 +1,29 @@
 import { IOptionalDependency, IValidationSchema } from "../defs";
 import { TagType } from "./tag";
 import { IEventMeta } from "./meta";
-import { symbolEvent, symbolFilePath } from "./utilities";
+import { CommonPayload, symbolEvent, symbolFilePath } from "./utilities";
 
 export type EventHandlerType<T = any> = (
   event: IEventEmission<T>,
 ) => any | Promise<any>;
+
+// Helper to keep tuple inference intact for multi-event hooks
+export function onAnyOf<T extends readonly IEventDefinition<any>[]>(
+  ...defs: T
+): T {
+  return defs;
+}
+
+/**
+ * Runtime guard that checks if an emission belongs to one of the given event defs.
+ * Narrows payload type to the intersection of the provided events' payloads.
+ */
+export function isOneOf<TDefs extends readonly IEventDefinition<any>[]>(
+  emission: IEventEmission<any>,
+  defs: TDefs,
+): emission is IEventEmission<CommonPayload<TDefs>> {
+  return defs.some((d) => d.id === emission.id);
+}
 
 export interface IEventDefinition<TPayload = void> {
   id: string;

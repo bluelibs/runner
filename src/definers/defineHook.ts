@@ -15,7 +15,10 @@ import { getCallerFile } from "../tools/getCallerFile";
  */
 export function defineHook<
   D extends DependencyMapType = any,
-  TOn extends "*" | IEventDefinition = any,
+  TOn extends
+    | "*"
+    | IEventDefinition<any>
+    | readonly IEventDefinition<any>[] = any,
   TMeta extends ITaskMeta = any,
 >(hookDef: IHookDefinition<D, TOn, TMeta>): IHook<D, TOn, TMeta> {
   const filePath = getCallerFile();

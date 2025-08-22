@@ -238,11 +238,22 @@ export class DependencyProcessor {
 
         if (eventDefinition === "*") {
           this.eventManager.addGlobalListener(handler, { order });
+        } else if (Array.isArray(eventDefinition)) {
+          for (const ed of eventDefinition) {
+            if (this.store.events.get(ed.id) === undefined) {
+              throw new EventNotFoundError(ed.id);
+            }
+          }
+          this.eventManager.addListener(eventDefinition as any, handler, {
+            order,
+          });
         } else {
           if (this.store.events.get(eventDefinition.id) === undefined) {
             throw new EventNotFoundError(eventDefinition.id);
           }
-          this.eventManager.addListener(eventDefinition, handler, { order });
+          this.eventManager.addListener(eventDefinition as any, handler, {
+            order,
+          });
         }
       }
     }

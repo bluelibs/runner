@@ -102,6 +102,21 @@ const internal = event({
 });
 ```
 
+### Multiple Events per Hook
+
+Listen to multiple events with type-safe common fields:
+
+```ts
+const h = hook({
+  id: "app.hooks.multi",
+  on: onAnyOf(event1, event2),
+  // on: isOneOf(event1, event2, event3)
+  run: async (ev) => {
+    ev.data.commonField; // TypeScript knows common fields
+  },
+});
+```
+
 ### Interception APIs
 
 Low-level interception is available for advanced observability and control:

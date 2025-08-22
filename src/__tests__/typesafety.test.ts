@@ -11,6 +11,7 @@ import {
 import { IMeta, TagType } from "../defs";
 import { run } from "..";
 import z from "zod";
+import { isOneOf, onAnyOf } from "../types/event";
 
 // This is skipped because we mostly check typesafety.
 describe.skip("typesafety", () => {
@@ -186,6 +187,58 @@ describe.skip("typesafety", () => {
         deps.task();
         // @ts-expect-error
         deps.task2;
+      },
+    });
+
+    expect(true).toBe(true);
+  });
+
+  it("events: should infer common payload for multi-event hooks", async () => {
+    const e1 = defineEvent<{ a: string; b: number; common: number }>({
+      id: "e1",
+    });
+    const e2 = defineEvent<{ a: string; c: boolean; common: number }>({
+      id: "e2",
+    });
+    const e3 = defineEvent<{
+      a: string;
+      b: number;
+      d?: string;
+      common: number;
+    }>({ id: "e3" });
+
+    defineHook({
+      id: "hook.common",
+      on: [e1, e2, e3],
+      run: async (ev) => {
+        ev.data.a;
+        ev.data.common;
+        // @ts-expect-error b is not common to all
+        ev.data.b;
+        // @ts-expect-error c is not common to all
+        ev.data.c;
+      },
+    });
+
+    defineHook({
+      id: "hook.helper",
+      on: onAnyOf(e1, e3),
+      run: async (ev) => {
+        ev.data.a;
+        // @ts-expect-error c not present in either
+        ev.data.c;
+      },
+    });
+
+    defineHook({
+      id: "hook.guard",
+      on: [e1, e2],
+      run: async (ev) => {
+        if (isOneOf(ev, [e1, e2])) {
+          ev.data.a;
+          // @ts-expect-error b not common
+          ev.data.c;
+        }
       },
     });
 
