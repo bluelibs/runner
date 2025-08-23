@@ -101,6 +101,9 @@ export class DependencyProcessor {
       deps,
       task.task.id,
     );
+    // Mark task as initialized so subsequent injections don't recompute using
+    // a potentially lazy dependencies() function and lose computed values.
+    task.isInitialized = true;
   }
 
   // Most likely these are resources that no-one has dependencies towards
@@ -121,6 +124,7 @@ export class DependencyProcessor {
           );
         resource.context = context;
         resource.value = value;
+        resource.isInitialized = true;
       }
     }
   }
