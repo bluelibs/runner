@@ -90,7 +90,30 @@ type ExtractResourceValue<T> = T extends IResource<any, infer V, infer D>
     : V
   : never;
 
-export type ExtractEventParams<T> = T extends IEvent<infer P> ? P : never;
+export type ExtractEventParams<T> = T extends IEventDefinition<infer P>
+  ? P
+  : T extends IEvent<infer P>
+  ? P
+  : never;
+
+// Type helpers for unions/intersections and common payload across event arrays
+export type UnionToIntersection<U> = (
+  U extends any ? (x: U) => any : never
+) extends (x: infer I) => any
+  ? I
+  : never;
+
+export type CommonPayload<
+  T extends readonly IEventDefinition<any>[] | IEventDefinition<any>,
+> = T extends readonly IEventDefinition<any>[]
+  ? {
+      [K in keyof ExtractEventParams<T[number]>]: UnionToIntersection<
+        ExtractEventParams<T[number]> extends any
+          ? ExtractEventParams<T[number]>[K]
+          : never
+      >;
+    }
+  : ExtractEventParams<T>;
 
 /**
  * Task dependencies transform into callable functions: call with the task input

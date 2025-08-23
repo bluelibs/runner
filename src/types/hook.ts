@@ -7,11 +7,13 @@ import {
 } from "../defs";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
-import { symbolFilePath, symbolHook } from "./utilities";
+import { CommonPayload, symbolFilePath, symbolHook } from "./utilities";
+
+type OnType = "*" | IEventDefinition<any> | readonly IEventDefinition<any>[];
 
 export interface IHookDefinition<
   TDependencies extends DependencyMapType = {},
-  TOn extends "*" | IEventDefinition<any> = any,
+  TOn extends OnType = any,
   TMeta extends ITaskMeta = any,
 > {
   id: string;
@@ -21,7 +23,13 @@ export interface IHookDefinition<
   order?: number;
   meta?: TMeta;
   run: (
-    event: IEventEmission<TOn extends "*" ? any : ExtractEventParams<TOn>>,
+    event: IEventEmission<
+      TOn extends "*"
+        ? any
+        : TOn extends readonly IEventDefinition<any>[]
+        ? CommonPayload<TOn>
+        : ExtractEventParams<TOn>
+    >,
     dependencies: DependencyValuesType<TDependencies>,
   ) => Promise<any>;
   tags?: TagType[];
@@ -29,7 +37,7 @@ export interface IHookDefinition<
 
 export interface IHook<
   TDependencies extends DependencyMapType = {},
-  TOn extends "*" | IEventDefinition<any> = any,
+  TOn extends OnType = any,
   TMeta extends ITaskMeta = any,
 > extends IHookDefinition<TDependencies, TOn, TMeta> {
   id: string;

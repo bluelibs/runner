@@ -2,6 +2,7 @@ import { task } from "@bluelibs/runner";
 import { RegisterRequest, User } from "../types";
 import { db } from "../../db/database";
 import bcrypt from "bcryptjs";
+import z from "zod";
 
 export interface CreateUserInput {
   email: string;
@@ -9,8 +10,15 @@ export interface CreateUserInput {
   name: string;
 }
 
+const schema = z.object({
+  email: z.email(),
+  password: z.string().min(8),
+  name: z.string().min(1),
+});
+
 export const createUserTask = task({
   id: "app.tasks.users.createUser",
+  inputSchema: schema,
   dependencies: { db },
   run: async (userData: CreateUserInput, { db }) => {
     const { email, password, name } = userData;
@@ -30,13 +38,13 @@ export const createUserTask = task({
     // Insert user
     const result = await db.run(
       "INSERT INTO users (email, name, password_hash) VALUES (?, ?, ?)",
-      [email, name, passwordHash]
+      [email, name, passwordHash],
     );
 
     // Return created user
     const user = await db.get<User>(
       "SELECT id, email, name, created_at FROM users WHERE id = ?",
-      [result.lastID]
+      [result.lastID],
     );
 
     if (!user) {

@@ -101,6 +101,9 @@ export class DependencyProcessor {
       deps,
       task.task.id,
     );
+    // Mark task as initialized so subsequent injections don't recompute using
+    // a potentially lazy dependencies() function and lose computed values.
+    task.isInitialized = true;
   }
 
   // Most likely these are resources that no-one has dependencies towards
@@ -121,6 +124,7 @@ export class DependencyProcessor {
           );
         resource.context = context;
         resource.value = value;
+        resource.isInitialized = true;
       }
     }
   }
@@ -238,11 +242,22 @@ export class DependencyProcessor {
 
         if (eventDefinition === "*") {
           this.eventManager.addGlobalListener(handler, { order });
+        } else if (Array.isArray(eventDefinition)) {
+          for (const ed of eventDefinition) {
+            if (this.store.events.get(ed.id) === undefined) {
+              throw new EventNotFoundError(ed.id);
+            }
+          }
+          this.eventManager.addListener(eventDefinition as any, handler, {
+            order,
+          });
         } else {
           if (this.store.events.get(eventDefinition.id) === undefined) {
             throw new EventNotFoundError(eventDefinition.id);
           }
-          this.eventManager.addListener(eventDefinition, handler, { order });
+          this.eventManager.addListener(eventDefinition as any, handler, {
+            order,
+          });
         }
       }
     }

@@ -318,6 +318,46 @@ const myHook = hook({
 });
 ```
 
+#### Multiple Events (type-safe intersection)
+
+Hooks can listen to multiple events by providing an array to `on`. The `run(event)` payload is inferred as the common (intersection-like) shape across all provided event payloads. Use the `onAnyOf()` helper to preserve tuple inference ergonomics, and `isOneOf()` as a convenient runtime/type guard when needed.
+
+```typescript
+import { hook, onAnyOf, isOneOf, event } from "@bluelibs/runner";
+
+const eUser = event<{ id: string; email: string }>({ id: "app.events.user" });
+const eAdmin = event<{ id: string; role: "admin" | "superadmin" }>({
+  id: "app.events.admin",
+});
+const eGuest = event<{ id: string; guest: true }>({ id: "app.events.guest" });
+
+// The common field across all three is { id: string }
+const auditUsers = hook({
+  id: "app.hooks.auditUsers",
+  on: [eUser, eAdmin, eGuest],
+  run: async (ev) => {
+    ev.data.id; // OK: common field inferred
+    // ev.data.email; // TS error: not common to all
+  },
+});
+
+// Guard usage to refine at runtime (still narrows to common payload)
+const auditSome = hook({
+  id: "app.hooks.auditSome",
+  on: onAnyOf([eUser, eAdmin]), // to get a combined event
+  run: async (ev) => {
+    if (isOneOf(ev, [eUser, eAdmin])) {
+      ev.data.id; // common field of eUser and eAdmin
+    }
+  },
+});
+```
+
+Notes:
+
+- The common payload is computed structurally. Optional properties become optional if they are not present across all events.
+- Wildcard `on: "*"` continues to accept any event and infers `any` payload.
+
 Hooks are perfect for:
 
 - Event-driven side effects

@@ -115,6 +115,40 @@ describe("run", () => {
       await run(app);
     });
 
+    it("should compute dependencies() for events for a task", async () => {
+      const testEvent = defineEvent<{ message: string }>({
+        id: "test.event.fn",
+      });
+      const eventHandler = jest.fn();
+
+      const emitterTask = defineTask({
+        id: "emitter.task",
+        dependencies: () => ({ testEvent }),
+        async run(_, { testEvent }) {
+          await testEvent({ message: "Emitted" });
+          return "done";
+        },
+      });
+
+      const hookListener = defineHook({
+        id: "listener.task",
+        on: testEvent,
+        run: eventHandler as any,
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [testEvent, hookListener, emitterTask],
+        dependencies: { emitterTask },
+        async init(_, { emitterTask }) {
+          await emitterTask();
+          expect(eventHandler).toHaveBeenCalled();
+        },
+      });
+
+      await run(app);
+    });
+
     // Lifecycle-specific task events removed
 
     it("should propagate the error to the parent", async () => {
