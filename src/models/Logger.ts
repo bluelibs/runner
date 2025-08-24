@@ -40,11 +40,14 @@ export class Logger {
   private bufferLogs: boolean = false;
   private buffer: ILog[] = [];
   private boundContext: Record<string, any> = {};
-  private localListeners: Array<(log: ILog) => void | Promise<void>> = [];
   private isLocked: boolean = false;
   private useColors: boolean = true;
   private printer: LogPrinter;
   private source?: string;
+  // This is used for when we use .with() .with() and we want access to local listeners
+  private rootLogger?: Logger;
+  // Observable why not?
+  public localListeners: Array<(log: ILog) => void | Promise<void>> = [];
 
   public static Severity = {
     trace: 0,
@@ -103,7 +106,7 @@ export class Logger {
     source?: string;
     context?: Record<string, any>;
   }): Logger {
-    return new Logger(
+    const child = new Logger(
       {
         printThreshold: this.printThreshold,
         printStrategy: this.printStrategy,
@@ -113,6 +116,9 @@ export class Logger {
       { ...this.boundContext, ...context },
       source,
     );
+    // Ensure child logger delegates buffering, listeners and printing to root
+    child.rootLogger = this.rootLogger ?? this;
+    return child;
   }
 
   /**
@@ -135,15 +141,17 @@ export class Logger {
       context: { ...this.boundContext, ...context },
     };
 
-    if (this.bufferLogs) {
-      this.buffer.push(log);
+    const root = this.rootLogger ?? this;
+
+    if (root.bufferLogs) {
+      root.buffer.push(log);
       return;
     }
 
-    await this.triggerLocalListeners(log);
+    await root.triggerLocalListeners(log);
 
-    if (this.canPrint(level)) {
-      this.printer.print(log);
+    if (root.canPrint(level)) {
+      root.printer.print(log);
     }
   }
 
@@ -210,23 +218,24 @@ export class Logger {
    * @returns A promise that resolves when the logger is ready.
    */
   public async lock() {
-    if (this.isLocked) {
+    const root = this.rootLogger ?? this;
+    if (root.isLocked) {
       return;
     }
 
-    if (this.bufferLogs) {
-      for (const log of this.buffer) {
-        await this.triggerLocalListeners(log);
+    if (root.bufferLogs) {
+      for (const log of root.buffer) {
+        await root.triggerLocalListeners(log);
       }
-      for (const log of this.buffer) {
-        if (this.canPrint(log.level)) {
-          this.printer.print(log);
+      for (const log of root.buffer) {
+        if (root.canPrint(log.level)) {
+          root.printer.print(log);
         }
       }
     }
-    this.bufferLogs = false;
-    this.buffer = [];
-    this.isLocked = true;
+    root.bufferLogs = false;
+    root.buffer = [];
+    root.isLocked = true;
   }
 
   private canPrint(level: LogLevels) {
@@ -241,7 +250,10 @@ export class Logger {
   }
 
   private async triggerLocalListeners(log: ILog) {
-    for (const listener of this.localListeners) {
+    const listeners = this.rootLogger
+      ? this.rootLogger.localListeners
+      : this.localListeners;
+    for (const listener of listeners) {
       try {
         await listener(log);
       } catch (error) {

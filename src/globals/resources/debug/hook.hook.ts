@@ -9,6 +9,12 @@ import { safeStringify } from "../../../models/utils/safeStringify";
 
 export const hookInterceptorResource = defineResource({
   id: "debug.hookInterceptorResource",
+  meta: {
+    title: "Hook Interceptor",
+    description:
+      "Intercepts hooks for debug logging, skipping system-tagged hooks.",
+  },
+  tags: [globalTags.system],
   dependencies: {
     logger: globalResources.logger,
     debugConfig,

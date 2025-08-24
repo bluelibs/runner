@@ -1,19 +1,21 @@
 import { defineResource } from "../../../define";
 import { globalResources } from "../../globalResources";
+import { globalTags } from "../../globalTags";
 import { getConfig } from "./types";
 import { debugConfig } from "./debugConfig.resource";
-// import { hasSystemTag } from "./utils";
+import { hasSystemTag } from "./utils";
 import { ITaskMiddlewareExecutionInput } from "../../../types/taskMiddleware";
 import { IResourceMiddlewareExecutionInput } from "../../../types/resourceMiddleware";
-import { IResourceMiddleware } from "../../../types/resourceMiddleware";
-
-function hasSystemTag(x: any) {
-  return false;
-}
 
 const id = "debug.middlewareInterceptorResource";
 export const middlewareInterceptorResource = defineResource({
   id,
+  meta: {
+    title: "Middleware Interceptor",
+    description:
+      "Intercepts task and resource middleware, skipping system-tagged entities.",
+  },
+  tags: [globalTags.system],
   dependencies: {
     logger: globalResources.logger,
     debugConfig,

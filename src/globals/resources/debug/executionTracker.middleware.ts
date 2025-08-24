@@ -18,13 +18,15 @@ export const tasksTrackerMiddleware = defineTaskMiddleware({
   },
   run: async ({ task, next }, { logger, debugConfig, store }) => {
     const start = Date.now();
+    logger = logger.with({
+      source: tasksTrackerMiddleware.id,
+    });
 
     debugConfig = getConfig(debugConfig, task?.definition);
     const taskStartMessage = `Task ${task!.definition.id} is running...`;
     const shouldShowData = debugConfig.logTaskInput && task!.input;
     await logger.info(taskStartMessage, {
       data: shouldShowData ? { input: task!.input } : undefined,
-      source: "debug.middleware.tracker",
     });
 
     try {
@@ -36,7 +38,6 @@ export const tasksTrackerMiddleware = defineTaskMiddleware({
       const shouldShowResult = debugConfig.logTaskOutput && result;
       await logger.info(taskCompleteMessage, {
         data: shouldShowResult ? { result } : undefined,
-        source: "debug.middleware.tracker",
       });
       return result;
     } catch (error) {
@@ -61,6 +62,9 @@ export const resourcesTrackerMiddleware = defineResourceMiddleware({
   everywhere: (resource) => !globalTags.system.exists(resource),
   run: async ({ resource, next }, { logger, debugConfig, store }) => {
     const start = Date.now();
+    logger = logger.with({
+      source: resourcesTrackerMiddleware.id,
+    });
     debugConfig = getConfig(debugConfig, resource?.definition);
     const resourceStartMessage = `Resource ${
       resource!.definition.id
@@ -71,7 +75,6 @@ export const resourcesTrackerMiddleware = defineResourceMiddleware({
 
     await logger.info(resourceStartMessage, {
       data: shouldShowConfig ? { config: resource!.config } : undefined,
-      source: "debug.middleware.tracker",
     });
 
     try {
@@ -85,7 +88,6 @@ export const resourcesTrackerMiddleware = defineResourceMiddleware({
 
       await logger.info(resourceCompleteMessage, {
         data: shouldShowResult ? { result } : undefined,
-        source: "debug.middleware.tracker",
       });
       return result;
     } catch (error) {
