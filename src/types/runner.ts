@@ -28,11 +28,18 @@ export type RunOptions = {
    */
   errorBoundary?: boolean;
   /**
-   * When true (default), installs SIGINT/SIGTERM handlers that call dispose() on the root.
+   * When true (default), installs SIGINT/SIGTERM handlers that call dispose() on the root allowing for graceful shutdown.
    */
   shutdownHooks?: boolean;
   /**
    * Custom handler for any unhandled error caught by Runner. Defaults to logging via the created logger.
    */
   onUnhandledError?: OnUnhandledError;
+  /**
+   * Dry run mode. When true, the runner will setup the system, ensure there are no errors, but will not start the system.
+   * Your resources will not be initialized, and no events will be emitted. This is useful for testing and debugging.
+   *
+   * Note: this cannot catch init() errors that happen within resources.
+   */
+  dryRun?: boolean;
 };

@@ -6,6 +6,7 @@ alwaysApply: true
 
 ## **MUST**
 
+- Before you begin create a TODO-list.
 - Avoid running commands like `/bin/zsh -lc 'cd ...; npm run'`
 - Read AI.md stored at the root folder if it's not already in your context.
 - Be a highly motivated, adaptable copilot for a Senior Web Developer.
@@ -18,6 +19,7 @@ alwaysApply: true
 - Add `meta.title`, `meta.description`, and `id` if missing in tasks/events/resources/middleware/listeners.
 - After the implementation is completed, run the full suite of tests and ensure 100% coverage.
 - After every implementation, suggest improvements if and only if tests pass and coverage is maintained at 100%.
+- At the end ensure all these elements have bene taken into consideration and review your work like it was written by another AI.
 
 ## **SHOULD**
 

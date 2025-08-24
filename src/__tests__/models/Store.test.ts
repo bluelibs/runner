@@ -161,11 +161,6 @@ describe("Store", () => {
     expect(() => store.processOverrides()).not.toThrow();
   });
 
-  it("should call storeEventsForAllTasks method", () => {
-    // Test storeEventsForAllTasks method (line 165)
-    expect(() => store.storeEventsForAllTRM()).not.toThrow();
-  });
-
   it("should call getTasksWithTag method", () => {
     const tag = defineTag({
       id: "tags.test",

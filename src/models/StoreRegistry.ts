@@ -211,13 +211,6 @@ export class StoreRegistry {
     });
   }
 
-  /**
-   * TRM = tasks, resources and middlewares
-   */
-  storeEventsForAllTRM() {
-    // Lifecycle events removed; no-op retained for API compatibility
-  }
-
   // Feels like a dependencyProcessor task?
   getDependentNodes() {
     const depenedants: IDependentNode[] = [];

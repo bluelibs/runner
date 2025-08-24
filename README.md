@@ -571,6 +571,104 @@ const loggedTask = task({
 
 > **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'. I’ll keep unwrapping until we hit the single lonely `return` you were hiding like state secrets."
 
+## run() and RunOptions
+
+The `run()` function boots a root `resource` and returns a `RunResult` handle to interact with your system.
+
+Basic usage:
+
+```ts
+import { resource, task } from "@bluelibs/runner";
+import { run } from "@bluelibs/runner";
+
+const ping = task({
+  id: "ping.task",
+  async run() {
+    return "pong";
+  },
+});
+
+const app = resource({
+  id: "app",
+  register: [ping],
+  async init(_, {}) {
+    // your boot logic here
+    return "ready";
+  },
+});
+
+const result = await run(app);
+console.log(result.value); // "ready"
+await result.dispose();
+```
+
+What `run()` returns:
+
+| Property                | Description                                                        |
+| ----------------------- | ------------------------------------------------------------------ |
+| `value`                 | Value returned by root resource’s `init()`                         |
+| `runTask(...)`          | Run a task by reference or string id                               |
+| `emitEvent(...)`        | Emit events                                                        |
+| `getResourceValue(...)` | Read a resource’s value                                            |
+| `logger`                | Logger instance                                                    |
+| `store`                 | Runtime store with registered resources, tasks, middleware, events |
+| `dispose()`             | Gracefully dispose resources and unhook listeners                  |
+
+### RunOptions
+
+Pass as the second argument to `run(root, options)`.
+
+| Option             | Type                    | Description                                                                                                                                                                                                                   |
+| ------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug`            | `"normal" or "verbose"` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. Can also be a partial config object for fine-grained control.                                                |
+| `logs`             | `object`                | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete. |
+| `errorBoundary`    | `boolean`               | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                        |
+| `shutdownHooks`    | `boolean`               | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                            |
+| `onUnhandledError` | `(err, ctx) => void`    | Custom handler for unhandled errors captured by the boundary.                                                                                                                                                                 |
+| `dryRun`           | `boolean`               | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                          |
+
+```ts
+const result = await run(app, { dryRun: true });
+// result.value is undefined (root not initialized)
+// You can inspect result.store.resources / result.store.tasks
+await result.dispose();
+```
+
+### Patterns
+
+- Minimal boot:
+
+```ts
+await run(app);
+```
+
+- Debugging locally:
+
+```ts
+await run(app, { debug: "normal", logs: { printThreshold: "debug" } });
+```
+
+- Verbose investigations:
+
+```ts
+await run(app, { debug: "verbose", logs: { printStrategy: "json-pretty" } });
+```
+
+- CI validation (no side effects):
+
+```ts
+await run(app, { dryRun: true });
+```
+
+- Custom process error routing:
+
+```ts
+await run(app, {
+  errorBoundary: true,
+  onUnhandledError: (err) => report(err),
+});
+```
+
 ## Task Interceptors
 
 _Resources can dynamically modify task behavior during initialization_

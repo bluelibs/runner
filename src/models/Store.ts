@@ -259,10 +259,6 @@ export class Store {
     return this.registry.storeGenericItem<C>(item);
   }
 
-  public storeEventsForAllTRM() {
-    this.registry.storeEventsForAllTRM();
-  }
-
   /**
    * Returns all tasks with the given tag.
    * @param tag - The tag to filter by.

@@ -40,8 +40,10 @@ export async function run<C, V extends Promise<any>>(
     logs = {},
     errorBoundary = true,
     shutdownHooks = true,
+    dryRun = false,
     onUnhandledError: onUnhandledErrorOpt,
   } = options || {};
+
   const {
     printThreshold = process.env.NODE_ENV === "test" ? null : "info",
     printStrategy = "pretty",
@@ -114,8 +116,19 @@ export async function run<C, V extends Promise<any>>(
 
     store.validateDependencyGraph();
 
-    // a form of hooking, we create the events for all tasks and store them so they can be referenced
-    await store.storeEventsForAllTRM();
+    if (dryRun) {
+      await logger.debug("Dry run mode. Skipping initialization...");
+      return new RunResult(
+        store.root.value,
+        logger,
+        store,
+        eventManager,
+        taskRunner,
+        disposeAll,
+      );
+    }
+
+    // Beginning initialization
     await logger.debug("Events stored. Attaching listeners...");
     await processor.attachListeners();
     await logger.debug("Listeners attached. Computing dependencies...");
