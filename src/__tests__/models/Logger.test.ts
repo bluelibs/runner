@@ -290,6 +290,38 @@ describe("Logger", () => {
     expect(outputs).toContain('"c": 2');
   });
 
+  it("with() delegates buffering and listeners to the root logger", async () => {
+    // Root buffers; child logs should be buffered and later flushed by root.lock()
+    const root = new Logger({
+      printThreshold: "trace",
+      printStrategy: "pretty" as any,
+      bufferLogs: true,
+    });
+
+    const seen: string[] = [];
+    root.onLog((log) => {
+      seen.push(String(log.message));
+    });
+
+    const child = root.with({ source: "child" });
+
+    await child.info("m1");
+    await child.warn("m2");
+
+    // Nothing emitted yet because root buffers
+    expect(consoleSpy).not.toHaveBeenCalled();
+    expect(consoleErrorSpy).not.toHaveBeenCalled();
+    expect(seen).toHaveLength(0);
+
+    // Flushing the root should notify listeners first, then print
+    await root.lock();
+
+    expect(seen).toEqual(["m1", "m2"]);
+    const outputs = gather();
+    expect(outputs.indexOf("m1")).toBeGreaterThanOrEqual(0);
+    expect(outputs.indexOf("m2")).toBeGreaterThan(outputs.indexOf("m1"));
+  });
+
   it("respects NO_COLOR env by disabling ANSI color codes", async () => {
     const prev = process.env.NO_COLOR;
     process.env.NO_COLOR = "1";

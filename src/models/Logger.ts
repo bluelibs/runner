@@ -250,10 +250,7 @@ export class Logger {
   }
 
   private async triggerLocalListeners(log: ILog) {
-    const listeners = this.rootLogger
-      ? this.rootLogger.localListeners
-      : this.localListeners;
-    for (const listener of listeners) {
+    for (const listener of this.localListeners) {
       try {
         await listener(log);
       } catch (error) {
