@@ -58,6 +58,8 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "lru-cache": "^11.1.0"
+    "@modelcontextprotocol/sdk": "^1.17.3",
+    "lru-cache": "^11.1.0",
+    "zod-to-json-schema": "^3.24.6"
   }
 }
