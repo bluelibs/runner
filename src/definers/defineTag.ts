@@ -38,6 +38,7 @@ export function defineTag<
     id,
     meta: definition.meta,
     config: definition.config,
+    configSchema: definition.configSchema,
   } as ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>;
 
   return {
