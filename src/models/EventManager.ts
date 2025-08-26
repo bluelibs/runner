@@ -5,9 +5,10 @@ import {
   IEventDefinition,
   IEventEmission,
 } from "../defs";
-import { LockedError, ValidationError } from "../errors";
+import { LockedError, ValidationError, EventCycleError } from "../errors";
 import { globalTags } from "../globals/globalTags";
 import { IHook } from "../types/hook";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 /**
  * Default options for event handlers
@@ -72,6 +73,13 @@ export class EventManager {
   private emissionInterceptors: EventEmissionInterceptor[] = [];
   private hookInterceptors: HookExecutionInterceptor[] = [];
 
+  // Tracks the current emission chain to detect cycles
+  private readonly emissionStack = new AsyncLocalStorage<
+    Array<{ id: string; source: string }>
+  >();
+  // Tracks currently executing hook id (if any)
+  private readonly currentHookIdContext = new AsyncLocalStorage<string>();
+
   // Locking mechanism to prevent modifications after initialization
   #isLocked = false;
 
@@ -117,66 +125,87 @@ export class EventManager {
       }
     }
 
-    const allListeners = this.getCachedMergedListeners(eventDefinition.id);
+    // Detect re-entrant event cycles: same event id appearing in the current chain
+    const frame = { id: eventDefinition.id, source };
+    const currentStack = this.emissionStack.getStore();
+    if (currentStack) {
+      const cycleStart = currentStack.findIndex((f) => f.id === frame.id);
+      if (cycleStart !== -1) {
+        const top = currentStack[currentStack.length - 1];
+        const currentHookId = this.currentHookIdContext.getStore();
+        const safeReEmitBySameHook =
+          top.id === frame.id && currentHookId && currentHookId === source;
 
-    let propagationStopped = false;
-
-    const event: IEventEmission = {
-      id: eventDefinition.id,
-      data,
-      timestamp: new Date(),
-      source,
-      meta: eventDefinition.meta || {},
-      stopPropagation: () => {
-        propagationStopped = true;
-      },
-      isPropagationStopped: () => propagationStopped,
-      tags: eventDefinition.tags,
-    };
-
-    // Create the base emission function
-    const baseEmit = async (
-      eventToEmit: IEventEmission<any>,
-    ): Promise<void> => {
-      if (allListeners.length === 0) {
-        return;
-      }
-
-      const excludeFromGlobal = this.isExcludedFromGlobal(eventToEmit);
-
-      for (const listener of allListeners) {
-        if (propagationStopped) {
-          break;
-        }
-
-        // If this event is marked to be excluded from global listeners,
-        // we only allow non-global (event-specific) listeners to run.
-        // Global listeners are mixed into `allListeners` but flagged.
-        if (excludeFromGlobal && listener.isGlobal) {
-          continue;
-        }
-
-        if (!listener.filter || listener.filter(eventToEmit)) {
-          await listener.handler(eventToEmit);
+        if (!safeReEmitBySameHook) {
+          throw new EventCycleError([...currentStack.slice(cycleStart), frame]);
         }
       }
-    };
-
-    // Apply emission interceptors (last added runs first)
-    let emitWithInterceptors: (event: IEventEmission<any>) => Promise<void> =
-      baseEmit;
-
-    // Reverse the interceptors so the last added runs first
-    const reversedInterceptors = [...this.emissionInterceptors].reverse();
-
-    for (const interceptor of reversedInterceptors) {
-      const nextFunction = emitWithInterceptors;
-      emitWithInterceptors = async (eventToEmit: IEventEmission<any>) =>
-        interceptor(nextFunction, eventToEmit);
     }
 
-    // Execute the emission with interceptors
-    await emitWithInterceptors(event);
+    const nextStack = currentStack ? [...currentStack, frame] : [frame];
+
+    await this.emissionStack.run(nextStack, async () => {
+      const allListeners = this.getCachedMergedListeners(eventDefinition.id);
+
+      let propagationStopped = false;
+
+      const event: IEventEmission = {
+        id: eventDefinition.id,
+        data,
+        timestamp: new Date(),
+        source,
+        meta: eventDefinition.meta || {},
+        stopPropagation: () => {
+          propagationStopped = true;
+        },
+        isPropagationStopped: () => propagationStopped,
+        tags: eventDefinition.tags,
+      };
+
+      // Create the base emission function
+      const baseEmit = async (
+        eventToEmit: IEventEmission<any>,
+      ): Promise<void> => {
+        if (allListeners.length === 0) {
+          return;
+        }
+
+        const excludeFromGlobal = this.isExcludedFromGlobal(eventToEmit);
+
+        for (const listener of allListeners) {
+          if (propagationStopped) {
+            break;
+          }
+
+          // If this event is marked to be excluded from global listeners,
+          // we only allow non-global (event-specific) listeners to run.
+          // Global listeners are mixed into `allListeners` but flagged.
+          if (excludeFromGlobal && listener.isGlobal) {
+            continue;
+          }
+
+          if (!listener.filter || listener.filter(eventToEmit)) {
+            await listener.handler(eventToEmit);
+          }
+        }
+      };
+
+      // Apply emission interceptors (last added runs first)
+      let emitWithInterceptors: (event: IEventEmission<any>) => Promise<void> =
+        baseEmit;
+
+      // Reverse the interceptors so the last added runs first
+      const reversedInterceptors = [...this.emissionInterceptors].reverse();
+
+      for (const interceptor of reversedInterceptors) {
+        const nextFunction = emitWithInterceptors;
+        emitWithInterceptors = async (eventToEmit: IEventEmission<any>) =>
+          interceptor(nextFunction, eventToEmit);
+      }
+
+      // Execute the emission with interceptors
+      await emitWithInterceptors(event);
+    });
   }
 
   /**
@@ -324,8 +353,11 @@ export class EventManager {
       ) => interceptor(nextFunction, hookToExecute, eventForHook);
     }
 
-    // Execute the hook with interceptors
-    return await executeWithInterceptors(hook, event);
+    // Execute the hook with interceptors within current hook context
+    return await this.currentHookIdContext.run(
+      hook.id,
+      async () => await executeWithInterceptors(hook, event),
+    );
   }
 
   // ==================== PRIVATE METHODS ====================

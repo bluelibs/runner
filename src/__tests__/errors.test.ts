@@ -115,6 +115,30 @@ describe("Errors", () => {
     );
   });
 
+  it("should throw EventEmissionCycleError on A->B->A via hooks (dry-run)", async () => {
+    const A = defineEvent<void>({ id: "err.A" });
+    const B = defineEvent<void>({ id: "err.B" });
+
+    const h1 = defineHook({
+      id: "h1",
+      on: A,
+      dependencies: { B },
+      async run() {},
+    });
+    const h2 = defineHook({
+      id: "h2",
+      on: B,
+      dependencies: { A },
+      async run() {},
+    });
+
+    const app = defineResource({ id: "err.app", register: [A, B, h1, h2] });
+
+    await expect(run(app, { dryRun: true })).rejects.toThrow(
+      /Event emission cycles/i,
+    );
+  });
+
   it("should throw taskError", async () => {
     const errorTask = defineTask({
       id: "error.task",

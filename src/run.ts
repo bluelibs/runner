@@ -115,6 +115,8 @@ export async function run<C, V extends Promise<any>>(
     await store.processOverrides();
 
     store.validateDependencyGraph();
+    // Compile-time event emission cycle detection (cheap, graph-based)
+    store.validateEventEmissionGraph();
 
     if (dryRun) {
       await logger.debug("Dry run mode. Skipping initialization...");

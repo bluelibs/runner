@@ -15,6 +15,7 @@ import { globalEventsArray } from "../globals/globalEvents";
 import {
   CircularDependenciesError,
   StoreAlreadyInitializedError,
+  EventEmissionCycleError,
 } from "../errors";
 import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
@@ -216,6 +217,14 @@ export class Store {
     const circularDependencies = findCircularDependencies(dependentNodes);
     if (circularDependencies.cycles.length > 0) {
       throw new CircularDependenciesError(circularDependencies.cycles);
+    }
+  }
+
+  public validateEventEmissionGraph() {
+    const eventNodes = this.registry.buildEventEmissionGraph();
+    const circular = findCircularDependencies(eventNodes);
+    if (circular.cycles.length > 0) {
+      throw new EventEmissionCycleError(circular.cycles);
     }
   }
 

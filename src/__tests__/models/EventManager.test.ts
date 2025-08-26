@@ -7,6 +7,7 @@ import {
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
+import { EventCycleError } from "../../errors";
 
 describe("EventManager", () => {
   let eventManager: EventManager;
@@ -1098,4 +1099,57 @@ describe("EventManager", () => {
   });
 
   // Hook lifecycle events are no longer emitted by EventManager; related tests removed
+
+  describe("cycle detection", () => {
+    it("throws on direct self-cycle (A -> A)", async () => {
+      const A = defineEvent<string>({ id: "A" });
+      eventManager.addListener(A, async () => {
+        await eventManager.emit(A, "x", "listener-A");
+      });
+
+      await expect(eventManager.emit(A, "init", "test")).rejects.toBeInstanceOf(
+        EventCycleError,
+      );
+    });
+
+    it("throws on cross-cycle (A -> B -> A)", async () => {
+      const A = defineEvent<string>({ id: "A" });
+      const B = defineEvent<string>({ id: "B" });
+
+      eventManager.addListener(A, async () => {
+        await eventManager.emit(B, "x", "listener-A");
+      });
+      eventManager.addListener(B, async () => {
+        await eventManager.emit(A, "y", "listener-B");
+      });
+
+      await expect(eventManager.emit(A, "init", "test")).rejects.toBeInstanceOf(
+        EventCycleError,
+      );
+    });
+
+    it("allows acyclic chains (A -> B -> C)", async () => {
+      const calls: string[] = [];
+      const A = defineEvent<string>({ id: "A" });
+      const B = defineEvent<string>({ id: "B" });
+      const C = defineEvent<string>({ id: "C" });
+
+      eventManager.addListener(A, async () => {
+        calls.push("A");
+        await eventManager.emit(B, "x", "listener-A");
+      });
+      eventManager.addListener(B, async () => {
+        calls.push("B");
+        await eventManager.emit(C, "y", "listener-B");
+      });
+      eventManager.addListener(C, async () => {
+        calls.push("C");
+      });
+
+      await expect(
+        eventManager.emit(A, "init", "test"),
+      ).resolves.toBeUndefined();
+      expect(calls).toEqual(["A", "B", "C"]);
+    });
+  });
 });

@@ -154,3 +154,29 @@ export class ValidationError extends RuntimeError {
     this.name = "ValidationError";
   }
 }
+
+/**
+ * Error thrown when an event emission cycle is detected
+ */
+export class EventCycleError extends RuntimeError {
+  constructor(path: Array<{ id: string; source: string }>) {
+    const chain = path.map((p) => `${p.id}←${p.source}`).join("  ->  ");
+    super(
+      `Event emission cycle detected:\n  ${chain}\n\nBreak the cycle by changing hook logic (avoid mutual emits) or gate with conditions/tags.`,
+    );
+    this.name = "EventCycleError";
+  }
+}
+
+/**
+ * Error thrown when a compile-time event emission cycle is detected
+ */
+export class EventEmissionCycleError extends RuntimeError {
+  constructor(cycles: string[]) {
+    const list = cycles.map((c) => `  • ${c}`).join("\n");
+    super(
+      `Event emission cycles detected between hooks and events:\n${list}\n\nThis was detected at compile time (dry-run). Break the cycle by avoiding mutual emits between hooks or scoping hooks using tags.`,
+    );
+    this.name = "EventEmissionCycleError";
+  }
+}
