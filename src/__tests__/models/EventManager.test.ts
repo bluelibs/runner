@@ -14,7 +14,7 @@ describe("EventManager", () => {
   let eventDefinition: IEvent<string>;
 
   beforeEach(() => {
-    eventManager = new EventManager();
+    eventManager = new EventManager({ runtimeCycleDetection: true });
     eventDefinition = defineEvent<string>({ id: "testEvent" });
   });
 
@@ -351,6 +351,32 @@ describe("EventManager", () => {
 
     await eventManager.emit(eventDefinition, "allowed", "test");
     expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("should skip listener when listener id equals source", async () => {
+    const handler = jest.fn();
+
+    eventManager.addListener(eventDefinition, handler, { id: "self" } as any);
+
+    // When the source equals the listener id, the listener should be skipped
+    await eventManager.emit(eventDefinition, "data", "self");
+    expect(handler).not.toHaveBeenCalled();
+
+    // When source is different, it should be called
+    await eventManager.emit(eventDefinition, "data", "other");
+    expect(handler).toHaveBeenCalledTimes(1);
+  });
+
+  it("hasListeners returns false when only global listeners exist but event is tagged excludeFromGlobalHooks", () => {
+    const handler = jest.fn();
+    eventManager.addGlobalListener(handler);
+
+    const taggedEvent = defineEvent<string>({
+      id: "taggedForHas",
+      tags: [globalTags.excludeFromGlobalHooks],
+    });
+
+    expect(eventManager.hasListeners(taggedEvent)).toBe(false);
   });
 
   it("should handle emitting with no listeners", async () => {
@@ -942,6 +968,31 @@ describe("EventManager", () => {
       ).rejects.toThrow("boom");
       expect(mockHook.run).toHaveBeenCalled();
     });
+
+    it("executes hook directly when runtimeCycleDetection is false", async () => {
+      const em = new EventManager({ runtimeCycleDetection: false });
+      const mockHook = {
+        id: "noContextHook",
+        run: jest.fn().mockResolvedValue("ok-no-context"),
+      } as any;
+
+      const mockEvent = {
+        id: "evt",
+        data: "x",
+        timestamp: new Date(),
+        source: "s",
+        tags: [],
+      } as any;
+
+      const result = await em.executeHookWithInterceptors(
+        mockHook,
+        mockEvent,
+        {},
+      );
+
+      expect(result).toBe("ok-no-context");
+      expect(mockHook.run).toHaveBeenCalledWith(mockEvent, {});
+    });
   });
 
   describe("integration with emit", () => {
@@ -1020,6 +1071,22 @@ describe("EventManager", () => {
     expect(handlerGlobal).not.toHaveBeenCalled();
   });
 
+  it("should not call global listeners when event is tagged and has no event-specific listeners", async () => {
+    const handlerGlobal = jest.fn();
+    eventManager.addGlobalListener(handlerGlobal);
+
+    const taggedEvent = defineEvent<string>({
+      id: "taggedNoSpecific",
+      tags: [globalTags.excludeFromGlobalHooks],
+    });
+
+    // Emit should ignore global listeners for this tagged event
+    await eventManager.emit(taggedEvent, "data", "src");
+
+    expect(handlerGlobal).not.toHaveBeenCalled();
+    expect(eventManager.hasListeners(taggedEvent)).toBe(false);
+  });
+
   it("should still run emission interceptors for events tagged excludeFromGlobalHooks", async () => {
     const taggedEvent = defineEvent<string>({
       id: "observ.event",
@@ -1050,6 +1117,51 @@ describe("EventManager", () => {
       "event-listener",
       "interceptor-end",
     ]);
+  });
+
+  it("uses only event-specific listeners when excludeFromGlobal is set (avoids merging)", async () => {
+    const spy = jest.spyOn(eventManager as any, "getCachedMergedListeners");
+
+    const handlerEvent = jest.fn();
+    const handlerGlobal = jest.fn();
+
+    const taggedEvent = defineEvent<string>({
+      id: "taggedMergeCheck",
+      tags: [globalTags.excludeFromGlobalHooks],
+    });
+
+    eventManager.addListener(taggedEvent, handlerEvent);
+    eventManager.addGlobalListener(handlerGlobal);
+
+    await eventManager.emit(taggedEvent, "data", "src");
+
+    expect(handlerEvent).toHaveBeenCalledTimes(1);
+    expect(handlerGlobal).not.toHaveBeenCalled();
+    expect(spy).not.toHaveBeenCalled();
+
+    spy.mockRestore();
+  });
+
+  it("forces excludeFromGlobal branch by mocking isExcludedFromGlobal", async () => {
+    const isExcludedSpy = jest
+      .spyOn(eventManager as any, "isExcludedFromGlobal")
+      .mockReturnValue(true);
+    const cachedSpy = jest.spyOn(
+      eventManager as any,
+      "getCachedMergedListeners",
+    );
+
+    const handler = jest.fn();
+    eventManager.addListener(eventDefinition, handler);
+    eventManager.addGlobalListener(jest.fn());
+
+    await eventManager.emit(eventDefinition, "data", "src");
+
+    expect(isExcludedSpy).toHaveBeenCalled();
+    expect(cachedSpy).not.toHaveBeenCalled();
+
+    isExcludedSpy.mockRestore();
+    cachedSpy.mockRestore();
   });
 
   it("should still run hook interceptors for events tagged excludeFromGlobalHooks", async () => {
@@ -1101,6 +1213,41 @@ describe("EventManager", () => {
   // Hook lifecycle events are no longer emitted by EventManager; related tests removed
 
   describe("cycle detection", () => {
+    it("constructor default enables runtimeCycleDetection and throws on self-cycle", async () => {
+      const em = new EventManager();
+      const A = defineEvent<string>({ id: "A_default" });
+      em.addListener(A, async () => {
+        await em.emit(A, "x", "listener-A");
+      });
+
+      await expect(em.emit(A, "init", "test")).rejects.toBeInstanceOf(
+        EventCycleError,
+      );
+    });
+
+    it("safe re-emit by same hook does not throw", async () => {
+      const em = new EventManager({ runtimeCycleDetection: true });
+      const A = defineEvent<string>({ id: "A_hook" });
+
+      const hook = {
+        id: "hook-1",
+        run: async (event: any) => {
+          // only re-emit once for the initial event to avoid infinite recursion
+          if (event && event.data === "start") {
+            await em.emit(A, "from-hook", "hook-1");
+          }
+          return undefined;
+        },
+      } as any;
+
+      em.addListener(A, async (event) => {
+        // Execute hook within currentHookIdContext via executeHookWithInterceptors
+        await em.executeHookWithInterceptors(hook, event, {} as any);
+      });
+
+      // Initial emit should not throw because re-emit is from the same hook id
+      await expect(em.emit(A, "start", "origin")).resolves.toBeUndefined();
+    });
     it("throws on direct self-cycle (A -> A)", async () => {
       const A = defineEvent<string>({ id: "A" });
       eventManager.addListener(A, async () => {
@@ -1150,6 +1297,32 @@ describe("EventManager", () => {
         eventManager.emit(A, "init", "test"),
       ).resolves.toBeUndefined();
       expect(calls).toEqual(["A", "B", "C"]);
+    });
+
+    it("does not throw when runtimeCycleDetection is false (A -> B -> A)", async () => {
+      const calls: string[] = [];
+      const max = 2;
+      const A = defineEvent<{ count: number }>({ id: "A_disabled" });
+      const B = defineEvent<{ count: number }>({ id: "B_disabled" });
+
+      const em = new EventManager({ runtimeCycleDetection: false });
+
+      em.addListener(A, async (event) => {
+        calls.push("A");
+        if (event.data.count < max) {
+          await em.emit(B, { count: event.data.count + 1 }, "listener-A");
+        }
+      });
+
+      em.addListener(B, async (event) => {
+        calls.push("B");
+        if (event.data.count < max) {
+          await em.emit(A, { count: event.data.count + 1 }, "listener-B");
+        }
+      });
+
+      await expect(em.emit(A, { count: 0 }, "test")).resolves.toBeUndefined();
+      expect(calls).toEqual(["A", "B", "A"]);
     });
   });
 });

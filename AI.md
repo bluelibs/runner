@@ -100,6 +100,9 @@ const internal = event({
   id: "app.events.internal",
   tags: [globals.tags.excludeFromGlobalHooks],
 });
+
+// Performance: runtime event emission cycle detection
+// run(app, { runtimeCycleDetection: true }) // To prevent deadlocks from happening.
 ```
 
 ### Multiple Events per Hook

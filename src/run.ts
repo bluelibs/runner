@@ -42,6 +42,7 @@ export async function run<C, V extends Promise<any>>(
     shutdownHooks = true,
     dryRun = false,
     onUnhandledError: onUnhandledErrorOpt,
+    runtimeCycleDetection = true,
   } = options || {};
 
   const {
@@ -50,7 +51,10 @@ export async function run<C, V extends Promise<any>>(
     bufferLogs = false,
   } = logs;
 
-  const eventManager = new EventManager();
+  const eventManager = new EventManager({
+    runtimeCycleDetection,
+  });
+
   let { resource, config } = extractResourceAndConfig(
     resourceOrResourceWithConfig,
   );

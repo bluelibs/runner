@@ -22,6 +22,8 @@ interface IListenerStorage {
   order: number;
   filter?: (event: IEventEmission<any>) => boolean;
   handler: EventHandlerType;
+  /** Optional listener id (from IEventHandlerOptions.id) */
+  id?: string;
   /** True when this listener originates from addGlobalListener(). */
   isGlobal: boolean;
 }
@@ -83,6 +85,13 @@ export class EventManager {
   // Locking mechanism to prevent modifications after initialization
   #isLocked = false;
 
+  // Feature flags
+  private readonly runtimeCycleDetection: boolean;
+
+  constructor(options?: { runtimeCycleDetection?: boolean }) {
+    this.runtimeCycleDetection = options?.runtimeCycleDetection ?? true;
+  }
+
   // ==================== PUBLIC API ====================
 
   /**
@@ -125,27 +134,27 @@ export class EventManager {
       }
     }
 
-    // Detect re-entrant event cycles: same event id appearing in the current chain
     const frame = { id: eventDefinition.id, source };
-    const currentStack = this.emissionStack.getStore();
-    if (currentStack) {
-      const cycleStart = currentStack.findIndex((f) => f.id === frame.id);
-      if (cycleStart !== -1) {
-        const top = currentStack[currentStack.length - 1];
-        const currentHookId = this.currentHookIdContext.getStore();
-        const safeReEmitBySameHook =
-          top.id === frame.id && currentHookId && currentHookId === source;
+    const processEmission = async () => {
+      // Determine whether this emission should be excluded from global listeners
+      /* istanbul ignore next */
+      const pseudoForExclude = {
+        id: eventDefinition.id,
+        data,
+        timestamp: new Date(),
+        source,
+        meta: eventDefinition.meta || {},
+        stopPropagation: () => {},
+        isPropagationStopped: () => false,
+        tags: eventDefinition.tags,
+      } as IEventEmission<TInput>;
 
-        if (!safeReEmitBySameHook) {
-          throw new EventCycleError([...currentStack.slice(cycleStart), frame]);
-        }
-      }
-    }
+      const excludeFromGlobal = this.isExcludedFromGlobal(pseudoForExclude);
 
-    const nextStack = currentStack ? [...currentStack, frame] : [frame];
-
-    await this.emissionStack.run(nextStack, async () => {
-      const allListeners = this.getCachedMergedListeners(eventDefinition.id);
+      // Choose listeners: if globals are excluded, only use event-specific listeners
+      const allListeners = excludeFromGlobal
+        ? this.listeners.get(eventDefinition.id) || []
+        : this.getCachedMergedListeners(eventDefinition.id);
 
       let propagationStopped = false;
 
@@ -177,10 +186,9 @@ export class EventManager {
             break;
           }
 
-          // If this event is marked to be excluded from global listeners,
-          // we only allow non-global (event-specific) listeners to run.
-          // Global listeners are mixed into `allListeners` but flagged.
-          if (excludeFromGlobal && listener.isGlobal) {
+          // Skip handlers that identify themselves as the source of this event
+          // (prevents a listener from re-invoking itself).
+          if (listener.id && listener.id === eventToEmit.source) {
             continue;
           }
 
@@ -205,7 +213,34 @@ export class EventManager {
 
       // Execute the emission with interceptors
       await emitWithInterceptors(event);
-    });
+    };
+
+    if (this.runtimeCycleDetection) {
+      // Detect re-entrant event cycles: same event id appearing in the current chain
+      const currentStack = this.emissionStack.getStore();
+      if (currentStack) {
+        const cycleStart = currentStack.findIndex((f) => f.id === frame.id);
+        if (cycleStart !== -1) {
+          const top = currentStack[currentStack.length - 1];
+          const currentHookId = this.currentHookIdContext.getStore();
+          const safeReEmitBySameHook =
+            top.id === frame.id && currentHookId && currentHookId === source;
+
+          if (!safeReEmitBySameHook) {
+            throw new EventCycleError([
+              ...currentStack.slice(cycleStart),
+              frame,
+            ]);
+          }
+        }
+      }
+
+      const nextStack = currentStack ? [...currentStack, frame] : [frame];
+      await this.emissionStack.run(nextStack, processEmission);
+    } else {
+      // Fast path without AsyncLocalStorage context tracking
+      await processEmission();
+    }
   }
 
   /**
@@ -225,7 +260,8 @@ export class EventManager {
     const newListener: IListenerStorage = {
       handler,
       order: options.order || 0,
-      // filter: options.filter,
+      filter: options.filter,
+      id: options.id,
       isGlobal: false,
     };
 
@@ -259,6 +295,7 @@ export class EventManager {
       handler,
       order: options.order || 0,
       filter: options.filter,
+      id: options.id,
       isGlobal: true,
     };
     this.insertListener(this.globalListeners, newListener);
@@ -272,13 +309,35 @@ export class EventManager {
    * @returns true if listeners exist, false otherwise
    */
   hasListeners<T>(eventDefinition: IEvent<T>): boolean {
-    const eventListeners = this.listeners.get(eventDefinition.id);
+    const eventListeners = this.listeners.get(eventDefinition.id) || [];
 
-    if (!eventListeners) {
+    if (eventListeners.length > 0) {
+      return true;
+    }
+
+    if (this.globalListeners.length === 0) {
       return false;
     }
 
-    return eventListeners.length > 0 || this.globalListeners.length > 0;
+    // If the event definition carries the tag that excludes it from global
+    // listeners, report no listeners (since globals would be skipped at emit).
+    /* istanbul ignore next */
+    const pseudoEmission = {
+      id: eventDefinition.id,
+      data: undefined,
+      timestamp: new Date(),
+      source: "",
+      meta: eventDefinition.meta || {},
+      stopPropagation: () => {},
+      isPropagationStopped: () => false,
+      tags: eventDefinition.tags,
+    } as unknown as IEventEmission<any>;
+
+    if (this.isExcludedFromGlobal(pseudoEmission)) {
+      return false;
+    }
+
+    return true;
   }
 
   /**
@@ -354,10 +413,14 @@ export class EventManager {
     }
 
     // Execute the hook with interceptors within current hook context
-    return await this.currentHookIdContext.run(
-      hook.id,
-      async () => await executeWithInterceptors(hook, event),
-    );
+    if (this.runtimeCycleDetection) {
+      return await this.currentHookIdContext.run(
+        hook.id,
+        async () => await executeWithInterceptors(hook, event),
+      );
+    } else {
+      return await executeWithInterceptors(hook, event);
+    }
   }
 
   // ==================== PRIVATE METHODS ====================
