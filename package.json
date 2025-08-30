@@ -39,6 +39,7 @@
     "prettier": "^2.0.5",
     "reflect-metadata": "^0.2.2",
     "source-map-support": "^0.5.13",
+    "tailwindcss": "^4.1.12",
     "ts-jest": "^29.0.0",
     "typedoc": "^0.26.7",
     "typedoc-material-theme": "^1.1.0",
