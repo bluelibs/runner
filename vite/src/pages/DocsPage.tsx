@@ -1,4 +1,4 @@
-import { Book, Zap, Shield, Timer, Activity, Eye, HardDrive, RotateCcw, Clock, BarChart3, TrendingUp } from "lucide-react";
+import { Book, Zap, Shield, Timer } from "lucide-react";
 import DocsLayout from "../components/docs/DocsLayout";
 import ConceptCard from "../components/docs/ConceptCard";
 import { allDocSections, conceptIcons } from "../data/documentation";
@@ -32,10 +32,15 @@ const DocsPage: React.FC = () => {
               When to use tasks:
             </h4>
             <ul className="space-y-2 text-gray-600 dark:text-gray-300">
-              <li>• High-level business actions: "app.user.register", "app.order.process"</li>
+              <li>
+                • High-level business actions: "app.user.register",
+                "app.order.process"
+              </li>
               <li>• Operations that need middleware (auth, caching, retry)</li>
               <li>• Functions called from multiple places</li>
-              <li>• Complex operations that benefit from dependency injection</li>
+              <li>
+                • Complex operations that benefit from dependency injection
+              </li>
             </ul>
           </div>
         </ConceptCard>
@@ -92,7 +97,8 @@ const DocsPage: React.FC = () => {
             Interceptors
           </h3>
           <p className="text-gray-600 dark:text-gray-300 mb-6">
-            Dynamic task behavior modification at runtime. Perfect for debugging, metrics, or conditional logic.
+            Dynamic task behavior modification at runtime. Perfect for
+            debugging, metrics, or conditional logic.
           </p>
         </div>
 
@@ -101,7 +107,8 @@ const DocsPage: React.FC = () => {
             Optional Dependencies
           </h3>
           <p className="text-gray-600 dark:text-gray-300 mb-6">
-            Graceful degradation patterns when dependencies aren't available. Build resilient systems that adapt to missing services.
+            Graceful degradation patterns when dependencies aren't available.
+            Build resilient systems that adapt to missing services.
           </p>
         </div>
 
@@ -110,7 +117,8 @@ const DocsPage: React.FC = () => {
             Task Hooks
           </h3>
           <p className="text-gray-600 dark:text-gray-300 mb-6">
-            Lifecycle event handling for tasks. React to task execution events with custom logic.
+            Lifecycle event handling for tasks. React to task execution events
+            with custom logic.
           </p>
         </div>
       </section>
@@ -188,7 +196,8 @@ const DocsPage: React.FC = () => {
             Monitoring
           </h3>
           <p className="text-gray-600 dark:text-gray-300 mb-6">
-            Built-in performance monitoring with metrics collection and debugging tools.
+            Built-in performance monitoring with metrics collection and
+            debugging tools.
           </p>
         </div>
 
@@ -197,7 +206,8 @@ const DocsPage: React.FC = () => {
             Memory Management
           </h3>
           <p className="text-gray-600 dark:text-gray-300 mb-6">
-            Automatic resource lifecycle management with proper cleanup and garbage collection optimization.
+            Automatic resource lifecycle management with proper cleanup and
+            garbage collection optimization.
           </p>
         </div>
       </section>
