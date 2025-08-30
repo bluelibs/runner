@@ -373,17 +373,43 @@ Access denied: Unauthorized: User not authenticated
                   <button
                     key={key}
                     onClick={() => setSelectedExample(key)}
-                    className={`w-full text-left p-3 rounded-lg transition-colors duration-200 ${
-                      selectedExample === key
-                        ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-900 dark:text-blue-100'
-                        : 'hover:bg-gray-100/50 dark:hover:bg-gray-700/50 text-gray-700 dark:text-gray-300'
-                    }`}
+                    className="w-full text-left p-3 rounded-lg transition-all duration-200 border"
+                    style={{
+                      backgroundColor: selectedExample === key 
+                        ? 'rgb(30 64 175)' // blue-800
+                        : 'transparent',
+                      color: selectedExample === key 
+                        ? 'white' 
+                        : 'rgb(229 231 235)', // gray-200 
+                      borderColor: selectedExample === key 
+                        ? 'rgb(59 130 246)' // blue-500
+                        : 'transparent'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedExample !== key) {
+                        e.currentTarget.style.backgroundColor = 'rgb(55 65 81)'; // gray-700
+                        e.currentTarget.style.borderColor = 'rgb(107 114 128)'; // gray-500
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedExample !== key) {
+                        e.currentTarget.style.backgroundColor = 'transparent';
+                        e.currentTarget.style.borderColor = 'transparent';
+                      }
+                    }}
                   >
                     <div className="flex items-center space-x-3 mb-2">
                       <example.icon className="w-4 h-4 flex-shrink-0" />
                       <span className="font-medium">{example.title}</span>
                     </div>
-                    <p className="text-xs text-gray-600 dark:text-gray-400">
+                    <p 
+                      className="text-xs"
+                      style={{
+                        color: selectedExample === key 
+                          ? 'rgb(229 231 235)' // gray-200
+                          : 'rgb(209 213 219)' // gray-300
+                      }}
+                    >
                       {example.description}
                     </p>
                   </button>

@@ -128,7 +128,7 @@ const { dispose } = await run(app);`,
               
               {/* Connecting line for non-last steps */}
               {index < steps.length - 1 && (
-                <div className="absolute left-4 top-8 w-0.5 h-12 bg-gray-300 dark:bg-gray-600"></div>
+                <div className="absolute left-4 top-12 w-0.5 h-8 bg-gray-300 dark:bg-gray-600"></div>
               )}
             </div>
           ))}

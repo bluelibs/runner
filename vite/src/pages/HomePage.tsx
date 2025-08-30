@@ -1,12 +1,12 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { 
-  ArrowRight, 
-  Zap, 
-  Shield, 
-  Code, 
-  Gauge, 
-  Users, 
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import {
+  ArrowRight,
+  Zap,
+  Shield,
+  Code,
+  Gauge,
+  Users,
   Check,
   Play,
   GitBranch,
@@ -16,9 +16,9 @@ import {
   Star,
   TrendingUp,
   Timer,
-  Award
-} from 'lucide-react';
-import CodeBlock from '../components/CodeBlock';
+  Award,
+} from "lucide-react";
+import CodeBlock from "../components/CodeBlock";
 
 const HomePage: React.FC = () => {
   const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
@@ -26,20 +26,22 @@ const HomePage: React.FC = () => {
   const features = [
     {
       icon: Code,
-      title: 'Tasks are Functions',
-      description: 'Not classes with 47 methods you swear you\'ll refactor. Pure, testable, composable functions with superpowers.',
+      title: "Tasks are Functions",
+      description:
+        "Not classes with 47 methods you swear you'll refactor. Pure, testable, composable functions with superpowers.",
       example: `const sendEmail = task({
   id: "app.tasks.sendEmail",
   dependencies: { emailService },
   run: async ({ to, subject, body }) => {
     return await emailService.send({ to, subject, body });
   }
-});`
+});`,
     },
     {
       icon: Database,
-      title: 'Resources are Singletons',
-      description: 'Database connections, configs, services - the usual suspects. Initialize once, use everywhere.',
+      title: "Resources are Singletons",
+      description:
+        "Database connections, configs, services - the usual suspects. Initialize once, use everywhere.",
       example: `const database = resource({
   id: "app.db",
   init: async () => {
@@ -48,38 +50,56 @@ const HomePage: React.FC = () => {
     return client;
   },
   dispose: async (client) => await client.close()
-});`
+});`,
     },
     {
       icon: MessageSquare,
-      title: 'Events are Just Events',
-      description: 'Revolutionary concept, we know. Loose coupling without the tight coupling headaches.',
+      title: "Events are Just Events",
+      description:
+        "Revolutionary concept, we know. Loose coupling without the tight coupling headaches.",
       example: `const userRegistered = event<{ userId: string }>({
   id: "app.events.userRegistered"
 });
 
 // Emit events
-await userRegistered({ userId: "123" });`
+await userRegistered({ userId: "123" });`,
     },
     {
       icon: Settings,
-      title: 'Middleware with Power',
-      description: 'Cross-cutting concerns with full lifecycle interception. Like onions, but useful.',
+      title: "Middleware with Power",
+      description:
+        "Cross-cutting concerns with full lifecycle interception. Like onions, but useful.",
       example: `const authMiddleware = taskMiddleware({
   id: "app.middleware.auth",
   run: async ({ task, next }) => {
     // Auth logic here
     return await next(task.input);
   }
-});`
-    }
+});`,
+    },
   ];
 
   const benchmarks = [
-    { label: 'Basic Task Execution', value: '2.2M tasks/sec', color: 'from-green-400 to-blue-500' },
-    { label: 'With 5 Middlewares', value: '244K tasks/sec', color: 'from-blue-400 to-purple-500' },
-    { label: 'Event Handling', value: '246K events/sec', color: 'from-purple-400 to-pink-500' },
-    { label: 'Resource Init', value: '59.7K resources/sec', color: 'from-pink-400 to-red-500' }
+    {
+      label: "Basic Task Execution",
+      value: "2.2M tasks/sec",
+      color: "from-green-400 to-blue-500",
+    },
+    {
+      label: "With 5 Middlewares",
+      value: "244K tasks/sec",
+      color: "from-blue-400 to-purple-500",
+    },
+    {
+      label: "Event Handling",
+      value: "246K events/sec",
+      color: "from-purple-400 to-pink-500",
+    },
+    {
+      label: "Resource Init",
+      value: "59.7K resources/sec",
+      color: "from-pink-400 to-red-500",
+    },
   ];
 
   return (
@@ -88,27 +108,35 @@ await userRegistered({ userId: "123" });`
       <section className="min-h-screen flex items-center justify-center relative overflow-hidden">
         {/* Background Effects */}
         <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-purple-50/30 to-pink-50/50 dark:from-blue-950/50 dark:via-purple-950/30 dark:to-pink-950/50"></div>
-        
+
         {/* Animated Background Elements */}
         <div className="absolute inset-0 overflow-hidden">
           <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-r from-blue-400/20 to-purple-400/20 rounded-full blur-3xl animate-pulse-slow"></div>
-          <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-r from-purple-400/20 to-pink-400/20 rounded-full blur-3xl animate-pulse-slow" style={{ animationDelay: '1s' }}></div>
+          <div
+            className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-r from-purple-400/20 to-pink-400/20 rounded-full blur-3xl animate-pulse-slow"
+            style={{ animationDelay: "1s" }}
+          ></div>
         </div>
 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="text-center">
-            <div className="mb-8">
-              <div className="inline-flex items-center px-4 py-2 rounded-full bg-blue-100/50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-sm font-medium mb-4">
+            <div className="mb-8 mt-20">
+              {/* <div className="inline-flex items-center px-4 py-2 rounded-full bg-blue-100/50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-sm font-medium mb-4">
                 <Star className="w-4 h-4 mr-2" />
                 TypeScript-First Framework
-              </div>
+              </div> */}
               <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold text-gray-900 dark:text-white mb-6">
                 <span className="block">Stop Worrying and</span>
                 <span className="gradient-text">Love Dependency Injection</span>
               </h1>
               <p className="text-xl sm:text-2xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto mb-8 leading-relaxed">
-                BlueLibs Runner is the anti-framework framework. It gets out of your way and lets you build stuff that actually works. 
-                <strong className="text-gray-900 dark:text-white"> No magic, no surprises</strong>, just elegant code.
+                BlueLibs Runner is the anti-framework framework. It gets out of
+                your way and lets you build stuff that actually works.
+                <strong className="text-gray-900 dark:text-white">
+                  {" "}
+                  No magic, no surprises
+                </strong>
+                , just elegant code.
               </p>
             </div>
 
@@ -127,20 +155,36 @@ await userRegistered({ userId: "123" });`
             {/* Quick Stats */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-16">
               <div className="text-center">
-                <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">2.2M</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Tasks/sec</div>
+                <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
+                  2.2M
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Tasks/sec
+                </div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-green-600 dark:text-green-400">100%</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Test Coverage</div>
+                <div className="text-3xl font-bold text-green-600 dark:text-green-400">
+                  100%
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Test Coverage
+                </div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">0ms</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">Magic Overhead</div>
+                <div className="text-3xl font-bold text-purple-600 dark:text-purple-400">
+                  0ms
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  Magic Overhead
+                </div>
               </div>
               <div className="text-center">
-                <div className="text-3xl font-bold text-pink-600 dark:text-pink-400">1.2k</div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">GitHub Stars</div>
+                <div className="text-3xl font-bold text-pink-600 dark:text-pink-400">
+                  1.2k
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  GitHub Stars
+                </div>
               </div>
             </div>
 
@@ -149,7 +193,9 @@ await userRegistered({ userId: "123" });`
               <div className="card p-6">
                 <div className="text-left">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Quick Example</h3>
+                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                      Quick Example
+                    </h3>
                     <div className="flex space-x-2">
                       <div className="w-3 h-3 bg-red-500 rounded-full"></div>
                       <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
@@ -157,7 +203,7 @@ await userRegistered({ userId: "123" });`
                     </div>
                   </div>
                   <CodeBlock>
-{`import { resource, task, run } from "@bluelibs/runner";
+                    {`import { resource, task, run } from "@bluelibs/runner";
 
 const server = resource({
   id: "app.server",
@@ -194,8 +240,9 @@ const { dispose } = await run(app);`}
               The Big Four
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-              Understanding these four concepts is key to using Runner effectively. 
-              They're not just buzzwords – they're the building blocks of maintainable applications.
+              Understanding these four concepts is key to using Runner
+              effectively. They're not just buzzwords – they're the building
+              blocks of maintainable applications.
             </p>
           </div>
 
@@ -204,7 +251,7 @@ const { dispose } = await run(app);`}
               <div
                 key={index}
                 className={`card p-8 cursor-pointer transition-all duration-300 ${
-                  hoveredFeature === index ? 'scale-105 shadow-2xl' : ''
+                  hoveredFeature === index ? "scale-105 shadow-2xl" : ""
                 }`}
                 onMouseEnter={() => setHoveredFeature(index)}
                 onMouseLeave={() => setHoveredFeature(null)}
@@ -242,15 +289,18 @@ const { dispose } = await run(app);`}
               Built for Performance
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-              Real benchmarks from our comprehensive test suite. These aren't marketing numbers – 
-              they're what you'll actually see in production.
+              Real benchmarks from our comprehensive test suite. These aren't
+              marketing numbers – they're what you'll actually see in
+              production.
             </p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
             {benchmarks.map((benchmark, index) => (
               <div key={index} className="card p-6 text-center">
-                <div className={`w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r ${benchmark.color} flex items-center justify-center`}>
+                <div
+                  className={`w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-r ${benchmark.color} flex items-center justify-center`}
+                >
                   <TrendingUp className="w-8 h-8 text-white" />
                 </div>
                 <div className="text-2xl font-bold text-gray-900 dark:text-white mb-2">
@@ -282,17 +332,19 @@ const { dispose } = await run(app);`}
               </h2>
               <div className="space-y-6">
                 {[
-                  'No magic, no surprises - explicit beats implicit',
-                  'TypeScript-first with zero compromise on type safety',
-                  'High performance - 2.2M+ tasks per second',
-                  'Enterprise ready with graceful shutdown, error boundaries',
-                  'Comprehensive logging, caching, and retry mechanisms',
-                  'Functional programming with simple dependency injection',
-                  '100% test coverage - because quality matters'
+                  "No magic, no surprises - explicit beats implicit",
+                  "TypeScript-first with zero compromise on type safety",
+                  "High performance - 2.2M+ tasks per second",
+                  "Enterprise ready with graceful shutdown, error boundaries",
+                  "Comprehensive logging, caching, and retry mechanisms",
+                  "Functional programming with simple dependency injection",
+                  "100% test coverage - because quality matters",
                 ].map((feature, index) => (
                   <div key={index} className="flex items-start space-x-3">
                     <Check className="w-6 h-6 text-green-500 flex-shrink-0 mt-0.5" />
-                    <span className="text-gray-600 dark:text-gray-300">{feature}</span>
+                    <span className="text-gray-600 dark:text-gray-300">
+                      {feature}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -304,16 +356,23 @@ const { dispose } = await run(app);`}
               </div>
             </div>
             <div className="card p-8">
-              <div className="text-gray-500 dark:text-gray-400 text-sm mb-4">What developers are saying:</div>
+              <div className="text-gray-500 dark:text-gray-400 text-sm mb-4">
+                What developers are saying:
+              </div>
               <blockquote className="text-lg text-gray-900 dark:text-white mb-4">
-                "Finally, a framework that doesn't make me question my life choices at 3am. 
-                Runner gets out of my way and lets me build actual features."
+                "Finally, a framework that doesn't make me question my life
+                choices at 3am. Runner gets out of my way and lets me build
+                actual features."
               </blockquote>
               <div className="flex items-center space-x-2">
                 <div className="w-8 h-8 bg-gray-300 rounded-full"></div>
                 <div>
-                  <div className="font-medium text-gray-900 dark:text-white">Alex Chen</div>
-                  <div className="text-sm text-gray-500 dark:text-gray-400">Senior Developer</div>
+                  <div className="font-medium text-gray-900 dark:text-white">
+                    Alex Chen
+                  </div>
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    Senior Developer
+                  </div>
                 </div>
               </div>
             </div>
@@ -328,17 +387,17 @@ const { dispose } = await run(app);`}
             Ready to Stop Worrying?
           </h2>
           <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
-            Join thousands of developers who've already made the switch to cleaner, 
-            more maintainable TypeScript applications.
+            Join thousands of developers who've already made the switch to
+            cleaner, more maintainable TypeScript applications.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link to="/quick-start" className="btn-primary text-lg px-8 py-4">
               <Zap className="w-6 h-6 mr-2" />
               Get Started Now
             </Link>
-            <a 
-              href="https://github.com/bluelibs/runner" 
-              target="_blank" 
+            <a
+              href="https://github.com/bluelibs/runner"
+              target="_blank"
               rel="noopener noreferrer"
               className="btn-secondary text-lg px-8 py-4"
             >
