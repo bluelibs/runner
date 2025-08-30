@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Book, 
   Code, 
@@ -10,12 +10,38 @@ import {
   Timer,
   Search,
   ChevronRight,
-  ChevronDown
+  ChevronDown,
+  Activity,
+  Lock,
+  RotateCcw,
+  Clock,
+  BarChart3,
+  TrendingUp,
+  Eye,
+  HardDrive
 } from 'lucide-react';
 
 const DocsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['core-concepts']));
+
+  useEffect(() => {
+    // Add smooth scrolling behavior
+    const handleSmoothScroll = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'A' && target.getAttribute('href')?.startsWith('#')) {
+        e.preventDefault();
+        const id = target.getAttribute('href')?.slice(1);
+        const element = document.getElementById(id!);
+        if (element) {
+          element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+      }
+    };
+
+    document.addEventListener('click', handleSmoothScroll);
+    return () => document.removeEventListener('click', handleSmoothScroll);
+  }, []);
 
   const toggleSection = (sectionId: string) => {
     const newExpanded = new Set(expandedSections);
@@ -324,6 +350,172 @@ const adminTask = task({
                     <code>{conceptExamples.middleware}</code>
                   </pre>
                 </div>
+              </div>
+            </section>
+
+            {/* Advanced Features */}
+            <section id="advanced" className="scroll-mt-24">
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-8 flex items-center">
+                <Zap className="w-8 h-8 mr-3" />
+                Advanced Features
+              </h2>
+              
+              <div id="context" className="card p-8 mb-8 scroll-mt-24">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-10 h-10 bg-gradient-to-r from-indigo-500 to-purple-600 rounded-lg flex items-center justify-center">
+                    <Activity className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Context</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Request-scoped data without prop drilling. Pass data through the execution chain without explicitly threading it through every function call.
+                </p>
+                <div className="bg-gray-900 dark:bg-gray-800 rounded-lg p-4 overflow-x-auto">
+                  <pre className="text-green-400 text-sm">
+                    <code>{`const requestContext = context<{ userId: string; traceId: string }>({
+  id: "app.context.request"
+});
+
+const authMiddleware = taskMiddleware({
+  id: "app.middleware.auth",
+  run: async ({ task, next, context }) => {
+    const token = task.input.headers.authorization;
+    const user = await verifyToken(token);
+    
+    // Set context for downstream tasks
+    context.set(requestContext, { 
+      userId: user.id, 
+      traceId: generateTraceId() 
+    });
+    
+    return await next(task.input);
+  },
+});`}</code>
+                  </pre>
+                </div>
+              </div>
+
+              <div id="interceptors" className="card p-8 mb-8 scroll-mt-24">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Interceptors</h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Dynamic task behavior modification at runtime. Perfect for debugging, metrics, or conditional logic.
+                </p>
+              </div>
+
+              <div id="optional-deps" className="card p-8 mb-8 scroll-mt-24">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Optional Dependencies</h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Graceful degradation patterns when dependencies aren't available. Build resilient systems that adapt to missing services.
+                </p>
+              </div>
+
+              <div id="task-hooks" className="card p-8 scroll-mt-24">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Task Hooks</h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Lifecycle event handling for tasks. React to task execution events with custom logic.
+                </p>
+              </div>
+            </section>
+
+            {/* Enterprise Features */}
+            <section id="enterprise" className="scroll-mt-24">
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-8 flex items-center">
+                <Shield className="w-8 h-8 mr-3" />
+                Enterprise Features
+              </h2>
+              
+              <div id="logging" className="card p-8 mb-8 scroll-mt-24">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-teal-600 rounded-lg flex items-center justify-center">
+                    <Eye className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Logging</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Structured logging with automatic context injection. Every log entry includes execution context, timing, and metadata.
+                </p>
+              </div>
+
+              <div id="caching" className="card p-8 mb-8 scroll-mt-24">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-cyan-600 rounded-lg flex items-center justify-center">
+                    <HardDrive className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Caching</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Built-in LRU and custom cache providers. Automatic cache invalidation and warming strategies.
+                </p>
+              </div>
+
+              <div id="retries" className="card p-8 mb-8 scroll-mt-24">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-red-600 rounded-lg flex items-center justify-center">
+                    <RotateCcw className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Retries</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Automatic retry with exponential backoff, jitter, and circuit breaker patterns for resilient operations.
+                </p>
+              </div>
+
+              <div id="timeouts" className="card p-8 scroll-mt-24">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-10 h-10 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
+                    <Clock className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Timeouts</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Operation timeout management with graceful degradation and cleanup handlers.
+                </p>
+              </div>
+            </section>
+
+            {/* Performance */}
+            <section id="performance" className="scroll-mt-24">
+              <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-8 flex items-center">
+                <Timer className="w-8 h-8 mr-3" />
+                Performance
+              </h2>
+              
+              <div id="benchmarks" className="card p-8 mb-8 scroll-mt-24">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-10 h-10 bg-gradient-to-r from-emerald-500 to-green-600 rounded-lg flex items-center justify-center">
+                    <BarChart3 className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Benchmarks</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Real-world performance metrics showing 2.2M+ tasks per second with full middleware stack.
+                </p>
+              </div>
+
+              <div id="optimization" className="card p-8 mb-8 scroll-mt-24">
+                <div className="flex items-center space-x-3 mb-6">
+                  <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg flex items-center justify-center">
+                    <TrendingUp className="w-5 h-5 text-white" />
+                  </div>
+                  <h3 className="text-2xl font-bold text-gray-900 dark:text-white">Optimization</h3>
+                </div>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Best practices for high-performance applications: dependency tree optimization, lazy loading, and efficient resource management.
+                </p>
+              </div>
+
+              <div id="monitoring" className="card p-8 mb-8 scroll-mt-24">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Monitoring</h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Built-in performance monitoring with metrics collection and debugging tools.
+                </p>
+              </div>
+
+              <div id="memory" className="card p-8 scroll-mt-24">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">Memory Management</h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-6">
+                  Automatic resource lifecycle management with proper cleanup and garbage collection optimization.
+                </p>
               </div>
             </section>
 
