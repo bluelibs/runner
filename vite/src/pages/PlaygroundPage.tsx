@@ -11,6 +11,7 @@ import {
   Terminal,
   Lightbulb
 } from 'lucide-react';
+import CodeBlock from '../components/CodeBlock';
 
 const PlaygroundPage: React.FC = () => {
   const [selectedExample, setSelectedExample] = useState('basic-task');
@@ -460,11 +461,9 @@ Access denied: Unauthorized: User not authenticated
                   {isRunning ? 'Running...' : 'Run Code'}
                 </button>
               </div>
-              <div className="bg-gray-900 dark:bg-gray-800 rounded-lg p-4 overflow-x-auto">
-                <pre className="text-green-400 text-sm font-mono">
-                  <code>{currentExample.code}</code>
-                </pre>
-              </div>
+              <CodeBlock>
+                {currentExample.code}
+              </CodeBlock>
             </div>
 
             {/* Output */}

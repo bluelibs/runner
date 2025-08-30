@@ -18,6 +18,7 @@ import {
   Timer,
   Award
 } from 'lucide-react';
+import CodeBlock from '../components/CodeBlock';
 
 const HomePage: React.FC = () => {
   const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
@@ -155,7 +156,7 @@ await userRegistered({ userId: "123" });`
                       <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                     </div>
                   </div>
-                  <pre className="code-block text-sm">
+                  <CodeBlock>
 {`import { resource, task, run } from "@bluelibs/runner";
 
 const server = resource({
@@ -177,7 +178,7 @@ const createUser = task({
 
 // That's it. Clean, simple, testable.
 const { dispose } = await run(app);`}
-                  </pre>
+                  </CodeBlock>
                 </div>
               </div>
             </div>

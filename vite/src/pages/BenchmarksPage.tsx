@@ -12,6 +12,7 @@ import {
   Settings,
   Info
 } from 'lucide-react';
+import CodeBlock from '../components/CodeBlock';
 
 const BenchmarksPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('core');
@@ -368,14 +369,12 @@ const BenchmarksPage: React.FC = () => {
             <p className="text-gray-600 dark:text-gray-300 mb-6">
               Don't just take our word for it. Clone the repository and run the benchmarks yourself.
             </p>
-            <div className="bg-gray-900 dark:bg-gray-800 rounded-lg p-4 mb-6 text-left">
-              <pre className="text-green-400 text-sm">
-                <code>{`git clone https://github.com/bluelibs/runner.git
+            <CodeBlock language="bash" className="mb-6 text-left">
+{`git clone https://github.com/bluelibs/runner.git
 cd runner
 npm install
-npm run benchmark`}</code>
-              </pre>
-            </div>
+npm run benchmark`}
+            </CodeBlock>
             <a
               href="https://github.com/bluelibs/runner"
               target="_blank"

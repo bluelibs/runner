@@ -1,14 +1,8 @@
 import { useState } from 'react';
-import { Copy, Check, Play, Terminal, Package, Rocket } from 'lucide-react';
+import { Play, Terminal, Package, Rocket } from 'lucide-react';
+import CodeBlock from '../components/CodeBlock';
 
 const QuickStartPage: React.FC = () => {
-  const [copiedStep, setCopiedStep] = useState<number | null>(null);
-
-  const copyToClipboard = (text: string, stepIndex: number) => {
-    navigator.clipboard.writeText(text);
-    setCopiedStep(stepIndex);
-    setTimeout(() => setCopiedStep(null), 2000);
-  };
 
   const steps = [
     {
@@ -108,44 +102,34 @@ const { dispose } = await run(app);`,
         {/* Steps */}
         <div className="space-y-12 mb-16">
           {steps.map((step, index) => (
-            <div key={index} className="card p-8">
-              <div className="flex items-start space-x-4 mb-6">
-                <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <step.icon className="w-6 h-6 text-white" />
+            <div key={index} className="relative">
+              {/* Step number indicator */}
+              <div className="flex items-center mb-4">
+                <div className="flex items-center justify-center w-8 h-8 bg-blue-600 text-white rounded-full text-sm font-bold mr-4">
+                  {index + 1}
                 </div>
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-2">
-                    <span className="bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 px-2 py-1 rounded text-sm font-medium">
-                      Step {index + 1}
-                    </span>
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white">
-                      {step.title}
-                    </h3>
-                  </div>
-                  <p className="text-gray-600 dark:text-gray-300 mb-4">
-                    {step.description}
-                  </p>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white">
+                  {step.title}
+                </h3>
+              </div>
+              
+              {/* Step content */}
+              <div className="ml-12">
+                <p className="text-gray-600 dark:text-gray-300 mb-6 text-lg">
+                  {step.description}
+                </p>
+                
+                <div className="card p-6">
+                  <CodeBlock>
+                    {step.code}
+                  </CodeBlock>
                 </div>
               </div>
               
-              <div className="relative">
-                <div className="absolute top-2 right-2 z-10">
-                  <button
-                    onClick={() => copyToClipboard(step.code, index)}
-                    className="p-2 bg-gray-800/80 hover:bg-gray-700/80 rounded text-gray-300 hover:text-white transition-colors duration-200"
-                    title="Copy to clipboard"
-                  >
-                    {copiedStep === index ? (
-                      <Check className="w-4 h-4 text-green-400" />
-                    ) : (
-                      <Copy className="w-4 h-4" />
-                    )}
-                  </button>
-                </div>
-                <pre className="code-block text-sm overflow-x-auto">
-                  <code>{step.code}</code>
-                </pre>
-              </div>
+              {/* Connecting line for non-last steps */}
+              {index < steps.length - 1 && (
+                <div className="absolute left-4 top-8 w-0.5 h-12 bg-gray-300 dark:bg-gray-600"></div>
+              )}
             </div>
           ))}
         </div>

@@ -40,10 +40,10 @@ const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode }) => {
               <Link
                 key={item.name}
                 to={item.href}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-300 ${
+                className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-300 relative ${
                   isActive(item.href)
-                    ? 'text-white bg-white/10'
-                    : 'text-gray-300 hover:text-white hover:bg-white/5'
+                    ? 'text-white bg-gradient-to-r from-emerald-500/20 to-emerald-400/20 shadow-lg shadow-emerald-500/10'
+                    : 'text-gray-300 hover:text-white hover:bg-white/8 hover:shadow-md'
                 }`}
               >
                 {item.name}
@@ -97,8 +97,8 @@ const Navbar: React.FC<NavbarProps> = ({ darkMode, toggleDarkMode }) => {
                 onClick={() => setIsOpen(false)}
                 className={`block px-3 py-2 rounded-md text-base font-medium transition-all duration-300 ${
                   isActive(item.href)
-                    ? 'text-white bg-white/10'
-                    : 'text-gray-300 hover:text-white hover:bg-white/5'
+                    ? 'text-white bg-gradient-to-r from-emerald-500/20 to-emerald-400/20 shadow-lg shadow-emerald-500/10'
+                    : 'text-gray-300 hover:text-white hover:bg-white/8'
                 }`}
               >
                 {item.name}

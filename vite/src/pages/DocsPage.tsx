@@ -8,7 +8,6 @@ import {
   Zap, 
   Shield, 
   Timer,
-  Search,
   ChevronRight,
   ChevronDown,
   Activity,
@@ -20,9 +19,9 @@ import {
   Eye,
   HardDrive
 } from 'lucide-react';
+import CodeBlock from '../components/CodeBlock';
 
 const DocsPage: React.FC = () => {
-  const [searchQuery, setSearchQuery] = useState('');
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set(['core-concepts']));
 
   useEffect(() => {
@@ -179,13 +178,7 @@ const adminTask = task({
 });`
   };
 
-  const filteredDocs = documentation.map(section => ({
-    ...section,
-    items: section.items.filter(item => 
-      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchQuery.toLowerCase())
-    )
-  })).filter(section => section.items.length > 0 || searchQuery === '');
+  const filteredDocs = documentation;
 
   return (
     <div className="pt-24 pb-16">
@@ -200,17 +193,6 @@ const adminTask = task({
             Everything you need to build production-ready applications.
           </p>
           
-          {/* Search */}
-          <div className="max-w-md mx-auto relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search documentation..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 rounded-lg bg-white/10 dark:bg-gray-800/50 border border-gray-200/20 dark:border-gray-700/50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 dark:text-white"
-            />
-          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
@@ -279,11 +261,9 @@ const adminTask = task({
                   Tasks are functions with superpowers. They're pure-ish, testable, and composable. 
                   Unlike classes that accumulate methods like a hoarder accumulates stuff, tasks do one thing well.
                 </p>
-                <div className="bg-gray-900 dark:bg-gray-800 rounded-lg p-4 overflow-x-auto mb-6">
-                  <pre className="text-green-400 text-sm">
-                    <code>{conceptExamples.tasks}</code>
-                  </pre>
-                </div>
+                <CodeBlock className="mb-6">
+                  {conceptExamples.tasks}
+                </CodeBlock>
                 <div className="space-y-4">
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white">When to use tasks:</h4>
                   <ul className="space-y-2 text-gray-600 dark:text-gray-300">
@@ -307,11 +287,9 @@ const adminTask = task({
                   Resources are the singletons, services, configs, and connections that live throughout your app's lifecycle. 
                   They initialize once and stick around until cleanup time.
                 </p>
-                <div className="bg-gray-900 dark:bg-gray-800 rounded-lg p-4 overflow-x-auto mb-6">
-                  <pre className="text-green-400 text-sm">
-                    <code>{conceptExamples.resources}</code>
-                  </pre>
-                </div>
+                <CodeBlock className="mb-6">
+                  {conceptExamples.resources}
+                </CodeBlock>
               </div>
 
               {/* Events */}
@@ -326,11 +304,9 @@ const adminTask = task({
                   Events let different parts of your app talk to each other without tight coupling. 
                   It's like having a really good office messenger who never forgets anything.
                 </p>
-                <div className="bg-gray-900 dark:bg-gray-800 rounded-lg p-4 overflow-x-auto mb-6">
-                  <pre className="text-green-400 text-sm">
-                    <code>{conceptExamples.events}</code>
-                  </pre>
-                </div>
+                <CodeBlock className="mb-6">
+                  {conceptExamples.events}
+                </CodeBlock>
               </div>
 
               {/* Middleware */}
@@ -345,11 +321,9 @@ const adminTask = task({
                   Middleware wraps around your tasks and resources, adding cross-cutting concerns 
                   without polluting your business logic.
                 </p>
-                <div className="bg-gray-900 dark:bg-gray-800 rounded-lg p-4 overflow-x-auto">
-                  <pre className="text-green-400 text-sm">
-                    <code>{conceptExamples.middleware}</code>
-                  </pre>
-                </div>
+                <CodeBlock>
+                  {conceptExamples.middleware}
+                </CodeBlock>
               </div>
             </section>
 
@@ -370,9 +344,8 @@ const adminTask = task({
                 <p className="text-gray-600 dark:text-gray-300 mb-6">
                   Request-scoped data without prop drilling. Pass data through the execution chain without explicitly threading it through every function call.
                 </p>
-                <div className="bg-gray-900 dark:bg-gray-800 rounded-lg p-4 overflow-x-auto">
-                  <pre className="text-green-400 text-sm">
-                    <code>{`const requestContext = context<{ userId: string; traceId: string }>({
+                <CodeBlock>
+                  {`const requestContext = context<{ userId: string; traceId: string }>({
   id: "app.context.request"
 });
 
@@ -390,9 +363,8 @@ const authMiddleware = taskMiddleware({
     
     return await next(task.input);
   },
-});`}</code>
-                  </pre>
-                </div>
+});`}
+                </CodeBlock>
               </div>
 
               <div id="interceptors" className="card p-8 mb-8 scroll-mt-24">

@@ -7,6 +7,7 @@ import QuickStartPage from './pages/QuickStartPage';
 import BenchmarksPage from './pages/BenchmarksPage';
 import PlaygroundPage from './pages/PlaygroundPage';
 import Footer from './components/Footer';
+import ScrollToTop from './components/ScrollToTop';
 
 function App() {
   const [darkMode, setDarkMode] = useState(false);
@@ -32,6 +33,7 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-black text-white dark">
+        <ScrollToTop />
         <Navbar darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
         <main>
           <Routes>

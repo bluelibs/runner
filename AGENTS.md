@@ -189,7 +189,8 @@ export const wireAgents = hook({
     const abilities = store.getTasksWithTag(abilityTag);
 
     // Index tools and abilities by id for quick lookup
-    const byId = <T extends { id: string }>(xs: T[]) => Object.fromEntries(xs.map((x) => [x.id, x]));
+    const byId = <T extends { id: string }>(xs: T[]) =>
+      Object.fromEntries(xs.map((x) => [x.id, x]));
     const toolIndex = byId(tools);
     const abilityIndex = byId(abilities);
 
@@ -245,7 +246,11 @@ interface PlanStep {
   input: unknown;
   toolIds?: string[];
 }
-interface Plan { steps: PlanStep[]; done?: boolean; notes?: string[] }
+interface Plan {
+  steps: PlanStep[];
+  done?: boolean;
+  notes?: string[];
+}
 ```
 
 ## Observability & safety
@@ -283,7 +288,11 @@ Keep generated files separate; allow overrides via composition rather than editi
 Example (pseudo):
 
 ```ts
-const harness = resource({ id: "test", register: [app], overrides: [mockMemory] });
+const harness = resource({
+  id: "test",
+  register: [app],
+  overrides: [mockMemory],
+});
 const rr = await run(harness);
 await rr.runTask("app.agents.support.entry", { message: "Hi" });
 await rr.dispose();
