@@ -80,8 +80,7 @@ describe("MCP Integration", () => {
           description: "Test MCP server"
         },
         transport: { type: "stdio" as const },
-        autoStart: false, // Don't auto-start for test
-        tasks: []
+        autoStart: false // Don't auto-start for test
       };
 
       const mcp = mcpResource.with(mcpConfig);
@@ -90,7 +89,7 @@ describe("MCP Integration", () => {
       expect(mcp.config).toEqual(mcpConfig);
     });
 
-    it("should initialize MCP server with tasks", async () => {
+    it("should initialize MCP server with auto-discovered tasks", async () => {
       // Create a test task with MCP tag
       const testTask = task<{ value: number }>({
         id: "test.mcp.task",
@@ -112,16 +111,15 @@ describe("MCP Integration", () => {
           version: "1.0.0"
         },
         transport: { type: "stdio" as const },
-        autoStart: false, // Don't auto-start for test
-        tasks: [testTask]
+        autoStart: false // Don't auto-start for test
       };
 
       const mcp = mcpResource.with(mcpConfig);
       
-      // Test that the resource can be initialized
+      // Test that the resource can be initialized and auto-discovers the task
       const app = resource({
         id: "test.app",
-        register: [mcp, mcpTag], // Register the tag
+        register: [testTask, mcp, mcpTag], // Register task, mcp, and tag
         async init() {
           return "ready";
         }
@@ -132,7 +130,7 @@ describe("MCP Integration", () => {
       await dispose();
     });
 
-    it("should filter tasks when taskFilter is provided", async () => {
+    it("should filter auto-discovered tasks when taskFilter is provided", async () => {
       const task1 = task({
         id: "test.task1",
         tags: [mcpTag.with({ name: "tool1" })],
@@ -149,7 +147,6 @@ describe("MCP Integration", () => {
         serverInfo: { name: "test", version: "1.0.0" },
         transport: { type: "stdio" as const },
         autoStart: false,
-        tasks: [task1, task2],
         taskFilter: (task: any, mcpConfig: any) => mcpConfig.name === "tool1"
       };
 
@@ -158,7 +155,36 @@ describe("MCP Integration", () => {
       // The resource should initialize successfully even with filtering
       const app = resource({
         id: "test.app",
-        register: [mcp, mcpTag], // Register the tag
+        register: [task1, task2, mcp, mcpTag], // Register tasks, mcp, and tag
+        async init() {
+          return "ready";
+        }
+      });
+
+      const { value, dispose } = await run(app);
+      expect(value).toBe("ready");
+      await dispose();
+    });
+
+    it("should support deprecated tasks field for backward compatibility", async () => {
+      const testTask = task({
+        id: "test.task.explicit",
+        tags: [mcpTag.with({ name: "explicit-tool" })],
+        async run() { return {}; }
+      });
+
+      const mcpConfig = {
+        serverInfo: { name: "test", version: "1.0.0" },
+        transport: { type: "stdio" as const },
+        autoStart: false,
+        tasks: [testTask] // Explicit tasks should still work
+      };
+
+      const mcp = mcpResource.with(mcpConfig);
+      
+      const app = resource({
+        id: "test.app",
+        register: [testTask, mcp, mcpTag],
         async init() {
           return "ready";
         }
@@ -201,14 +227,13 @@ describe("MCP Integration", () => {
           description: "Calculator MCP server"
         },
         transport: { type: "stdio" },
-        autoStart: false, // Don't start stdio server in tests
-        tasks: [calculateTask]
+        autoStart: false // Don't start stdio server in tests
       });
 
-      // Create app with both
+      // Create app with both - tasks will be auto-discovered
       const app = resource({
         id: "app",
-        register: [calculateTask, mcp, mcpTag], // Register the tag
+        register: [calculateTask, mcp, mcpTag], // Register task, mcp, and tag
         async init() {
           return "app ready";
         }
@@ -234,15 +259,14 @@ describe("MCP Integration", () => {
       const mcpConfig = {
         serverInfo: { name: "test", version: "1.0.0" },
         transport: { type: "stdio" as const },
-        autoStart: false,
-        tasks: [taskWithBadSchema]
+        autoStart: false
       };
 
       // Should not throw during initialization even with bad schemas
       const mcp = mcpResource.with(mcpConfig);
       const app = resource({
         id: "test.app",
-        register: [mcp, mcpTag],
+        register: [taskWithBadSchema, mcp, mcpTag], // Register task, mcp, and tag
         async init() { return "ready"; }
       });
 

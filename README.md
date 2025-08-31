@@ -2731,8 +2731,7 @@ const mcpServer = mcp.mcpResource.with({
     version: "1.0.0",
     description: "Calculator MCP server"
   },
-  transport: { type: "stdio" },
-  tasks: [calculateTask]
+  transport: { type: "stdio" }
 });
 
 // Run your app with MCP support
@@ -2798,13 +2797,12 @@ const toolTask = task({
 
 ### Task Filtering
 
-You can filter which tasks get exposed as MCP tools:
+By default, all tasks tagged with `mcpTag` are automatically discovered and exposed as MCP tools. You can filter which tasks get exposed using a `taskFilter`:
 
 ```typescript
 const mcpServer = mcp.mcpResource.with({
   serverInfo: { name: "my-mcp", version: "1.0.0" },
   transport: { type: "stdio" },
-  tasks: [task1, task2, task3],
   taskFilter: (task, mcpConfig) => {
     // Only expose tasks tagged as "public"
     return mcpConfig.annotations?.tags?.includes("public") ?? false;

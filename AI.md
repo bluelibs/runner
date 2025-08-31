@@ -554,8 +554,7 @@ const calculate = task({
 // MCP server resource
 const mcpServer = mcp.mcpResource.with({
   serverInfo: { name: "calculator-mcp", version: "1.0.0" },
-  transport: { type: "stdio" },
-  tasks: [calculate]
+  transport: { type: "stdio" }
 });
 
 const app = resource({

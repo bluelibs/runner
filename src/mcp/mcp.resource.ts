@@ -4,6 +4,7 @@ import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio";
 import { mcpTag, IMcpConfig } from "./mcp.tag";
 import { ITask } from "../types/task";
 import { IValidationSchema } from "../defs";
+import { globalResources } from "../globals/globalResources";
 import * as z from "zod";
 
 /**
@@ -32,7 +33,8 @@ export interface IMcpResourceConfig {
   autoStart?: boolean;
   
   /**
-   * Tasks to expose as MCP tools. These should be tagged with mcpTag.
+   * Tasks to expose as MCP tools. If not provided, all tasks tagged with mcpTag will be automatically discovered.
+   * @deprecated Use mcpTag on tasks instead of explicitly listing them here. This field will be removed in a future version.
    */
   tasks?: ITask[];
   
@@ -87,15 +89,14 @@ function validationSchemaToJsonSchema(schema: IValidationSchema<any>): any {
  *   run: async (input) => ({ result: 42 })
  * });
  * 
- * // Create MCP resource with those tasks
+ * // Create MCP resource with auto-discovery
  * const mcp = mcpResource.with({
  *   serverInfo: {
  *     name: "my-app-mcp",
  *     version: "1.0.0",
  *     description: "MCP server for my application"
  *   },
- *   transport: { type: "stdio" },
- *   tasks: [calculateTask]
+ *   transport: { type: "stdio" }
  * });
  * 
  * run(mcp);
@@ -108,16 +109,30 @@ export const mcpResource = defineResource<
     transport: StdioServerTransport;
     start: () => Promise<void>;
     stop: () => Promise<void>;
-  }>
+  }>,
+  {
+    store: typeof globalResources.store;
+  }
 >({
   id: "mcp.server",
   
-  async init(config: IMcpResourceConfig) {
+  dependencies: {
+    store: globalResources.store,
+  },
+  
+  async init(config: IMcpResourceConfig, { store }) {
     // Create MCP server
     const server = new McpServer(config.serverInfo);
     
-    // Get tasks to expose (from config)
-    const tasks = config.tasks || [];
+    // Auto-discover tasks with mcpTag or use explicitly provided tasks (deprecated)
+    let tasks: ITask[];
+    if (config.tasks && config.tasks.length > 0) {
+      // Use explicitly provided tasks (deprecated path)
+      tasks = config.tasks;
+    } else {
+      // Auto-discover all tasks tagged with mcpTag
+      tasks = store.getTasksWithTag(mcpTag.id);
+    }
     
     // Register each task as an MCP tool
     for (const task of tasks) {
