@@ -1,4 +1,4 @@
-import { Github, Mail, ExternalLink, CheckCircle } from 'lucide-react';
+import { Github, ExternalLink, CheckCircle } from "lucide-react";
 
 const Footer: React.FC = () => {
   return (
@@ -11,10 +11,11 @@ const Footer: React.FC = () => {
               <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
                 <span className="text-black font-semibold text-sm">R</span>
               </div>
-              <span className="text-2xl font-semibold text-white">BlueLibs Runner</span>
+              <span className="text-2xl font-semibold text-white">Runner</span>
             </div>
             <p className="text-gray-400 max-w-sm mb-8 leading-relaxed">
-              TypeScript-first framework for functional programming with simple dependency injection.
+              TypeScript-first framework for functional programming with simple
+              dependency injection.
             </p>
             <div className="flex flex-col space-y-4">
               <a
@@ -26,37 +27,47 @@ const Footer: React.FC = () => {
                 <Github className="w-4 h-4" />
                 <span>Star on GitHub</span>
               </a>
-              <div className="flex items-center space-x-2 text-sm text-gray-400">
+              {/* <div className="flex items-center space-x-2 text-sm text-gray-400">
                 <span>2.1k stars</span>
                 <span>•</span>
                 <span>156k downloads</span>
-              </div>
+              </div> */}
             </div>
           </div>
 
           {/* Product */}
           <div>
-            <h3 className="text-sm font-medium text-white mb-6">
-              Product
-            </h3>
+            <h3 className="text-sm font-medium text-white mb-6">Product</h3>
             <ul className="space-y-4">
               <li>
-                <a href="/quick-start" className="text-gray-400 hover:text-white transition-colors duration-200">
+                <a
+                  href="/quick-start"
+                  className="text-gray-400 hover:text-white transition-colors duration-200"
+                >
                   Quick Start
                 </a>
               </li>
               <li>
-                <a href="/docs" className="text-gray-400 hover:text-white transition-colors duration-200">
+                <a
+                  href="/docs"
+                  className="text-gray-400 hover:text-white transition-colors duration-200"
+                >
                   Documentation
                 </a>
               </li>
               <li>
-                <a href="/benchmarks" className="text-gray-400 hover:text-white transition-colors duration-200">
+                <a
+                  href="/benchmarks"
+                  className="text-gray-400 hover:text-white transition-colors duration-200"
+                >
                   Benchmarks
                 </a>
               </li>
               <li>
-                <a href="/playground" className="text-gray-400 hover:text-white transition-colors duration-200">
+                <a
+                  href="/playground"
+                  className="text-gray-400 hover:text-white transition-colors duration-200"
+                >
                   Playground
                 </a>
               </li>
@@ -65,13 +76,11 @@ const Footer: React.FC = () => {
 
           {/* Resources */}
           <div>
-            <h3 className="text-sm font-medium text-white mb-6">
-              Resources
-            </h3>
+            <h3 className="text-sm font-medium text-white mb-6">Resources</h3>
             <ul className="space-y-4">
               <li>
-                <a 
-                  href="https://github.com/bluelibs/runner/tree/main/examples" 
+                <a
+                  href="https://github.com/bluelibs/runner/tree/main/examples"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
@@ -81,8 +90,8 @@ const Footer: React.FC = () => {
                 </a>
               </li>
               <li>
-                <a 
-                  href="https://bluelibs.github.io/runner/" 
+                <a
+                  href="https://bluelibs.github.io/runner/"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
@@ -92,8 +101,8 @@ const Footer: React.FC = () => {
                 </a>
               </li>
               <li>
-                <a 
-                  href="https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md" 
+                <a
+                  href="https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
@@ -106,7 +115,7 @@ const Footer: React.FC = () => {
           </div>
 
           {/* Company */}
-          <div>
+          {/* <div>
             <h3 className="text-sm font-medium text-white mb-6">
               Company
             </h3>
@@ -132,17 +141,15 @@ const Footer: React.FC = () => {
                 </a>
               </li>
             </ul>
-          </div>
+          </div> */}
 
           {/* Community */}
           <div>
-            <h3 className="text-sm font-medium text-white mb-6">
-              Community
-            </h3>
+            <h3 className="text-sm font-medium text-white mb-6">Community</h3>
             <ul className="space-y-4">
               <li>
-                <a 
-                  href="https://github.com/bluelibs/runner/issues" 
+                <a
+                  href="https://github.com/bluelibs/runner/issues"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
@@ -152,8 +159,8 @@ const Footer: React.FC = () => {
                 </a>
               </li>
               <li>
-                <a 
-                  href="https://discord.gg/bluelibs" 
+                <a
+                  href="https://discord.gg/bluelibs"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
@@ -163,8 +170,8 @@ const Footer: React.FC = () => {
                 </a>
               </li>
               <li>
-                <a 
-                  href="https://twitter.com/bluelibs" 
+                <a
+                  href="https://twitter.com/bluelibs"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
@@ -174,7 +181,10 @@ const Footer: React.FC = () => {
                 </a>
               </li>
               <li>
-                <a href="/blog" className="text-gray-400 hover:text-white transition-colors duration-200">
+                <a
+                  href="/blog"
+                  className="text-gray-400 hover:text-white transition-colors duration-200"
+                >
                   Blog
                 </a>
               </li>
@@ -183,10 +193,14 @@ const Footer: React.FC = () => {
         </div>
 
         {/* Newsletter Signup */}
-        <div className="bg-gray-900/50 rounded-2xl p-8 mb-12">
+        {/* <div className="bg-gray-900/50 rounded-2xl p-8 mb-12">
           <div className="max-w-md">
-            <h3 className="text-lg font-medium text-white mb-2">Stay updated</h3>
-            <p className="text-gray-400 mb-6 text-sm">Get the latest updates on new features and releases.</p>
+            <h3 className="text-lg font-medium text-white mb-2">
+              Stay updated
+            </h3>
+            <p className="text-gray-400 mb-6 text-sm">
+              Get the latest updates on new features and releases.
+            </p>
             <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-3">
               <input
                 type="email"
@@ -199,30 +213,40 @@ const Footer: React.FC = () => {
               </button>
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Bottom Section */}
         <div className="border-t border-gray-800/60 pt-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center space-y-6 md:space-y-0">
             <div className="flex flex-col space-y-2">
-              <span className="text-gray-400 text-sm">© 2025 BlueLibs. All rights reserved.</span>
+              <span className="text-gray-400 text-sm">
+                © 2025 Runner. All rights reserved.
+              </span>
               <div className="flex items-center space-x-2">
                 <CheckCircle className="w-4 h-4 text-green-500" />
-                <span className="text-sm text-gray-400">All systems operational</span>
+                <span className="text-sm text-gray-400">
+                  All systems operational
+                </span>
               </div>
             </div>
             <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-8">
               <div className="flex items-center space-x-2 text-sm text-gray-400">
                 <span>Tests:</span>
-                <span className="bg-gray-800 text-gray-300 px-2.5 py-1 rounded-md text-xs font-medium">Passing</span>
+                <span className="bg-gray-800 text-gray-300 px-2.5 py-1 rounded-md text-xs font-medium">
+                  Passing
+                </span>
               </div>
               <div className="flex items-center space-x-2 text-sm text-gray-400">
                 <span>Coverage:</span>
-                <span className="bg-gray-800 text-gray-300 px-2.5 py-1 rounded-md text-xs font-medium">100%</span>
+                <span className="bg-gray-800 text-gray-300 px-2.5 py-1 rounded-md text-xs font-medium">
+                  100%
+                </span>
               </div>
               <div className="flex items-center space-x-2 text-sm text-gray-400">
                 <span>Uptime:</span>
-                <span className="bg-gray-800 text-gray-300 px-2.5 py-1 rounded-md text-xs font-medium">99.9%</span>
+                <span className="bg-gray-800 text-gray-300 px-2.5 py-1 rounded-md text-xs font-medium">
+                  99.9%
+                </span>
               </div>
             </div>
           </div>

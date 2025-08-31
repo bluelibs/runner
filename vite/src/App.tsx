@@ -10,31 +10,17 @@ import Footer from './components/Footer';
 import ScrollToTop from './components/ScrollToTop';
 
 function App() {
-  const [darkMode, setDarkMode] = useState(false);
-
   useEffect(() => {
-    // Force dark mode always
-    setDarkMode(true);
+    // Force dark mode always - no exceptions
     document.documentElement.classList.add('dark');
     localStorage.setItem('theme', 'dark');
   }, []);
 
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
-    if (!darkMode) {
-      document.documentElement.classList.add('dark');
-      localStorage.setItem('theme', 'dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-      localStorage.setItem('theme', 'light');
-    }
-  };
-
   return (
     <Router>
-      <div className="min-h-screen bg-black text-white dark">
+      <div className="min-h-screen bg-white dark:bg-black dark">
         <ScrollToTop />
-        <Navbar darkMode={darkMode} toggleDarkMode={toggleDarkMode} />
+        <Navbar darkMode={true} toggleDarkMode={() => {}} />
         <main>
           <Routes>
             <Route path="/" element={<HomePage />} />

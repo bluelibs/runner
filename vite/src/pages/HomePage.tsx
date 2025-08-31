@@ -3,20 +3,17 @@ import { Link } from "react-router-dom";
 import {
   ArrowRight,
   Zap,
-  Shield,
   Code,
   Gauge,
-  Users,
   Check,
   Play,
   GitBranch,
   Database,
   MessageSquare,
   Settings,
-  Star,
   TrendingUp,
   Timer,
-  Award,
+  Tag,
 } from "lucide-react";
 import CodeBlock from "../components/CodeBlock";
 
@@ -77,6 +74,13 @@ await userRegistered({ userId: "123" });`,
   }
 });`,
     },
+    {
+      icon: Tag,
+      title: "Tags for Contracts",
+      description:
+        "Attach metadata to tasks and resources. Use tags to enforce type contracts or to flag functionalities for programmatic access.",
+      example: `const contractTag = tag<ConfigType, InputType, OutputType>({\n  id: "app.tags.contract"\n});\n\nconst createUser = task({\n  id: "users.create",\n  tags: [contractTag],\n  // The runner will enforce that the output matches OutputType\n  run: async (data) => {\n    return { id: "123", ...data };\n  }\n});\n\nconst sendEmail = task({\n  id: "emails.send",\n  // This task doesn't have the tag, so no contract is enforced\n  run: async () => { /* ... */ } \n});`,
+    },
   ];
 
   const benchmarks = [
@@ -127,11 +131,11 @@ await userRegistered({ userId: "123" });`,
               </div> */}
               <h1 className="text-4xl sm:text-6xl lg:text-7xl font-bold text-gray-900 dark:text-white mb-6">
                 <span className="block">Stop Worrying and</span>
-                <span className="gradient-text">Love Dependency Injection</span>
+                <span className="">Love Dependency Injection</span>
               </h1>
               <p className="text-xl sm:text-2xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto mb-8 leading-relaxed">
-                BlueLibs Runner is the anti-framework framework. It gets out of
-                your way and lets you build stuff that actually works.
+                Runner is the anti-framework framework. It gets out of your way
+                and lets you build stuff that actually works.
                 <strong className="text-gray-900 dark:text-white">
                   {" "}
                   No magic, no surprises
@@ -180,10 +184,10 @@ await userRegistered({ userId: "123" });`,
               </div>
               <div className="text-center">
                 <div className="text-3xl font-bold text-pink-600 dark:text-pink-400">
-                  1.2k
+                  Simple
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
-                  GitHub Stars
+                  Dependency Injection
                 </div>
               </div>
             </div>
@@ -237,10 +241,10 @@ const { dispose } = await run(app);`}
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
-              The Big Four
+              The Big Five
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-              Understanding these four concepts is key to using Runner
+              Understanding these five concepts is key to using Runner
               effectively. They're not just buzzwords – they're the building
               blocks of maintainable applications.
             </p>
@@ -328,7 +332,7 @@ const { dispose } = await run(app);`}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
             <div>
               <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-8">
-                Why Choose BlueLibs Runner?
+                Why Choose Runner?
               </h2>
               <div className="space-y-6">
                 {[

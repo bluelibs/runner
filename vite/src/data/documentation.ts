@@ -14,12 +14,18 @@ import {
   Clock,
   BarChart3,
   TrendingUp,
+  Power,
+  PowerOff,
+  AlertTriangle,
+  Bug,
+  Tags,
+  Rocket,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
 export interface DocItem {
+  id: string;
   title: string;
-  href: string;
   description: string;
 }
 
@@ -36,24 +42,42 @@ export const coreConceptsSection: DocSection = {
   icon: Book,
   items: [
     {
+      id: "tasks",
       title: "Tasks",
-      href: "#tasks",
       description: "Functions with superpowers - your business logic",
     },
     {
+      id: "resources",
       title: "Resources",
-      href: "#resources",
       description: "Singletons, services, and shared state",
     },
     {
+      id: "events",
       title: "Events",
-      href: "#events",
       description: "Decoupled communication between components",
     },
     {
+      id: "hooks",
+      title: "Hooks",
+      description: "Lightweight event listeners",
+    },
+    {
+      id: "middleware",
       title: "Middleware",
-      href: "#middleware",
       description: "Cross-cutting concerns and lifecycle hooks",
+    },
+  ],
+};
+
+export const executionSection: DocSection = {
+  id: "execution",
+  title: "Execution",
+  icon: Rocket,
+  items: [
+    {
+      id: "run-options",
+      title: "Run & RunOptions",
+      description: "Booting your application and configuring its runtime.",
     },
   ],
 };
@@ -64,24 +88,29 @@ export const advancedSection: DocSection = {
   icon: Zap,
   items: [
     {
+      id: "context",
       title: "Context",
-      href: "#context",
       description: "Request-scoped data without prop drilling",
     },
     {
+      id: "interceptors",
       title: "Interceptors",
-      href: "#interceptors",
       description: "Dynamic task behavior modification",
     },
     {
+      id: "optional-deps",
       title: "Optional Dependencies",
-      href: "#optional-deps",
       description: "Graceful degradation patterns",
     },
     {
-      title: "Task Hooks",
-      href: "#task-hooks",
-      description: "Lifecycle event handling",
+      id: "meta-and-tags",
+      title: "Meta & Tags",
+      description: "Describe and control your components",
+    },
+    {
+      id: "debug-resource",
+      title: "Debug Resource",
+      description: "Professional-grade debugging",
     },
   ],
 };
@@ -92,24 +121,34 @@ export const enterpriseSection: DocSection = {
   icon: Shield,
   items: [
     {
+      id: "logging",
       title: "Logging",
-      href: "#logging",
       description: "Structured logging with context",
     },
     {
+      id: "caching",
       title: "Caching",
-      href: "#caching",
       description: "Built-in LRU and custom cache providers",
     },
     {
+      id: "retries",
       title: "Retries",
-      href: "#retries",
       description: "Automatic retry with backoff strategies",
     },
     {
+      id: "timeouts",
       title: "Timeouts",
-      href: "#timeouts",
       description: "Operation timeout management",
+    },
+    {
+      id: "shutdown",
+      title: "System Shutdown",
+      description: "Graceful shutdown and cleanup",
+    },
+    {
+      id: "unhandled-errors",
+      title: "Unhandled Errors",
+      description: "Catch and handle unexpected errors",
     },
   ],
 };
@@ -120,23 +159,23 @@ export const performanceSection: DocSection = {
   icon: Timer,
   items: [
     {
+      id: "benchmarks",
       title: "Benchmarks",
-      href: "#benchmarks",
       description: "Real-world performance metrics",
     },
     {
+      id: "optimization",
       title: "Optimization",
-      href: "#optimization",
       description: "Best practices for high performance",
     },
     {
+      id: "monitoring",
       title: "Monitoring",
-      href: "#monitoring",
       description: "Debug and performance monitoring",
     },
     {
+      id: "memory",
       title: "Memory Management",
-      href: "#memory",
       description: "Resource lifecycle and cleanup",
     },
   ],
@@ -144,21 +183,32 @@ export const performanceSection: DocSection = {
 
 export const allDocSections = [
   coreConceptsSection,
+  executionSection,
   advancedSection,
   enterpriseSection,
   performanceSection,
 ];
 
-export const conceptIcons = {
+export const conceptIcons: Record<string, LucideIcon> = {
   tasks: Code,
   resources: Database,
   events: MessageSquare,
+  hooks: Code,
   middleware: Settings,
+  "run-options": Power,
   context: Activity,
+  interceptors: Zap,
+  "optional-deps": Bug,
+  "meta-and-tags": Tags,
+  "debug-resource": Bug,
   logging: Eye,
   caching: HardDrive,
   retries: RotateCcw,
   timeouts: Clock,
+  shutdown: PowerOff,
+  "unhandled-errors": AlertTriangle,
   benchmarks: BarChart3,
   optimization: TrendingUp,
+  monitoring: Activity,
+  memory: HardDrive,
 };

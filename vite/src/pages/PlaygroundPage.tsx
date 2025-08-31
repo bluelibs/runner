@@ -1,29 +1,29 @@
-import { useState } from 'react';
-import { 
-  Play, 
-  Copy, 
-  Check, 
-  RotateCcw, 
-  Code, 
-  Database, 
-  MessageSquare, 
+import { useState } from "react";
+import {
+  Play,
+  Copy,
+  Check,
+  RotateCcw,
+  Code,
+  Database,
+  MessageSquare,
   Settings,
   Terminal,
-  Lightbulb
-} from 'lucide-react';
-import CodeBlock from '../components/CodeBlock';
+  Lightbulb,
+} from "lucide-react";
+import CodeBlock from "../components/CodeBlock";
 
 const PlaygroundPage: React.FC = () => {
-  const [selectedExample, setSelectedExample] = useState('basic-task');
-  const [code, setCode] = useState('');
-  const [output, setOutput] = useState('');
+  const [selectedExample, setSelectedExample] = useState("basic-task");
+  const [code, setCode] = useState("");
+  const [output, setOutput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const examples = {
-    'basic-task': {
-      title: 'Basic Task',
-      description: 'Simple task creation and execution',
+    "basic-task": {
+      title: "Basic Task",
+      description: "Simple task creation and execution",
       icon: Code,
       code: `import { task, run, resource } from '@bluelibs/runner';
 
@@ -31,7 +31,7 @@ const PlaygroundPage: React.FC = () => {
 const greetUser = task({
   id: 'app.tasks.greetUser',
   run: async (name: string) => {
-    return \`Hello, \${name}! Welcome to BlueLibs Runner.\`;
+    return \`Hello, \${name}! Welcome to Runner.\`;
   }
 });
 
@@ -53,11 +53,11 @@ const { dispose, value } = await run(app);
 console.log('App result:', value);
 
 // Clean up resources
-await dispose();`
+await dispose();`,
     },
-    'task-with-deps': {
-      title: 'Task with Dependencies',
-      description: 'Tasks using dependency injection',
+    "task-with-deps": {
+      title: "Task with Dependencies",
+      description: "Tasks using dependency injection",
       icon: Database,
       code: `import { task, resource, run } from '@bluelibs/runner';
 
@@ -119,11 +119,11 @@ const app = resource({
 
 const { dispose, value } = await run(app);
 console.log('Result:', value);
-await dispose();`
+await dispose();`,
     },
-    'events': {
-      title: 'Events & Hooks',
-      description: 'Event-driven communication',
+    events: {
+      title: "Events & Hooks",
+      description: "Event-driven communication",
       icon: MessageSquare,
       code: `import { event, hook, task, resource, run } from '@bluelibs/runner';
 
@@ -192,11 +192,11 @@ const app = resource({
 
 const { dispose, value } = await run(app);
 console.log('Final result:', value);
-await dispose();`
+await dispose();`,
     },
-    'middleware': {
-      title: 'Middleware',
-      description: 'Cross-cutting concerns with middleware',
+    middleware: {
+      title: "Middleware",
+      description: "Cross-cutting concerns with middleware",
       icon: Settings,
       code: `import { task, taskMiddleware, resource, run } from '@bluelibs/runner';
 
@@ -280,8 +280,8 @@ const app = resource({
 const { dispose, value } = await run(app, { debug: 'normal' });
 console.log('\\n--- Final Result ---');
 console.log(value);
-await dispose();`
-    }
+await dispose();`,
+    },
   };
 
   const currentExample = examples[selectedExample as keyof typeof examples];
@@ -294,22 +294,22 @@ await dispose();`
 
   const runCode = async () => {
     setIsRunning(true);
-    setOutput('');
-    
+    setOutput("");
+
     // Simulate code execution
-    await new Promise(resolve => setTimeout(resolve, 500));
-    
+    await new Promise((resolve) => setTimeout(resolve, 500));
+
     // Mock output based on selected example
     const mockOutputs = {
-      'basic-task': `[INFO] Task execution started
-Hello, World! Welcome to BlueLibs Runner.
-App result: Hello, World! Welcome to BlueLibs Runner.
+      "basic-task": `[INFO] Task execution started
+Hello, World! Welcome to Runner.
+App result: Hello, World! Welcome to Runner.
 [INFO] Resources disposed successfully`,
-      'task-with-deps': `[INFO] Database connected
+      "task-with-deps": `[INFO] Database connected
 [INFO] Looking up user with ID: 1
 [INFO] Found user: Alice
 Result: { success: true, user: { id: 1, name: 'Alice', email: 'alice@example.com' } }`,
-      'events': `🔄 Registering user: Alice Johnson
+      events: `🔄 Registering user: Alice Johnson
 📧 Sending welcome email to alice@example.com
 📝 Logging registration for user xyz123abc
 ✅ Welcome email sent!
@@ -317,7 +317,7 @@ Final result: {
   message: 'User registered successfully', 
   user: { id: 'xyz123abc', name: 'Alice Johnson', email: 'alice@example.com' } 
 }`,
-      'middleware': `--- Attempt 1: Authenticated User ---
+      middleware: `--- Attempt 1: Authenticated User ---
 🚀 Starting task: app.tasks.getSecretData
 🔐 Checking authentication...
 👤 Authenticated user: Alice
@@ -330,16 +330,16 @@ Final result: {
 Access denied: Unauthorized: User not authenticated
 
 --- Final Result ---
-{ success: true, data: { secret: 'The answer is 42', accessedBy: 'Alice' } }`
+{ success: true, data: { secret: 'The answer is 42', accessedBy: 'Alice' } }`,
     };
-    
+
     setOutput(mockOutputs[selectedExample as keyof typeof mockOutputs]);
     setIsRunning(false);
   };
 
   const resetCode = () => {
     setCode(currentExample.code);
-    setOutput('');
+    setOutput("");
   };
 
   return (
@@ -352,12 +352,12 @@ Access denied: Unauthorized: User not authenticated
             Interactive Playground
           </div>
           <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white mb-6">
-            Try BlueLibs Runner
+            Try Runner
             <span className="gradient-text"> Live</span>
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-            Experiment with BlueLibs Runner concepts in an interactive environment. 
-            Run examples, modify code, and see results in real-time.
+            Experiment with Runner concepts in an interactive environment. Run
+            examples, modify code, and see results in real-time.
           </p>
         </div>
 
@@ -375,26 +375,27 @@ Access denied: Unauthorized: User not authenticated
                     onClick={() => setSelectedExample(key)}
                     className="w-full text-left p-3 rounded-lg transition-all duration-200 border"
                     style={{
-                      backgroundColor: selectedExample === key 
-                        ? 'rgb(30 64 175)' // blue-800
-                        : 'transparent',
-                      color: selectedExample === key 
-                        ? 'white' 
-                        : 'rgb(229 231 235)', // gray-200 
-                      borderColor: selectedExample === key 
-                        ? 'rgb(59 130 246)' // blue-500
-                        : 'transparent'
+                      backgroundColor:
+                        selectedExample === key
+                          ? "rgb(30 64 175)" // blue-800
+                          : "transparent",
+                      color:
+                        selectedExample === key ? "white" : "rgb(229 231 235)", // gray-200
+                      borderColor:
+                        selectedExample === key
+                          ? "rgb(59 130 246)" // blue-500
+                          : "transparent",
                     }}
                     onMouseEnter={(e) => {
                       if (selectedExample !== key) {
-                        e.currentTarget.style.backgroundColor = 'rgb(55 65 81)'; // gray-700
-                        e.currentTarget.style.borderColor = 'rgb(107 114 128)'; // gray-500
+                        e.currentTarget.style.backgroundColor = "rgb(55 65 81)"; // gray-700
+                        e.currentTarget.style.borderColor = "rgb(107 114 128)"; // gray-500
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (selectedExample !== key) {
-                        e.currentTarget.style.backgroundColor = 'transparent';
-                        e.currentTarget.style.borderColor = 'transparent';
+                        e.currentTarget.style.backgroundColor = "transparent";
+                        e.currentTarget.style.borderColor = "transparent";
                       }
                     }}
                   >
@@ -402,12 +403,13 @@ Access denied: Unauthorized: User not authenticated
                       <example.icon className="w-4 h-4 flex-shrink-0" />
                       <span className="font-medium">{example.title}</span>
                     </div>
-                    <p 
+                    <p
                       className="text-xs"
                       style={{
-                        color: selectedExample === key 
-                          ? 'rgb(229 231 235)' // gray-200
-                          : 'rgb(209 213 219)' // gray-300
+                        color:
+                          selectedExample === key
+                            ? "rgb(229 231 235)" // gray-200
+                            : "rgb(209 213 219)", // gray-300
                       }}
                     >
                       {example.description}
@@ -415,13 +417,14 @@ Access denied: Unauthorized: User not authenticated
                   </button>
                 ))}
               </div>
-              
+
               <div className="mt-6 pt-6 border-t border-gray-200/20 dark:border-gray-700/20">
                 <div className="flex items-start space-x-2 text-sm text-gray-600 dark:text-gray-400">
                   <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <p>
-                    <strong>Tip:</strong> This playground simulates code execution. 
-                    For real testing, install BlueLibs Runner in your local environment.
+                    <strong>Tip:</strong> This playground simulates code
+                    execution. For real testing, install Runner in your local
+                    environment.
                   </p>
                 </div>
               </div>
@@ -484,12 +487,10 @@ Access denied: Unauthorized: User not authenticated
                   ) : (
                     <Play className="w-4 h-4 mr-2" />
                   )}
-                  {isRunning ? 'Running...' : 'Run Code'}
+                  {isRunning ? "Running..." : "Run Code"}
                 </button>
               </div>
-              <CodeBlock>
-                {currentExample.code}
-              </CodeBlock>
+              <CodeBlock>{currentExample.code}</CodeBlock>
             </div>
 
             {/* Output */}
@@ -500,7 +501,9 @@ Access denied: Unauthorized: User not authenticated
               </h3>
               <div className="bg-gray-900 dark:bg-gray-800 rounded-lg p-4 min-h-[200px] font-mono text-sm">
                 {output ? (
-                  <pre className="text-gray-300 whitespace-pre-wrap">{output}</pre>
+                  <pre className="text-gray-300 whitespace-pre-wrap">
+                    {output}
+                  </pre>
                 ) : (
                   <div className="text-gray-500 italic">
                     Click "Run Code" to see the output here...
@@ -515,8 +518,9 @@ Access denied: Unauthorized: User not authenticated
                 Ready to Build Something Real?
               </h3>
               <p className="text-gray-600 dark:text-gray-300 mb-6">
-                These examples just scratch the surface. Install BlueLibs Runner locally 
-                to explore the full feature set and build production applications.
+                These examples just scratch the surface. Install Runner locally
+                to explore the full feature set and build production
+                applications.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <a href="/quick-start" className="btn-primary">

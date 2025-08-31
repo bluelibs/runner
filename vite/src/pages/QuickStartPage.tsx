@@ -1,15 +1,13 @@
-import { useState } from 'react';
-import { Play, Terminal, Package, Rocket } from 'lucide-react';
-import CodeBlock from '../components/CodeBlock';
+import { Play, Terminal, Package, Rocket } from "lucide-react";
+import CodeBlock from "../components/CodeBlock";
 
 const QuickStartPage: React.FC = () => {
-
   const steps = [
     {
-      title: "Install BlueLibs Runner",
+      title: "Install Runner",
       description: "Get started with a simple npm install command",
       code: "npm install @bluelibs/runner",
-      icon: Package
+      icon: Package,
     },
     {
       title: "Create Your First App",
@@ -38,7 +36,7 @@ const createUser = task({
     return { id: "user-123", ...userData };
   },
 });`,
-      icon: Terminal
+      icon: Terminal,
     },
     {
       title: "Wire Everything Together",
@@ -58,26 +56,29 @@ const app = resource({
 
 // Start your application
 const { dispose } = await run(app);`,
-      icon: Rocket
-    }
+      icon: Rocket,
+    },
   ];
 
   const examples = [
     {
       title: "Express + OpenAPI + SQLite",
-      description: "Complete REST API with OpenAPI documentation and SQLite database",
-      link: "https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite"
+      description:
+        "Complete REST API with OpenAPI documentation and SQLite database",
+      link: "https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite",
     },
     {
       title: "Microservice Template",
-      description: "Production-ready microservice with logging, metrics, and health checks",
-      link: "https://github.com/bluelibs/runner/tree/main/examples/microservice"
+      description:
+        "Production-ready microservice with logging, metrics, and health checks",
+      link: "https://github.com/bluelibs/runner/tree/main/examples/microservice",
     },
     {
       title: "Event-Driven Architecture",
-      description: "Showcase of events, hooks, and decoupled communication patterns",
-      link: "https://github.com/bluelibs/runner/tree/main/examples/event-driven"
-    }
+      description:
+        "Showcase of events, hooks, and decoupled communication patterns",
+      link: "https://github.com/bluelibs/runner/tree/main/examples/event-driven",
+    },
   ];
 
   return (
@@ -94,8 +95,8 @@ const { dispose } = await run(app);`,
             <span className="gradient-text"> Minutes</span>
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-            BlueLibs Runner is designed to get you productive immediately. 
-            Follow these steps and you'll have a running application in no time.
+            Runner is designed to get you productive immediately. Follow these
+            steps and you'll have a running application in no time.
           </p>
         </div>
 
@@ -112,20 +113,18 @@ const { dispose } = await run(app);`,
                   {step.title}
                 </h3>
               </div>
-              
+
               {/* Step content */}
               <div className="ml-12">
                 <p className="text-gray-600 dark:text-gray-300 mb-6 text-lg">
                   {step.description}
                 </p>
-                
+
                 <div className="card p-6">
-                  <CodeBlock>
-                    {step.code}
-                  </CodeBlock>
+                  <CodeBlock>{step.code}</CodeBlock>
                 </div>
               </div>
-              
+
               {/* Connecting line for non-last steps */}
               {index < steps.length - 1 && (
                 <div className="absolute left-4 top-12 w-0.5 h-8 bg-gray-300 dark:bg-gray-600"></div>
@@ -164,16 +163,10 @@ const { dispose } = await run(app);`,
             </div>
           </div>
           <div className="mt-6 flex flex-col sm:flex-row gap-4">
-            <a
-              href="/docs"
-              className="btn-primary"
-            >
+            <a href="/docs" className="btn-primary">
               Read Full Documentation
             </a>
-            <a
-              href="/playground"
-              className="btn-secondary"
-            >
+            <a href="/playground" className="btn-secondary">
               Try Interactive Examples
             </a>
           </div>
@@ -218,8 +211,11 @@ const { dispose } = await run(app);`,
                 <span className="text-white text-xs font-bold">1</span>
               </div>
               <p>
-                <strong className="text-gray-900 dark:text-white">Start with debug mode:</strong> 
-                Use <code className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">{`run(app, { debug: "verbose" })`}</code> 
+                <strong className="text-gray-900 dark:text-white">
+                  Start with debug mode:
+                </strong>
+                Use{" "}
+                <code className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">{`run(app, { debug: "verbose" })`}</code>
                 to see exactly what's happening during development.
               </p>
             </div>
@@ -228,8 +224,13 @@ const { dispose } = await run(app);`,
                 <span className="text-white text-xs font-bold">2</span>
               </div>
               <p>
-                <strong className="text-gray-900 dark:text-white">Test your tasks:</strong> 
-                Tasks are just functions! Test them by calling <code className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">task.run(input, dependencies)</code> 
+                <strong className="text-gray-900 dark:text-white">
+                  Test your tasks:
+                </strong>
+                Tasks are just functions! Test them by calling{" "}
+                <code className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
+                  task.run(input, dependencies)
+                </code>
                 directly with mock dependencies.
               </p>
             </div>
@@ -238,8 +239,11 @@ const { dispose } = await run(app);`,
                 <span className="text-white text-xs font-bold">3</span>
               </div>
               <p>
-                <strong className="text-gray-900 dark:text-white">Use TypeScript:</strong> 
-                Runner is TypeScript-first. You'll get amazing IntelliSense and catch errors at compile time.
+                <strong className="text-gray-900 dark:text-white">
+                  Use TypeScript:
+                </strong>
+                Runner is TypeScript-first. You'll get amazing IntelliSense and
+                catch errors at compile time.
               </p>
             </div>
           </div>

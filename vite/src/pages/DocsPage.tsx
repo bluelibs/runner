@@ -1,4 +1,4 @@
-import { Book, Zap, Shield, Timer } from "lucide-react";
+import { Book, Zap, Shield, Timer, Rocket } from "lucide-react";
 import DocsLayout from "../components/docs/DocsLayout";
 import ConceptCard from "../components/docs/ConceptCard";
 import { allDocSections, conceptIcons } from "../data/documentation";
@@ -8,7 +8,7 @@ const DocsPage: React.FC = () => {
   return (
     <DocsLayout
       title="Documentation"
-      description="Comprehensive guides and API reference for BlueLibs Runner. Everything you need to build production-ready applications."
+      description="Comprehensive guides and API reference for Runner. Everything you need to build production-ready applications."
       sidebarSections={allDocSections}
     >
       {/* Core Concepts */}
@@ -42,6 +42,14 @@ const DocsPage: React.FC = () => {
                 • Complex operations that benefit from dependency injection
               </li>
             </ul>
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+              When not to use tasks:
+            </h4>
+            <ul className="space-y-2 text-gray-600 dark:text-gray-300">
+              <li>• Simple utility functions</li>
+              <li>• Code used in only one place</li>
+              <li>• Performance-critical hot paths that don't need DI</li>
+            </ul>
           </div>
         </ConceptCard>
 
@@ -53,7 +61,17 @@ const DocsPage: React.FC = () => {
           description="Resources are the singletons, services, configs, and connections that live throughout your app's lifecycle. They initialize once and stick around until cleanup time."
           codeExample={codeExamples.resources}
           className="mb-8"
-        />
+        >
+          <div className="space-y-4">
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Resource Configuration
+            </h4>
+            <p className="text-gray-600 dark:text-gray-300">
+              Resources can be configured with type-safe options. No more
+              "config object of unknown shape" nonsense.
+            </p>
+          </div>
+        </ConceptCard>
 
         <ConceptCard
           id="events"
@@ -62,6 +80,23 @@ const DocsPage: React.FC = () => {
           iconBgGradient="bg-gradient-to-r from-purple-500 to-pink-600"
           description="Events let different parts of your app talk to each other without tight coupling. It's like having a really good office messenger who never forgets anything."
           codeExample={codeExamples.events}
+          className="mb-8"
+        >
+          <div className="space-y-4">
+            <p className="text-gray-600 dark:text-gray-300">
+              You can listen to events using hooks. You can also listen to all
+              events using <code>on: "*"</code>, and stop propagation of events.
+            </p>
+          </div>
+        </ConceptCard>
+
+        <ConceptCard
+          id="hooks"
+          title="Hooks"
+          icon={conceptIcons.hooks}
+          iconBgGradient="bg-gradient-to-r from-blue-500 to-purple-600"
+          description="The modern way to listen to events is through hooks. They are lightweight event listeners, similar to tasks, but with a few key differences."
+          codeExample={codeExamples.hooks}
           className="mb-8"
         />
 
@@ -73,6 +108,82 @@ const DocsPage: React.FC = () => {
           description="Middleware wraps around your tasks and resources, adding cross-cutting concerns without polluting your business logic."
           codeExample={codeExamples.middleware}
         />
+      </section>
+
+      {/* Execution */}
+      <section id="execution" className="scroll-mt-24">
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-8 flex items-center">
+          <Rocket className="w-8 h-8 mr-3" />
+          Execution
+        </h2>
+        <ConceptCard
+          id="run-options"
+          title="run() and RunOptions"
+          icon={conceptIcons["run-options"]}
+          iconBgGradient="bg-gradient-to-r from-green-500 to-teal-600"
+          description="The run() function boots a root resource and returns a handle to interact with your system. It can be configured with various options."
+          codeExample={codeExamples.runOptions}
+          className="mb-8"
+        >
+          <div className="space-y-4">
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Available options
+            </h4>
+            <ul className="space-y-2 text-gray-600 dark:text-gray-300">
+              <li>
+                • <code>debug?: DebugFriendlyConfig</code> (default:
+                <code>undefined</code>) — enables rich debug output and hooks
+                into the Debug resource for development visibility.
+              </li>
+              <li>
+                •{" "}
+                <code>
+                  logs?: &#123; printThreshold?: null | LogLevels;
+                  printStrategy?: PrintStrategy; bufferLogs?: boolean &#125;
+                </code>
+                <div className="ml-5">
+                  <div>
+                    — <code>printThreshold</code> (default: <code>info</code>;
+                    use <code>null</code> to disable)
+                  </div>
+                  <div>
+                    — <code>printStrategy</code> (default: <code>PRETTY</code>)
+                  </div>
+                  <div>
+                    — <code>bufferLogs</code> (default: <code>false</code>) —
+                    buffer until the root resource is ready
+                  </div>
+                </div>
+              </li>
+              <li>
+                • <code>errorBoundary?: boolean</code> (default:{" "}
+                <code>true</code>) — installs a central error boundary for
+                uncaught errors routed to <code>onUnhandledError</code>.
+              </li>
+              <li>
+                • <code>shutdownHooks?: boolean</code> (default:{" "}
+                <code>true</code>) — installs SIGINT/SIGTERM handlers that call{" "}
+                <code>dispose()</code> for graceful shutdown.
+              </li>
+              <li>
+                • <code>onUnhandledError?: OnUnhandledError</code> — custom
+                handler for any unhandled error; defaults to logging via the
+                created logger.
+              </li>
+              <li>
+                • <code>dryRun?: boolean</code> (default: <code>false</code>) —
+                validates setup without starting: resources aren't initialized
+                and no events are emitted.
+              </li>
+              <li>
+                • <code>runtimeCycleDetection?: boolean</code> (default:{" "}
+                <code>true</code>) — forces runtime cycle detection for event
+                emissions; disable to improve performance if you're sure there
+                are no deadlocks.
+              </li>
+            </ul>
+          </div>
+        </ConceptCard>
       </section>
 
       {/* Advanced Features */}
@@ -92,35 +203,44 @@ const DocsPage: React.FC = () => {
           className="mb-8"
         />
 
-        <div id="interceptors" className="card p-8 mb-8 scroll-mt-24">
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            Interceptors
-          </h3>
-          <p className="text-gray-600 dark:text-gray-300 mb-6">
-            Dynamic task behavior modification at runtime. Perfect for
-            debugging, metrics, or conditional logic.
-          </p>
-        </div>
+        <ConceptCard
+          id="interceptors"
+          title="Interceptors"
+          icon={conceptIcons.interceptors}
+          iconBgGradient="bg-gradient-to-r from-blue-500 to-purple-600"
+          description="Dynamic task behavior modification at runtime. Perfect for debugging, metrics, or conditional logic."
+          codeExample={codeExamples.interceptors}
+          className="mb-8"
+        />
 
-        <div id="optional-deps" className="card p-8 mb-8 scroll-mt-24">
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            Optional Dependencies
-          </h3>
-          <p className="text-gray-600 dark:text-gray-300 mb-6">
-            Graceful degradation patterns when dependencies aren't available.
-            Build resilient systems that adapt to missing services.
-          </p>
-        </div>
+        <ConceptCard
+          id="optional-deps"
+          title="Optional Dependencies"
+          icon={conceptIcons["optional-deps"]}
+          iconBgGradient="bg-gradient-to-r from-green-500 to-blue-600"
+          description="Graceful degradation patterns when dependencies aren't available. Build resilient systems that adapt to missing services."
+          codeExample={codeExamples.optionalDeps}
+          className="mb-8"
+        />
 
-        <div id="task-hooks" className="card p-8 scroll-mt-24">
-          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4">
-            Task Hooks
-          </h3>
-          <p className="text-gray-600 dark:text-gray-300 mb-6">
-            Lifecycle event handling for tasks. React to task execution events
-            with custom logic.
-          </p>
-        </div>
+        <ConceptCard
+          id="meta-and-tags"
+          title="Meta & Tags"
+          icon={conceptIcons["meta-and-tags"]}
+          iconBgGradient="bg-gradient-to-r from-purple-500 to-pink-600"
+          description="Describe and control your components. Tags can be simple strings or sophisticated configuration objects that control component behavior."
+          codeExample={codeExamples.metaAndTags}
+          className="mb-8"
+        />
+
+        <ConceptCard
+          id="debug-resource"
+          title="Debug Resource"
+          icon={conceptIcons["debug-resource"]}
+          iconBgGradient="bg-gradient-to-r from-orange-500 to-red-600"
+          description="A powerful observability suite that hooks into the framework's execution pipeline to provide detailed insights into your application's behavior."
+          codeExample={codeExamples.debugResource}
+        />
       </section>
 
       {/* Enterprise Features */}
@@ -136,6 +256,7 @@ const DocsPage: React.FC = () => {
           icon={conceptIcons.logging}
           iconBgGradient="bg-gradient-to-r from-green-500 to-teal-600"
           description="Structured logging with automatic context injection. Every log entry includes execution context, timing, and metadata."
+          codeExample={codeExamples.logging}
           className="mb-8"
         />
 
@@ -145,8 +266,19 @@ const DocsPage: React.FC = () => {
           icon={conceptIcons.caching}
           iconBgGradient="bg-gradient-to-r from-blue-500 to-cyan-600"
           description="Built-in LRU and custom cache providers. Automatic cache invalidation and warming strategies."
+          codeExample={codeExamples.caching}
           className="mb-8"
-        />
+        >
+          <div className="space-y-4">
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Override Cache Factory
+            </h4>
+            <p className="text-gray-600 dark:text-gray-300">
+              You can override the default in-memory cache with your own
+              implementation, for example, to use Redis.
+            </p>
+          </div>
+        </ConceptCard>
 
         <ConceptCard
           id="retries"
@@ -154,6 +286,7 @@ const DocsPage: React.FC = () => {
           icon={conceptIcons.retries}
           iconBgGradient="bg-gradient-to-r from-orange-500 to-red-600"
           description="Automatic retry with exponential backoff, jitter, and circuit breaker patterns for resilient operations."
+          codeExample={codeExamples.retries}
           className="mb-8"
         />
 
@@ -163,6 +296,27 @@ const DocsPage: React.FC = () => {
           icon={conceptIcons.timeouts}
           iconBgGradient="bg-gradient-to-r from-purple-500 to-pink-600"
           description="Operation timeout management with graceful degradation and cleanup handlers."
+          codeExample={codeExamples.timeouts}
+          className="mb-8"
+        />
+
+        <ConceptCard
+          id="shutdown"
+          title="System Shutdown"
+          icon={conceptIcons.shutdown}
+          iconBgGradient="bg-gradient-to-r from-green-500 to-teal-600"
+          description="Graceful shutdown and cleanup when your app needs to stop."
+          codeExample={codeExamples.shutdown}
+          className="mb-8"
+        />
+
+        <ConceptCard
+          id="unhandled-errors"
+          title="Unhandled Errors"
+          icon={conceptIcons["unhandled-errors"]}
+          iconBgGradient="bg-gradient-to-r from-blue-500 to-cyan-600"
+          description="The onUnhandledError callback is invoked by Runner whenever an error escapes normal handling."
+          codeExample={codeExamples.unhandledErrors}
         />
       </section>
 
