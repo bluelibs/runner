@@ -11,6 +11,7 @@ import {
   Info,
 } from "lucide-react";
 import CodeBlock from "../components/CodeBlock";
+import Meta from "../components/Meta";
 
 const BenchmarksPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState("core");
@@ -196,6 +197,10 @@ const BenchmarksPage: React.FC = () => {
 
   return (
     <div className="pt-24 pb-16">
+      <Meta
+        title="Runner Benchmarks — Real performance numbers"
+        description="Throughput and latency benchmarks for tasks, middleware, events, and resources. Reproducible methodology on M1 Max."
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-16">

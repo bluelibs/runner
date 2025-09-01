@@ -8,6 +8,7 @@ import BenchmarksPage from "./pages/BenchmarksPage";
 import PlaygroundPage from "./pages/PlaygroundPage";
 import Footer from "./components/Footer";
 import ScrollToTop from "./components/ScrollToTop";
+import NotFoundPage from "./pages/NotFoundPage";
 
 function App() {
   useEffect(() => {
@@ -21,13 +22,14 @@ function App() {
       <div className="min-h-screen bg-white dark:bg-black dark">
         <ScrollToTop />
         <Navbar darkMode={true} toggleDarkMode={() => {}} />
-        <main>
+        <main id="main-content">
           <Routes>
             <Route path="/" element={<HomePage />} />
             <Route path="/docs" element={<DocsPage />} />
             <Route path="/quick-start" element={<QuickStartPage />} />
             <Route path="/benchmarks" element={<BenchmarksPage />} />
             <Route path="/playground" element={<PlaygroundPage />} />
+            <Route path="*" element={<NotFoundPage />} />
           </Routes>
         </main>
         <Footer />

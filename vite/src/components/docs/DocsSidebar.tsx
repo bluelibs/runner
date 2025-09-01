@@ -26,7 +26,7 @@ const DocsSidebar: React.FC<DocsSidebarProps> = ({
   };
 
   return (
-    <div className="card p-6 max-h-[calc(100vh-10rem)] overflow-y-auto fine-scrollbar">
+    <div className="card p-6 max-h-[calc(100vh-10rem)] overflow-y-auto fine-scrollbar" aria-label="Documentation table of contents">
       <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
         Table of Contents
       </h2>

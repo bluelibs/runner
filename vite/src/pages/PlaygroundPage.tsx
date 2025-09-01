@@ -12,10 +12,11 @@ import {
   Lightbulb,
 } from "lucide-react";
 import CodeBlock from "../components/CodeBlock";
+import Meta from "../components/Meta";
 
 const PlaygroundPage: React.FC = () => {
   const [selectedExample, setSelectedExample] = useState("basic-task");
-  const [code, setCode] = useState("");
+  // In simulated mode we don't edit code; we only display examples
   const [output, setOutput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -338,12 +339,15 @@ Access denied: Unauthorized: User not authenticated
   };
 
   const resetCode = () => {
-    setCode(currentExample.code);
     setOutput("");
   };
 
   return (
     <div className="pt-24 pb-16">
+      <Meta
+        title="Runner Playground — Try tasks, events, and middleware"
+        description="Interactive examples that simulate Runner execution. Explore tasks, dependencies, events, and middleware."
+      />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-16">

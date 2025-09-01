@@ -3,6 +3,7 @@ import DocsLayout from "../components/docs/DocsLayout";
 import ConceptCard from "../components/docs/ConceptCard";
 import { allDocSections, conceptIcons } from "../data/documentation";
 import { codeExamples } from "../data/codeExamples";
+import Meta from "../components/Meta";
 
 const DocsPage: React.FC = () => {
   return (
@@ -11,6 +12,10 @@ const DocsPage: React.FC = () => {
       description="Comprehensive guides and API reference for Runner. Everything you need to build production-ready applications."
       sidebarSections={allDocSections}
     >
+      <Meta
+        title="Runner Docs — Concepts, Guides, API"
+        description="Learn Runner's core concepts (tasks, resources, events, middleware), advanced features, enterprise patterns, and execution model."
+      />
       {/* Core Concepts */}
       <section id="core-concepts" className="scroll-mt-24">
         <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-8 flex items-center">

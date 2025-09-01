@@ -1,5 +1,6 @@
 import { Play, Terminal, Package, Rocket } from "lucide-react";
 import CodeBlock from "../components/CodeBlock";
+import Meta from "../components/Meta";
 
 const QuickStartPage: React.FC = () => {
   const steps = [
@@ -83,6 +84,10 @@ const { dispose } = await run(app);`,
 
   return (
     <div className="pt-24 pb-16">
+      <Meta
+        title="Runner Quick Start — From install to first task in minutes"
+        description="Install Runner, define a resource and a task, wire it up, and run. Step-by-step guide with copy-paste code."
+      />
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-16">

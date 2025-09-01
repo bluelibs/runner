@@ -16,6 +16,7 @@ import {
   Tag,
 } from "lucide-react";
 import CodeBlock from "../components/CodeBlock";
+import Meta from "../components/Meta";
 
 const HomePage: React.FC = () => {
   const [hoveredFeature, setHoveredFeature] = useState<number | null>(null);
@@ -108,6 +109,11 @@ await userRegistered({ userId: "123" });`,
 
   return (
     <div className="pt-16">
+      <Meta
+        title="Runner — TypeScript-first DI framework: fast, explicit, testable"
+        description="Build production-ready TypeScript apps with tasks, resources, events, and middleware. No magic, full type-safety, 2.2M+ tasks/sec."
+        image="/og/runner-og.svg"
+      />
       {/* Hero Section */}
       <section className="min-h-screen flex items-center justify-center relative overflow-hidden">
         {/* Background Effects */}
