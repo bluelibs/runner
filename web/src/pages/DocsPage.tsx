@@ -1,4 +1,12 @@
-import { Book, Zap, Shield, Timer, Rocket, Activity, CheckCircle } from "lucide-react";
+import {
+  Book,
+  Zap,
+  Shield,
+  Timer,
+  Rocket,
+  Activity,
+  CheckCircle,
+} from "lucide-react";
 import DocsLayout from "../components/docs/DocsLayout";
 import ConceptCard from "../components/docs/ConceptCard";
 import { allDocSections, conceptIcons } from "../data/documentation";
@@ -24,11 +32,16 @@ const DocsPage: React.FC = () => {
             TL;DR
           </h2>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-gray-700 dark:text-gray-300">
-            <li>Lifecycle: <code>run() → ready event → dispose()</code></li>
+            <li>
+              Lifecycle: <code>run() → ready event → dispose()</code>
+            </li>
             <li>Tasks: DI + middleware; validate input/result</li>
             <li>Resources: managed singletons with init/dispose</li>
             <li>Events: emit → validate → ordered hooks → run</li>
-            <li>Hooks: async listeners; stoppable via <code>stopPropagation()</code></li>
+            <li>
+              Hooks: async listeners; stoppable via{" "}
+              <code>stopPropagation()</code>
+            </li>
             <li>Middleware: cross‑cutting concerns; async and awaited</li>
           </ul>
         </div>
@@ -156,7 +169,8 @@ const DocsPage: React.FC = () => {
               </li>
               <li>
                 <span className="font-semibold">Discovery:</span> find
-                components at runtime via <code>store.getTasksWithTag(tag)</code>
+                components at runtime via{" "}
+                <code>store.getTasksWithTag(tag)</code>
                 and <code>store.getResourcesWithTag(tag)</code> in a
                 <code>ready</code> hook.
               </li>
@@ -188,8 +202,14 @@ const DocsPage: React.FC = () => {
           className="mt-8"
         >
           <ul className="list-disc ml-6 text-gray-700 dark:text-gray-300 space-y-2">
-            <li><span className="font-semibold">Circular Dependencies:</span> fatal at runtime with a descriptive chain (A → B → A).</li>
-            <li><span className="font-semibold">Override Precedence:</span> top‑down; the override closest to <code>run()</code> wins.</li>
+            <li>
+              <span className="font-semibold">Circular Dependencies:</span>{" "}
+              fatal at runtime with a descriptive chain (A → B → A).
+            </li>
+            <li>
+              <span className="font-semibold">Override Precedence:</span>{" "}
+              top‑down; the override closest to <code>run()</code> wins.
+            </li>
           </ul>
         </ConceptCard>
       </section>
@@ -335,12 +355,16 @@ middleware({ id: "m", configSchema: z.object({ retries: z.number() }) });`}
             Event Cycle Safety
           </h3>
           <p className="text-gray-600 dark:text-gray-300 mb-3">
-            The runner detects cycles during emission to prevent deadlocks (for example, <code>e1 → e2 → e1</code> in the same chain).
+            The runner detects cycles during emission to prevent deadlocks (for
+            example, <code>e1 → e2 → e1</code> in the same chain).
           </p>
           <ul className="list-disc ml-6 text-gray-700 dark:text-gray-300 space-y-1">
             <li>Readable error with the full emission chain</li>
             <li>Same‑hook re‑emits allowed only for idempotent cases</li>
-            <li>Prefer one‑way flows; use <code>stopPropagation()</code> when needed</li>
+            <li>
+              Prefer one‑way flows; use <code>stopPropagation()</code> when
+              needed
+            </li>
           </ul>
         </div>
 
@@ -450,7 +474,7 @@ middleware({ id: "m", configSchema: z.object({ retries: z.number() }) });`}
           title="Benchmarks"
           icon={conceptIcons.benchmarks}
           iconBgGradient="bg-gradient-to-r from-emerald-500 to-green-600"
-          description="Real-world performance metrics showing 2.2M+ tasks per second with full middleware stack."
+          description="Real-world performance metrics showing 2.49M+ tasks per second with full middleware stack."
           className="mb-8"
         />
 
@@ -579,7 +603,8 @@ await q.dispose({ cancel: true });`}
               AI‑Friendly Guide (AI.md)
             </h3>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Minimal guide for quick reference: lifecycle, tasks, resources, events
+              Minimal guide for quick reference: lifecycle, tasks, resources,
+              events
             </p>
           </a>
         </div>

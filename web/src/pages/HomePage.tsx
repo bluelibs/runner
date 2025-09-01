@@ -87,7 +87,7 @@ await userRegistered({ userId: "123" });`,
   const benchmarks = [
     {
       label: "Basic Task Execution",
-      value: "2.2M tasks/sec",
+      value: "2.49M tasks/sec",
       color: "from-green-400 to-blue-500",
     },
     {
@@ -111,7 +111,7 @@ await userRegistered({ userId: "123" });`,
     <div className="pt-16">
       <Meta
         title="Runner — TypeScript-first DI framework: fast, explicit, testable"
-        description="Build production-ready TypeScript apps with tasks, resources, events, and middleware. No magic, full type-safety, 2.2M+ tasks/sec."
+        description="Build production-ready TypeScript apps with tasks, resources, events, and middleware. No magic, full type-safety, 2.49M+ tasks/sec."
         image="/og/runner-og.svg"
       />
       {/* Hero Section */}
@@ -174,7 +174,7 @@ await userRegistered({ userId: "123" });`,
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-16">
               <div className="text-center">
                 <div className="text-3xl font-bold text-blue-600 dark:text-blue-400">
-                  2.2M
+                  2.49M
                 </div>
                 <div className="text-sm text-gray-600 dark:text-gray-400">
                   Tasks/sec
@@ -353,19 +353,26 @@ const { dispose } = await run(app);`}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             <div className="card p-6">
-              <div className="font-semibold text-gray-900 dark:text-white mb-2">Lifecycle</div>
+              <div className="font-semibold text-gray-900 dark:text-white mb-2">
+                Lifecycle
+              </div>
               <div className="text-gray-700 dark:text-gray-300 text-sm">
-                <code>run()</code> → <code>ready</code> event → <code>dispose()</code>
+                <code>run()</code> → <code>ready</code> event →{" "}
+                <code>dispose()</code>
               </div>
             </div>
             <div className="card p-6">
-              <div className="font-semibold text-gray-900 dark:text-white mb-2">Tasks</div>
+              <div className="font-semibold text-gray-900 dark:text-white mb-2">
+                Tasks
+              </div>
               <div className="text-gray-700 dark:text-gray-300 text-sm">
                 Functions with DI + middleware; validate input/result.
               </div>
             </div>
             <div className="card p-6">
-              <div className="font-semibold text-gray-900 dark:text-white mb-2">Resources</div>
+              <div className="font-semibold text-gray-900 dark:text-white mb-2">
+                Resources
+              </div>
               <div className="text-gray-700 dark:text-gray-300 text-sm">
                 Managed singletons (init/dispose) for services and state.
               </div>
@@ -373,21 +380,29 @@ const { dispose } = await run(app);`}
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="card p-6">
-              <div className="font-semibold text-gray-900 dark:text-white mb-2">Events & Hooks</div>
+              <div className="font-semibold text-gray-900 dark:text-white mb-2">
+                Events & Hooks
+              </div>
               <div className="text-gray-700 dark:text-gray-300 text-sm">
-                Emit → validate → ordered hooks run; use <code>stopPropagation()</code>.
+                Emit → validate → ordered hooks run; use{" "}
+                <code>stopPropagation()</code>.
               </div>
             </div>
             <div className="card p-6">
-              <div className="font-semibold text-gray-900 dark:text-white mb-2">Middleware</div>
+              <div className="font-semibold text-gray-900 dark:text-white mb-2">
+                Middleware
+              </div>
               <div className="text-gray-700 dark:text-gray-300 text-sm">
                 Retry, timeout, cache, auth; async and awaited.
               </div>
             </div>
             <div className="card p-6">
-              <div className="font-semibold text-gray-900 dark:text-white mb-2">Concurrency</div>
+              <div className="font-semibold text-gray-900 dark:text-white mb-2">
+                Concurrency
+              </div>
               <div className="text-gray-700 dark:text-gray-300 text-sm">
-                <code>Semaphore</code> for limits, <code>Queue</code> for FIFO + cancel.
+                <code>Semaphore</code> for limits, <code>Queue</code> for FIFO +
+                cancel.
               </div>
             </div>
           </div>
@@ -406,7 +421,7 @@ const { dispose } = await run(app);`}
                 {[
                   "No magic, no surprises — explicit beats implicit",
                   "TypeScript-first with zero compromise on type safety",
-                  "High performance — 2.2M+ tasks per second",
+                  "High performance — 2.49M+ tasks per second",
                   "Enterprise ready with graceful shutdown & error boundaries",
                   "Structured logging, caching, retry, and timeouts built-in",
                   "Functional style with simple dependency injection",
