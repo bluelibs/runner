@@ -18,7 +18,7 @@ describe("MiddlewareManager", () => {
   let manager: MiddlewareManager;
   let onUnhandledError: OnUnhandledError;
   beforeEach(() => {
-    eventManager = new EventManager();
+    eventManager = new EventManager({ runtimeCycleDetection: true });
     logger = new Logger({
       printThreshold: null,
       printStrategy: "pretty",

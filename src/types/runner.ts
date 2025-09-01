@@ -7,6 +7,9 @@ export type RunOptions = {
    * Defaults to undefined. If true, we introduce logging to the console.
    */
   debug?: DebugFriendlyConfig;
+  /**
+   * Configure logging settings.
+   */
   logs?: {
     /**
      * Defaults to info. Use null to disable logging.
@@ -36,10 +39,18 @@ export type RunOptions = {
    */
   onUnhandledError?: OnUnhandledError;
   /**
+   * Defaults to false.
+   *
    * Dry run mode. When true, the runner will setup the system, ensure there are no errors, but will not start the system.
    * Your resources will not be initialized, and no events will be emitted. This is useful for testing and debugging.
    *
    * Note: this cannot catch init() errors that happen within resources.
    */
   dryRun?: boolean;
+  /**
+   * Defaults to true.
+   * When set, forces runtime cycle detection for event emissions. Disable if you're sure
+   * you don't have event deadlocks to improve event emission performance.
+   */
+  runtimeCycleDetection?: boolean;
 };

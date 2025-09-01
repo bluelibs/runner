@@ -13,7 +13,6 @@ import {
   symbolTaskMiddleware,
   symbolResourceMiddleware,
 } from "../defs";
-import { IDependentNode } from "./utils/findCircularDependencies";
 import * as utils from "../define";
 import { UnknownItemTypeError } from "../errors";
 import {
@@ -27,6 +26,7 @@ import {
 import { StoreValidator } from "./StoreValidator";
 import { Store } from "./Store";
 import { task } from "..";
+import { IDependentNode } from "./utils/findCircularDependencies";
 
 type StoringMode = "normal" | "override";
 export class StoreRegistry {
@@ -359,6 +359,55 @@ export class StoreRegistry {
     }
 
     return depenedants;
+  }
+
+  /**
+   * Builds a directed graph of event emissions based on hooks listening to events
+   * and their dependencies on events (emission capability). Ignores wildcard hooks by default.
+   */
+  buildEventEmissionGraph() {
+    const nodes = new Map<string, IDependentNode>();
+
+    // Create nodes for all events
+    for (const e of this.events.values()) {
+      nodes.set(e.event.id, { id: e.event.id, dependencies: {} });
+    }
+
+    // For each hook, if it listens to concrete event(s) and depends on events, add edges listenedEvent -> depEvent
+    for (const h of this.hooks.values()) {
+      const listened: string[] = [];
+      const on = h.hook.on as any;
+      if (on === "*") continue; // avoid over-reporting for global hooks
+      if (Array.isArray(on)) listened.push(...on.map((e: IEvent) => e.id));
+      else listened.push(on.id);
+
+      // Collect event dependencies from the hook
+      const depEvents: string[] = [];
+      const deps = h.hook.dependencies as any;
+      if (deps) {
+        for (const value of Object.values(deps)) {
+          const candidate = utils.isOptional(value) ? value.inner : value;
+          if (candidate && utils.isEvent(candidate)) {
+            depEvents.push(candidate.id);
+          }
+        }
+      }
+
+      // Add edges
+      for (const srcId of listened) {
+        const srcNode = nodes.get(srcId);
+        if (!srcNode) continue; // skip unknown/unregistered events
+        for (const dstId of depEvents) {
+          if (srcId === dstId) continue; // ignore trivial self edge
+          const dstNode = nodes.get(dstId);
+          if (dstNode) {
+            srcNode.dependencies[dstId] = dstNode;
+          }
+        }
+      }
+    }
+
+    return Array.from(nodes.values());
   }
 
   private setupBlankNodes(

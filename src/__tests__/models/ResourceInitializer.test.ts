@@ -13,7 +13,7 @@ describe("ResourceInitializer", () => {
   let onUnhandledError: OnUnhandledError;
 
   beforeEach(() => {
-    eventManager = new EventManager();
+    eventManager = new EventManager({ runtimeCycleDetection: true });
     logger = new Logger({
       printThreshold: "info",
       printStrategy: "pretty",
