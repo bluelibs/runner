@@ -48,7 +48,15 @@ const DocsLayout: React.FC<DocsLayoutProps> = ({
             {title}
           </h1>
           <p className="text-lg text-gray-400 max-w-3xl mx-auto mb-6">{description}</p>
-          <div className="flex justify-center">
+          <div className="flex justify-center gap-4">
+            <a
+              href="https://bluelibs.github.io/runner/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-sm text-gray-300 hover:text-white underline underline-offset-4"
+            >
+              API Reference
+            </a>
             <a
               href={editPath}
               target="_blank"

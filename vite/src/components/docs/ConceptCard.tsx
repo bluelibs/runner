@@ -9,6 +9,7 @@ interface ConceptCardProps {
   iconBgGradient: string;
   description: string;
   codeExample?: string;
+  apiHref?: string;
   children?: ReactNode;
   className?: string;
 }
@@ -20,6 +21,7 @@ const ConceptCard: React.FC<ConceptCardProps> = ({
   iconBgGradient,
   description,
   codeExample,
+  apiHref,
   children,
   className = "",
 }) => {
@@ -43,6 +45,19 @@ const ConceptCard: React.FC<ConceptCardProps> = ({
       )}
       
       {children}
+
+      {apiHref && (
+        <div className="mt-4">
+          <a
+            href={apiHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            View in API Reference
+          </a>
+        </div>
+      )}
     </div>
   );
 };

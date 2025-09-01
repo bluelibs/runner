@@ -30,6 +30,16 @@ const DocsSidebar: React.FC<DocsSidebarProps> = ({
       <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
         Table of Contents
       </h2>
+      <div className="mb-4">
+        <a
+          href="https://bluelibs.github.io/runner/"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center text-xs px-2 py-1 rounded-md bg-blue-50 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/60"
+        >
+          API Reference
+        </a>
+      </div>
       <div className="space-y-2">
         {sections.map((section) => (
           <div key={section.id}>

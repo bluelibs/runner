@@ -160,6 +160,14 @@ await userRegistered({ userId: "123" });`,
                 <Play className="w-5 h-5 mr-2" />
                 Try Playground
               </Link>
+              <a
+                href="https://bluelibs.github.io/runner/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn-secondary group"
+              >
+                API Reference
+              </a>
             </div>
 
             {/* Quick Stats */}
@@ -332,6 +340,60 @@ const { dispose } = await run(app);`}
         </div>
       </section>
 
+      {/* TL;DR Section */}
+      <section className="py-24 bg-white/50 dark:bg-gray-900/50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+              TL;DR
+            </h2>
+            <p className="text-lg text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+              The essentials from the minimal guide.
+            </p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="card p-6">
+              <div className="font-semibold text-gray-900 dark:text-white mb-2">Lifecycle</div>
+              <div className="text-gray-700 dark:text-gray-300 text-sm">
+                <code>run()</code> → <code>ready</code> event → <code>dispose()</code>
+              </div>
+            </div>
+            <div className="card p-6">
+              <div className="font-semibold text-gray-900 dark:text-white mb-2">Tasks</div>
+              <div className="text-gray-700 dark:text-gray-300 text-sm">
+                Functions with DI + middleware; validate input/result.
+              </div>
+            </div>
+            <div className="card p-6">
+              <div className="font-semibold text-gray-900 dark:text-white mb-2">Resources</div>
+              <div className="text-gray-700 dark:text-gray-300 text-sm">
+                Managed singletons (init/dispose) for services and state.
+              </div>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="card p-6">
+              <div className="font-semibold text-gray-900 dark:text-white mb-2">Events & Hooks</div>
+              <div className="text-gray-700 dark:text-gray-300 text-sm">
+                Emit → validate → ordered hooks run; use <code>stopPropagation()</code>.
+              </div>
+            </div>
+            <div className="card p-6">
+              <div className="font-semibold text-gray-900 dark:text-white mb-2">Middleware</div>
+              <div className="text-gray-700 dark:text-gray-300 text-sm">
+                Retry, timeout, cache, auth; async and awaited.
+              </div>
+            </div>
+            <div className="card p-6">
+              <div className="font-semibold text-gray-900 dark:text-white mb-2">Concurrency</div>
+              <div className="text-gray-700 dark:text-gray-300 text-sm">
+                <code>Semaphore</code> for limits, <code>Queue</code> for FIFO + cancel.
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Why Choose Section */}
       <section className="py-24 bg-white/50 dark:bg-gray-900/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -342,13 +404,14 @@ const { dispose } = await run(app);`}
               </h2>
               <div className="space-y-6">
                 {[
-                  "No magic, no surprises - explicit beats implicit",
+                  "No magic, no surprises — explicit beats implicit",
                   "TypeScript-first with zero compromise on type safety",
-                  "High performance - 2.2M+ tasks per second",
-                  "Enterprise ready with graceful shutdown, error boundaries",
-                  "Comprehensive logging, caching, and retry mechanisms",
-                  "Functional programming with simple dependency injection",
-                  "100% test coverage - because quality matters",
+                  "High performance — 2.2M+ tasks per second",
+                  "Enterprise ready with graceful shutdown & error boundaries",
+                  "Structured logging, caching, retry, and timeouts built-in",
+                  "Functional style with simple dependency injection",
+                  "Optional validation for inputs, results, configs, payloads",
+                  "Concurrency primitives: Semaphore & Queue",
                 ].map((feature, index) => (
                   <div key={index} className="flex items-start space-x-3">
                     <Check className="w-6 h-6 text-green-500 flex-shrink-0 mt-0.5" />

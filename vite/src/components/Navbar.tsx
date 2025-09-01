@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X, Github, Star } from "lucide-react";
-import Search from "./../components/Search";
 
 interface NavbarProps {
   darkMode: boolean;
@@ -62,7 +61,15 @@ const Navbar: React.FC<NavbarProps> = () => {
             ))}
 
             <div className="flex items-center space-x-3">
-              <Search />
+              {/* API Reference */}
+              <a
+                href="https://bluelibs.github.io/runner/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hidden lg:flex items-center space-x-2 px-3 py-2 rounded-lg bg-white/10 text-white hover:bg-white/20 transition-all duration-300"
+              >
+                <span className="text-sm font-medium">API Reference</span>
+              </a>
               {/* GitHub Link */}
               <a
                 href="https://github.com/bluelibs/runner"
@@ -121,6 +128,15 @@ const Navbar: React.FC<NavbarProps> = () => {
                 {item.name}
               </Link>
             ))}
+
+            <a
+              href="https://bluelibs.github.io/runner/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block px-3 py-2 rounded-md text-base font-medium text-gray-300 hover:text-white hover:bg-white/8 transition-all duration-300"
+            >
+              API Reference
+            </a>
 
             <a
               href="https://github.com/bluelibs/runner"

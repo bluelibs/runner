@@ -66,6 +66,11 @@ export const coreConceptsSection: DocSection = {
       title: "Middleware",
       description: "Cross-cutting concerns and lifecycle hooks",
     },
+    {
+      id: "tags",
+      title: "Tags",
+      description: "Attach contracts and metadata to components",
+    },
   ],
 };
 
@@ -101,11 +106,6 @@ export const advancedSection: DocSection = {
       id: "optional-deps",
       title: "Optional Dependencies",
       description: "Graceful degradation patterns",
-    },
-    {
-      id: "meta-and-tags",
-      title: "Meta & Tags",
-      description: "Describe and control your components",
     },
     {
       id: "debug-resource",
@@ -195,11 +195,11 @@ export const conceptIcons: Record<string, LucideIcon> = {
   events: MessageSquare,
   hooks: Code,
   middleware: Settings,
+  tags: Tags,
   "run-options": Power,
   context: Activity,
   interceptors: Zap,
   "optional-deps": Bug,
-  "meta-and-tags": Tags,
   "debug-resource": Bug,
   logging: Eye,
   caching: HardDrive,
