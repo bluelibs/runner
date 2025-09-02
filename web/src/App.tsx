@@ -9,6 +9,7 @@ import PlaygroundPage from "./pages/PlaygroundPage";
 import Footer from "./components/Footer";
 import ScrollToTop from "./components/ScrollToTop";
 import NotFoundPage from "./pages/NotFoundPage";
+import Cursor from "./cursor";
 
 function App() {
   useEffect(() => {
@@ -20,6 +21,7 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-white dark:bg-black dark">
+        <Cursor />
         <ScrollToTop />
         <Navbar darkMode={true} toggleDarkMode={() => {}} />
         <main id="main-content">

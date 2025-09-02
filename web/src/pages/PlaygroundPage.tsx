@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
   Play,
   Copy,
@@ -20,6 +20,26 @@ const PlaygroundPage: React.FC = () => {
   const [output, setOutput] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [copied, setCopied] = useState(false);
+
+  // Refs to scroll into view on mobile
+  const codeSectionRef = useRef<HTMLDivElement | null>(null);
+  const outputSectionRef = useRef<HTMLDivElement | null>(null);
+
+  const scrollIntoViewIfMobile = (el: HTMLElement | null) => {
+    if (!el) return;
+    // Match Tailwind's lg breakpoint: below 1024px treat as mobile/tablet
+    const isMobile = window.matchMedia("(max-width: 1023px)").matches;
+    if (isMobile) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const handleExampleSelect = (key: string) => {
+    setSelectedExample(key);
+    // After selecting an example, scroll to the code section on mobile
+    // Use setTimeout to ensure layout updates before scrolling
+    setTimeout(() => scrollIntoViewIfMobile(codeSectionRef.current), 0);
+  };
 
   const examples = {
     "basic-task": {
@@ -297,6 +317,15 @@ await dispose();`,
     setIsRunning(true);
     setOutput("");
 
+    // Always jump to the output section so the user sees results area
+    // Defer to next tick to ensure DOM/layout updates before scrolling
+    setTimeout(() => {
+      outputSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 50);
+
     // Simulate code execution
     await new Promise((resolve) => setTimeout(resolve, 500));
 
@@ -335,10 +364,17 @@ Access denied: Unauthorized: User not authenticated
     };
 
     setOutput(mockOutputs[selectedExample as keyof typeof mockOutputs]);
+    // Ensure we scroll again after content is rendered (desktop + mobile)
+    setTimeout(() => {
+      outputSectionRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
     setIsRunning(false);
   };
 
-  const resetCode = () => {
+  const clearOutput = () => {
     setOutput("");
   };
 
@@ -350,12 +386,12 @@ Access denied: Unauthorized: User not authenticated
       />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center px-4 py-2 rounded-full bg-blue-100/50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-sm font-medium mb-4">
+        <div className="text-center mb-16 rounded-2xl bg-gradient-to-b from-blue-50/50 via-transparent dark:from-blue-900/20 py-16">
+          <div className="inline-flex items-center px-4 py-2 rounded-full bg-blue-100/50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-sm font-medium mb-6">
             <Play className="w-4 h-4 mr-2" />
             Interactive Playground
           </div>
-          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+          <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold text-gray-900 dark:text-white mb-8 tracking-tighter">
             Try Runner
             <span className="gradient-text"> Live</span>
           </h1>
@@ -376,7 +412,7 @@ Access denied: Unauthorized: User not authenticated
                 {Object.entries(examples).map(([key, example]) => (
                   <button
                     key={key}
-                    onClick={() => setSelectedExample(key)}
+                    onClick={() => handleExampleSelect(key)}
                     className="w-full text-left p-3 rounded-lg transition-all duration-200 border"
                     style={{
                       backgroundColor:
@@ -451,11 +487,27 @@ Access denied: Unauthorized: User not authenticated
                     </p>
                   </div>
                 </div>
-                <div className="flex space-x-2">
+                {/* Title bar intentionally minimal */}
+              </div>
+            </div>
+
+            {/* Code Editor */}
+            <div
+              className="card p-6"
+              ref={codeSectionRef}
+              style={{ scrollMarginTop: "96px" }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                  <Code className="w-5 h-5 mr-2" />
+                  Code
+                </h3>
+                <div className="flex items-center gap-2">
                   <button
                     onClick={copyToClipboard}
                     className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors duration-200"
                     title="Copy code"
+                    aria-label="Copy code"
                   >
                     {copied ? (
                       <Check className="w-4 h-4 text-green-600" />
@@ -464,45 +516,42 @@ Access denied: Unauthorized: User not authenticated
                     )}
                   </button>
                   <button
-                    onClick={resetCode}
-                    className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors duration-200"
-                    title="Reset code"
+                    onClick={runCode}
+                    disabled={isRunning}
+                    className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <RotateCcw className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                    {isRunning ? (
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                    ) : (
+                      <Play className="w-4 h-4 mr-2" />
+                    )}
+                    {isRunning ? "Running..." : "Run Code"}
                   </button>
                 </div>
-              </div>
-            </div>
-
-            {/* Code Editor */}
-            <div className="card p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
-                  <Code className="w-5 h-5 mr-2" />
-                  Code
-                </h3>
-                <button
-                  onClick={runCode}
-                  disabled={isRunning}
-                  className="btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {isRunning ? (
-                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  ) : (
-                    <Play className="w-4 h-4 mr-2" />
-                  )}
-                  {isRunning ? "Running..." : "Run Code"}
-                </button>
               </div>
               <CodeBlock>{currentExample.code}</CodeBlock>
             </div>
 
             {/* Output */}
-            <div className="card p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center">
-                <Terminal className="w-5 h-5 mr-2" />
-                Output
-              </h3>
+            <div
+              className="card p-6"
+              ref={outputSectionRef}
+              style={{ scrollMarginTop: "96px" }}
+            >
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center">
+                  <Terminal className="w-5 h-5 mr-2" />
+                  Output
+                </h3>
+                <button
+                  onClick={clearOutput}
+                  className="p-2 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors duration-200"
+                  title="Clear output"
+                  aria-label="Clear output"
+                >
+                  <RotateCcw className="w-4 h-4 text-gray-600 dark:text-gray-400" />
+                </button>
+              </div>
               <div className="bg-gray-900 dark:bg-gray-800 rounded-lg p-4 min-h-[200px] font-mono text-sm">
                 {output ? (
                   <pre className="text-gray-300 whitespace-pre-wrap">

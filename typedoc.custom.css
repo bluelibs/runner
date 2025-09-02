@@ -1,3 +1,38 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+* {
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+code,
+pre,
+.tsd-signature {
+  font-family: "JetBrains Mono", "SF Mono", Monaco, Inconsolata, "Roboto Mono",
+    Consolas, "Courier New", monospace !important;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+pre {
+  border-radius: 8px;
+  padding: 1rem;
+  overflow-x: auto;
+}
+
+code {
+  padding: 0.2em 0.4em;
+  border-radius: 4px;
+  color: #334155;
+}
+
+pre code {
+  background: none;
+  padding: 0;
+  border-radius: 0;
+  color: inherit;
+}
+
 .page-menu .tsd-navigation a,
 .page-menu .tsd-navigation summary > span,
 .page-menu .tsd-page-navigation a {

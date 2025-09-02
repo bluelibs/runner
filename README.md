@@ -14,6 +14,7 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 - [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)
 - [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)
 - [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite)
+- [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking) (or feed README.md and use your own AI)
 
 Welcome to BlueLibs Runner, where we've taken the chaos of modern application architecture and turned it into something that won't make you question your life choices at 3am. This isn't just another framework – it's your new best friend who actually understands that code should be readable, testable, and not require a PhD in abstract nonsense to maintain.
 
@@ -594,10 +595,7 @@ const httpTag = tag<{ method: string; path: string }>({
 
 const getUserTask = task({
   id: "app.tasks.getUser",
-  tags: [
-    "api",
-    httpTag.with({ method: "GET", path: "/users/:id" }),
-  ],
+  tags: ["api", httpTag.with({ method: "GET", path: "/users/:id" })],
   run: async ({ id }) => getUserFromDatabase(id),
 });
 ```
@@ -613,25 +611,25 @@ import { hook, globals } from "@bluelibs/runner";
 const routeRegistration = hook({
   id: "app.hooks.registerRoutes",
   on: globals.events.ready,
-  dependencies: { 
-    store: globals.resources.store, 
-    server: expressServer 
+  dependencies: {
+    store: globals.resources.store,
+    server: expressServer,
   },
   run: async (_, { store, server }) => {
     // Find all tasks with HTTP tags
     const apiTasks = store.getTasksWithTag(httpTag);
-    
+
     apiTasks.forEach((taskDef) => {
       const config = httpTag.extract(taskDef);
       if (!config) return;
-      
+
       const { method, path } = config;
       server.app[method.toLowerCase()](path, async (req, res) => {
         const result = await taskDef({ ...req.params, ...req.body });
         res.json(result);
       });
     });
-    
+
     // Also find by string tags
     const cacheableTasks = store.getTasksWithTag("cacheable");
     console.log(`Found ${cacheableTasks.length} cacheable tasks`);
@@ -654,19 +652,19 @@ const performanceMiddleware = taskMiddleware({
     if (!performanceTag.exists(task.definition)) {
       return next(task.input);
     }
-    
+
     // Extract the configuration
     const config = performanceTag.extract(task.definition);
     const startTime = Date.now();
-    
+
     try {
       const result = await next(task.input);
       const duration = Date.now() - startTime;
-      
+
       if (duration > config.warnAboveMs) {
         console.warn(`Task ${task.definition.id} took ${duration}ms`);
       }
-      
+
       return result;
     } catch (error) {
       const duration = Date.now() - startTime;
@@ -705,8 +703,8 @@ Enforce return value shapes at compile time:
 
 ```typescript
 // Tags that enforce type contracts
-const userContract = tag<void, void, { name: string }>({ 
-  id: "contract.user" 
+const userContract = tag<void, void, { name: string }>({
+  id: "contract.user",
 });
 
 const profileTask = task({

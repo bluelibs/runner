@@ -108,9 +108,19 @@ export const advancedSection: DocSection = {
       description: "Graceful degradation patterns",
     },
     {
+      id: "overrides",
+      title: "Overrides",
+      description: "Swap implementations deterministically",
+    },
+    {
       id: "debug-resource",
       title: "Debug Resource",
       description: "Professional-grade debugging",
+    },
+    {
+      id: "testing",
+      title: "Testing",
+      description: "Minimal harness with run()",
     },
   ],
 };
@@ -201,6 +211,8 @@ export const conceptIcons: Record<string, LucideIcon> = {
   interceptors: Zap,
   "optional-deps": Bug,
   "debug-resource": Bug,
+  overrides: Settings,
+  testing: Code,
   logging: Eye,
   caching: HardDrive,
   retries: RotateCcw,

@@ -1,4 +1,23 @@
 export const codeExamples = {
+  tasksQuickStart: `import { resource, task, run } from "@bluelibs/runner";
+
+const hello = task({
+  id: "app.tasks.hello",
+  run: async (name: string) => "Hello, " + name + "!",
+});
+
+const app = resource({
+  id: "app",
+  // Registration makes the task discoverable & interceptable
+  register: [hello],
+  // This is how you let the system know about all other core components.
+});
+
+(async () => {
+  const { runTask, dispose } = await run(app);
+  const result = await runTask(hello, "Runner"); // "Hello, Runner!"
+  await dispose();
+})();`,
   tasks: `const sendEmail = task({
   id: "app.tasks.sendEmail",
   dependencies: { emailService, logger },
@@ -310,4 +329,42 @@ const expensiveTask = task({
     // Heavy computation here
   },
 });`,
+
+  overrides: `import { resource, override, run } from "@bluelibs/runner";
+
+const emailer = resource({
+  id: "app.emailer",
+  init: async () => ({ send: async () => "smtp" }),
+});
+
+// Keep the same id, change behavior; nearest to run() wins
+const testEmailer = override(emailer, {
+  init: async () => ({ send: async () => "mock" }),
+});
+
+const app = resource({
+  id: "app",
+  register: [emailer],
+  overrides: [testEmailer],
+});
+
+const rr = await run(app);
+const svc = rr.getResourceValue(emailer);
+await svc.send(); // -> "mock"
+await rr.dispose();`,
+
+  testing: `import { resource, run, override } from "@bluelibs/runner";
+
+// App under test
+const app = resource({ id: "app", register: [/* tasks/resources */] });
+
+// Optional: apply test doubles via overrides
+// const mockRes = override(realRes, { init: async () => mock });
+// const harness = resource({ id: "test", register: [app], overrides: [mockRes] });
+
+const rr = await run(app /* or harness */);
+await rr.runTask(someTask, { x: 1 });
+await rr.emitEvent(someEvent, { id: "e1" });
+const value = rr.getResourceValue(someResource);
+await rr.dispose();`,
 };

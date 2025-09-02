@@ -16,6 +16,32 @@ describe("Comprehensive Performance Benchmarks", () => {
     console.log("\n=== BlueLibs Runner Performance Benchmark Results ===");
     console.log(JSON.stringify(results, null, 2));
     console.log("=====================================================\n");
+
+    // Optional: write to file if BENCHMARK_OUTPUT is provided (for CI)
+    const outputPath = process.env.BENCHMARK_OUTPUT;
+    if (outputPath) {
+      try {
+        const fs = require("fs");
+        const os = require("os");
+        const meta = {
+          timestamp: new Date().toISOString(),
+          node: process.version,
+          platform: process.platform,
+          arch: process.arch,
+          cpu: os.cpus?.()[0]?.model || "unknown",
+        };
+        fs.writeFileSync(
+          outputPath,
+          JSON.stringify({ meta, results }, null, 2),
+          "utf8",
+        );
+        // eslint-disable-next-line no-console
+        console.log(`Benchmark results written to ${outputPath}`);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn("Failed to write benchmark results:", e);
+      }
+    }
   });
 
   it("should benchmark basic task execution", async () => {

@@ -1,0 +1,62 @@
+name: Benchmark Regression
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout HEAD (PR)
+        uses: actions/checkout@v4
+        with:
+          path: head
+
+      - name: Checkout BASE (main)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install deps (base)
+        working-directory: base
+        run: npm ci
+
+      - name: Run benchmarks (base)
+        working-directory: base
+        env:
+          NODE_OPTIONS: --expose-gc
+          BENCHMARK_OUTPUT: ../baseline.json
+        run: npm run benchmark
+
+      - name: Install deps (head)
+        working-directory: head
+        run: npm ci
+
+      - name: Run benchmarks (head)
+        working-directory: head
+        env:
+          NODE_OPTIONS: --expose-gc
+          BENCHMARK_OUTPUT: ../benchmark-results.json
+        run: npm run benchmark
+
+      - name: Compare results
+        working-directory: head
+        run: node ./scripts/compare-benchmarks.mjs ../baseline.json ../benchmark-results.json ./benchmarks.config.json
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-outputs
+          path: |
+            baseline.json
+            benchmark-results.json
+

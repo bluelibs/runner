@@ -10,6 +10,12 @@ npm install @bluelibs/runner
 
 BlueLibs Runner is a **powerful and integrated** framework. It provides a comprehensive set of tools for building robust, testable, and maintainable applications by combining a predictable Dependency Injection (DI) container with a dynamic metadata and eventing system.
 
+## Security & Compliance
+
+- Guarantees: runtime circular-dependency failure, override precedence safety, event cycle detection, validation gates for inputs/outputs/config, error boundary + graceful shutdown, timeout/retry middleware, global-hook scoping via `excludeFromGlobalHooks`.
+- Tests: see `src/__tests__/security/*` for security-focused tests that exercise the guarantees above.
+- Policy: see `SECURITY.md` for reporting, supported versions, and CI checks (includes `npm audit` for prod deps).
+
 ## DI Container Guarantees
 
 This is the foundation of trust for any DI framework.
@@ -24,7 +30,8 @@ This is the foundation of trust for any DI framework.
 - **Resources**: Managed singletons (init/dispose).
 - **Events**: Decoupled communication. Flow: `emit → validation → find & order hooks → run hooks (stoppable)`
 - **Hooks**: Lightweight event listeners. Async and awaited by default.
-- **Middleware**: Cross-cutting concerns. Async and awaited by default.
+- **Middleware**: Cross-cutting concerns. Async and awaited by default. Optionally contract-enforcing for input/output.
+- **Tags**: Metadata for organizing, filtering, enforcing input/output contracts to tasks or resources.
 
 ## Quick Start
 
@@ -234,8 +241,8 @@ const auth = taskMiddleware<
 // of a resource and replaces it with a non-destructive update.
 const softDelete = resourceMiddleware({
   id: "app.middleware.softDelete",
-  run: async ({ next }) => {
-    const resourceInstance = await next(); // The original resource instance
+  run: async ({ resource, next }) => {
+    const resourceInstance = await next(resource.config); // The original resource instance
 
     // This example assumes the resource has `update` and `delete` methods.
     // A more robust implementation would check for their existence.
@@ -305,7 +312,12 @@ const globalTaskMiddleware = taskMiddleware({
   // if you have dependencies as task, exclude them via everywhere filter.
 });
 
-// Similar behavior for resourceMiddleware({ ... });
+// Global resource middleware (same everywhere semantics)
+const globalResourceMiddleware = resourceMiddleware({
+  id: "...",
+  everywhere: true, // or: (resource) => boolean
+  run: async ({ next }) => next(),
+});
 ```
 
 ## Context (request-scoped values)

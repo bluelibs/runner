@@ -157,58 +157,27 @@ const BenchmarksPage: React.FC = () => {
     ],
   };
 
-  const comparisonData = [
-    {
-      framework: "Runner",
-      taskExecution: "2.49M/sec",
-      memoryOverhead: "33KB/component",
-      bootTime: "~50ms",
-      features: ["DI", "Middleware", "Events", "Type Safety"],
-      color: "bg-gradient-to-r from-blue-500 to-purple-600",
-    },
-    {
-      framework: "Express.js",
-      taskExecution: "~800K/sec",
-      memoryOverhead: "~45KB/route",
-      bootTime: "~20ms",
-      features: ["Middleware", "Routing"],
-      color: "bg-gradient-to-r from-gray-500 to-gray-600",
-    },
-    {
-      framework: "NestJS",
-      taskExecution: "~120K/sec",
-      memoryOverhead: "~150KB/component",
-      bootTime: "~500ms",
-      features: ["DI", "Decorators", "Guards", "Type Safety"],
-      color: "bg-gradient-to-r from-red-500 to-red-600",
-    },
-    {
-      framework: "Fastify",
-      taskExecution: "~1.1M/sec",
-      memoryOverhead: "~25KB/route",
-      bootTime: "~30ms",
-      features: ["High Performance", "JSON Schema"],
-      color: "bg-gradient-to-r from-green-500 to-green-600",
-    },
-  ];
+  // Note: We intentionally avoid cross-framework comparison tables here.
+  // Public benchmarks (eg. Fastify benchmarks, TechEmpower) measure HTTP servers
+  // under specific setups and do not map 1:1 to Runner's task semantics.
 
   const currentBenchmarks =
     benchmarkData[selectedCategory as keyof typeof benchmarkData];
 
   return (
-    <div className="pt-24 pb-16">
+    <div className="py-24 sm:py-32">
       <Meta
         title="Runner Benchmarks — Real performance numbers"
         description="Throughput and latency benchmarks for tasks, middleware, events, and resources. Reproducible methodology on M1 Max."
       />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center mb-16">
-          <div className="inline-flex items-center px-4 py-2 rounded-full bg-blue-100/50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-sm font-medium mb-4">
+        <div className="text-center mb-16 rounded-2xl bg-gradient-to-b from-blue-50/50 via-transparent dark:from-blue-900/20 py-16">
+          <div className="inline-flex items-center px-4 py-2 rounded-full bg-blue-100/50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-sm font-medium mb-6">
             <TrendingUp className="w-4 h-4 mr-2" />
             Real Performance Data
           </div>
-          <h1 className="text-4xl sm:text-5xl font-bold text-gray-900 dark:text-white mb-6">
+          <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold text-gray-900 dark:text-white mb-8 tracking-tighter">
             Performance
             <span className="gradient-text"> Benchmarks</span>
           </h1>
@@ -225,7 +194,7 @@ const BenchmarksPage: React.FC = () => {
             <button
               key={category.id}
               onClick={() => setSelectedCategory(category.id)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 ${
+              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 cursor-pointer ${
                 selectedCategory === category.id
                   ? "bg-blue-600 text-white shadow-lg"
                   : "bg-white/10 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 hover:bg-white/20 dark:hover:bg-gray-700/50"
@@ -270,81 +239,45 @@ const BenchmarksPage: React.FC = () => {
           ))}
         </div>
 
-        {/* Performance Comparison */}
+        {/* External Benchmarks (links only) */}
         <section className="mb-16">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
-              Framework Comparison
+          <div className="text-center mb-6">
+            <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">
+              External Benchmarks
             </h2>
-            <p className="text-gray-600 dark:text-gray-300">
-              How Runner compares to other popular Node.js frameworks
+            <p className="text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
+              For HTTP framework performance (hello world/JSON), see community-maintained
+              benchmarks. These measure web servers under specific setups and are not
+              directly comparable to Runner’s task throughput.
             </p>
           </div>
-
-          <div className="card overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead className="bg-gray-50/50 dark:bg-gray-800/50">
-                  <tr>
-                    <th className="text-left py-4 px-6 font-semibold text-gray-900 dark:text-white">
-                      Framework
-                    </th>
-                    <th className="text-center py-4 px-6 font-semibold text-gray-900 dark:text-white">
-                      Task Execution
-                    </th>
-                    <th className="text-center py-4 px-6 font-semibold text-gray-900 dark:text-white">
-                      Memory/Component
-                    </th>
-                    <th className="text-center py-4 px-6 font-semibold text-gray-900 dark:text-white">
-                      Boot Time
-                    </th>
-                    <th className="text-center py-4 px-6 font-semibold text-gray-900 dark:text-white">
-                      Features
-                    </th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200/20 dark:divide-gray-700/20">
-                  {comparisonData.map((framework, index) => (
-                    <tr
-                      key={index}
-                      className="hover:bg-gray-50/30 dark:hover:bg-gray-800/30"
-                    >
-                      <td className="py-4 px-6">
-                        <div className="flex items-center space-x-3">
-                          <div
-                            className={`w-3 h-3 rounded-full ${framework.color}`}
-                          ></div>
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {framework.framework}
-                          </span>
-                        </div>
-                      </td>
-                      <td className="text-center py-4 px-6 text-gray-600 dark:text-gray-300">
-                        {framework.taskExecution}
-                      </td>
-                      <td className="text-center py-4 px-6 text-gray-600 dark:text-gray-300">
-                        {framework.memoryOverhead}
-                      </td>
-                      <td className="text-center py-4 px-6 text-gray-600 dark:text-gray-300">
-                        {framework.bootTime}
-                      </td>
-                      <td className="text-center py-4 px-6">
-                        <div className="flex flex-wrap justify-center gap-1">
-                          {framework.features.map((feature, featureIndex) => (
-                            <span
-                              key={featureIndex}
-                              className="px-2 py-1 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs rounded"
-                            >
-                              {feature}
-                            </span>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <a
+              className="card p-5 hover:scale-[1.01] transition"
+              href="https://github.com/fastify/benchmarks"
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              <div className="font-semibold text-gray-900 dark:text-white mb-1">
+                Fastify Benchmarks (GitHub)
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                Comparative Node.js HTTP framework results with methodology and scripts.
+              </div>
+            </a>
+            <a
+              className="card p-5 hover:scale-[1.01] transition"
+              href="https://www.techempower.com/benchmarks/"
+              target="_blank"
+              rel="noreferrer noopener"
+            >
+              <div className="font-semibold text-gray-900 dark:text-white mb-1">
+                TechEmpower Framework Benchmarks
+              </div>
+              <div className="text-sm text-gray-600 dark:text-gray-300">
+                Large, standardized cross-language web framework benchmarks; results vary by test.
+              </div>
+            </a>
           </div>
         </section>
 
@@ -407,7 +340,7 @@ npm install
 npm run benchmark`}
             </CodeBlock>
             <a
-              href="https://github.com/bluelibs/runner"
+              href="https://github.com/bluelibs/runner/blob/main/src/__tests__/benchmark/comprehensive-benchmark.test.ts"
               target="_blank"
               rel="noopener noreferrer"
               className="btn-primary"

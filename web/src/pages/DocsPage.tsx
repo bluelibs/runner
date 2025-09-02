@@ -6,14 +6,38 @@ import {
   Rocket,
   Activity,
   CheckCircle,
+  ArrowRight,
 } from "lucide-react";
 import DocsLayout from "../components/docs/DocsLayout";
 import ConceptCard from "../components/docs/ConceptCard";
 import { allDocSections, conceptIcons } from "../data/documentation";
 import { codeExamples } from "../data/codeExamples";
 import Meta from "../components/Meta";
+import CodeBlock from "../components/CodeBlock";
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 
 const DocsPage: React.FC = () => {
+  const location = useLocation();
+
+  // Ensure deep links like /docs#middleware scroll to the correct section
+  useEffect(() => {
+    const hash = location.hash?.replace(/^#/, "");
+    if (!hash) return;
+    // Defer until after paint so the element is in the DOM
+    const id = decodeURIComponent(hash);
+    const tryScroll = () => {
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    };
+    // Try immediately and on next frame to handle async layouts
+    tryScroll();
+    const raf = requestAnimationFrame(tryScroll);
+    return () => cancelAnimationFrame(raf);
+  }, [location.hash]);
+
   return (
     <DocsLayout
       title="Documentation"
@@ -24,6 +48,23 @@ const DocsPage: React.FC = () => {
         title="Runner Docs — Concepts, Guides, API"
         description="Learn Runner's core concepts (tasks, resources, events, middleware), advanced features, enterprise patterns, and execution model."
       />
+      {/* Quick Start: define → register → run */}
+      <section id="quick-start" className="scroll-mt-24">
+        <div className="card p-8 mb-12">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+            <Rocket className="w-8 h-8 mr-3" />
+            Quick Start: define → register → run
+          </h2>
+          <p className="text-gray-700 dark:text-gray-300 mb-4">
+            Registration wires your definitions into the system. If a task or
+            resource isn't registered on the root resource, it won't exist at
+            runtime, can't be discovered, intercepted, or depended on. Define
+            your pieces, register them on the root, then call <code>run()</code>{" "}
+            to boot and use helpers like <code>runTask()</code>.
+          </p>
+          <CodeBlock>{codeExamples.tasksQuickStart}</CodeBlock>
+        </div>
+      </section>
       {/* TL;DR */}
       <section id="tldr" className="scroll-mt-24">
         <div className="card p-8 mb-12">
@@ -43,6 +84,14 @@ const DocsPage: React.FC = () => {
               <code>stopPropagation()</code>
             </li>
             <li>Middleware: cross‑cutting concerns; async and awaited</li>
+            <li>
+              Bench CI: <code>npm run benchmark:json</code> writes results;
+              files
+              <code> baseline.json</code> and{" "}
+              <code> benchmark-results.json</code>
+              are gitignored. CI compares PR vs base using
+              <code> benchmarks.config.json</code> thresholds.
+            </li>
           </ul>
         </div>
       </section>
@@ -53,17 +102,40 @@ const DocsPage: React.FC = () => {
           Core Concepts
         </h2>
 
-        <ConceptCard
-          id="tasks"
-          title="Tasks"
-          icon={conceptIcons.tasks}
-          iconBgGradient="bg-gradient-to-r from-blue-500 to-purple-600"
-          description="Tasks are functions with superpowers. They're pure-ish, testable, and composable. Unlike classes that accumulate methods like a hoarder accumulates stuff, tasks do one thing well."
-          codeExample={codeExamples.tasks}
-          apiHref="https://bluelibs.github.io/runner/"
-          className="mb-8"
-        >
-          <div className="space-y-4">
+        <div id="tasks" className="card p-8 mb-8 scroll-mt-24">
+          <div className="flex items-start space-x-4 mb-6">
+            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              {conceptIcons.tasks && (
+                <conceptIcons.tasks className="w-6 h-6 text-white" />
+              )}
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 flex items-center">
+                Tasks
+                <a
+                  href="#tasks"
+                  className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  #
+                </a>
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                Tasks are functions with superpowers. They're pure-ish,
+                testable, and composable. Unlike classes that accumulate methods
+                like a hoarder accumulates stuff, tasks do one thing well.
+              </p>
+              <a
+                href="https://bluelibs.github.io/runner/#md:tasks"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mt-2"
+              >
+                View API Reference <ArrowRight className="w-4 h-4 ml-1" />
+              </a>
+            </div>
+          </div>
+          <CodeBlock>{codeExamples.tasks}</CodeBlock>
+          <div className="space-y-4 mt-6">
             <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
               When to use tasks:
             </h4>
@@ -87,19 +159,42 @@ const DocsPage: React.FC = () => {
               <li>• Performance-critical hot paths that don't need DI</li>
             </ul>
           </div>
-        </ConceptCard>
+        </div>
 
-        <ConceptCard
-          id="resources"
-          title="Resources"
-          icon={conceptIcons.resources}
-          iconBgGradient="bg-gradient-to-r from-green-500 to-blue-600"
-          description="Resources are the singletons, services, configs, and connections that live throughout your app's lifecycle. They initialize once and stick around until cleanup time."
-          codeExample={codeExamples.resources}
-          apiHref="https://bluelibs.github.io/runner/"
-          className="mb-8"
-        >
-          <div className="space-y-4">
+        <div id="resources" className="card p-8 mb-8 scroll-mt-24">
+          <div className="flex items-start space-x-4 mb-6">
+            <div className="w-12 h-12 bg-gradient-to-r from-green-500 to-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              {conceptIcons.resources && (
+                <conceptIcons.resources className="w-6 h-6 text-white" />
+              )}
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 flex items-center">
+                Resources
+                <a
+                  href="#resources"
+                  className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  #
+                </a>
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                Resources are the singletons, services, configs, and connections
+                that live throughout your app's lifecycle. They initialize once
+                and stick around until cleanup time.
+              </p>
+              <a
+                href="https://bluelibs.github.io/runner/#md:resources"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mt-2"
+              >
+                View API Reference <ArrowRight className="w-4 h-4 ml-1" />
+              </a>
+            </div>
+          </div>
+          <CodeBlock>{codeExamples.resources}</CodeBlock>
+          <div className="space-y-4 mt-6">
             <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
               Resource Configuration
             </h4>
@@ -107,47 +202,138 @@ const DocsPage: React.FC = () => {
               Resources can be configured with type-safe options. No more
               "config object of unknown shape" nonsense.
             </p>
-          </div>
-        </ConceptCard>
+            <CodeBlock>
+              {`const server = resource({
+  id: "app.server",
+  init: async (config: { port: number; host: string }) => {
+    const app = express();
+    return app.listen(config.port, config.host);
+  },
+  dispose: async (server) => server.close(),
+});
 
-        <ConceptCard
-          id="events"
-          title="Events"
-          icon={conceptIcons.events}
-          iconBgGradient="bg-gradient-to-r from-purple-500 to-pink-600"
-          description="Events let different parts of your app talk to each other without tight coupling. It's like having a really good office messenger who never forgets anything."
-          codeExample={codeExamples.events}
-          apiHref="https://bluelibs.github.io/runner/"
-          className="mb-8"
-        >
-          <div className="space-y-4">
+// Register with configuration
+const app = resource({
+  id: "app",
+  register: [
+    // Unless all config fields are optional (or void),
+    // you will be forced to register it with() configuration.
+    server.with({ port: 3000, host: "localhost" })
+  ],
+});`}
+            </CodeBlock>
+          </div>
+        </div>
+
+        <div id="events" className="card p-8 mb-8 scroll-mt-24">
+          <div className="flex items-start space-x-4 mb-6">
+            <div className="w-12 h-12 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              {conceptIcons.events && (
+                <conceptIcons.events className="w-6 h-6 text-white" />
+              )}
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 flex items-center">
+                Events
+                <a
+                  href="#events"
+                  className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  #
+                </a>
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                Events let different parts of your app talk to each other
+                without tight coupling. It's like having a really good office
+                messenger who never forgets anything.
+              </p>
+              <a
+                href="https://bluelibs.github.io/runner/#md:events"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mt-2"
+              >
+                View API Reference <ArrowRight className="w-4 h-4 ml-1" />
+              </a>
+            </div>
+          </div>
+          <CodeBlock>{codeExamples.events}</CodeBlock>
+          <div className="space-y-4 mt-6">
             <p className="text-gray-600 dark:text-gray-300">
               You can listen to events using hooks. You can also listen to all
               events using <code>on: "*"</code>, and stop propagation of events.
             </p>
           </div>
-        </ConceptCard>
+        </div>
 
-        <ConceptCard
-          id="hooks"
-          title="Hooks"
-          icon={conceptIcons.hooks}
-          iconBgGradient="bg-gradient-to-r from-blue-500 to-purple-600"
-          description="The modern way to listen to events is through hooks. They are lightweight event listeners, similar to tasks, but with a few key differences."
-          codeExample={codeExamples.hooks}
-          apiHref="https://bluelibs.github.io/runner/"
-          className="mb-8"
-        />
+        <div id="hooks" className="card p-8 mb-8 scroll-mt-24">
+          <div className="flex items-start space-x-4 mb-6">
+            <div className="w-12 h-12 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              {conceptIcons.hooks && (
+                <conceptIcons.hooks className="w-6 h-6 text-white" />
+              )}
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 flex items-center">
+                Hooks
+                <a
+                  href="#hooks"
+                  className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  #
+                </a>
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                The modern way to listen to events is through hooks. They are
+                lightweight event listeners, similar to tasks, but with a few
+                key differences.
+              </p>
+              <a
+                href="https://bluelibs.github.io/runner/#md:hooks"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mt-2"
+              >
+                View API Reference <ArrowRight className="w-4 h-4 ml-1" />
+              </a>
+            </div>
+          </div>
+          <CodeBlock>{codeExamples.hooks}</CodeBlock>
+        </div>
 
-        <ConceptCard
-          id="middleware"
-          title="Middleware"
-          icon={conceptIcons.middleware}
-          iconBgGradient="bg-gradient-to-r from-orange-500 to-red-600"
-          description="Middleware wraps around your tasks and resources, adding cross-cutting concerns without polluting your business logic."
-          codeExample={codeExamples.middleware}
-          apiHref="https://bluelibs.github.io/runner/"
-        />
+        <div id="middleware" className="card p-8 mb-8 scroll-mt-24">
+          <div className="flex items-start space-x-4 mb-6">
+            <div className="w-12 h-12 bg-gradient-to-r from-orange-500 to-red-600 rounded-lg flex items-center justify-center flex-shrink-0">
+              {conceptIcons.middleware && (
+                <conceptIcons.middleware className="w-6 h-6 text-white" />
+              )}
+            </div>
+            <div>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2 flex items-center">
+                Middleware
+                <a
+                  href="#middleware"
+                  className="ml-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                >
+                  #
+                </a>
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300">
+                Middleware wraps around your tasks and resources, adding
+                cross-cutting concerns without polluting your business logic.
+              </p>
+              <a
+                href="https://bluelibs.github.io/runner/#md:middleware"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 mt-2"
+              >
+                View API Reference <ArrowRight className="w-4 h-4 ml-1" />
+              </a>
+            </div>
+          </div>
+          <CodeBlock>{codeExamples.middleware}</CodeBlock>
+        </div>
         <ConceptCard
           id="tags"
           title="Tags"
@@ -155,7 +341,7 @@ const DocsPage: React.FC = () => {
           iconBgGradient="bg-gradient-to-r from-fuchsia-500 to-pink-600"
           description="Typed metadata and contracts for tasks/resources. Use tags for discovery, wiring, and enforcing output contracts."
           codeExample={codeExamples.metaAndTags}
-          apiHref="https://bluelibs.github.io/runner/"
+          apiHref="https://bluelibs.github.io/runner/#md:tags"
           className="mt-8"
         >
           <div className="space-y-3">
@@ -227,7 +413,7 @@ const DocsPage: React.FC = () => {
           iconBgGradient="bg-gradient-to-r from-green-500 to-teal-600"
           description="The run() function boots a root resource and returns a handle to interact with your system. It can be configured with various options."
           codeExample={codeExamples.runOptions}
-          apiHref="https://bluelibs.github.io/runner/"
+          apiHref="https://bluelibs.github.io/runner/#md:run-and-runoptions"
           className="mb-8"
         >
           <div className="space-y-4">
@@ -305,7 +491,7 @@ const DocsPage: React.FC = () => {
           iconBgGradient="bg-gradient-to-r from-indigo-500 to-purple-600"
           description="Request-scoped data without prop drilling. Pass data through the execution chain without explicitly threading it through every function call."
           codeExample={codeExamples.context}
-          apiHref="https://bluelibs.github.io/runner/"
+          apiHref="https://bluelibs.github.io/runner/#md:context"
           className="mb-8"
         />
 
@@ -316,7 +502,7 @@ const DocsPage: React.FC = () => {
           iconBgGradient="bg-gradient-to-r from-blue-500 to-purple-600"
           description="Dynamic task behavior modification at runtime. Perfect for debugging, metrics, or conditional logic."
           codeExample={codeExamples.interceptors}
-          apiHref="https://bluelibs.github.io/runner/"
+          apiHref="https://bluelibs.github.io/runner/#md:task-interceptors"
           className="mb-8"
         />
 
@@ -333,6 +519,17 @@ const DocsPage: React.FC = () => {
         {/* Tags moved to Core Concepts */}
 
         <ConceptCard
+          id="overrides"
+          title="Overrides"
+          icon={conceptIcons.overrides}
+          iconBgGradient="bg-gradient-to-r from-amber-500 to-orange-600"
+          description="Swap implementations without changing IDs. Nearest override to run() wins; great for env‑specific behavior and tests."
+          codeExample={codeExamples.overrides}
+          apiHref="https://bluelibs.github.io/runner/#md:overrides"
+          className="mb-8"
+        />
+
+        <ConceptCard
           id="validation"
           title="Validation"
           icon={CheckCircle}
@@ -347,6 +544,7 @@ task({ id: "app.t", inputSchema: input, resultSchema: output });
 resource({ id: "r", configSchema: z.object({ url: z.string().url() }) });
 event({ id: "e", payloadSchema: z.object({ id: z.string() }) });
 middleware({ id: "m", configSchema: z.object({ retries: z.number() }) });`}
+          apiHref="https://bluelibs.github.io/runner/#md:runtime-validation"
           className="mb-8"
         />
 
@@ -375,7 +573,18 @@ middleware({ id: "m", configSchema: z.object({ retries: z.number() }) });`}
           iconBgGradient="bg-gradient-to-r from-orange-500 to-red-600"
           description="A powerful observability suite that hooks into the framework's execution pipeline to provide detailed insights into your application's behavior."
           codeExample={codeExamples.debugResource}
-          apiHref="https://bluelibs.github.io/runner/"
+          apiHref="https://bluelibs.github.io/runner/#md:debug-resource"
+        />
+
+        <ConceptCard
+          id="testing"
+          title="Testing"
+          icon={conceptIcons.testing}
+          iconBgGradient="bg-gradient-to-r from-sky-500 to-indigo-600"
+          description="Use run() as a minimal, full‑stack test harness: run tasks, emit events, and access resource values. Layer overrides for test doubles."
+          codeExample={codeExamples.testing}
+          apiHref="https://bluelibs.github.io/runner/#md:testing"
+          className="mt-8"
         />
       </section>
 
@@ -393,7 +602,7 @@ middleware({ id: "m", configSchema: z.object({ retries: z.number() }) });`}
           iconBgGradient="bg-gradient-to-r from-green-500 to-teal-600"
           description="Structured logging with automatic context injection. Every log entry includes execution context, timing, and metadata."
           codeExample={codeExamples.logging}
-          apiHref="https://bluelibs.github.io/runner/"
+          apiHref="https://bluelibs.github.io/runner/#md:logging"
           className="mb-8"
         />
 
@@ -404,7 +613,7 @@ middleware({ id: "m", configSchema: z.object({ retries: z.number() }) });`}
           iconBgGradient="bg-gradient-to-r from-blue-500 to-cyan-600"
           description="Built-in LRU and custom cache providers. Automatic cache invalidation and warming strategies."
           codeExample={codeExamples.caching}
-          apiHref="https://bluelibs.github.io/runner/"
+          apiHref="https://bluelibs.github.io/runner/#md:caching"
           className="mb-8"
         >
           <div className="space-y-4">
@@ -425,7 +634,7 @@ middleware({ id: "m", configSchema: z.object({ retries: z.number() }) });`}
           iconBgGradient="bg-gradient-to-r from-orange-500 to-red-600"
           description="Automatic retry with exponential backoff, jitter, and circuit breaker patterns for resilient operations."
           codeExample={codeExamples.retries}
-          apiHref="https://bluelibs.github.io/runner/"
+          apiHref="https://bluelibs.github.io/runner/#md:retrying-failed-operations"
           className="mb-8"
         />
 
@@ -436,7 +645,7 @@ middleware({ id: "m", configSchema: z.object({ retries: z.number() }) });`}
           iconBgGradient="bg-gradient-to-r from-purple-500 to-pink-600"
           description="Operation timeout management with graceful degradation and cleanup handlers."
           codeExample={codeExamples.timeouts}
-          apiHref="https://bluelibs.github.io/runner/"
+          apiHref="https://bluelibs.github.io/runner/#md:timeouts"
           className="mb-8"
         />
 
@@ -447,7 +656,7 @@ middleware({ id: "m", configSchema: z.object({ retries: z.number() }) });`}
           iconBgGradient="bg-gradient-to-r from-green-500 to-teal-600"
           description="Graceful shutdown and cleanup when your app needs to stop."
           codeExample={codeExamples.shutdown}
-          apiHref="https://bluelibs.github.io/runner/"
+          apiHref="https://bluelibs.github.io/runner/#md:system-shutdown-hooks"
           className="mb-8"
         />
 
@@ -458,7 +667,7 @@ middleware({ id: "m", configSchema: z.object({ retries: z.number() }) });`}
           iconBgGradient="bg-gradient-to-r from-blue-500 to-cyan-600"
           description="The onUnhandledError callback is invoked by Runner whenever an error escapes normal handling."
           codeExample={codeExamples.unhandledErrors}
-          apiHref="https://bluelibs.github.io/runner/"
+          apiHref="https://bluelibs.github.io/runner/#md:unhandled-errors"
         />
       </section>
 
@@ -506,7 +715,7 @@ const result = await q.run(async (signal) => {
   return await step();
 });
 await q.dispose({ cancel: true });`}
-          apiHref="https://bluelibs.github.io/runner/"
+          apiHref="https://bluelibs.github.io/runner/#md:performance"
           className="mb-8"
         />
 
@@ -528,36 +737,6 @@ await q.dispose({ cancel: true });`}
             Automatic resource lifecycle management with proper cleanup and
             garbage collection optimization.
           </p>
-        </div>
-      </section>
-
-      {/* Quick Reference */}
-      <section className="card p-8 mb-8">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
-          Quick Reference
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-              Essential Imports
-            </h3>
-            <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3">
-              <code className="text-sm text-gray-800 dark:text-gray-200">
-                import &#123; resource, task, event, hook, run &#125; from
-                "@bluelibs/runner";
-              </code>
-            </div>
-          </div>
-          <div>
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-              Run Options
-            </h3>
-            <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3">
-              <code className="text-sm text-gray-800 dark:text-gray-200">
-                run(app, &#123; debug: "verbose", shutdownHooks: true &#125;)
-              </code>
-            </div>
-          </div>
         </div>
       </section>
 

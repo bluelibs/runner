@@ -2,15 +2,27 @@ import { Github, ExternalLink, CheckCircle } from "lucide-react";
 
 const Footer: React.FC = () => {
   return (
-    <footer className="bg-black/80 backdrop-blur-sm border-t border-gray-800/50">
+    <footer className="relative overflow-hidden bg-black/80 backdrop-blur-sm border-t border-gray-800/50 dark:bg-gradient-to-b dark:from-violet-950/60 dark:via-black/70 dark:to-black">
+      {/* Dark mode gradient glow background */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 -z-10 hidden dark:block"
+      >
+        {/* Top-right glow */}
+        <div className="absolute -top-28 -right-24 h-[34rem] w-[34rem] rounded-full bg-gradient-to-br from-fuchsia-500/25 via-indigo-500/15 to-cyan-500/25 blur-3xl" />
+        {/* Bottom-left glow */}
+        <div className="absolute -bottom-28 -left-24 h-[30rem] w-[30rem] rounded-full bg-gradient-to-tr from-emerald-400/20 via-sky-500/10 to-purple-500/20 blur-3xl" />
+        {/* Subtle horizon line */}
+        <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/15 to-transparent" />
+      </div>
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12 sm:py-16">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-8 sm:gap-12 mb-12 sm:mb-16">
           {/* Brand */}
           <div className="col-span-1 sm:col-span-2 lg:col-span-2">
             <div className="flex items-center space-x-3 mb-6">
-              <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
+              {/* <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
                 <span className="text-black font-semibold text-sm">R</span>
-              </div>
+              </div> */}
               <span className="text-2xl font-semibold text-white">Runner</span>
             </div>
             <p className="text-gray-400 max-w-sm mb-8 leading-relaxed">
@@ -149,43 +161,43 @@ const Footer: React.FC = () => {
             <ul className="space-y-4">
               <li>
                 <a
+                  href="https://github.com/bluelibs/runner/discussions"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
+                >
+                  <span>Discussions</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://github.com/bluelibs/runner/discussions/new/choose"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
+                >
+                  <span>Ask a Question</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </li>
+              <li>
+                <a
                   href="https://github.com/bluelibs/runner/issues"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
                 >
-                  <span>GitHub Issues</span>
+                  <span>Issues</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </li>
               <li>
                 <a
-                  href="https://discord.gg/bluelibs"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
-                >
-                  <span>Discord</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://twitter.com/bluelibs"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
-                >
-                  <span>Twitter</span>
-                  <ExternalLink className="w-3 h-3" />
-                </a>
-              </li>
-              <li>
-                <a
-                  href="/blog"
+                  href="mailto:theodor@bluelibs.com"
                   className="text-gray-400 hover:text-white transition-colors duration-200"
                 >
-                  Blog
+                  <span>Business Inquiries</span>
                 </a>
               </li>
             </ul>
@@ -242,12 +254,12 @@ const Footer: React.FC = () => {
                   100%
                 </span>
               </div>
-              <div className="flex items-center space-x-2 text-sm text-gray-400">
+              {/* <div className="flex items-center space-x-2 text-sm text-gray-400">
                 <span>Uptime:</span>
                 <span className="bg-gray-800 text-gray-300 px-2.5 py-1 rounded-md text-xs font-medium">
                   99.9%
                 </span>
-              </div>
+              </div> */}
             </div>
           </div>
         </div>
