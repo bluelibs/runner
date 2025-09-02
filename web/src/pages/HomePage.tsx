@@ -250,12 +250,17 @@ const allResources = resourceMiddleware({
         {/* Background Effects */}
         <div className="absolute inset-0 bg-gradient-to-br from-blue-50/50 via-purple-50/30 to-pink-50/50 dark:from-blue-950/50 dark:via-purple-950/30 dark:to-pink-950/50"></div>
 
+        {/* Full screen gradient swipe animation */}
+        <div className="absolute inset-0 overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-400/30 via-purple-400/20 to-pink-400/30 animate-gradient-swipe"></div>
+        </div>
+
         {/* Animated Background Elements */}
         <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-r from-blue-400/20 to-purple-400/20 rounded-full blur-3xl animate-pulse-slow"></div>
+          <div className="absolute -top-40 -right-40 w-80 h-80 bg-gradient-to-r from-blue-400/20 to-purple-400/20 rounded-full blur-3xl animate-pulse-slow animate-fade-in-right"></div>
           <div
-            className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-r from-purple-400/20 to-pink-400/20 rounded-full blur-3xl animate-pulse-slow"
-            style={{ animationDelay: "1s" }}
+            className="absolute -bottom-40 -left-40 w-80 h-80 bg-gradient-to-r from-purple-400/20 to-pink-400/20 rounded-full blur-3xl animate-pulse-slow animate-fade-in-left"
+            style={{ animationDelay: "0.5s" }}
           ></div>
         </div>
 
@@ -598,20 +603,6 @@ const { dispose, value } = await run(server);`}
               </div>
             </div>
           </div>
-          <p className="mt-8 text-sm text-gray-600 dark:text-gray-400 text-center">
-            Bench CI: <code>npm run benchmark:json</code> writes results
-            locally;
-            <code> baseline.json</code> and <code> benchmark-results.json</code>
-            are gitignored. CI compares PR vs base with budgets in
-            <code> benchmarks.config.json</code>.{' '}
-            <Link
-              to="/docs#benchmarks"
-              className="inline-flex items-center text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-            >
-              See docs
-              <ArrowRight className="w-4 h-4 ml-1" />
-            </Link>
-          </p>
         </div>
       </section>
 

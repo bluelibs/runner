@@ -2,57 +2,70 @@ import { useEffect } from "react";
 
 const Cursor = () => {
   useEffect(() => {
-    const cursor = document.querySelector(".cursor");
+    const cursor = document.querySelector(".cursor") as HTMLElement | null;
+    if (!cursor) return;
+
     const clickableSelector =
       'a, button, [role="button"], [class*="cursor-pointer"], [data-cursor="clickable"]';
-    const clickable = document.querySelectorAll(clickableSelector);
 
-    const moveCursor = (e: MouseEvent) => {
-      (cursor as HTMLElement)!.style.left = `${e.clientX}px`;
-      (cursor as HTMLElement)!.style.top = `${e.clientY}px`;
+    // rAF-throttled movement using GPU-friendly transforms via CSS variables
+    let x = 0;
+    let y = 0;
+    let rafId: number | null = null;
+
+    const flush = () => {
+      cursor.style.setProperty("--x", `${x}px`);
+      cursor.style.setProperty("--y", `${y}px`);
+      rafId = null;
     };
 
-    const addGlow = () => cursor!.classList.add("glow");
-    const removeGlow = () => cursor!.classList.remove("glow");
+    const schedule = () => {
+      if (rafId == null) rafId = requestAnimationFrame(flush);
+    };
 
-    window.addEventListener("mousemove", moveCursor);
+    const onPointerMove = (e: PointerEvent) => {
+      x = e.clientX;
+      y = e.clientY;
+      schedule();
+    };
 
-    clickable.forEach((el) => {
-      el.addEventListener("mouseover", addGlow);
-      el.addEventListener("mouseleave", removeGlow);
-    });
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
 
-    // Delegated handlers for dynamically added elements (eg. Benchmarks tabs)
-    const delegatedOver = (e: MouseEvent) => {
-      const target = e?.target as Element | null;
+    const addGlow = () => cursor.classList.add("glow");
+    const removeGlow = () => cursor.classList.remove("glow");
+
+    // Delegated handlers for dynamically added elements (eg. tabs)
+    const delegatedOver = (e: Event) => {
+      const target = e.target as Element | null;
       if (target && target.closest && target.closest(clickableSelector)) {
         addGlow();
       }
     };
-    const delegatedOut = (e: MouseEvent) => {
-      const from = e?.target as Element | null;
-      const to = e?.relatedTarget as Element | null;
+    const delegatedOut = (e: PointerEvent) => {
+      const from = e.target as Element | null;
+      const to = (e.relatedTarget as Element | null) ?? null;
       const leavingClickable =
         from && from.closest && from.closest(clickableSelector);
       const enteringClickable =
-        to &&
-        (to as unknown as Element).closest &&
-        (to as unknown as Element).closest(clickableSelector);
+        to && to.closest && to.closest(clickableSelector);
       if (leavingClickable && !enteringClickable) {
         removeGlow();
       }
     };
-    document.addEventListener("pointerover", delegatedOver);
-    document.addEventListener("pointerout", delegatedOut);
+    document.addEventListener("pointerover", delegatedOver, { passive: true });
+    document.addEventListener("pointerout", delegatedOut, { passive: true });
+
+    // Initial position to avoid visual jump
+    schedule();
 
     return () => {
-      window.removeEventListener("mousemove", moveCursor);
-      clickable.forEach((el) => {
-        el.removeEventListener("mouseover", addGlow);
-        el.removeEventListener("mouseleave", removeGlow);
-      });
-      document.removeEventListener("pointerover", delegatedOver);
-      document.removeEventListener("pointerout", delegatedOut);
+      window.removeEventListener("pointermove", onPointerMove);
+      document.removeEventListener(
+        "pointerover",
+        delegatedOver as EventListener,
+      );
+      document.removeEventListener("pointerout", delegatedOut as EventListener);
+      if (rafId != null) cancelAnimationFrame(rafId);
     };
   }, []);
 

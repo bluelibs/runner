@@ -1,5 +1,8 @@
 # React + TypeScript + Vite
 
+Important licensing notice
+- The contents of this `web/` folder are provided under a View‑Only license. You may inspect these files, but you may not copy, download, modify, distribute, host, or otherwise use them without prior written permission. See `web/LICENSE.md` for full terms.
+
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
 
 Currently, two official plugins are available:

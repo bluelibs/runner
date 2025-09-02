@@ -60,6 +60,7 @@
   [class*="cursor-pointer"],
   a:active,
   button:active {
+    /* Cursor styles handled by global cursor setting */
   }
 
   .text-blue-800,
@@ -170,6 +171,67 @@
 
   .animate-scale-in.animate {
     animation-name: scaleIn;
+  }
+
+  /* Initial load swipe animations for background gradients */
+  @keyframes fadeInRightSwipe {
+    from {
+      opacity: 0;
+      transform: translateX(100px) scale(0.8);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+  }
+
+  @keyframes fadeInLeftSwipe {
+    from {
+      opacity: 0;
+      transform: translateX(-100px) scale(0.8);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(0) scale(1);
+    }
+  }
+
+  .animate-fade-in-right {
+    animation: fadeInRightSwipe 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  .animate-fade-in-left {
+    animation: fadeInLeftSwipe 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  /* Full screen gradient swipe animation */
+  @keyframes gradientSwipe {
+    0% {
+      opacity: 0;
+      transform: translateX(-100%) skewX(-20deg) scale(1.2);
+      filter: blur(20px);
+    }
+    30% {
+      opacity: 0.7;
+      transform: translateX(-20%) skewX(-10deg) scale(1.1);
+      filter: blur(10px);
+    }
+    60% {
+      opacity: 1;
+      transform: translateX(10%) skewX(0deg) scale(1);
+      filter: blur(0px);
+    }
+    100% {
+      opacity: 0.8;
+      transform: translateX(0%) skewX(0deg) scale(1);
+      filter: blur(0px);
+    }
+  }
+
+  .animate-gradient-swipe {
+    animation: gradientSwipe 2s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+    background-size: 150% 150%;
+    background-position: -50% -50%;
   }
 
   /* Animated grid background */
@@ -1033,8 +1095,8 @@
     border-radius: 50%;
     pointer-events: none;
     z-index: 9999;
-    transform: translate(-50%, -50%);
-    transition: all 0.05s ease-out;
+    transform: translate(calc(var(--x, 0px) - 50%), calc(var(--y, 0px) - 50%));
+    will-change: transform;
   }
 
   .cursor-dot {
@@ -1043,7 +1105,8 @@
     border-radius: 50%;
     background-color: transparent;
     border: 2px solid rgba(255, 255, 255, 0.2); /* Subtle white border */
-    transition: all 0.1s ease-out;
+    transition: transform 120ms ease-out, background-color 120ms ease-out,
+      border-color 120ms ease-out;
     position: relative;
   }
 

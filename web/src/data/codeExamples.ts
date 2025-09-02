@@ -367,4 +367,89 @@ await rr.runTask(someTask, { x: 1 });
 await rr.emitEvent(someEvent, { id: "e1" });
 const value = rr.getResourceValue(someResource);
 await rr.dispose();`,
+
+  // Middleware – extended samples
+  middlewareTaskAuth: `import { task, taskMiddleware } from "@bluelibs/runner";
+
+type User = { id: string; role: "user" | "admin" };
+
+// Task middleware with typed config, input, output
+const requireRole = taskMiddleware<
+  { role: User["role"] },
+  { user: User },
+  { user: User & { verified: true } }
+>({
+  id: "app.middleware.task.requireRole",
+  run: async ({ task, next }, _deps, cfg) => {
+    if (task.input.user.role !== cfg.role) {
+      throw new Error("Unauthorized");
+    }
+    const result = await next(task.input);
+    return { user: { ...task.input.user, verified: true } };
+  },
+});
+
+export const getSecret = task({
+  id: "app.tasks.getSecret",
+  middleware: [requireRole.with({ role: "admin" })],
+  run: async (input: { user: User }) => ({ secret: "xyz" }),
+});`,
+
+  middlewareResilientTask: `import { task, globals } from "@bluelibs/runner";
+
+const resilientTask = task({
+  id: "app.tasks.resilient",
+  middleware: [
+    globals.middleware.task.retry.with({
+      retries: 3,
+      delayStrategy: (attempt) => 250 * attempt,
+      stopRetryIf: (err) => err?.permanent === true,
+    }),
+    globals.middleware.task.timeout.with({ ttl: 10_000 }),
+    globals.middleware.task.cache.with({ ttl: 60_000 }),
+  ],
+  run: async (input: { id: string }) => fetchExpensive(input.id),
+});`,
+
+  middlewareGlobalTask: `import { taskMiddleware } from "@bluelibs/runner";
+
+// Apply to every task (or filter with a predicate)
+const auditAllTasks = taskMiddleware({
+  id: "app.middleware.task.auditAll",
+  everywhere: true, // or everywhere: (t) => t.id.startsWith("app.")
+  run: async ({ task, next }) => {
+    const started = Date.now();
+    try {
+      return await next(task.input);
+    } finally {
+      console.log('[task] ' + task.id + ' in ' + (Date.now() - started) + 'ms');
+    }
+  },
+});`,
+
+  middlewareResourceSoftDelete: `import { resourceMiddleware } from "@bluelibs/runner";
+
+// Intercept a resource after it initializes
+const softDelete = resourceMiddleware({
+  id: "app.middleware.resource.softDelete",
+  run: async ({ resource, next }) => {
+    const instance = await next(resource.config);
+    const originalDelete = instance.delete;
+    instance.delete = async (id: string, ...args: any[]) => {
+      return instance.update(id, { deletedAt: new Date() }, ...args);
+    };
+    return instance;
+  },
+});`,
+
+  middlewareGlobalResource: `import { resourceMiddleware } from "@bluelibs/runner";
+
+const tagAll = resourceMiddleware({
+  id: "app.middleware.resource.tagAll",
+  everywhere: (r) => r.id.startsWith("app."),
+  run: async ({ resource, next }) => {
+    const value = await next(resource.config);
+    return { ...value, __tag: "app" };
+  },
+});`,
 };

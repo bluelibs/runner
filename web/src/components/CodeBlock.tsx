@@ -17,6 +17,16 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
   variant = "premium",
 }) => {
   const [copied, setCopied] = useState(false);
+  const [mousePos, setMousePos] = useState({ x: 50, y: 50 });
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (variant !== "premium") return;
+    
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    setMousePos({ x, y });
+  };
 
   const copyToClipboard = () => {
     navigator.clipboard.writeText(children);
@@ -133,6 +143,8 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
       borderRadius: "0.875rem",
       overflow: "hidden",
       boxShadow: "none",
+      position: "relative",
+      transition: "all 0.4s cubic-bezier(0.4, 0, 0.2, 1)",
     },
   };
 
@@ -249,7 +261,21 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
         style={outerStyleMap[variant]}
       >
         <div className="rounded-xl p-[2px]" style={innerStyleMap[variant]}>
-          <div className="relative rounded-lg overflow-hidden">
+          <div 
+            className="relative rounded-lg overflow-hidden group"
+            onMouseMove={handleMouseMove}
+          >
+            {/* Subtle hover gradient overlay */}
+            {variant === "premium" && (
+              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out pointer-events-none z-[1]">
+                <div 
+                  className="absolute inset-0 transition-all duration-200 ease-out"
+                  style={{
+                    background: `radial-gradient(600px circle at ${mousePos.x}% ${mousePos.y}%, rgba(139,92,246,0.08), rgba(59,130,246,0.04), transparent 50%)`
+                  }}
+                />
+              </div>
+            )}
             <button
               onClick={copyToClipboard}
               className={buttonClassMap[variant].className}

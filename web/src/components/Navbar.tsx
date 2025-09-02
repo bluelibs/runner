@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X, Github, Star } from "lucide-react";
 
@@ -82,6 +82,47 @@ const Navbar: React.FC<NavbarProps> = () => {
     { name: "Playground", href: "/playground" },
   ];
 
+  // Route module prefetchers (lazy import targets). Using dynamic imports allows
+  // bundlers to prefetch/warm chunks even if routes are not lazily rendered yet.
+  const prefetchers = useMemo(
+    () =>
+      ({
+        "/": () => import("../pages/HomePage"),
+        "/docs": () => import("../pages/DocsPage"),
+        "/quick-start": () => import("../pages/QuickStartPage"),
+        "/benchmarks": () => import("../pages/BenchmarksPage"),
+        "/playground": () => import("../pages/PlaygroundPage"),
+      } as Record<string, () => Promise<unknown>>),
+    [],
+  );
+
+  const prefetchRoute = (path: string) => {
+    const load = prefetchers[path];
+    if (typeof load === "function") {
+      // Fire and forget, ignore errors (already in main chunk, offline, etc.)
+      try {
+        load();
+      } catch (e) {
+        console.error(e);
+        /* no-op */
+      }
+    }
+  };
+
+  // Idle prefetch: warm all non-active routes shortly after mount.
+  useEffect(() => {
+    const idle = window.requestIdleCallback || ((cb) => setTimeout(cb, 300));
+    const cancelIdle = window.cancelIdleCallback || ((id) => clearTimeout(id));
+    const id = idle(() => {
+      navigation
+        .map((n) => n.href)
+        .filter((p) => p !== location.pathname)
+        .forEach((p) => prefetchRoute(p));
+    });
+    return () => cancelIdle(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
+
   const isActive = (path: string) => location.pathname === path;
 
   return (
@@ -91,10 +132,10 @@ const Navbar: React.FC<NavbarProps> = () => {
         <div className="relative">
           {/* Background layer with gradient fade */}
           <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-white/70 to-white/30 dark:from-slate-950/90 dark:via-slate-950/70 dark:to-slate-950/30" />
-          
+
           {/* Backdrop blur layer */}
           <div className="absolute inset-0 backdrop-blur-xl" />
-          
+
           {/* Content container */}
           <div className="nav-aware relative">
             {/* Subtle accent hairline */}
@@ -123,6 +164,8 @@ const Navbar: React.FC<NavbarProps> = () => {
                     <Link
                       key={item.name}
                       to={item.href}
+                      onMouseEnter={() => prefetchRoute(item.href)}
+                      onFocus={() => prefetchRoute(item.href)}
                       className={`px-3 py-2 rounded-md text-sm font-medium transition-all duration-300 relative ${
                         isActive(item.href)
                           ? "text-white bg-gradient-to-r from-emerald-500/20 to-emerald-400/20 shadow-lg shadow-emerald-500/10"
@@ -191,6 +234,8 @@ const Navbar: React.FC<NavbarProps> = () => {
                 key={item.name}
                 to={item.href}
                 onClick={() => setIsOpen(false)}
+                onMouseEnter={() => prefetchRoute(item.href)}
+                onFocus={() => prefetchRoute(item.href)}
                 className={`block px-3 py-2 rounded-md text-base font-medium transition-all duration-300 ${
                   isActive(item.href)
                     ? "text-white bg-gradient-to-r from-emerald-500/20 to-emerald-400/20 shadow-lg shadow-emerald-500/10"
