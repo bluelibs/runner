@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Menu, X, Github, Star } from "lucide-react";
+import { formatStarCount, useGithubStars } from "../hooks/useGithubStars";
 
 const LogoR: React.FC<{ className?: string }> = ({ className }) => (
   <svg
@@ -73,6 +74,7 @@ interface NavbarProps {
 const Navbar: React.FC<NavbarProps> = () => {
   const [isOpen, setIsOpen] = useState(false);
   const location = useLocation();
+  const { count } = useGithubStars();
 
   const navigation = [
     { name: "Home", href: "/" },
@@ -197,7 +199,9 @@ const Navbar: React.FC<NavbarProps> = () => {
                       <span className="text-sm font-medium">GitHub</span>
                       <div className="flex items-center space-x-1">
                         <Star className="w-3 h-3" />
-                        <span className="text-xs">48</span>
+                        <span className="text-xs">
+                          {formatStarCount(count)}
+                        </span>
                       </div>
                     </a>
                   </div>

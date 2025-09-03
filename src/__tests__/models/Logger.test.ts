@@ -322,6 +322,54 @@ describe("Logger", () => {
     expect(outputs.indexOf("m2")).toBeGreaterThan(outputs.indexOf("m1"));
   });
 
+  it("registering listener on child delegates to root logger", async () => {
+    const root = new Logger({
+      printThreshold: "trace",
+      printStrategy: "pretty" as any,
+      bufferLogs: false,
+    });
+
+    const child = root.with({ source: "child" });
+
+    const seen: string[] = [];
+    // This should hit the delegation branch in onLog()
+    child.onLog((log) => {
+      seen.push(String(log.message));
+    });
+
+    await root.info("from root");
+    await child.info("from child");
+
+    expect(seen).toEqual(["from root", "from child"]);
+  });
+
+  it("child.triggerLogListeners delegates up to root (private path)", async () => {
+    const root = new Logger({
+      printThreshold: null,
+      printStrategy: "pretty" as any,
+      bufferLogs: false,
+    });
+
+    const child = root.with({ source: "child" });
+
+    const seen: string[] = [];
+    root.onLog((log) => {
+      seen.push(String(log.message));
+    });
+
+    const spy = jest.spyOn((root as any), "triggerLogListeners");
+
+    // Directly invoke the private method on the child to cover the branch
+    await (child as any).triggerLogListeners({
+      level: "info",
+      message: "via child",
+      timestamp: new Date(),
+    });
+
+    expect(spy).toHaveBeenCalled();
+    expect(seen).toEqual(["via child"]);
+  });
+
   it("respects NO_COLOR env by disabling ANSI color codes", async () => {
     const prev = process.env.NO_COLOR;
     process.env.NO_COLOR = "1";

@@ -1,6 +1,8 @@
-import { Github, ExternalLink, CheckCircle } from "lucide-react";
+import { Github, ExternalLink, CheckCircle, Star } from "lucide-react";
+import { formatStarCount, useGithubStars } from "../hooks/useGithubStars";
 
 const Footer: React.FC = () => {
+  const { count } = useGithubStars();
   return (
     <footer className="relative overflow-hidden bg-black/80 backdrop-blur-sm border-t border-gray-800/50 dark:bg-gradient-to-b dark:from-violet-950/60 dark:via-black/70 dark:to-black">
       {/* Dark mode gradient glow background */}
@@ -39,11 +41,10 @@ const Footer: React.FC = () => {
                 <Github className="w-4 h-4" />
                 <span>Star on GitHub</span>
               </a>
-              {/* <div className="flex items-center space-x-2 text-sm text-gray-400">
-                <span>2.1k stars</span>
-                <span>•</span>
-                <span>156k downloads</span>
-              </div> */}
+              <div className="flex items-center space-x-2 text-sm text-gray-400">
+                <Star className="w-4 h-4" />
+                <span>{formatStarCount(count)} stars</span>
+              </div>
             </div>
           </div>
 
