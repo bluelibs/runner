@@ -388,15 +388,20 @@ const app = resource({
 
 ## Namespacing
 
-As your app grows, use a consistent naming convention. This is the recommended format:
+As your app grows, you'll want consistent naming. Here's the convention that won't drive you crazy:
 
-| Type       | Format                                 |
-| ---------- | -------------------------------------- |
-| Tasks      | `{domain}.tasks.{taskName}`            |
-| Hooks      | `{domain}.hooks.on{EventName}`         |
-| Resources  | `{domain}.resources.{resourceName}`    |
-| Events     | `{domain}.events.{eventName}`          |
-| Middleware | `{domain}.middleware.{middlewareName}` |
+| Type                | Format                                           |
+| ------------------- | ------------------------------------------------ |
+| Resources           | `{domain}.resources.{resource-name}`             |
+| Tasks               | `{domain}.tasks.{task-name}`                     |
+| Events              | `{domain}.events.{event-name}`                   |
+| Hooks               | `{domain}.hooks.on-{event-name}`                 |
+| Task Middleware     | `{domain}.middleware.task.{middleware-name}`     |
+| Resource Middleware | `{domain}.middleware.resource.{middleware-name}` |
+
+We recommend kebab-case for file names and ids. Suffix files with their primitive type: `*.task.ts`, `*.task-middleware.ts`, `*.hook.ts`, etc.
+
+Folders can look something like this: `src/app/users/tasks/create-user.task.ts`. For domain: `app.users` and a task. Use `middleware/task|resource` for middleware files.
 
 ## Factory Pattern
 
