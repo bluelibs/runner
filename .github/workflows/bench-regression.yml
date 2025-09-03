@@ -35,7 +35,7 @@ jobs:
         working-directory: base
         env:
           NODE_OPTIONS: --expose-gc
-          BENCHMARK_OUTPUT: ../baseline.json
+          BENCHMARK_OUTPUT: ${{ github.workspace }}/baseline.json
         run: npm run benchmark
 
       - name: Install deps (head)
@@ -46,12 +46,25 @@ jobs:
         working-directory: head
         env:
           NODE_OPTIONS: --expose-gc
-          BENCHMARK_OUTPUT: ../benchmark-results.json
+          BENCHMARK_OUTPUT: ${{ github.workspace }}/benchmark-results.json
         run: npm run benchmark
+
+      - name: Prepare comparison inputs
+        run: |
+          set -euo pipefail
+          echo "Workspace: $GITHUB_WORKSPACE"
+          if [ ! -f "$GITHUB_WORKSPACE/baseline.json" ]; then
+            echo "No baseline.json found; creating stub baseline (no base benchmarks)."
+            printf '{"meta":{"note":"stub baseline - no benchmarks in base"},"results":{}}' > "$GITHUB_WORKSPACE/baseline.json"
+          fi
+          if [ ! -f "$GITHUB_WORKSPACE/benchmark-results.json" ]; then
+            echo "benchmark-results.json missing from head run" >&2
+            exit 1
+          fi
 
       - name: Compare results
         working-directory: head
-        run: node ./scripts/compare-benchmarks.mjs ../baseline.json ../benchmark-results.json ./benchmarks.config.json
+        run: node ./scripts/compare-benchmarks.mjs ${{ github.workspace }}/baseline.json ${{ github.workspace }}/benchmark-results.json ${{ github.workspace }}/benchmarks.config.json
 
       - name: Upload artifacts
         if: always()
@@ -59,5 +72,5 @@ jobs:
         with:
           name: benchmark-outputs
           path: |
-            baseline.json
-            benchmark-results.json
+            ${{ github.workspace }}/baseline.json
+            ${{ github.workspace }}/benchmark-results.json
