@@ -39,7 +39,7 @@ export class DependencyProcessor {
     protected readonly taskRunner: TaskRunner,
     logger: Logger,
   ) {
-    this.logger = logger.with({ source: "runner.dependencyProcessor" });
+    this.logger = logger.with({ source: "dependencyProcessor" });
     this.resourceInitializer = new ResourceInitializer(
       store,
       eventManager,
