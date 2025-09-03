@@ -24,6 +24,8 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+          # Ensure caching works with multi-checkout (head/base)
+          cache-dependency-path: '**/package-lock.json'
 
       - name: Install deps (base)
         working-directory: base
@@ -59,4 +61,3 @@ jobs:
           path: |
             baseline.json
             benchmark-results.json
-
