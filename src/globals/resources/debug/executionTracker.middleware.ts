@@ -9,7 +9,7 @@ import { globalTags } from "../../globalTags";
 import { getConfig } from "./types";
 
 export const tasksTrackerMiddleware = defineTaskMiddleware({
-  id: "debug.middleware.tracker.task",
+  id: "globals.debug.middleware.task.executionTracker",
   everywhere: (task) => !globalTags.system.exists(task),
   dependencies: {
     logger: globalResources.logger,
@@ -53,7 +53,7 @@ export const tasksTrackerMiddleware = defineTaskMiddleware({
 });
 
 export const resourcesTrackerMiddleware = defineResourceMiddleware({
-  id: "debug.middleware.tracker.resource",
+  id: "globals.debug.middleware.resource.executionTracker",
   dependencies: {
     logger: globalResources.logger,
     debugConfig,
