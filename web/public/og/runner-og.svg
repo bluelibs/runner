@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#10b981"/>
+      <stop offset="100%" stop-color="#3b82f6"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#000"/>
+  <g opacity="0.15">
+    <circle cx="200" cy="100" r="160" fill="url(#g)"/>
+    <circle cx="1000" cy="530" r="220" fill="url(#g)"/>
+  </g>
+  <text x="80" y="210" fill="#fff" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="88" font-weight="800">Runner</text>
+  <text x="80" y="290" fill="#d1d5db" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="34" font-weight="600">TypeScript-first DI framework</text>
+  <text x="80" y="360" fill="#9ca3af" font-family="Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif" font-size="28">Tasks • Resources • Events • Middleware</text>
+  <rect x="80" y="400" width="1040" height="160" rx="16" fill="#0b0b0b" stroke="#1f2937"/>
+  <text x="110" y="460" fill="#93c5fd" font-family="JetBrains Mono, monospace" font-size="24">npm i @bluelibs/runner</text>
+  <text x="110" y="500" fill="#a7f3d0" font-family="JetBrains Mono, monospace" font-size="22">2.2M+ tasks/sec • 100% coverage</text>
+</svg>
+

@@ -2,7 +2,7 @@
 TODO.md
 coverage
 dist
-docs
+/docs
 node_modules
 npm-debug.log
 typings
@@ -11,3 +11,5 @@ yarn.lock
 .vscode
 .aider*
 junit.xml
+/baseline.json
+/benchmark-results.json

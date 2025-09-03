@@ -17,9 +17,12 @@
     "test:clean": "jest --clearCache",
     "testonly": "npm test",
     "test:ci": "jest --verbose --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
+    "test:security": "jest --verbose --runInBand --testPathPattern=src/__tests__/security",
     "prepublishOnly": "npm run clean && npm run build",
     "typedoc": "typedoc --options typedoc.json",
-    "benchmark": "jest --config jest.bench.config.js --verbose"
+    "benchmark": "jest --config jest.bench.config.js --verbose --runInBand",
+    "benchmark:json": "BENCHMARK_OUTPUT=./benchmark-results.json NODE_OPTIONS=--expose-gc npm run benchmark",
+    "benchmark:compare": "node ./scripts/compare-benchmarks.mjs ./baseline.json ./benchmark-results.json ./benchmarks.config.json"
   },
   "devDependencies": {
     "@types/benchmark": "^2.1.5",
@@ -39,6 +42,7 @@
     "prettier": "^2.0.5",
     "reflect-metadata": "^0.2.2",
     "source-map-support": "^0.5.13",
+    "tailwindcss": "^4.1.12",
     "ts-jest": "^29.0.0",
     "typedoc": "^0.26.7",
     "typedoc-material-theme": "^1.1.0",

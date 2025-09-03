@@ -122,8 +122,9 @@ export async function run<C, V extends Promise<any>>(
     // Compile-time event emission cycle detection (cheap, graph-based)
     store.validateEventEmissionGraph();
 
+    const boundedLogger = logger.with({ source: "run" });
     if (dryRun) {
-      await logger.debug("Dry run mode. Skipping initialization...");
+      await boundedLogger.debug("Dry run mode. Skipping initialization...");
       return new RunResult(
         store.root.value,
         logger,
@@ -135,12 +136,12 @@ export async function run<C, V extends Promise<any>>(
     }
 
     // Beginning initialization
-    await logger.debug("Events stored. Attaching listeners...");
+    await boundedLogger.debug("Events stored. Attaching listeners...");
     await processor.attachListeners();
-    await logger.debug("Listeners attached. Computing dependencies...");
+    await boundedLogger.debug("Listeners attached. Computing dependencies...");
     await processor.computeAllDependencies();
     // After this stage, logger print policy could have been set.
-    await logger.debug(
+    await boundedLogger.debug(
       "Dependencies computed. Proceeding with initialization...",
     );
 
@@ -163,7 +164,7 @@ export async function run<C, V extends Promise<any>>(
       "system",
     );
 
-    await logger.info("Runner online. Awaiting tasks and events.");
+    await boundedLogger.info("Runner online. Awaiting tasks and events.");
 
     if (shutdownHooks) {
       unhookShutdown = registerShutdownHook(() => store.dispose());

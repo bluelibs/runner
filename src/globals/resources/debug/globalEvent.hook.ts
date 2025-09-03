@@ -7,7 +7,7 @@ import { getConfig } from "./types";
 import { globalEvents } from "../../globalEvents";
 
 export const globalEventListener = defineHook({
-  id: "debug.catchAllHook",
+  id: "globals.debug.hooks.onAnyEvent",
   on: "*",
   dependencies: {
     logger: globalResources.logger,
@@ -22,7 +22,7 @@ export const globalEventListener = defineHook({
     if (debugConfig.logEventEmissionOnRun) {
       const message = `Event ${String(event!.id)} emitted`;
       await logger.info(message, {
-        source: "debug.catchAllHook",
+        source: "globals.debug.hooks.onAnyEvent",
         data: debugConfig.logEventEmissionInput
           ? { data: event!.data }
           : undefined,

@@ -1,0 +1,76 @@
+name: Benchmark Regression
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout HEAD (PR)
+        uses: actions/checkout@v4
+        with:
+          path: head
+
+      - name: Checkout BASE (main)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          # Ensure caching works with multi-checkout (head/base)
+          cache-dependency-path: '**/package-lock.json'
+
+      - name: Install deps (base)
+        working-directory: base
+        run: npm ci
+
+      - name: Run benchmarks (base)
+        working-directory: base
+        env:
+          NODE_OPTIONS: --expose-gc
+          BENCHMARK_OUTPUT: ${{ github.workspace }}/baseline.json
+        run: npm run benchmark
+
+      - name: Install deps (head)
+        working-directory: head
+        run: npm ci
+
+      - name: Run benchmarks (head)
+        working-directory: head
+        env:
+          NODE_OPTIONS: --expose-gc
+          BENCHMARK_OUTPUT: ${{ github.workspace }}/benchmark-results.json
+        run: npm run benchmark
+
+      - name: Prepare comparison inputs
+        run: |
+          set -euo pipefail
+          echo "Workspace: $GITHUB_WORKSPACE"
+          if [ ! -f "$GITHUB_WORKSPACE/baseline.json" ]; then
+            echo "No baseline.json found; creating stub baseline (no base benchmarks)."
+            printf '{"meta":{"note":"stub baseline - no benchmarks in base"},"results":{}}' > "$GITHUB_WORKSPACE/baseline.json"
+          fi
+          if [ ! -f "$GITHUB_WORKSPACE/benchmark-results.json" ]; then
+            echo "benchmark-results.json missing from head run" >&2
+            exit 1
+          fi
+
+      - name: Compare results
+        working-directory: head
+        run: node ./scripts/compare-benchmarks.mjs ${{ github.workspace }}/baseline.json ${{ github.workspace }}/benchmark-results.json ${{ github.workspace }}/head/benchmarks.config.json
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-outputs
+          path: |
+            ${{ github.workspace }}/baseline.json
+            ${{ github.workspace }}/benchmark-results.json

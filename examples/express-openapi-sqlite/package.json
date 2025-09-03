@@ -12,8 +12,8 @@
     "mcp": "runner-dev mcp"
   },
   "dependencies": {
-    "@bluelibs/runner": "^4.1.1",
-    "@bluelibs/runner-dev": "^4.2.0",
+    "@bluelibs/runner": "^4.3.0",
+    "@bluelibs/runner-dev": "^4.1.0",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dedupe": "^4.0.3",

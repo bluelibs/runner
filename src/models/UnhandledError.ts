@@ -22,10 +22,13 @@ export function createDefaultUnhandledError(logger: Logger): OnUnhandledError {
   return async ({ error, kind, source }: OnUnhandledErrorInfo) => {
     const normalizedError =
       error instanceof Error ? error : new Error(String(error));
+
     await logger.error(`${normalizedError.toString()}`, {
       source,
       error: normalizedError,
-      data: kind ? { kind } : undefined,
+      data: {
+        kind,
+      },
     });
   };
 }

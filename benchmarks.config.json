@@ -1,0 +1,17 @@
+{
+  "threshold": 0.15,
+  "metrics": {
+    "basicTaskExecution.tasksPerSecond": "higher",
+    "basicTaskExecution.avgTimePerTaskMs": "lower",
+    "middlewareTaskExecution.tasksPerSecond": "higher",
+    "middlewareTaskExecution.avgTimePerTaskMs": "lower",
+    "resourceInitialization.resourcesPerSecond": "higher",
+    "resourceInitialization.avgTimePerResourceMs": "lower",
+    "eventEmissionAndHandling.eventsPerSecond": "higher",
+    "eventEmissionAndHandling.avgTimePerEventMs": "lower",
+    "dependencyResolution.chainsPerSecond": "higher",
+    "dependencyResolution.avgTimePerChainMs": "lower",
+    "cacheMiddleware.speedupFactor": "higher"
+  }
+}
+

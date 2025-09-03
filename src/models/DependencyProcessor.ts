@@ -32,13 +32,14 @@ import { Logger } from "./Logger";
  */
 export class DependencyProcessor {
   protected readonly resourceInitializer: ResourceInitializer;
-
+  protected readonly logger!: Logger;
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
     protected readonly taskRunner: TaskRunner,
-    protected readonly logger: Logger,
+    logger: Logger,
   ) {
+    this.logger = logger.with({ source: "dependencyProcessor" });
     this.resourceInitializer = new ResourceInitializer(
       store,
       eventManager,
@@ -272,6 +273,11 @@ export class DependencyProcessor {
     for (const key in map) {
       try {
         object[key] = await this.extractDependency(map[key], source);
+        // Special handling, a little bit of magic and memory sacrifice for the sake of observability.
+        // Maybe later we can allow this to be opt-in to save 'memory' in the case of large tasks?
+        if ((object[key] as any) instanceof Logger) {
+          object[key] = object[key].with({ source });
+        }
       } catch (e) {
         const errorMessage = String(e);
         this.logger.error(
@@ -355,9 +361,7 @@ export class DependencyProcessor {
 
     const { resource, config } = storeResource;
 
-    if (storeResource.isInitialized) {
-      return storeResource.value;
-    } else {
+    if (!storeResource.isInitialized) {
       // check if it has an initialisation function that provides the value
       if (resource.init) {
         const depMap = (resource.dependencies || {}) as DependencyMapType;

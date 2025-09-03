@@ -8,7 +8,7 @@ import { globalEvents } from "../../globalEvents";
 import { safeStringify } from "../../../models/utils/safeStringify";
 
 export const hookInterceptorResource = defineResource({
-  id: "debug.hookInterceptorResource",
+  id: "globals.debug.resources.hookInterceptor",
   meta: {
     title: "Hook Interceptor",
     description:
@@ -34,7 +34,7 @@ export const hookInterceptorResource = defineResource({
         const hookId = hook.id;
         let logString = `Hook triggered for ${String(hookId)}`;
         await logger.info(logString, {
-          source: "debug.hookInterceptorResource",
+          source: "globals.debug.resources.hookInterceptor",
         });
       }
 
@@ -44,7 +44,7 @@ export const hookInterceptorResource = defineResource({
         const hookId = hook.id;
         let logString = `Hook completed for ${String(hookId)}`;
         await logger.info(logString, {
-          source: "debug.hookInterceptorResource",
+          source: "globals.debug.resources.hookInterceptor",
         });
       }
     });

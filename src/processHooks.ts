@@ -1,5 +1,3 @@
-import { OnUnhandledError } from "./models/UnhandledError";
-
 // Global registry of active error handlers for process-level safety nets
 const activeErrorHandlers = new Set<
   (

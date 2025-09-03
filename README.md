@@ -14,6 +14,7 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 - [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)
 - [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)
 - [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite)
+- [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking) (or feed README.md and use your own AI)
 
 Welcome to BlueLibs Runner, where we've taken the chaos of modern application architecture and turned it into something that won't make you question your life choices at 3am. This isn't just another framework – it's your new best friend who actually understands that code should be readable, testable, and not require a PhD in abstract nonsense to maintain.
 
@@ -90,9 +91,9 @@ const { dispose } = await run(app, { debug: "verbose" });
 
 > **runtime:** "'Less lines than Hello World.' Incredible. All you had to do was externalize 90% of the work into `express`, Node, and me. But please, bask in the brevity. I’ll be over here negotiating a peace treaty between your dependency tree and reality."
 
-## The Big Four
+## The Big Five
 
-The framework is built around four core concepts: Tasks, Resources, Events, and Middleware. Understanding them is key to using the runner effectively.
+The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using the runner effectively.
 
 ### Tasks
 
@@ -569,7 +570,149 @@ const loggedTask = task({
 });
 ```
 
-> **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'. I’ll keep unwrapping until we hit the single lonely `return` you were hiding like state secrets."
+> **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'. I'll keep unwrapping until we hit the single lonely `return` you were hiding like state secrets."
+
+### Tags
+
+Tags are metadata that can influence system behavior. Unlike meta properties, tags can be queried at runtime to build dynamic functionality. They can be simple strings or structured configuration objects.
+
+#### Basic Usage
+
+```typescript
+import { tag, task, hook, globals } from "@bluelibs/runner";
+
+// Simple string tags
+const apiTask = task({
+  id: "app.tasks.getUserData",
+  tags: ["api", "public", "cacheable"],
+  run: async (userId) => getUserFromDatabase(userId),
+});
+
+// Structured tags with configuration
+const httpTag = tag<{ method: string; path: string }>({
+  id: "http.route",
+});
+
+const getUserTask = task({
+  id: "app.tasks.getUser",
+  tags: ["api", httpTag.with({ method: "GET", path: "/users/:id" })],
+  run: async ({ id }) => getUserFromDatabase(id),
+});
+```
+
+#### Discovering Components by Tags
+
+The core power of tags is runtime discovery. Use `store.getTasksWithTag()` to find components:
+
+```typescript
+import { hook, globals } from "@bluelibs/runner";
+
+// Auto-register HTTP routes based on tags
+const routeRegistration = hook({
+  id: "app.hooks.registerRoutes",
+  on: globals.events.ready,
+  dependencies: {
+    store: globals.resources.store,
+    server: expressServer,
+  },
+  run: async (_, { store, server }) => {
+    // Find all tasks with HTTP tags
+    const apiTasks = store.getTasksWithTag(httpTag);
+
+    apiTasks.forEach((taskDef) => {
+      const config = httpTag.extract(taskDef);
+      if (!config) return;
+
+      const { method, path } = config;
+      server.app[method.toLowerCase()](path, async (req, res) => {
+        const result = await taskDef({ ...req.params, ...req.body });
+        res.json(result);
+      });
+    });
+
+    // Also find by string tags
+    const cacheableTasks = store.getTasksWithTag("cacheable");
+    console.log(`Found ${cacheableTasks.length} cacheable tasks`);
+  },
+});
+```
+
+#### Tag Extraction and Processing
+
+```typescript
+// Check if a tag exists and extract its configuration
+const performanceTag = tag<{ warnAboveMs: number }>({
+  id: "performance.monitor",
+});
+
+const performanceMiddleware = taskMiddleware({
+  id: "app.middleware.performance",
+  run: async ({ task, next }) => {
+    // Check if task has performance monitoring enabled
+    if (!performanceTag.exists(task.definition)) {
+      return next(task.input);
+    }
+
+    // Extract the configuration
+    const config = performanceTag.extract(task.definition);
+    const startTime = Date.now();
+
+    try {
+      const result = await next(task.input);
+      const duration = Date.now() - startTime;
+
+      if (duration > config.warnAboveMs) {
+        console.warn(`Task ${task.definition.id} took ${duration}ms`);
+      }
+
+      return result;
+    } catch (error) {
+      const duration = Date.now() - startTime;
+      console.error(`Task failed after ${duration}ms`, error);
+      throw error;
+    }
+  },
+});
+```
+
+#### System Tags
+
+Built-in tags for framework behavior:
+
+```typescript
+import { globals } from "@bluelibs/runner";
+
+const internalTask = task({
+  id: "app.internal.cleanup",
+  tags: [
+    globals.tags.system, // Excludes from debug logs
+    globals.tags.debug.with({ logTaskInput: true }), // Per-component debug config
+  ],
+  run: async () => performCleanup(),
+});
+
+const internalEvent = event({
+  id: "app.events.internal",
+  tags: [globals.tags.excludeFromGlobalHooks], // Won't trigger wildcard listeners
+});
+```
+
+#### Contract Tags
+
+Enforce return value shapes at compile time:
+
+```typescript
+// Tags that enforce type contracts
+const userContract = tag<void, void, { name: string }>({
+  id: "contract.user",
+});
+
+const profileTask = task({
+  id: "app.tasks.getProfile",
+  tags: [userContract], // Must return { name: string }
+  run: async () => ({ name: "Ada" }), // ✅ Satisfies contract
+});
+```
 
 ## run() and RunOptions
 
@@ -887,7 +1030,7 @@ const databaseResource = resource({
   },
   dispose: async (connection) => {
     await connection.close();
-    console.log("Database connection closed");
+    // console.log("Database connection closed");
   },
 });
 
@@ -1310,6 +1453,7 @@ const app = resource({
     logger.trace("Very detailed trace"); // ❌ Hidden by default
 
     logger.onLog(async (log) => {
+      // Sub-loggers instantiated .with() share the same log listeners.
       // Catch logs
     })
   },
@@ -1762,203 +1906,6 @@ const sendWelcomeEmail = task({
   run: async (userData, { emailService }) => {
     // Email sending logic
   },
-});
-```
-
-### Tags
-
-Tags are a way to describe your element, however, unlike meta, tags may influence behaviour in the system. They can be simple strings or sophisticated configuration objects that control component behavior. They have to be registered for it to work, to understand their ownership.
-
-#### Tags with Configuration
-
-For more sophisticated control, you can create structured tags that carry configuration:
-
-```typescript
-import { tag } from "@bluelibs/runner";
-
-// Define a reusable tag with configuration
-const performanceTag = tag<{ alertAboveMs: number; criticalAboveMs: number }>({
-  id: "performance.monitoring",
-});
-
-const rateLimitTag = tag<{ maxRequestsPerMinute: number; burstLimit?: number }>(
-  {
-    id: "rate.limit",
-  },
-);
-
-const cacheTag = tag<{ ttl: number; keyPattern?: string }>({
-  id: "cache.strategy",
-});
-
-// Use structured tags in your components
-const expensiveTask = task({
-  id: "app.tasks.expensiveCalculation",
-  tags: [
-    "computation",
-    "background",
-    performanceTag.with({
-      alertAboveMs: 5000,
-      criticalAboveMs: 15000,
-    }),
-    cacheTag.with({
-      ttl: 300000, // 5 minutes
-      keyPattern: "calc-{userId}-{datasetId}",
-    }),
-  ],
-  run: async (input) => {
-    // Heavy computation here
-  },
-});
-
-const apiEndpoint = task({
-  id: "app.tasks.api.getUserProfile",
-  tags: [
-    "api",
-    "public",
-    rateLimitTag.with({
-      maxRequestsPerMinute: 100,
-      burstLimit: 20,
-    }),
-    cacheTag.with({ ttl: 60000 }), // 1 minute cache
-  ],
-  run: async (userId) => {
-    // API logic
-  },
-});
-```
-
-### Global Tags System
-
-The framework now includes a sophisticated global tagging system for better component organization and control:
-
-```typescript
-import { globals } from "@bluelibs/runner";
-
-// System components (automatically excluded from debug logs)
-const internalTask = task({
-  id: "app.tasks.internal",
-  tags: [globals.tags.system], // Marks as system component
-  run: async () => "internal work",
-});
-
-// Debug-specific configuration
-const debugTask = task({
-  id: "app.tasks.debug",
-  tags: [
-    globals.tags.debug.with({
-      logTaskInput: true,
-      logTaskResult: true,
-    }),
-  ],
-  run: async (input) => processInput(input),
-});
-
-// Events that should not be sent to global listeners
-const internalEvent = event({
-  id: "app.events.internal",
-  tags: [globals.tags.excludeFromGlobalHooks],
-});
-```
-
-To process these tags you can hook into `globals.events.ready`, use the global store as dependency and use the `getTasksWithTag()` and `getResourcesWithTag()` functionality.
-
-#### Structured Tags
-
-```typescript
-const performanceMiddleware = taskMiddleware({
-  id: "app.middleware.performance",
-  run: async ({ task, next }) => {
-    const perfConfiguration = performanceTag.extract(task.definition); // you can just use .exists() if you want to check for presence
-
-    if (perfConfiguration) {
-      const startTime = Date.now();
-
-      try {
-        const result = await next(task?.input);
-        const duration = Date.now() - startTime;
-
-        if (duration > perfConfiguration.criticalAboveMs) {
-          await alerting.critical(
-            `Task ${task.definition.id} took ${duration}ms`,
-          );
-        } else if (duration > perfConfiguration.alertAboveMs) {
-          await alerting.warn(`Task ${task.definition.id} took ${duration}ms`);
-        }
-
-        return result;
-      } catch (error) {
-        const duration = Date.now() - startTime;
-        await alerting.error(
-          `Task ${task.definition.id} failed after ${duration}ms`,
-          error,
-        );
-        throw error;
-      }
-    }
-
-    return next(task?.input);
-  },
-});
-```
-
-#### Contract Tags
-
-You can attach contracts to tags to enforce the shape of a task's returned value and a resource's `init()` value at compile time. Contracts are specified via the third generic of `defineTag<TConfig, TUnused, TOutput>`.
-
-```typescript
-// A tag that enforces the returned value to include { name: string }
-const userContract = tag<void, void, { name: string }>({ id: "contract.user" });
-
-// Another tag that enforces { age: number }
-const ageContract = tag<void, void, { age: number }>({ id: "contract.age" });
-
-// Works with configured tags too
-const preferenceContract = tag<
-  { locale: string },
-  void,
-  { preferredLocale: string }
->({
-  id: "contract.preferences",
-});
-```
-
-The return value must return a union of all tags with return contracts.
-
-```typescript
-// Task: the awaited return value must satisfy { name: string } & { age: number }
-const getProfile = task({
-  id: "app.tasks.getProfile",
-  tags: [userContract, ageContract, preferenceContract.with({ locale: "en" })],
-  run: async () => {
-    return { name: "Ada", age: 37, preferredLocale: "en" }; // OK
-  },
-});
-
-// Resource: init() return must satisfy the same intersection
-const profileService = resource({
-  id: "app.resources.profileService",
-  tags: [userContract, ageContract],
-  init: async () => {
-    return { name: "Ada", age: 37 }; // OK
-  },
-});
-```
-
-If the returned value does not satisfy the intersection, TypeScript surfaces a readable, verbose type error that includes what was expected and what was received.
-
-```typescript
-const badTask = task({
-  id: "app.tasks.bad",
-  tags: [userContract, ageContract],
-  //    vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
-  run: async () => ({ name: "Ada" }), // Missing { age: number }
-  // Type error includes a helpful shape similar to:
-  // ContractViolationError<
-  //   { message: "Value does not satisfy all tag contracts";
-  //     expected: { name: string } & { age: number };
-  //     received: { name: string } }
-  // >
 });
 ```
 

@@ -9,7 +9,7 @@ import { globalTags } from "../../globalTags";
 import { getConfig } from "./types";
 
 export const tasksTrackerMiddleware = defineTaskMiddleware({
-  id: "debug.middleware.tracker.task",
+  id: "globals.debug.middleware.task.executionTracker",
   everywhere: (task) => !globalTags.system.exists(task),
   dependencies: {
     logger: globalResources.logger,
@@ -29,21 +29,16 @@ export const tasksTrackerMiddleware = defineTaskMiddleware({
       data: shouldShowData ? { input: task!.input } : undefined,
     });
 
-    try {
-      const result = await next(task!.input);
-      const duration = Date.now() - start;
-      const taskCompleteMessage = `Task ${
-        task!.definition.id
-      } completed in ${duration}ms`;
-      const shouldShowResult = debugConfig.logTaskOutput && result;
-      await logger.info(taskCompleteMessage, {
-        data: shouldShowResult ? { result } : undefined,
-      });
-      return result;
-    } catch (error) {
-      await logger.error(error);
-      throw error;
-    }
+    const result = await next(task!.input);
+    const duration = Date.now() - start;
+    const taskCompleteMessage = `Task ${
+      task!.definition.id
+    } completed in ${duration}ms`;
+    const shouldShowResult = debugConfig.logTaskOutput && result;
+    await logger.info(taskCompleteMessage, {
+      data: shouldShowResult ? { result } : undefined,
+    });
+    return result;
   },
   meta: {
     title: "Execution Tracker",
@@ -53,7 +48,7 @@ export const tasksTrackerMiddleware = defineTaskMiddleware({
 });
 
 export const resourcesTrackerMiddleware = defineResourceMiddleware({
-  id: "debug.middleware.tracker.resource",
+  id: "globals.debug.middleware.resource.executionTracker",
   dependencies: {
     logger: globalResources.logger,
     debugConfig,
@@ -77,22 +72,18 @@ export const resourcesTrackerMiddleware = defineResourceMiddleware({
       data: shouldShowConfig ? { config: resource!.config } : undefined,
     });
 
-    try {
-      const result = await next(resource!.config);
-      const duration = Date.now() - start;
-      const resourceCompleteMessage = `Resource ${String(
-        resource!.definition.id,
-      )} initialized in ${duration}ms`;
-      const shouldShowResult =
-        debugConfig.logResourceValue && result !== undefined;
+    const result = await next(resource!.config);
+    const duration = Date.now() - start;
+    const resourceCompleteMessage = `Resource ${String(
+      resource!.definition.id,
+    )} initialized in ${duration}ms`;
+    const shouldShowResult =
+      debugConfig.logResourceValue && result !== undefined;
 
-      await logger.info(resourceCompleteMessage, {
-        data: shouldShowResult ? { result } : undefined,
-      });
-      return result;
-    } catch (error) {
-      throw error;
-    }
+    await logger.info(resourceCompleteMessage, {
+      data: shouldShowResult ? { result } : undefined,
+    });
+    return result;
   },
   meta: {
     title: "Execution Tracker",
