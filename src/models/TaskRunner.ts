@@ -45,7 +45,18 @@ export class TaskRunner {
       this.runnerStore.set(task.id, runner);
     }
 
-    return await runner(input);
+    try {
+      return await runner(input);
+    } catch (error) {
+      try {
+        await this.store.onUnhandledError({
+          error,
+          kind: "task",
+          source: task.id,
+        });
+      } catch (_) {}
+      throw error;
+    }
   }
 
   /**

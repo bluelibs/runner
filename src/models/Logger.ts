@@ -148,7 +148,7 @@ export class Logger {
       return;
     }
 
-    await root.triggerLocalListeners(log);
+    await root.triggerLogListeners(log);
 
     if (root.canPrint(level)) {
       root.printer.print(log);
@@ -209,7 +209,11 @@ export class Logger {
    * @param listener - A listener that will be triggered for every log.
    */
   public onLog(listener: (log: ILog) => any) {
-    this.localListeners.push(listener);
+    if (this.rootLogger && this.rootLogger !== this) {
+      this.rootLogger.onLog(listener);
+    } else {
+      this.localListeners.push(listener);
+    }
   }
 
   /**
@@ -225,7 +229,7 @@ export class Logger {
 
     if (root.bufferLogs) {
       for (const log of root.buffer) {
-        await root.triggerLocalListeners(log);
+        await root.triggerLogListeners(log);
       }
       for (const log of root.buffer) {
         if (root.canPrint(log.level)) {
@@ -249,7 +253,11 @@ export class Logger {
     );
   }
 
-  private async triggerLocalListeners(log: ILog) {
+  private async triggerLogListeners(log: ILog) {
+    if (this.rootLogger && this.rootLogger !== this) {
+      await this.rootLogger.triggerLogListeners(log);
+    }
+
     for (const listener of this.localListeners) {
       try {
         await listener(log);

@@ -252,7 +252,7 @@ export class MiddlewareManager {
   >(task: ITask<TInput, TOutput, TDeps>) {
     const storeTask = this.store.tasks.get(task.id)!;
 
-    // Base next executes the task with validation and unhandled error routing
+    // Base next executes the task with validation
     let next = async (input: any) => {
       // Extract raw input from execution input if needed
       let rawInput = input;
@@ -270,26 +270,15 @@ export class MiddlewareManager {
       }
 
       const deps = storeTask.computedDependencies;
-      try {
-        const rawResult = await task.run.call(null, rawInput, deps);
-        if (task.resultSchema) {
-          try {
-            return task.resultSchema.parse(rawResult);
-          } catch (error) {
-            throw new ValidationError("Task result", task.id, error as any);
-          }
-        }
-        return rawResult;
-      } catch (error: unknown) {
+      const rawResult = await task.run.call(null, rawInput, deps);
+      if (task.resultSchema) {
         try {
-          await this.store.onUnhandledError({
-            error,
-            kind: "task",
-            source: task.id,
-          });
-        } catch (_) {}
-        throw error;
+          return task.resultSchema.parse(rawResult);
+        } catch (error) {
+          throw new ValidationError("Task result", task.id, error as any);
+        }
       }
+      return rawResult;
     };
 
     // Inject local per-task interceptors first (closest to the task)
@@ -355,33 +344,19 @@ export class MiddlewareManager {
 
       // Create the base middleware runner with events
       const baseMiddlewareRunner = async (input: any) => {
-        let result: any;
-        try {
-          // Attention: we use the store middleware run, because it might have been overidden.
-          // All middleware run() functions should be common accross all tasks.
-          result = await storeMiddleware.middleware.run(
-            {
-              task: {
-                definition: task,
-                input,
-              },
-              next: nextFunction,
+        // Attention: we use the store middleware run, because it might have been overidden.
+        // All middleware run() functions should be common accross all tasks.
+        return storeMiddleware.middleware.run(
+          {
+            task: {
+              definition: task,
+              input,
             },
-            storeMiddleware.computedDependencies,
-            middleware.config,
-          );
-          return result;
-        } catch (error: unknown) {
-          try {
-            await this.store.onUnhandledError({
-              error,
-              kind: "middleware",
-              source: middleware.id,
-            });
-          } catch (_) {}
-
-          throw error;
-        }
+            next: nextFunction,
+          },
+          storeMiddleware.computedDependencies,
+          middleware.config,
+        );
       };
 
       // Get interceptors for this specific middleware

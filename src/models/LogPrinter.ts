@@ -1,4 +1,11 @@
 import { safeStringify } from "./utils/safeStringify";
+
+// eslint-disable-next-line no-control-regex
+const ansiRegex = /[][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
+function stripAnsi(str: string): string {
+  return str.replace(ansiRegex, '');
+}
+
 export type PrintStrategy = "pretty" | "plain" | "json" | "json_pretty";
 
 export type LogLevels =
@@ -72,13 +79,9 @@ export class LogPrinter {
     colorTheme?: Partial<ColorTheme>;
   }) {
     this.strategy = options.strategy;
-    // For 'plain', force no ANSI colors regardless of options
     if (options.strategy === "plain") {
       this.colors = LogPrinter.NO_COLORS;
     } else {
-      // If a custom colorTheme is provided, prefer starting from the colored theme
-      // so that overrides augment ANSI-enabled defaults even when useColors=false.
-      // This allows tests or consumers to opt-in per-key colors via colorTheme.
       const base =
         options.useColors || options.colorTheme ? COLORS : LogPrinter.NO_COLORS;
       this.colors = { ...base, ...(options.colorTheme || {}) };
@@ -87,36 +90,61 @@ export class LogPrinter {
 
   public print(log: PrintableLog): void {
     if (this.strategy === "json") {
-      // Compact JSON line
       LogPrinter.writers.log(safeStringify(this.normalizeForJson(log)));
       return;
     }
 
     if (this.strategy === "json_pretty") {
-      // Pretty JSON
       LogPrinter.writers.log(safeStringify(this.normalizeForJson(log), 2));
       return;
     }
 
-    // Default: pretty
+    // Pretty, multi-line output
     const { level, source, message, timestamp, error, data, context } = log;
-    const mainLine = [
-      this.formatTime(timestamp),
-      this.formatLevel(level),
-      this.formatSource(source),
-      this.formatMessage(message),
+
+    const timePart = this.formatTime(timestamp);
+    const levelPart = this.formatLevel(level);
+    const sourcePart = this.formatSource(source);
+
+    const headerLine = [
+      timePart,
+      levelPart,
+      sourcePart,
     ]
       .filter(Boolean)
       .join(" ");
 
-    const output: string[] = [mainLine];
+    const messageString = this.formatMessage(message);
+    const messageLines = messageString.split('\n');
+
+    const output: string[] = [headerLine];
+
+    const timePartLength = stripAnsi(timePart).length;
+    const levelPartLength = stripAnsi(levelPart).length;
+    // Indentation is length of time + space + level + space
+    const indentation = ' '.repeat(timePartLength + 1 + levelPartLength + 1);
+
+    if (message) {
+      output.push(...messageLines.map(line => `${indentation}${line}`));
+    }
+
     const errorLines = this.formatError(error);
     const dataLines = this.formatData(data);
     const contextLines = this.formatContext(context);
-    if (errorLines.length || dataLines.length || contextLines.length) {
-      output.push(...errorLines, ...dataLines, ...contextLines);
-      output.push("");
+
+    const detailsExist =
+      errorLines.length > 0 || dataLines.length > 0 || contextLines.length > 0;
+
+    if (detailsExist) {
+        output.push(''); // Add a space before details
     }
+
+    output.push(...errorLines, ...dataLines, ...contextLines);
+
+    if (detailsExist) {
+        output.push(''); // Add a space after for readability
+    }
+
     const writer = this.pickWriter(level);
     output.forEach((line) => writer(line));
   }
@@ -145,55 +173,49 @@ export class LogPrinter {
 
   private formatSource(source?: string): string {
     if (!source) return "";
-    return `${this.colors.blue}[${source}]${this.colors.reset} `;
+    return `${this.colors.cyan}${source}${this.colors.reset}`;
   }
 
   private formatMessage(message: any): string {
-    if (typeof message === "object") {
-      const json = safeStringify(message, 2);
-      const padding = " ".repeat(37);
-      return json
-        .split("\n")
-        .map((line: string, i: number) =>
-          i === 0 ? line : `${padding}${line}`,
-        )
-        .join("\n");
+    if (typeof message === 'object' && message !== null) {
+      return safeStringify(message, 2);
     }
     return String(message);
   }
 
-  private formatError(error: PrintableLog["error"]): string[] {
+  private formatError(error: PrintableLog["error"], indentation = '  '): string[] {
     if (!error) return [];
     const lines: string[] = [];
     lines.push(
-      `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.error}${error.name}: ${error.message}${this.colors.reset}`,
+      `${indentation}${this.colors.gray}╰─${this.colors.reset} ${this.colors.error}Error: ${error.name}: ${error.message}${this.colors.reset}`,
     );
     if (error.stack) {
-      const frames = error.stack.split("\n");
+      const frames = error.stack.split("\n").slice(1); // slice(1) to skip the error message line
       frames.forEach((frame) => {
         const cleaned = frame.trim().replace(/^at /, "");
         lines.push(
-          `       ${this.colors.gray}↳${this.colors.reset} ${this.colors.dim}${cleaned}${this.colors.reset}`,
+          `${indentation}   ${this.colors.gray}↳${this.colors.reset} ${this.colors.dim}${cleaned}${this.colors.reset}`,
         );
       });
     }
     return lines;
   }
 
-  private formatData(data?: Record<string, any>): string[] {
+  private formatData(data?: Record<string, any>, indentation = '  '): string[] {
     if (!data || Object.keys(data).length === 0) return [];
     const lines: string[] = [];
     const formatted = safeStringify(data, 2, { maxDepth: 3 }).split("\n");
     lines.push(
-      `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.cyan}data:${this.colors.reset}`,
+      `${indentation}${this.colors.gray}╰─${this.colors.reset} ${this.colors.cyan}Data:${this.colors.reset}`,
     );
     formatted.forEach((line) => {
-      lines.push(`       ${this.colors.dim}${line}${this.colors.reset}`);
+      // Keep data lines non-padded to save horizontal space
+      lines.push(`${indentation}${this.colors.dim}${line}${this.colors.reset}`);
     });
     return lines;
   }
 
-  private formatContext(context?: Record<string, any>): string[] {
+  private formatContext(context?: Record<string, any>, indentation = '  '): string[] {
     if (!context) return [];
     const filtered = { ...context };
     delete (filtered as any).source;
@@ -201,10 +223,11 @@ export class LogPrinter {
     const lines: string[] = [];
     const formatted = safeStringify(filtered, 2, { maxDepth: 3 }).split("\n");
     lines.push(
-      `    ${this.colors.gray}╰─${this.colors.reset} ${this.colors.blue}context:${this.colors.reset}`,
+      `${indentation}${this.colors.gray}╰─${this.colors.reset} ${this.colors.blue}Context:${this.colors.reset}`,
     );
     formatted.forEach((line) => {
-      lines.push(`       ${this.colors.dim}${line}${this.colors.reset}`);
+      // Keep context lines non-padded to save horizontal space
+      lines.push(`${indentation}${this.colors.dim}${line}${this.colors.reset}`);
     });
     return lines;
   }
@@ -221,8 +244,6 @@ export class LogPrinter {
     }
     return normalized;
   }
-
-  // Intentionally no private stringify; reuse shared util for consistency
 
   private static NO_COLORS: ColorTheme = {
     trace: "",

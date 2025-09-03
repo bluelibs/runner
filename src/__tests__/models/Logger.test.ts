@@ -42,8 +42,8 @@ describe("Logger", () => {
     await logger.info("hello");
 
     const all = gather();
-    expect(all).toContain("[worker]");
-    expect(all).toContain("context:");
+    expect(all).toContain("worker");
+    expect(all).toContain("Context:");
     expect(all).toContain('"userId": 42');
 
     // Override source from logInfo
@@ -52,7 +52,7 @@ describe("Logger", () => {
     const overridden = consoleSpy.mock.calls
       .map((c) => String(c[0]))
       .join("\n");
-    expect(overridden).toContain("[override]");
+    expect(overridden).toContain("override");
   });
 
   it("triggers local listeners even when below print threshold", async () => {
@@ -177,14 +177,14 @@ describe("Logger", () => {
 
     await logger.info("with data", { data: { foo: "bar", nested: { a: 1 } } });
     let outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
-    expect(outputs).toContain("data:");
+    expect(outputs).toContain("Data:");
     expect(outputs).toContain('"foo": "bar"');
     expect(outputs).toContain('"nested":');
 
     consoleSpy.mockClear();
     await logger.info("empty data", { data: {} });
     outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
-    expect(outputs).not.toContain("data:");
+    expect(outputs).not.toContain("Data:");
   });
 
   it("prints context merging bound and log contexts, omitting source", async () => {
@@ -195,11 +195,11 @@ describe("Logger", () => {
     });
     await logger.info("ctx msg", { sessionId: "s-1" });
     const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
-    expect(outputs).toContain("context:");
+    expect(outputs).toContain("Context:");
     expect(outputs).toContain('"traceId": "t-1"');
     expect(outputs).toContain('"sessionId": "s-1"');
     // source should not be listed under context
-    expect(outputs).not.toMatch(/context:[\s\S]*\"source\"/);
+    expect(outputs).not.toMatch(/Context:[\s\S]*"source"/);
   });
 
   it("does not print context section when it would be empty", () => {
@@ -216,7 +216,7 @@ describe("Logger", () => {
     logger.print(log);
     const outputs = gather();
     expect(outputs).toContain("no ctx");
-    expect(outputs).not.toContain("context:");
+    expect(outputs).not.toContain("Context:");
   });
 
   it("omits context section when only bound source exists (filtered to empty)", async () => {
@@ -224,16 +224,16 @@ describe("Logger", () => {
     const logger = base.with({ source: "only-src" });
     await logger.info("msg");
     const outputs = gather();
-    expect(outputs).toContain("[only-src]");
-    expect(outputs).not.toContain("context:");
+    expect(outputs).toContain("only-src");
+    expect(outputs).not.toContain("Context:");
   });
 
   it("formats object messages with indented subsequent lines", async () => {
     const logger = createLogger({ threshold: "trace" });
     await logger.info({ k: "v", nested: { a: 1 } });
     const outputs = gather();
-    // subsequent lines are prefixed with many spaces
-    expect(outputs).toMatch(/\n\s{30,}\"nested\":/);
+    // subsequent lines are prefixed with 2 spaces
+    expect(outputs).toMatch(/\n\s{2,}\"nested\":/);
   });
 
   it("convenience methods call the core log with expected levels", async () => {

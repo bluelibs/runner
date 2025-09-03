@@ -1030,7 +1030,7 @@ const databaseResource = resource({
   },
   dispose: async (connection) => {
     await connection.close();
-    console.log("Database connection closed");
+    // console.log("Database connection closed");
   },
 });
 
@@ -1453,6 +1453,7 @@ const app = resource({
     logger.trace("Very detailed trace"); // ❌ Hidden by default
 
     logger.onLog(async (log) => {
+      // Sub-loggers instantiated .with() share the same log listeners.
       // Catch logs
     })
   },

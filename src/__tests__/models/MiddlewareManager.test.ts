@@ -162,44 +162,6 @@ describe("MiddlewareManager", () => {
     spy.mockRestore();
   });
 
-  it("routes errors from failing middleware and still emits completed with error", async () => {
-    const errors: any[] = [];
-    const store = new Store(eventManager, logger, (e) => {
-      errors.push(e);
-    });
-    const manager = new MiddlewareManager(store, eventManager, logger);
-
-    const calls: Array<{ kind: string; error?: any }> = [];
-
-    const failing = defineTaskMiddleware({
-      id: "failing",
-      run: async () => {
-        throw new Error("boom");
-      },
-    });
-    const task = defineTask({
-      id: "t3",
-      middleware: [failing],
-      run: async () => 1,
-    });
-    store.tasks.set(task.id, {
-      task,
-      computedDependencies: {},
-      isInitialized: true,
-    });
-    store.taskMiddlewares.set(failing.id, {
-      middleware: failing,
-      computedDependencies: {},
-    } as any);
-
-    const runner = manager.composeTaskRunner(task);
-    await expect(runner(undefined as any)).rejects.toThrow("boom");
-
-    expect(errors.length).toBe(1);
-    expect(errors[0].kind).toBe("middleware");
-    expect(errors[0].source).toBe("failing");
-  });
-
   it("wraps resource init with middleware and returns modified result", async () => {
     const m = defineResourceMiddleware({
       id: "rm",

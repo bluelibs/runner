@@ -84,14 +84,6 @@ const DocsPage: React.FC = () => {
               <code>stopPropagation()</code>
             </li>
             <li>Middleware: cross‑cutting concerns; async and awaited</li>
-            <li>
-              Bench CI: <code>npm run benchmark:json</code> writes results;
-              files
-              <code> baseline.json</code> and{" "}
-              <code> benchmark-results.json</code>
-              are gitignored. CI compares PR vs base using
-              <code> benchmarks.config.json</code> thresholds.
-            </li>
           </ul>
         </div>
       </section>
@@ -349,19 +341,29 @@ const app = resource({
                 </a>
               </h4>
               <p className="text-gray-600 dark:text-gray-300 mb-3">
-                Runs around task execution. Ideal for authentication, input/result
-                shaping, caching, retries, timeouts, and telemetry.
+                Runs around task execution. Ideal for authentication,
+                input/result shaping, caching, retries, timeouts, and telemetry.
               </p>
               <CodeBlock>{codeExamples.middlewareTaskAuth}</CodeBlock>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <div className="space-y-2">
-                  <h5 className="font-semibold text-gray-900 dark:text-white">Compose built‑ins</h5>
-                  <p className="text-gray-600 dark:text-gray-300">Use retry, timeout, and cache from <code>globals.middleware.task</code>.</p>
+                  <h5 className="font-semibold text-gray-900 dark:text-white">
+                    Compose built‑ins
+                  </h5>
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Use retry, timeout, and cache from{" "}
+                    <code>globals.middleware.task</code>.
+                  </p>
                   <CodeBlock>{codeExamples.middlewareResilientTask}</CodeBlock>
                 </div>
                 <div className="space-y-2">
-                  <h5 className="font-semibold text-gray-900 dark:text-white">Global task middleware</h5>
-                  <p className="text-gray-600 dark:text-gray-300">Apply to all or a filtered set of tasks via <code>everywhere</code>.</p>
+                  <h5 className="font-semibold text-gray-900 dark:text-white">
+                    Global task middleware
+                  </h5>
+                  <p className="text-gray-600 dark:text-gray-300">
+                    Apply to all or a filtered set of tasks via{" "}
+                    <code>everywhere</code>.
+                  </p>
                   <CodeBlock>{codeExamples.middlewareGlobalTask}</CodeBlock>
                 </div>
               </div>
@@ -369,15 +371,22 @@ const app = resource({
 
             {/* Resource Middleware */}
             <div>
-              <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Resource Middleware</h4>
+              <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Resource Middleware
+              </h4>
               <p className="text-gray-600 dark:text-gray-300 mb-3">
-                Wraps resource initialization and can enhance the returned instance
-                (e.g., patch methods, add guards, add observability).
+                Wraps resource initialization and can enhance the returned
+                instance (e.g., patch methods, add guards, add observability).
               </p>
               <CodeBlock>{codeExamples.middlewareResourceSoftDelete}</CodeBlock>
               <div className="mt-4">
-                <h5 className="font-semibold text-gray-900 dark:text-white">Global resource middleware</h5>
-                <p className="text-gray-600 dark:text-gray-300 mb-2">Use <code>everywhere</code> to scope by predicate and apply consistently.</p>
+                <h5 className="font-semibold text-gray-900 dark:text-white">
+                  Global resource middleware
+                </h5>
+                <p className="text-gray-600 dark:text-gray-300 mb-2">
+                  Use <code>everywhere</code> to scope by predicate and apply
+                  consistently.
+                </p>
                 <CodeBlock>{codeExamples.middlewareGlobalResource}</CodeBlock>
               </div>
             </div>
@@ -473,56 +482,120 @@ const app = resource({
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-gray-200/20 dark:border-gray-700/50">
-                    <th className="text-left py-3 px-2 font-semibold text-gray-900 dark:text-white">Option</th>
-                    <th className="text-left py-3 px-2 font-semibold text-gray-900 dark:text-white">Default</th>
-                    <th className="text-left py-3 px-2 font-semibold text-gray-900 dark:text-white">Description</th>
+                    <th className="text-left py-3 px-2 font-semibold text-gray-900 dark:text-white">
+                      Option
+                    </th>
+                    <th className="text-left py-3 px-2 font-semibold text-gray-900 dark:text-white">
+                      Default
+                    </th>
+                    <th className="text-left py-3 px-2 font-semibold text-gray-900 dark:text-white">
+                      Description
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="text-gray-600 dark:text-gray-300">
                   <tr className="border-b border-gray-200/10 dark:border-gray-700/30">
-                    <td className="py-3 px-2"><code>debug?</code></td>
-                    <td className="py-3 px-2"><code>undefined</code></td>
-                    <td className="py-3 px-2">Enables rich debug output and hooks into the Debug resource for development visibility.</td>
+                    <td className="py-3 px-2">
+                      <code>debug?</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      <code>undefined</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      Enables rich debug output and hooks into the Debug
+                      resource for development visibility.
+                    </td>
                   </tr>
                   <tr className="border-b border-gray-200/10 dark:border-gray-700/30">
-                    <td className="py-3 px-2"><code>logs?.printThreshold?</code></td>
-                    <td className="py-3 px-2"><code>info</code></td>
-                    <td className="py-3 px-2">Log level threshold for printing. Use <code>null</code> to disable.</td>
+                    <td className="py-3 px-2">
+                      <code>logs?.printThreshold?</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      <code>info</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      Log level threshold for printing. Use <code>null</code> to
+                      disable.
+                    </td>
                   </tr>
                   <tr className="border-b border-gray-200/10 dark:border-gray-700/30">
-                    <td className="py-3 px-2"><code>logs?.printStrategy?</code></td>
-                    <td className="py-3 px-2"><code>PRETTY</code></td>
+                    <td className="py-3 px-2">
+                      <code>logs?.printStrategy?</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      <code>PRETTY</code>
+                    </td>
                     <td className="py-3 px-2">How to format log output.</td>
                   </tr>
                   <tr className="border-b border-gray-200/10 dark:border-gray-700/30">
-                    <td className="py-3 px-2"><code>logs?.bufferLogs?</code></td>
-                    <td className="py-3 px-2"><code>false</code></td>
-                    <td className="py-3 px-2">Buffer logs until the root resource is ready.</td>
+                    <td className="py-3 px-2">
+                      <code>logs?.bufferLogs?</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      <code>false</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      Buffer logs until the root resource is ready.
+                    </td>
                   </tr>
                   <tr className="border-b border-gray-200/10 dark:border-gray-700/30">
-                    <td className="py-3 px-2"><code>errorBoundary?</code></td>
-                    <td className="py-3 px-2"><code>true</code></td>
-                    <td className="py-3 px-2">Installs a central error boundary for uncaught errors routed to <code>onUnhandledError</code>.</td>
+                    <td className="py-3 px-2">
+                      <code>errorBoundary?</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      <code>true</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      Installs a central error boundary for uncaught errors
+                      routed to <code>onUnhandledError</code>.
+                    </td>
                   </tr>
                   <tr className="border-b border-gray-200/10 dark:border-gray-700/30">
-                    <td className="py-3 px-2"><code>shutdownHooks?</code></td>
-                    <td className="py-3 px-2"><code>true</code></td>
-                    <td className="py-3 px-2">Installs SIGINT/SIGTERM handlers that call <code>dispose()</code> for graceful shutdown.</td>
+                    <td className="py-3 px-2">
+                      <code>shutdownHooks?</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      <code>true</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      Installs SIGINT/SIGTERM handlers that call{" "}
+                      <code>dispose()</code> for graceful shutdown.
+                    </td>
                   </tr>
                   <tr className="border-b border-gray-200/10 dark:border-gray-700/30">
-                    <td className="py-3 px-2"><code>onUnhandledError?</code></td>
+                    <td className="py-3 px-2">
+                      <code>onUnhandledError?</code>
+                    </td>
                     <td className="py-3 px-2">logger</td>
-                    <td className="py-3 px-2">Custom handler for any unhandled error; defaults to logging via the created logger.</td>
+                    <td className="py-3 px-2">
+                      Custom handler for any unhandled error; defaults to
+                      logging via the created logger.
+                    </td>
                   </tr>
                   <tr className="border-b border-gray-200/10 dark:border-gray-700/30">
-                    <td className="py-3 px-2"><code>dryRun?</code></td>
-                    <td className="py-3 px-2"><code>false</code></td>
-                    <td className="py-3 px-2">Validates setup without starting: resources aren't initialized and no events are emitted.</td>
+                    <td className="py-3 px-2">
+                      <code>dryRun?</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      <code>false</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      Validates setup without starting: resources aren't
+                      initialized and no events are emitted.
+                    </td>
                   </tr>
                   <tr>
-                    <td className="py-3 px-2"><code>runtimeCycleDetection?</code></td>
-                    <td className="py-3 px-2"><code>true</code></td>
-                    <td className="py-3 px-2">Forces runtime cycle detection for event emissions; disable to improve performance if you're sure there are no deadlocks.</td>
+                    <td className="py-3 px-2">
+                      <code>runtimeCycleDetection?</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      <code>true</code>
+                    </td>
+                    <td className="py-3 px-2">
+                      Forces runtime cycle detection for event emissions;
+                      disable to improve performance if you're sure there are no
+                      deadlocks.
+                    </td>
                   </tr>
                 </tbody>
               </table>
