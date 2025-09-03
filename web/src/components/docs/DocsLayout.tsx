@@ -16,7 +16,6 @@ const DocsLayout: React.FC<DocsLayoutProps> = ({
   title,
   description,
   sidebarSections = allDocSections,
-  editPath = "https://github.com/bluelibs/runner/blob/main/vite/src/pages/DocsPage.tsx",
 }) => {
   useEffect(() => {
     // Add smooth scrolling behavior
@@ -78,14 +77,14 @@ const DocsLayout: React.FC<DocsLayoutProps> = ({
             >
               API Reference
             </a>
-            <a
+            {/* <a
               href={editPath}
               target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-gray-400 hover:text-white underline underline-offset-4"
             >
               Edit this page on GitHub
-            </a>
+            </a> */}
           </div>
         </div>
 

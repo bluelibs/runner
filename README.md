@@ -13,6 +13,7 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 | ------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------- |
 | [Presentation Website](https://runner.bluelibs.com/)                                                                | Website | Overview, features, and highlights                            |
 | [BlueLibs Runner GitHub](https://github.com/bluelibs/runner)                                                        | GitHub  | Source code, issues, and releases                             |
+| [BlueLibs Runner Dev](https://github.com/bluelibs/runner-dev)                                                       | GitHub  | Development tools and CLI for BlueLibs Runner                 |
 | [UX Friendly Docs](https://bluelibs.github.io/runner/)                                                              | Docs    | Clean, navigable documentation                                |
 | [AI Friendly Docs (<5000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)                               | Docs    | Short, token-friendly summary (<5000 tokens)                  |
 | [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade from v3 to v4                            |
