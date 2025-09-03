@@ -10,12 +10,6 @@ npm install @bluelibs/runner
 
 BlueLibs Runner is a **powerful and integrated** framework. It provides a comprehensive set of tools for building robust, testable, and maintainable applications by combining a predictable Dependency Injection (DI) container with a dynamic metadata and eventing system.
 
-## Security & Compliance
-
-- Guarantees: runtime circular-dependency failure, override precedence safety, event cycle detection, validation gates for inputs/outputs/config, error boundary + graceful shutdown, timeout/retry middleware, global-hook scoping via `excludeFromGlobalHooks`.
-- Tests: see `src/__tests__/security/*` for security-focused tests that exercise the guarantees above.
-- Policy: see `SECURITY.md` for reporting, supported versions, and CI checks (includes `npm audit` for prod deps).
-
 ## DI Container Guarantees
 
 This is the foundation of trust for any DI framework.
