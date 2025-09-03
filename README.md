@@ -2065,6 +2065,8 @@ As your app grows, you'll want consistent naming. Here's the convention that won
 
 We recommend kebab-case for file names and ids. Suffix files with their primitive type: `*.task.ts`, `*.task-middleware.ts`, `*.hook.ts`, etc.
 
+Folders can look something like this: `src/app/users/tasks/create-user.task.ts`. For domain: `app.users` and a task. Use `middleware/task|resource` for middleware files.
+
 ```typescript
 // Helper function for consistency
 function namespaced(id: string) {
