@@ -64,7 +64,7 @@ jobs:
 
       - name: Compare results
         working-directory: head
-        run: node ./scripts/compare-benchmarks.mjs ${{ github.workspace }}/baseline.json ${{ github.workspace }}/benchmark-results.json ${{ github.workspace }}/benchmarks.config.json
+        run: node ./scripts/compare-benchmarks.mjs ${{ github.workspace }}/baseline.json ${{ github.workspace }}/benchmark-results.json ${{ github.workspace }}/head/benchmarks.config.json
 
       - name: Upload artifacts
         if: always()
