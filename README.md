@@ -2054,14 +2054,16 @@ Overrides are applied after everything is registered. If multiple overrides targ
 
 As your app grows, you'll want consistent naming. Here's the convention that won't drive you crazy:
 
-| Type                | Format                                          |
-| ------------------- | ----------------------------------------------- |
-| Resources           | `{domain}.resources.{resourceName}`             |
-| Tasks               | `{domain}.tasks.{taskName}`                     |
-| Events              | `{domain}.events.{eventName}`                   |
-| Hooks               | `{domain}.hooks.on{EventName}`                  |
-| Task Middleware     | `{domain}.middleware.task.{middlewareName}`     |
-| Resource Middleware | `{domain}.middleware.resource.{middlewareName}` |
+| Type                | Format                                           |
+| ------------------- | ------------------------------------------------ |
+| Resources           | `{domain}.resources.{resource-name}`             |
+| Tasks               | `{domain}.tasks.{task-name}`                     |
+| Events              | `{domain}.events.{event-name}`                   |
+| Hooks               | `{domain}.hooks.on-{event-name}`                 |
+| Task Middleware     | `{domain}.middleware.task.{middleware-name}`     |
+| Resource Middleware | `{domain}.middleware.resource.{middleware-name}` |
+
+We recommend kebab-case for file names and ids. Suffix files with their primitive type: `*.task.ts`, `*.task-middleware.ts`, `*.hook.ts`, etc.
 
 ```typescript
 // Helper function for consistency
@@ -2070,7 +2072,7 @@ function namespaced(id: string) {
 }
 
 const userTask = task({
-  id: namespaced("tasks.user.create"),
+  id: namespaced("tasks.user.create-user"),
   // ...
 });
 ```
