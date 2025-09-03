@@ -9,12 +9,16 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 <a href="https://github.com/bluelibs/runner" target="_blank"><img src="https://img.shields.io/badge/github-blue" alt="GitHub" /></a>
 </p>
 
-- [UX Friendly Docs](https://bluelibs.github.io/runner/)
-- [AI Friendly Docs (<4500 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)
-- [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)
-- [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)
-- [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite)
-- [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking) (or feed README.md and use your own AI)
+| Resource                                                                                                            | Type    | Notes                                                         |
+| ------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------- |
+| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website | Overview, features, and highlights                            |
+| [BlueLibs Runner GitHub](https://github.com/bluelibs/runner)                                                        | GitHub  | Source code, issues, and releases                             |
+| [UX Friendly Docs](https://bluelibs.github.io/runner/)                                                              | Docs    | Clean, navigable documentation                                |
+| [AI Friendly Docs (<5000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)                               | Docs    | Short, token-friendly summary (<5000 tokens)                  |
+| [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade from v3 to v4                            |
+| [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)                                                 | Docs    | Design notes, deep dives, and context                         |
+| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | Full Express + OpenAPI + SQLite demo                          |
+| [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)       | Chatbot | Ask questions interactively, or feed README.md to your own AI |
 
 Welcome to BlueLibs Runner, where we've taken the chaos of modern application architecture and turned it into something that won't make you question your life choices at 3am. This isn't just another framework – it's your new best friend who actually understands that code should be readable, testable, and not require a PhD in abstract nonsense to maintain.
 
