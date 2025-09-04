@@ -23,7 +23,12 @@ describe("platform types utilities", () => {
       const { isBrowser, isWebWorker, isNode } = require("../platform/types");
       expect(isBrowser()).toBe(true);
       expect(isWebWorker()).toBe(false);
-      expect(isNode()).toBe(!!((globalThis as any).process && (globalThis as any).process.versions?.node));
+      expect(isNode()).toBe(
+        !!(
+          (globalThis as any).process &&
+          (globalThis as any).process.versions?.node
+        ),
+      );
     });
   });
 
@@ -36,14 +41,6 @@ describe("platform types utilities", () => {
       const { isBrowser, isWebWorker } = require("../platform/types");
       expect(isBrowser()).toBe(false);
       expect(isWebWorker()).toBe(true);
-    });
-  });
-
-  it("detects node", () => {
-    jest.isolateModules(() => {
-      (globalThis as any).process = { versions: { node: "20.x" } };
-      const { isNode } = require("../platform/types");
-      expect(isNode()).toBe(true);
     });
   });
 });

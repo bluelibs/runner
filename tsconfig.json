@@ -10,8 +10,6 @@
     "outDir": "./dist",
     "allowSyntheticDefaultImports": true,
     "pretty": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
     "declaration": true,
     "strict": true,
     "strictNullChecks": true,

@@ -8,6 +8,7 @@ module.exports = {
     "!src/**/*.d.ts",
     "!src/**/__tests__/**",
   ],
+  setupFilesAfterEnv: ["<rootDir>/src/__tests__/jest.setup.ts"],
   coverageDirectory: "coverage",
   coverageReporters: ["text", "lcov", "html"],
   coverageThreshold: {

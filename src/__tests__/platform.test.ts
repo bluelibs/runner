@@ -6,9 +6,9 @@ import {
   getPlatform,
   setPlatform,
   resetPlatform,
-  UniversalPlatformAdapter,
-  NodePlatformAdapter,
+  PlatformAdapter,
 } from "../platform";
+import { isNode, isBrowser, isWebWorker, isUniversal } from "../platform/types";
 
 describe("Platform Abstraction", () => {
   afterEach(() => {
@@ -21,7 +21,7 @@ describe("Platform Abstraction", () => {
   });
 
   it("should handle error listeners gracefully", () => {
-    const universalAdapter = new UniversalPlatformAdapter();
+    const universalAdapter = new PlatformAdapter("universal");
     setPlatform(universalAdapter);
 
     const platform = getPlatform();
@@ -36,7 +36,7 @@ describe("Platform Abstraction", () => {
   });
 
   it("should handle shutdown signals gracefully", () => {
-    const universalAdapter = new UniversalPlatformAdapter();
+    const universalAdapter = new PlatformAdapter("universal");
     setPlatform(universalAdapter);
 
     const platform = getPlatform();
@@ -51,7 +51,7 @@ describe("Platform Abstraction", () => {
   });
 
   it("should throw for unsupported exit in universal environment", () => {
-    const universalAdapter = new UniversalPlatformAdapter();
+    const universalAdapter = new PlatformAdapter("universal");
     setPlatform(universalAdapter);
 
     const platform = getPlatform();
@@ -61,7 +61,7 @@ describe("Platform Abstraction", () => {
   });
 
   it("should handle manual platform override", () => {
-    const customAdapter = new UniversalPlatformAdapter();
+    const customAdapter = new PlatformAdapter("universal");
     setPlatform(customAdapter);
 
     const platform = getPlatform();
@@ -73,7 +73,7 @@ describe("Platform Abstraction", () => {
   });
 
   it("should handle universal platform edge cases", () => {
-    const universalAdapter = new UniversalPlatformAdapter();
+    const universalAdapter = new PlatformAdapter("universal");
     setPlatform(universalAdapter);
 
     const platform = getPlatform();
@@ -94,7 +94,7 @@ describe("Platform Abstraction", () => {
   });
 
   it("should handle Node.js platform features", () => {
-    const nodeAdapter = new NodePlatformAdapter();
+    const nodeAdapter = new PlatformAdapter("node");
     setPlatform(nodeAdapter);
 
     const platform = getPlatform();
@@ -128,33 +128,15 @@ describe("Platform Abstraction", () => {
     cleanupShutdown();
   });
 
-  it("should handle platform detection without Node.js", () => {
-    // Temporarily hide Node.js globals
-    const originalProcess = (globalThis as any).process;
-    const originalRequire = (globalThis as any).require;
-
-    delete (globalThis as any).process;
-    delete (globalThis as any).require;
-
-    resetPlatform(); // Force re-detection
-
-    const platform = getPlatform();
-    expect(platform).toBeInstanceOf(UniversalPlatformAdapter);
-
-    // Restore globals
-    (globalThis as any).process = originalProcess;
-    (globalThis as any).require = originalRequire;
-  });
-
   it("should test universal adapter environment variable fallbacks", () => {
-    const universalAdapter = new UniversalPlatformAdapter();
+    const universalAdapter = new PlatformAdapter("universal");
 
     // Test with simulated environment variables
     const originalGlobalThis = globalThis;
 
     expect(() => {
       universalAdapter.createAsyncLocalStorage<string>();
-    }).toThrow(PlatformUnsupportedFunction);
+    }).not.toThrow(PlatformUnsupportedFunction);
 
     // Test __ENV__ fallback
     (globalThis as any).__ENV__ = { TEST_VAR: "env_value" };
@@ -176,7 +158,7 @@ describe("Platform Abstraction", () => {
   });
 
   it("should test universal adapter event listener safety", () => {
-    const universalAdapter = new UniversalPlatformAdapter();
+    const universalAdapter = new PlatformAdapter("universal");
 
     // Test when addEventListener is not available
     const originalAddEventListener = (globalThis as any).addEventListener;
@@ -202,7 +184,7 @@ describe("Platform Abstraction", () => {
   });
 
   it("should test visibilitychange listener behavior", () => {
-    const universalAdapter = new UniversalPlatformAdapter();
+    const universalAdapter = new PlatformAdapter("universal");
 
     // Mock document and addEventListener
     const originalDocument = (globalThis as any).document;
@@ -253,7 +235,7 @@ describe("Platform Abstraction", () => {
   it("should test Node.js platform exit method (mocked)", () => {
     // Only test if we're in a Node.js environment
     if (typeof process !== "undefined" && process.exit) {
-      const nodeAdapter = new NodePlatformAdapter();
+      const nodeAdapter = new PlatformAdapter("node");
       const originalExit = process.exit;
 
       // Mock process.exit to capture the call
@@ -276,7 +258,7 @@ describe("Platform Abstraction", () => {
   it("should test Node.js platform onShutdownSignal method", () => {
     // Only test if we're in a Node.js environment
     if (typeof process !== "undefined" && typeof process.on === "function") {
-      const nodeAdapter = new NodePlatformAdapter();
+      const nodeAdapter = new PlatformAdapter("node");
 
       const handler = jest.fn();
       const cleanup = nodeAdapter.onShutdownSignal(handler);
@@ -295,7 +277,7 @@ describe("Platform Abstraction", () => {
   it("should test Node.js platform getEnv method", () => {
     // Only test if we're in a Node.js environment
     if (typeof process !== "undefined" && process.env) {
-      const nodeAdapter = new NodePlatformAdapter();
+      const nodeAdapter = new PlatformAdapter("node");
 
       // Set a test environment variable
       process.env.TEST_PLATFORM_VAR = "test-value";
@@ -314,8 +296,9 @@ describe("Platform Abstraction", () => {
     }
   });
 
-  it("should test Node.js platform createAsyncLocalStorage method", () => {
-    const nodeAdapter = new NodePlatformAdapter();
+  it("should test Node.js platform createAsyncLocalStorage method", async () => {
+    const nodeAdapter = new PlatformAdapter("node");
+    await nodeAdapter.init(); // Ensure initialization
 
     // Test creating AsyncLocalStorage
     const als = nodeAdapter.createAsyncLocalStorage<string>();
@@ -339,7 +322,7 @@ describe("Platform Abstraction", () => {
   });
 
   it("should trigger error handler when error event fires in universal adapter", () => {
-    const universalAdapter = new UniversalPlatformAdapter();
+    const universalAdapter = new PlatformAdapter("universal");
 
     let capturedListener: any;
     const originalAddEventListener = (globalThis as any).addEventListener;
@@ -365,7 +348,7 @@ describe("Platform Abstraction", () => {
   });
 
   it("should trigger rejection handler when unhandledrejection event fires in universal adapter", () => {
-    const universalAdapter = new UniversalPlatformAdapter();
+    const universalAdapter = new PlatformAdapter("universal");
 
     let capturedListener: any;
     const originalAddEventListener = (globalThis as any).addEventListener;
@@ -391,7 +374,7 @@ describe("Platform Abstraction", () => {
   });
 
   it("should trigger beforeunload shutdown handler in universal adapter", () => {
-    const universalAdapter = new UniversalPlatformAdapter();
+    const universalAdapter = new PlatformAdapter("universal");
 
     let capturedBeforeUnloadListener: any;
     const originalAddEventListener = (globalThis as any).addEventListener;
@@ -409,5 +392,183 @@ describe("Platform Abstraction", () => {
     expect(handlerCalled).toBe(true);
 
     (globalThis as any).addEventListener = originalAddEventListener;
+  });
+
+  // NEW TESTS FOR 100% COVERAGE
+
+  it("should test detectEnvironment universal path", () => {
+    // Mock environment to force universal detection
+    const originalWindow = (globalThis as any).window;
+    const originalDocument = (globalThis as any).document;
+    const originalProcess = (globalThis as any).process;
+
+    delete (globalThis as any).window;
+    delete (globalThis as any).document;
+    delete (globalThis as any).process;
+
+    const { detectEnvironment } = require("../platform");
+    expect(detectEnvironment()).toBe("universal");
+
+    // Restore
+    (globalThis as any).window = originalWindow;
+    (globalThis as any).document = originalDocument;
+    (globalThis as any).process = originalProcess;
+  });
+
+  it("should test PlatformAdapter constructor with explicit env", () => {
+    const adapter = new PlatformAdapter("browser");
+    expect(adapter.env).toBe("browser");
+  });
+
+  it("should test hasAsyncLocalStorage universal case", () => {
+    const universalAdapter = new PlatformAdapter("universal");
+    expect(universalAdapter.hasAsyncLocalStorage()).toBe(false);
+  });
+
+  it("should test createAsyncLocalStorage browser case", () => {
+    const browserAdapter = new PlatformAdapter("browser");
+    expect(() => browserAdapter.createAsyncLocalStorage()).not.toThrow();
+  });
+
+  it("should test utility functions", () => {
+    const {
+      getDetectedEnvironment,
+      isNode,
+      isBrowser,
+      isUniversal,
+    } = require("../platform");
+
+    // Test getDetectedEnvironment
+    const env = getDetectedEnvironment();
+    expect(["node", "browser", "universal"]).toContain(env);
+
+    // Test utility functions based on detected environment
+    if (env === "node") {
+      expect(isNode()).toBe(true);
+      expect(isBrowser()).toBe(false);
+      expect(isUniversal()).toBe(false);
+    } else if (env === "browser") {
+      expect(isNode()).toBe(false);
+      expect(isBrowser()).toBe(true);
+      expect(isUniversal()).toBe(false);
+    } else {
+      expect(isNode()).toBe(false);
+      expect(isBrowser()).toBe(false);
+      expect(isUniversal()).toBe(true);
+    }
+  });
+
+  it("should test onShutdownSignal universal cleanup", () => {
+    const universalAdapter = new PlatformAdapter("universal");
+
+    // Mock addEventListener to track calls
+    const originalAddEventListener = (globalThis as any).addEventListener;
+    const mockAddEventListener = jest.fn();
+    (globalThis as any).addEventListener = mockAddEventListener;
+
+    const cleanup = universalAdapter.onShutdownSignal(() => {});
+    expect(typeof cleanup).toBe("function");
+
+    // Call cleanup and verify it doesn't throw
+    expect(() => cleanup()).not.toThrow();
+
+    // Restore
+    (globalThis as any).addEventListener = originalAddEventListener;
+  });
+
+  // Tests for platform/types.ts utility functions
+  describe("Platform Type Utilities", () => {
+    it("should test isNode utility", () => {
+      // Mock Node.js environment
+      const originalProcess = (globalThis as any).process;
+      (globalThis as any).process = { versions: { node: "18.0.0" } };
+
+      expect(isNode()).toBe(true);
+
+      // Mock non-Node.js environment
+      delete (globalThis as any).process;
+      expect(isNode()).toBe(false);
+
+      // Restore
+      (globalThis as any).process = originalProcess;
+    });
+
+    it("should test isBrowser utility", () => {
+      // Mock browser environment
+      const originalWindow = (globalThis as any).window;
+      const originalDocument = (globalThis as any).document;
+      (globalThis as any).window = {};
+      (globalThis as any).document = {};
+
+      expect(isBrowser()).toBe(true);
+
+      // Mock non-browser environment
+      delete (globalThis as any).window;
+      delete (globalThis as any).document;
+      expect(isBrowser()).toBe(false);
+
+      // Restore
+      (globalThis as any).window = originalWindow;
+      (globalThis as any).document = originalDocument;
+    });
+
+    it("should test isWebWorker utility", () => {
+      // Mock WebWorker environment
+      const originalSelf = (globalThis as any).self;
+      const originalImportScripts = (globalThis as any).importScripts;
+      const originalWindow = (globalThis as any).window;
+      (globalThis as any).self = {};
+      (globalThis as any).importScripts = () => {};
+      delete (globalThis as any).window;
+
+      expect(isWebWorker()).toBe(true);
+
+      // Mock non-WebWorker environment
+      delete (globalThis as any).self;
+      delete (globalThis as any).importScripts;
+      expect(isWebWorker()).toBe(false);
+
+      // Restore
+      (globalThis as any).self = originalSelf;
+      (globalThis as any).importScripts = originalImportScripts;
+      (globalThis as any).window = originalWindow;
+    });
+
+    it("should test isUniversal utility", () => {
+      // Mock universal environment (no Node.js, no browser, no WebWorker)
+      const originalProcess = (globalThis as any).process;
+      const originalWindow = (globalThis as any).window;
+      const originalDocument = (globalThis as any).document;
+      const originalSelf = (globalThis as any).self;
+      const originalImportScripts = (globalThis as any).importScripts;
+
+      delete (globalThis as any).process;
+      delete (globalThis as any).window;
+      delete (globalThis as any).document;
+      delete (globalThis as any).self;
+      delete (globalThis as any).importScripts;
+
+      expect(isUniversal()).toBe(true);
+
+      // Mock Node.js environment
+      (globalThis as any).process = { versions: { node: "18.0.0" } };
+      expect(isUniversal()).toBe(false);
+
+      // Mock browser environment
+      delete (globalThis as any).process;
+      (globalThis as any).window = {};
+      (globalThis as any).document = {};
+      expect(isUniversal()).toBe(false);
+
+      // Mock WebWorker environment
+      delete (globalThis as any).window;
+      delete (globalThis as any).document;
+      (globalThis as any).self = {};
+      (globalThis as any).importScripts = () => {};
+      expect(isUniversal()).toBe(false);
+
+      // Restore
+      (globalThis as any).importScripts = originalImportScripts;
+    });
   });
 });

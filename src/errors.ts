@@ -37,7 +37,9 @@ export class DependencyNotFoundError extends RuntimeError {
  */
 export class UnknownItemTypeError extends RuntimeError {
   constructor(item: any) {
-    super(`Unknown item type: ${item}`);
+    super(
+      `Unknown item type: ${item}. Please ensure you are not using different versions of '@bluelibs/runner'`,
+    );
     this.name = "UnknownItemTypeError";
   }
 }
@@ -186,7 +188,9 @@ export class EventEmissionCycleError extends RuntimeError {
  */
 export class PlatformUnsupportedFunction extends RuntimeError {
   constructor(functionName: string) {
-    super(`Platform function not supported in this environment: ${functionName}`);
+    super(
+      `Platform function not supported in this environment: ${functionName}`,
+    );
     this.name = "PlatformUnsupportedFunction";
   }
 }

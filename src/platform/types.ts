@@ -13,12 +13,16 @@ export interface IPlatformAdapter {
   // Environment
   getEnv(key: string): string | undefined;
 
+  hasAsyncLocalStorage(): boolean;
+
   // Async context (AsyncLocalStorage abstraction)
   createAsyncLocalStorage<T>(): IAsyncLocalStorage<T>;
 
   // Timers (Web API compatible)
   setTimeout: typeof globalThis.setTimeout;
   clearTimeout: typeof globalThis.clearTimeout;
+
+  init: () => Promise<void>;
 }
 
 export interface IAsyncLocalStorage<T> {
@@ -26,26 +30,29 @@ export interface IAsyncLocalStorage<T> {
   run<R>(store: T, callback: () => R): R;
 }
 
-// Browser-specific event types for better type safety
-export interface BrowserErrorEvent extends ErrorEvent {
-  error: Error;
+/**
+ * Utility functions for environment detection
+ */
+export function isNode(): boolean {
+  return !!(
+    typeof process !== "undefined" &&
+    process.versions &&
+    process.versions.node
+  );
 }
 
-export interface BrowserPromiseRejectionEvent extends PromiseRejectionEvent {
-  reason: unknown;
-  promise: Promise<unknown>;
+export function isBrowser(): boolean {
+  return !!(typeof window !== "undefined" && typeof document !== "undefined");
 }
 
-// Environment detection utilities
-export const isBrowser = (): boolean =>
-  typeof window !== "undefined" && typeof document !== "undefined";
+export function isWebWorker(): boolean {
+  return !!(
+    typeof self !== "undefined" &&
+    typeof (globalThis as any).importScripts === "function" &&
+    typeof window === "undefined"
+  );
+}
 
-export const isWebWorker = (): boolean =>
-  typeof self !== "undefined" &&
-  typeof window === "undefined" &&
-  typeof (globalThis as any).importScripts === "function";
-
-export const isNode = (): boolean =>
-  typeof process !== "undefined" &&
-  process.versions != null &&
-  process.versions.node != null;
+export function isUniversal(): boolean {
+  return !isNode() && !isBrowser() && !isWebWorker();
+}

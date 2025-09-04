@@ -7,15 +7,25 @@ describe("processHooks platform integration", () => {
     jest.isolateModules(() => {
       // Fake adapter that captures shutdown handler and throws on exit
       class FakeAdapter {
-        onUncaughtException() { return () => {}; }
-        onUnhandledRejection() { return () => {}; }
+        onUncaughtException() {
+          return () => {};
+        }
+        onUnhandledRejection() {
+          return () => {};
+        }
         onShutdownSignal(handler: () => void) {
           (this as any)._shutdown = handler;
           return () => {};
         }
-        exit() { /* no-op to avoid process exit in tests */ }
-        getEnv() { return undefined; }
-        createAsyncLocalStorage() { return { getStore: () => undefined, run: (_: any, cb: any) => cb() }; }
+        exit() {
+          /* no-op to avoid process exit in tests */
+        }
+        getEnv() {
+          return undefined;
+        }
+        createAsyncLocalStorage() {
+          return { getStore: () => undefined, run: (_: any, cb: any) => cb() };
+        }
         setTimeout = setTimeout;
         clearTimeout = clearTimeout;
       }
@@ -47,17 +57,25 @@ describe("processHooks platform integration", () => {
     jest.isolateModules(async () => {
       // Fake adapter that throws a generic error on exit
       class FakeAdapterWithGenericError {
-        onUncaughtException() { return () => {}; }
-        onUnhandledRejection() { return () => {}; }
+        onUncaughtException() {
+          return () => {};
+        }
+        onUnhandledRejection() {
+          return () => {};
+        }
         onShutdownSignal(handler: () => void) {
           (this as any)._shutdown = handler;
           return () => {};
         }
-        exit() { 
-          throw new Error("Generic exit error"); 
+        exit() {
+          throw new Error("Generic exit error");
         }
-        getEnv() { return undefined; }
-        createAsyncLocalStorage() { return { getStore: () => undefined, run: (_: any, cb: any) => cb() }; }
+        getEnv() {
+          return undefined;
+        }
+        createAsyncLocalStorage() {
+          return { getStore: () => undefined, run: (_: any, cb: any) => cb() };
+        }
         setTimeout = setTimeout;
         clearTimeout = clearTimeout;
       }
@@ -74,8 +92,10 @@ describe("processHooks platform integration", () => {
       });
 
       // Trigger the captured shutdown handler - should rethrow the generic error
-      await expect((adapter as any)._shutdown()).rejects.toThrow("Generic exit error");
-      
+      await expect((adapter as any)._shutdown()).rejects.toThrow(
+        "Generic exit error",
+      );
+
       expect(disposed).toBe(true);
       unhook();
     });

@@ -1,7 +1,11 @@
 import { getPlatform } from "./platform";
 import { ITaskMiddlewareConfigured } from "./defs";
 import { requireContextTaskMiddleware } from "./globals/middleware/requireContext.middleware";
-import { ContextError } from "./errors";
+import {
+  ContextError,
+  PlatformUnsupportedFunction,
+  RuntimeError,
+} from "./errors";
 
 export { ContextError };
 /**
@@ -39,9 +43,14 @@ function getCurrentStore(): Map<symbol, unknown> | undefined {
  * Context API but adapted for async usage in Runner.
  */
 export function createContext<T>(name: string = "runner.context"): Context<T> {
+  if (!platform.hasAsyncLocalStorage()) {
+    throw new PlatformUnsupportedFunction(
+      `createAsyncLocalStorage: Cannot create context ${name}: no async storage available in this environment`,
+    );
+  }
   const ctxId = Symbol(name);
 
-  function use(): T {
+  const use = (): T => {
     const store = getCurrentStore();
     if (!store || !store.has(ctxId)) {
       throw new ContextError(
@@ -49,9 +58,9 @@ export function createContext<T>(name: string = "runner.context"): Context<T> {
       );
     }
     return store.get(ctxId) as T;
-  }
+  };
 
-  function provide<R>(value: T, fn: () => Promise<R> | R): Promise<R> | R {
+  const provide = <R>(value: T, fn: () => Promise<R> | R): Promise<R> | R => {
     const currentStore = getCurrentStore();
     const map = currentStore
       ? new Map(currentStore)
@@ -59,21 +68,16 @@ export function createContext<T>(name: string = "runner.context"): Context<T> {
     map.set(ctxId, value);
 
     return storage.run(map, fn as any);
-  }
+  };
 
-  /**
-   * Generates a middleware that guarantees the context exists (and optionally
-   * enforces that certain keys are present on the context object).
-   * @throws {ContextError} if the context is not available
-   */
-  function require(): ITaskMiddlewareConfigured {
-    return requireContextTaskMiddleware.with({ context: this as Context<T> });
-  }
-
-  return {
+  const api = {
     id: ctxId,
     use,
     provide,
-    require,
+    require(): ITaskMiddlewareConfigured {
+      return requireContextTaskMiddleware.with({ context: api as Context<T> });
+    },
   };
+
+  return api;
 }

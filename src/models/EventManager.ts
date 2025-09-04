@@ -8,7 +8,7 @@ import {
 import { LockedError, ValidationError, EventCycleError } from "../errors";
 import { globalTags } from "../globals/globalTags";
 import { IHook } from "../types/hook";
-import { getPlatform } from "../platform";
+import { getPlatform, IAsyncLocalStorage } from "../platform";
 
 /**
  * Default options for event handlers
@@ -76,13 +76,9 @@ export class EventManager {
   private hookInterceptors: HookExecutionInterceptor[] = [];
 
   // Tracks the current emission chain to detect cycles
-  private readonly emissionStack =
-    getPlatform().createAsyncLocalStorage<
-      Array<{ id: string; source: string }>
-    >();
+  private readonly emissionStack!: IAsyncLocalStorage<any> | null;
   // Tracks currently executing hook id (if any)
-  private readonly currentHookIdContext =
-    getPlatform().createAsyncLocalStorage<string>();
+  private readonly currentHookIdContext!: IAsyncLocalStorage<string> | null;
 
   // Locking mechanism to prevent modifications after initialization
   #isLocked = false;
@@ -92,6 +88,20 @@ export class EventManager {
 
   constructor(options?: { runtimeCycleDetection?: boolean }) {
     this.runtimeCycleDetection = options?.runtimeCycleDetection ?? true;
+
+    // Store based on the platform.
+    if (getPlatform().hasAsyncLocalStorage() && this.runtimeCycleDetection) {
+      this.emissionStack =
+        getPlatform().createAsyncLocalStorage<
+          { id: string; source: string }[]
+        >();
+      this.currentHookIdContext =
+        getPlatform().createAsyncLocalStorage<string>();
+    } else {
+      this.runtimeCycleDetection = false;
+      this.emissionStack = null;
+      this.currentHookIdContext = null;
+    }
   }
 
   // ==================== PUBLIC API ====================
@@ -217,7 +227,11 @@ export class EventManager {
       await emitWithInterceptors(event);
     };
 
-    if (this.runtimeCycleDetection) {
+    if (
+      this.runtimeCycleDetection &&
+      this.emissionStack &&
+      this.currentHookIdContext
+    ) {
       // Detect re-entrant event cycles: same event id appearing in the current chain
       const currentStack = this.emissionStack.getStore();
       if (currentStack) {
@@ -418,7 +432,7 @@ export class EventManager {
 
     // Execute the hook with interceptors within current hook context
     if (this.runtimeCycleDetection) {
-      return await this.currentHookIdContext.run(
+      return await this.currentHookIdContext?.run(
         hook.id,
         async () => await executeWithInterceptors(hook, event),
       );
