@@ -5,7 +5,9 @@ import { users } from "./users";
 import { appConfig } from "./app.config";
 import { dev } from "@bluelibs/runner-dev";
 
-const ENABLE_DEV = true;
+console.log(process.env);
+const ENABLE_DEV = process.env.NODE_ENV === "development";
+const extra = ENABLE_DEV ? [dev.with({ port: 1337 })] : [];
 
 export const app = resource({
   id: "app.main",
@@ -16,13 +18,7 @@ export const app = resource({
       verbose: true,
     }),
     http,
-    ...(ENABLE_DEV
-      ? [
-          dev.with({
-            port: 1337,
-          }),
-        ]
-      : []),
     users,
+    ...extra,
   ],
 });

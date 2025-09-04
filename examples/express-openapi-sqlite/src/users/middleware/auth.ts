@@ -1,7 +1,7 @@
 import { taskMiddleware } from "@bluelibs/runner";
 import jwt from "jsonwebtoken";
 import { UserContext } from "../user.context";
-import { usersRepository } from "../repository/users.repository";
+import { usersRepository } from "../resources/users-repository.resource";
 import { UserSession } from "../types";
 import { appConfig } from "../../app.config";
 
@@ -15,7 +15,7 @@ export const authMiddleware = taskMiddleware({
   run: async (
     { task, next },
     { userService, appConfig },
-    config: AuthMiddlewareConfig
+    config: AuthMiddlewareConfig,
   ) => {
     const { jwtSecret } = appConfig;
     const { requiresAuth = true } = config;

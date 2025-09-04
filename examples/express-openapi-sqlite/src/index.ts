@@ -1,5 +1,5 @@
 import { run } from "@bluelibs/runner";
-import { app } from "./modules";
+import { app } from "./app.resource";
 
 /**
  * Start the application

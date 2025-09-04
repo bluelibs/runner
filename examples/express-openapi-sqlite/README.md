@@ -34,15 +34,13 @@ The full power and simplicity of Runner.
 // HTTP tag for marking tasks as endpoints
 const registerUserTask = task({
   id: "app.tasks.auth.register",
-  meta: {
-    tags: [
-      httpRoute.post("/api/auth/register", {
-        summary: "Register a new user",
-        requiresAuth: false,
-        requestBodySchema: registerSchema,
-      }),
-    ],
-  },
+  tags: [
+    httpRoute.post("/api/auth/register", {
+      summary: "Register a new user",
+      requiresAuth: false,
+      requestBodySchema: registerSchema,
+    }),
+  ],
   run: async (userData) => {
     // Enforces API response because of the presence of the tag
     /* ... */

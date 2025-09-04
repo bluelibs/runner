@@ -1,9 +1,9 @@
 // examples/express-openapi-sqlite/src/tasks/routeRegistration.ts
 import { hook, globals } from "@bluelibs/runner";
 import { Request, Response } from "express";
-import { httpTag } from "./http.tag";
-import { RequestContext, RequestData } from "./request.context";
-import { expressServerResource } from "./expressServer";
+import { httpTag } from "../tags/http.tag";
+import { RequestContext, RequestData } from "../request.context";
+import { expressServerResource } from "../resources/express.resource";
 import swaggerUi from "swagger-ui-express";
 import { createDocument } from "zod-openapi";
 

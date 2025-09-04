@@ -1,12 +1,12 @@
 import z from "zod";
-import { usersRepository } from "../repository/users.repository";
-import { httpRoute } from "../../http/http.tag";
+import { usersRepository } from "../resources/users-repository.resource";
+import { httpRoute } from "../../http/tags/http.tag";
 import { task } from "@bluelibs/runner";
 import { LoginRequest, LoginResponse, ApiResponse } from "../types";
 import jwt from "jsonwebtoken";
 import { appConfig } from "../../app.config";
 import { UserSchema } from "../types";
-import { verifyPasswordTask } from "./verifyPassword.task";
+import { verifyPasswordTask } from "./verify-password.task";
 
 const loginSchema = z.object({
   email: z.email(),

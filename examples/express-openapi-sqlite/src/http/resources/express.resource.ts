@@ -3,9 +3,9 @@ import express, { Express, Request, Response } from "express";
 import cors from "cors";
 import swaggerJSDoc from "swagger-jsdoc";
 import swaggerUi from "swagger-ui-express";
-import { httpTag } from "./http.tag";
-import { RequestContext, RequestData } from "./request.context";
-import { appConfig } from "../app.config";
+import { httpTag } from "../tags/http.tag";
+import { RequestContext, RequestData } from "../request.context";
+import { appConfig } from "../../app.config";
 // Simple UUID generator (for demo purposes)
 const generateId = () =>
   Math.random().toString(36).substring(2) + Date.now().toString(36);

@@ -1,7 +1,7 @@
 import z from "zod";
-import { usersRepository } from "../repository/users.repository";
+import { usersRepository } from "../resources/users-repository.resource";
 import { task } from "@bluelibs/runner";
-import { httpRoute } from "../../http/http.tag";
+import { httpRoute } from "../../http/tags/http.tag";
 import {
   RegisterRequest,
   LoginResponse,
@@ -10,7 +10,7 @@ import {
 } from "../types";
 import jwt from "jsonwebtoken";
 import { appConfig } from "../../app.config";
-import { createUserTask } from "./createUser.task";
+import { createUserTask } from "./create-user.task";
 
 // Validation schemas
 const registerSchema = z.object({
