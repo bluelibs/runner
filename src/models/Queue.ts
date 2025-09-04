@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "node:async_hooks";
+import { getPlatform } from "../platform";
 
 /**
  * Cooperative task queue.
@@ -12,7 +12,8 @@ export class Queue {
   private abortController = new AbortController();
 
   // true while inside a queued task → helps detect "queue in queue"
-  private readonly executionContext = new AsyncLocalStorage<boolean>();
+  private readonly executionContext =
+    getPlatform().createAsyncLocalStorage<boolean>();
 
   /**
    * Schedule an asynchronous task.

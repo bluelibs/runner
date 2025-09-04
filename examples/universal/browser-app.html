@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>BlueLibs Runner - Browser Example</title>
+    <script type="module">
+      // Browser Application Example
+      // Same API as Node.js, but automatically adapted for browser environment
+      import { run, resource, task, event, hook } from "../../dist/index.js";
+
+      // Data store resource
+      const dataStore = resource({
+        id: "browser-data-store",
+        init: async () => {
+          const data = new Map();
+          return {
+            set: (key, value) => data.set(key, value),
+            get: (key) => data.get(key),
+            getAll: () => Array.from(data.entries()),
+          };
+        },
+      });
+
+      // User interaction task
+      const handleUserInput = task({
+        id: "handle-user-input",
+        dependencies: { dataStore },
+        run: async (input, { dataStore }) => {
+          const timestamp = new Date().toISOString();
+          dataStore.set(timestamp, input);
+          return { timestamp, input, total: dataStore.getAll().length };
+        },
+      });
+
+      // Event for UI updates
+      const dataUpdated = event({
+        id: "data-updated",
+        payload: (data) => ({ data }),
+      });
+
+      // Hook to update UI when data changes
+      const updateUI = hook({
+        id: "update-ui",
+        event: dataUpdated,
+        dependencies: { dataStore },
+        run: async (event, { dataStore }) => {
+          const output = document.getElementById("output");
+          const allData = dataStore.getAll();
+          output.innerHTML = `
+                    <h3>Stored Data (${allData.length} items):</h3>
+                    <ul>
+                        ${allData
+                          .map(
+                            ([timestamp, value]) =>
+                              `<li><strong>${timestamp}:</strong> ${value}</li>`,
+                          )
+                          .join("")}
+                    </ul>
+                `;
+        },
+      });
+
+      // Browser app resource
+      const browserApp = resource({
+        id: "browser-app",
+        register: [dataStore, handleUserInput, updateUI],
+        dependencies: { dataStore, handleUserInput },
+        init: async (_, { dataStore, handleUserInput }) => {
+          // Set up event listeners
+          const button = document.getElementById("addData");
+          const input = document.getElementById("userInput");
+
+          button.addEventListener("click", async () => {
+            const value = input.value.trim();
+            if (value) {
+              const result = await handleUserInput.run(value);
+              console.log("Data added:", result);
+
+              // Emit event to update UI
+              await dataUpdated.emit({ data: result });
+
+              input.value = "";
+            }
+          });
+
+          return { message: "Browser app initialized!" };
+        },
+      });
+
+      // Run in browser with adapted features
+      // - Uses beforeunload for shutdown hooks
+      // - AsyncLocalStorage polyfill for context tracking
+      // - No process exit (just console warning)
+      run(browserApp, {
+        shutdownHooks: true,
+        errorBoundary: true,
+        logs: { printThreshold: "info", printStrategy: "pretty" },
+      })
+        .then((result) => {
+          console.log("Browser app started:", result);
+          window.runnerInstance = result; // Store for global access
+
+          // Show success message
+          const status = document.getElementById("status");
+          status.innerHTML =
+            '<span style="color: green;">✓ BlueLibs Runner initialized successfully!</span>';
+          status.innerHTML +=
+            "<br><em>Same API as Node.js, automatically adapted for browser!</em>";
+        })
+        .catch((error) => {
+          console.error("Failed to start browser app:", error);
+
+          const status = document.getElementById("status");
+          status.innerHTML =
+            '<span style="color: red;">✗ Failed to initialize</span>';
+        });
+
+      // Demonstrate graceful shutdown on page unload
+      window.addEventListener("beforeunload", () => {
+        console.log("Browser app shutting down gracefully...");
+      });
+    </script>
+  </head>
+  <body>
+    <h1>BlueLibs Runner - Browser Example</h1>
+
+    <div id="status">Loading...</div>
+
+    <div style="margin: 20px 0">
+      <h2>Add Data</h2>
+      <input
+        type="text"
+        id="userInput"
+        placeholder="Enter some data..."
+        style="padding: 8px; width: 200px"
+      />
+      <button id="addData" style="padding: 8px 16px; margin-left: 8px">
+        Add Data
+      </button>
+    </div>
+
+    <div id="output">
+      <p><em>No data yet. Add some data above!</em></p>
+    </div>
+
+    <div
+      style="
+        margin-top: 40px;
+        padding: 20px;
+        background: #f5f5f5;
+        border-radius: 8px;
+      "
+    >
+      <h3>Universal Features Working in Browser:</h3>
+      <ul>
+        <li>✓ Dependency Injection</li>
+        <li>✓ Task Orchestration</li>
+        <li>✓ Event System</li>
+        <li>✓ Resource Management</li>
+        <li>✓ Context Tracking (polyfilled AsyncLocalStorage)</li>
+        <li>✓ Error Boundary</li>
+        <li>✓ Graceful Shutdown (beforeunload)</li>
+      </ul>
+      <p><strong>Same API as Node.js, zero configuration needed!</strong></p>
+    </div>
+  </body>
+</html>

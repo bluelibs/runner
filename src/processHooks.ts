@@ -1,3 +1,8 @@
+import { getPlatform } from "./platform";
+import { PlatformUnsupportedFunction } from "./errors";
+
+const platform = getPlatform();
+
 // Global registry of active error handlers for process-level safety nets
 const activeErrorHandlers = new Set<
   (
@@ -24,8 +29,8 @@ function installGlobalProcessSafetyNetsOnce() {
       } catch (_) {}
     }
   };
-  process.on("uncaughtException", onUncaughtException as any);
-  process.on("unhandledRejection", onUnhandledRejection as any);
+  platform.onUncaughtException(onUncaughtException);
+  platform.onUnhandledRejection(onUnhandledRejection);
 }
 
 export function registerProcessLevelSafetyNets(
@@ -48,7 +53,7 @@ let shutdownHooksInstalled = false;
 function installGlobalShutdownHooksOnce() {
   if (shutdownHooksInstalled) return;
   shutdownHooksInstalled = true;
-  const handler = async (signal: NodeJS.Signals) => {
+  const handler = async () => {
     try {
       const disposers = Array.from(activeDisposers);
       for (const d of disposers) {
@@ -58,11 +63,16 @@ function installGlobalShutdownHooksOnce() {
         activeDisposers.delete(d);
       }
     } finally {
-      process.exit(0);
+      try {
+        platform.exit(0);
+      } catch (e) {
+        if (!(e instanceof PlatformUnsupportedFunction)) {
+          throw e;
+        }
+      }
     }
   };
-  process.on("SIGINT", handler);
-  process.on("SIGTERM", handler);
+  platform.onShutdownSignal(handler);
 }
 
 export function registerShutdownHook(disposeOnce: () => Promise<void>) {

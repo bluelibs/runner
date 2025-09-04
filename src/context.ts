@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "async_hooks";
+import { getPlatform } from "./platform";
 import { ITaskMiddlewareConfigured } from "./defs";
 import { requireContextTaskMiddleware } from "./globals/middleware/requireContext.middleware";
 import { ContextError } from "./errors";
@@ -26,7 +26,8 @@ export interface Context<T> {
 }
 
 // The internal storage maps Context identifiers (symbols) to their values
-export const storage = new AsyncLocalStorage<Map<symbol, unknown>>();
+const platform = getPlatform();
+export const storage = platform.createAsyncLocalStorage<Map<symbol, unknown>>();
 
 /** Returns the currently active store or undefined. */
 function getCurrentStore(): Map<symbol, unknown> | undefined {

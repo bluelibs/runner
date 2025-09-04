@@ -180,3 +180,13 @@ export class EventEmissionCycleError extends RuntimeError {
     this.name = "EventEmissionCycleError";
   }
 }
+
+/**
+ * Error thrown when a platform function is not supported in the current environment.
+ */
+export class PlatformUnsupportedFunction extends RuntimeError {
+  constructor(functionName: string) {
+    super(`Platform function not supported in this environment: ${functionName}`);
+    this.name = "PlatformUnsupportedFunction";
+  }
+}
