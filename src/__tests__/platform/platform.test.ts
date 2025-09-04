@@ -1,4 +1,4 @@
-import { PlatformUnsupportedFunction } from "../errors";
+import { PlatformUnsupportedFunction } from "../../errors";
 /**
  * Simple test to verify platform abstraction works in different environments
  */
@@ -7,8 +7,13 @@ import {
   setPlatform,
   resetPlatform,
   PlatformAdapter,
-} from "../platform";
-import { isNode, isBrowser, isWebWorker, isUniversal } from "../platform/types";
+} from "../../platform";
+import {
+  isNode,
+  isBrowser,
+  isWebWorker,
+  isUniversal,
+} from "../../platform/types";
 
 describe("Platform Abstraction", () => {
   afterEach(() => {
@@ -406,7 +411,7 @@ describe("Platform Abstraction", () => {
     delete (globalThis as any).document;
     delete (globalThis as any).process;
 
-    const { detectEnvironment } = require("../platform");
+    const { detectEnvironment } = require("../../platform");
     expect(detectEnvironment()).toBe("universal");
 
     // Restore
@@ -436,7 +441,7 @@ describe("Platform Abstraction", () => {
       isNode,
       isBrowser,
       isUniversal,
-    } = require("../platform");
+    } = require("../../platform");
 
     // Test getDetectedEnvironment
     const env = getDetectedEnvironment();

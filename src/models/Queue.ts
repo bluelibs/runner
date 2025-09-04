@@ -15,6 +15,8 @@ export class Queue {
   private readonly executionContext =
     getPlatform().createAsyncLocalStorage<boolean>();
 
+  private readonly hasAsyncLocalStorage = getPlatform().hasAsyncLocalStorage();
+
   /**
    * Schedule an asynchronous task.
    * @param task – receives an AbortSignal so it can cancel early if desired.
@@ -26,7 +28,7 @@ export class Queue {
     }
 
     // 2. detect dead‑locks (a queued task adding another queued task)
-    if (this.executionContext.getStore()) {
+    if (this.hasAsyncLocalStorage && this.executionContext.getStore()) {
       return Promise.reject(
         new Error(
           "Dead‑lock detected: a queued task attempted to queue another task",
@@ -38,7 +40,9 @@ export class Queue {
 
     // 3. chain task after the current tail
     const result = this.tail.then(() =>
-      this.executionContext.run(true, () => task(signal)),
+      this.hasAsyncLocalStorage
+        ? this.executionContext.run(true, () => task(signal))
+        : task(signal),
     );
 
     // 4. preserve the chain even if the task rejects (swallow internally)

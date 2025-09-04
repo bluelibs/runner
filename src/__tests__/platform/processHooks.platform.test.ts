@@ -30,11 +30,11 @@ describe("processHooks platform integration", () => {
         clearTimeout = clearTimeout;
       }
 
-      const { setPlatform } = require("../platform");
+      const { setPlatform } = require("../../platform");
       const adapter: any = new FakeAdapter();
       setPlatform(adapter);
 
-      const { registerShutdownHook } = require("../processHooks");
+      const { registerShutdownHook } = require("../../processHooks");
 
       let disposed = false;
       const unhook = registerShutdownHook(async () => {
@@ -80,11 +80,11 @@ describe("processHooks platform integration", () => {
         clearTimeout = clearTimeout;
       }
 
-      const { setPlatform } = require("../platform");
+      const { setPlatform } = require("../../platform");
       const adapter: any = new FakeAdapterWithGenericError();
       setPlatform(adapter);
 
-      const { registerShutdownHook } = require("../processHooks");
+      const { registerShutdownHook } = require("../../processHooks");
 
       let disposed = false;
       const unhook = registerShutdownHook(async () => {

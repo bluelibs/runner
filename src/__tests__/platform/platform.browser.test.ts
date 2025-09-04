@@ -15,9 +15,9 @@ class FakePromiseRejectionEvent extends Event {
 
 (global as any).PromiseRejectionEvent = FakePromiseRejectionEvent;
 
-import { detectEnvironment, PlatformAdapter } from "../platform";
-import { createContext, storage } from "../context";
-import { PlatformUnsupportedFunction } from "../errors";
+import { detectEnvironment, PlatformAdapter } from "../../platform";
+import { createContext, storage } from "../../context";
+import { PlatformUnsupportedFunction } from "../../errors";
 import exp from "constants";
 describe("PlatformAdapter (Browser)", () => {
   it("should register and cleanup error listeners", () => {

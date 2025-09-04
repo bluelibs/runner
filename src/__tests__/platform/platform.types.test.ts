@@ -20,7 +20,11 @@ describe("platform types utilities", () => {
     jest.isolateModules(() => {
       (globalThis as any).window = {};
       (globalThis as any).document = {};
-      const { isBrowser, isWebWorker, isNode } = require("../platform/types");
+      const {
+        isBrowser,
+        isWebWorker,
+        isNode,
+      } = require("../../platform/types");
       expect(isBrowser()).toBe(true);
       expect(isWebWorker()).toBe(false);
       expect(isNode()).toBe(
@@ -38,7 +42,7 @@ describe("platform types utilities", () => {
       delete (globalThis as any).document;
       (globalThis as any).self = {};
       (globalThis as any).importScripts = function () {};
-      const { isBrowser, isWebWorker } = require("../platform/types");
+      const { isBrowser, isWebWorker } = require("../../platform/types");
       expect(isBrowser()).toBe(false);
       expect(isWebWorker()).toBe(true);
     });
