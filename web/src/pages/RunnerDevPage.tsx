@@ -2,40 +2,29 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import {
   ArrowRight,
+  Zap,
+  Gauge,
   Check,
   Play,
   GitBranch,
   Database,
+  Settings,
   Brain,
   Eye,
   FileText,
   Terminal,
   Activity,
+  Layers,
+  Search,
   Download,
 } from "lucide-react";
 import CodeBlock from "../components/CodeBlock";
 import Meta from "../components/Meta";
 import RunnerDevUrlCards from "../components/RunnerDevUrlCards";
+import IntelligentZoomImage from "../components/IntelligentZoomImage";
 
-// Main features - the core value propositions
+// Feature showcase data with corresponding images
 const features = [
-  {
-    id: "app-topology",
-    title: "Application Topology",
-    description:
-      "Visualize your entire app structure with tasks, resources, events, hooks, and their dependencies in one comprehensive view.",
-    image: "/runner-dev/your-app-at-one-glance.png",
-    icon: Eye,
-    gradient: "from-blue-500 to-purple-600",
-    details: [
-      "Interactive GraphQL API for deep exploration",
-      "Built-in GraphQL Playground for query testing",
-      "Voyager schema visualization for graph exploration",
-      "Dependency graph visualization",
-      "Real-time topology updates",
-      "File-aware metadata with source locations",
-    ],
-  },
   {
     id: "ai-assistant",
     title: "AI Assistant Integration",
@@ -52,18 +41,125 @@ const features = [
     ],
   },
   {
-    id: "live-telemetry",
-    title: "Live Telemetry",
+    id: "app-overview",
+    title: "Complete Application Topology",
+    description:
+      "Visualize your entire app structure with tasks, resources, events, hooks, and their dependencies in one comprehensive view.",
+    image: "/runner-dev/your-app-at-one-glance.png",
+    icon: Eye,
+    gradient: "from-blue-500 to-purple-600",
+    details: [
+      "Interactive GraphQL API for deep exploration",
+      "Built-in GraphQL Playground for query testing",
+      "Voyager schema visualization for graph exploration",
+      "Dependency graph visualization",
+      "Real-time topology updates",
+      "File-aware metadata with source locations",
+    ],
+  },
+  {
+    id: "insights",
+    title: "Granular Performance Insights",
     description:
       "Monitor your application's performance with real-time metrics, execution traces, and correlation tracking across your entire system.",
     image: "/runner-dev/gain-granular-insights.png",
-    icon: Activity,
+    icon: Gauge,
     gradient: "from-purple-500 to-pink-600",
     details: [
       "Real-time performance monitoring",
       "Memory, CPU, and event loop metrics",
       "Execution time tracking per task",
       "Correlation ID tracing across operations",
+    ],
+  },
+  {
+    id: "diagnostics",
+    title: "Smart Diagnostics",
+    description:
+      "Advanced diagnostics system that detects orphaned events, unused middleware, missing files, and other potential issues automatically.",
+    image: "/runner-dev/diagnostics-for-your-app.png",
+    icon: Search,
+    gradient: "from-pink-500 to-red-600",
+    details: [
+      "Automatic issue detection and reporting",
+      "Orphaned event detection",
+      "Unused middleware identification",
+      "File system integrity checks",
+    ],
+  },
+  {
+    id: "file-editing",
+    title: "Live File Preview & Editing",
+    description:
+      "Browse and edit your source files directly from the dev interface with syntax highlighting and real-time file system integration.",
+    image: "/runner-dev/preview-and-edit-files-in-place.png",
+    icon: FileText,
+    gradient: "from-red-500 to-orange-600",
+    details: [
+      "In-browser file editing with syntax highlighting",
+      "Real-time file system synchronization",
+      "Source location links from GraphQL data",
+      "Integrated development workflow",
+    ],
+  },
+  {
+    id: "task-execution",
+    title: "Interactive Task Execution",
+    description:
+      "Run tasks, emit events, and test your application logic directly from the interface with full input/output serialization.",
+    image: "/runner-dev/run-tasks-or-emit-events.png",
+    icon: Play,
+    gradient: "from-orange-500 to-yellow-600",
+    details: [
+      "Execute tasks with custom inputs",
+      "JavaScript expression evaluation",
+      "Pure mode bypass for testing",
+      "Real-time execution feedback",
+    ],
+  },
+  {
+    id: "custom-ai",
+    title: "Customize Your AI Experience",
+    description:
+      "Tailor the AI assistant integration to your workflow with custom prompts, specialized agents, and development-specific automations.",
+    image: "/runner-dev/customize-your-own-ai.png",
+    icon: Settings,
+    gradient: "from-yellow-500 to-green-600",
+    details: [
+      "Customizable AI provider",
+      "Development workflow automation",
+      "Context-aware code generation",
+      "Intelligent debugging assistance",
+    ],
+  },
+  {
+    id: "visualization-type",
+    title: "Type-Based Visualization",
+    description:
+      "Advanced visualization options that let you explore your application by types, schemas, and data relationships.",
+    image: "/runner-dev/vizualize-them-your-way-type.png",
+    icon: Layers,
+    gradient: "from-green-500 to-blue-600",
+    details: [
+      "Schema-aware data visualization",
+      "Type relationship mapping",
+      "JSON Schema integration with Zod",
+      "Data flow visualization",
+    ],
+  },
+  {
+    id: "visualization-namespace",
+    title: "Namespace Organization",
+    description:
+      "Organize and visualize your application components by namespaces for better architecture understanding and navigation.",
+    image: "/runner-dev/vizualize-them-your-way-namespace.png",
+    icon: Database,
+    gradient: "from-blue-500 to-purple-600",
+    details: [
+      "Hierarchical namespace organization",
+      "Domain-driven design visualization",
+      "Component grouping and filtering",
+      "Architecture overview at a glance",
     ],
   },
 ];
@@ -235,8 +331,8 @@ export const app = resource({
 
           {/* Selected Feature Display */}
           <div className="card p-12">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
-              <div>
+            <div className="grid grid-cols-1 lg:grid-cols-5 gap-16 items-center">
+              <div className="lg:col-span-2">
                 <div className="flex items-center mb-6">
                   <div
                     className={`w-12 h-12 bg-gradient-to-r ${features[selectedFeature].gradient} rounded-lg flex items-center justify-center flex-shrink-0`}
@@ -268,21 +364,12 @@ export const app = resource({
                   ))}
                 </ul>
               </div>
-              <div className="relative">
-                <div className="relative overflow-hidden rounded-xl shadow-2xl">
-                  <img
-                    src={features[selectedFeature].image}
-                    alt={features[selectedFeature].title}
-                    className="w-full h-auto transition-transform duration-500 hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-transparent"></div>
-                </div>
-                {/* Floating elements */}
-                <div className="absolute -top-4 -right-4 w-8 h-8 bg-gradient-to-r from-emerald-400 to-teal-500 rounded-full opacity-80 animate-pulse"></div>
-                <div
-                  className="absolute -bottom-4 -left-4 w-6 h-6 bg-gradient-to-r from-blue-400 to-purple-500 rounded-full opacity-60 animate-pulse"
-                  style={{ animationDelay: "1s" }}
-                ></div>
+              <div className="lg:col-span-3">
+                <IntelligentZoomImage
+                  src={features[selectedFeature].image}
+                  alt={features[selectedFeature].title}
+                  gradient={features[selectedFeature].gradient}
+                />
               </div>
             </div>
           </div>
