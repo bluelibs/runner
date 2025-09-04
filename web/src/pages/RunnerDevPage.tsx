@@ -289,6 +289,44 @@ export const app = resource({
         </div>
       </section>
 
+      {/* Installation Guide */}
+      <section id="installation" className="py-32">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="text-center mb-16">
+            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-6">
+              Get Started in Seconds
+            </h2>
+            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto mb-8">
+              Three simple steps to supercharge your Runner development
+              experience.
+            </p>
+          </div>
+
+          <div className="space-y-12">
+            {installationSteps.map((step, index) => (
+              <div key={index} className="card p-10">
+                <div className="flex items-start space-x-6">
+                  <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <span className="text-white font-bold text-lg">
+                      {index + 1}
+                    </span>
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
+                      {step.title}
+                    </h3>
+                    <p className="text-gray-600 dark:text-gray-300 mb-6">
+                      {step.description}
+                    </p>
+                    <CodeBlock>{step.code}</CodeBlock>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Hot-Swapping Deep Dive */}
       <section className="py-32">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -357,23 +395,8 @@ export const app = resource({
   "runCode": """
     async function run(input, deps) {
       // Add debug logging
-      console.log('Creating user:', input);
-      
-      // Enhanced validation
-      if (!input.email?.includes('@')) {
-        throw new Error('Invalid email');
-      }
-      
-      // Original logic with improvements
-      const result = {
-        id: crypto.randomUUID(),
-        ...input,
-        createdAt: new Date().toISOString(),
-        debugInfo: { swapped: true }
-      };
-      
-      console.log('User created:', result);
-      return result;
+      // Modify certain bits of code
+      // Easily get the function value from Runner Documentation.
     }
   """
 }`}
@@ -506,44 +529,6 @@ query LiveMetrics {
         </div>
       </section>
 
-      {/* Installation Guide */}
-      <section id="installation" className="py-32">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-6">
-              Get Started in Seconds
-            </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-              Three simple steps to supercharge your Runner development
-              experience.
-            </p>
-          </div>
-
-          <div className="space-y-12">
-            {installationSteps.map((step, index) => (
-              <div key={index} className="card p-10">
-                <div className="flex items-start space-x-6">
-                  <div className="w-12 h-12 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <span className="text-white font-bold text-lg">
-                      {index + 1}
-                    </span>
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3">
-                      {step.title}
-                    </h3>
-                    <p className="text-gray-600 dark:text-gray-300 mb-6">
-                      {step.description}
-                    </p>
-                    <CodeBlock>{step.code}</CodeBlock>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
       {/* CLI Tools */}
       <section className="py-32">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -625,15 +610,8 @@ query LiveMetrics {
               Try Interactive Demo
             </Link>
           </div>
-          <div className="mt-8">
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-              <code className="bg-gray-100 dark:bg-gray-800 px-3 py-2 rounded text-emerald-600 dark:text-emerald-400">
-                npm install -g @bluelibs/runner-dev
-              </code>
-            </p>
-            <div className="mt-16">
-              <RunnerDevUrlCards />
-            </div>
+          <div className="mt-16">
+            <RunnerDevUrlCards />
           </div>
         </div>
       </section>
