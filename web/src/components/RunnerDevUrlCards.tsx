@@ -42,7 +42,13 @@ const RunnerDevUrlCards: React.FC<RunnerDevUrlCardsProps> = ({ variant = "full" 
   return (
     <div className={`grid grid-cols-1 ${isCompact ? "sm:grid-cols-3 gap-3 max-w-2xl" : "md:grid-cols-3 gap-4 max-w-4xl"} mx-auto`}>
       {cards.map((card, index) => (
-        <div key={index} className={`inline-flex items-center ${padding} bg-gradient-to-r ${card.gradient} rounded-lg`}>
+        <a 
+          key={index} 
+          href={`http://${card.url}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className={`inline-flex items-center ${padding} bg-gradient-to-r ${card.gradient} rounded-lg hover:shadow-lg transition-shadow cursor-pointer`}
+        >
           <card.icon className={`${iconSize} ${card.iconColor} mr-2`} />
           <div className="text-left">
             <div className={`${labelTextSize} text-gray-600 dark:text-gray-400`}>
@@ -52,7 +58,7 @@ const RunnerDevUrlCards: React.FC<RunnerDevUrlCardsProps> = ({ variant = "full" 
               {card.url}
             </code>
           </div>
-        </div>
+        </a>
       ))}
     </div>
   );

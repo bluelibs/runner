@@ -1,11 +1,11 @@
 import { Link } from "react-router-dom";
-import { 
-  Brain, 
-  Gauge, 
-  Zap, 
-  Settings, 
-  ArrowRight, 
-  GitBranch 
+import {
+  Brain,
+  Gauge,
+  Zap,
+  Settings,
+  ArrowRight,
+  GitBranch,
 } from "lucide-react";
 import { devToolsFeatures } from "../../constants/homePage";
 import RunnerDevUrlCards from "../RunnerDevUrlCards";
@@ -36,8 +36,8 @@ const RunnerDevToolsSection: React.FC = () => {
           </h2>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto mb-12">
             Introspection, live telemetry, and AI-powered debugging for your
-            Runner apps. See your application's topology, monitor performance
-            in real-time, and debug with AI assistance.
+            Runner apps. See your application's topology, monitor performance in
+            real-time, and debug with AI assistance.
           </p>
         </div>
 
@@ -88,8 +88,8 @@ const RunnerDevToolsSection: React.FC = () => {
             </div>
             <p className="text-gray-600 dark:text-gray-300 mb-4">
               Real-time logs, events, performance metrics, and system health.
-              Monitor your app's behavior with granular insights and
-              correlation tracking.
+              Monitor your app's behavior with granular insights and correlation
+              tracking.
             </p>
           </div>
 
@@ -203,9 +203,9 @@ const RunnerDevToolsSection: React.FC = () => {
                 npm install -g @bluelibs/runner-dev
               </code>
             </p>
-            <p className="mt-16">
+            <div className="mt-16">
               <RunnerDevUrlCards variant="full" />
-            </p>
+            </div>
           </div>
         </div>
       </div>

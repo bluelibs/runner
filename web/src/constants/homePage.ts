@@ -228,7 +228,7 @@ export const whyChooseFeatures = [
 
 export const devToolsFeatures = [
   "GraphQL API for deep introspection",
-  "GraphQL Playground & Voyager schema explorer",
+  "GraphQL + Voyager Playground",
   "MCP server for AI assistant integration",
   "Real-time performance monitoring",
   "Hot-swapping function replacement",

@@ -1,13 +1,11 @@
-import { 
-  MessageSquare, 
-  Settings, 
-  Code, 
-  Heart 
-} from "lucide-react";
+import { MessageSquare, Settings, Code, Heart } from "lucide-react";
 
 const BusinessInquirySection: React.FC = () => {
   return (
-    <section className="py-32 bg-gradient-to-br from-blue-50/80 via-purple-50/60 to-pink-50/80 dark:from-blue-950/80 dark:via-purple-950/60 dark:to-pink-950/80 relative overflow-hidden">
+    <section
+      id="enterprise"
+      className="py-32 bg-gradient-to-br from-blue-50/80 via-purple-50/60 to-pink-50/80 dark:from-blue-950/80 dark:via-purple-950/60 dark:to-pink-950/80 relative overflow-hidden scroll-mt-20"
+    >
       {/* Background Effects */}
       <div className="absolute inset-0 bg-gradient-to-br from-blue-100/30 via-purple-100/20 to-pink-100/30 dark:from-blue-900/30 dark:via-purple-900/20 dark:to-pink-900/30"></div>
 
@@ -22,7 +20,9 @@ const BusinessInquirySection: React.FC = () => {
 
       <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
         <div className="text-center mb-16">
-          <div className="inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-blue-100/80 to-purple-100/80 dark:from-blue-900/50 dark:to-purple-900/50 text-blue-800 dark:text-blue-200 text-sm font-medium mb-6">
+          <div
+            className="inline-flex items-center px-4 py-2 rounded-full bg-gradient-to-r from-blue-100/80 to-purple-100/80 dark:from-blue-900/50 dark:to-purple-900/50 text-blue-800 dark:text-blue-200 text-sm font-medium mb-6"
+          >
             <MessageSquare className="w-4 h-4 mr-2" />
             Enterprise Solutions
           </div>
@@ -30,9 +30,9 @@ const BusinessInquirySection: React.FC = () => {
             Need Runner for Your Enterprise?
           </h2>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto mb-12">
-            From proof-of-concept to production deployment, we help
-            enterprises adopt Runner successfully with custom training,
-            migration support, and ongoing consultation.
+            From proof-of-concept to production deployment, we help enterprises
+            adopt Runner successfully with custom training, migration support,
+            and ongoing consultation.
           </p>
         </div>
 
@@ -58,8 +58,8 @@ const BusinessInquirySection: React.FC = () => {
               Migration Support
             </h3>
             <p className="text-gray-600 dark:text-gray-300">
-              Strategic guidance and hands-on assistance for migrating
-              existing applications to Runner architecture.
+              Strategic guidance and hands-on assistance for migrating existing
+              applications to Runner architecture.
             </p>
           </div>
 

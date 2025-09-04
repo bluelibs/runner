@@ -92,6 +92,14 @@ const Footer: React.FC = () => {
                   Dev Tools
                 </a>
               </li>
+              <li>
+                <a
+                  href="/#enterprise"
+                  className="text-gray-400 hover:text-white transition-colors duration-200"
+                >
+                  Enterprise
+                </a>
+              </li>
             </ul>
           </div>
 

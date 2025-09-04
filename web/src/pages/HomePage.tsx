@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import Meta from "../components/Meta";
 import HeroSection from "../components/HomePage/HeroSection";
 import FeaturesSection from "../components/HomePage/FeaturesSection";
@@ -9,6 +10,29 @@ import CtaSection from "../components/HomePage/CtaSection";
 import BusinessInquirySection from "../components/HomePage/BusinessInquirySection";
 
 const HomePage: React.FC = () => {
+  useEffect(() => {
+    const handleHashNavigation = () => {
+      const hash = window.location.hash.substring(1);
+      if (hash) {
+        setTimeout(() => {
+          const element = document.getElementById(hash);
+          if (element) {
+            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        }, 100);
+      }
+    };
+
+    // Handle initial hash on page load
+    handleHashNavigation();
+
+    // Handle hash changes
+    window.addEventListener('hashchange', handleHashNavigation);
+    
+    return () => {
+      window.removeEventListener('hashchange', handleHashNavigation);
+    };
+  }, []);
   return (
     <div className="pt-16">
       <Meta
