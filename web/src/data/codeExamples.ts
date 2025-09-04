@@ -397,16 +397,17 @@ export const getSecret = task({
 
   middlewareResilientTask: `import { task, globals } from "@bluelibs/runner";
 
+const mw = globals.middleware.task;
 const resilientTask = task({
   id: "app.tasks.resilient",
   middleware: [
-    globals.middleware.task.retry.with({
+    mw.retry.with({
       retries: 3,
       delayStrategy: (attempt) => 250 * attempt,
       stopRetryIf: (err) => err?.permanent === true,
     }),
-    globals.middleware.task.timeout.with({ ttl: 10_000 }),
-    globals.middleware.task.cache.with({ ttl: 60_000 }),
+    mw.timeout.with({ ttl: 10_000 }),
+    mw.cache.with({ ttl: 60_000 }),
   ],
   run: async (input: { id: string }) => fetchExpensive(input.id),
 });`,

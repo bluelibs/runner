@@ -9,8 +9,8 @@ const CtaSection: React.FC = () => {
           Ready to Stop Worrying?
         </h2>
         <p className="text-xl text-gray-600 dark:text-gray-300 mb-12">
-          Join thousands of developers who've already made the switch to
-          cleaner, more maintainable TypeScript applications.
+          Join the developers who've already made the switch to cleaner, more
+          maintainable TypeScript applications.
         </p>
         <div className="flex flex-col sm:flex-row gap-6 justify-center">
           <Link to="/quick-start" className="btn-primary text-lg px-8 py-4">

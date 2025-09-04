@@ -21,7 +21,7 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
 
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (variant !== "premium") return;
-    
+
     const rect = e.currentTarget.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -234,22 +234,27 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
             <Copy className="w-4 h-4" />
           )}
         </button>
-        <SyntaxHighlighter
-          language={language}
-          style={vscDarkPlus}
-          customStyle={{
-            margin: 0,
-            padding: "1.05rem",
-            fontSize: "0.9rem",
-            lineHeight: "1.6",
-            ...contentStyleMap[variant],
-          }}
-          showLineNumbers={false}
-          wrapLines={true}
-          wrapLongLines={true}
-        >
-          {children}
-        </SyntaxHighlighter>
+        <div className="overflow-x-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500 scrollbar-thumb-rounded-full">
+          <div style={{ minWidth: "max-content" }}>
+            <SyntaxHighlighter
+              language={language}
+              style={vscDarkPlus}
+              customStyle={{
+                margin: 0,
+                padding: "1.05rem",
+                fontSize: "0.9rem",
+                lineHeight: "1.6",
+                whiteSpace: "pre",
+                ...contentStyleMap[variant],
+              }}
+              showLineNumbers={false}
+              wrapLines={false}
+              wrapLongLines={false}
+            >
+              {children}
+            </SyntaxHighlighter>
+          </div>
+        </div>
       </div>
     );
   }
@@ -261,17 +266,17 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
         style={outerStyleMap[variant]}
       >
         <div className="rounded-xl p-[2px]" style={innerStyleMap[variant]}>
-          <div 
+          <div
             className="relative rounded-lg overflow-hidden group"
             onMouseMove={handleMouseMove}
           >
             {/* Subtle hover gradient overlay */}
             {variant === "premium" && (
               <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 ease-out pointer-events-none z-[1]">
-                <div 
+                <div
                   className="absolute inset-0 transition-all duration-200 ease-out"
                   style={{
-                    background: `radial-gradient(600px circle at ${mousePos.x}% ${mousePos.y}%, rgba(139,92,246,0.08), rgba(59,130,246,0.04), transparent 50%)`
+                    background: `radial-gradient(600px circle at ${mousePos.x}% ${mousePos.y}%, rgba(139,92,246,0.08), rgba(59,130,246,0.04), transparent 50%)`,
                   }}
                 />
               </div>
@@ -292,22 +297,27 @@ const CodeBlock: React.FC<CodeBlockProps> = ({
                 <Copy className="w-4 h-4" />
               )}
             </button>
-            <SyntaxHighlighter
-              language={language}
-              style={vscDarkPlus}
-              customStyle={{
-                margin: 0,
-                padding: "1.05rem",
-                fontSize: "0.9rem",
-                lineHeight: "1.6",
-                ...contentStyleMap[variant],
-              }}
-              showLineNumbers={false}
-              wrapLines={true}
-              wrapLongLines={true}
-            >
-              {children}
-            </SyntaxHighlighter>
+            <div className="overflow-x-auto scrollbar-thin scrollbar-track-transparent scrollbar-thumb-gray-600 hover:scrollbar-thumb-gray-500 scrollbar-thumb-rounded-full">
+              <div style={{ minWidth: "max-content" }}>
+                <SyntaxHighlighter
+                  language={language}
+                  style={vscDarkPlus}
+                  customStyle={{
+                    margin: 0,
+                    padding: "1.05rem",
+                    fontSize: "0.9rem",
+                    lineHeight: "1.6",
+                    whiteSpace: "pre",
+                    ...contentStyleMap[variant],
+                  }}
+                  showLineNumbers={false}
+                  wrapLines={false}
+                  wrapLongLines={false}
+                >
+                  {children}
+                </SyntaxHighlighter>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -172,7 +172,7 @@ const { dispose } = await run(app);`,
               Read Full Documentation
             </a>
             <a href="/playground" className="btn-secondary">
-              Try Interactive Examples
+              See Quick Examples
             </a>
           </div>
         </div>
@@ -207,49 +207,60 @@ const { dispose } = await run(app);`,
 
         {/* Tips */}
         <div className="card p-8">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-8">
             💡 Pro Tips
           </h2>
-          <div className="space-y-4 text-gray-600 dark:text-gray-300">
-            <div className="flex items-start space-x-3">
-              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-white text-xs font-bold">1</span>
+          <div className="space-y-6">
+            <div className="flex items-start space-x-4">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                <span className="text-white text-sm font-semibold">1</span>
               </div>
-              <p>
-                <strong className="text-gray-900 dark:text-white">
-                  Start with debug mode:
-                </strong>
-                Use{" "}
-                <code className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">{`run(app, { debug: "verbose" })`}</code>
-                to see exactly what's happening during development.
-              </p>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Start with debug mode
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-3">
+                  Use debug mode to see exactly what's happening during development.
+                </p>
+                <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3">
+                  <code className="text-sm text-gray-800 dark:text-gray-200">
+                    {`run(app, { debug: "verbose" })`}
+                  </code>
+                </div>
+              </div>
             </div>
-            <div className="flex items-start space-x-3">
-              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-white text-xs font-bold">2</span>
+
+            <div className="flex items-start space-x-4">
+              <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                <span className="text-white text-sm font-semibold">2</span>
               </div>
-              <p>
-                <strong className="text-gray-900 dark:text-white">
-                  Test your tasks:
-                </strong>
-                Tasks are just functions! Test them by calling{" "}
-                <code className="bg-gray-200 dark:bg-gray-700 px-2 py-1 rounded">
-                  task.run(input, dependencies)
-                </code>
-                directly with mock dependencies.
-              </p>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Test your tasks
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300 mb-3">
+                  Tasks are just functions! Test them directly with mock dependencies.
+                </p>
+                <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3">
+                  <code className="text-sm text-gray-800 dark:text-gray-200">
+                    task.run(input, dependencies)
+                  </code>
+                </div>
+              </div>
             </div>
-            <div className="flex items-start space-x-3">
-              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
-                <span className="text-white text-xs font-bold">3</span>
+
+            <div className="flex items-start space-x-4">
+              <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-purple-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm">
+                <span className="text-white text-sm font-semibold">3</span>
               </div>
-              <p>
-                <strong className="text-gray-900 dark:text-white">
-                  Use TypeScript:
-                </strong>
-                Runner is TypeScript-first. You'll get amazing IntelliSense and
-                catch errors at compile time.
-              </p>
+              <div className="flex-1">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
+                  Use TypeScript
+                </h3>
+                <p className="text-gray-600 dark:text-gray-300">
+                  Runner is TypeScript-first. You'll get amazing IntelliSense and catch errors at compile time.
+                </p>
+              </div>
             </div>
           </div>
         </div>

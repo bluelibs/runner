@@ -99,9 +99,24 @@ export const features = [
     docAnchor: "tasks",
     example: `const sendEmail = task({
   id: "app.tasks.sendEmail",
-  dependencies: { emailService },
-  run: async ({ to, subject, body }) => {
-    return await emailService.send({ to, subject, body });
+  // Dependencies can be tasks, events and resources
+  // tasks, events -> functions, resources -> init value
+  dependencies: {
+    emailService,
+    emailSentEvent,
+    increaseEmailCounterTask,
+  },
+  run: async ({ to, subject, body }, {
+    // This is where dependencies get injected
+    emailService,
+    emailSentEvent, // now function()
+    increaseEmailCounterTask // now function()
+  }) => {
+    await emailService.send({ to, subject, body });
+    emailSentEvent({ to, subject, body })
+
+    // You can do this one asynchronously
+    increaseEmailCounterTask();
   }
 });`,
   },
@@ -109,13 +124,25 @@ export const features = [
     icon: Database,
     title: "Resources are Singletons",
     description:
-      "Database connections, configs, services - the usual suspects. Initialize once, use everywhere.",
+      "Database connections, configs, services - the usual suspects. Initialize once, use everywhere. They also register all type of elements.",
     docAnchor: "resources",
     example: `const database = resource({
   id: "app.db",
-  init: async () => {
-    const client = new MongoClient(process.env.DATABASE_URL);
+  register: [
+    someTask,
+    someEvent,
+    someTaskMiddleware,
+    someResourceMiddleware,
+    someHook,
+    someResource,
+    someTag,
+  ],
+  init: async ({ dbUrl }) => {
+    const client = new Database(dbUrl);
+    // You could await connection, or you
+    // could do it async if you want non-blocking startup.
     await client.connect();
+
     return client;
   },
   dispose: async (client) => await client.close()
@@ -127,44 +154,63 @@ export const features = [
     description:
       "Decoupled communication via events and hooks. Emit events; ordered hooks run (you can stop propagation).",
     docAnchor: "events",
-    example: `const userRegistered = event<{ userId: string }>({
-  id: "app.events.userRegistered",
+    example: `
+const userRegisteredEvent = event<{ userId: string }>({
+  id: "app.events.userRegistered"
 });
 
 // Listen with hooks
 const sendWelcomeEmail = hook({
   id: "app.hooks.sendWelcomeEmail",
-  on: userRegistered,
-  run: async (e) => {
-    console.log("Welcome new user:", e.data.userId);
+  on: userRegisteredEvent,
+  run: async (event) => {
+    console.log("Welcome new user:", event.data.userId);
   },
 });
+    
+// Ensure the event and the hooks are registered
 
-// Emit event → triggers hooks
-await userRegistered({ userId: "123" });`,
+const myTask = task({
+  id: "app.tasks.myTask",
+  dependencies: { userRegisteredEvent },
+  run: async (_, { userRegisteredEvent }) => {
+    await userRegisteredEvent({ userId: '...' });
+  },
+});`,
   },
   {
     icon: Settings,
     title: "Middleware with Power",
     description:
-      "Cross-cutting concerns with full lifecycle interception. Like onions, but useful.",
+      "Cross-cutting concerns with full lifecycle interception. Like onions, but with less tears.",
     docAnchor: "middleware",
-    example: `const auth = taskMiddleware({
+    example: `type AuthType = { role: string };
+
+const auth = taskMiddleware({
   id: "app.middleware.auth",
-  run: async ({ task, next }) => next(task.input),
+  run: async ({ task, next }, config: AuthType) =>
+    next(task.input),
+  // Make them run everywhere, default is false.
+  everywhere: true,
 });
 
 const softDelete = resourceMiddleware({
   id: "app.middleware.softDelete",
   run: async ({ resource, next }) => next(resource.config),
+  // everywhere can be very smart and efficient
+  everywhere: (resource) => customTag.exists(resource)
 });
 
-// Global resource middleware (apply to all or by predicate)
-const allResources = resourceMiddleware({
-  id: "app.middleware.allResources",
-  everywhere: true, // or: (resource) => boolean
-  run: async ({ next }) => next(),
-});`,
+// They work similar for tasks (on each run)
+// and for resources (on init)
+const usersList = task({
+  id: "app.tasks.userList",
+  middleware: [
+    auth.with({ roles: "USER" }),
+  ],
+  // ... run function and rest
+})
+`,
   },
   {
     icon: Tag,
@@ -172,22 +218,20 @@ const allResources = resourceMiddleware({
     description:
       "Attach metadata to tasks and resources. Use tags to enforce type contracts or to flag functionalities for programmatic access.",
     docAnchor: "tags",
-    example: `const contractTag = tag<Config, Input, Output>({ 
+    example: `const httpResponseTag = tag<Config, Input, Output>({ 
+  // omit or use void if you want non-enforcing shapes
   // optional shapes and configs
   id: "app.tags.contract"
-});\\n\\nconst createUser = task({
+});
+
+const createUser = task({
   id: "users.create",
-  tags: [contractTag],
+  tags: [httpResponseTag],
   // The runner will enforce that the
   // output matches Output type from tag
   run: async (data) => {
-    return { id: "123", ...data };
+    return { status: "ok" };
   }
-});\\n\\nconst sendEmail = task({
-  id: "emails.send",
-  // This task doesn't have the tag,
-  // so no contract is enforced
-  run: async () => { /* ... */ }
 });`,
   },
 ];

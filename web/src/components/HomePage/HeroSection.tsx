@@ -48,7 +48,7 @@ const HeroSection: React.FC = () => {
             </Link>
             <Link to="/playground" className="btn-secondary group">
               <Play className="w-5 h-5 mr-2" />
-              Try Playground
+              See Quick Examples
             </Link>
             <a
               href="https://bluelibs.github.io/runner/"
@@ -97,12 +97,12 @@ const HeroSection: React.FC = () => {
           </div>
 
           {/* Code Preview */}
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-6xl mx-auto">
             <div className="card p-4 sm:p-6">
               <div className="text-left">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    Quick Example
+                    HTTP Server Example
                   </h3>
                   <div className="flex space-x-2">
                     <div className="w-3 h-3 bg-red-500 rounded-full"></div>
@@ -110,29 +110,60 @@ const HeroSection: React.FC = () => {
                     <div className="w-3 h-3 bg-green-500 rounded-full"></div>
                   </div>
                 </div>
-                <CodeBlock>
-                  {`import { resource, task, run } from "@bluelibs/runner";
+                <div className="mb-6">
+                  <CodeBlock>
+                    {`import {
+  // Basic necessities factories
+  run, resource, task, event, hook, tag, globals,
+  // Advanced
+  taskMiddleware, resourceMiddleware, createContext
+  // More Advanced
+  tag, override,
+} from "@bluelibs/runner"`}
+                  </CodeBlock>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  <div>
+                    <CodeBlock>
+                      {`import Fastify from "fastify"
 
-const server = resource({
-  id: "app.server",
-  init: async ({ port }: { port: number }) => {
-    const app = express();
-    return app.listen(port);
-  }
+const sayHelloTask = task({
+  id: "app.tasks.sayHello",
+  run: async () => 'Hello world!'
 });
 
-const createUser = task({
-  id: "app.tasks.createUser",
-  dependencies: { server },
-  run: async (userData, { server }) => {
-    // Your business logic here
-    return { id: "user-123", ...userData };
+const fastifyResource = resource({
+  id: "app.resources.fastify",
+  init: async ({ port }) => Fastify({ port }),
+  dispose: async (instance) => instance.close()
+});`}
+                    </CodeBlock>
+                  </div>
+                  <div>
+                    <CodeBlock>
+                      {`const appResource = resource({
+  id: "app.resources.init",
+  register: [
+    sayHelloTask,
+    fastifyResource.with({ port: 3000 })
+  ],
+  dependencies: { app: fastifyResource, sayHelloTask },
+  init: async (_, { app }) => {
+    app.get('/hello', async (_, reply) => {
+      return reply.send(await sayHelloTask());
+    })
   }
-});
-
-// That's it. Clean, simple, testable.
-const { dispose, value } = await run(server);`}
-                </CodeBlock>
+})`}
+                    </CodeBlock>
+                  </div>
+                </div>
+                <div className="mt-6">
+                  <CodeBlock>
+                    {`// That's it. Clean, simple, testable.
+const { dispose, value } = await run(app);
+`}
+                  </CodeBlock>
+                </div>
               </div>
             </div>
           </div>

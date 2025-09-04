@@ -78,7 +78,7 @@ const Navbar: React.FC<NavbarProps> = () => {
 
   const navigation = [
     { name: "Home", href: "/" },
-    { name: "Quick Start", href: "/quick-start" },
+    { name: "Start", href: "/quick-start" },
     { name: "Docs", href: "/docs" },
     { name: "Dev", href: "/runner-dev" },
     { name: "Bench", href: "/benchmarks" },

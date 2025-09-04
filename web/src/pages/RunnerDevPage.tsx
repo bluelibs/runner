@@ -21,6 +21,7 @@ import CodeBlock from "../components/CodeBlock";
 import Meta from "../components/Meta";
 import RunnerDevUrlCards from "../components/RunnerDevUrlCards";
 import IntelligentZoomImage from "../components/IntelligentZoomImage";
+import Enterprise from "../components/Enterprise";
 
 // Feature showcase data with corresponding images
 const features = [
@@ -662,6 +663,9 @@ query LiveMetrics {
         </div>
       </section>
 
+      {/* Enterprise Section */}
+      <Enterprise />
+
       {/* Call to Action */}
       <section className="py-32 bg-gradient-to-br from-blue-950/50 via-purple-950/30 to-pink-950/50 relative overflow-hidden">
         {/* Background Effects */}
@@ -693,7 +697,7 @@ query LiveMetrics {
             </a>
             <Link to="/playground" className="btn-secondary text-lg px-8 py-4">
               <Play className="w-6 h-6 mr-2" />
-              Try Interactive Demo
+              See Quick Examples
             </Link>
           </div>
           <div className="mt-16">

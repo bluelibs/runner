@@ -22,6 +22,7 @@ const PlaygroundPage: React.FC = () => {
   const [copied, setCopied] = useState(false);
 
   // Refs to scroll into view on mobile
+  const exampleInfoRef = useRef<HTMLDivElement | null>(null);
   const codeSectionRef = useRef<HTMLDivElement | null>(null);
   const outputSectionRef = useRef<HTMLDivElement | null>(null);
 
@@ -36,15 +37,20 @@ const PlaygroundPage: React.FC = () => {
 
   const handleExampleSelect = (key: string) => {
     setSelectedExample(key);
-    // After selecting an example, scroll to the code section on mobile
+    setOutput(""); // Clear output when switching examples
+    // After selecting an example, scroll to the example info section
     // Use setTimeout to ensure layout updates before scrolling
-    setTimeout(() => scrollIntoViewIfMobile(codeSectionRef.current), 0);
+    setTimeout(() => {
+      exampleInfoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 0);
   };
 
   const examples = {
     "basic-task": {
       title: "Basic Task",
       description: "Simple task creation and execution",
+      fullDescription:
+        "Learn the fundamentals of Runner by creating your first task. This example shows how to define a task, create a resource to register it, and execute it within Runner's dependency injection system. You'll see the complete lifecycle from task definition to execution and cleanup.",
       icon: Code,
       code: `import { task, run, resource } from '@bluelibs/runner';
 
@@ -79,6 +85,8 @@ await dispose();`,
     "task-with-deps": {
       title: "Task with Dependencies",
       description: "Tasks using dependency injection",
+      fullDescription:
+        "Explore Runner's powerful dependency injection system. This example demonstrates how to create resources (like a logger and database mock), inject them into tasks, and manage complex dependency graphs. See how Runner automatically resolves and provides dependencies to your tasks at runtime.",
       icon: Database,
       code: `import { task, resource, run } from '@bluelibs/runner';
 
@@ -145,6 +153,8 @@ await dispose();`,
     events: {
       title: "Events & Hooks",
       description: "Event-driven communication",
+      fullDescription:
+        "Master Runner's event-driven architecture with this comprehensive example. Learn how to define events, create hooks that listen for those events, and build decoupled systems where tasks can trigger side effects automatically. This pattern is essential for building scalable, maintainable applications.",
       icon: MessageSquare,
       code: `import { event, hook, task, resource, run } from '@bluelibs/runner';
 
@@ -218,6 +228,8 @@ await dispose();`,
     middleware: {
       title: "Middleware",
       description: "Cross-cutting concerns with middleware",
+      fullDescription:
+        "Implement cross-cutting concerns elegantly with Runner's middleware system. This example shows how to create reusable middleware for logging, authentication, error handling, and more. Learn how middleware can intercept task execution, modify inputs/outputs, and add behavior without cluttering your core business logic.",
       icon: Settings,
       code: `import { task, taskMiddleware, resource, run } from '@bluelibs/runner';
 
@@ -381,23 +393,23 @@ Access denied: Unauthorized: User not authenticated
   return (
     <div className="pt-24 pb-16">
       <Meta
-        title="Runner Playground — Try tasks, events, and middleware"
-        description="Interactive examples that simulate Runner execution. Explore tasks, dependencies, events, and middleware."
+        title="Runner Examples — Tasks, Events, and Middleware"
+        description="Code examples demonstrating Runner concepts. View tasks, dependencies, events, and middleware patterns."
       />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="text-center mb-16 rounded-2xl bg-gradient-to-b from-blue-50/50 via-transparent dark:from-blue-900/20 py-16">
           <div className="inline-flex items-center px-4 py-2 rounded-full bg-blue-100/50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 text-sm font-medium mb-6">
-            <Play className="w-4 h-4 mr-2" />
-            Interactive Playground
+            <Code className="w-4 h-4 mr-2" />
+            Code Examples
           </div>
           <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold text-gray-900 dark:text-white mb-8 tracking-tighter">
-            Try Runner
-            <span className="gradient-text"> Live</span>
+            Runner
+            <span className="gradient-text"> Examples</span>
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-            Experiment with Runner concepts in an interactive environment. Run
-            examples, modify code, and see results in real-time.
+            Explore Runner concepts through practical code examples. Copy
+            examples, view simulated outputs, and understand key patterns.
           </p>
         </div>
 
@@ -462,9 +474,8 @@ Access denied: Unauthorized: User not authenticated
                 <div className="flex items-start space-x-2 text-sm text-gray-600 dark:text-gray-400">
                   <Lightbulb className="w-4 h-4 mt-0.5 flex-shrink-0" />
                   <p>
-                    <strong>Tip:</strong> This playground simulates code
-                    execution. For real testing, install Runner in your local
-                    environment.
+                    <strong>Note:</strong> These examples show simulated output.
+                    Copy the code to test with real Runner execution locally.
                   </p>
                 </div>
               </div>
@@ -474,16 +485,16 @@ Access denied: Unauthorized: User not authenticated
           {/* Code Editor and Output */}
           <div className="lg:col-span-3 space-y-6">
             {/* Example Info */}
-            <div className="card p-6">
+            <div className="card p-6" ref={exampleInfoRef} style={{ scrollMarginTop: "96px" }}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
-                  <currentExample.icon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                  <currentExample.icon className="w-40 h-40 text-blue-600 dark:text-blue-400" />
                   <div>
-                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                    <h2 className="text-2xl font-bold text-gray-900 dark:text-white">
                       {currentExample.title}
                     </h2>
-                    <p className="text-gray-600 dark:text-gray-400 text-sm">
-                      {currentExample.description}
+                    <p className="text-gray-600 dark:text-gray-400 text-lg leading-relaxed mb-0">
+                      {currentExample.fullDescription}
                     </p>
                   </div>
                 </div>
@@ -525,11 +536,13 @@ Access denied: Unauthorized: User not authenticated
                     ) : (
                       <Play className="w-4 h-4 mr-2" />
                     )}
-                    {isRunning ? "Running..." : "Run Code"}
+                    {isRunning ? "Loading..." : "View Output"}
                   </button>
                 </div>
               </div>
-              <CodeBlock>{currentExample.code}</CodeBlock>
+              <div className="max-h-[90vh] overflow-y-auto">
+                <CodeBlock>{currentExample.code}</CodeBlock>
+              </div>
             </div>
 
             {/* Output */}
@@ -552,17 +565,11 @@ Access denied: Unauthorized: User not authenticated
                   <RotateCcw className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                 </button>
               </div>
-              <div className="bg-gray-900 dark:bg-gray-800 rounded-lg p-4 min-h-[200px] font-mono text-sm">
-                {output ? (
-                  <pre className="text-gray-300 whitespace-pre-wrap">
-                    {output}
-                  </pre>
-                ) : (
-                  <div className="text-gray-500 italic">
-                    Click "Run Code" to see the output here...
-                  </div>
-                )}
-              </div>
+              {output ? (
+                <CodeBlock language="bash">{output}</CodeBlock>
+              ) : (
+                <CodeBlock language="bash"># Waiting for you to run the code</CodeBlock>
+              )}
             </div>
 
             {/* Next Steps */}
@@ -571,9 +578,7 @@ Access denied: Unauthorized: User not authenticated
                 Ready to Build Something Real?
               </h3>
               <p className="text-gray-600 dark:text-gray-300 mb-6">
-                These examples just scratch the surface. Install Runner locally
-                to explore the full feature set and build production
-                applications.
+                These examples just scratch the surface.
               </p>
               <div className="flex flex-col sm:flex-row gap-4">
                 <a href="/quick-start" className="btn-primary">
