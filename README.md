@@ -62,7 +62,7 @@ const server = resource({
   dispose: async ({ server }) => server.close(),
 });
 
-// Tasks are your business logic - pure-ish, easily testable functions
+// Tasks are your business logic - easily testable functions
 const createUser = task({
   id: "app.tasks.createUser",
   // That's how you depend "value": resource as singleton value, task as function, event as emittor
@@ -102,7 +102,7 @@ The framework is built around five core concepts: Tasks, Resources, Events, Midd
 
 ### Tasks
 
-Tasks are functions with superpowers. They're pure-ish, testable, and composable. Unlike classes that accumulate methods like a hoarder accumulates stuff, tasks do one thing well.
+Tasks are functions with superpowers. They're testable, and composable. Unlike classes that accumulate methods like a hoarder accumulates stuff, tasks do one thing well.
 
 ```typescript
 const sendEmail = task({

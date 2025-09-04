@@ -112,9 +112,9 @@ const DocsPage: React.FC = () => {
                 </a>
               </h3>
               <p className="text-gray-600 dark:text-gray-300">
-                Tasks are functions with superpowers. They're pure-ish,
-                testable, and composable. Unlike classes that accumulate methods
-                like a hoarder accumulates stuff, tasks do one thing well.
+                Tasks are functions with superpowers. They're testable and
+                composable. Unlike classes that accumulate methods like a
+                hoarder accumulates stuff, tasks do one thing well.
               </p>
               <a
                 href="https://bluelibs.github.io/runner/#md:tasks"

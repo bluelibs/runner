@@ -118,7 +118,7 @@ const HomePage: React.FC = () => {
       icon: Code,
       title: "Tasks are Functions",
       description:
-        "Not classes with 47 methods you swear you'll refactor. Pure, testable, composable functions with superpowers.",
+        "Not classes with 47 methods you swear you'll refactor. Testable and composable functions with superpowers.",
       docAnchor: "tasks",
       example: `const sendEmail = task({
   id: "app.tasks.sendEmail",
