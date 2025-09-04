@@ -26,22 +26,16 @@ const PlaygroundPage: React.FC = () => {
   const codeSectionRef = useRef<HTMLDivElement | null>(null);
   const outputSectionRef = useRef<HTMLDivElement | null>(null);
 
-  const scrollIntoViewIfMobile = (el: HTMLElement | null) => {
-    if (!el) return;
-    // Match Tailwind's lg breakpoint: below 1024px treat as mobile/tablet
-    const isMobile = window.matchMedia("(max-width: 1023px)").matches;
-    if (isMobile) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-  };
-
   const handleExampleSelect = (key: string) => {
     setSelectedExample(key);
     setOutput(""); // Clear output when switching examples
     // After selecting an example, scroll to the example info section
     // Use setTimeout to ensure layout updates before scrolling
     setTimeout(() => {
-      exampleInfoRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      exampleInfoRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
     }, 0);
   };
 
@@ -485,7 +479,11 @@ Access denied: Unauthorized: User not authenticated
           {/* Code Editor and Output */}
           <div className="lg:col-span-3 space-y-6">
             {/* Example Info */}
-            <div className="card p-6" ref={exampleInfoRef} style={{ scrollMarginTop: "96px" }}>
+            <div
+              className="card p-6"
+              ref={exampleInfoRef}
+              style={{ scrollMarginTop: "96px" }}
+            >
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center space-x-3">
                   <currentExample.icon className="w-40 h-40 text-blue-600 dark:text-blue-400" />
@@ -568,7 +566,9 @@ Access denied: Unauthorized: User not authenticated
               {output ? (
                 <CodeBlock language="bash">{output}</CodeBlock>
               ) : (
-                <CodeBlock language="bash"># Waiting for you to run the code</CodeBlock>
+                <CodeBlock language="bash">
+                  # Waiting for you to run the code
+                </CodeBlock>
               )}
             </div>
 

@@ -102,7 +102,7 @@ const HeroSection: React.FC = () => {
               <div className="text-left">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                    HTTP Server Example
+                    Full HTTP Server Example
                   </h3>
                   <div className="flex space-x-2">
                     <div className="w-3 h-3 bg-red-500 rounded-full"></div>
@@ -116,9 +116,7 @@ const HeroSection: React.FC = () => {
   // Basic necessities factories
   run, resource, task, event, hook, tag, globals,
   // Advanced
-  taskMiddleware, resourceMiddleware, createContext
-  // More Advanced
-  tag, override,
+  taskMiddleware, resourceMiddleware, createContext, override,
 } from "@bluelibs/runner"`}
                   </CodeBlock>
                 </div>
@@ -126,13 +124,14 @@ const HeroSection: React.FC = () => {
                   <div>
                     <CodeBlock>
                       {`import Fastify from "fastify"
-
-const sayHelloTask = task({
+// Tasks can run many times within a run()
+const sayHello = task({
   id: "app.tasks.sayHello",
   run: async () => 'Hello world!'
 });
 
-const fastifyResource = resource({
+// Resources initialise once within a run()
+const fastify = resource({
   id: "app.resources.fastify",
   init: async ({ port }) => Fastify({ port }),
   dispose: async (instance) => instance.close()
@@ -141,16 +140,16 @@ const fastifyResource = resource({
                   </div>
                   <div>
                     <CodeBlock>
-                      {`const appResource = resource({
+                      {`const app = resource({
   id: "app.resources.init",
   register: [
-    sayHelloTask,
-    fastifyResource.with({ port: 3000 })
+    sayHello,
+    fastify.with({ port: 3000 })
   ],
-  dependencies: { app: fastifyResource, sayHelloTask },
-  init: async (_, { app }) => {
-    app.get('/hello', async (_, reply) => {
-      return reply.send(await sayHelloTask());
+  dependencies: { f: fastify, sayHello },
+  init: async (_, { f, sayHello }) => {
+    f.get('/hello', async (_, reply) => {
+      return reply.send(await sayHello());
     })
   }
 })`}
@@ -160,7 +159,9 @@ const fastifyResource = resource({
                 <div className="mt-6">
                   <CodeBlock>
                     {`// That's it. Clean, simple, testable.
-const { dispose, value } = await run(app);
+const { dispose, value, runTask } = await run(app);
+
+// Your HTTP Server is ready!
 `}
                   </CodeBlock>
                 </div>
