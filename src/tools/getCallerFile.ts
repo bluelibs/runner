@@ -21,10 +21,10 @@ export function getCallerFile(): string {
     stack.shift();
 
     // Remove the second frame (the direct caller of getCallerFile)
-    currentfile = stack.shift()?.getFileName();
+    currentfile = stack.shift()?.getFileName?.();
 
     // The third frame (the caller above the immediate one)
-    callerfile = stack.shift()?.getFileName();
+    callerfile = stack.shift()?.getFileName?.();
 
     return callerfile as string; // Return the file name of the caller above
   } finally {
