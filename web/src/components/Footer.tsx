@@ -84,6 +84,14 @@ const Footer: React.FC = () => {
                   Playground
                 </a>
               </li>
+              <li>
+                <a
+                  href="/runner-dev"
+                  className="text-gray-400 hover:text-white transition-colors duration-200"
+                >
+                  Dev Tools
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -115,12 +123,45 @@ const Footer: React.FC = () => {
               </li>
               <li>
                 <a
-                  href="https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md"
+                  href="https://github.com/bluelibs/runner/blob/main/AI.md"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
                 >
-                  <span>Migration Guide</span>
+                  <span>AI Docs</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://github.com/bluelibs/runner/blob/main/readmes"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
+                >
+                  <span>Runner Lore</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://github.com/bluelibs/runner-dev"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
+                >
+                  <span>Runner Dev Tools</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-gray-400 hover:text-white transition-colors duration-200 flex items-center space-x-1"
+                >
+                  <span>OpenAI Chatbot</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </li>

@@ -177,34 +177,6 @@ export const app = resource({
               capabilities.
             </p>
 
-            {/* Key Features Preview */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto mb-16">
-              <div className="flex items-center space-x-3 justify-center md:justify-start">
-                <div className="w-8 h-8 bg-gradient-to-r from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                  <Eye className="w-4 h-4 text-white" />
-                </div>
-                <span className="text-gray-700 dark:text-gray-300 font-medium">
-                  Application Topology
-                </span>
-              </div>
-              <div className="flex items-center space-x-3 justify-center md:justify-start">
-                <div className="w-8 h-8 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg flex items-center justify-center">
-                  <Brain className="w-4 h-4 text-white" />
-                </div>
-                <span className="text-gray-700 dark:text-gray-300 font-medium">
-                  AI Assistant Integration
-                </span>
-              </div>
-              <div className="flex items-center space-x-3 justify-center md:justify-start">
-                <div className="w-8 h-8 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg flex items-center justify-center">
-                  <Activity className="w-4 h-4 text-white" />
-                </div>
-                <span className="text-gray-700 dark:text-gray-300 font-medium">
-                  Live Telemetry
-                </span>
-              </div>
-            </div>
-
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-6 justify-center mb-16">
               <a href="#installation" className="btn-primary group">
@@ -539,7 +511,7 @@ query LiveMetrics {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="text-center mb-16">
             <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-6">
-              Get Started in Minutes
+              Get Started in Seconds
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
               Three simple steps to supercharge your Runner development
