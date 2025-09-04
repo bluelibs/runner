@@ -4,6 +4,7 @@ import Navbar from "./components/Navbar";
 import HomePage from "./pages/HomePage";
 import DocsPage from "./pages/DocsPage";
 import QuickStartPage from "./pages/QuickStartPage";
+import RunnerDevPage from "./pages/RunnerDevPage";
 import BenchmarksPage from "./pages/BenchmarksPage";
 import PlaygroundPage from "./pages/PlaygroundPage";
 import Footer from "./components/Footer";
@@ -29,6 +30,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/docs" element={<DocsPage />} />
             <Route path="/quick-start" element={<QuickStartPage />} />
+            <Route path="/runner-dev" element={<RunnerDevPage />} />
             <Route path="/benchmarks" element={<BenchmarksPage />} />
             <Route path="/playground" element={<PlaygroundPage />} />
             <Route path="*" element={<NotFoundPage />} />

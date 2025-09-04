@@ -80,8 +80,9 @@ const Navbar: React.FC<NavbarProps> = () => {
     { name: "Home", href: "/" },
     { name: "Quick Start", href: "/quick-start" },
     { name: "Docs", href: "/docs" },
-    { name: "Benchmarks", href: "/benchmarks" },
-    { name: "Playground", href: "/playground" },
+    { name: "Dev", href: "/runner-dev" },
+    { name: "Bench", href: "/benchmarks" },
+    { name: "Play", href: "/playground" },
   ];
 
   // Route module prefetchers (lazy import targets). Using dynamic imports allows
@@ -92,6 +93,7 @@ const Navbar: React.FC<NavbarProps> = () => {
         "/": () => import("../pages/HomePage"),
         "/docs": () => import("../pages/DocsPage"),
         "/quick-start": () => import("../pages/QuickStartPage"),
+        "/runner-dev": () => import("../pages/RunnerDevPage"),
         "/benchmarks": () => import("../pages/BenchmarksPage"),
         "/playground": () => import("../pages/PlaygroundPage"),
       } as Record<string, () => Promise<unknown>>),

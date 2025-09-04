@@ -13,3 +13,4 @@ yarn.lock
 junit.xml
 /baseline.json
 /benchmark-results.json
+/tmp

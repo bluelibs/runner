@@ -68,18 +68,18 @@ const { dispose } = await run(app);`,
         "Complete REST API with OpenAPI documentation and SQLite database",
       link: "https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite",
     },
-    {
-      title: "Microservice Template",
-      description:
-        "Production-ready microservice with logging, metrics, and health checks",
-      link: "https://github.com/bluelibs/runner/tree/main/examples/microservice",
-    },
-    {
-      title: "Event-Driven Architecture",
-      description:
-        "Showcase of events, hooks, and decoupled communication patterns",
-      link: "https://github.com/bluelibs/runner/tree/main/examples/event-driven",
-    },
+    // {
+    //   title: "Microservice Template",
+    //   description:
+    //     "Production-ready microservice with logging, metrics, and health checks",
+    //   link: "https://github.com/bluelibs/runner/tree/main/examples/microservice",
+    // },
+    // {
+    //   title: "Event-Driven Architecture",
+    //   description:
+    //     "Showcase of events, hooks, and decoupled communication patterns",
+    //   link: "https://github.com/bluelibs/runner/tree/main/examples/event-driven",
+    // },
   ];
 
   return (
