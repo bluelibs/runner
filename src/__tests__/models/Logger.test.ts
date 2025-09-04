@@ -37,7 +37,10 @@ describe("Logger", () => {
 
   it("supports with() to bind and merge context, and uses bound source as fallback", async () => {
     const base = createLogger();
-    const logger = base.with({ source: "worker", context: { userId: 42 } });
+    const logger = base.with({
+      source: "worker",
+      additionalContext: { userId: 42 },
+    });
 
     await logger.info("hello");
 
@@ -191,7 +194,7 @@ describe("Logger", () => {
     const base = createLogger({ threshold: "trace" });
     const logger = base.with({
       source: "svc",
-      context: { traceId: "t-1" },
+      additionalContext: { traceId: "t-1" },
     });
     await logger.info("ctx msg", { sessionId: "s-1" });
     const outputs = consoleSpy.mock.calls.map((c) => String(c[0])).join("\n");
@@ -357,7 +360,7 @@ describe("Logger", () => {
       seen.push(String(log.message));
     });
 
-    const spy = jest.spyOn((root as any), "triggerLogListeners");
+    const spy = jest.spyOn(root as any, "triggerLogListeners");
 
     // Directly invoke the private method on the child to cover the branch
     await (child as any).triggerLogListeners({

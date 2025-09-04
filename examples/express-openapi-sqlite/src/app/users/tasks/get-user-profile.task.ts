@@ -1,8 +1,8 @@
 import { task } from "@bluelibs/runner";
 import { httpRoute } from "../../http/tags/http.tag";
 import { authMiddleware } from "../middleware/auth";
-import { UserContext } from "../user.context";
-import { RequestContext } from "../../http/request.context";
+import { UserContext } from "../contexts/user.context";
+import { RequestContext } from "../../http/contexts/request.context";
 import { ApiResponse } from "../../http/types";
 import { User, UserSchema } from "../types";
 import z from "zod";

@@ -67,6 +67,7 @@ export class Logger {
     },
     boundContext: Record<string, any> = {},
     source?: string,
+    printer?: LogPrinter,
   ) {
     this.boundContext = { ...boundContext };
     this.printThreshold = options.printThreshold;
@@ -76,11 +77,15 @@ export class Logger {
       typeof options.useColors === "boolean"
         ? options.useColors
         : this.detectColorSupport();
-    this.printer = new LogPrinter({
-      strategy: this.printStrategy,
-      useColors: this.useColors,
-    });
+
     this.source = source;
+
+    this.printer = printer
+      ? printer
+      : new LogPrinter({
+          strategy: this.printStrategy,
+          useColors: this.useColors,
+        });
   }
 
   private detectColorSupport(): boolean {
@@ -101,10 +106,10 @@ export class Logger {
    */
   public with({
     source,
-    context,
+    additionalContext: context,
   }: {
     source?: string;
-    context?: Record<string, any>;
+    additionalContext?: Record<string, any>;
   }): Logger {
     const child = new Logger(
       {
@@ -115,6 +120,7 @@ export class Logger {
       },
       { ...this.boundContext, ...context },
       source,
+      this.printer,
     );
     // Ensure child logger delegates buffering, listeners and printing to root
     child.rootLogger = this.rootLogger ?? this;

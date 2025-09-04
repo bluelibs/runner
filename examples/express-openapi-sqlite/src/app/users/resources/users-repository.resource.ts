@@ -1,7 +1,7 @@
 import { resource } from "@bluelibs/runner";
 import bcrypt from "bcryptjs";
 import { User, RegisterRequest } from "../types";
-import { db } from "../../db/database";
+import { db } from "../../db/resources/database";
 
 export const usersRepository = resource({
   id: "app.resources.userService",
@@ -11,7 +11,7 @@ export const usersRepository = resource({
       async getUserByEmail(email: string): Promise<User | null> {
         const user = await database.get<User>(
           "SELECT id, email, name, password_hash, created_at FROM users WHERE email = ?",
-          [email]
+          [email],
         );
 
         if (!user) return null;
@@ -26,7 +26,7 @@ export const usersRepository = resource({
       async getUserById(id: string): Promise<User | null> {
         const user = await database.get<User>(
           "SELECT id, email, name, created_at FROM users WHERE id = ?",
-          [id]
+          [id],
         );
 
         if (!user) return null;
@@ -40,7 +40,7 @@ export const usersRepository = resource({
 
       async getAllUsers(): Promise<User[]> {
         const users = await database.all<User>(
-          "SELECT id, email, name, created_at FROM users ORDER BY created_at DESC"
+          "SELECT id, email, name, created_at FROM users ORDER BY created_at DESC",
         );
 
         return users.map((user: any) => ({

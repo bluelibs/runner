@@ -1,8 +1,8 @@
 import { resource, run } from "@bluelibs/runner";
 import request from "supertest";
 import { app } from "../index";
-import { db } from "../db/database";
-import { expressServerResource } from "../http/resources/express.resource";
+import { db } from "../app/db/resources/database";
+import { expressServerResource } from "../app/http/resources/express.resource";
 
 describe("Express OpenAPI SQLite Integration", () => {
   let appInstance: any;

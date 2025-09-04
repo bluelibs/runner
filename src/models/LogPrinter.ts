@@ -1,9 +1,10 @@
 import { safeStringify } from "./utils/safeStringify";
 
 // eslint-disable-next-line no-control-regex
-const ansiRegex = /[][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
+const ansiRegex =
+  /[][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
 function stripAnsi(str: string): string {
-  return str.replace(ansiRegex, '');
+  return str.replace(ansiRegex, "");
 }
 
 export type PrintStrategy = "pretty" | "plain" | "json" | "json_pretty";
@@ -106,26 +107,22 @@ export class LogPrinter {
     const levelPart = this.formatLevel(level);
     const sourcePart = this.formatSource(source);
 
-    const headerLine = [
-      timePart,
-      levelPart,
-      sourcePart,
-    ]
+    const headerLine = [timePart, levelPart, sourcePart]
       .filter(Boolean)
       .join(" ");
 
     const messageString = this.formatMessage(message);
-    const messageLines = messageString.split('\n');
+    const messageLines = messageString.split("\n");
 
     const output: string[] = [headerLine];
 
     const timePartLength = stripAnsi(timePart).length;
     const levelPartLength = stripAnsi(levelPart).length;
     // Indentation is length of time + space + level + space
-    const indentation = ' '.repeat(timePartLength + 1 + levelPartLength + 1);
+    const indentation = " ".repeat(timePartLength + 1 + levelPartLength + 1);
 
     if (message) {
-      output.push(...messageLines.map(line => `${indentation}${line}`));
+      output.push(...messageLines.map((line) => `${indentation}${line}`));
     }
 
     const errorLines = this.formatError(error);
@@ -136,17 +133,19 @@ export class LogPrinter {
       errorLines.length > 0 || dataLines.length > 0 || contextLines.length > 0;
 
     if (detailsExist) {
-        output.push(''); // Add a space before details
+      output.push(""); // Add a space before details
     }
 
     output.push(...errorLines, ...dataLines, ...contextLines);
 
     if (detailsExist) {
-        output.push(''); // Add a space after for readability
+      output.push(""); // Add a space after for readability
     }
 
     const writer = this.pickWriter(level);
     output.forEach((line) => writer(line));
+    // New line for readability especially in console
+    writer("");
   }
 
   private pickWriter(level: LogLevels) {
@@ -177,13 +176,16 @@ export class LogPrinter {
   }
 
   private formatMessage(message: any): string {
-    if (typeof message === 'object' && message !== null) {
+    if (typeof message === "object" && message !== null) {
       return safeStringify(message, 2);
     }
     return String(message);
   }
 
-  private formatError(error: PrintableLog["error"], indentation = '  '): string[] {
+  private formatError(
+    error: PrintableLog["error"],
+    indentation = "  ",
+  ): string[] {
     if (!error) return [];
     const lines: string[] = [];
     lines.push(
@@ -201,7 +203,7 @@ export class LogPrinter {
     return lines;
   }
 
-  private formatData(data?: Record<string, any>, indentation = '  '): string[] {
+  private formatData(data?: Record<string, any>, indentation = "  "): string[] {
     if (!data || Object.keys(data).length === 0) return [];
     const lines: string[] = [];
     const formatted = safeStringify(data, 2, { maxDepth: 3 }).split("\n");
@@ -215,7 +217,10 @@ export class LogPrinter {
     return lines;
   }
 
-  private formatContext(context?: Record<string, any>, indentation = '  '): string[] {
+  private formatContext(
+    context?: Record<string, any>,
+    indentation = "  ",
+  ): string[] {
     if (!context) return [];
     const filtered = { ...context };
     delete (filtered as any).source;

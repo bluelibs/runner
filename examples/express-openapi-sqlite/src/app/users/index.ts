@@ -1,6 +1,6 @@
 import { usersRepository } from "./resources/users-repository.resource";
 import { resource } from "@bluelibs/runner";
-import { registerUserTask } from "./tasks/regoster-user.task";
+import { registerUserTask } from "./tasks/register-user.task";
 import { loginUserTask } from "./tasks/login-user.task";
 import { getUserProfileTask } from "./tasks/get-user-profile.task";
 import { getAllUsersTask } from "./tasks/get-all-users.task";

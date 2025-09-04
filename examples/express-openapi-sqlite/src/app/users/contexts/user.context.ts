@@ -1,5 +1,5 @@
 import { createContext } from "@bluelibs/runner";
-import { UserSession } from "./types";
+import { UserSession } from "../types";
 
 /**
  * User context for request-scoped user data.

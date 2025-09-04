@@ -3,7 +3,7 @@ import { task } from "@bluelibs/runner";
 import { usersRepository } from "../resources/users-repository.resource";
 import { authMiddleware } from "../middleware/auth";
 import { httpRoute } from "../../http/tags/http.tag";
-import { UserContext } from "../user.context";
+import { UserContext } from "../contexts/user.context";
 import { ApiResponse } from "../../http/types";
 import { User, UserSchema } from "../types";
 

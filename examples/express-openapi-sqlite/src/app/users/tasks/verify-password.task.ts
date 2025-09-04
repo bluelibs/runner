@@ -1,5 +1,5 @@
 import { task } from "@bluelibs/runner";
-import { db } from "../../db/database";
+import { db } from "../../db/resources/database";
 import { User } from "../types";
 import bcrypt from "bcryptjs";
 
@@ -14,7 +14,7 @@ export const verifyPasswordTask = task({
   run: async (input: VerifyPasswordInput, { db }) => {
     const user = await db.get<User & { password_hash: string }>(
       "SELECT id, email, name, password_hash, created_at FROM users WHERE email = ?",
-      [input.email]
+      [input.email],
     );
 
     if (!user) return null;

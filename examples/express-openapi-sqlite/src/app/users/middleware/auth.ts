@@ -1,6 +1,6 @@
 import { taskMiddleware } from "@bluelibs/runner";
 import jwt from "jsonwebtoken";
-import { UserContext } from "../user.context";
+import { UserContext } from "../contexts/user.context";
 import { usersRepository } from "../resources/users-repository.resource";
 import { UserSession } from "../types";
 import { appConfig } from "../../app.config";
