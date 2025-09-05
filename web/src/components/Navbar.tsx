@@ -91,11 +91,21 @@ const Navbar: React.FC<NavbarProps> = () => {
             <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex justify-between h-16">
                 <div className="flex items-center">
-                  <Link to="/#" className="flex items-center space-x-2">
+                  <Link
+                    to="/#"
+                    className="flex items-center space-x-2 group"
+                    onClick={(e) => {
+                      if (location.pathname === "/") {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        window.scrollTo({ top: 0, behavior: "instant" });
+                      }
+                    }}
+                  >
                     <img
                       src="/logo.png"
                       alt="Runner Logo"
-                      className="w-8 h-8"
+                      className="w-8 h-8 transition-all duration-300 group-hover:scale-125 group-hover:rotate-12"
                     />
                     <span className="font-extrabold text-xl bg-clip-text text-transparent bg-gradient-to-r from-emerald-300 via-teal-200 to-sky-300 dark:from-emerald-400 dark:via-teal-300 dark:to-sky-400">
                       runner

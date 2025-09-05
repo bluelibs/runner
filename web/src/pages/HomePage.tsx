@@ -9,8 +9,11 @@ import WhyChooseSection from "../components/HomePage/WhyChooseSection";
 import PlatformsSection from "../components/HomePage/PlatformsSection";
 import CtaSection from "../components/HomePage/CtaSection";
 import BusinessInquirySection from "../components/HomePage/BusinessInquirySection";
+import { useLocation } from "react-router-dom";
 
 const HomePage: React.FC = () => {
+  const location = useLocation();
+
   useEffect(() => {
     const handleHashNavigation = () => {
       const hash = window.location.hash.substring(1);
@@ -18,7 +21,7 @@ const HomePage: React.FC = () => {
         setTimeout(() => {
           const element = document.getElementById(hash);
           if (element) {
-            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            element.scrollIntoView({ behavior: "instant", block: "start" });
           }
         }, 100);
       }
@@ -28,12 +31,12 @@ const HomePage: React.FC = () => {
     handleHashNavigation();
 
     // Handle hash changes
-    window.addEventListener('hashchange', handleHashNavigation);
-    
+    window.addEventListener("hashchange", handleHashNavigation);
+
     return () => {
-      window.removeEventListener('hashchange', handleHashNavigation);
+      window.removeEventListener("hashchange", handleHashNavigation);
     };
-  }, []);
+  }, [location.pathname]);
   return (
     <div className="pt-16">
       <Meta
