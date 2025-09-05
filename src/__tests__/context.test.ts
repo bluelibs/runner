@@ -53,28 +53,39 @@ describe("Context System", () => {
   });
 
   test("concurrent provide calls are isolated", async () => {
+    // Use fake timers to make ordering deterministic under coverage/CI
+    jest.useFakeTimers();
+
     const results: string[] = [];
 
-    const promises = [
-      TestContext.provide({ id: "user-1" }, async () => {
-        await new Promise((resolve) => setTimeout(resolve, 10)); // small delay
-        const context = TestContext.use();
-        results.push(context.id);
-        return context.id;
-      }),
-      TestContext.provide({ id: "user-2" }, async () => {
-        await new Promise((resolve) => setTimeout(resolve, 5)); // smaller delay
-        const context = TestContext.use();
-        results.push(context.id);
-        return context.id;
-      }),
-    ];
+    const p1 = TestContext.provide({ id: "user-1" }, async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10)); // small delay
+      const context = TestContext.use();
+      results.push(context.id);
+      return context.id;
+    });
 
-    const values = await Promise.all(promises);
+    const p2 = TestContext.provide({ id: "user-2" }, async () => {
+      await new Promise((resolve) => setTimeout(resolve, 5)); // smaller delay
+      const context = TestContext.use();
+      results.push(context.id);
+      return context.id;
+    });
+
+    // Advance time to trigger the shorter timeout first, then the longer one
+    jest.advanceTimersByTime(5);
+    // Flush microtasks so the awaited promise continuations run
+    await Promise.resolve();
+    jest.advanceTimersByTime(5);
+    await Promise.resolve();
+
+    const values = await Promise.all([p1, p2]);
 
     // Each context should maintain its own value
     expect(values).toEqual(["user-1", "user-2"]);
     expect(results).toEqual(["user-2", "user-1"]); // user-2 finishes first due to shorter delay
+
+    jest.useRealTimers();
   });
 
   test("nested provide calls work correctly", async () => {

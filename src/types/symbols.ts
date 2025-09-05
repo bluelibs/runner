@@ -4,50 +4,50 @@
  * helpers instead of touching these directly.
  * @internal
  */
-export const symbolTask: unique symbol = Symbol("runner.task");
-export const symbolResource: unique symbol = Symbol("runner.resource");
-export const symbolResourceWithConfig: unique symbol = Symbol(
+export const symbolTask: unique symbol = Symbol.for("runner.task");
+export const symbolResource: unique symbol = Symbol.for("runner.resource");
+export const symbolResourceWithConfig: unique symbol = Symbol.for(
   "runner.resourceWithConfig",
 );
-export const symbolEvent: unique symbol = Symbol("runner.event");
-export const symbolMiddleware: unique symbol = Symbol("runner.middleware");
+export const symbolEvent: unique symbol = Symbol.for("runner.event");
+export const symbolMiddleware: unique symbol = Symbol.for("runner.middleware");
 /** New brands for separated middleware kinds */
-export const symbolTaskMiddleware: unique symbol = Symbol(
+export const symbolTaskMiddleware: unique symbol = Symbol.for(
   "runner.taskMiddleware",
 );
-export const symbolResourceMiddleware: unique symbol = Symbol(
+export const symbolResourceMiddleware: unique symbol = Symbol.for(
   "runner.resourceMiddleware",
 );
-export const symbolMiddlewareConfigured: unique symbol = Symbol(
+export const symbolMiddlewareConfigured: unique symbol = Symbol.for(
   "runner.middlewareConfigured",
 );
 /** @internal Marks hook definitions (event listeners without middleware) */
-export const symbolHook: unique symbol = Symbol("runner.hook");
-// export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol(
+export const symbolHook: unique symbol = Symbol.for("runner.hook");
+// export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol.for(
 //   "runner.middlewareGlobalTasks",
 // );
-// export const symbolMiddlewareEverywhereResources: unique symbol = Symbol(
+// export const symbolMiddlewareEverywhereResources: unique symbol = Symbol.for(
 //   "runner.middlewareGlobalResources",
 // );
 /** @internal Marks a tag definition */
-export const symbolTag: unique symbol = Symbol("runner.tag");
-export const symbolTagConfigured: unique symbol = Symbol(
+export const symbolTag: unique symbol = Symbol.for("runner.tag");
+export const symbolTagConfigured: unique symbol = Symbol.for(
   "runner.tagConfigured",
 );
 
 /** @internal Marks an optional dependency wrapper */
-export const symbolOptionalDependency: unique symbol = Symbol(
+export const symbolOptionalDependency: unique symbol = Symbol.for(
   "runner.optionalDependency",
 );
 
 /** @internal Path to aid anonymous id generation and error messages */
-export const symbolFilePath: unique symbol = Symbol("runner.filePath");
+export const symbolFilePath: unique symbol = Symbol.for("runner.filePath");
 /** @internal Marks disposable instances */
-export const symbolDispose: unique symbol = Symbol("runner.dispose");
+export const symbolDispose: unique symbol = Symbol.for("runner.dispose");
 /** @internal Link to internal Store */
-export const symbolStore: unique symbol = Symbol("runner.store");
+export const symbolStore: unique symbol = Symbol.for("runner.store");
 
 /** @internal Brand used by index() resources */
-export const symbolIndexResource: unique symbol = Symbol(
+export const symbolIndexResource: unique symbol = Symbol.for(
   "runner.indexResource",
 );

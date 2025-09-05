@@ -37,7 +37,9 @@ export class DependencyNotFoundError extends RuntimeError {
  */
 export class UnknownItemTypeError extends RuntimeError {
   constructor(item: any) {
-    super(`Unknown item type: ${item}`);
+    super(
+      `Unknown item type: ${item}. Please ensure you are not using different versions of '@bluelibs/runner'`,
+    );
     this.name = "UnknownItemTypeError";
   }
 }
@@ -178,5 +180,17 @@ export class EventEmissionCycleError extends RuntimeError {
       `Event emission cycles detected between hooks and events:\n${list}\n\nThis was detected at compile time (dry-run). Break the cycle by avoiding mutual emits between hooks or scoping hooks using tags.`,
     );
     this.name = "EventEmissionCycleError";
+  }
+}
+
+/**
+ * Error thrown when a platform function is not supported in the current environment.
+ */
+export class PlatformUnsupportedFunction extends RuntimeError {
+  constructor(functionName: string) {
+    super(
+      `Platform function not supported in this environment: ${functionName}`,
+    );
+    this.name = "PlatformUnsupportedFunction";
   }
 }

@@ -6,6 +6,17 @@
 npm install @bluelibs/runner
 ```
 
+## Platform & Browser
+
+- Auto‑detects platform at runtime. In browsers, `exit()` is unsupported and throws. Env reads use `globalThis.__ENV__`, `process.env`, or `globalThis.env`.
+
+```ts
+import { setPlatform, BrowserPlatformAdapter } from "@bluelibs/runner/platform";
+setPlatform(new BrowserPlatformAdapter());
+//
+globalThis.__ENV__ = { API_URL: "https://example.test" };
+```
+
 ## Core Philosophy
 
 BlueLibs Runner is a **powerful and integrated** framework. It provides a comprehensive set of tools for building robust, testable, and maintainable applications by combining a predictable Dependency Injection (DI) container with a dynamic metadata and eventing system.
@@ -448,6 +459,26 @@ await rr.runTask(id | task, { input: 1 });
 // rr.logger.info("xxx")
 await rr.dispose();
 ```
+
+## Pre‑release (alpha)
+
+Publish an alpha without affecting latest:
+
+```bash
+npm version prerelease --preid=alpha
+npm run clean && npm run build
+npm publish --tag alpha --access public
+# consumers: npm i @bluelibs/runner@alpha
+```
+
+Local test without publishing:
+
+```bash
+npm pack  # then in a demo app: npm i ../@bluelibs-runner-<version>.tgz
+# or: npm link / npm link @bluelibs/runner
+```
+
+Coverage tip: the script name is `npm run coverage`.
 
 ## Metadata & Tags
 

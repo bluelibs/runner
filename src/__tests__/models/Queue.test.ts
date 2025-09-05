@@ -186,4 +186,19 @@ describe("Queue", () => {
     await expect(q.run(errorTask)).rejects.toThrow("Task exception");
     await expect(q.run(errorTask)).rejects.toThrow("Task exception");
   });
+
+  it("should work with other platforms than node", async () => {
+    // This test is mostly to increase coverage on the platform checks
+    // since we can't actually change the runtime environment in a test.
+
+    // Create a Queue instance which will use the detected platform
+    const q = new Queue();
+
+    // @ts-expect-error
+    q["hasAsyncLocalStorage"] = false; // force false to simulate non-node environment
+
+    // Run a simple task to ensure basic functionality works
+    const result = await q.run(async () => 3);
+    expect(result).toBe(3);
+  });
 });

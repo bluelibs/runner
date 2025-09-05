@@ -6,6 +6,7 @@ import BenchmarksSection from "../components/HomePage/BenchmarksSection";
 import RunnerDevToolsSection from "../components/HomePage/RunnerDevToolsSection";
 import TldrSection from "../components/HomePage/TldrSection";
 import WhyChooseSection from "../components/HomePage/WhyChooseSection";
+import PlatformsSection from "../components/HomePage/PlatformsSection";
 import CtaSection from "../components/HomePage/CtaSection";
 import BusinessInquirySection from "../components/HomePage/BusinessInquirySection";
 
@@ -46,6 +47,7 @@ const HomePage: React.FC = () => {
       <RunnerDevToolsSection />
       <TldrSection />
       <WhyChooseSection />
+      <PlatformsSection />
       <CtaSection />
       <BusinessInquirySection />
     </div>

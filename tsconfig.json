@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
+    "target": "ES2020",
     "module": "commonjs",
-    "lib": ["esnext"],
+    "lib": ["ES2020", "DOM"],
     "moduleResolution": "node",
     "sourceMap": true,
     "noImplicitAny": true,
@@ -10,15 +10,13 @@
     "outDir": "./dist",
     "allowSyntheticDefaultImports": true,
     "pretty": true,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
     "declaration": true,
     "strict": true,
     "strictNullChecks": true,
-    "typeRoots": ["node_modules/@types"],
-    "noImplicitThis": false
+    "noImplicitThis": false,
+    "skipLibCheck": true
   },
 
   "include": ["src/**/*.ts"],
-  "exclude": ["examples/**"]
+  "exclude": ["examples/**", "web/**"]
 }

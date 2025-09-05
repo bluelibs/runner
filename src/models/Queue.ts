@@ -1,4 +1,4 @@
-import { AsyncLocalStorage } from "node:async_hooks";
+import { getPlatform } from "../platform";
 
 /**
  * Cooperative task queue.
@@ -12,7 +12,10 @@ export class Queue {
   private abortController = new AbortController();
 
   // true while inside a queued task → helps detect "queue in queue"
-  private readonly executionContext = new AsyncLocalStorage<boolean>();
+  private readonly executionContext =
+    getPlatform().createAsyncLocalStorage<boolean>();
+
+  private readonly hasAsyncLocalStorage = getPlatform().hasAsyncLocalStorage();
 
   /**
    * Schedule an asynchronous task.
@@ -25,7 +28,7 @@ export class Queue {
     }
 
     // 2. detect dead‑locks (a queued task adding another queued task)
-    if (this.executionContext.getStore()) {
+    if (this.hasAsyncLocalStorage && this.executionContext.getStore()) {
       return Promise.reject(
         new Error(
           "Dead‑lock detected: a queued task attempted to queue another task",
@@ -37,7 +40,9 @@ export class Queue {
 
     // 3. chain task after the current tail
     const result = this.tail.then(() =>
-      this.executionContext.run(true, () => task(signal)),
+      this.hasAsyncLocalStorage
+        ? this.executionContext.run(true, () => task(signal))
+        : task(signal),
     );
 
     // 4. preserve the chain even if the task rejects (swallow internally)

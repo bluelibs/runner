@@ -422,7 +422,7 @@ export const app = resource({
               🔥 Revolutionary Hot-Swapping
             </h2>
             <p className="text-xl text-gray-600 dark:text-gray-300 max-w-4xl mx-auto">
-              Replace function logic in running applications without restarts.
+              Replace task logic in running applications without restarts.
               Perfect for production debugging, A/B testing, and AI-driven
               development workflows.
             </p>

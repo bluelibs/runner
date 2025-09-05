@@ -97,8 +97,8 @@ export const features = [
     description:
       "Not classes with 47 methods you swear you'll refactor. Testable and composable functions with superpowers.",
     docAnchor: "tasks",
-    example: `const sendEmail = task({
-  id: "app.tasks.sendEmail",
+    example: `const sendEmailToUserTask = task({
+  id: "app.tasks.sendEmailToUser",
   // Dependencies can be tasks, events and resources
   // tasks, events -> functions, resources -> init value
   dependencies: {
@@ -106,14 +106,14 @@ export const features = [
     emailSentEvent,
     increaseEmailCounterTask,
   },
-  run: async ({ to, subject, body }, {
+  run: async ({ user, message }, {
     // This is where dependencies get injected
     emailService,
     emailSentEvent, // now function()
     increaseEmailCounterTask // now function()
   }) => {
-    await emailService.send({ to, subject, body });
-    emailSentEvent({ to, subject, body })
+    await emailService.send(user.email, message);
+    await emailSentEvent({ to: user.email, message });
 
     // You can do this one asynchronously
     increaseEmailCounterTask();
