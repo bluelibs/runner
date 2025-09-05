@@ -21,7 +21,6 @@ import {
 import { RunResult } from "./models/RunResult";
 import { RunOptions } from "./types/runner";
 import { getPlatform } from "./platform";
-import { detectEnvironment } from "./platform/index";
 
 const platform = getPlatform();
 
@@ -39,7 +38,7 @@ export async function run<C, V extends Promise<any>>(
     | IResource<{ [K in any]?: any }, V, any, any>, // For optional config
   options?: RunOptions,
 ): Promise<RunResult<V extends Promise<infer U> ? U : V>> {
-  await getPlatform().init(); // ensure platform is initialized
+  await platform.init(); // ensure platform is initialized
   const {
     debug = undefined,
     logs = {},
