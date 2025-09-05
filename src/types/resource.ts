@@ -21,7 +21,18 @@ import {
   EnsureOutputSatisfiesContracts,
   HasInputContracts,
   HasOutputContracts,
+  InferInputOrViolationFromContracts,
 } from "./contracts";
+
+// Helper to detect `any` so we can treat it as "unspecified"
+type IsAny<T> = 0 extends 1 & T ? true : false;
+type IsUnspecified<T> = [T] extends [undefined]
+  ? true
+  : [T] extends [void]
+  ? true
+  : IsAny<T> extends true
+  ? true
+  : false;
 
 export interface IResourceDefinition<
   TConfig = any,
@@ -50,7 +61,12 @@ export interface IResourceDefinition<
    */
   init?: (
     config: HasInputContracts<[...TTags, ...TMiddleware]> extends true
-      ? EnsureInputSatisfiesContracts<[...TTags, ...TMiddleware], TConfig>
+      ? (IsUnspecified<TConfig> extends true
+          ? InferInputOrViolationFromContracts<[...TTags, ...TMiddleware]>
+          : EnsureInputSatisfiesContracts<
+              [...TTags, ...TMiddleware],
+              TConfig
+            >)
       : TConfig,
     dependencies: ResourceDependencyValuesType<TDependencies>,
     context: TContext,
@@ -131,7 +147,11 @@ export interface IResource<
   > {
   id: string;
   with(
-    config: TConfig,
+    config: HasInputContracts<[...TTags, ...TMiddleware]> extends true
+      ? (IsUnspecified<TConfig> extends true
+          ? InferInputOrViolationFromContracts<[...TTags, ...TMiddleware]>
+          : TConfig)
+      : TConfig,
   ): IResourceWithConfig<
     TConfig,
     TValue,

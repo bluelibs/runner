@@ -369,6 +369,9 @@ describe.skip("typesafety", () => {
 
     const tag = defineTag<{ value: number }, void, IUser>({ id: "tag" });
     const tag2 = defineTag<void, void, IOther>({ id: "tag2" });
+    const tag3WithInputContract = defineTag<void, { a: string }, void>({
+      id: "tag3",
+    });
 
     const tags = [tag.with({ value: 123 }), tag2] satisfies TagType[];
 
@@ -404,6 +407,46 @@ describe.skip("typesafety", () => {
       // @ts-expect-error
       run: async (input: { name: string }) => {
         return {};
+      },
+    });
+
+    const task4 = defineTask({
+      id: "task",
+      tags: [tag3WithInputContract],
+      run: async (input) => {
+        // Should automatically be infered, because of the
+        input.a;
+        // @ts-expect-error
+        input.b;
+        return {
+          age: 123,
+          name: "123",
+        };
+      },
+    });
+
+    const resource4 = defineResource({
+      id: "resource",
+      tags: [tag3WithInputContract],
+      init: async (input) => {
+        // Should automatically be infered, because of the
+        input.a;
+        // @ts-expect-error
+        input.b;
+      },
+    });
+
+    const resourceTag = defineTag<void, void, { name: string }>({
+      id: "resource.tag",
+    });
+    const resourceUser = defineResource({
+      id: "resource.user",
+      tags: [resourceTag],
+      // @ts-expect-error should throw invalid because of missing name as response resource contract
+      init: async () => {
+        return {
+          name1: "123",
+        };
       },
     });
   });

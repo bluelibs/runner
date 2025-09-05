@@ -14,6 +14,7 @@ import {
   EnsureOutputSatisfiesContracts,
   HasInputContracts,
   HasOutputContracts,
+  InferInputOrViolationFromContracts,
 } from "./contracts";
 
 export interface ITaskDefinition<
@@ -49,7 +50,12 @@ export interface ITaskDefinition<
   >;
   run: (
     input: HasInputContracts<[...TTags, ...TMiddleware]> extends true
-      ? EnsureInputSatisfiesContracts<[...TTags, ...TMiddleware], TInput>
+      ? ([TInput] extends [undefined]
+          ? InferInputOrViolationFromContracts<[...TTags, ...TMiddleware]>
+          : EnsureInputSatisfiesContracts<
+              [...TTags, ...TMiddleware],
+              TInput
+            >)
       : TInput,
     dependencies: DependencyValuesType<TDependencies>,
   ) => HasOutputContracts<[...TTags, ...TMiddleware]> extends true
