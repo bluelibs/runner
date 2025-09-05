@@ -302,8 +302,8 @@ describe.skip("typesafety", () => {
       run: async () => "Task executed",
     });
 
-    // @ts-expect-error
     const overrideTask = defineOverride(task, {
+      // @ts-expect-error
       run: async () => 234,
     });
 
@@ -316,8 +316,8 @@ describe.skip("typesafety", () => {
     const overrideResource = defineOverride(resource, {
       init: async () => "Resource overridden",
     });
-    // @ts-expect-error
     defineOverride(resource, {
+      // @ts-expect-error
       init: async () => 123, // bad type
     });
 

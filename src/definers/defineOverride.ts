@@ -14,33 +14,35 @@ import {
  * @param patch - Properties to override (except `id`).
  * @returns A definition of the same kind with overrides applied.
  */
-export function defineOverride<T extends ITask<any, any, any, any, any, any>>(
+// Narrowed helper types for better inference and diagnostics
+type AnyTask = ITask<any, any, any, any, any, any>;
+type AnyResource = IResource<any, any, any, any, any, any, any>;
+type AnyTaskMiddleware = ITaskMiddleware<any, any, any, any>;
+type AnyResourceMiddleware = IResourceMiddleware<any, any, any, any>;
+type AnyHook = IHook<any, any, any>;
+
+// Conditional patch type that maps the required/allowed fields based on base kind
+type OverridePatch<T> = T extends AnyTask
+  ? Omit<Partial<T>, "id"> & Pick<T, "run">
+  : T extends AnyResource
+  ? Omit<Partial<T>, "id"> & Pick<T, "init">
+  : T extends AnyTaskMiddleware
+  ? Omit<Partial<T>, "id">
+  : T extends AnyResourceMiddleware
+  ? Omit<Partial<T>, "id"> & Pick<T, "run">
+  : T extends AnyHook
+  ? Omit<Partial<T>, "id" | "on"> & Pick<T, "run">
+  : never;
+
+export function defineOverride<T extends AnyTask | AnyResource | AnyTaskMiddleware | AnyResourceMiddleware | AnyHook>(
   base: T,
-  patch: Omit<Partial<T>, "id"> & Pick<T, "run">,
-): T;
-export function defineOverride<
-  T extends IResource<any, any, any, any, any, any>,
->(base: T, patch: Omit<Partial<T>, "id"> & Pick<T, "init">): T;
-export function defineOverride<T extends ITaskMiddleware<any, any, any, any>>(
-  base: T,
-  patch: Omit<Partial<T>, "id">,
-): T;
-export function defineOverride<
-  T extends IResourceMiddleware<any, any, any, any>,
->(base: T, patch: Omit<Partial<T>, "id"> & Pick<T, "run">): T;
-export function defineOverride<T extends IHook<any, any, any>>(
-  base: T,
-  patch: Omit<Partial<T>, "id" | "on"> & Pick<T, "run">,
-): T;
-export function defineOverride(
-  base: ITask | IResource | ITaskMiddleware | IResourceMiddleware,
-  patch: Record<string, unknown>,
-): ITask | IResource | ITaskMiddleware | IResourceMiddleware {
-  const { id: _ignored, ...rest } = patch;
+  patch: OverridePatch<T>,
+): T {
   // Ensure we never change the id, and merge overrides last
+  const rest = patch as any;
   return {
     ...(base as any),
     ...rest,
     id: (base as any).id,
-  } as any;
+  } as T;
 }
