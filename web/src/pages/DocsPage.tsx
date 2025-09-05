@@ -56,15 +56,61 @@ const DocsPage: React.FC = () => {
             Quick Start: define → register → run
           </h2>
           <p className="text-gray-700 dark:text-gray-300 mb-4">
-            Registration wires your definitions into the system. If a task or
-            resource isn't registered on the root resource, it won't exist at
-            runtime, can't be discovered, intercepted, or depended on. Define
-            your pieces, register them on the root, then call <code>run()</code>{" "}
-            to boot and use helpers like <code>runTask()</code>.
+            The core pattern in Runner is simple: you{" "}
+            <strong>define</strong> your application parts (tasks, resources),
+            <strong>register</strong> them to let the system know they exist,
+            and then <strong>run</strong> the whole application. Registration is
+            key—it’s how Runner builds the dependency graph and enables all its
+            powerful features.
           </p>
           <CodeBlock>{codeExamples.tasksQuickStart}</CodeBlock>
         </div>
       </section>
+
+      {/* The Big Picture */}
+      <section id="the-big-picture" className="scroll-mt-24">
+        <div className="card p-8 mb-12">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+            <Book className="w-8 h-8 mr-3" />
+            The Big Picture: A Mental Model
+          </h2>
+          <p className="text-gray-700 dark:text-gray-300 mb-4">
+            Before diving into the details, let's zoom out. Runner is built on
+            a simple idea called <strong>Inversion of Control (IoC)</strong>,
+            also known as Dependency Injection.
+          </p>
+          <p className="text-gray-700 dark:text-gray-300 mb-4">
+            Instead of your code creating its own dependencies (like a database
+            connection or a logger), you declare what you need, and Runner
+            provides them for you. This makes your code more modular, easier to
+            test, and simpler to manage.
+          </p>
+          <h4 className="text-lg font-semibold text-gray-900 dark:text-white mt-6 mb-2">
+            The Application Lifecycle
+          </h4>
+          <ol className="list-decimal list-inside space-y-2 text-gray-600 dark:text-gray-300">
+            <li>
+              <strong>run()</strong>: You start the application. Runner reads
+              all your definitions and builds a dependency tree.
+            </li>
+            <li>
+              <strong>init()</strong>: Runner initializes all registered{" "}
+              <strong>resources</strong> in the correct order. This is where
+              database connections are made and services are started.
+            </li>
+            <li>
+              <strong>Ready</strong>: The system is now running and ready to
+              execute <strong>tasks</strong> or handle <strong>events</strong>.
+            </li>
+            <li>
+              <strong>dispose()</strong>: When the application shuts down,
+              Runner calls the <code>dispose()</code> method on all resources in
+              reverse order, ensuring a graceful cleanup.
+            </li>
+          </ol>
+        </div>
+      </section>
+
       {/* TL;DR */}
       <section id="tldr" className="scroll-mt-24">
         <div className="card p-8 mb-12">
@@ -74,16 +120,33 @@ const DocsPage: React.FC = () => {
           </h2>
           <ul className="grid grid-cols-1 md:grid-cols-2 gap-3 text-gray-700 dark:text-gray-300">
             <li>
-              Lifecycle: <code>run() → ready event → dispose()</code>
+              <strong>Lifecycle</strong>: Your app boots with{" "}
+              <code>run()</code>, becomes operational after the{" "}
+              <code>ready</code> event, and cleans up with <code>dispose()</code>
+              .
             </li>
-            <li>Tasks: DI + middleware; validate input/result</li>
-            <li>Resources: managed singletons with init/dispose</li>
-            <li>Events: emit → validate → ordered hooks → run</li>
             <li>
-              Hooks: async listeners; stoppable via{" "}
-              <code>stopPropagation()</code>
+              <strong>Tasks</strong>: These are your functions that do the work.
+              They get their dependencies automatically and can be wrapped with
+              middleware.
             </li>
-            <li>Middleware: cross‑cutting concerns; async and awaited</li>
+            <li>
+              <strong>Resources</strong>: These are your shared, long-lived
+              objects like database connections or services. Runner manages
+              their creation and destruction.
+            </li>
+            <li>
+              <strong>Events</strong>: A way to signal that something happened
+              (e.g., "user signed up").
+            </li>
+            <li>
+              <strong>Hooks</strong>: Functions that listen for specific events
+              and run in response.
+            </li>
+            <li>
+              <strong>Middleware</strong>: Wrappers that add extra behavior to
+              your tasks and resources, like logging or authentication.
+            </li>
           </ul>
         </div>
       </section>
@@ -112,9 +175,10 @@ const DocsPage: React.FC = () => {
                 </a>
               </h3>
               <p className="text-gray-600 dark:text-gray-300">
-                Tasks are functions with superpowers. They're testable and
-                composable. Unlike classes that accumulate methods like a
-                hoarder accumulates stuff, tasks do one thing well.
+                <strong>Analogy</strong>: Think of a task as a recipe for a
+                specific action, like "Bake a Cake" or "Register a User". It
+                lists the ingredients it needs (dependencies) and provides
+                step-by-step instructions (the <code>run</code> function).
               </p>
               <a
                 href="https://bluelibs.github.io/runner/#md:tasks"
@@ -129,26 +193,24 @@ const DocsPage: React.FC = () => {
           <CodeBlock>{codeExamples.tasks}</CodeBlock>
           <div className="space-y-4 mt-6">
             <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-              When to use tasks:
+              Why use a Task (instead of a regular function)?
             </h4>
-            <ul className="space-y-2 text-gray-600 dark:text-gray-300">
+            <ul className="space-y-2 text-gray-600 dark:text-gray-300 list-disc list-inside">
               <li>
-                • High-level business actions: "app.user.register",
-                "app.order.process"
+                <strong>Automatic Dependencies</strong>: Just declare what you
+                need (like <code>emailService</code>), and Runner provides it.
+                This makes your code cleaner.
               </li>
-              <li>• Operations that need middleware (auth, caching, retry)</li>
-              <li>• Functions called from multiple places</li>
               <li>
-                • Complex operations that benefit from dependency injection
+                <strong>Easy to Test</strong>: Because dependencies are passed
+                in, you can easily provide mock versions in your tests, as shown
+                in the example.
               </li>
-            </ul>
-            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-              When not to use tasks:
-            </h4>
-            <ul className="space-y-2 text-gray-600 dark:text-gray-300">
-              <li>• Simple utility functions</li>
-              <li>• Code used in only one place</li>
-              <li>• Performance-critical hot paths that don't need DI</li>
+              <li>
+                <strong>Middleware</strong>: You can wrap tasks with middleware
+                for caching, authentication, logging, etc., without changing the
+                task's code.
+              </li>
             </ul>
           </div>
         </div>
@@ -171,9 +233,11 @@ const DocsPage: React.FC = () => {
                 </a>
               </h3>
               <p className="text-gray-600 dark:text-gray-300">
-                Resources are the singletons, services, configs, and connections
-                that live throughout your app's lifecycle. They initialize once
-                and stick around until cleanup time.
+                <strong>Analogy</strong>: A resource is like a shared, heavy-duty
+                tool in a workshop, such as a table saw or a drill press. You
+                set it up once (<code>init</code>), use it many times across
+                different projects (tasks), and then properly shut it down at
+                the end of the day (<code>dispose</code>).
               </p>
               <a
                 href="https://bluelibs.github.io/runner/#md:resources"
@@ -188,15 +252,28 @@ const DocsPage: React.FC = () => {
           <CodeBlock>{codeExamples.resources}</CodeBlock>
           <div className="space-y-4 mt-6">
             <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-              Resource Configuration
+              Why use a Resource?
             </h4>
-            <p className="text-gray-600 dark:text-gray-300">
-              Resources can be configured with type-safe options. No more
-              "config object of unknown shape" nonsense.
-            </p>
+            <ul className="space-y-2 text-gray-600 dark:text-gray-300 list-disc list-inside">
+              <li>
+                <strong>Managed Lifecycle</strong>: Runner handles the setup (
+                <code>init</code>) and teardown (<code>dispose</code>) for you,
+                preventing resource leaks.
+              </li>
+              <li>
+                <strong>Singleton Pattern</strong>: A resource is created only
+                once and shared everywhere. This is efficient for expensive
+                objects like database connections.
+              </li>
+              <li>
+                <strong>Configuration</strong>: You can pass type-safe
+                configuration to resources, making them flexible and reusable.
+              </li>
+            </ul>
             <CodeBlock>
               {`const server = resource({
   id: "app.server",
+  // This function receives the config you provide below
   init: async (config: { port: number; host: string }) => {
     const app = express();
     return app.listen(config.port, config.host);
@@ -204,17 +281,51 @@ const DocsPage: React.FC = () => {
   dispose: async (server) => server.close(),
 });
 
-// Register with configuration
+// Register the resource with its configuration
 const app = resource({
   id: "app",
   register: [
-    // Unless all config fields are optional (or void),
-    // you will be forced to register it with() configuration.
     server.with({ port: 3000, host: "localhost" })
   ],
 });`}
             </CodeBlock>
           </div>
+        </div>
+
+        {/* Connecting the Dots */}
+        <div className="card p-8 mb-8 bg-blue-50 dark:bg-blue-900/20">
+          <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-3">
+            Connecting the Dots: How They Work Together
+          </h3>
+          <p className="text-gray-700 dark:text-gray-300 mb-3">
+            The core concepts are designed to fit together seamlessly. Here's a
+            typical flow:
+          </p>
+          <div className="text-center text-gray-600 dark:text-gray-400 font-mono">
+            <p>
+              A <strong>Task</strong> (e.g., `registerUser`) needs to do its job.
+            </p>
+            <p className="text-2xl my-2">↓</p>
+            <p>
+              It depends on a <strong>Resource</strong> (e.g., `database`) to
+              save the user.
+            </p>
+            <p className="text-2xl my-2">↓</p>
+            <p>
+              After saving, the <strong>Task</strong> emits an{" "}
+              <strong>Event</strong> (e.g., `userRegistered`).
+            </p>
+            <p className="text-2xl my-2">↓</p>
+            <p>
+              A <strong>Hook</strong> (e.g., `sendWelcomeEmail`) is listening for
+              that <strong>Event</strong> and runs automatically.
+            </p>
+          </div>
+          <p className="text-gray-700 dark:text-gray-300 mt-4">
+            This pattern keeps your code decoupled. The registration task
+            doesn't need to know about sending emails; it just announces that a
+            user has registered.
+          </p>
         </div>
 
         <div id="events" className="card p-8 mb-8 scroll-mt-24">
@@ -235,9 +346,10 @@ const app = resource({
                 </a>
               </h3>
               <p className="text-gray-600 dark:text-gray-300">
-                Events let different parts of your app talk to each other
-                without tight coupling. It's like having a really good office
-                messenger who never forgets anything.
+                <strong>Analogy</strong>: An event is like a public announcement
+                or a flare gun. You fire it to signal that something important
+                has happened (like "User Registered!"), without knowing or
+                caring who is listening.
               </p>
               <a
                 href="https://bluelibs.github.io/runner/#md:events"
@@ -251,10 +363,21 @@ const app = resource({
           </div>
           <CodeBlock>{codeExamples.events}</CodeBlock>
           <div className="space-y-4 mt-6">
-            <p className="text-gray-600 dark:text-gray-300">
-              You can listen to events using hooks. You can also listen to all
-              events using <code>on: "*"</code>, and stop propagation of events.
-            </p>
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Why use Events?
+            </h4>
+            <ul className="space-y-2 text-gray-600 dark:text-gray-300 list-disc list-inside">
+              <li>
+                <strong>Decoupling</strong>: The part of your code that creates
+                an event doesn't need to know what will happen next. This makes
+                it easy to add new functionality later without changing existing
+                code.
+              </li>
+              <li>
+                <strong>Extensibility</strong>: Other developers (or even other
+                modules) can listen for your events and add their own logic.
+              </li>
+            </ul>
           </div>
         </div>
 
@@ -276,9 +399,10 @@ const app = resource({
                 </a>
               </h3>
               <p className="text-gray-600 dark:text-gray-300">
-                The modern way to listen to events is through hooks. They are
-                lightweight event listeners, similar to tasks, but with a few
-                key differences.
+                <strong>Analogy</strong>: If an event is an announcement, a hook
+                is the person assigned to listen for that specific announcement
+                and perform an action. For example, when they hear "User
+                Registered!", their job is to send a welcome email.
               </p>
               <a
                 href="https://bluelibs.github.io/runner/#md:hooks"
@@ -291,6 +415,23 @@ const app = resource({
             </div>
           </div>
           <CodeBlock>{codeExamples.hooks}</CodeBlock>
+          <div className="space-y-4 mt-6">
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Why use Hooks?
+            </h4>
+            <ul className="space-y-2 text-gray-600 dark:text-gray-300 list-disc list-inside">
+              <li>
+                <strong>Reactive Logic</strong>: Hooks are perfect for running
+                side-effects in response to events, like sending notifications,
+                logging, or updating other systems.
+              </li>
+              <li>
+                <strong>Lightweight</strong>: They are simpler and more
+                lightweight than tasks, designed specifically for event
+                handling.
+              </li>
+            </ul>
+          </div>
         </div>
 
         <div id="middleware" className="card p-8 mb-8 scroll-mt-24">
@@ -311,10 +452,11 @@ const app = resource({
                 </a>
               </h3>
               <p className="text-gray-600 dark:text-gray-300">
-                Middleware wraps around tasks and resources to add cross‑cutting
-                concerns (auth, caching, retries, timeouts, auditing) without
-                polluting business logic. There are two kinds: task middleware
-                and resource middleware.
+                <strong>Analogy</strong>: Middleware is like a series of security
+                checkpoints or quality control stations that your task's request
+                must pass through. Each station can inspect the request, add to
+                it, or even turn it away before it reaches its final
+                destination (the task's <code>run</code> logic).
               </p>
               <a
                 href="https://bluelibs.github.io/runner/#md:middleware"
@@ -341,28 +483,30 @@ const app = resource({
                 </a>
               </h4>
               <p className="text-gray-600 dark:text-gray-300 mb-3">
-                Runs around task execution. Ideal for authentication,
-                input/result shaping, caching, retries, timeouts, and telemetry.
+                Runs "around" a task's execution. It's perfect for handling
+                cross-cutting concerns that apply to many tasks.
               </p>
               <CodeBlock>{codeExamples.middlewareTaskAuth}</CodeBlock>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
                 <div className="space-y-2">
                   <h5 className="font-semibold text-gray-900 dark:text-white">
-                    Compose built‑ins
+                    Common Use Cases
                   </h5>
-                  <p className="text-gray-600 dark:text-gray-300">
-                    Use retry, timeout, and cache from{" "}
-                    <code>globals.middleware.task</code>.
-                  </p>
+                  <ul className="text-gray-600 dark:text-gray-300 list-disc list-inside">
+                    <li>Authentication & Authorization</li>
+                    <li>Caching results</li>
+                    <li>Retrying failed operations</li>
+                    <li>Logging and performance monitoring</li>
+                  </ul>
                   <CodeBlock>{codeExamples.middlewareResilientTask}</CodeBlock>
                 </div>
                 <div className="space-y-2">
                   <h5 className="font-semibold text-gray-900 dark:text-white">
-                    Global task middleware
+                    Global Middleware
                   </h5>
                   <p className="text-gray-600 dark:text-gray-300">
-                    Apply to all or a filtered set of tasks via{" "}
-                    <code>everywhere</code>.
+                    You can apply middleware to all tasks at once using the{" "}
+                    <code>everywhere</code> flag.
                   </p>
                   <CodeBlock>{codeExamples.middlewareGlobalTask}</CodeBlock>
                 </div>
@@ -375,20 +519,12 @@ const app = resource({
                 Resource Middleware
               </h4>
               <p className="text-gray-600 dark:text-gray-300 mb-3">
-                Wraps resource initialization and can enhance the returned
-                instance (e.g., patch methods, add guards, add observability).
+                Wraps a resource's initialization. This is more advanced, but it
+                can be used to dynamically modify a resource's behavior. For
+                example, you could add a "soft delete" feature to a database
+                service.
               </p>
               <CodeBlock>{codeExamples.middlewareResourceSoftDelete}</CodeBlock>
-              <div className="mt-4">
-                <h5 className="font-semibold text-gray-900 dark:text-white">
-                  Global resource middleware
-                </h5>
-                <p className="text-gray-600 dark:text-gray-300 mb-2">
-                  Use <code>everywhere</code> to scope by predicate and apply
-                  consistently.
-                </p>
-                <CodeBlock>{codeExamples.middlewareGlobalResource}</CodeBlock>
-              </div>
             </div>
           </div>
         </div>
@@ -610,13 +746,20 @@ const app = resource({
           <Zap className="w-8 h-8 mr-3" />
           Advanced Features
         </h2>
+        <div className="card p-6 mb-8 bg-yellow-50 dark:bg-yellow-900/20">
+          <p className="text-gray-800 dark:text-yellow-200">
+            <strong>Good to know</strong>: You won't need these features when
+            you're just starting out. Focus on the Core Concepts first, and come
+            back here when you have a specific problem to solve!
+          </p>
+        </div>
 
         <ConceptCard
           id="context"
           title="Context"
           icon={conceptIcons.context}
           iconBgGradient="bg-gradient-to-r from-indigo-500 to-purple-600"
-          description="Request-scoped data without prop drilling (works in Node only). Pass data through the execution chain without explicitly threading it through every function call."
+          description='Problem: Ever needed to pass a "request ID" or user information through many layers of your app? Passing it as an argument everywhere is tedious. Solution: Context provides a "magical" way to make data available to all functions in a specific async chain, without prop drilling.'
           codeExample={codeExamples.context}
           apiHref="https://bluelibs.github.io/runner/#md:context"
           className="mb-8"
@@ -627,7 +770,7 @@ const app = resource({
           title="Interceptors"
           icon={conceptIcons.interceptors}
           iconBgGradient="bg-gradient-to-r from-blue-500 to-purple-600"
-          description="Dynamic task behavior modification at runtime. Perfect for debugging, metrics, or conditional logic."
+          description="Problem: How can you peek into a task's execution, or even change its behavior from the outside? Solution: Interceptors let you wrap a task's run logic at runtime. This is perfect for fine-grained logging, metrics, or adding dynamic checks."
           codeExample={codeExamples.interceptors}
           apiHref="https://bluelibs.github.io/runner/#md:task-interceptors"
           className="mb-8"
@@ -638,7 +781,7 @@ const app = resource({
           title="Optional Dependencies"
           icon={conceptIcons["optional-deps"]}
           iconBgGradient="bg-gradient-to-r from-green-500 to-blue-600"
-          description="Graceful degradation patterns when dependencies aren't available. Build resilient systems that adapt to missing services."
+          description="Problem: What if your app uses an external service for a non-critical feature (like analytics), and that service goes down? You don't want your whole app to crash. Solution: Mark the dependency as optional, and your code can gracefully handle cases where it's not available."
           codeExample={codeExamples.optionalDeps}
           className="mb-8"
         />
@@ -650,7 +793,7 @@ const app = resource({
           title="Overrides"
           icon={conceptIcons.overrides}
           iconBgGradient="bg-gradient-to-r from-amber-500 to-orange-600"
-          description="Swap implementations without changing IDs. Nearest override to run() wins; great for env‑specific behavior and tests."
+          description="Problem: How do you use a fake email service in your tests, or a different implementation in development vs. production? Solution: Overrides let you swap out a resource or task's implementation without changing its ID. It's a clean way to handle test doubles and environment-specific logic."
           codeExample={codeExamples.overrides}
           apiHref="https://bluelibs.github.io/runner/#md:overrides"
           className="mb-8"
@@ -864,6 +1007,58 @@ await q.dispose({ cancel: true });`}
             Automatic resource lifecycle management with proper cleanup and
             garbage collection optimization.
           </p>
+        </div>
+      </section>
+
+      {/* Glossary */}
+      <section id="glossary" className="scroll-mt-24">
+        <div className="card p-8 mb-12">
+          <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-4 flex items-center">
+            <Book className="w-8 h-8 mr-3" />
+            Glossary of Terms
+          </h2>
+          <ul className="space-y-4 text-gray-700 dark:text-gray-300">
+            <li>
+              <strong className="text-gray-900 dark:text-white">
+                Dependency Injection (DI)
+              </strong>
+              : A design pattern where a component receives its dependencies
+              from an external source rather than creating them itself. This is
+              the core principle of Runner.
+            </li>
+            <li>
+              <strong className="text-gray-900 dark:text-white">
+                Inversion of Control (IoC)
+              </strong>
+              : A broader principle where the framework (Runner) controls the
+              flow of the program, calling your code rather than your code
+              calling the framework. DI is a form of IoC.
+            </li>
+            <li>
+              <strong className="text-gray-900 dark:text-white">
+                Singleton
+              </strong>
+              : A design pattern that ensures a class has only one instance and
+              provides a global point of access to it. Resources in Runner are
+              singletons.
+            </li>
+            <li>
+              <strong className="text-gray-900 dark:text-white">
+                Decoupling
+              </strong>
+              : The practice of separating components so that they are not
+              tightly connected. This makes the system more modular and easier
+              to maintain. Events are a key tool for decoupling.
+            </li>
+            <li>
+              <strong className="text-gray-900 dark:text-white">
+                Cross-Cutting Concern
+              </strong>
+              : A feature that is needed in many different parts of an
+              application, such as logging, security, or caching. Middleware is
+              the primary way to handle these in Runner.
+            </li>
+          </ul>
         </div>
       </section>
 

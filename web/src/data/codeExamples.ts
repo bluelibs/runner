@@ -13,11 +13,12 @@ const app = resource({
   // This is how you let the system know about all other core components.
 });
 
-(async () => {
+async function main() {
   const { runTask, dispose } = await run(app);
   const result = await runTask(hello, "Runner"); // "Hello, Runner!"
-  await dispose();
-})();`,
+  await dispose(); // Cleanup
+}
+`,
   tasks: `const sendEmail = task({
   id: "app.tasks.sendEmail",
   dependencies: { emailService, logger },
@@ -27,7 +28,15 @@ const app = resource({
   },
 });
 
-// Test it like a normal function (because it basically is)
+const router = resource({
+  id: "app.router",
+  dependencies: { sendEmail },
+  init: async (_, { sendEmail }) => ({
+    // Use the task sendEmail({ to, subject, body })
+  }),
+});
+
+// You can unit-test it like a normal function (because it basically is)
 const result = await sendEmail.run(
   { to: "user@example.com", subject: "Hi", body: "Hello!" },
   { emailService: mockEmailService, logger: mockLogger },
