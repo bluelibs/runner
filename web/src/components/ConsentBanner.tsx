@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { X, Shield, Check } from 'lucide-react';
+import React, { useState, useEffect } from "react";
+import { Shield, Check } from "lucide-react";
 
 interface ConsentBannerProps {
   onConsentChange?: (hasConsent: boolean) => void;
@@ -11,7 +11,7 @@ const ConsentBanner: React.FC<ConsentBannerProps> = ({ onConsentChange }) => {
 
   useEffect(() => {
     // Check if user has already made a consent choice
-    const consentChoice = localStorage.getItem('analytics-consent');
+    const consentChoice = localStorage.getItem("analytics-consent");
     if (!consentChoice) {
       // Delay showing the banner slightly for better UX
       setTimeout(() => {
@@ -20,18 +20,18 @@ const ConsentBanner: React.FC<ConsentBannerProps> = ({ onConsentChange }) => {
       }, 1000);
     } else {
       // User has already made a choice, notify parent component
-      onConsentChange?.(consentChoice === 'accepted');
+      onConsentChange?.(consentChoice === "accepted");
     }
   }, [onConsentChange]);
 
   const handleAcceptAll = () => {
-    localStorage.setItem('analytics-consent', 'accepted');
+    localStorage.setItem("analytics-consent", "accepted");
     onConsentChange?.(true);
     hideBanner();
   };
 
   const handleRejectAll = () => {
-    localStorage.setItem('analytics-consent', 'rejected');
+    localStorage.setItem("analytics-consent", "rejected");
     onConsentChange?.(false);
     hideBanner();
   };
@@ -46,7 +46,7 @@ const ConsentBanner: React.FC<ConsentBannerProps> = ({ onConsentChange }) => {
   return (
     <div
       className={`fixed bottom-0 left-0 right-0 z-50 transform transition-transform duration-300 ${
-        isAnimating ? 'translate-y-0' : 'translate-y-full'
+        isAnimating ? "translate-y-0" : "translate-y-full"
       }`}
     >
       <div className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-lg">
@@ -62,12 +62,13 @@ const ConsentBanner: React.FC<ConsentBannerProps> = ({ onConsentChange }) => {
                     Cookie Consent
                   </h3>
                   <p className="text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
-                    We use Google Analytics to understand how visitors interact with our website and improve your experience.
-                    You can accept or decline analytics cookies below.
+                    We use Google Analytics to understand how visitors interact
+                    with our website and improve your experience. You can accept
+                    or decline analytics cookies below.
                   </p>
                 </div>
               </div>
-              
+
               <div className="flex items-center gap-2 flex-shrink-0">
                 <button
                   onClick={handleRejectAll}
