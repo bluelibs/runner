@@ -45,12 +45,12 @@ const HomePage: React.FC = () => {
         image="/og/runner-og.svg"
       />
       <HeroSection />
+      <PlatformsSection />
       <FeaturesSection />
       <BenchmarksSection />
       <RunnerDevToolsSection />
       <TldrSection />
       <WhyChooseSection />
-      <PlatformsSection />
       <CtaSection />
       <BusinessInquirySection />
     </div>

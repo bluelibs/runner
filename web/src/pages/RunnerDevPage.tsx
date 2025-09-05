@@ -171,7 +171,7 @@ const RunnerDevPage: React.FC = () => {
       title: "Global Installation",
       code: "npm install -g @bluelibs/runner-dev",
       description:
-        "Install the CLI tools globally for scaffolding and project management.",
+        "Install the CLI tools globally for scaffolding and project management. Or locally to attach it to your resource.",
     },
     {
       title: "Add to Your App",
