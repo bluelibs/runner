@@ -3,69 +3,6 @@ import { Link, useLocation } from "react-router-dom";
 import { Menu, X, Github, Star } from "lucide-react";
 import { formatStarCount, useGithubStars } from "../hooks/useGithubStars";
 
-const LogoR: React.FC<{ className?: string }> = ({ className }) => (
-  <svg
-    className={className}
-    width="28"
-    height="28"
-    viewBox="0 0 512 512"
-    preserveAspectRatio="xMidYMid meet"
-    xmlns="http://www.w3.org/2000/svg"
-    role="img"
-    aria-label="Runner logo"
-  >
-    <defs>
-      <linearGradient id="nav-g1" x1="0" x2="1" y1="0" y2="1">
-        <stop offset="0%" stopColor="#7C3AED" />
-        <stop offset="50%" stopColor="#2563EB" />
-        <stop offset="100%" stopColor="#06B6D4" />
-      </linearGradient>
-      <linearGradient id="nav-g2" x1="0" x2="1" y1="1" y2="0">
-        <stop offset="0%" stopColor="#22D3EE" />
-        <stop offset="100%" stopColor="#A78BFA" />
-      </linearGradient>
-    </defs>
-    {/* Background tile, subtle to blend with navbar */}
-    <rect
-      x="48"
-      y="48"
-      width="416"
-      height="416"
-      rx="104"
-      fill="#0B0B0F"
-      opacity="0.9"
-    />
-    <rect
-      x="48"
-      y="48"
-      width="416"
-      height="416"
-      rx="104"
-      fill="url(#nav-g1)"
-      opacity="0.10"
-    />
-    {/* Stylized R path (optically centered, no shadow) */}
-    <g transform="translate(-20,-12)">
-      <path
-        d="M188 140h110c60 0 96 32 96 84 0 44-26 74-69 83l63 65c8 8 7 20-2 28-9 8-23 7-31-2l-85-92h-50v86c0 12-10 22-22 22s-22-10-22-22V162c0-12 10-22 22-22Zm110 122c34 0 52-14 52-38s-18-38-52-38h-88v76h88Z"
-        fill="url(#nav-g2)"
-      />
-    </g>
-    {/* Inner highlight */}
-    <rect
-      x="56"
-      y="56"
-      width="400"
-      height="400"
-      rx="96"
-      fill="none"
-      stroke="url(#nav-g2)"
-      strokeOpacity="0.25"
-      strokeWidth="2"
-    />
-  </svg>
-);
-
 interface NavbarProps {
   darkMode: boolean;
   toggleDarkMode: () => void;
@@ -138,7 +75,7 @@ const Navbar: React.FC<NavbarProps> = () => {
           <div className="absolute inset-0 bg-gradient-to-b from-white/90 via-white/70 to-white/30 dark:from-slate-950/90 dark:via-slate-950/70 dark:to-slate-950/30" />
 
           {/* Backdrop blur layer */}
-          <div className="absolute inset-0 backdrop-blur-xl" />
+          <div className="absolute inset-0 backdrop-blur-md" />
 
           {/* Content container */}
           <div className="nav-aware relative">
@@ -154,10 +91,14 @@ const Navbar: React.FC<NavbarProps> = () => {
             <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
               <div className="flex justify-between h-16">
                 <div className="flex items-center">
-                  <Link to="/" className="flex items-center space-x-2">
-                    <LogoR className="w-8 h-8" />
-                    <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-emerald-300 via-teal-200 to-sky-300 dark:from-emerald-400 dark:via-teal-300 dark:to-sky-400">
-                      Runner
+                  <Link to="/#" className="flex items-center space-x-2">
+                    <img
+                      src="/logo.png"
+                      alt="Runner Logo"
+                      className="w-8 h-8"
+                    />
+                    <span className="font-extrabold text-xl bg-clip-text text-transparent bg-gradient-to-r from-emerald-300 via-teal-200 to-sky-300 dark:from-emerald-400 dark:via-teal-300 dark:to-sky-400">
+                      runner
                     </span>
                   </Link>
                 </div>

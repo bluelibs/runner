@@ -239,22 +239,22 @@ const createUser = task({
 export const benchmarks = [
   {
     label: "Basic Task Execution",
-    value: "2.49M tasks/sec",
+    value: "2.51M tasks/sec",
     color: "from-green-400 to-blue-500",
   },
   {
     label: "With 5 Middlewares",
-    value: "244K tasks/sec",
+    value: "109K tasks/sec",
     color: "from-blue-400 to-purple-500",
   },
   {
     label: "Event Handling",
-    value: "246K events/sec",
+    value: "131K events/sec",
     color: "from-purple-400 to-pink-500",
   },
   {
-    label: "Resource Init",
-    value: "59.7K resources/sec",
+    label: "Resource Inits",
+    value: "20K inits/sec",
     color: "from-pink-400 to-red-500",
   },
 ];
@@ -262,7 +262,7 @@ export const benchmarks = [
 export const whyChooseFeatures = [
   "No magic, no surprises — explicit beats implicit",
   "TypeScript-first with zero compromise on type safety",
-  "High performance — 2.49M+ tasks per second",
+  "High performance — 2.51M+ tasks per second",
   "Enterprise ready with graceful shutdown & error boundaries",
   "Structured logging, caching, retry, and timeouts built-in",
   "Functional style with simple dependency injection",

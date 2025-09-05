@@ -113,7 +113,6 @@ const features = [
     details: [
       "Execute tasks with custom inputs",
       "JavaScript expression evaluation",
-      "Pure mode bypass for testing",
       "Real-time execution feedback",
     ],
   },

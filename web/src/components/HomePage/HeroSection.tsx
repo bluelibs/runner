@@ -64,7 +64,7 @@ const HeroSection: React.FC = () => {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8 sm:gap-12 mb-20 sm:mb-28">
             <div className="text-center">
               <div className="text-2xl sm:text-3xl font-bold text-blue-600 dark:text-blue-400">
-                2.49M
+                2.5M
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 Tasks/sec

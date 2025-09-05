@@ -12,149 +12,17 @@ import {
 } from "lucide-react";
 import CodeBlock from "../components/CodeBlock";
 import Meta from "../components/Meta";
+import { benchmarkCategories, benchmarkData } from "../constants/benchmarkData";
 
 const BenchmarksPage: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState("core");
 
-  const benchmarkCategories = [
-    { id: "core", label: "Core Operations", icon: Zap },
-    { id: "middleware", label: "Middleware", icon: Settings },
-    { id: "events", label: "Events", icon: MessageSquare },
-    { id: "resources", label: "Resources", icon: Database },
-    { id: "memory", label: "Memory", icon: HardDrive },
-  ];
-
-  const benchmarkData = {
-    core: [
-      {
-        name: "Lightning Fast Tasks",
-        value: "2.49M",
-        unit: "tasks/sec",
-        description: "Execute tasks at incredible speed",
-        details: "Just 0.0004ms per task - faster than most alternatives",
-        color: "from-green-400 to-blue-500",
-      },
-      {
-        name: "Smart Dependencies",
-        value: "1.8M",
-        unit: "tasks/sec",
-        description: "Automatic dependency injection with minimal overhead",
-        details: "Get what you need, when you need it",
-        color: "from-blue-400 to-purple-500",
-      },
-      {
-        name: "Complex Apps Made Simple",
-        value: "683",
-        unit: "apps/sec",
-        description: "Handle complex dependency trees effortlessly",
-        details: "10-level deep dependencies resolved in ~1.47ms",
-        color: "from-purple-400 to-pink-500",
-      },
-    ],
-    middleware: [
-      {
-        name: "Nearly Zero Overhead",
-        value: "1.9M",
-        unit: "tasks/sec",
-        description: "Add middleware without slowing down",
-        details: "Just 0.0003ms overhead per middleware layer",
-        color: "from-green-400 to-blue-500",
-      },
-      {
-        name: "Stack Multiple Layers",
-        value: "100K",
-        unit: "tasks/sec",
-        description: "Chain multiple middleware without performance penalty",
-        details: "5 middleware layers with minimal impact",
-        color: "from-blue-400 to-purple-500",
-      },
-      {
-        name: "Built-in Caching",
-        value: "69%",
-        unit: "faster",
-        description: "Automatic performance boost with intelligent caching",
-        details: "1.69x speedup for repeated operations",
-        color: "from-purple-400 to-pink-500",
-      },
-    ],
-    events: [
-      {
-        name: "Reactive & Fast",
-        value: "102K",
-        unit: "events/sec",
-        description: "Handle events in real-time with ease",
-        details: "Lightning-fast event processing at ~0.01ms per event",
-        color: "from-green-400 to-blue-500",
-      },
-      {
-        name: "Reliable Event Handling",
-        value: "100%",
-        unit: "success rate",
-        description: "Every event gets handled, guaranteed",
-        details: "500 handlers executed without a single miss",
-        color: "from-blue-400 to-purple-500",
-      },
-      {
-        name: "Batch Processing",
-        value: "4.88",
-        unit: "ms for 500 events",
-        description: "Process hundreds of events in milliseconds",
-        details: "Efficient batch processing for high-volume scenarios",
-        color: "from-purple-400 to-pink-500",
-      },
-    ],
-    resources: [
-      {
-        name: "Instant Startup",
-        value: "31K",
-        unit: "resources/sec",
-        description: "Get your app running immediately",
-        details: "Resources initialize in just 0.032ms each",
-        color: "from-green-400 to-blue-500",
-      },
-      {
-        name: "Scale Without Worry",
-        value: "3.21",
-        unit: "ms for 100 resources",
-        description: "Handle hundreds of components effortlessly",
-        details: "100 resources ready in just 3.21 milliseconds",
-        color: "from-blue-400 to-purple-500",
-      },
-      {
-        name: "Production Ready",
-        value: "100+",
-        unit: "components",
-        description: "Built for real-world applications",
-        details: "Tested with large-scale component architectures",
-        color: "from-purple-400 to-pink-500",
-      },
-    ],
-    memory: [
-      {
-        name: "Lightweight Framework",
-        value: "5.54",
-        unit: "MB overhead",
-        description: "Minimal memory footprint for maximum performance",
-        details: "Just 5.54MB to bootstrap 100 components",
-        color: "from-green-400 to-blue-500",
-      },
-      {
-        name: "Self-Cleaning",
-        value: "8.29",
-        unit: "MB freed",
-        description: "Automatic memory cleanup after execution",
-        details: "Framework cleans up after itself - no memory leaks",
-        color: "from-blue-400 to-purple-500",
-      },
-      {
-        name: "Production Efficient",
-        value: "168",
-        unit: "MB total",
-        description: "Efficient memory usage in real applications",
-        details: "Stable memory consumption with 100+ components",
-        color: "from-purple-400 to-pink-500",
-      },
-    ],
+  const iconMap = {
+    Zap,
+    Settings,
+    MessageSquare,
+    Database,
+    HardDrive,
   };
 
   // Note: We intentionally avoid cross-framework comparison tables here.
@@ -190,20 +58,23 @@ const BenchmarksPage: React.FC = () => {
 
         {/* Category Selector */}
         <div className="flex flex-wrap justify-center gap-2 mb-12">
-          {benchmarkCategories.map((category) => (
-            <button
-              key={category.id}
-              onClick={() => setSelectedCategory(category.id)}
-              className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 cursor-pointer ${
-                selectedCategory === category.id
-                  ? "bg-blue-600 text-white shadow-lg"
-                  : "bg-white/10 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 hover:bg-white/20 dark:hover:bg-gray-700/50"
-              }`}
-            >
-              <category.icon className="w-4 h-4" />
-              <span>{category.label}</span>
-            </button>
-          ))}
+          {benchmarkCategories.map((category) => {
+            const IconComponent = iconMap[category.icon as keyof typeof iconMap];
+            return (
+              <button
+                key={category.id}
+                onClick={() => setSelectedCategory(category.id)}
+                className={`flex items-center space-x-2 px-4 py-2 rounded-lg font-medium transition-all duration-200 cursor-pointer ${
+                  selectedCategory === category.id
+                    ? "bg-blue-600 text-white shadow-lg"
+                    : "bg-white/10 dark:bg-gray-800/50 text-gray-700 dark:text-gray-300 hover:bg-white/20 dark:hover:bg-gray-700/50"
+                }`}
+              >
+                <IconComponent className="w-4 h-4" />
+                <span>{category.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         {/* Benchmark Results */}

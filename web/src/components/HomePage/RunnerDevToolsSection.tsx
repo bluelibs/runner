@@ -203,9 +203,6 @@ const RunnerDevToolsSection: React.FC = () => {
                 npm install -g @bluelibs/runner-dev
               </code>
             </p>
-            <div className="mt-16">
-              <RunnerDevUrlCards variant="full" />
-            </div>
           </div>
         </div>
       </div>

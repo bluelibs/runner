@@ -25,7 +25,8 @@ const Footer: React.FC = () => {
               {/* <div className="w-8 h-8 bg-white rounded-lg flex items-center justify-center">
                 <span className="text-black font-semibold text-sm">R</span>
               </div> */}
-              <span className="text-2xl font-semibold text-white">Runner</span>
+              <img src="/logo.png" alt="Runner Logo" className="w-8 h-8" />
+              <span className="text-2xl font-semibold text-white">runner</span>
             </div>
             <p className="text-gray-400 max-w-sm mb-8 leading-relaxed">
               TypeScript-first framework for functional programming with simple
