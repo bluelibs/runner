@@ -260,10 +260,18 @@ export class Store {
     }
   }
 
+  /**
+   * Internal, avoid using this method directly.
+   */
   public processOverrides() {
     this.overrideManager.processOverrides();
   }
 
+  /**
+   * Internal, avoid using this method directly.
+   * @param item
+   * @returns
+   */
   public storeGenericItem<C>(item: RegisterableItems) {
     return this.registry.storeGenericItem<C>(item);
   }
@@ -273,11 +281,16 @@ export class Store {
    * @param tag - The tag to filter by.
    * @returns The tasks with the given tag.
    */
-  public getTasksWithTag(tag: string | ITag) {
+  public getTasksWithTag(tag: string | ITag<any, any, any>) {
     return this.registry.getTasksWithTag(tag);
   }
 
-  public getResourcesWithTag(tag: string | ITag) {
+  /**
+   * Returns all resources with the given tag.
+   * @param tag - The tag to filter by.
+   * @returns The resources with the given tag.
+   */
+  public getResourcesWithTag(tag: string | ITag<any, any, any>) {
     return this.registry.getResourcesWithTag(tag);
   }
 }
