@@ -33,7 +33,21 @@ export class PlatformAdapter implements IPlatformAdapter {
 
   async init() {
     if (this.env === "node") {
-      this.nodeALSClass = (await import("node:async_hooks")).AsyncLocalStorage;
+      const buildFormat =
+        typeof __BUILD_FORMAT__ !== "undefined" ? __BUILD_FORMAT__ : undefined;
+
+      // 1) Prefer per-bundle static branching; dead code eliminated in builds
+      if (typeof buildFormat !== "undefined") {
+        if (buildFormat === "cjs") {
+          const mod = require("node:async_hooks");
+          this.nodeALSClass = mod.AsyncLocalStorage;
+        }
+      } else {
+        // 2) Fallback for source imports, most likely running through ts-node
+        this.nodeALSClass = (
+          await import("node:async_hooks")
+        ).AsyncLocalStorage;
+      }
     }
   }
 
