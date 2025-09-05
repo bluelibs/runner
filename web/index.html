@@ -27,7 +27,7 @@
     <link rel="icon" href="/favicon.svg?v=3" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <!-- Google tag (gtag.js) -->
+    <!-- Google tag (gtag.js) with consent mode -->
     <script
       async
       src="https://www.googletagmanager.com/gtag/js?id=G-TRRM2KSZKE"
@@ -38,6 +38,11 @@
         dataLayer.push(arguments);
       }
       gtag("js", new Date());
+
+      // Set default consent to denied (no tracking until user opts in)
+      gtag("consent", "default", {
+        analytics_storage: "denied"
+      });
 
       gtag("config", "G-TRRM2KSZKE");
     </script>
