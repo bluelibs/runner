@@ -1,3 +1,5 @@
+import { detectEnvironment } from "./platform";
+
 /**
  * Base error class for all BlueLibs Runner errors
  */
@@ -189,7 +191,7 @@ export class EventEmissionCycleError extends RuntimeError {
 export class PlatformUnsupportedFunction extends RuntimeError {
   constructor(functionName: string) {
     super(
-      `Platform function not supported in this environment: ${functionName}`,
+      `Platform function not supported in this environment: ${functionName}. Detected platform: ${detectEnvironment()}.`,
     );
     this.name = "PlatformUnsupportedFunction";
   }
