@@ -1,0 +1,5 @@
+node_modules
+.dist
+/dist
+.env
+/repomix-output.xml
