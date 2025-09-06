@@ -11,8 +11,8 @@ npm install @bluelibs/runner
 - Auto‑detects platform at runtime. In browsers, `exit()` is unsupported and throws. Env reads use `globalThis.__ENV__`, `process.env`, or `globalThis.env`.
 
 ```ts
-import { setPlatform, BrowserPlatformAdapter } from "@bluelibs/runner/platform";
-setPlatform(new BrowserPlatformAdapter());
+import { setPlatform, PlatformAdapter } from "@bluelibs/runner/platform";
+setPlatform(new PlatformAdapter("browser"));
 //
 globalThis.__ENV__ = { API_URL: "https://example.test" };
 ```
@@ -184,11 +184,9 @@ import { globals, task } from "@bluelibs/runner";
 
 const critical = task({
   id: "app.tasks.critical",
-  meta: {
-    tags: [
-      globals.tags.debug.with({ logTaskInput: true, logTaskResult: true }),
-    ],
-  },
+  tags: [
+    globals.tags.debug.with({ logTaskInput: true, logTaskOutput: true }),
+  ],
   run: async () => "ok",
 });
 ```
@@ -202,7 +200,7 @@ const logsExtension = resource({
   id: "app.logs",
   dependencies: { logger: globals.resources.logger },
   init: async (_, { logger }) => {
-    logger.info("test", { data }); // "trace", "debug", "info", "warn", "error", "critical"
+    logger.info("test", { example: 123 }); // "trace", "debug", "info", "warn", "error", "critical"
     const sublogger = logger.with({
       source: "app.logs",
       context: {},
@@ -212,6 +210,47 @@ const logsExtension = resource({
     });
   },
 });
+```
+
+## AWS Lambda
+
+- Cache the runner between warm invocations; do not dispose on each call.
+- Disable shutdown hooks (`shutdownHooks: false`) and enable the error boundary.
+- Provide a request-scoped context per invocation via `createContext`.
+- Parse API Gateway v1/v2 events (handle `requestContext.http.method`/`rawPath` and `httpMethod`/`path`) and base64 bodies.
+- Optionally set `context.callbackWaitsForEmptyEventLoop = false` when using long‑lived connections.
+
+Example outline:
+
+```ts
+// bootstrap.ts
+import { resource, task, run, createContext } from "@bluelibs/runner";
+export const RequestCtx: any = createContext("app.http.request");
+// define resources & tasks...
+let rrPromise: Promise<any> | null = null;
+export async function getRunner() {
+  if (!rrPromise) {
+    rrPromise = run(app, { shutdownHooks: false, errorBoundary: true });
+  }
+  return rrPromise;
+}
+
+// handler.ts
+export const handler = async (event: any, context: any) => {
+  const rr: any = await getRunner();
+  const method = event?.requestContext?.http?.method ?? event?.httpMethod ?? "GET";
+  const path = event?.rawPath || event?.path || "/";
+  const rawBody = event?.body
+    ? event.isBase64Encoded
+      ? Buffer.from(event.body, "base64").toString("utf8")
+      : event.body
+    : undefined;
+  const body = rawBody ? JSON.parse(rawBody) : undefined;
+
+  return RequestCtx.provide({ requestId: context?.awsRequestId ?? "local", method, path }, async () => {
+    // route and call rr.runTask(...)
+  });
+};
 ```
 
 ## Middleware (global or local)

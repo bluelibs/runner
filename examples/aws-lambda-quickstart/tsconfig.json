@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022"],
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "noEmitOnError": true,
+    "baseUrl": ".",
+    "paths": {
+      "@bluelibs/runner": ["../../dist"]
+    }
+  },
+  "include": ["src"],
+  "exclude": ["../../dist/**", "../../../dist/**", "node_modules", "../../node_modules"]
+}

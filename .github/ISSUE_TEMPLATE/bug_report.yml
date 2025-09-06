@@ -1,0 +1,94 @@
+name: Bug report
+description: Something isn’t working as expected
+title: "[Bug]: "
+labels: [bug, triage]
+body:
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      description: Help us help you faster by checking these.
+      options:
+        - label: I’ve searched existing issues and discussions for duplicates
+          required: true
+        - label: I’ve read the docs and FAQs
+          required: false
+        - label: I can reproduce this with the latest version
+          required: false
+  - type: input
+    id: version
+    attributes:
+      label: Runner version
+      description: Output of `npm ls @bluelibs/runner` or your package.json version.
+      placeholder: "e.g. 4.0.0"
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Tell us where this happens.
+      placeholder: |
+        - OS: macOS 14.5 / Ubuntu 22.04 / Windows 11
+        - Node.js: 20.11.0
+        - Package manager: npm 10 / pnpm 9 / yarn 4
+        - Frameworks: (e.g. Express 4, Fastify 4, Next.js 14)
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: |
+        Link to a minimal GitHub repo or a short code snippet that reproduces the issue.
+        Issues without a minimal repro are much harder to fix.
+      placeholder: "https://github.com/yourname/runner-repro (or paste minimal code)"
+      render: bash
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Step-by-step instructions to trigger the issue.
+      placeholder: |
+        1. Setup ...
+        2. Run ...
+        3. Observe ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      placeholder: Tell us what you expected to happen.
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+      placeholder: Tell us what actually happened.
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and stack traces
+      description: Paste relevant logs. Use code fences for readability.
+      placeholder: |
+        ```
+        <paste logs here>
+        ```
+      render: shell
+    validations:
+      required: false
+  - type: input
+    id: link
+    attributes:
+      label: Related link(s)
+      description: Docs pages, PRs, or similar issues.
+      placeholder: "https://..."
+    validations:
+      required: false
+

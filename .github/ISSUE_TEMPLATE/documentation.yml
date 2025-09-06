@@ -1,0 +1,34 @@
+name: Documentation issue
+description: Report a typo, gap, or confusing doc
+title: "[Docs]: "
+labels: [documentation]
+body:
+  - type: input
+    id: page
+    attributes:
+      label: Page or link
+      description: The doc page or section that needs work.
+      placeholder: "https://bluelibs.github.io/runner/..."
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What’s confusing or missing?
+      placeholder: Be clear and specific.
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement
+      placeholder: Propose wording, examples, or structure changes.
+    validations:
+      required: false
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots or snippets
+      description: Optional visuals to clarify the issue.
+    validations:
+      required: false

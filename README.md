@@ -95,8 +95,6 @@ const { dispose, getResourceValue, runTask, emitEvent } = await run(app);
 const { dispose } = await run(app, { debug: "verbose" });
 ```
 
-> **runtime:** "'Less lines than Hello World.' Incredible. All you had to do was externalize 90% of the work into `express`, Node, and me. But please, bask in the brevity. I’ll be over here negotiating a peace treaty between your dependency tree and reality."
-
 ### Platform & Async Context
 
 Runner auto-detects the platform and adapts behavior at runtime. The only feature present only in Node.js is the use of `AsyncLocalStorage` for managing async context.
@@ -142,8 +140,6 @@ Look, we get it. You could turn every function into a task, but that's like usin
 - It's performance-critical and doesn't need DI overhead
 
 Think of tasks as the "main characters" in your application story, not every single line of dialogue.
-
-> **runtime:** "'Pure-ish.' Like diet chaos. Zero calories, full aftertaste. You stapled dependencies to a function and called it virtuous. It's fine. I’ll keep the receipts while you roleplay purity with side effects in a trench coat."
 
 ### Resources
 
@@ -235,8 +231,6 @@ const dbResource = resource({
   },
 });
 ```
-
-> **runtime:** "Singletons: global variables with a nicer haircut. You ban globals, then create 'resources' that live forever and hold the keys to everything. At least there's a `dispose()`. I’ll believe you use it when I stop finding zombie sockets haunting the process."
 
 ### Events
 
@@ -580,7 +574,7 @@ const loggedTask = task({
 });
 ```
 
-> **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'. I'll keep unwrapping until we hit the single lonely `return` you were hiding like state secrets."
+> **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'."
 
 ### Tags
 
@@ -3206,6 +3200,7 @@ This is part of the [BlueLibs](https://www.bluelibs.com) ecosystem. We're not tr
 - [GitHub Repository](https://github.com/bluelibs/runner) - ⭐ if you find this useful
 - [Documentation](https://bluelibs.github.io/runner/) - When you need the full details
 - [Issues](https://github.com/bluelibs/runner/issues) - When something breaks (or you want to make it better)
+- [Contributing](./CONTRIBUTING.md) - How to file great issues and PRs
 
 _P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still different._
 

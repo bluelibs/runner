@@ -1,0 +1,19 @@
+{
+  "name": "aws-lambda-quickstart",
+  "version": "0.1.0",
+  "private": true,
+  "type": "commonjs",
+  "description": "QuickStart showing @bluelibs/runner with AWS Lambda (lambdalith and per-route).",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "start": "npm run build && node dist/local-runner.js",
+    "test": "npm run start"
+  },
+  "dependencies": {
+    "@bluelibs/runner": "^4.5.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  }
+}

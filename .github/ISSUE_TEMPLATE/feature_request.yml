@@ -1,0 +1,49 @@
+name: Feature request
+description: Propose an idea to improve Runner
+title: "[Feature]: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem to solve
+      description: What’s the pain or limitation?
+      placeholder: "When I try to ..., I can’t ... which means ..."
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Be as specific as possible. APIs, options, behavior.
+      placeholder: |
+        - New API / option names
+        - Example usage
+        - Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: What else did you try? Why not sufficient?
+      placeholder: List any workarounds or other libraries.
+    validations:
+      required: false
+  - type: textarea
+    id: impact
+    attributes:
+      label: Use cases and impact
+      description: Who benefits and how common is this need?
+      placeholder: "This helps ... in scenarios like ..."
+    validations:
+      required: true
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope and compatibility
+      options:
+        - label: This change is backwards compatible
+        - label: I’m willing to help implement this
+        - label: I can help test and provide feedback
+
