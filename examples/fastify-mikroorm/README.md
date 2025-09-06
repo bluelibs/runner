@@ -1,4 +1,4 @@
-# clearspec-attempt
+# fastify-mikroorm
 
 Minimal app built with @bluelibs/runner, Fastify and MikroORM (PostgreSQL). It includes a dev portal (Runner Dev) and a tiny Users feature with a GET /users route, plus simple authentication (register/login, cookie or Bearer).
 
