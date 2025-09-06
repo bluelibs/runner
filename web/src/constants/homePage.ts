@@ -16,6 +16,16 @@ import {
   MessageSquare,
   GitBranch,
   Tag,
+  Search,
+  PlayCircle,
+  Bot,
+  Activity,
+  RotateCcw,
+  FileText,
+  Terminal,
+  Shield,
+  Eye,
+  Link,
 } from "lucide-react";
 
 export const authorQuotes: string[] = [
@@ -271,14 +281,14 @@ export const whyChooseFeatures = [
 ];
 
 export const devToolsFeatures = [
-  "GraphQL API for deep introspection",
-  "GraphQL + Voyager Playground",
-  "MCP server for AI assistant integration",
-  "Real-time performance monitoring",
-  "Hot-swapping function replacement",
-  "Live logging and event tracking",
-  "CLI tools with scaffolding support",
-  "Custom diagnostics and health checks",
-  "In-browser file preview and editing",
-  "Correlation ID tracking for debugging",
+  { icon: Search, text: "GraphQL API for deep introspection" },
+  { icon: PlayCircle, text: "GraphQL + Voyager Playground" },
+  { icon: Bot, text: "MCP server for AI assistant integration" },
+  { icon: Activity, text: "Real-time performance monitoring" },
+  { icon: RotateCcw, text: "Hot-swapping function replacement" },
+  { icon: FileText, text: "Live logging and event tracking" },
+  { icon: Terminal, text: "CLI tools with scaffolding support" },
+  { icon: Shield, text: "Custom diagnostics and health checks" },
+  { icon: Eye, text: "In-browser file preview and editing" },
+  { icon: Link, text: "Correlation ID tracking for debugging" },
 ];

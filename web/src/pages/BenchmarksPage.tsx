@@ -47,7 +47,7 @@ const BenchmarksPage: React.FC = () => {
           </div>
           <h1 className="text-5xl sm:text-6xl md:text-7xl font-bold text-gray-900 dark:text-white mb-8 tracking-tighter">
             Performance
-            <span className="gradient-text"> Benchmarks</span>
+            <span className=""> Benchmarks</span>
           </h1>
           <p className="text-xl text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
             These aren't marketing numbers. They're real benchmarks from our
@@ -59,7 +59,8 @@ const BenchmarksPage: React.FC = () => {
         {/* Category Selector */}
         <div className="flex flex-wrap justify-center gap-2 mb-12">
           {benchmarkCategories.map((category) => {
-            const IconComponent = iconMap[category.icon as keyof typeof iconMap];
+            const IconComponent =
+              iconMap[category.icon as keyof typeof iconMap];
             return (
               <button
                 key={category.id}
@@ -117,9 +118,10 @@ const BenchmarksPage: React.FC = () => {
               External Benchmarks
             </h2>
             <p className="text-gray-600 dark:text-gray-300 max-w-3xl mx-auto">
-              For HTTP framework performance (hello world/JSON), see community-maintained
-              benchmarks. These measure web servers under specific setups and are not
-              directly comparable to Runner’s task throughput.
+              For HTTP framework performance (hello world/JSON), see
+              community-maintained benchmarks. These measure web servers under
+              specific setups and are not directly comparable to Runner’s task
+              throughput.
             </p>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -133,7 +135,8 @@ const BenchmarksPage: React.FC = () => {
                 Fastify Benchmarks (GitHub)
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-300">
-                Comparative Node.js HTTP framework results with methodology and scripts.
+                Comparative Node.js HTTP framework results with methodology and
+                scripts.
               </div>
             </a>
             <a
@@ -146,7 +149,8 @@ const BenchmarksPage: React.FC = () => {
                 TechEmpower Framework Benchmarks
               </div>
               <div className="text-sm text-gray-600 dark:text-gray-300">
-                Large, standardized cross-language web framework benchmarks; results vary by test.
+                Large, standardized cross-language web framework benchmarks;
+                results vary by test.
               </div>
             </a>
           </div>

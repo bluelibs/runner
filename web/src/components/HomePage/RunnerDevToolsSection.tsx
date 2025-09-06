@@ -171,7 +171,10 @@ const RunnerDevToolsSection: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {devToolsFeatures.map((feature, index) => (
               <div key={index} className="flex items-center space-x-3">
-                <span className="text-lg">{feature}</span>
+                <div className="w-5 h-5 flex items-center justify-center flex-shrink-0">
+                  <feature.icon className="w-4 h-4 text-gray-500 dark:text-gray-400" />
+                </div>
+                <span className="text-sm text-gray-700 dark:text-gray-300">{feature.text}</span>
               </div>
             ))}
           </div>

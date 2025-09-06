@@ -10,14 +10,14 @@ import PlaygroundPage from "./pages/PlaygroundPage";
 import Footer from "./components/Footer";
 import ScrollToTop from "./components/ScrollToTop";
 import NotFoundPage from "./pages/NotFoundPage";
-import Cursor from "./cursor";
+import Cursor from "./CustomCursor";
 import { ConsentProvider } from "./contexts/ConsentContext";
 import ConsentBanner from "./components/ConsentBanner";
 
 // Type declaration for gtag
 declare global {
   interface Window {
-    gtag?: (...args: any[]) => void;
+    gtag?: (...args: unknown[]) => void;
   }
 }
 
@@ -30,9 +30,9 @@ function App() {
 
   const handleConsentChange = (hasConsent: boolean) => {
     // Update gtag consent when user makes a choice
-    if (typeof window !== 'undefined' && window.gtag) {
-      window.gtag('consent', 'update', {
-        'analytics_storage': hasConsent ? 'granted' : 'denied'
+    if (typeof window !== "undefined" && window.gtag) {
+      window.gtag("consent", "update", {
+        analytics_storage: hasConsent ? "granted" : "denied",
       });
     }
   };
