@@ -1,4 +1,5 @@
 import { Context, ContextError } from "../context";
+import { authMiddlewares } from "./auth";
 import { cacheMiddleware } from "./middleware/cache.middleware";
 import { requireContextTaskMiddleware } from "./middleware/requireContext.middleware";
 import {
@@ -26,4 +27,5 @@ export const globalMiddlewares = {
     retry: retryResourceMiddleware,
     timeout: timeoutResourceMiddleware,
   },
+  auth: authMiddlewares,
 };

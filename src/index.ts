@@ -13,6 +13,7 @@ import { globalEvents } from "./globals/globalEvents";
 import { globalResources } from "./globals/globalResources";
 import { globalMiddlewares } from "./globals/globalMiddleware";
 import { globalTags } from "./globals/globalTags";
+import { globalTasks } from "./globals/globalTasks";
 import { run } from "./run";
 import { createTestResource } from "./testing";
 
@@ -21,6 +22,8 @@ const globals = {
   resources: globalResources,
   middleware: globalMiddlewares,
   tags: globalTags,
+  middlewares: globalMiddlewares,
+  tasks: globalTasks,
 };
 
 export { globals };
