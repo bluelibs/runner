@@ -17,6 +17,9 @@
     "skipLibCheck": true
   },
 
-  "include": ["src/**/*.ts"],
+  "include": [
+    "src/**/*.ts",
+    "examples/aws-lambda-quickstart/aws-lambda-quickstart.test.ts"
+  ],
   "exclude": ["examples/**", "web/**"]
 }

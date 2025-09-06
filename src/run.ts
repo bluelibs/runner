@@ -38,7 +38,8 @@ export async function run<C, V extends Promise<any>>(
     | IResource<{ [K in any]?: any }, V, any, any>, // For optional config
   options?: RunOptions,
 ): Promise<RunResult<V extends Promise<infer U> ? U : V>> {
-  await platform.init(); // ensure platform is initialized
+  // Import all necessary elements based on platform.
+  await platform.init();
   const {
     debug = undefined,
     logs = {},
