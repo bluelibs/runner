@@ -10,7 +10,6 @@ import PlaygroundPage from "./pages/PlaygroundPage";
 import Footer from "./components/Footer";
 import ScrollToTop from "./components/ScrollToTop";
 import NotFoundPage from "./pages/NotFoundPage";
-import Cursor from "./CustomCursor";
 import { ConsentProvider } from "./contexts/ConsentContext";
 import ConsentBanner from "./components/ConsentBanner";
 
@@ -41,7 +40,6 @@ function App() {
     <ConsentProvider>
       <Router>
         <div className="min-h-screen bg-white dark:bg-black dark">
-          <Cursor />
           <ScrollToTop />
           <Navbar darkMode={true} toggleDarkMode={() => {}} />
           <main id="main-content">

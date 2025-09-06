@@ -5,20 +5,20 @@ const platforms = [
     name: "Node.js",
     icon: Server,
     description: "Server-side applications, APIs, and microservices",
-    color: "from-green-500 to-emerald-600"
+    color: "from-green-500 to-emerald-600",
   },
   {
     name: "Browser",
     icon: Globe,
     description: "Client-side web applications and SPAs",
-    color: "from-blue-500 to-cyan-600"
+    color: "from-blue-500 to-cyan-600",
   },
   {
     name: "Edge/Universal",
     icon: Zap,
     description: "Edge functions, serverless, and universal runtime",
-    color: "from-purple-500 to-violet-600"
-  }
+    color: "from-purple-500 to-violet-600",
+  },
 ];
 
 const PlatformsSection: React.FC = () => {
@@ -34,7 +34,7 @@ const PlatformsSection: React.FC = () => {
             <p className="text-gray-600 dark:text-gray-400 mb-10">
               One framework, every platform
             </p>
-            
+
             <div className="grid grid-cols-3 gap-6">
               {platforms.map((platform, index) => (
                 <div key={index} className="flex flex-col items-center group">
@@ -52,12 +52,12 @@ const PlatformsSection: React.FC = () => {
           {/* Designed for Humans and AI Section */}
           <div className="text-center">
             <h3 className="text-3xl font-bold text-gray-900 dark:text-white mb-3">
-              Designed for Humans and AI
+              For Humans and AI
             </h3>
             <p className="text-gray-600 dark:text-gray-400 mb-10">
               Built with both in mind
             </p>
-            
+
             <div className="grid grid-cols-3 gap-6">
               <div className="flex flex-col items-center group">
                 <div className="w-16 h-16 bg-gray-100 dark:bg-gray-800 rounded-2xl flex items-center justify-center mb-3 group-hover:bg-gray-200 dark:group-hover:bg-gray-700 transition-colors duration-200">

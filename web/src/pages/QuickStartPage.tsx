@@ -189,7 +189,7 @@ const { dispose } = await run(app);`,
                 href={example.link}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="card p-6 hover:scale-105 transition-transform duration-200 cursor-pointer"
+                className="card p-6 hover:scale-105 transition-transform duration-200"
               >
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
                   {example.title}
@@ -220,7 +220,8 @@ const { dispose } = await run(app);`,
                   Start with debug mode
                 </h3>
                 <p className="text-gray-600 dark:text-gray-300 mb-3">
-                  Use debug mode to see exactly what's happening during development.
+                  Use debug mode to see exactly what's happening during
+                  development.
                 </p>
                 <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3">
                   <code className="text-sm text-gray-800 dark:text-gray-200">
@@ -239,7 +240,8 @@ const { dispose } = await run(app);`,
                   Test your tasks
                 </h3>
                 <p className="text-gray-600 dark:text-gray-300 mb-3">
-                  Tasks are just functions! Test them directly with mock dependencies.
+                  Tasks are just functions! Test them directly with mock
+                  dependencies.
                 </p>
                 <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3">
                   <code className="text-sm text-gray-800 dark:text-gray-200">
@@ -258,7 +260,8 @@ const { dispose } = await run(app);`,
                   Use TypeScript
                 </h3>
                 <p className="text-gray-600 dark:text-gray-300">
-                  Runner is TypeScript-first. You'll get amazing IntelliSense and catch errors at compile time.
+                  Runner is TypeScript-first. You'll get amazing IntelliSense
+                  and catch errors at compile time.
                 </p>
               </div>
             </div>

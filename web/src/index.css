@@ -37,7 +37,6 @@
 @layer base {
   * {
     box-sizing: border-box;
-    cursor: none !important;
   }
 
   html {
@@ -60,7 +59,17 @@
   [class*="cursor-pointer"],
   a:active,
   button:active {
-    /* Cursor styles handled by global cursor setting */
+    cursor: pointer;
+  }
+
+  p,
+  span,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5 {
+    cursor: default;
   }
 
   .text-blue-800,
