@@ -23,10 +23,14 @@ function json(statusCode: number, body: unknown): APIGatewayProxyResult {
 const CreateUserSchema = z.object({ name: z.string().min(1) });
 const GetUserSchema = z.object({ id: z.string().min(1) });
 
-export const handler = async (event: any, context: any): Promise<APIGatewayProxyResult> => {
-  const rr: any = await getRunner();
+export const handler = async (
+  event: any,
+  context: any,
+): Promise<APIGatewayProxyResult> => {
+  const rr = await getRunner();
 
-  const method = event?.requestContext?.http?.method ?? event?.httpMethod ?? "GET";
+  const method =
+    event?.requestContext?.http?.method ?? event?.httpMethod ?? "GET";
   const path = event?.rawPath || event?.path || "/";
   const headers = event?.headers || {};
   const rawBody = event?.body
@@ -57,7 +61,10 @@ export const handler = async (event: any, context: any): Promise<APIGatewayProxy
           const id = path.split("/").pop()!;
           const parsed = GetUserSchema.safeParse({ id });
           if (!parsed.success) {
-            return json(400, { message: "Invalid id", issues: parsed.error.issues });
+            return json(400, {
+              message: "Invalid id",
+              issues: parsed.error.issues,
+            });
           }
           const user = await rr.runTask(getUser, parsed.data);
           return user ? json(200, user) : json(404, { message: "Not found" });
@@ -66,7 +73,10 @@ export const handler = async (event: any, context: any): Promise<APIGatewayProxy
         if (method === "POST" && path === "/users") {
           const parsed = CreateUserSchema.safeParse({ name: body?.name });
           if (!parsed.success) {
-            return json(400, { message: "Invalid body", issues: parsed.error.issues });
+            return json(400, {
+              message: "Invalid body",
+              issues: parsed.error.issues,
+            });
           }
           const created = await rr.runTask(createUser, parsed.data);
           return json(201, created);

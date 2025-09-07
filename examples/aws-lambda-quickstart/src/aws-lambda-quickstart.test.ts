@@ -101,7 +101,7 @@ describe("examples/aws-lambda-quickstart", () => {
       makeCtx(),
     );
     expect(res.statusCode).toBe(204);
-    expect(res.headers["Access-Control-Allow-Origin"]).toBe("*");
+    expect(res.headers?.["Access-Control-Allow-Origin"]).toBe("*");
   });
 
   it("validation: createUser returns 400 when name missing", async () => {

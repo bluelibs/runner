@@ -1,6 +1,12 @@
 // In this repository example we import from the local build output.
 // In a real project, use: import { resource, task, run, createContext } from "@bluelibs/runner";
-import { resource, task, run, createContext } from "@bluelibs/runner";
+import {
+  resource,
+  task,
+  run,
+  createContext,
+  RunResult,
+} from "@bluelibs/runner";
 
 // Keep it simple for local example typing; real apps should type this
 export const RequestCtx: any = createContext("app.http.request");
@@ -44,7 +50,8 @@ export const app = resource({
   register: [usersRepo, getUser, createUser],
 });
 
-let rrPromise: Promise<any> | null = null;
+let rrPromise: Promise<RunResult<void>> | null = null;
+
 export async function getRunner() {
   if (!rrPromise) {
     rrPromise = run(app, {
@@ -53,5 +60,6 @@ export async function getRunner() {
       logs: { printThreshold: "info", printStrategy: "json" },
     });
   }
+
   return rrPromise;
 }

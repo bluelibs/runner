@@ -2,12 +2,18 @@ import { handler as lambdalith } from "./handler.lambdalith";
 import { handler as getUser } from "./handlers/getUser";
 import { handler as createUser } from "./handlers/createUser";
 
+// Demo test run
+
 async function runLambdalith() {
   const ctx = { awsRequestId: "local-lith-1" };
 
   // Try GET before any user exists
   const notFound = await lambdalith(
-    { requestContext: { http: { method: "GET" } }, rawPath: "/users/1", headers: {} },
+    {
+      requestContext: { http: { method: "GET" } },
+      rawPath: "/users/1",
+      headers: {},
+    },
     ctx,
   );
   console.log("LITH GET /users/1 =>", notFound.statusCode, notFound.body);
@@ -29,7 +35,11 @@ async function runLambdalith() {
 
   // Fetch created user
   const fetched = await lambdalith(
-    { requestContext: { http: { method: "GET" } }, rawPath: `/users/${id}`, headers: {} },
+    {
+      requestContext: { http: { method: "GET" } },
+      rawPath: `/users/${id}`,
+      headers: {},
+    },
     ctx,
   );
   console.log(`LITH GET /users/${id} =>`, fetched.statusCode, fetched.body);

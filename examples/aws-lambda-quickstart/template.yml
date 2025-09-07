@@ -1,0 +1,68 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: aws-lambda-quickstart
+
+Globals:
+  Function:
+    Runtime: nodejs20.x
+    MemorySize: 256
+    Timeout: 10
+
+Resources:
+  # One Lambda to rule them all
+  Lambdalith:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handler.lambdalith.handler
+      CodeUri: .
+      Events:
+        AnyProxy:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Target: node20
+        Minify: false
+        Sourcemap: true
+        EntryPoints:
+          - src/handler.lambdalith.ts
+
+  # Optional: explicit per-route functions
+  CreateUserFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers/createUser.handler
+      CodeUri: .
+      Events:
+        CreateUser:
+          Type: HttpApi
+          Properties:
+            Path: /users
+            Method: POST
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Target: node20
+        EntryPoints:
+          - src/handlers/createUser.ts
+
+  GetUserFn:
+    Type: AWS::Serverless::Function
+    Properties:
+      Handler: handlers/getUser.handler
+      CodeUri: .
+      Events:
+        GetUser:
+          Type: HttpApi
+          Properties:
+            Path: /users/{id}
+            Method: GET
+    Metadata:
+      BuildMethod: esbuild
+      BuildProperties:
+        Target: node20
+        EntryPoints:
+          - src/handlers/getUser.ts

@@ -1,0 +1,37 @@
+service: aws-lambda-quickstart
+frameworkVersion: "4"
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  region: eu-central-1
+  environment:
+    NODE_OPTIONS: --enable-source-maps
+
+plugins:
+  - serverless-offline
+
+custom:
+  serverless-offline:
+    httpPort: 3050
+
+functions:
+  # Lambdalith that handles everything under /
+  lambdalith:
+    handler: src/handler.lambdalith.handler
+    events:
+      - httpApi: "* /{proxy+}"
+
+  # (Optional) Per-route handlers if you want separate Lambdas too:
+  getUser:
+    handler: src/handlers/getUser.handler
+    events:
+      - httpApi:
+          method: GET
+          path: /users/{id}
+  createUser:
+    handler: src/handlers/createUser.handler
+    events:
+      - httpApi:
+          method: POST
+          path: /users
