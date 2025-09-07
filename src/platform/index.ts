@@ -41,6 +41,11 @@ export class PlatformAdapter implements IPlatformAdapter {
         if (buildFormat === "cjs") {
           const mod = require("node:async_hooks");
           this.nodeALSClass = mod.AsyncLocalStorage;
+        } else {
+          // Do not try to "optimize" the if, logic here, as code gets tree-shaked due to buildformat constant.
+          // ESM bundle or any other declared format: use dynamic import
+          const mod = await import("node:async_hooks");
+          this.nodeALSClass = (mod as any).AsyncLocalStorage;
         }
       } else {
         // 2) Fallback for source imports, most likely running through ts-node
