@@ -549,6 +549,16 @@ describe("Platform Abstraction", () => {
       (global as any).__BUILD_FORMAT__ = originalValue;
     });
 
+    it("should work with require when module is mjs", async () => {
+      const originalValue = (global as any).__BUILD_FORMAT__;
+      (global as any).__BUILD_FORMAT__ = "mjs";
+
+      const platform = new PlatformAdapter("node");
+      await expect(platform.init()).resolves.toBe(undefined);
+
+      (global as any).__BUILD_FORMAT__ = originalValue;
+    });
+
     it("should test isUniversal utility", () => {
       // Mock universal environment (no Node.js, no browser, no WebWorker)
       const originalProcess = (globalThis as any).process;
