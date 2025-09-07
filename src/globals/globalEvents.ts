@@ -15,9 +15,7 @@ export const globalEvents = {
   /**
    * Emitted when the system is fully initialized and ready for work.
    */
-  ready: defineEvent<{
-    root: IResource<any, any, any, any, any, any, any>;
-  }>({
+  ready: defineEvent({
     id: "globals.events.ready",
     meta: {
       title: "System Ready",

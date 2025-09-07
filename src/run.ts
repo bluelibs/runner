@@ -161,13 +161,7 @@ export async function run<C, V extends Promise<any>>(
     eventManager.lock();
     await logger.lock();
 
-    await eventManager.emit(
-      globalEvents.ready,
-      {
-        root: store.root.resource,
-      },
-      "system",
-    );
+    await eventManager.emit(globalEvents.ready, undefined, "run");
 
     await boundedLogger.info("Runner online. Awaiting tasks and events.");
 
