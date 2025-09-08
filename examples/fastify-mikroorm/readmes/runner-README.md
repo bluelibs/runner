@@ -1333,7 +1333,7 @@ BlueLibs Runner achieves high performance while providing enterprise features:
 | Event System         | ~0.013ms             | Loose coupling, observability |
 | Middleware Chain     | ~0.0003ms/middleware | Cross-cutting concerns        |
 | Resource Management  | One-time init        | Singleton pattern, lifecycle  |
-| Built-in Caching     | 1.8x speedup         | Automatic optimization        |
+| Built-in Caching     | Variable speedup     | Automatic optimization        |
 
 **Bottom line**: The framework adds minimal overhead (~0.005ms per task) while providing significant architectural benefits.
 
