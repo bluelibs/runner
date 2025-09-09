@@ -5,9 +5,9 @@
  */
 import { task } from "@bluelibs/runner";
 import { z } from "zod";
-import { httpRoute } from "../../http/tags";
-import { db } from "../../db/resources";
-import { authorize } from "../../http/middleware/authorize.middleware";
+import { httpRoute } from "#/http/tags";
+import { db } from "#/db/resources";
+import { authorize } from "#/http/middleware/authorize.middleware";
 
 export interface ListAllUsersInput {
   // Define input fields

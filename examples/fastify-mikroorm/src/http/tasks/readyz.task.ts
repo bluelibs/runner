@@ -1,7 +1,7 @@
 import { task } from "@bluelibs/runner";
 import { z } from "zod";
-import { httpRoute } from "../tags";
-import { db } from "../../db/resources";
+import { httpRoute } from "#/http/tags";
+import { db } from "#/db/resources";
 
 export const readyz = task({
   id: "app.http.tasks.readyz",
@@ -20,4 +20,3 @@ export const readyz = task({
     return { status: "ok" as const };
   },
 });
-

@@ -3,7 +3,7 @@ import { db } from "./db.resource";
 import { User } from "./entities/user.entity";
 import { Post } from "./entities/post.entity";
 import { randomUUID } from "crypto";
-import { auth as authResource } from "../../users/resources/auth.resource";
+import { auth as authResource } from "#/users/resources/auth.resource";
 
 export const fixtures = resource({
   id: "app.db.resources.fixtures",

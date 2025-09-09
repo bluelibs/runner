@@ -1,12 +1,12 @@
-import { buildTestRunner } from "../test/utils";
+import { buildTestRunner } from "#/general/test/utils";
 import { fastify } from "./resources/fastify.resource";
 import { fastifyRouter } from "./resources/fastify-router.resource";
-import { listAllUsers } from "../users/tasks/list-all-users.task";
+import { listAllUsers } from "#/users/tasks/list-all-users.task";
 import { authorize } from "./middleware/authorize.middleware";
-import { auth as authResource } from "../users/resources/auth.resource";
+import { auth as authResource } from "#/users/resources/auth.resource";
 import { httpRoute } from "./tags";
-import { db } from "../db/resources/db.resource";
-import { testOrmConfig } from "../test/utils";
+import { db } from "#/db/resources/db.resource";
+import { testOrmConfig } from "#/general/test/utils";
 
 describe("fastify router", () => {
   it("registers routes from tagged tasks", async () => {

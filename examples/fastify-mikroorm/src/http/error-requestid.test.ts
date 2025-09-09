@@ -1,11 +1,11 @@
-import { buildTestRunner, testOrmConfig } from "../test/utils";
+import { buildTestRunner, testOrmConfig } from "#/general/test/utils";
 import { httpRoute } from "./tags";
 import { fastify } from "./resources/fastify.resource";
 import { fastifyRouter } from "./resources/fastify-router.resource";
 import { task } from "@bluelibs/runner";
 import { z } from "zod";
-import { auth as authResource } from "../users/resources/auth.resource";
-import { db } from "../db/resources/db.resource";
+import { auth as authResource } from "#/users/resources/auth.resource";
+import { db } from "#/db/resources/db.resource";
 import { HTTPError } from "./http-error";
 
 describe("error handler and request id", () => {

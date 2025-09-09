@@ -1,9 +1,9 @@
 import { task } from "@bluelibs/runner";
 import { z } from "zod";
-import { httpRoute } from "../../http/tags";
-import { auth as authResource } from "../resources/auth.resource";
-import { fastifyContext } from "../../http/fastify-context";
-import { HTTPError } from "../../http/http-error";
+import { httpRoute } from "#/http/tags";
+import { auth as authResource } from "#/users/resources/auth.resource";
+import { fastifyContext } from "#/http/fastify-context";
+import { HTTPError } from "#/http/http-error";
 
 export const logoutUser = task({
   id: "app.users.tasks.logout",

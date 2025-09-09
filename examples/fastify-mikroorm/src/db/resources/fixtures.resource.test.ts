@@ -1,19 +1,26 @@
-import { buildTestRunner, testOrmConfig } from "../../test/utils";
+import { buildTestRunner, testOrmConfig } from "#/general/test/utils";
 import { db } from "./db.resource";
 import { fixtures } from "./fixtures.resource";
-import { auth as authResource } from "../../users/resources/auth.resource";
+import { auth as authResource } from "#/users/resources/auth.resource";
 import { User } from "./entities/user.entity";
 import { Post } from "./entities/post.entity";
 
 describe("fixtures resource", () => {
   it("returns false and warns when schema is missing", async () => {
-    const rr = await buildTestRunner({ register: [db, authResource], overrides: [testOrmConfig] });
+    const rr = await buildTestRunner({
+      register: [db, authResource],
+      overrides: [testOrmConfig],
+    });
     try {
       const logger = { info: jest.fn(), warn: jest.fn() } as const;
       const dbRes = rr.getResourceValue(db);
       const auth = rr.getResourceValue(authResource);
 
-      const result = await (fixtures as any).init(undefined, { db: dbRes, logger, auth });
+      const result = await (fixtures as any).init(undefined, {
+        db: dbRes,
+        logger,
+        auth,
+      });
       expect(result).toBe(false);
       expect(logger.warn).toHaveBeenCalled();
     } finally {
@@ -22,7 +29,10 @@ describe("fixtures resource", () => {
   });
 
   it("seeds users and posts when empty, and is idempotent", async () => {
-    const rr = await buildTestRunner({ register: [db, authResource], overrides: [testOrmConfig] });
+    const rr = await buildTestRunner({
+      register: [db, authResource],
+      overrides: [testOrmConfig],
+    });
     try {
       const logger = { info: jest.fn(), warn: jest.fn() } as const;
       const dbRes = rr.getResourceValue(db);
@@ -32,7 +42,11 @@ describe("fixtures resource", () => {
       await dbRes.orm.getSchemaGenerator().createSchema();
 
       // First run seeds data
-      const seeded = await (fixtures as any).init(undefined, { db: dbRes, logger, auth });
+      const seeded = await (fixtures as any).init(undefined, {
+        db: dbRes,
+        logger,
+        auth,
+      });
       expect(seeded).toBe(true);
 
       const em = dbRes.em();
@@ -47,7 +61,11 @@ describe("fixtures resource", () => {
       }
 
       // Second run should skip (idempotent) and not add duplicates
-      const skipped = await (fixtures as any).init(undefined, { db: dbRes, logger, auth });
+      const skipped = await (fixtures as any).init(undefined, {
+        db: dbRes,
+        logger,
+        auth,
+      });
       expect(skipped).toBe(true);
       const usersAfter = await em.find(User, {});
       const postsAfter = await em.find(Post, {});
@@ -58,4 +76,3 @@ describe("fixtures resource", () => {
     }
   });
 });
-

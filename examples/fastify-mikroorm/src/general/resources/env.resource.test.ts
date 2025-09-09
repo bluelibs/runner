@@ -1,5 +1,5 @@
 import { env, getNodeEnv } from "./env.resource";
-import { buildTestRunner } from "../../test/utils";
+import { buildTestRunner } from "#/general/test/utils";
 
 describe("env resource", () => {
   const orig = process.env.NODE_ENV;

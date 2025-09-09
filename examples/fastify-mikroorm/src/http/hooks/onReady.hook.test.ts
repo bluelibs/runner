@@ -1,4 +1,4 @@
-import { buildTestRunner } from "../../test/utils";
+import { buildTestRunner } from "#/general/test/utils";
 
 // We'll mock Fastify and its plugins so no real network/listen happens
 jest.mock("fastify", () => {
@@ -15,13 +15,25 @@ jest.mock("fastify", () => {
   (factory as any).__instance = instance;
   return { __esModule: true, default: factory };
 });
-jest.mock("@fastify/helmet", () => ({ __esModule: true, default: jest.fn(async () => void 0) }));
-jest.mock("@fastify/cors", () => ({ __esModule: true, default: jest.fn(async () => void 0) }));
-jest.mock("@fastify/swagger", () => ({ __esModule: true, default: jest.fn(async () => void 0) }));
-jest.mock("@fastify/swagger-ui", () => ({ __esModule: true, default: jest.fn(async () => void 0) }));
+jest.mock("@fastify/helmet", () => ({
+  __esModule: true,
+  default: jest.fn(async () => void 0),
+}));
+jest.mock("@fastify/cors", () => ({
+  __esModule: true,
+  default: jest.fn(async () => void 0),
+}));
+jest.mock("@fastify/swagger", () => ({
+  __esModule: true,
+  default: jest.fn(async () => void 0),
+}));
+jest.mock("@fastify/swagger-ui", () => ({
+  __esModule: true,
+  default: jest.fn(async () => void 0),
+}));
 
 import { onReady } from "./onReady.hook";
-import { fastify } from "../resources/fastify.resource";
+import { fastify } from "#/http/resources/fastify.resource";
 
 describe("onReady hook", () => {
   it("runs without real network listen", async () => {

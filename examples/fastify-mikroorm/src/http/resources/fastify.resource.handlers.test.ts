@@ -1,9 +1,9 @@
-import { buildTestRunner, testOrmConfig } from "../../test/utils";
-import { httpRoute } from "../../http/tags";
+import { buildTestRunner, testOrmConfig } from "#/general/test/utils";
+import { httpRoute } from "#/http/tags";
 import { fastify } from "./fastify.resource";
 import { fastifyRouter } from "./fastify-router.resource";
-import { db } from "../../db/resources/db.resource";
-import { auth as authResource } from "../../users/resources/auth.resource";
+import { db } from "#/db/resources/db.resource";
+import { auth as authResource } from "#/users/resources/auth.resource";
 import { task, Errors } from "@bluelibs/runner";
 import { z } from "zod";
 
@@ -34,26 +34,49 @@ describe("fastify error handler branches", () => {
       meta: { title: "Boom", description: "generic" },
       inputSchema: z.undefined(),
       tags: [httpRoute.with({ method: "get", path: "/boom" })],
-      run: async () => { throw new Error("boom"); },
+      run: async () => {
+        throw new Error("boom");
+      },
     });
 
     const nameValidationErr = task({
       id: "tests.http.nameValidation",
-      meta: { title: "NameValidation", description: "name === ValidationError" },
+      meta: {
+        title: "NameValidation",
+        description: "name === ValidationError",
+      },
       inputSchema: z.undefined(),
       tags: [httpRoute.with({ method: "get", path: "/name-validation" })],
-      run: async () => { const e = new Error("bad"); (e as any).name = "ValidationError"; throw e; },
+      run: async () => {
+        const e = new Error("bad");
+        (e as any).name = "ValidationError";
+        throw e;
+      },
     });
 
     const rr = await buildTestRunner({
-      register: [httpRoute, fastify, fastifyRouter, authResource, db, badInput, statusErr, boom, nameValidationErr],
+      register: [
+        httpRoute,
+        fastify,
+        fastifyRouter,
+        authResource,
+        db,
+        badInput,
+        statusErr,
+        boom,
+        nameValidationErr,
+      ],
       overrides: [testOrmConfig],
     });
 
     try {
       const f = rr.getResourceValue(fastify);
 
-      const v = await f.inject({ method: "POST", url: "/bad-input", payload: {} });
+      const v = await f.inject({
+        method: "POST",
+        url: "/bad-input",
+        payload: {},
+      });
       expect(v.statusCode).toBe(400);
 
       const s = await f.inject({ method: "GET", url: "/status-err" });

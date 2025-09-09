@@ -5,9 +5,10 @@ import {
   loginUser,
   currentUser,
   logoutUser,
+  getUserById,
 } from "./tasks";
 import { auth } from "./resources";
-import { authorize } from "../http/middleware/authorize.middleware";
+import { authorize } from "#/http/middleware/authorize.middleware";
 
 export const users = resource({
   id: "app.users.resources.users",
@@ -24,6 +25,7 @@ export const users = resource({
     loginUser,
     currentUser,
     logoutUser,
+    getUserById,
     // resources and middlewares
     auth,
     authorize,

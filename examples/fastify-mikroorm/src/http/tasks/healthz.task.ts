@@ -1,6 +1,6 @@
 import { task } from "@bluelibs/runner";
 import { z } from "zod";
-import { httpRoute } from "../tags";
+import { httpRoute } from "#/http/tags";
 
 export const healthz = task({
   id: "app.http.tasks.healthz",
@@ -13,4 +13,3 @@ export const healthz = task({
   tags: [httpRoute.with({ method: "get", path: "/healthz" })],
   run: async () => ({ status: "ok" as const }),
 });
-

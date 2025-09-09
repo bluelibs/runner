@@ -1,6 +1,6 @@
 import { taskMiddleware } from "@bluelibs/runner";
-import { fastifyContext } from "../fastify-context";
-import { HTTPError } from "../http-error";
+import { fastifyContext } from "#/http/fastify-context";
+import { HTTPError } from "#/http/http-error";
 
 export type AuthorizeConfig = {
   required?: boolean; // default true: user must be present

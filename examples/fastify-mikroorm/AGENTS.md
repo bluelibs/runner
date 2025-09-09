@@ -10,4 +10,12 @@ You are within a web development project written with Runner Framework. Find AI-
 - Always define `inputSchema` and `resultSchema` for tasks using the zod library.
 - Prefer strict typing everywhere possible, avoiding `any` and `unknown`.
 - Prefer using full variable access without conditional check: config?.that?.x?
+- When defining entities: `src/db/entities` 
+- If db changes use `npm run db:migrate:create` and `npm run db:migrate:up`
 </rules>
+
+<task>
+- When given a task it's automatically the case it's within Runner framework. Almost always you have to read readmes/runner-AI.md to understand the context. (~5k tokens)
+- Each task must have a close-by test. If tests become too big, they should be splitted into multiple files.
+- Ensure the component you write gets registered, contains meta, and validation.
+</task>

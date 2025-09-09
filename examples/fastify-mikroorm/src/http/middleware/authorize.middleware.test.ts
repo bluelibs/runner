@@ -1,9 +1,9 @@
-import { buildTestRunner, testOrmConfig } from "../../test/utils";
-import { httpRoute } from "../tags";
-import { fastify } from "../resources/fastify.resource";
-import { fastifyRouter } from "../resources/fastify-router.resource";
-import { db } from "../../db/resources/db.resource";
-import { users } from "../../users";
+import { buildTestRunner, testOrmConfig } from "#/general/test/utils";
+import { httpRoute } from "#/http/tags";
+import { fastify } from "#/http/resources/fastify.resource";
+import { fastifyRouter } from "#/http/resources/fastify-router.resource";
+import { db } from "#/db/resources/db.resource";
+import { users } from "#/users";
 
 describe("authorize middleware (roles)", () => {
   it("enforces auth required and admin role on GET /users", async () => {

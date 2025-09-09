@@ -3,6 +3,9 @@ module.exports = {
   preset: "ts-jest/presets/default-esm",
   testEnvironment: "node",
   roots: ["<rootDir>/src"],
+  moduleNameMapper: {
+    "^#/(.*)$": "<rootDir>/src/$1",
+  },
   moduleFileExtensions: ["ts", "tsx", "js"],
   extensionsToTreatAsEsm: [".ts", ".tsx"],
   transform: {

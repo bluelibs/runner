@@ -1,6 +1,6 @@
 import { globals, hook } from "@bluelibs/runner";
-import { fastify } from "../resources/fastify.resource";
-import { env } from "../../general/resources/env.resource";
+import { fastify } from "#/http/resources/fastify.resource";
+import { env } from "#/general/resources/env.resource";
 
 // We start the server once all the hooks and resources have been registered.
 export const onReady = hook({

@@ -3,7 +3,7 @@ import { PostgreSqlDriver } from "@mikro-orm/postgresql";
 import { entities } from "./entities/index";
 import { Migrator } from "@mikro-orm/migrations";
 import { Options } from "@mikro-orm/core";
-import { env } from "../../general";
+import { env } from "#/general";
 
 export const ormConfig = resource({
   id: "app.db.resources.orm.config",

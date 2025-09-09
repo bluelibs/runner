@@ -1,8 +1,8 @@
-import { buildTestRunner, testOrmConfig } from "../test/utils";
-import { httpRoute } from "../http/tags";
-import { fastify } from "../http/resources/fastify.resource";
-import { fastifyRouter } from "../http/resources/fastify-router.resource";
-import { db } from "../db/resources/db.resource";
+import { buildTestRunner, testOrmConfig } from "#/general/test/utils";
+import { httpRoute } from "#/http/tags";
+import { fastify } from "#/http/resources/fastify.resource";
+import { fastifyRouter } from "#/http/resources/fastify-router.resource";
+import { db } from "#/db/resources/db.resource";
 import { users } from "./index";
 
 describe("auth flows", () => {
@@ -31,7 +31,10 @@ describe("auth flows", () => {
       const regBody = reg.json();
       expect(regBody.token).toBeTruthy();
       expect(regBody.user.email).toBe(email);
-      const setCookie = reg.headers["set-cookie"] as string | string[] | undefined;
+      const setCookie = reg.headers["set-cookie"] as
+        | string
+        | string[]
+        | undefined;
       const cookieValue = Array.isArray(setCookie) ? setCookie[0] : setCookie;
       expect(cookieValue).toBeTruthy();
       const cookieAuth = cookieValue!.split(";")[0]; // "auth=..."
@@ -72,7 +75,10 @@ describe("auth flows", () => {
       // Logout
       const logout = await f.inject({ method: "POST", url: "/auth/logout" });
       expect(logout.statusCode).toBe(200);
-      const clearCookie = logout.headers["set-cookie"] as string | string[] | undefined;
+      const clearCookie = logout.headers["set-cookie"] as
+        | string
+        | string[]
+        | undefined;
       expect(clearCookie).toBeTruthy();
     } finally {
       await rr.dispose();

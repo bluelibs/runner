@@ -1,9 +1,8 @@
 import { override, resource, run } from "@bluelibs/runner";
-import { ormConfig } from "../db/resources/orm.config";
-import { entities } from "../db/resources/entities";
+import { ormConfig } from "#/db/resources/orm.config";
 import { SqliteDriver } from "@mikro-orm/sqlite";
 import type { DebugConfig } from "@bluelibs/runner";
-import { env } from "../general/resources/env.resource";
+import { env } from "#/general/resources/env.resource";
 
 Error.stackTraceLimit = 100;
 // Override ORM config for tests to use in-memory SQLite
