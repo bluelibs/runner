@@ -16,9 +16,10 @@ export const onReady = hook({
     logger: globals.resources.logger,
     env,
   },
-  async run(event, { fastify, logger, env }) {
+  async run(_, { fastify, logger, env }) {
     const port = Number(env.PORT || 3000);
     await fastify.listen({ port });
     logger.info(`Fastify is listening on port ${port}`);
+    logger.info(`Swagger UI available at http://localhost:${port}/swagger`);
   },
 });

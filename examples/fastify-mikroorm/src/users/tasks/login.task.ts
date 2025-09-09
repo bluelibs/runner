@@ -17,13 +17,15 @@ export const loginUser = task({
     email: z.string().email(),
     password: z.string().min(1),
   }),
-  resultSchema: z.object({
-    token: z.string(),
-    user: z
-      .object({ id: z.string(), name: z.string(), email: z.string() })
-      .passthrough(),
-  }),
-  tags: [httpRoute.with({ method: "post", path: "/auth/login" })],
+  resultSchema: z
+    .object({
+      token: z.string(),
+      user: z
+        .object({ id: z.string(), name: z.string(), email: z.string() })
+        .strict(),
+    })
+    .strict(),
+  tags: [httpRoute.with({ method: "post", path: "/auth/login", auth: "public" })],
   dependencies: { db, auth: authResource },
   run: async (input, { db, auth }) => {
     const email = String(input.email || "")

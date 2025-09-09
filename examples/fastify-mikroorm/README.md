@@ -11,12 +11,32 @@ Minimal app built with @bluelibs/runner, Fastify and MikroORM (PostgreSQL). It i
 - App HTTP server (Fastify): http://localhost:3000
   - Example route: GET /users
   - Auth routes: POST /auth/register, POST /auth/login, POST /auth/logout, GET /me
+  - Health: GET /healthz (liveness)
+  - Ready: GET /readyz (DB readiness)
+  - Swagger UI: http://localhost:3000/swagger
 - MikroORM (PostgreSQL)
 
 ## Prerequisites
 
 - Node.js 20+
 - PostgreSQL
+
+Quick Postgres (Docker):
+
+```bash
+docker run --name runner-pg -e POSTGRES_USER=myuser -e POSTGRES_PASSWORD=mysecretpassword -e POSTGRES_DB=clearspec -p 5433:5432 -d postgres:16
+```
+
+Then set `DATABASE_URL` accordingly (see `.env.example`).
+
+## Environment
+
+Copy `.env.example` to `.env` and adjust:
+
+- `NODE_ENV`: `development` | `production`
+- `PORT`: Fastify port (default 3000)
+- `AUTH_SECRET`: strong secret for HMAC token signing
+- `DATABASE_URL`: Postgres connection string (ex: `postgres://myuser:mysecretpassword@localhost:5433/clearspec`)
 
 ## Quick start
 
@@ -35,7 +55,7 @@ npm run dev
 3. Apply DB migrations (first run only)
 
 ```bash
-npx mikro-orm migration:up
+npm run db:migrate:up
 ```
 
 4. Try the API
@@ -53,6 +73,13 @@ curl http://localhost:3000/users
 - test:watch: Run Jest in watch mode
 - schema:sdl: Print GraphQL schema SDL via Runner Dev
 
+Prod-ish build/run:
+
+```bash
+npm run build
+npm start
+```
+
 ## Database
 
 - ORM: MikroORM (PostgreSQL)
@@ -63,9 +90,26 @@ curl http://localhost:3000/users
 Schema (via migrations) includes `users` and `posts` tables with a relation (`posts.author_id -> users.id`).
 Users also have `password_hash` and `password_salt` columns.
 
+Fixtures: The app seeds a few demo users and posts the first time it runs against an empty DB. See `src/db/resources/fixtures.resource.ts`.
+
+Migrations workflow:
+
+```bash
+# After changing an Entity schema, emit a migration
+npm run db:migrate:create
+
+# Apply migrations
+npm run db:migrate:up
+
+# Roll back last migration (if needed)
+npm run db:migrate:down
+```
+
 ## Features in this repo
 
 - HTTP wiring: `src/http` – Fastify instance and router that binds tasks tagged with `httpRoute` to routes
+- Security: `@fastify/helmet` and CORS enabled; cookies marked `Secure` in production
+- Observability: request `x-request-id` and request-scoped logger; access logs per request
 - Users module: `src/users`
   - Task: `GET /users` (`list-all-users.task.ts`) – returns all users from the DB
   - Auth resource: `src/users/resources/auth.resource.ts` – password hashing and stateless HMAC tokens
@@ -81,13 +125,24 @@ This app wires HTTP routes to Runner tasks using a small tag + router pattern:
 
 - Tag HTTP endpoints using `httpRoute`:
   - File: `src/http/tags/http-route.tag.ts`
-  - Example: `tags: [httpRoute.with({ method: "post", path: "/auth/login" })]`
-- The Fastify router (`src/http/resources/fastify-router.resource.ts`) does two things:
-  - Passes `request.body` directly as the task input.
-  - Provides a `FastifyContext` so tasks can access `request` and `reply` when needed.
+  - Example: `tags: [httpRoute.with({ method: "post", path: "/auth/login", auth: 'public' })]`
+- The Fastify router (`src/http/resources/fastify-router.resource.ts`) does the following:
+  - Passes `request.body` as task input by default; set `httpRoute.with({ ..., inputFrom: 'merged' })` to pass `{ ...params, ...query, ...body }`.
+  - Provides a single `fastifyContext` so tasks can access `request`, `reply`, `requestId`, request-scoped `logger`, and `user` (when present).
+  - Attaches user automatically when a valid token is sent via Cookie or Bearer. Control per-route via `auth`: `public` (default), `optional`, or `required`.
+- Builds Fastify route schemas from your Zod `inputSchema`/`resultSchema` and exposes OpenAPI at `/swagger`.
 - Global error handling is set in `src/http/resources/fastify.resource.ts`:
   - Throw `new HTTPError(status, message)` from tasks to return proper HTTP codes.
   - Zod/Runner validation errors are returned as `400`.
+
+Common patterns:
+
+- Access request/reply/context:
+  ```ts
+  const { request, reply, user, requestId, logger } = fastifyContext.use();
+  ```
+- Validate inputs/outputs with Zod: use `inputSchema` and `resultSchema` in tasks.
+- Return consistent errors: throw `new HTTPError(code, message)`.
 
 Each task should define zod schemas:
 
@@ -129,6 +184,22 @@ Notes:
 5. Return data adhering to `resultSchema`; throw `HTTPError` for expected errors.
 
 See `src/users/tasks/*.ts` for reference implementations.
+
+## Env & Security
+
+- Copy `.env.example` to `.env` and set values. In production, set a strong `AUTH_SECRET` and ensure you serve over HTTPS (cookies become `Secure`).
+- CORS defaults to permissive for development; tighten origins in `fastify.resource.ts` for production.
+
+Cookie/security notes:
+
+- Cookies are `HttpOnly` and `SameSite=Lax`. In production, they become `Secure` (HTTPS required).
+- Change cookie name via `auth.resource` config/env (`cookieName`).
+- Tokens are signed via HMAC (HS256-like). Rotate `AUTH_SECRET` when needed.
+
+## Health & Readiness
+
+- `GET /healthz` returns `{ status: 'ok' }` for liveness.
+- `GET /readyz` returns `{ status: 'ok' }` after a successful DB connectivity check.
 
 ## Project layout (high-level)
 
@@ -224,6 +295,51 @@ Behind the scenes:
 - `register` and `login` set an HTTP-only cookie using `fastifyContext`.
 - `me` extracts the auth token from either the cookie or the `Authorization` header.
 
+### Authorization middleware (roles)
+
+This project includes a Runner task middleware to enforce authorization based on presence of a user and optional roles:
+
+- File: `src/http/middlewares/authorize.middleware.ts`
+- Usage: `middleware: [authorize.with({ roles: ["admin"] })]`
+- Example: `GET /users` requires an authenticated user and `role=admin`.
+
+Role detection prefers `fastifyContext.use().user?.role`; if not present, it falls back to the `x-user-role` header. Since the demo DB schema does not include roles, you can provide the role via header when testing.
+
+Example call (using Bearer token and header role):
+
+```bash
+TOKEN="<copy from login>"
+curl http://localhost:3000/users \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "x-user-role: admin"
+```
+
+Requests with a missing user return 401; with a non-allowed role return 403.
+
+API endpoints overview:
+
+| Method | Path           | Auth                 | Description                                |
+| ------ | -------------- | -------------------- | ------------------------------------------ |
+| GET    | /users         | Required + admin     | List all users (admin-only)                |
+| POST   | /auth/register | Public               | Create user, returns token + sets cookie   |
+| POST   | /auth/login    | Public               | Authenticate, returns token + sets cookie  |
+| POST   | /auth/logout   | Public               | Clears auth cookie                         |
+| GET    | /me            | Required             | Current user info                          |
+| GET    | /healthz       | Public               | Liveness probe                             |
+| GET    | /readyz        | Public               | DB readiness check                         |
+
+Extending roles (optional): If you want persistent roles, add a `role` property to the `User` entity + migration, and include it in the `user` object built in the router (`fastify-router.resource.ts`).
+
+Example snippet:
+
+```ts
+// In User entity schema:
+role?: string; // add and migrate
+
+// In fastify-router.resource.ts when attaching user:
+user = { id: entity.id, name: entity.name, email: entity.email, role: entity.role };
+```
+
 ## Runner Dev tips
 
 - Explore tasks/events and live docs at http://localhost:1337/docs
@@ -247,7 +363,79 @@ npm test
 
 Tests cover DB, HTTP router, boot, and auth flows (register → me → bad login → login → logout).
 
+Additional tests validate the authorization middleware:
+
+- `src/http/authorize.middleware.test.ts` verifies 401/403/200 responses for `/users` under different auth/role conditions.
+
+Run a single test file:
+
+```bash
+npx jest src/http/authorize.middleware.test.ts
+```
+
+Jest uses the in-memory SQLite harness in `src/test/utils.ts` so tests are fast and hermetic.
+
+Watch mode:
+
+```bash
+npm run test:watch
+```
+
 ## Troubleshooting
 
 - DB connection errors: ensure PostgreSQL is running on `localhost:5433` and the database `clearspec` exists, or update the URL in `src/db/resources/orm.config.ts`.
 - Port conflicts: Runner Dev uses 1337, Fastify uses 3000 (see `src/http/hooks/onReady.hook.ts`).
+ - Missing middleware/resource errors in tests: ensure you register any task middlewares and resources used by your tasks within the test harness' `register` list.
+
+## Docs sync (optional)
+
+This project includes a helper to sync Runner docs into local `readmes/` for AI-friendly browsing.
+
+```bash
+npx ts-node scripts/sync-docs.ts
+```
+
+This refreshes:
+
+- `readmes/runner-AI.md`
+- `readmes/runner-README.md`
+- `readmes/runner-dev-AI.md`
+
+## Common Tasks
+
+- Create a new HTTP endpoint
+  1) Create a task in `src/<feature>/tasks/xxx.task.ts`
+  2) Add `inputSchema` and `resultSchema`
+  3) Tag it: `httpRoute.with({ method, path, auth })`
+  4) Register the task in the feature `index.ts`
+
+- Add middleware to a task
+  ```ts
+  import { authorize } from "../../http/middlewares/authorize.middleware";
+  export const myTask = task({
+    id: "app.feature.tasks.myTask",
+    middleware: [authorize.with({ roles: ["admin"] })],
+    // ...
+  });
+  ```
+
+- Access request/reply and user
+  ```ts
+  const { request, reply, user } = fastifyContext.use();
+  ```
+
+- Throw HTTP errors
+  ```ts
+  throw new HTTPError(404, "Not found");
+  ```
+
+- Merge params/query/body as input
+  ```ts
+  tags: [httpRoute.with({ method: "get", path: "/items/:id", inputFrom: "merged" })]
+  ```
+
+- Explore tasks/events in Runner Dev
+  - Visit http://localhost:1337/docs and http://localhost:1337/graphql
+
+- Update OpenAPI docs
+  - Ensure your tasks have `inputSchema`/`resultSchema`. Fastify route schemas are derived automatically and shown at `/swagger`.

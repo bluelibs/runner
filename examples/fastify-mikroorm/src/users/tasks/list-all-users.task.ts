@@ -7,6 +7,7 @@ import { task } from "@bluelibs/runner";
 import { z } from "zod";
 import { httpRoute } from "../../http/tags";
 import { db } from "../../db/resources";
+import { authorize } from "../../http/middleware/authorize.middleware";
 
 export interface ListAllUsersInput {
   // Define input fields
@@ -24,15 +25,16 @@ export const listAllUsers = task({
   },
   inputSchema: z.undefined(),
   resultSchema: z.array(
-    z.object({ id: z.string(), name: z.string(), email: z.string() })
+    z.object({ id: z.string(), name: z.string(), email: z.string() }),
   ),
   tags: [
     httpRoute.with({
       method: "get",
       path: "/users",
+      auth: "required", // require authenticated user at router level
     }),
   ],
-  // middleware: [],
+  middleware: [authorize.with({ roles: ["admin"] })],
   dependencies: {
     db,
   },

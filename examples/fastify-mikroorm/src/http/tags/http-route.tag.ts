@@ -9,6 +9,11 @@ export interface HttpRouteConfig {
   // Optional config carried by the tag (available via extract())
   method: "get" | "post" | "put" | "delete" | "patch" | "options" | "head";
   path: string;
+  // If set to 'merged', the router will pass { ...params, ...query, ...body } as task input
+  // Defaults to 'body' for backward compatibility.
+  inputFrom?: "body" | "merged";
+  // Auth: public (default), optional (attach user if present), required (401 if missing)
+  auth?: "public" | "optional" | "required";
 }
 
 export const httpRoute = tag<HttpRouteConfig>({

@@ -5,6 +5,10 @@
  */
 import { globals, resource, Errors } from "@bluelibs/runner";
 import Fastify from "fastify";
+import helmet from "@fastify/helmet";
+import cors from "@fastify/cors";
+import swagger from "@fastify/swagger";
+import swaggerUi from "@fastify/swagger-ui";
 import { HTTPError } from "../http-error";
 
 export const fastify = resource({
@@ -15,6 +19,20 @@ export const fastify = resource({
   },
   init: async () => {
     const fastify = Fastify();
+
+    // Security & CORS
+    await fastify.register(helmet);
+    await fastify.register(cors, { origin: true, credentials: true });
+
+    // OpenAPI (dev-friendly)
+    await fastify.register(swagger, {
+      openapi: {
+        info: { title: "Fastify + Runner API", version: "0.1.0" },
+      },
+    });
+    await fastify.register(swaggerUi, {
+      routePrefix: "/swagger",
+    });
 
     fastify.setErrorHandler((err, _req, reply) => {
       // HTTPError thrown from tasks

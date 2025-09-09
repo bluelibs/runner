@@ -13,7 +13,7 @@ const app = resource({
 });
 
 run(app, {
-  // debug: "normal",
+  debug: "normal",
   logs: {
     printThreshold: "info",
   },
@@ -21,6 +21,6 @@ run(app, {
   .then(({ logger }) => {})
   .catch((err) => {
     // eslint-disable-next-line no-console
-    console.error(err);
+    console.error("From main run: " + err);
     process.exit(1);
   });

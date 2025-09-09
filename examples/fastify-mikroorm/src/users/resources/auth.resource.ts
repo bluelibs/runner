@@ -4,6 +4,7 @@
  * - File: src/users/resources/auth.resource.ts
  */
 import { globals, resource } from '@bluelibs/runner';
+import { env } from '../../general/resources/env.resource';
 import { randomBytes, scrypt as _scrypt, timingSafeEqual, createHmac } from 'crypto';
 import { promisify } from 'util';
 
@@ -54,11 +55,13 @@ export const auth = resource({
   },
   dependencies: {
     logger: globals.resources.logger,
+    env,
   },
-  init: async (cfg: AuthConfig, { logger }): Promise<AuthValue> => {
+  init: async (cfg: AuthConfig, { logger, env }): Promise<AuthValue> => {
     const secret = cfg.secret || process.env.AUTH_SECRET || 'dev-secret-change-me';
     const cookieName = cfg.cookieName || 'auth';
     const defaultExpiry = cfg.tokenExpiresInSeconds ?? 60 * 60 * 24 * 7; // 7 days
+    const isProd = (env?.NODE_ENV || process.env.NODE_ENV) === 'production';
 
     const hashPassword = async (password: string) => {
       const salt = randomBytes(16).toString('hex');
@@ -118,11 +121,18 @@ export const auth = resource({
         'HttpOnly',
         'SameSite=Lax',
       ];
-      // In prod you likely want 'Secure'
+      if (isProd) attrs.push('Secure');
       return attrs.join('; ');
     };
 
-    const clearAuthCookie = () => `${cookieName}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`;
+    const clearAuthCookie = () => [
+      `${cookieName}=`,
+      'Path=/',
+      'Max-Age=0',
+      'HttpOnly',
+      'SameSite=Lax',
+      isProd ? 'Secure' : '',
+    ].filter(Boolean).join('; ');
 
     return {
       hashPassword,

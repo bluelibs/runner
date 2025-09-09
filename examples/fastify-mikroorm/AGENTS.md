@@ -9,4 +9,5 @@ You are within a web development project written with Runner Framework. Find AI-
 - Prefer clear and descriptive names for all Runner primitives via `meta.title` and `meta.description`.
 - Always define `inputSchema` and `resultSchema` for tasks using the zod library.
 - Prefer strict typing everywhere possible, avoiding `any` and `unknown`.
+- Prefer using full variable access without conditional check: config?.that?.x?
 </rules>

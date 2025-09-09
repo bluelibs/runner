@@ -18,13 +18,15 @@ export const registerUser = task({
     email: z.string().email(),
     password: z.string().min(6),
   }),
-  resultSchema: z.object({
-    token: z.string(),
-    user: z.object({ id: z.string(), name: z.string(), email: z.string() }).passthrough(),
-  }),
-  tags: [
-    httpRoute.with({ method: "post", path: "/auth/register" }),
-  ],
+  resultSchema: z
+    .object({
+      token: z.string(),
+      user: z
+        .object({ id: z.string(), name: z.string(), email: z.string() })
+        .strict(),
+    })
+    .strict(),
+  tags: [httpRoute.with({ method: "post", path: "/auth/register", auth: "public" })],
   dependencies: { db, auth: authResource },
   run: async (input, { db, auth }) => {
     const { reply } = fastifyContext.use();

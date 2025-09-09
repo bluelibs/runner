@@ -12,7 +12,7 @@ export const logoutUser = task({
     description: "Clear user authentication cookie and end session",
   },
   resultSchema: z.object({ success: z.literal(true) }),
-  tags: [httpRoute.with({ method: "post", path: "/auth/logout" })],
+  tags: [httpRoute.with({ method: "post", path: "/auth/logout", auth: "optional" })],
   dependencies: { auth: authResource },
   run: async (_input, { auth }) => {
     const { reply } = fastifyContext.use();

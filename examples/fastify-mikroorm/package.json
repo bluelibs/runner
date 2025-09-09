@@ -8,15 +8,24 @@
     "start": "node --env-file=.env --enable-source-maps dist/main.js",
     "build": "tsc -p tsconfig.json",
     "test": "node --env-file=.env.test ./node_modules/jest/bin/jest.js --runInBand",
+    "test:coverage": "node --env-file=.env.test ./node_modules/jest/bin/jest.js --runInBand --coverage",
     "test:watch": "node --env-file=.env.test ./node_modules/jest/bin/jest.js --runInBand --watch",
-    "schema:sdl": "runner-dev schema sdl"
+    "schema:sdl": "runner-dev schema sdl",
+    "db:migrate:up": "mikro-orm migration:up",
+    "db:migrate:down": "mikro-orm migration:down",
+    "db:migrate:create": "mikro-orm migration:create"
   },
   "dependencies": {
-    "@bluelibs/runner": "^4.5.5",
+    "@bluelibs/runner": "file:../..",
+    "@fastify/cors": "^10.0.1",
+    "@fastify/helmet": "^12.0.0",
+    "@fastify/swagger": "^9.4.1",
+    "@fastify/swagger-ui": "^5.1.0",
     "@mikro-orm/core": "^6.5.2",
     "@mikro-orm/migrations": "^6.5.2",
     "@mikro-orm/postgresql": "^6.5.2",
-    "fastify": "^5.6.0"
+    "fastify": "^5.6.0",
+    "zod": "^4.0.17"
   },
   "devDependencies": {
     "@bluelibs/runner-dev": "^4.4.6",
@@ -28,8 +37,7 @@
     "ts-jest": "^29.1.1",
     "ts-node": "^10.9.2",
     "tsx": "^4.19.2",
-    "typescript": "^5.6.3",
-    "zod": "^3.25.76"
+    "typescript": "^5.6.3"
   },
   "mikro-orm": {
     "useTsNode": true,
