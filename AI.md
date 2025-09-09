@@ -184,9 +184,7 @@ import { globals, task } from "@bluelibs/runner";
 
 const critical = task({
   id: "app.tasks.critical",
-  tags: [
-    globals.tags.debug.with({ logTaskInput: true, logTaskOutput: true }),
-  ],
+  tags: [globals.tags.debug.with({ logTaskInput: true, logTaskOutput: true })],
   run: async () => "ok",
 });
 ```
@@ -203,7 +201,7 @@ const logsExtension = resource({
     logger.info("test", { example: 123 }); // "trace", "debug", "info", "warn", "error", "critical"
     const sublogger = logger.with({
       source: "app.logs",
-      context: {},
+      additionalContext: {},
     });
     logger.onLog((log) => {
       // ship or transform
@@ -238,7 +236,8 @@ export async function getRunner() {
 // handler.ts
 export const handler = async (event: any, context: any) => {
   const rr: any = await getRunner();
-  const method = event?.requestContext?.http?.method ?? event?.httpMethod ?? "GET";
+  const method =
+    event?.requestContext?.http?.method ?? event?.httpMethod ?? "GET";
   const path = event?.rawPath || event?.path || "/";
   const rawBody = event?.body
     ? event.isBase64Encoded
@@ -247,9 +246,12 @@ export const handler = async (event: any, context: any) => {
     : undefined;
   const body = rawBody ? JSON.parse(rawBody) : undefined;
 
-  return RequestCtx.provide({ requestId: context?.awsRequestId ?? "local", method, path }, async () => {
-    // route and call rr.runTask(...)
-  });
+  return RequestCtx.provide(
+    { requestId: context?.awsRequestId ?? "local", method, path },
+    async () => {
+      // route and call rr.runTask(...)
+    },
+  );
 };
 ```
 

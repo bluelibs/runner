@@ -1552,10 +1552,12 @@ const requestHandler = task({
     const request = RequestContext.use();
 
     // Create a contextual logger with bound metadata with source and context
-    const requestLogger = logger.with("api.handler", {
+    const requestLogger = logger.with({
       source: requestHandler.id,
-      requestId: request.requestId,
-      userId: request.userId,
+      additionalContext: {
+        requestId: request.requestId,
+        userId: request.userId,
+      },
     });
 
     // All logs from this logger will include the bound context
