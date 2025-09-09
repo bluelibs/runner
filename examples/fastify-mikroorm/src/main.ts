@@ -13,7 +13,7 @@ const app = resource({
 });
 
 run(app, {
-  debug: "normal",
+  // debug: "normal",
   logs: {
     printThreshold: "info",
   },
