@@ -82,15 +82,22 @@ export interface IOptionalDependency<T> {
 }
 
 // Helper Types for Extracting Generics
-type ExtractTaskInput<T> = T extends ITask<infer I, any, infer D> ? I : never;
-type ExtractTaskOutput<T> = T extends ITask<any, infer O, infer D> ? O : never;
-type ExtractResourceValue<T> = T extends IResource<any, infer V, infer D>
+export type ExtractTaskInput<T> = T extends ITask<infer I, any, infer D>
+  ? I
+  : never;
+export type ExtractTaskOutput<T> = T extends ITask<any, infer O, infer D>
+  ? O
+  : never;
+export type ExtractResourceConfig<T> = T extends IResource<infer C, any, any>
+  ? C
+  : never;
+export type ExtractResourceValue<T> = T extends IResource<any, infer V, infer D>
   ? V extends Promise<infer U>
     ? U
     : V
   : never;
 
-export type ExtractEventParams<T> = T extends IEventDefinition<infer P>
+export type ExtractEventPayload<T> = T extends IEventDefinition<infer P>
   ? P
   : T extends IEvent<infer P>
   ? P
@@ -107,13 +114,13 @@ export type CommonPayload<
   T extends readonly IEventDefinition<any>[] | IEventDefinition<any>,
 > = T extends readonly IEventDefinition<any>[]
   ? {
-      [K in keyof ExtractEventParams<T[number]>]: UnionToIntersection<
-        ExtractEventParams<T[number]> extends any
-          ? ExtractEventParams<T[number]>[K]
+      [K in keyof ExtractEventPayload<T[number]>]: UnionToIntersection<
+        ExtractEventPayload<T[number]> extends any
+          ? ExtractEventPayload<T[number]>[K]
           : never
       >;
     }
-  : ExtractEventParams<T>;
+  : ExtractEventPayload<T>;
 
 /**
  * Task dependencies transform into callable functions: call with the task input
@@ -143,7 +150,7 @@ export type DependencyValueType<T> = T extends ITask<any, any, any>
   : T extends IResource<any, any>
   ? ResourceDependency<ExtractResourceValue<T>>
   : T extends IEventDefinition<any>
-  ? EventDependency<ExtractEventParams<T>>
+  ? EventDependency<ExtractEventPayload<T>>
   : T extends IOptionalDependency<infer U>
   ? DependencyValueType<U> | undefined
   : never;
@@ -172,7 +179,7 @@ export type ResourceDependencyValueType<T> = T extends ITask<any, any, any>
   : T extends IResource<any, any>
   ? ResourceDependency<ExtractResourceValue<T>>
   : T extends IEventDefinition<any>
-  ? EventDependency<ExtractEventParams<T>>
+  ? EventDependency<ExtractEventPayload<T>>
   : T extends IOptionalDependency<infer U>
   ? ResourceDependencyValueType<U> | undefined
   : never;

@@ -398,6 +398,21 @@ const { dispose } = await run(app, {
 });
 ```
 
+## Type Helpers
+
+Extract generics from tasks, resources, and events without re-declaring their shapes and avoid use of 'any'.
+
+```ts
+import { task, resource, event } from "@bluelibs/runner";
+import type {
+  ExtractTaskInput, // ExtractTaskInput(typeof myTask)
+  ExtractTaskOutput,
+  ExtractResourceConfig,
+  ExtractResourceValue,
+  ExtractEventPayload,
+} from "@bluelibs/runner";
+```
+
 ## Run Options (high‑level)
 
 - debug: "normal" | "verbose" | DebugConfig
@@ -523,115 +538,40 @@ Coverage tip: the script name is `npm run coverage`.
 
 ## Metadata & Tags
 
+Tags and meta can be applied to all elements.
+
 ```ts
 import { tag, globals, task, resource } from "@bluelibs/runner";
 
-// Simple tags and debug/system globals
-const perf = tag<{ warnAboveMs: number }>({ id: "perf" });
 const contractTag = tag<void, void, { result: string }>({ id: "contract" });
+const httpRouteTag = tag<{ method: "GET" | "POST"; path: string }>({
+  id: "httpRoute",
+});
 
-const processPayment = task({
-  id: "app.tasks.pay",
-  tags: [perf.with({ warnAboveMs: 1000 })],
+const task = task({
+  id: "app.tasks.myTask",
+  tags: [contractTag, httpRouteTag.with({ method: "POST", path: "/do" })],
+  run: async () => ({ result: "ok" }), // must return { result: string }
   meta: {
-    title: "Process Payment",
-    description: "Detailed",
-  },
-  run: async () => {
-    /* ... */
-  },
-});
-
-const internalSvc = resource({
-  id: "app.resources.internal",
-  register: [perf],
-  tags: [globals.tags.system],
-  init: async () => ({}),
-});
-```
-
-### Tag Contracts (type‑enforced returns)
-
-```ts
-// Contract enforces the awaited return type (Config, Input, Output)
-const userContract = tag<void, void, { name: string }>({ id: "contract.user" });
-
-const getProfile = task({
-  id: "app.tasks.getProfile",
-  tags: [userContract],
-  run: async () => ({ name: "Ada" }), // must contain { name: string }
-});
-
-const profileService = resource({
-  id: "app.resources.profile",
-  tags: [userContract],
-  init: async () => ({ name: "Ada" }),
-});
-```
-
-### Tag Extraction (behavior flags)
-
-```ts
-const perf = tag<{ warnAboveMs: number }>({ id: "perf" });
-
-const perfMiddleware = taskMiddleware({
-  id: "app.middleware.perf",
-  run: async ({ task, next }) => {
-    const cfg = perf.extract(task.definition);
-    // use perf.exists(task.definition) to check for existence
-    if (!cfg) return next(task.input);
-    // performance hooks here ...
+    title: "My Task",
+    description: "Does something important", // multi-line description, markdown
   },
 });
 ```
 
-### Intercept Tasks via Tags (programmatic wiring)
-
-Use a hook on `globals.events.ready` to discover and intercept tasks by tag:
+Usage:
 
 ```ts
-import { hook, globals, tag } from "@bluelibs/runner";
-
-const apiTag = tag<void>({ id: "api" });
-
-const addTracingToApiTasks = hook({
-  id: "app.hooks.traceApis",
+const onReady = hook({
+  id: "app.hooks.onReady",
   on: globals.events.ready,
   dependencies: { store: globals.resources.store },
   run: async (_, { store }) => {
-    const apiTasks = store.getTasksWithTag(apiTag); // tag object or string id
-    apiTasks.forEach((taskDef) => {
-      taskDef.intercept(async (next, input) => {
-        // ...
-      });
-    });
-    // Apply same concept to routing like fastify, express routes based on tag config to your fastify instance.
-  },
-});
-```
-
-### Route registration via tags (ready hook)
-
-```ts
-import { hook, globals } from "@bluelibs/runner";
-import { httpTag } from "./http.tag"; // your structured tag (method, path, schemas, etc.)
-import { expressServer } from "./expressServer"; // resource that returns { app, port }
-
-const registerRoutes = hook({
-  id: "app.hooks.registerRoutes",
-  on: globals.events.ready,
-  dependencies: { store: globals.resources.store, server: expressServer },
-  run: async (_, { store, server }) => {
-    const tasks = store.getTasksWithTag(httpTag);
+    // Same concept for resources
+    const tasks = store.getTasksWithTag(httpRouteTag); // uses httpRouteTag.exists(component);
     tasks.forEach((t) => {
-      const cfg = httpTag.extract(t.meta?.tags || []);
-      if (!cfg?.config) return;
-      const { method, path } = cfg.config;
-      if (!method || !path) return;
-      (server.app as any)[method.toLowerCase()](path, async (req, res) => {
-        const result = await t({ ...req.body, ...req.query, ...req.params });
-        res.json(result);
-      });
+      const cfg = httpRouteTag.extract(tasks); // { method, path }
+      // you can even do t
     });
   },
 });
@@ -706,7 +646,7 @@ interface IValidationSchema<T> {
 }
 ```
 
-Works out of the box with Zod (`z.object(...).parse`), and can be adapted for Yup/Joi with small wrappers.
+Works out of the box with Zod (`z.object(...).parse`), and can be adapted for Yup/Joi with small wrappers. As it only needs a parse() method.
 
 ```ts
 import { z } from "zod";
@@ -728,6 +668,10 @@ resource({
 
 event({
   payloadSchema, // Runs on event emission
+});
+
+tag({
+  configSchema, // Tag config validation (runs on .with())
 });
 
 // Middleware config validation (runs on .with())

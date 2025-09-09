@@ -958,6 +958,43 @@ const handleRequest = resource({
 });
 ```
 
+## Type Helpers
+
+These utility types help you extract the generics from tasks, resources, and events without re-declaring them. Import them from `@bluelibs/runner`.
+
+```ts
+import { task, resource, event } from "@bluelibs/runner";
+import type {
+  ExtractTaskInput,
+  ExtractTaskOutput,
+  ExtractResourceConfig,
+  ExtractResourceValue,
+  ExtractEventPayload,
+} from "@bluelibs/runner";
+
+// Task example
+const add = task({
+  id: "calc.add",
+  run: async (input: { a: number; b: number }) => input.a + input.b,
+});
+
+type AddInput = ExtractTaskInput<typeof add>; // { a: number; b: number }
+type AddOutput = ExtractTaskOutput<typeof add>; // number
+
+// Resource example
+const config = resource({
+  id: "app.config",
+  init: async (cfg: { baseUrl: string }) => ({ baseUrl: cfg.baseUrl }),
+});
+
+type ConfigInput = ExtractResourceConfig<typeof config>; // { baseUrl: string }
+type ConfigValue = ExtractResourceValue<typeof config>; // { baseUrl: string }
+
+// Event example
+const userRegistered = event<{ userId: string; email: string }>({ id: "app.events.userRegistered" });
+type UserRegisteredPayload = ExtractEventPayload<typeof userRegistered>; // { userId: string; email: string }
+```
+
 ### Context with Middleware
 
 Context shines when combined with middleware for request-scoped data:

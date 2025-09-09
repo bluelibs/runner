@@ -3,7 +3,7 @@ import {
   DependencyValuesType,
   IEventDefinition,
   IEventEmission,
-  ExtractEventParams,
+  ExtractEventPayload,
 } from "../defs";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
@@ -28,7 +28,7 @@ export interface IHookDefinition<
         ? any
         : TOn extends readonly IEventDefinition<any>[]
         ? CommonPayload<TOn>
-        : ExtractEventParams<TOn>
+        : ExtractEventPayload<TOn>
     >,
     dependencies: DependencyValuesType<TDependencies>,
   ) => Promise<any>;
