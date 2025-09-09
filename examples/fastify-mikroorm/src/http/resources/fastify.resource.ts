@@ -3,19 +3,20 @@
  * - Namespace: http
  * - File: src/http/resources/fastify.resource.ts
  */
-import { globals, resource, Errors } from "@bluelibs/runner";
+import { globals, resource } from "@bluelibs/runner";
 import Fastify from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
-import { HTTPError } from "../http-error";
+import { createErrorHandler } from "./helpers/createErrorHandler";
 
 export const fastify = resource({
   id: "app.http.resources.fastify",
   meta: {
     title: "Fastify HTTP Server",
-    description: "High-performance HTTP server instance for handling web requests and API endpoints",
+    description:
+      "High-performance HTTP server instance for handling web requests and API endpoints",
   },
   init: async () => {
     const fastify = Fastify();
@@ -34,23 +35,7 @@ export const fastify = resource({
       routePrefix: "/swagger",
     });
 
-    fastify.setErrorHandler((err, _req, reply) => {
-      // HTTPError thrown from tasks
-      if (err instanceof HTTPError) {
-        return reply.status(err.statusCode).send({ error: err.message, details: err.details });
-      }
-      // Runner validation errors
-      if (err instanceof (Errors as any).ValidationError || err?.name === "ValidationError") {
-        return reply.status(400).send({ error: err.message });
-      }
-      // Errors with statusCode
-      const status = (err as any)?.statusCode;
-      if (typeof status === "number") {
-        return reply.status(status).send({ error: err.message });
-      }
-      // Fallback
-      reply.status(500).send({ error: "Internal Server Error" });
-    });
+    fastify.setErrorHandler(createErrorHandler());
 
     return fastify;
   },
