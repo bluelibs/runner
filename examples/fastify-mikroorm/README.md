@@ -318,15 +318,15 @@ Requests with a missing user return 401; with a non-allowed role return 403.
 
 API endpoints overview:
 
-| Method | Path           | Auth                 | Description                                |
-| ------ | -------------- | -------------------- | ------------------------------------------ |
-| GET    | /users         | Required + admin     | List all users (admin-only)                |
-| POST   | /auth/register | Public               | Create user, returns token + sets cookie   |
-| POST   | /auth/login    | Public               | Authenticate, returns token + sets cookie  |
-| POST   | /auth/logout   | Public               | Clears auth cookie                         |
-| GET    | /me            | Required             | Current user info                          |
-| GET    | /healthz       | Public               | Liveness probe                             |
-| GET    | /readyz        | Public               | DB readiness check                         |
+| Method | Path           | Auth             | Description                               |
+| ------ | -------------- | ---------------- | ----------------------------------------- |
+| GET    | /users         | Required + admin | List all users (admin-only)               |
+| POST   | /auth/register | Public           | Create user, returns token + sets cookie  |
+| POST   | /auth/login    | Public           | Authenticate, returns token + sets cookie |
+| POST   | /auth/logout   | Public           | Clears auth cookie                        |
+| GET    | /me            | Required         | Current user info                         |
+| GET    | /healthz       | Public           | Liveness probe                            |
+| GET    | /readyz        | Public           | DB readiness check                        |
 
 Extending roles (optional): If you want persistent roles, add a `role` property to the `User` entity + migration, and include it in the `user` object built in the router (`fastify-router.resource.ts`).
 
@@ -381,15 +381,25 @@ Watch mode:
 npm run test:watch
 ```
 
+## Import Aliases (#/\*)
+
+To keep imports readable in examples and apps, we use a global path alias that maps `#/` to your package’s `src` directory. This lets you write short absolute imports like:
+
+```ts
+import { fastify } from "#/http/resources/fastify.resource";
+import { db } from "#/db/resources";
+import { env } from "#/general";
+```
+
 ## Troubleshooting
 
 - DB connection errors: ensure PostgreSQL is running on `localhost:5433` and the database `clearspec` exists, or update the URL in `src/db/resources/orm.config.ts`.
 - Port conflicts: Runner Dev uses 1337, Fastify uses 3000 (see `src/http/hooks/onReady.hook.ts`).
- - Missing middleware/resource errors in tests: ensure you register any task middlewares and resources used by your tasks within the test harness' `register` list.
+- Missing middleware/resource errors in tests: ensure you register any task middlewares and resources used by your tasks within the test harness' `register` list.
 
 ## Docs sync (optional)
 
-This project includes a helper to sync Runner docs into local `readmes/` for AI-friendly browsing.
+This project includes a helper to sync Runner docs into local `readmes/` for AI-friendly context injection.
 
 ```bash
 npx ts-node scripts/sync-docs.ts
@@ -404,12 +414,13 @@ This refreshes:
 ## Common Tasks
 
 - Create a new HTTP endpoint
-  1) Create a task in `src/<feature>/tasks/xxx.task.ts`
-  2) Add `inputSchema` and `resultSchema`
-  3) Tag it: `httpRoute.with({ method, path, auth })`
-  4) Register the task in the feature `index.ts`
+  1. Create a task in `src/<feature>/tasks/xxx.task.ts`
+  2. Add `inputSchema` and `resultSchema`
+  3. Tag it: `httpRoute.with({ method, path, auth })`
+  4. Register the task in the feature `index.ts`
 
 - Add middleware to a task
+
   ```ts
   import { authorize } from "../../http/middlewares/authorize.middleware";
   export const myTask = task({
@@ -420,18 +431,23 @@ This refreshes:
   ```
 
 - Access request/reply and user
+
   ```ts
   const { request, reply, user } = fastifyContext.use();
   ```
 
 - Throw HTTP errors
+
   ```ts
   throw new HTTPError(404, "Not found");
   ```
 
 - Merge params/query/body as input
+
   ```ts
-  tags: [httpRoute.with({ method: "get", path: "/items/:id", inputFrom: "merged" })]
+  tags: [
+    httpRoute.with({ method: "get", path: "/items/:id", inputFrom: "merged" }),
+  ];
   ```
 
 - Explore tasks/events in Runner Dev
