@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "mcp-graphql": {
+      "description": "MCP Server for Active Running Context App",
+      "command": "npx",
+      "args": ["@bluelibs/runner-dev", "mcp"],
+      "env": {
+        "ENDPOINT": "http://localhost:1337/graphql",
+        "ALLOW_MUTATIONS": "true"
+      }
+    }
+  }
+}

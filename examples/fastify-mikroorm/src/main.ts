@@ -6,7 +6,7 @@ import { users } from "./users";
 import { env } from "./general";
 
 // Minimal Runner app using runner-dev's dev resource
-const app = resource({
+export const app = resource({
   id: "app.root",
   // Register fixtures after DB so seeding can run conditionally
   register: [env, db, fixtures, http, users, dev.with({ port: 1337 })],
