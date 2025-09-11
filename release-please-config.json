@@ -1,0 +1,13 @@
+{
+  "release-type": "node",
+  "packages": {
+    "/": {
+      "package-name": "@bluelibs/runner",
+      "changelog-path": "CHANGELOG.md"
+    }
+  },
+  "bump-minor-pre-major": true,
+  "bump-patch-for-minor-pre-major": true,
+  "include-v-in-tag": true
+}
+

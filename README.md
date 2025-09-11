@@ -19,8 +19,13 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 | [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade from v3 to v4                            |
 | [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)                                                 | Docs    | Design notes, deep dives, and context                         |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | Full Express + OpenAPI + SQLite demo                          |
-| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full Fastify + MikroORM + PostgreSQL demo                     |
-| [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)       | Chatbot | Ask questions interactively, or feed README.md to your own AI |
+|| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full Fastify + MikroORM + PostgreSQL demo                     |
+|| [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)       | Chatbot | Ask questions interactively, or feed README.md to your own AI |
+
+### Community & Policies
+- Code of Conduct: see [CODE_OF_CONDUCT](./CODE_OF_CONDUCT.md)
+- Contributing: see [CONTRIBUTING](./CONTRIBUTING.md)
+- Security: see [SECURITY](./SECURITY.md)
 
 Welcome to BlueLibs Runner, where we've taken the chaos of modern application architecture and turned it into something that won't make you question your life choices at 3am. This isn't just another framework – it's your new best friend who actually understands that code should be readable, testable, and not require a PhD in abstract nonsense to maintain.
 
