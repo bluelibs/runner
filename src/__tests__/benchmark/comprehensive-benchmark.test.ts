@@ -11,6 +11,35 @@ import { globals } from "../../index";
 describe("Comprehensive Performance Benchmarks", () => {
   let results: Record<string, any> = {};
 
+  // Configuration for benchmark runs
+  const BENCHMARK_CONFIG = {
+    runs: process.env.CI ? 3 : 5, // Fewer runs in CI due to time constraints
+    warmupRuns: 2,
+    isCI: !!(process.env.CI || process.env.GITHUB_ACTIONS)
+  };
+
+  function runMultipleTimes<T>(fn: () => Promise<T>, runs: number): Promise<T[]> {
+    const promises = Array.from({ length: runs }, () => fn());
+    return Promise.all(promises);
+  }
+
+  function calculateStats(values: number[]) {
+    const sorted = [...values].sort((a, b) => a - b);
+    const len = sorted.length;
+    
+    return {
+      min: sorted[0],
+      max: sorted[len - 1],
+      median: len % 2 === 0 
+        ? (sorted[len / 2 - 1] + sorted[len / 2]) / 2 
+        : sorted[Math.floor(len / 2)],
+      mean: values.reduce((a, b) => a + b, 0) / len,
+      p25: sorted[Math.floor(len * 0.25)],
+      p75: sorted[Math.floor(len * 0.75)],
+      values
+    };
+  }
+
   afterAll(() => {
     // Output all benchmark results in a structured format
     console.log("\n=== BlueLibs Runner Performance Benchmark Results ===");
@@ -29,6 +58,9 @@ describe("Comprehensive Performance Benchmarks", () => {
           platform: process.platform,
           arch: process.arch,
           cpu: os.cpus?.()[0]?.model || "unknown",
+          isCI: BENCHMARK_CONFIG.isCI,
+          runs: BENCHMARK_CONFIG.runs,
+          warmupRuns: BENCHMARK_CONFIG.warmupRuns
         };
         fs.writeFileSync(
           outputPath,
@@ -51,35 +83,61 @@ describe("Comprehensive Performance Benchmarks", () => {
       run: async (n: number) => n * 2,
     });
 
-    const app = defineResource({
-      id: "benchmark.basic.app",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        // Warm-up
-        await task(1);
+    const runBenchmark = async () => {
+      let benchmarkResult: any;
+      
+      const app = defineResource({
+        id: "benchmark.basic.app",
+        register: [task],
+        dependencies: { task },
+        async init(_, { task }) {
+          // Extended warm-up for more stable results
+          for (let w = 0; w < BENCHMARK_CONFIG.warmupRuns * 100; w++) {
+            await task(w);
+          }
 
-        const start = performance.now();
-        for (let i = 0; i < iterations; i++) {
-          await task(i);
-        }
-        const duration = performance.now() - start;
+          const start = performance.now();
+          for (let i = 0; i < iterations; i++) {
+            await task(i);
+          }
+          const duration = performance.now() - start;
 
-        results.basicTaskExecution = {
-          iterations,
-          totalTimeMs: parseFloat(duration.toFixed(2)),
-          avgTimePerTaskMs: parseFloat((duration / iterations).toFixed(4)),
-          tasksPerSecond: Math.round(iterations / (duration / 1000)),
-        };
+          benchmarkResult = {
+            totalTimeMs: parseFloat(duration.toFixed(2)),
+            avgTimePerTaskMs: parseFloat((duration / iterations).toFixed(4)),
+            tasksPerSecond: Math.round(iterations / (duration / 1000)),
+          };
+        },
+      });
 
-        console.log(
-          `Basic task execution: ${results.basicTaskExecution.tasksPerSecond} tasks/sec`,
-        );
-      },
-    });
+      const { dispose } = await run(app);
+      await dispose();
+      return benchmarkResult;
+    };
 
-    const { dispose } = await run(app);
-    await dispose();
+    // Run warmup rounds
+    for (let w = 0; w < BENCHMARK_CONFIG.warmupRuns; w++) {
+      await runBenchmark();
+    }
+
+    // Run actual benchmark multiple times
+    const benchmarkResults = await runMultipleTimes(runBenchmark, BENCHMARK_CONFIG.runs);
+    
+    const totalTimes = benchmarkResults.map(r => r.totalTimeMs);
+    const avgTimes = benchmarkResults.map(r => r.avgTimePerTaskMs);
+    const tasksPerSec = benchmarkResults.map(r => r.tasksPerSecond);
+
+    results.basicTaskExecution = {
+      iterations,
+      runs: BENCHMARK_CONFIG.runs,
+      totalTimeMs: calculateStats(totalTimes),
+      avgTimePerTaskMs: calculateStats(avgTimes),
+      tasksPerSecond: calculateStats(tasksPerSec),
+    };
+
+    console.log(
+      `Basic task execution: ${results.basicTaskExecution.tasksPerSecond.median} tasks/sec (median of ${BENCHMARK_CONFIG.runs} runs)`,
+    );
   });
 
   it("should benchmark task execution with middleware", async () => {
