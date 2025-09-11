@@ -100,28 +100,30 @@ describe("Comprehensive Performance Benchmarks", () => {
         id: "benchmark.basic.app",
         register: [task],
         dependencies: { task },
-        async init(_, { task }) {
-          // Extended warm-up for more stable results
-          for (let w = 0; w < BENCHMARK_CONFIG.warmupRuns * 100; w++) {
-            await task(w);
-          }
-
-          const start = performance.now();
-          for (let i = 0; i < iterations; i++) {
-            await task(i);
-          }
-          const duration = performance.now() - start;
-
-          benchmarkResult = {
-            totalTimeMs: parseFloat(duration.toFixed(2)),
-            avgTimePerTaskMs: parseFloat((duration / iterations).toFixed(4)),
-            tasksPerSecond: Math.round(iterations / (duration / 1000)),
-          };
-        },
+        async init(_, { task }) {},
       });
 
-      const { dispose } = await run(app);
+      const { dispose, runTask } = await run(app);
+
+      // Extended warm-up for more stable results
+      for (let w = 0; w < BENCHMARK_CONFIG.warmupRuns * 100; w++) {
+        await runTask(task, w);
+      }
+
+      const start = performance.now();
+      for (let i = 0; i < iterations; i++) {
+        await runTask(task, i);
+      }
+      const duration = performance.now() - start;
+
+      benchmarkResult = {
+        totalTimeMs: parseFloat(duration.toFixed(2)),
+        avgTimePerTaskMs: parseFloat((duration / iterations).toFixed(4)),
+        tasksPerSecond: Math.round(iterations / (duration / 1000)),
+      };
+
       await dispose();
+
       return benchmarkResult;
     };
 
