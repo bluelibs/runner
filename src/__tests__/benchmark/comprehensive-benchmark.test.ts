@@ -15,28 +15,38 @@ describe("Comprehensive Performance Benchmarks", () => {
   const BENCHMARK_CONFIG = {
     runs: process.env.CI ? 3 : 5, // Fewer runs in CI due to time constraints
     warmupRuns: 2,
-    isCI: !!(process.env.CI || process.env.GITHUB_ACTIONS)
+    isCI: !!(process.env.CI || process.env.GITHUB_ACTIONS),
   };
 
-  function runMultipleTimes<T>(fn: () => Promise<T>, runs: number): Promise<T[]> {
-    const promises = Array.from({ length: runs }, () => fn());
-    return Promise.all(promises);
+  async function runMultipleTimes<T>(
+    fn: () => Promise<T>,
+    runs: number,
+  ): Promise<T[]> {
+    const results: T[] = [];
+    for (let i = 0; i < runs; i++) {
+      // run sequentially to avoid shared-state/resource conflicts between runs
+      // and to produce stable timing measurements
+      // eslint-disable-next-line no-await-in-loop
+      results.push(await fn());
+    }
+    return results;
   }
 
   function calculateStats(values: number[]) {
     const sorted = [...values].sort((a, b) => a - b);
     const len = sorted.length;
-    
+
     return {
       min: sorted[0],
       max: sorted[len - 1],
-      median: len % 2 === 0 
-        ? (sorted[len / 2 - 1] + sorted[len / 2]) / 2 
-        : sorted[Math.floor(len / 2)],
+      median:
+        len % 2 === 0
+          ? (sorted[len / 2 - 1] + sorted[len / 2]) / 2
+          : sorted[Math.floor(len / 2)],
       mean: values.reduce((a, b) => a + b, 0) / len,
       p25: sorted[Math.floor(len * 0.25)],
       p75: sorted[Math.floor(len * 0.75)],
-      values
+      values,
     };
   }
 
@@ -60,7 +70,7 @@ describe("Comprehensive Performance Benchmarks", () => {
           cpu: os.cpus?.()[0]?.model || "unknown",
           isCI: BENCHMARK_CONFIG.isCI,
           runs: BENCHMARK_CONFIG.runs,
-          warmupRuns: BENCHMARK_CONFIG.warmupRuns
+          warmupRuns: BENCHMARK_CONFIG.warmupRuns,
         };
         fs.writeFileSync(
           outputPath,
@@ -85,7 +95,7 @@ describe("Comprehensive Performance Benchmarks", () => {
 
     const runBenchmark = async () => {
       let benchmarkResult: any;
-      
+
       const app = defineResource({
         id: "benchmark.basic.app",
         register: [task],
@@ -121,11 +131,14 @@ describe("Comprehensive Performance Benchmarks", () => {
     }
 
     // Run actual benchmark multiple times
-    const benchmarkResults = await runMultipleTimes(runBenchmark, BENCHMARK_CONFIG.runs);
-    
-    const totalTimes = benchmarkResults.map(r => r.totalTimeMs);
-    const avgTimes = benchmarkResults.map(r => r.avgTimePerTaskMs);
-    const tasksPerSec = benchmarkResults.map(r => r.tasksPerSecond);
+    const benchmarkResults = await runMultipleTimes(
+      runBenchmark,
+      BENCHMARK_CONFIG.runs,
+    );
+
+    const totalTimes = benchmarkResults.map((r) => r.totalTimeMs);
+    const avgTimes = benchmarkResults.map((r) => r.avgTimePerTaskMs);
+    const tasksPerSec = benchmarkResults.map((r) => r.tasksPerSecond);
 
     results.basicTaskExecution = {
       iterations,
