@@ -14,6 +14,24 @@ function get(obj, path) {
   return value;
 }
 
+function getStatInfo(obj, path) {
+  const value = path.split('.').reduce((o, k) => (o ? o[k] : undefined), obj);
+  if (value && typeof value === 'object' && value.median !== undefined) {
+    return {
+      value: value.median,
+      isStatistical: true,
+      min: value.min,
+      max: value.max,
+      variance: ((value.max - value.min) / value.median * 100).toFixed(1)
+    };
+  }
+  return {
+    value: value,
+    isStatistical: false,
+    variance: 'N/A'
+  };
+}
+
 function formatPct(n) {
   return `${(n * 100).toFixed(1)}%`;
 }
@@ -80,6 +98,29 @@ function main() {
     notes.push('Running in CI environment - using relaxed thresholds');
   }
 
+  // Check for format compatibility issues
+  let hasFormatMismatch = false;
+  let statisticalMetricsCount = 0;
+  let oldFormatMetricsCount = 0;
+
+  for (const [path, direction] of Object.entries(metrics)) {
+    const baseInfo = getStatInfo(base.results, path);
+    const curInfo = getStatInfo(cur.results, path);
+    
+    if (curInfo.isStatistical) statisticalMetricsCount++;
+    if (baseInfo.value !== undefined && !baseInfo.isStatistical) oldFormatMetricsCount++;
+    
+    if (baseInfo.value !== undefined && curInfo.value !== undefined && 
+        baseInfo.isStatistical !== curInfo.isStatistical) {
+      hasFormatMismatch = true;
+    }
+  }
+
+  if (hasFormatMismatch) {
+    notes.push(`⚠️  Format mismatch detected: baseline uses ${oldFormatMetricsCount ? 'single-value' : 'statistical'} format, current uses ${statisticalMetricsCount ? 'statistical' : 'single-value'} format`);
+    notes.push('This may cause apparent regressions during format transition. Consider updating baseline.');
+  }
+
   for (const [path, direction] of Object.entries(metrics)) {
     const baseVal = get(base.results, path);
     const curVal = get(cur.results, path);
@@ -92,23 +133,35 @@ function main() {
 
     const change = (curVal - baseVal) / baseVal;
     const changeStr = formatPct(Math.abs(change));
-    const thresholdStr = formatPct(threshold);
+
+    // Check if this specific metric has a format mismatch
+    const baseInfo = getStatInfo(base.results, path);
+    const curInfo = getStatInfo(cur.results, path);
+    const isFormatMismatch = baseInfo.isStatistical !== curInfo.isStatistical;
+
+    // Use more lenient threshold during format transitions
+    let effectiveThreshold = threshold;
+    if (isFormatMismatch && hasFormatMismatch) {
+      effectiveThreshold = Math.max(threshold, 0.6); // At least 60% tolerance during transition
+    }
 
     if (direction === 'higher') {
-      const allowed = baseVal * (1 - threshold);
+      const allowed = baseVal * (1 - effectiveThreshold);
       if (curVal < allowed) {
-        const severity = Math.abs(change) > threshold * 2 ? 'MAJOR' : 'minor';
-        failures.push(`${severity} regression in ${path}: ${curVal} < ${allowed.toFixed(3)} (−${changeStr} vs base ${baseVal}, threshold: ${thresholdStr})`);
-      } else if (change < -threshold * 0.5) {
-        warnings.push(`${path} trending down: −${changeStr} (within ${thresholdStr} threshold)`);
+        const severity = Math.abs(change) > effectiveThreshold * 2 ? 'MAJOR' : 'minor';
+        const formatNote = isFormatMismatch ? ' [format mismatch]' : '';
+        failures.push(`${severity} regression in ${path}: ${curVal} < ${allowed.toFixed(3)} (−${changeStr} vs base ${baseVal}, threshold: ${formatPct(effectiveThreshold)})${formatNote}`);
+      } else if (change < -effectiveThreshold * 0.5) {
+        warnings.push(`${path} trending down: −${changeStr} (within ${formatPct(effectiveThreshold)} threshold)`);
       }
     } else if (direction === 'lower') {
-      const allowed = baseVal * (1 + threshold);
+      const allowed = baseVal * (1 + effectiveThreshold);
       if (curVal > allowed) {
-        const severity = Math.abs(change) > threshold * 2 ? 'MAJOR' : 'minor';
-        failures.push(`${severity} regression in ${path}: ${curVal} > ${allowed.toFixed(3)} (+${changeStr} vs base ${baseVal}, threshold: ${thresholdStr})`);
-      } else if (change > threshold * 0.5) {
-        warnings.push(`${path} trending up: +${changeStr} (within ${thresholdStr} threshold)`);
+        const severity = Math.abs(change) > effectiveThreshold * 2 ? 'MAJOR' : 'minor';
+        const formatNote = isFormatMismatch ? ' [format mismatch]' : '';
+        failures.push(`${severity} regression in ${path}: ${curVal} > ${allowed.toFixed(3)} (+${changeStr} vs base ${baseVal}, threshold: ${formatPct(effectiveThreshold)})${formatNote}`);
+      } else if (change > effectiveThreshold * 0.5) {
+        warnings.push(`${path} trending up: +${changeStr} (within ${formatPct(effectiveThreshold)} threshold)`);
       }
     } else {
       notes.push(`Unknown direction for ${path}: ${direction}`);

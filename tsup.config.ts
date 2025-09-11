@@ -26,6 +26,7 @@ export default defineConfig([
     dts: false,
     esbuildOptions(options) {
       options.metafile = true;
+      options.target = "es2022";
       options.define = {
         ...(options.define || {}),
         __TARGET__: JSON.stringify("universal"),
@@ -45,6 +46,7 @@ export default defineConfig([
     dts: false,
     esbuildOptions(options) {
       options.metafile = true;
+      options.target = "es2022";
       options.define = {
         ...(options.define || {}),
         __TARGET__: JSON.stringify("universal"),
@@ -65,6 +67,7 @@ export default defineConfig([
     clean: false,
     esbuildOptions(options) {
       options.metafile = true;
+      options.target = "es2022";
       options.define = {
         ...(options.define || {}),
         __TARGET__: JSON.stringify("node"),
@@ -84,6 +87,7 @@ export default defineConfig([
     clean: false,
     esbuildOptions(options) {
       options.metafile = true;
+      options.target = "es2022";
       options.define = {
         ...(options.define || {}),
         __TARGET__: JSON.stringify("node"),
@@ -104,6 +108,7 @@ export default defineConfig([
     clean: false,
     esbuildOptions(options) {
       options.metafile = true;
+      options.target = "es2022";
       options.define = {
         ...(options.define || {}),
         __TARGET__: JSON.stringify("browser"),
@@ -124,6 +129,7 @@ export default defineConfig([
     clean: false,
     esbuildOptions(options) {
       options.metafile = true;
+      options.target = "es2022";
       options.define = {
         ...(options.define || {}),
         __TARGET__: JSON.stringify("edge"),
@@ -144,6 +150,7 @@ export default defineConfig([
     clean: false,
     esbuildOptions(options) {
       options.metafile = true;
+      options.target = "es2022";
       options.define = {
         ...(options.define || {}),
         __TARGET__: JSON.stringify("universal"),

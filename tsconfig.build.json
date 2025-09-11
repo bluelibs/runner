@@ -12,10 +12,7 @@
     "sourceMap": true,
     "outDir": "dist",
     "types": ["node"],
-    "baseUrl": ".",
-    "paths": {
-      "@bluelibs/runner/platform": ["src/platform/index.ts"]
-    }
+    "baseUrl": "."
   },
   "include": ["src"],
   "exclude": ["examples/**", "src/__tests__/**"]
