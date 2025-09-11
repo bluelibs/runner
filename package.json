@@ -1,11 +1,11 @@
 {
   "name": "@bluelibs/runner",
-  "version": "4.5.10",
+  "version": "4.6.0-alpha",
   "description": "BlueLibs Runner",
   "sideEffects": false,
   "main": "dist/universal/index.cjs",
   "module": "dist/universal/index.mjs",
-  "types": "dist/index.d.mts",
+  "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -101,9 +101,9 @@
     "typescript": "^5.6.2",
     "zod": "^4.0.17"
   },
-  "typings": "dist/index.d.mts",
+  "typings": "dist/index.d.ts",
   "typescript": {
-    "definition": "dist/index.d.mts"
+    "definition": "dist/index.d.ts"
   },
   "files": [
     "dist",

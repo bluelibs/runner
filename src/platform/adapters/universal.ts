@@ -4,7 +4,7 @@ import { EdgePlatformAdapter } from "./edge";
 import { NodePlatformAdapter } from "./node";
 import { GenericUniversalPlatformAdapter } from "./universal-generic";
 
-export type PlatformEnv = "node" | "browser" | "edge" | "universal";
+export type PlatformEnv = "node" | "browser" | "edge" | "universal" | "manual";
 
 export function detectEnvironment(): PlatformEnv {
   if (typeof window !== "undefined" && typeof document !== "undefined") {

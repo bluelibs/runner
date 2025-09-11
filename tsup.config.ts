@@ -12,8 +12,22 @@ function withCommon(overrides: any = {}) {
     minify: false,
     tsconfig: "tsconfig.build.json",
     external: [...EXTERNAL],
+    target: "es2022",
     ...overrides,
   } as const;
+}
+
+function makeEsbuildOptions(targetName: string) {
+  return (options: any) => {
+    options.metafile = true;
+    options.target = "es2022";
+    options.define = {
+      ...(options.define || {}),
+      __TARGET__: JSON.stringify(targetName),
+    };
+    options.keepNames = true;
+    options.minifyIdentifiers = false;
+  };
 }
 
 export default defineConfig([
@@ -24,16 +38,7 @@ export default defineConfig([
     format: ["esm", "cjs"],
     clean: true,
     dts: false,
-    esbuildOptions(options) {
-      options.metafile = true;
-      options.target = "es2022";
-      options.define = {
-        ...(options.define || {}),
-        __TARGET__: JSON.stringify("universal"),
-      };
-      options.keepNames = true;
-      options.minifyIdentifiers = false;
-    },
+    esbuildOptions: makeEsbuildOptions("universal"),
     outExtension() {
       return { js: ".mjs" } as any;
     },
@@ -44,16 +49,7 @@ export default defineConfig([
     format: ["cjs"],
     clean: false,
     dts: false,
-    esbuildOptions(options) {
-      options.metafile = true;
-      options.target = "es2022";
-      options.define = {
-        ...(options.define || {}),
-        __TARGET__: JSON.stringify("universal"),
-      };
-      options.keepNames = true;
-      options.minifyIdentifiers = false;
-    },
+    esbuildOptions: makeEsbuildOptions("universal"),
     outExtension() {
       return { js: ".cjs" } as any;
     },
@@ -65,16 +61,7 @@ export default defineConfig([
     format: ["esm"],
     dts: false,
     clean: false,
-    esbuildOptions(options) {
-      options.metafile = true;
-      options.target = "es2022";
-      options.define = {
-        ...(options.define || {}),
-        __TARGET__: JSON.stringify("node"),
-      };
-      options.keepNames = true;
-      options.minifyIdentifiers = false;
-    },
+    esbuildOptions: makeEsbuildOptions("node"),
     outExtension() {
       return { js: ".mjs" } as any;
     },
@@ -85,16 +72,7 @@ export default defineConfig([
     format: ["cjs"],
     dts: false,
     clean: false,
-    esbuildOptions(options) {
-      options.metafile = true;
-      options.target = "es2022";
-      options.define = {
-        ...(options.define || {}),
-        __TARGET__: JSON.stringify("node"),
-      };
-      options.keepNames = true;
-      options.minifyIdentifiers = false;
-    },
+    esbuildOptions: makeEsbuildOptions("node"),
     outExtension() {
       return { js: ".cjs" } as any;
     },
@@ -106,20 +84,24 @@ export default defineConfig([
     format: ["esm"],
     dts: false,
     clean: false,
-    esbuildOptions(options) {
-      options.metafile = true;
-      options.target = "es2022";
-      options.define = {
-        ...(options.define || {}),
-        __TARGET__: JSON.stringify("browser"),
-      };
-      options.keepNames = true;
-      options.minifyIdentifiers = false;
-    },
+    esbuildOptions: makeEsbuildOptions("browser"),
     outExtension() {
       return { js: ".mjs" } as any;
     },
   }),
+  // Browser CJS for legacy consumers that require() the package
+  withCommon({
+    outDir: "dist/browser",
+    platform: "browser",
+    format: ["cjs"],
+    dts: false,
+    clean: false,
+    esbuildOptions: makeEsbuildOptions("browser"),
+    outExtension() {
+      return { js: ".cjs" } as any;
+    },
+  }),
+
   // Edge (workers)
   withCommon({
     outDir: "dist/edge",
@@ -127,16 +109,7 @@ export default defineConfig([
     format: ["esm"],
     dts: false,
     clean: false,
-    esbuildOptions(options) {
-      options.metafile = true;
-      options.target = "es2022";
-      options.define = {
-        ...(options.define || {}),
-        __TARGET__: JSON.stringify("edge"),
-      };
-      options.keepNames = true;
-      options.minifyIdentifiers = false;
-    },
+    esbuildOptions: makeEsbuildOptions("edge"),
     outExtension() {
       return { js: ".mjs" } as any;
     },
@@ -148,14 +121,7 @@ export default defineConfig([
     format: ["esm"],
     dts: true,
     clean: false,
-    esbuildOptions(options) {
-      options.metafile = true;
-      options.target = "es2022";
-      options.define = {
-        ...(options.define || {}),
-        __TARGET__: JSON.stringify("universal"),
-      };
-    },
+    esbuildOptions: makeEsbuildOptions("universal"),
     outExtension() {
       return { js: ".unused.js" } as any; // not referenced
     },

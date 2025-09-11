@@ -23,7 +23,7 @@ export function getPlatform(): IPlatformAdapter {
 
 export function setPlatform(adapter: IPlatformAdapter): void {
   platformInstance = adapter;
-  detectedEnvironment = "manual" as any;
+  detectedEnvironment = "manual";
 }
 
 export function resetPlatform(): void {
