@@ -78,7 +78,7 @@ describe("BrowserPlatformAdapter - Additional Coverage", () => {
 
       // Find and invoke the beforeunload handler
       const beforeHandler = mockWindow.addEventListener.mock.calls.find(
-        (call: any[]) => call[0] === "beforeunload"
+        (call: any[]) => call[0] === "beforeunload",
       )?.[1];
       expect(beforeHandler).toBeDefined();
       beforeHandler();
@@ -87,13 +87,13 @@ describe("BrowserPlatformAdapter - Additional Coverage", () => {
       cleanup();
       expect(mockWindow.removeEventListener).toHaveBeenCalledWith(
         "beforeunload",
-        expect.any(Function)
+        expect.any(Function),
       );
     });
     it("should not add visibilitychange listener when document is not available", () => {
       const mockWindow = {
         addEventListener: jest.fn(),
-        removeEventListener: jest.fn()
+        removeEventListener: jest.fn(),
       };
       (globalThis as any).window = mockWindow;
       delete (globalThis as any).document;
@@ -101,22 +101,31 @@ describe("BrowserPlatformAdapter - Additional Coverage", () => {
       const handler = jest.fn();
       const cleanup = adapter.onShutdownSignal(handler);
 
-      expect(mockWindow.addEventListener).toHaveBeenCalledWith("beforeunload", expect.any(Function));
-      expect(mockWindow.addEventListener).not.toHaveBeenCalledWith("visibilitychange", expect.any(Function));
+      expect(mockWindow.addEventListener).toHaveBeenCalledWith(
+        "beforeunload",
+        expect.any(Function),
+      );
+      expect(mockWindow.addEventListener).not.toHaveBeenCalledWith(
+        "visibilitychange",
+        expect.any(Function),
+      );
 
       cleanup();
-      expect(mockWindow.removeEventListener).toHaveBeenCalledWith("beforeunload", expect.any(Function));
+      expect(mockWindow.removeEventListener).toHaveBeenCalledWith(
+        "beforeunload",
+        expect.any(Function),
+      );
     });
 
     it("should call handler when document visibility changes to hidden", () => {
       const mockWindow = {
         addEventListener: jest.fn(),
-        removeEventListener: jest.fn()
+        removeEventListener: jest.fn(),
       };
       const mockDocument = {
-        visibilityState: "hidden"
+        visibilityState: "hidden",
       };
-      
+
       (globalThis as any).window = mockWindow;
       (globalThis as any).document = mockDocument;
 
@@ -125,14 +134,14 @@ describe("BrowserPlatformAdapter - Additional Coverage", () => {
 
       // Get the visibility change handler
       const visibilityHandler = mockWindow.addEventListener.mock.calls.find(
-        call => call[0] === "visibilitychange"
+        (call) => call[0] === "visibilitychange",
       )?.[1];
 
       expect(visibilityHandler).toBeDefined();
-      
+
       // Call the visibility handler
       visibilityHandler();
-      
+
       expect(handler).toHaveBeenCalled();
     });
 
@@ -142,23 +151,28 @@ describe("BrowserPlatformAdapter - Additional Coverage", () => {
       const globalRemoveEventListener = jest.fn();
       const originalAdd = (globalThis as any).addEventListener;
       const originalRemove = (globalThis as any).removeEventListener;
-      
+
       (globalThis as any).addEventListener = globalAddEventListener;
       (globalThis as any).removeEventListener = globalRemoveEventListener;
 
       const handler = jest.fn();
       const cleanup = adapter.onShutdownSignal(handler);
 
-      expect(globalAddEventListener).toHaveBeenCalledWith("beforeunload", expect.any(Function));
-      
+      expect(globalAddEventListener).toHaveBeenCalledWith(
+        "beforeunload",
+        expect.any(Function),
+      );
+
       cleanup();
-      expect(globalRemoveEventListener).toHaveBeenCalledWith("beforeunload", expect.any(Function));
-      
+      expect(globalRemoveEventListener).toHaveBeenCalledWith(
+        "beforeunload",
+        expect.any(Function),
+      );
+
       // Restore
       (globalThis as any).addEventListener = originalAdd;
       (globalThis as any).removeEventListener = originalRemove;
     });
-
   });
 
   describe("onUncaughtException - handler execution", () => {
@@ -198,18 +212,24 @@ describe("BrowserPlatformAdapter - Additional Coverage", () => {
       const globalRemoveEventListener = jest.fn();
       const originalAdd = (globalThis as any).addEventListener;
       const originalRemove = (globalThis as any).removeEventListener;
-      
+
       (globalThis as any).addEventListener = globalAddEventListener;
       (globalThis as any).removeEventListener = globalRemoveEventListener;
 
       const handler = jest.fn();
       const cleanup = adapter.onUnhandledRejection(handler);
 
-      expect(globalAddEventListener).toHaveBeenCalledWith("unhandledrejection", expect.any(Function));
-      
+      expect(globalAddEventListener).toHaveBeenCalledWith(
+        "unhandledrejection",
+        expect.any(Function),
+      );
+
       cleanup();
-      expect(globalRemoveEventListener).toHaveBeenCalledWith("unhandledrejection", expect.any(Function));
-      
+      expect(globalRemoveEventListener).toHaveBeenCalledWith(
+        "unhandledrejection",
+        expect.any(Function),
+      );
+
       // Restore
       (globalThis as any).addEventListener = originalAdd;
       (globalThis as any).removeEventListener = originalRemove;
@@ -224,7 +244,9 @@ describe("BrowserPlatformAdapter - Additional Coverage", () => {
 
     it("should throw PlatformUnsupportedFunction on run", () => {
       const als = adapter.createAsyncLocalStorage();
-      expect(() => als.run(undefined as any, () => {})).toThrow(PlatformUnsupportedFunction);
+      expect(() => als.run(undefined as any, () => {})).toThrow(
+        PlatformUnsupportedFunction,
+      );
     });
   });
 

@@ -23,11 +23,18 @@ export function detectEnvironment(): PlatformEnv {
     return "universal";
   }
 
-  if (typeof (globalThis as any).Bun !== "undefined" || (typeof process !== "undefined" && (process as any).versions?.bun)) {
+  if (
+    typeof (globalThis as any).Bun !== "undefined" ||
+    (typeof process !== "undefined" && (process as any).versions?.bun)
+  ) {
     return "universal";
   }
 
-  if (typeof (globalThis as any).WorkerGlobalScope !== "undefined" && typeof self !== "undefined" && self instanceof ((globalThis as any).WorkerGlobalScope)) {
+  if (
+    typeof (globalThis as any).WorkerGlobalScope !== "undefined" &&
+    typeof self !== "undefined" &&
+    self instanceof (globalThis as any).WorkerGlobalScope
+  ) {
     return "edge";
   }
 
@@ -40,7 +47,10 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
   async init() {
     if (!this.inner) {
       const kind = detectEnvironment();
-      if (typeof (globalThis as any).document !== "undefined" || typeof (globalThis as any).addEventListener === "function") {
+      if (
+        typeof (globalThis as any).document !== "undefined" ||
+        typeof (globalThis as any).addEventListener === "function"
+      ) {
         this.inner = new BrowserPlatformAdapter();
       } else {
         switch (kind) {
@@ -66,7 +76,10 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
   private get() {
     if (!this.inner) {
       const kind = detectEnvironment();
-      if (typeof (globalThis as any).document !== "undefined" || typeof (globalThis as any).addEventListener === "function") {
+      if (
+        typeof (globalThis as any).document !== "undefined" ||
+        typeof (globalThis as any).addEventListener === "function"
+      ) {
         this.inner = new BrowserPlatformAdapter();
       } else {
         switch (kind) {

@@ -7,7 +7,7 @@ Welcome to the BlueLibs Runner multi-platform architecture! This guide will walk
 JavaScript runs everywhere these days - Node.js servers, browser tabs, Cloudflare Workers, Deno, Bun, and more. Each environment has its own quirks:
 
 - **Node.js** has `process.exit()`, `process.env`, and `AsyncLocalStorage`
-- **Browsers** have `window.addEventListener` and no concept of "process exit" 
+- **Browsers** have `window.addEventListener` and no concept of "process exit"
 - **Edge Workers** are like browsers but without DOM APIs
 - **Deno/Bun** are Node-like but with their own global objects
 
@@ -53,7 +53,7 @@ export function detectEnvironment(): PlatformEnv {
     return "browser";
   }
 
-  // Node.js: has process.versions.node  
+  // Node.js: has process.versions.node
   if (typeof process !== "undefined" && process.versions?.node) {
     return "node";
   }
@@ -69,8 +69,10 @@ export function detectEnvironment(): PlatformEnv {
   }
 
   // Edge Workers: has WorkerGlobalScope
-  if (typeof globalThis.WorkerGlobalScope !== "undefined" && 
-      self instanceof globalThis.WorkerGlobalScope) {
+  if (
+    typeof globalThis.WorkerGlobalScope !== "undefined" &&
+    self instanceof globalThis.WorkerGlobalScope
+  ) {
     return "edge";
   }
 
@@ -84,6 +86,7 @@ export function detectEnvironment(): PlatformEnv {
 ## 🎭 Meet the Platform Adapters
 
 ### NodePlatformAdapter
+
 The full-featured adapter for Node.js environments:
 
 ```typescript
@@ -115,7 +118,8 @@ export class NodePlatformAdapter implements IPlatformAdapter {
 
 **Why Node.js is special:** It has the richest feature set - real process control, proper signal handling, and native async context tracking.
 
-### BrowserPlatformAdapter  
+### BrowserPlatformAdapter
+
 Translates browser concepts to our interface:
 
 ```typescript
@@ -152,6 +156,7 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
 **Key insight:** Browsers don't have "processes" but they do have lifecycle events we can map to our interface. The user closing a tab is conceptually similar to SIGTERM.
 
 ### EdgePlatformAdapter
+
 Simple but effective for worker environments:
 
 ```typescript
@@ -180,7 +185,7 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
         case "node":
           this.inner = new NodePlatformAdapter();
           break;
-        case "browser": 
+        case "browser":
           this.inner = new BrowserPlatformAdapter();
           break;
         case "edge":
@@ -216,9 +221,12 @@ Here's where it gets clever. We don't just detect at runtime - we also **optimiz
 export function createPlatformAdapter(): IPlatformAdapter {
   if (typeof __TARGET__ !== "undefined") {
     switch (__TARGET__) {
-      case "node": return new NodePlatformAdapter();
-      case "browser": return new BrowserPlatformAdapter(); 
-      case "edge": return new EdgePlatformAdapter();
+      case "node":
+        return new NodePlatformAdapter();
+      case "browser":
+        return new BrowserPlatformAdapter();
+      case "edge":
+        return new EdgePlatformAdapter();
     }
   }
   return new UniversalPlatformAdapter();
@@ -236,7 +244,7 @@ Our package.json shows the full strategy:
   "exports": {
     ".": {
       "browser": "./dist/browser/index.mjs",
-      "node": "./dist/node/index.mjs", 
+      "node": "./dist/node/index.mjs",
       "import": "./dist/universal/index.mjs"
     },
     "./edge": "./dist/edge/index.mjs"
@@ -258,7 +266,9 @@ export class PlatformAdapter implements IPlatformAdapter {
     // Tests used to pass explicit environments
     const kind = env ?? detectEnvironment();
     switch (kind) {
-      case "node": this.inner = new NodePlatformAdapter(); break;
+      case "node":
+        this.inner = new NodePlatformAdapter();
+        break;
       // ...etc
     }
   }
@@ -275,9 +285,11 @@ export class PlatformAdapter implements IPlatformAdapter {
 ## 🤔 Interesting Design Decisions
 
 ### Why Not Feature Detection?
+
 We could test `if (typeof process !== 'undefined')` everywhere, but that gets messy fast. The adapter pattern centralizes all environment-specific code.
 
 ### Why Async Init?
+
 Some platforms (like Node.js) need to dynamically import modules like `AsyncLocalStorage`. The `init()` method lets us handle this gracefully:
 
 ```typescript
@@ -288,6 +300,7 @@ async init() {
 ```
 
 ### Why Return Cleanup Functions?
+
 Every event listener registration returns a cleanup function:
 
 ```typescript
@@ -300,6 +313,7 @@ onUncaughtException(handler) {
 **Benefit:** No memory leaks, easy testing, and proper cleanup during shutdown.
 
 ### The "Fail Gracefully" Philosophy
+
 When a feature isn't available, we don't crash - we throw informative errors:
 
 ```typescript
@@ -308,21 +322,24 @@ exit() {
 }
 ```
 
-This lets developers know *why* something failed and what runtime features they're missing.
+This lets developers know _why_ something failed and what runtime features they're missing.
 
 ## 🎯 Real-World Benefits
 
 ### For Library Authors
+
 - Write once, run everywhere
-- No runtime-specific imports in your main code  
+- No runtime-specific imports in your main code
 - Bundle optimizers can tree-shake unused platform code
 
 ### For Application Developers
+
 - Same API whether you're building for Node.js, browsers, or edge workers
 - Gradual adoption - migrate one runtime at a time
 - Testing is consistent across all platforms
 
 ### For Framework Maintainers
+
 - Single codebase to maintain
 - Easy to add new runtime support
 - Clear separation of concerns
@@ -359,14 +376,14 @@ The multi-platform architecture might seem complex, but it solves a real problem
 
 - Maintain a single codebase
 - Provide runtime-optimized bundles
-- Support new platforms easily  
+- Support new platforms easily
 - Give developers a consistent experience
 
 The key insight is that **dependency injection has universal concepts** (lifecycle, error handling, environment access) but **platform-specific implementations**. Our adapter pattern bridges this gap elegantly.
 
 Next time you see code like `getPlatform().onShutdownSignal(handler)`, you'll know there's a sophisticated system making sure it works whether you're running in Node.js, a browser, or the next JavaScript runtime that gets invented!
 
-*Happy coding! 🚀*
+_Happy coding! 🚀_
 
 ## 🧪 Testing & Coverage Strategy (What We Practiced)
 
@@ -413,13 +430,16 @@ All registration methods return disposers. Tests should:
 ### Patterns we used in tests
 
 - Browser beforeunload & visibilitychange
+
   - Mock `window.addEventListener`/`removeEventListener` and stash handlers to invoke them synchronously.
   - Provide a `document` mock with `visibilityState = "hidden"` to trigger the visibility handler.
 
 - Error/unhandledrejection handling
+
   - Register handlers via the adapter, then call captured listeners with shapes `{ error: Error }` or `{ reason: value }` to validate unwrapping paths.
 
 - Timers exposure
+
   - Call `adapter.setTimeout(fn, ms)` and immediately `adapter.clearTimeout(id)` to ensure bindings are wired and execute without throwing.
 
 - AsyncLocalStorage
@@ -468,13 +488,18 @@ Beforeunload + cleanup:
 
 ```ts
 const adapter = new BrowserPlatformAdapter();
-const win = { addEventListener: jest.fn(), removeEventListener: jest.fn() } as any;
+const win = {
+  addEventListener: jest.fn(),
+  removeEventListener: jest.fn(),
+} as any;
 (globalThis as any).window = win;
 
 const handler = jest.fn();
 const dispose = adapter.onShutdownSignal(handler);
 
-const before = win.addEventListener.mock.calls.find((c: any[]) => c[0] === "beforeunload")?.[1];
+const before = win.addEventListener.mock.calls.find(
+  (c: any[]) => c[0] === "beforeunload",
+)?.[1];
 before?.();
 expect(handler).toHaveBeenCalled();
 dispose();
