@@ -12,7 +12,6 @@ import { TagType } from "./tag";
 import { IResourceMeta } from "./meta";
 import {
   symbolFilePath,
-  symbolIndexResource,
   symbolResource,
   symbolResourceWithConfig,
 } from "./symbols";
@@ -61,12 +60,9 @@ export interface IResourceDefinition<
    */
   init?: (
     config: HasInputContracts<[...TTags, ...TMiddleware]> extends true
-      ? (IsUnspecified<TConfig> extends true
-          ? InferInputOrViolationFromContracts<[...TTags, ...TMiddleware]>
-          : EnsureInputSatisfiesContracts<
-              [...TTags, ...TMiddleware],
-              TConfig
-            >)
+      ? IsUnspecified<TConfig> extends true
+        ? InferInputOrViolationFromContracts<[...TTags, ...TMiddleware]>
+        : EnsureInputSatisfiesContracts<[...TTags, ...TMiddleware], TConfig>
       : TConfig,
     dependencies: ResourceDependencyValuesType<TDependencies>,
     context: TContext,
@@ -119,10 +115,6 @@ export interface IResourceDefinition<
    * This is the reason we allow it here as well.
    */
   [symbolFilePath]?: string;
-  /**
-   * This is used internally when creating index resources.
-   */
-  [symbolIndexResource]?: boolean;
   tags?: TTags;
 }
 
@@ -148,9 +140,9 @@ export interface IResource<
   id: string;
   with(
     config: HasInputContracts<[...TTags, ...TMiddleware]> extends true
-      ? (IsUnspecified<TConfig> extends true
-          ? InferInputOrViolationFromContracts<[...TTags, ...TMiddleware]>
-          : TConfig)
+      ? IsUnspecified<TConfig> extends true
+        ? InferInputOrViolationFromContracts<[...TTags, ...TMiddleware]>
+        : TConfig
       : TConfig,
   ): IResourceWithConfig<
     TConfig,
@@ -167,7 +159,6 @@ export interface IResource<
   overrides: Array<OverridableElements>;
   middleware: TMiddleware;
   [symbolFilePath]: string;
-  [symbolIndexResource]: boolean;
   [symbolResource]: true;
   /** Return an optional dependency wrapper for this resource. */
   optional: () => IOptionalDependency<

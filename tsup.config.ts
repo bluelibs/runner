@@ -39,66 +39,32 @@ export default defineConfig([
     clean: true,
     dts: false,
     esbuildOptions: makeEsbuildOptions("universal"),
-    outExtension() {
-      return { js: ".mjs" } as any;
-    },
-  }),
-  withCommon({
-    outDir: "dist/universal",
-    platform: "neutral",
-    format: ["cjs"],
-    clean: false,
-    dts: false,
-    esbuildOptions: makeEsbuildOptions("universal"),
-    outExtension() {
-      return { js: ".cjs" } as any;
+    outExtension({ format }) {
+      return { js: format === "cjs" ? ".cjs" : ".mjs" };
     },
   }),
   // Node
   withCommon({
     outDir: "dist/node",
     platform: "node",
-    format: ["esm"],
+    format: ["esm", "cjs"],
     dts: false,
     clean: false,
     esbuildOptions: makeEsbuildOptions("node"),
-    outExtension() {
-      return { js: ".mjs" } as any;
-    },
-  }),
-  withCommon({
-    outDir: "dist/node",
-    platform: "node",
-    format: ["cjs"],
-    dts: false,
-    clean: false,
-    esbuildOptions: makeEsbuildOptions("node"),
-    outExtension() {
-      return { js: ".cjs" } as any;
+    outExtension({ format }) {
+      return { js: format === "cjs" ? ".cjs" : ".mjs" };
     },
   }),
   // Browser
   withCommon({
     outDir: "dist/browser",
     platform: "browser",
-    format: ["esm"],
+    format: ["esm", "cjs"],
     dts: false,
     clean: false,
     esbuildOptions: makeEsbuildOptions("browser"),
-    outExtension() {
-      return { js: ".mjs" } as any;
-    },
-  }),
-  // Browser CJS for legacy consumers that require() the package
-  withCommon({
-    outDir: "dist/browser",
-    platform: "browser",
-    format: ["cjs"],
-    dts: false,
-    clean: false,
-    esbuildOptions: makeEsbuildOptions("browser"),
-    outExtension() {
-      return { js: ".cjs" } as any;
+    outExtension({ format }) {
+      return { js: format === "cjs" ? ".cjs" : ".mjs" };
     },
   }),
 
@@ -106,12 +72,12 @@ export default defineConfig([
   withCommon({
     outDir: "dist/edge",
     platform: "neutral",
-    format: ["esm"],
+    format: ["esm", "cjs"],
     dts: false,
     clean: false,
     esbuildOptions: makeEsbuildOptions("edge"),
-    outExtension() {
-      return { js: ".mjs" } as any;
+    outExtension({ format }) {
+      return { js: format === "cjs" ? ".cjs" : ".mjs" };
     },
   }),
   // Types at root for package types resolution
