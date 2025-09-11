@@ -6,7 +6,8 @@ alwaysApply: true
 
 ## **MUST**
 
-- Before you begin create a TODO-list.
+- Listen carefully to all instructions and respect proper tooling for file editing and etc.
+- Before you begin create a TODO-list. You can adapt TODO-list mid-task. At the end make sure TODO list is completed.
 - Avoid running commands like `/bin/zsh -lc 'cd ...; npm run'`
 - Read AI.md stored at the root folder if it's not already in your context.
 - Be a highly motivated, adaptable copilot for a Senior Web Developer.
