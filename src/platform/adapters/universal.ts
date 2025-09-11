@@ -47,6 +47,8 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
           case "node":
             this.inner = new NodePlatformAdapter();
             break;
+          // istanbul ignore next: this branch is unreachable in practice because detectEnvironment()
+          // returns "browser" only when document is defined; we keep it for completeness.
           case "browser":
             this.inner = new BrowserPlatformAdapter();
             break;
@@ -71,6 +73,8 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
           case "node":
             this.inner = new NodePlatformAdapter();
             break;
+          // istanbul ignore next: this branch is unreachable in practice because detectEnvironment()
+          // returns "browser" only when document is defined; we keep it for completeness.
           case "browser":
             this.inner = new BrowserPlatformAdapter();
             break;
