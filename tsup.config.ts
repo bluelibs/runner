@@ -26,7 +26,10 @@ export default defineConfig([
     dts: false,
     esbuildOptions(options) {
       options.metafile = true;
-      options.define = { ...(options.define || {}), __TARGET__: JSON.stringify("universal") };
+      options.define = {
+        ...(options.define || {}),
+        __TARGET__: JSON.stringify("universal"),
+      };
       options.keepNames = true;
       options.minifyIdentifiers = false;
     },
@@ -42,7 +45,10 @@ export default defineConfig([
     dts: false,
     esbuildOptions(options) {
       options.metafile = true;
-      options.define = { ...(options.define || {}), __TARGET__: JSON.stringify("universal") };
+      options.define = {
+        ...(options.define || {}),
+        __TARGET__: JSON.stringify("universal"),
+      };
       options.keepNames = true;
       options.minifyIdentifiers = false;
     },
@@ -59,7 +65,10 @@ export default defineConfig([
     clean: false,
     esbuildOptions(options) {
       options.metafile = true;
-      options.define = { ...(options.define || {}), __TARGET__: JSON.stringify("node") };
+      options.define = {
+        ...(options.define || {}),
+        __TARGET__: JSON.stringify("node"),
+      };
       options.keepNames = true;
       options.minifyIdentifiers = false;
     },
@@ -75,7 +84,10 @@ export default defineConfig([
     clean: false,
     esbuildOptions(options) {
       options.metafile = true;
-      options.define = { ...(options.define || {}), __TARGET__: JSON.stringify("node") };
+      options.define = {
+        ...(options.define || {}),
+        __TARGET__: JSON.stringify("node"),
+      };
       options.keepNames = true;
       options.minifyIdentifiers = false;
     },
@@ -92,7 +104,10 @@ export default defineConfig([
     clean: false,
     esbuildOptions(options) {
       options.metafile = true;
-      options.define = { ...(options.define || {}), __TARGET__: JSON.stringify("browser") };
+      options.define = {
+        ...(options.define || {}),
+        __TARGET__: JSON.stringify("browser"),
+      };
       options.keepNames = true;
       options.minifyIdentifiers = false;
     },
@@ -109,7 +124,10 @@ export default defineConfig([
     clean: false,
     esbuildOptions(options) {
       options.metafile = true;
-      options.define = { ...(options.define || {}), __TARGET__: JSON.stringify("edge") };
+      options.define = {
+        ...(options.define || {}),
+        __TARGET__: JSON.stringify("edge"),
+      };
       options.keepNames = true;
       options.minifyIdentifiers = false;
     },
@@ -126,7 +144,10 @@ export default defineConfig([
     clean: false,
     esbuildOptions(options) {
       options.metafile = true;
-      options.define = { ...(options.define || {}), __TARGET__: JSON.stringify("universal") };
+      options.define = {
+        ...(options.define || {}),
+        __TARGET__: JSON.stringify("universal"),
+      };
     },
     outExtension() {
       return { js: ".unused.js" } as any; // not referenced
