@@ -5,10 +5,9 @@ import { globalTags } from "../globals/globalTags";
 
 describe("Phantom tasks", () => {
   it("creates a phantom task that registers and returns undefined when executed directly", async () => {
-    const ph = defineTask.phantom<
-      { v: string },
-      Promise<string>
-    >({ id: "app.tasks.phantom.1" });
+    const ph = defineTask.phantom<{ v: string }, Promise<string>>({
+      id: "app.tasks.phantom.1",
+    });
 
     // Basic branding checks
     expect(isTask(ph)).toBe(true);
@@ -34,10 +33,9 @@ describe("Phantom tasks", () => {
   });
 
   it("can be used as a dependency inside another task", async () => {
-    const ph = defineTask.phantom<
-      { x: number },
-      Promise<number>
-    >({ id: "app.tasks.phantom.2" });
+    const ph = defineTask.phantom<{ x: number }, Promise<number>>({
+      id: "app.tasks.phantom.2",
+    });
 
     const usesPhantom = defineTask<
       { n: number },
@@ -66,16 +64,15 @@ describe("Phantom tasks", () => {
   });
 
   it("is routed by tunnel middleware when selected", async () => {
-    const ph = defineTask.phantom<
-      { v: string },
-      Promise<string>
-    >({ id: "app.tasks.phantom.tunnel" });
+    const ph = defineTask.phantom<{ v: string }, Promise<string>>({
+      id: "app.tasks.phantom.tunnel",
+    });
 
     const tunnelRes = defineResource({
       id: "app.resources.phantom.tunnel",
-      tags: [globalTags.tunnel.with({ tasks: [ph.id] })],
+      tags: [globalTags.tunnel.with({ mode: "client", tasks: [ph.id] })],
       init: async () => ({
-        run: async (taskId: string, input: any) => `TUN:${taskId}:${input?.v}`,
+        run: async (task: any, input: any) => `TUN:${task.id}:${input?.v}`,
       }),
     });
 

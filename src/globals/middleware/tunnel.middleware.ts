@@ -2,7 +2,7 @@ import { defineResourceMiddleware } from "../../define";
 import { globalTags } from "../globalTags";
 import { globalResources } from "../globalResources";
 import type { Store } from "../../models/Store";
-import type { ITask, IEvent } from "../../defs";
+import type { ITask, IEvent, IEventEmission } from "../../defs";
 import type {
   TunnelRunner,
   TunnelTagConfig,
@@ -27,11 +27,9 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
     const value = (await next(resource.config)) as TunnelRunner;
 
     // Extract the tunnel configuration from the resource's tags
-    const cfg = globalTags.tunnel.extract(resource.definition) as
-      | TunnelTagConfig
-      | undefined;
-
-    if (!cfg) return value;
+    const cfg = globalTags.tunnel.extract(
+      resource.definition,
+    ) as TunnelTagConfig;
 
     const mode = cfg.mode || "none";
     const tasks = cfg.tasks ? resolveTasks(store, cfg.tasks) : [];
@@ -65,19 +63,15 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
     if (events.length > 0) {
       const selectedEventIds = new Set(events.map((e) => e.id));
       // Install a global emission interceptor for selected events
-      (eventManager as any).intercept(async (next: any, emission: any) => {
-        if (selectedEventIds.has(emission.id)) {
-          const st = store.events.get(emission.id);
-          if (!st) {
-            throw new Error(
-              `Event ${emission.id} not found while trying to tunnel emission.`,
-            );
+      eventManager.intercept(
+        async (next: any, emission: IEventEmission<any>) => {
+          if (selectedEventIds.has(emission.id)) {
+            return value.emit!(emission);
           }
-          await value.emit!(st.event as any, emission.data);
-          return; // skip normal listeners
-        }
-        return next(emission);
-      });
+
+          return next(emission);
+        },
+      );
     }
 
     return value;
@@ -134,22 +128,19 @@ function resolveEvents(store: Store, selector: any): IEvent[] {
     return out;
   }
 
-  for (const item of selector || []) {
+  for (const item of selector) {
+    let st;
     if (typeof item === "string") {
-      const st = store.events.get(item);
-      if (!st)
-        throw new Error(
-          `Event ${item} not found while trying to resolve events for tunnel.`,
-        );
-      out.push(st.event);
+      st = store.events.get(item);
     } else if (item && typeof item === "object") {
-      const st = store.events.get(item.id);
-      if (!st)
-        throw new Error(
-          `Event ${item} not found while trying to resolve events for tunnel.`,
-        );
-      out.push(st.event);
+      st = store.events.get(item.id);
     }
+
+    if (!st)
+      throw new Error(
+        `Event ${item} not found while trying to resolve events for tunnel.`,
+      );
+    out.push(st.event);
   }
 
   return out;
