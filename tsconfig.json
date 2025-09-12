@@ -14,7 +14,11 @@
     "strict": true,
     "strictNullChecks": true,
     "noImplicitThis": false,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "baseUrl": "./src",
+    "paths": {
+      "#/*": ["src/*"]
+    }
   },
 
   "include": ["src/**/*.ts"],

@@ -321,8 +321,9 @@ describe("Logger", () => {
 
     expect(seen).toEqual(["m1", "m2"]);
     const outputs = gather();
-    expect(outputs.indexOf("m1")).toBeGreaterThanOrEqual(0);
-    expect(outputs.indexOf("m2")).toBeGreaterThan(outputs.indexOf("m1"));
+    // Order across stdout/stderr is not guaranteed when aggregating streams; ensure both got printed
+    expect(outputs).toContain("m1");
+    expect(outputs).toContain("m2");
   });
 
   it("registering listener on child delegates to root logger", async () => {

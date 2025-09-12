@@ -1,12 +1,12 @@
-import { 
-  getPlatform, 
-  setPlatform, 
-  resetPlatform, 
+import {
+  getPlatform,
+  setPlatform,
+  resetPlatform,
   getDetectedEnvironment,
   isNode,
   isBrowser,
   isUniversal,
-  PlatformAdapter
+  PlatformAdapter,
 } from "../../platform";
 import { NodePlatformAdapter } from "../../platform/adapters/node";
 import { BrowserPlatformAdapter } from "../../platform/adapters/browser";
@@ -37,7 +37,7 @@ describe("Platform Index", () => {
     it("should set custom platform adapter", () => {
       const customAdapter = new NodePlatformAdapter();
       setPlatform(customAdapter);
-      
+
       const platform = getPlatform();
       expect(platform).toBe(customAdapter);
     });
@@ -45,10 +45,10 @@ describe("Platform Index", () => {
     it("should override previously created platform", () => {
       const firstPlatform = getPlatform();
       const customAdapter = new BrowserPlatformAdapter();
-      
+
       setPlatform(customAdapter);
       const secondPlatform = getPlatform();
-      
+
       expect(secondPlatform).toBe(customAdapter);
       expect(secondPlatform).not.toBe(firstPlatform);
     });
@@ -59,14 +59,14 @@ describe("Platform Index", () => {
       const platform1 = getPlatform();
       resetPlatform();
       const platform2 = getPlatform();
-      
+
       expect(platform1).not.toBe(platform2);
     });
 
     it("should reset detected environment", () => {
       getDetectedEnvironment();
       resetPlatform();
-      
+
       // The environment should be re-detected on next call
       const env = getDetectedEnvironment();
       expect(env).toBeDefined();
@@ -77,7 +77,7 @@ describe("Platform Index", () => {
     it("should detect and cache environment", () => {
       const env1 = getDetectedEnvironment();
       const env2 = getDetectedEnvironment();
-      
+
       expect(env1).toBe(env2);
       expect(["node", "browser", "universal", "edge"]).toContain(env1);
     });
@@ -86,7 +86,7 @@ describe("Platform Index", () => {
       const env1 = getDetectedEnvironment();
       resetPlatform();
       const env2 = getDetectedEnvironment();
-      
+
       // They should be equal since we're in the same environment
       // but the detection logic should have run again
       expect(env1).toBe(env2);
@@ -98,7 +98,7 @@ describe("Platform Index", () => {
       it("should return true only for node environment", () => {
         const result = isNode();
         expect(typeof result).toBe("boolean");
-        
+
         // In test environment, this is likely to be true
         if (getDetectedEnvironment() === "node") {
           expect(result).toBe(true);
@@ -112,7 +112,7 @@ describe("Platform Index", () => {
       it("should return true only for browser environment", () => {
         const result = isBrowser();
         expect(typeof result).toBe("boolean");
-        
+
         if (getDetectedEnvironment() === "browser") {
           expect(result).toBe(true);
         } else {
@@ -125,13 +125,58 @@ describe("Platform Index", () => {
       it("should return true only for universal environment", () => {
         const result = isUniversal();
         expect(typeof result).toBe("boolean");
-        
+
         if (getDetectedEnvironment() === "universal") {
           expect(result).toBe(true);
         } else {
           expect(result).toBe(false);
         }
       });
+    });
+  });
+
+  describe("__TARGET__ = universal cases", () => {
+    let originalTarget: any;
+
+    beforeAll(() => {
+      originalTarget = (globalThis as any).__TARGET__;
+      (globalThis as any).__TARGET__ = "universal";
+    });
+
+    afterAll(() => {
+      if (originalTarget !== undefined) {
+        (globalThis as any).__TARGET__ = originalTarget;
+      } else {
+        delete (globalThis as any).__TARGET__;
+      }
+    });
+
+    beforeEach(() => {
+      resetPlatform();
+    });
+
+    it("should call detectEnvironment when __TARGET__ is universal", () => {
+      const env = getDetectedEnvironment();
+      expect(env).toBeDefined();
+      expect(["node", "browser", "universal", "edge"]).toContain(env);
+    });
+
+    it("should use runtime detection in isNode when __TARGET__ is universal", () => {
+      const result = isNode();
+      expect(typeof result).toBe("boolean");
+      expect(result).toBe(getDetectedEnvironment() === "node");
+    });
+
+    it("should use runtime detection in isBrowser when __TARGET__ is universal", () => {
+      const result = isBrowser();
+      expect(typeof result).toBe("boolean");
+      expect(result).toBe(getDetectedEnvironment() === "browser");
+    });
+
+    it("should use runtime detection in isUniversal when __TARGET__ is universal", () => {
+      const result = isUniversal();
+      expect(typeof result).toBe("boolean");
+      expect(result).toBe(getDetectedEnvironment() === "universal");
     });
   });
 
@@ -157,7 +202,9 @@ describe("Platform Index", () => {
     it("should create GenericUniversalPlatformAdapter for universal environment", () => {
       const adapter = new PlatformAdapter("universal");
       expect(adapter.env).toBe("universal");
-      expect((adapter as any).inner).toBeInstanceOf(GenericUniversalPlatformAdapter);
+      expect((adapter as any).inner).toBeInstanceOf(
+        GenericUniversalPlatformAdapter,
+      );
     });
 
     it("should create UniversalPlatformAdapter for unknown environment", () => {
@@ -174,7 +221,7 @@ describe("Platform Index", () => {
     it("should delegate init to inner adapter", async () => {
       const adapter = new PlatformAdapter("node");
       const initSpy = jest.spyOn((adapter as any).inner, "init");
-      
+
       await adapter.init();
       expect(initSpy).toHaveBeenCalled();
     });
@@ -183,7 +230,7 @@ describe("Platform Index", () => {
       const adapter = new PlatformAdapter("node");
       const handler = jest.fn();
       const spy = jest.spyOn((adapter as any).inner, "onUncaughtException");
-      
+
       adapter.onUncaughtException(handler);
       expect(spy).toHaveBeenCalledWith(handler);
     });
@@ -192,7 +239,7 @@ describe("Platform Index", () => {
       const adapter = new PlatformAdapter("node");
       const handler = jest.fn();
       const spy = jest.spyOn((adapter as any).inner, "onUnhandledRejection");
-      
+
       adapter.onUnhandledRejection(handler);
       expect(spy).toHaveBeenCalledWith(handler);
     });
@@ -201,7 +248,7 @@ describe("Platform Index", () => {
       const adapter = new PlatformAdapter("node");
       const handler = jest.fn();
       const spy = jest.spyOn((adapter as any).inner, "onShutdownSignal");
-      
+
       adapter.onShutdownSignal(handler);
       expect(spy).toHaveBeenCalledWith(handler);
     });
@@ -209,7 +256,7 @@ describe("Platform Index", () => {
     it("should delegate exit to inner adapter", () => {
       const adapter = new PlatformAdapter("browser"); // Use browser instead of node to avoid process.exit
       const spy = jest.spyOn((adapter as any).inner, "exit");
-      
+
       try {
         adapter.exit(1);
       } catch {
@@ -221,7 +268,7 @@ describe("Platform Index", () => {
     it("should delegate getEnv to inner adapter", () => {
       const adapter = new PlatformAdapter("node");
       const spy = jest.spyOn((adapter as any).inner, "getEnv");
-      
+
       adapter.getEnv("TEST_KEY");
       expect(spy).toHaveBeenCalledWith("TEST_KEY");
     });
@@ -229,7 +276,7 @@ describe("Platform Index", () => {
     it("should delegate hasAsyncLocalStorage to inner adapter", () => {
       const adapter = new PlatformAdapter("node");
       const spy = jest.spyOn((adapter as any).inner, "hasAsyncLocalStorage");
-      
+
       adapter.hasAsyncLocalStorage();
       expect(spy).toHaveBeenCalled();
     });
@@ -237,7 +284,7 @@ describe("Platform Index", () => {
     it("should delegate createAsyncLocalStorage to inner adapter", () => {
       const adapter = new PlatformAdapter("node");
       const spy = jest.spyOn((adapter as any).inner, "createAsyncLocalStorage");
-      
+
       adapter.createAsyncLocalStorage();
       expect(spy).toHaveBeenCalled();
     });
@@ -246,6 +293,145 @@ describe("Platform Index", () => {
       const adapter = new PlatformAdapter("node");
       expect(adapter.setTimeout).toBe(globalThis.setTimeout);
       expect(adapter.clearTimeout).toBe(globalThis.clearTimeout);
+    });
+  });
+
+  describe("__TARGET__ build-time target cases", () => {
+    let originalTarget: any;
+
+    beforeEach(() => {
+      originalTarget = (globalThis as any).__TARGET__;
+      resetPlatform();
+    });
+
+    afterEach(() => {
+      if (originalTarget !== undefined) {
+        (globalThis as any).__TARGET__ = originalTarget;
+      } else {
+        delete (globalThis as any).__TARGET__;
+      }
+    });
+
+    describe("__TARGET__ = node", () => {
+      beforeEach(() => {
+        (globalThis as any).__TARGET__ = "node";
+      });
+
+      it("should use node as detected environment when __TARGET__ is node", () => {
+        const env = getDetectedEnvironment();
+        expect(env).toBe("node");
+      });
+
+      it("should return true for isNode() when __TARGET__ is node", () => {
+        expect(isNode()).toBe(true);
+      });
+
+      it("should return false for isBrowser() when __TARGET__ is node", () => {
+        expect(isBrowser()).toBe(false);
+      });
+
+      it("should return false for isUniversal() when __TARGET__ is node", () => {
+        expect(isUniversal()).toBe(false);
+      });
+    });
+
+    describe("__TARGET__ = browser", () => {
+      beforeEach(() => {
+        (globalThis as any).__TARGET__ = "browser";
+      });
+
+      it("should use browser as detected environment when __TARGET__ is browser", () => {
+        const env = getDetectedEnvironment();
+        expect(env).toBe("browser");
+      });
+
+      it("should return false for isNode() when __TARGET__ is browser", () => {
+        expect(isNode()).toBe(false);
+      });
+
+      it("should return true for isBrowser() when __TARGET__ is browser", () => {
+        expect(isBrowser()).toBe(true);
+      });
+
+      it("should return false for isUniversal() when __TARGET__ is browser", () => {
+        expect(isUniversal()).toBe(false);
+      });
+    });
+
+    describe("__TARGET__ = edge", () => {
+      beforeEach(() => {
+        (globalThis as any).__TARGET__ = "edge";
+      });
+
+      it("should use edge as detected environment when __TARGET__ is edge", () => {
+        const env = getDetectedEnvironment();
+        expect(env).toBe("edge");
+      });
+
+      it("should return false for isNode() when __TARGET__ is edge", () => {
+        expect(isNode()).toBe(false);
+      });
+
+      it("should return false for isBrowser() when __TARGET__ is edge", () => {
+        expect(isBrowser()).toBe(false);
+      });
+
+      it("should return false for isUniversal() when __TARGET__ is edge", () => {
+        expect(isUniversal()).toBe(false);
+      });
+    });
+
+    describe("__TARGET__ = universal", () => {
+      beforeEach(() => {
+        (globalThis as any).__TARGET__ = "universal";
+      });
+
+      it("should use runtime detection when __TARGET__ is universal", () => {
+        const env = getDetectedEnvironment();
+        // When __TARGET__ is "universal", it should use runtime detection
+        expect(["node", "browser", "universal", "edge"]).toContain(env);
+      });
+
+      it("should use runtime detection in isNode() when __TARGET__ is universal", () => {
+        const result = isNode();
+        expect(typeof result).toBe("boolean");
+        expect(result).toBe(getDetectedEnvironment() === "node");
+      });
+
+      it("should use runtime detection in isBrowser() when __TARGET__ is universal", () => {
+        const result = isBrowser();
+        expect(typeof result).toBe("boolean");
+        expect(result).toBe(getDetectedEnvironment() === "browser");
+      });
+
+      it("should use runtime detection in isUniversal() when __TARGET__ is universal", () => {
+        const result = isUniversal();
+        expect(typeof result).toBe("boolean");
+        expect(result).toBe(getDetectedEnvironment() === "universal");
+      });
+    });
+
+    describe("__TARGET__ undefined cases", () => {
+      beforeEach(() => {
+        (globalThis as any).__TARGET__ = undefined;
+      });
+
+      it("should use node as detected environment when __TARGET__ is undefined", () => {
+        const env = getDetectedEnvironment();
+        expect(env).toBe("node");
+      });
+
+      it("should return true for isNode() when __TARGET__ is undefined", () => {
+        expect(isNode()).toBe(true);
+      });
+
+      it("should return false for isBrowser() when __TARGET__ is undefined", () => {
+        expect(isBrowser()).toBe(false);
+      });
+
+      it("should return false for isUniversal() when __TARGET__ is undefined", () => {
+        expect(isUniversal()).toBe(false);
+      });
     });
   });
 });

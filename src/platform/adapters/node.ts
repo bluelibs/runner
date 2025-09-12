@@ -3,6 +3,7 @@ import { PlatformUnsupportedFunction } from "../../errors";
 import { loadAsyncLocalStorageClass } from "./node-als";
 
 export class NodePlatformAdapter implements IPlatformAdapter {
+  readonly id = "node" as const;
   private alsClass: any;
 
   async init() {

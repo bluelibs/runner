@@ -3,6 +3,7 @@ import { PlatformUnsupportedFunction } from "../../errors";
 
 // A generic, non-detecting adapter that uses globalThis listeners and no Node APIs.
 export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
+  readonly id = "universal" as const;
   async init() {}
 
   onUncaughtException(handler: (error: any) => void) {
@@ -42,7 +43,8 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
 
       return () => {
         tgt.removeEventListener?.("beforeunload", handlers.before);
-        if (handlers.visibility) tgt.removeEventListener?.("visibilitychange", handlers.visibility);
+        if (handlers.visibility)
+          tgt.removeEventListener?.("visibilitychange", handlers.visibility);
       };
     }
     return () => {};

@@ -1,7 +1,8 @@
-import type { IAsyncLocalStorage, IPlatformAdapter } from "../types";
+import type { IAsyncLocalStorage, IPlatformAdapter, PlatformId } from "../types";
 import { PlatformUnsupportedFunction } from "../../errors";
 
 export class BrowserPlatformAdapter implements IPlatformAdapter {
+  readonly id: PlatformId = "browser";
   async init() {}
 
   onUncaughtException(handler: (error: any) => void) {

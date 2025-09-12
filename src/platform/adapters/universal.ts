@@ -1,12 +1,10 @@
-import type { IPlatformAdapter } from "../types";
+import type { IPlatformAdapter, PlatformId } from "../types";
 import { BrowserPlatformAdapter } from "./browser";
 import { EdgePlatformAdapter } from "./edge";
 import { NodePlatformAdapter } from "./node";
 import { GenericUniversalPlatformAdapter } from "./universal-generic";
 
-export type PlatformEnv = "node" | "browser" | "edge" | "universal" | "manual";
-
-export function detectEnvironment(): PlatformEnv {
+export function detectEnvironment(): PlatformId {
   if (typeof window !== "undefined" && typeof document !== "undefined") {
     return "browser";
   }
@@ -42,6 +40,7 @@ export function detectEnvironment(): PlatformEnv {
 }
 
 export class UniversalPlatformAdapter implements IPlatformAdapter {
+  readonly id: PlatformId = "universal";
   private inner: IPlatformAdapter | null = null;
 
   async init() {

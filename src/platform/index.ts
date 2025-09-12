@@ -1,29 +1,31 @@
-import type { IPlatformAdapter, IAsyncLocalStorage } from "./types";
+import type { IPlatformAdapter, IAsyncLocalStorage, PlatformId } from "./types";
 import { createPlatformAdapter } from "./factory";
-import { detectEnvironment, type PlatformEnv } from "./adapters/universal";
+import { detectEnvironment } from "./adapters/universal";
 import { NodePlatformAdapter } from "./adapters/node";
 import { BrowserPlatformAdapter } from "./adapters/browser";
 import { EdgePlatformAdapter } from "./adapters/edge";
 import { UniversalPlatformAdapter } from "./adapters/universal";
 import { GenericUniversalPlatformAdapter } from "./adapters/universal-generic";
 
+declare const __TARGET__: string | undefined;
+
 // Keep legacy names but delegate to new adapters
 let platformInstance: IPlatformAdapter | null = null;
-let detectedEnvironment: PlatformEnv | null = null;
+let detectedEnvironment: PlatformId | null = null;
 
 export { detectEnvironment };
 
 export function getPlatform(): IPlatformAdapter {
   if (!platformInstance) {
     platformInstance = createPlatformAdapter();
-    detectedEnvironment = detectEnvironment();
+    detectedEnvironment = platformInstance.id;
   }
   return platformInstance;
 }
 
 export function setPlatform(adapter: IPlatformAdapter): void {
   platformInstance = adapter;
-  detectedEnvironment = "manual";
+  detectedEnvironment = adapter.id;
 }
 
 export function resetPlatform(): void {
@@ -31,20 +33,44 @@ export function resetPlatform(): void {
   detectedEnvironment = null;
 }
 
-export function getDetectedEnvironment(): PlatformEnv {
-  if (!detectedEnvironment) detectedEnvironment = detectEnvironment();
+export function getDetectedEnvironment(): PlatformId {
+  if (detectedEnvironment) return detectedEnvironment;
+  // Prefer build-time target when available (node/browser/edge bundles)
+  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
+    detectedEnvironment = __TARGET__ as PlatformId;
+    return detectedEnvironment;
+  }
+  // Default to node when target is undefined (dev default)
+  if (typeof __TARGET__ === "undefined") {
+    detectedEnvironment = "node";
+    return detectedEnvironment;
+  }
+  // Fallback to runtime detection only for explicit universal target
+  detectedEnvironment = detectEnvironment();
   return detectedEnvironment;
 }
 
 export function isNode(): boolean {
+  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
+    return __TARGET__ === "node";
+  }
+  if (typeof __TARGET__ === "undefined") return true; // dev default
   return getDetectedEnvironment() === "node";
 }
 
 export function isBrowser(): boolean {
+  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
+    return __TARGET__ === "browser";
+  }
+  if (typeof __TARGET__ === "undefined") return false; // dev default
   return getDetectedEnvironment() === "browser";
 }
 
 export function isUniversal(): boolean {
+  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
+    return __TARGET__ === "universal";
+  }
+  if (typeof __TARGET__ === "undefined") return false; // dev default
   return getDetectedEnvironment() === "universal";
 }
 
@@ -53,11 +79,12 @@ export type { IPlatformAdapter, IAsyncLocalStorage } from "./types";
 // Backwards-compat adapter preserving old constructor(env) signature used in tests
 export class PlatformAdapter implements IPlatformAdapter {
   private inner: IPlatformAdapter;
-  readonly env: PlatformEnv;
+  readonly env: PlatformId;
+  readonly id: PlatformId;
 
-  constructor(env?: PlatformEnv) {
+  constructor(env?: PlatformId) {
     const kind = env ?? detectEnvironment();
-    this.env = kind as PlatformEnv;
+    this.env = kind as PlatformId;
     switch (kind) {
       case "node":
         this.inner = new NodePlatformAdapter();
@@ -75,6 +102,7 @@ export class PlatformAdapter implements IPlatformAdapter {
       default:
         this.inner = new UniversalPlatformAdapter();
     }
+    this.id = this.inner.id;
   }
 
   async init() {

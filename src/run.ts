@@ -22,8 +22,6 @@ import { RunResult } from "./models/RunResult";
 import { RunOptions } from "./types/runner";
 import { getPlatform } from "./platform";
 
-const platform = getPlatform();
-
 /**
  * This is the central function that kicks off you runner. You can run as many resources as you want in a single process, they will run in complete isolation.
  *
@@ -39,7 +37,7 @@ export async function run<C, V extends Promise<any>>(
   options?: RunOptions,
 ): Promise<RunResult<V extends Promise<infer U> ? U : V>> {
   // Import all necessary elements based on platform.
-  await platform.init();
+  await getPlatform().init();
   const {
     debug = undefined,
     logs = {},
@@ -51,7 +49,7 @@ export async function run<C, V extends Promise<any>>(
   } = options || {};
 
   const {
-    printThreshold = platform.getEnv("NODE_ENV") === "test" ? null : "info",
+    printThreshold = getPlatform().getEnv("NODE_ENV") === "test" ? null : "info",
     printStrategy = "pretty",
     bufferLogs = false,
   } = logs;
