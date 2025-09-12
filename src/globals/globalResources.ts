@@ -7,6 +7,7 @@ import { cacheResource } from "./middleware/cache.middleware";
 import { queueResource } from "./resources/queue.resource";
 import { globalTags } from "./globalTags";
 import { MiddlewareManager } from "../models/MiddlewareManager";
+import { authResources } from "./auth";
 
 const systemTag = globalTags.system;
 
@@ -60,4 +61,5 @@ export const globalResources = {
   }),
   cache: cacheResource,
   queue: queueResource,
+  auth: authResources,
 };
