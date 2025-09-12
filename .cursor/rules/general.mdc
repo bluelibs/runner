@@ -33,3 +33,9 @@ alwaysApply: true
 
 - Use `(as any)` **only** as a tracked, temporary fix.
 - Further refine/reorganize code for better DX without altering behavior.
+
+## END OF WORK
+
+- Ensure all todos are done
+- Ensure there are no code-smells or code weirdness introduced
+- Trust yourself but verify yourself, you might make mistakes.
