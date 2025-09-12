@@ -25,6 +25,10 @@ export const symbolResourceMiddleware: unique symbol = Symbol.for(
 export const symbolMiddlewareConfigured: unique symbol = Symbol.for(
   "runner.middlewareConfigured",
 );
+/** Marks a task that has been patched by a tunnel. Value is the local side mode. */
+export const symbolTunneledTask: unique symbol = Symbol.for(
+  "runner.tunneledTask",
+);
 /** @internal Marks hook definitions (event listeners without middleware) */
 export const symbolHook: unique symbol = Symbol.for("runner.hook");
 // export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol.for(

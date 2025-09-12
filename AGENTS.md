@@ -1,0 +1,9 @@
+- Be passionate about what you do, be precise, thoughtful and clear.
+- When doing a tasks, first think about the contracts and interfaces, then think about the acceptance criteria, and only then think about implementation.
+- Type-strictness is a must, avoid type casting unless forced to
+- 100% test coverage is a must and mandatory after every change (npm run coverage)
+- AI.md contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
+- This package is multi-platform (readmes/MULTIPLATFORM.md) be sure to take this into account when implementing changes
+- Node specific code goes under ./src/node/ folder. It is exported only for node.
+- Always run the tests, don't assume that you're fixed work.
+- When running commands, don't run them with bash -lc, or zsh -lc, run the commands directly.

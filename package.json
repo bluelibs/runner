@@ -22,6 +22,12 @@
       "require": "./dist/universal/index.cjs",
       "default": "./dist/universal/index.mjs"
     },
+    "./node": {
+      "types": "./dist/node/node.d.ts",
+      "import": "./dist/node/node.mjs",
+      "require": "./dist/node/node.cjs",
+      "default": "./dist/node/node.mjs"
+    },
     "./edge": {
       "import": "./dist/edge/index.mjs",
       "default": "./dist/edge/index.mjs"

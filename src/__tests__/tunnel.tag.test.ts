@@ -178,7 +178,7 @@ describe("Tunnel Tag & Middleware", () => {
 });
 
 describe("Tunnel Events", () => {
-  it("routes selected events via ids and skips normal listeners", async () => {
+  it("routes selected events via ids and also runs local listeners", async () => {
     const ev = defineEvent<{ v: string }>({ id: "app.events.e1" });
     let handled = false;
     const h = defineHook({
@@ -216,7 +216,7 @@ describe("Tunnel Events", () => {
     });
 
     const rr = await run(app);
-    expect(handled).toBe(false);
+    expect(handled).toBe(true);
     expect(captured).toEqual([{ id: "app.events.e1", v: "X" }]);
     await rr.dispose();
   });

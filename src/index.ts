@@ -46,3 +46,6 @@ export { Context } from "./context";
 
 // Re-export types at the package root so consumer declaration emits can reference them directly
 export type * from "./defs";
+
+// Universal HTTP fetch-based tunnel helpers
+export { httpFetchTunnel, createExposureFetch } from "./http-fetch-tunnel.resource";

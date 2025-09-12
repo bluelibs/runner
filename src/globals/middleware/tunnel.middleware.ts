@@ -7,7 +7,9 @@ import type {
   TunnelRunner,
   TunnelTagConfig,
   TunnelTaskSelector,
+  TunnelEventSelector,
 } from "../resources/tunnel/types";
+import { symbolTunneledTask } from "../../types/symbols";
 
 export const tunnelResourceMiddleware = defineResourceMiddleware<
   void,
@@ -49,7 +51,8 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
     // If there is no mode, or we are server, we don't override anything
     // We are executing, the override happens on the client.
     if (mode === "none" || mode === "server") {
-      return;
+      // Do not patch in these modes, but preserve and return the runner value
+      return value;
     }
 
     // Override selected tasks' run() to delegate to tunnel runner
@@ -57,7 +60,8 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
       t.run = (async (input: any) => {
         return value.run!(t as any, input);
       }) as any;
-      // t[phantomTaskSymbol] = true;
+      // Mark task as tunneled locally so the caller side can adjust middleware policy
+      (t as any)[symbolTunneledTask] = "client";
     }
 
     if (events.length > 0) {
@@ -66,6 +70,11 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
       eventManager.intercept(
         async (next: any, emission: IEventEmission<any>) => {
           if (selectedEventIds.has(emission.id)) {
+            // TODO: maybe a Promise.all() ?
+            // New semantics: emit both locally and remotely.
+            // Local emission (respects stopPropagation locally)
+            await next(emission);
+            // Remote emission (always forwarded)
             return value.emit!(emission);
           }
 
@@ -116,7 +125,7 @@ function resolveTasks(store: Store, selector: TunnelTaskSelector): ITask[] {
 }
 
 // Helper function to resolve events from the store
-function resolveEvents(store: Store, selector: any): IEvent[] {
+function resolveEvents(store: Store, selector: TunnelEventSelector): IEvent[] {
   const out: IEvent[] = [];
 
   if (typeof selector === "function") {
