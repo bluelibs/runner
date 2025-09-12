@@ -40,6 +40,7 @@ import {
   timeoutTaskMiddleware,
   timeoutResourceMiddleware,
 } from "../globals/middleware/timeout.middleware";
+import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middleware";
 import { OnUnhandledError } from "./UnhandledError";
 import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
@@ -178,6 +179,7 @@ export class Store {
     const builtInResourceMiddlewares = [
       retryResourceMiddleware,
       timeoutResourceMiddleware,
+      tunnelResourceMiddleware,
     ];
     builtInResourceMiddlewares.forEach((middleware) => {
       this.registry.resourceMiddlewares.set(middleware.id, {

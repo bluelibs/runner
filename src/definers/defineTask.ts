@@ -9,6 +9,8 @@ import {
   symbolOptionalDependency,
   IOptionalDependency,
   TaskMiddlewareAttachmentType,
+  symbolPhantomTask,
+  IPhantomTask,
 } from "../defs";
 import { getCallerFile } from "../tools/getCallerFile";
 
@@ -59,3 +61,18 @@ export function defineTask<
     },
   };
 }
+
+defineTask.phantom = <Input = undefined, Output extends Promise<any> = any>(
+  taskConfig: Omit<ITaskDefinition<Input, Output, any, any, any, any>, "run">,
+) => {
+  const taskDef = defineTask({
+    ...taskConfig,
+    run: async (input: any): Promise<any> => {
+      return undefined;
+    },
+  });
+
+  taskDef[symbolPhantomTask] = true;
+
+  return taskDef as IPhantomTask<Input, Output, any, any, any, any>;
+};

@@ -72,7 +72,7 @@ export class StoreRegistry {
     }
   }
 
-  storeTag(item: ITag<any, any>) {
+  storeTag(item: ITag<any, any, any>) {
     this.validator.checkIfIDExists(item.id);
     this.tags.set(item.id, item);
   }
