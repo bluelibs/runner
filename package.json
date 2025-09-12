@@ -1,18 +1,32 @@
 {
   "name": "@bluelibs/runner",
-  "version": "4.5.10",
+  "version": "4.6.0-alpha.1",
   "description": "BlueLibs Runner",
   "sideEffects": false,
-  "main": "dist/index.cjs",
-  "module": "dist/index.mjs",
+  "main": "dist/universal/index.cjs",
+  "module": "dist/universal/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.cjs",
-      "default": "./dist/index.mjs"
-    }
+      "browser": {
+        "import": "./dist/browser/index.mjs",
+        "require": "./dist/browser/index.cjs",
+        "default": "./dist/browser/index.mjs"
+      },
+      "node": {
+        "import": "./dist/node/index.mjs",
+        "require": "./dist/node/index.cjs"
+      },
+      "import": "./dist/universal/index.mjs",
+      "require": "./dist/universal/index.cjs",
+      "default": "./dist/universal/index.mjs"
+    },
+    "./edge": {
+      "import": "./dist/edge/index.mjs",
+      "default": "./dist/edge/index.mjs"
+    },
+    "./package.json": "./package.json"
   },
   "homepage": "https://runner.bluelibs.com",
   "repository": {
@@ -82,6 +96,7 @@
     "ts-jest": "^29.0.0",
     "tsup": "^8.0.0",
     "typedoc": "^0.26.7",
+    "@types/busboy": "^1.5.4",
     "typedoc-material-theme": "^1.1.0",
     "typedoc-plugin-pages": "^1.1.0",
     "typescript": "^5.6.2",
@@ -99,6 +114,11 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "lru-cache": "^11.1.0"
+  "lru-cache": "^11.1.0",
+  "fastify": "^5.1.0",
+  "@fastify/multipart": "^9.0.0"
+  },
+  "optionalDependencies": {
+    "busboy": "^1.6.0"
   }
 }

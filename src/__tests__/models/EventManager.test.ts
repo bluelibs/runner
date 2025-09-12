@@ -1142,28 +1142,6 @@ describe("EventManager", () => {
     spy.mockRestore();
   });
 
-  it("forces excludeFromGlobal branch by mocking isExcludedFromGlobal", async () => {
-    const isExcludedSpy = jest
-      .spyOn(eventManager as any, "isExcludedFromGlobal")
-      .mockReturnValue(true);
-    const cachedSpy = jest.spyOn(
-      eventManager as any,
-      "getCachedMergedListeners",
-    );
-
-    const handler = jest.fn();
-    eventManager.addListener(eventDefinition, handler);
-    eventManager.addGlobalListener(jest.fn());
-
-    await eventManager.emit(eventDefinition, "data", "src");
-
-    expect(isExcludedSpy).toHaveBeenCalled();
-    expect(cachedSpy).not.toHaveBeenCalled();
-
-    isExcludedSpy.mockRestore();
-    cachedSpy.mockRestore();
-  });
-
   it("should still run hook interceptors for events tagged excludeFromGlobalHooks", async () => {
     const executionOrder: string[] = [];
     const hookInterceptor = jest.fn(async (next, hook, event) => {

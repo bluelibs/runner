@@ -1,40 +1,95 @@
 import { defineConfig } from "tsup";
 
-type BuildFormat = "esm" | "cjs";
-
 const ENTRY = { index: "src/index.ts" } as const;
 const EXTERNAL = ["async_hooks", "node:async_hooks"] as const;
-const SHARED = {
-  entry: ENTRY,
-  platform: "neutral" as const,
-  external: [...EXTERNAL],
-  sourcemap: true,
-  outDir: "dist",
-  splitting: false,
-  treeshake: true,
-  minify: false,
-  tsconfig: "tsconfig.build.json",
-};
 
-const build = (format: BuildFormat) => ({
-  ...SHARED,
-  format: [format],
-  // Only clean once (on the first/ESM build)
-  clean: format === "esm",
-  // Only emit types on the CJS build to match package.json
-  dts: format === "cjs",
-  outExtension() {
-    return { js: format === "esm" ? ".mjs" : ".cjs" };
-  },
-  esbuildOptions(options: import("esbuild").BuildOptions) {
-    options.metafile = true; // one metafile per format
+function withCommon(overrides: any = {}) {
+  return {
+    entry: ENTRY,
+    splitting: false,
+    sourcemap: true,
+    treeshake: true,
+    minify: false,
+    tsconfig: "tsconfig.build.json",
+    external: [...EXTERNAL],
+    target: "es2022",
+    ...overrides,
+  } as const;
+}
+
+function makeEsbuildOptions(targetName: string) {
+  return (options: any) => {
+    options.metafile = true;
+    options.target = "es2022";
     options.define = {
       ...(options.define || {}),
-      __BUILD_FORMAT__: JSON.stringify(format),
+      __TARGET__: JSON.stringify(targetName),
     };
-    options.keepNames = true; // keep class/function names (helps stability)
-    options.minifyIdentifiers = false; // avoid identifier mangling drift
-  },
-});
+    options.keepNames = true;
+    options.minifyIdentifiers = false;
+  };
+}
 
-export default defineConfig([build("esm"), build("cjs")]);
+export default defineConfig([
+  // Universal (fallback)
+  withCommon({
+    outDir: "dist/universal",
+    platform: "neutral",
+    format: ["esm", "cjs"],
+    clean: true,
+    dts: false,
+    esbuildOptions: makeEsbuildOptions("universal"),
+    outExtension({ format }) {
+      return { js: format === "cjs" ? ".cjs" : ".mjs" };
+    },
+  }),
+  // Node
+  withCommon({
+    outDir: "dist/node",
+    platform: "node",
+    format: ["esm", "cjs"],
+    dts: false,
+    clean: false,
+    esbuildOptions: makeEsbuildOptions("node"),
+    outExtension({ format }) {
+      return { js: format === "cjs" ? ".cjs" : ".mjs" };
+    },
+  }),
+  // Browser
+  withCommon({
+    outDir: "dist/browser",
+    platform: "browser",
+    format: ["esm", "cjs"],
+    dts: false,
+    clean: false,
+    esbuildOptions: makeEsbuildOptions("browser"),
+    outExtension({ format }) {
+      return { js: format === "cjs" ? ".cjs" : ".mjs" };
+    },
+  }),
+
+  // Edge (workers)
+  withCommon({
+    outDir: "dist/edge",
+    platform: "neutral",
+    format: ["esm", "cjs"],
+    dts: false,
+    clean: false,
+    esbuildOptions: makeEsbuildOptions("edge"),
+    outExtension({ format }) {
+      return { js: format === "cjs" ? ".cjs" : ".mjs" };
+    },
+  }),
+  // Types at root for package types resolution
+  withCommon({
+    outDir: "dist",
+    platform: "neutral",
+    format: ["esm"],
+    dts: true,
+    clean: false,
+    esbuildOptions: makeEsbuildOptions("universal"),
+    outExtension() {
+      return { js: ".unused.js" } as any; // not referenced
+    },
+  }),
+]);

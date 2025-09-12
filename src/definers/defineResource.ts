@@ -6,7 +6,6 @@ import {
   TagType,
   symbolResource,
   symbolFilePath,
-  symbolIndexResource,
   symbolResourceWithConfig,
   symbolOptionalDependency,
   IOptionalDependency,
@@ -53,15 +52,12 @@ export function defineResource<
    * @param constConfig - The resource definition config.
    * @returns A branded resource definition usable by the runner.
    */
-  // The symbolFilePath might already come from defineIndex() for example
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
-  const isIndexResource = constConfig[symbolIndexResource] || false;
   const id = constConfig.id;
 
   return {
     [symbolResource]: true,
     [symbolFilePath]: filePath,
-    [symbolIndexResource]: isIndexResource,
     id,
     dependencies: constConfig.dependencies,
     dispose: constConfig.dispose,

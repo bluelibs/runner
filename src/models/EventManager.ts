@@ -148,20 +148,8 @@ export class EventManager {
 
     const frame = { id: eventDefinition.id, source };
     const processEmission = async () => {
-      // Determine whether this emission should be excluded from global listeners
-      /* istanbul ignore next */
-      const pseudoForExclude = {
-        id: eventDefinition.id,
-        data,
-        timestamp: new Date(),
-        source,
-        meta: eventDefinition.meta || {},
-        stopPropagation: () => {},
-        isPropagationStopped: () => false,
-        tags: eventDefinition.tags,
-      } as IEventEmission<TInput>;
-
-      const excludeFromGlobal = this.isExcludedFromGlobal(pseudoForExclude);
+      const excludeFromGlobal =
+        globalTags.excludeFromGlobalHooks.exists(eventDefinition);
 
       // Choose listeners: if globals are excluded, only use event-specific listeners
       const allListeners = excludeFromGlobal
@@ -337,25 +325,10 @@ export class EventManager {
       return false;
     }
 
-    // If the event definition carries the tag that excludes it from global
-    // listeners, report no listeners (since globals would be skipped at emit).
-    /* istanbul ignore next */
-    const pseudoEmission = {
-      id: eventDefinition.id,
-      data: undefined,
-      timestamp: new Date(),
-      source: "",
-      meta: eventDefinition.meta || {},
-      stopPropagation: () => {},
-      isPropagationStopped: () => false,
-      tags: eventDefinition.tags,
-    } as unknown as IEventEmission<any>;
+    const isExcludedFromGlobal =
+      globalTags.excludeFromGlobalHooks.exists(eventDefinition);
 
-    if (this.isExcludedFromGlobal(pseudoEmission)) {
-      return false;
-    }
-
-    return true;
+    return !isExcludedFromGlobal;
   }
 
   /**

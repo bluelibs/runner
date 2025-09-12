@@ -36,6 +36,8 @@ jobs:
         env:
           NODE_OPTIONS: --expose-gc
           BENCHMARK_OUTPUT: ${{ github.workspace }}/baseline.json
+          CI: true
+          GITHUB_ACTIONS: true
         run: npm run benchmark
 
       - name: Install deps (head)
@@ -47,6 +49,8 @@ jobs:
         env:
           NODE_OPTIONS: --expose-gc
           BENCHMARK_OUTPUT: ${{ github.workspace }}/benchmark-results.json
+          CI: true
+          GITHUB_ACTIONS: true
         run: npm run benchmark
 
       - name: Prepare comparison inputs
@@ -64,7 +68,17 @@ jobs:
 
       - name: Compare results
         working-directory: head
-        run: node ./scripts/compare-benchmarks.mjs ${{ github.workspace }}/baseline.json ${{ github.workspace }}/benchmark-results.json ${{ github.workspace }}/head/benchmarks.config.json
+        run: |
+          echo "Comparing benchmark results..."
+          echo "Baseline: ${{ github.workspace }}/baseline.json"
+          echo "Current: ${{ github.workspace }}/benchmark-results.json"
+          echo "Config: ${{ github.workspace }}/head/benchmarks.config.json"
+          
+          # Show file sizes for debugging
+          ls -la ${{ github.workspace }}/baseline.json ${{ github.workspace }}/benchmark-results.json
+          
+          # Run comparison
+          node ./scripts/compare-benchmarks.mjs ${{ github.workspace }}/baseline.json ${{ github.workspace }}/benchmark-results.json ${{ github.workspace }}/head/benchmarks.config.json
 
       - name: Upload artifacts
         if: always()

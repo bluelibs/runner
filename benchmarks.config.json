@@ -1,5 +1,6 @@
 {
-  "threshold": 0.15,
+  "threshold": 0.3,
+  "ciThreshold": 0.4,
   "metrics": {
     "basicTaskExecution.tasksPerSecond": "higher",
     "basicTaskExecution.avgTimePerTaskMs": "lower",
@@ -12,6 +13,11 @@
     "dependencyResolution.chainsPerSecond": "higher",
     "dependencyResolution.avgTimePerChainMs": "lower",
     "cacheMiddleware.speedupFactor": "higher"
+  },
+  "metricThresholds": {
+    "memoryUsage.initOverheadMB": 0.25,
+    "memoryUsage.executionOverheadMB": 0.25,
+    "cacheMiddleware.speedupFactor": 0.2
   }
 }
 

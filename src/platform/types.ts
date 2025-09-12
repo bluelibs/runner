@@ -3,7 +3,10 @@
  * Inspired by Remix's approach to Web APIs and runtime-agnostic design
  */
 
+export type PlatformId = "node" | "browser" | "edge" | "universal";
+
 export interface IPlatformAdapter {
+  readonly id: PlatformId;
   // Process management
   onUncaughtException(handler: (error: Error) => void): () => void;
   onUnhandledRejection(handler: (reason: unknown) => void): () => void;

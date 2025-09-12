@@ -1,249 +1,31 @@
-/**
- * Unified Platform Adapter
- * Single adapter that switches behavior based on detected environment.
- */
+import type { IPlatformAdapter, IAsyncLocalStorage, PlatformId } from "./types";
+import { createPlatformAdapter } from "./factory";
+import { detectEnvironment } from "./adapters/universal";
+import { NodePlatformAdapter } from "./adapters/node";
+import { BrowserPlatformAdapter } from "./adapters/browser";
+import { EdgePlatformAdapter } from "./adapters/edge";
+import { UniversalPlatformAdapter } from "./adapters/universal";
+import { GenericUniversalPlatformAdapter } from "./adapters/universal-generic";
 
-import type { IPlatformAdapter, IAsyncLocalStorage } from "./types";
-import { PlatformUnsupportedFunction } from "../errors";
+declare const __TARGET__: string | undefined;
 
-export type PlatformEnv = "node" | "browser" | "universal";
-
-export function detectEnvironment(): PlatformEnv {
-  if (typeof window !== "undefined" && typeof document !== "undefined") {
-    return "browser";
-  }
-  if (
-    typeof process !== "undefined" &&
-    (process as any).versions &&
-    (process as any).versions.node
-  ) {
-    return "node";
-  }
-  return "universal";
-}
-
-export class PlatformAdapter implements IPlatformAdapter {
-  readonly env: PlatformEnv;
-  private isInitialized = false;
-  private nodeALSClass: any | null = null;
-
-  constructor(env?: PlatformEnv) {
-    this.env = env ?? detectEnvironment();
-  }
-
-  async init() {
-    if (this.env === "node") {
-      const buildFormat =
-        typeof __BUILD_FORMAT__ !== "undefined" ? __BUILD_FORMAT__ : undefined;
-
-      // 1) Prefer per-bundle static branching; dead code eliminated in builds
-      if (typeof buildFormat !== "undefined") {
-        if (buildFormat === "cjs") {
-          const mod = require("node:async_hooks");
-          this.nodeALSClass = mod.AsyncLocalStorage;
-        } else {
-          // Do not try to "optimize" the if, logic here, as code gets tree-shaked due to buildformat constant.
-          // ESM bundle or any other declared format: use dynamic import
-          const mod = await import("node:async_hooks");
-          this.nodeALSClass = (mod as any).AsyncLocalStorage;
-        }
-      } else {
-        // 2) Fallback for source imports, most likely running through ts-node
-        this.nodeALSClass = (
-          await import("node:async_hooks")
-        ).AsyncLocalStorage;
-      }
-    }
-  }
-
-  onUncaughtException(handler: (error: any) => void): () => void {
-    switch (this.env) {
-      case "node": {
-        process.on("uncaughtException", handler as any);
-        return () => process.off("uncaughtException", handler as any);
-      }
-      case "browser": {
-        const target: any = (globalThis as any).window ?? globalThis;
-        const h = (e: any) => handler(e?.error ?? e);
-        target.addEventListener?.("error", h);
-        return () => target.removeEventListener?.("error", h);
-      }
-      default: {
-        const tgt: any = globalThis as any;
-        if (tgt.addEventListener) {
-          const h = (e: any) => handler(e?.error ?? e);
-          tgt.addEventListener("error", h);
-          return () => tgt.removeEventListener("error", h);
-        }
-        return () => {};
-      }
-    }
-  }
-
-  onUnhandledRejection(handler: (reason: any) => void): () => void {
-    switch (this.env) {
-      case "node": {
-        const h = (reason: any) => handler(reason);
-        process.on("unhandledRejection", h);
-        return () => process.off("unhandledRejection", h);
-      }
-      case "browser": {
-        const target: any = (globalThis as any).window;
-        const wrap = (e: any) => handler(e.reason);
-        target.addEventListener?.("unhandledrejection", wrap);
-        return () => target.removeEventListener?.("unhandledrejection", wrap);
-      }
-      default: {
-        const tgt: any = globalThis as any;
-        if (tgt.addEventListener) {
-          const wrap = (e: any) => handler(e.reason ?? e);
-          tgt.addEventListener("unhandledrejection", wrap);
-          return () => tgt.removeEventListener("unhandledrejection", wrap);
-        }
-        return () => {};
-      }
-    }
-  }
-
-  onShutdownSignal(handler: () => void): () => void {
-    switch (this.env) {
-      case "node": {
-        process.on("SIGINT", handler);
-        process.on("SIGTERM", handler);
-        return () => {
-          process.off("SIGINT", handler);
-          process.off("SIGTERM", handler);
-        };
-      }
-      case "browser": {
-        const win: any = window;
-        const doc: any = document;
-        win.addEventListener?.("beforeunload", handler);
-        return () => {
-          win.removeEventListener?.("beforeunload", handler);
-        };
-      }
-      default: {
-        const tgt: any = globalThis as any;
-        const cleanup: Array<() => void> = [];
-        if (tgt.addEventListener) {
-          tgt.addEventListener("beforeunload", handler);
-          cleanup.push(() =>
-            tgt.removeEventListener?.("beforeunload", handler),
-          );
-          const vis = () => {
-            const doc: any = (globalThis as any).document;
-            if (doc && doc.visibilityState === "hidden") handler();
-          };
-          tgt.addEventListener("visibilitychange", vis);
-          cleanup.push(() =>
-            tgt.removeEventListener?.("visibilitychange", vis),
-          );
-        }
-        if (typeof process !== "undefined" && (process as any).on) {
-          (process as any).on("SIGINT", handler);
-          (process as any).on("SIGTERM", handler);
-          cleanup.push(() => {
-            (process as any).off?.("SIGINT", handler);
-            (process as any).off?.("SIGTERM", handler);
-          });
-        }
-        return () => cleanup.forEach((fn) => fn());
-      }
-    }
-  }
-
-  exit(code: number): void {
-    switch (this.env) {
-      case "node":
-        process.exit(code);
-        return;
-      default:
-        throw new PlatformUnsupportedFunction("exit");
-    }
-  }
-
-  getEnv(key: string): string | undefined {
-    switch (this.env) {
-      case "node":
-        return process.env[key];
-      default: {
-        const g: any = globalThis as any;
-        if (g.__ENV__ && typeof g.__ENV__ === "object") return g.__ENV__[key];
-        if (typeof process !== "undefined" && (process as any).env)
-          return (process as any).env[key];
-        if (g.env && typeof g.env === "object") return g.env[key];
-        return undefined;
-      }
-    }
-  }
-
-  hasAsyncLocalStorage(): boolean {
-    switch (this.env) {
-      case "node":
-        return true; // We'll try native, else polyfill
-      case "browser":
-      default:
-        return false; // Keep behavior strict for universal
-    }
-  }
-
-  createAsyncLocalStorage<T>(): IAsyncLocalStorage<T> {
-    switch (this.env) {
-      case "node": {
-        let instance: IAsyncLocalStorage<T> | undefined;
-        const get = (): IAsyncLocalStorage<T> => {
-          if (!instance) {
-            if (!this.nodeALSClass) {
-              throw new PlatformUnsupportedFunction(
-                "createAsyncLocalStorage: Platform not initialized",
-              );
-            }
-            instance = new this.nodeALSClass();
-          }
-
-          return instance!;
-        };
-
-        return {
-          getStore: () => get().getStore(),
-          run: (store: T, callback: () => any) => get().run(store, callback),
-        };
-      }
-      case "browser":
-      default:
-        return {
-          getStore: () => {
-            throw new PlatformUnsupportedFunction("createAsyncLocalStorage");
-          },
-          run: () => {
-            throw new PlatformUnsupportedFunction("createAsyncLocalStorage");
-          },
-        };
-    }
-  }
-
-  // timers
-  setTimeout = globalThis.setTimeout;
-  clearTimeout = globalThis.clearTimeout;
-}
-
-// Singleton management
+// Keep legacy names but delegate to new adapters
 let platformInstance: IPlatformAdapter | null = null;
-let detectedEnvironment: PlatformEnv | null = null;
+let detectedEnvironment: PlatformId | null = null;
+
+export { detectEnvironment };
 
 export function getPlatform(): IPlatformAdapter {
   if (!platformInstance) {
-    const env = detectEnvironment();
-    detectedEnvironment = env;
-    platformInstance = new PlatformAdapter(env);
+    platformInstance = createPlatformAdapter();
+    detectedEnvironment = platformInstance.id;
   }
   return platformInstance;
 }
 
 export function setPlatform(adapter: IPlatformAdapter): void {
   platformInstance = adapter;
-  detectedEnvironment = "manual" as any;
+  detectedEnvironment = adapter.id;
 }
 
 export function resetPlatform(): void {
@@ -251,22 +33,102 @@ export function resetPlatform(): void {
   detectedEnvironment = null;
 }
 
-export function getDetectedEnvironment(): PlatformEnv {
-  if (!detectedEnvironment) detectedEnvironment = detectEnvironment();
+export function getDetectedEnvironment(): PlatformId {
+  if (detectedEnvironment) return detectedEnvironment;
+  // Prefer build-time target when available (node/browser/edge bundles)
+  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
+    detectedEnvironment = __TARGET__ as PlatformId;
+    return detectedEnvironment;
+  }
+  // Default to node when target is undefined (dev default)
+  if (typeof __TARGET__ === "undefined") {
+    detectedEnvironment = "node";
+    return detectedEnvironment;
+  }
+  // Fallback to runtime detection only for explicit universal target
+  detectedEnvironment = detectEnvironment();
   return detectedEnvironment;
 }
 
 export function isNode(): boolean {
+  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
+    return __TARGET__ === "node";
+  }
+  if (typeof __TARGET__ === "undefined") return true; // dev default
   return getDetectedEnvironment() === "node";
 }
 
 export function isBrowser(): boolean {
+  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
+    return __TARGET__ === "browser";
+  }
+  if (typeof __TARGET__ === "undefined") return false; // dev default
   return getDetectedEnvironment() === "browser";
 }
 
 export function isUniversal(): boolean {
+  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
+    return __TARGET__ === "universal";
+  }
+  if (typeof __TARGET__ === "undefined") return false; // dev default
   return getDetectedEnvironment() === "universal";
 }
 
-// Re-export types
 export type { IPlatformAdapter, IAsyncLocalStorage } from "./types";
+
+// Backwards-compat adapter preserving old constructor(env) signature used in tests
+export class PlatformAdapter implements IPlatformAdapter {
+  private inner: IPlatformAdapter;
+  readonly env: PlatformId;
+  readonly id: PlatformId;
+
+  constructor(env?: PlatformId) {
+    const kind = env ?? detectEnvironment();
+    this.env = kind as PlatformId;
+    switch (kind) {
+      case "node":
+        this.inner = new NodePlatformAdapter();
+        break;
+      case "browser":
+        this.inner = new BrowserPlatformAdapter();
+        break;
+      case "edge":
+        this.inner = new EdgePlatformAdapter();
+        break;
+      case "universal":
+        // Force generic, non-detecting behavior expected by tests
+        this.inner = new GenericUniversalPlatformAdapter();
+        break;
+      default:
+        this.inner = new UniversalPlatformAdapter();
+    }
+    this.id = this.inner.id;
+  }
+
+  async init() {
+    return this.inner.init();
+  }
+  onUncaughtException(handler: (error: any) => void) {
+    return this.inner.onUncaughtException(handler);
+  }
+  onUnhandledRejection(handler: (reason: any) => void) {
+    return this.inner.onUnhandledRejection(handler);
+  }
+  onShutdownSignal(handler: () => void) {
+    return this.inner.onShutdownSignal(handler);
+  }
+  exit(code: number) {
+    return this.inner.exit(code);
+  }
+  getEnv(key: string) {
+    return this.inner.getEnv(key);
+  }
+  hasAsyncLocalStorage() {
+    return this.inner.hasAsyncLocalStorage();
+  }
+  createAsyncLocalStorage<T>(): IAsyncLocalStorage<T> {
+    return this.inner.createAsyncLocalStorage<T>();
+  }
+  setTimeout = globalThis.setTimeout;
+  clearTimeout = globalThis.clearTimeout;
+}

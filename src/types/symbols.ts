@@ -42,12 +42,3 @@ export const symbolOptionalDependency: unique symbol = Symbol.for(
 
 /** @internal Path to aid anonymous id generation and error messages */
 export const symbolFilePath: unique symbol = Symbol.for("runner.filePath");
-/** @internal Marks disposable instances */
-export const symbolDispose: unique symbol = Symbol.for("runner.dispose");
-/** @internal Link to internal Store */
-export const symbolStore: unique symbol = Symbol.for("runner.store");
-
-/** @internal Brand used by index() resources */
-export const symbolIndexResource: unique symbol = Symbol.for(
-  "runner.indexResource",
-);

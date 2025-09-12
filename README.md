@@ -9,20 +9,21 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 <a href="https://github.com/bluelibs/runner" target="_blank"><img src="https://img.shields.io/badge/github-blue" alt="GitHub" /></a>
 </p>
 
-| Resource                                                                                                            | Type    | Notes                                                         |
-| ------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------- |
-| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website | Overview, features, and highlights                            |
-| [BlueLibs Runner GitHub](https://github.com/bluelibs/runner)                                                        | GitHub  | Source code, issues, and releases                             |
-| [BlueLibs Runner Dev](https://github.com/bluelibs/runner-dev)                                                       | GitHub  | Development tools and CLI for BlueLibs Runner                 |
-| [UX Friendly Docs](https://bluelibs.github.io/runner/)                                                              | Docs    | Clean, navigable documentation                                |
-| [AI Friendly Docs (<5000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)                               | Docs    | Short, token-friendly summary (<5000 tokens)                  |
-| [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade from v3 to v4                            |
-| [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)                                                 | Docs    | Design notes, deep dives, and context                         |
-| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | Full Express + OpenAPI + SQLite demo                          |
-|| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full Fastify + MikroORM + PostgreSQL demo                     |
-|| [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)       | Chatbot | Ask questions interactively, or feed README.md to your own AI |
+| Resource                                                                                                            | Type                                                                                                               | Notes                                         |
+| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- | ------------------------------------------------------------- |
+| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website                                                                                                            | Overview, features, and highlights            |
+| [BlueLibs Runner GitHub](https://github.com/bluelibs/runner)                                                        | GitHub                                                                                                             | Source code, issues, and releases             |
+| [BlueLibs Runner Dev](https://github.com/bluelibs/runner-dev)                                                       | GitHub                                                                                                             | Development tools and CLI for BlueLibs Runner |
+| [UX Friendly Docs](https://bluelibs.github.io/runner/)                                                              | Docs                                                                                                               | Clean, navigable documentation                |
+| [AI Friendly Docs (<5000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)                               | Docs                                                                                                               | Short, token-friendly summary (<5000 tokens)  |
+| [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide                                                                                                              | Step-by-step upgrade from v3 to v4            |
+| [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)                                                 | Docs                                                                                                               | Design notes, deep dives, and context         |
+| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example                                                                                                            | Full Express + OpenAPI + SQLite demo          |
+|                                                                                                                     | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm) | Example                                       | Full Fastify + MikroORM + PostgreSQL demo                     |
+|                                                                                                                     | [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)      | Chatbot                                       | Ask questions interactively, or feed README.md to your own AI |
 
 ### Community & Policies
+
 - Code of Conduct: see [CODE_OF_CONDUCT](./CODE_OF_CONDUCT.md)
 - Contributing: see [CONTRIBUTING](./CONTRIBUTING.md)
 - Security: see [SECURITY](./SECURITY.md)
@@ -996,7 +997,9 @@ type ConfigInput = ExtractResourceConfig<typeof config>; // { baseUrl: string }
 type ConfigValue = ExtractResourceValue<typeof config>; // { baseUrl: string }
 
 // Event example
-const userRegistered = event<{ userId: string; email: string }>({ id: "app.events.userRegistered" });
+const userRegistered = event<{ userId: string; email: string }>({
+  id: "app.events.userRegistered",
+});
 type UserRegisteredPayload = ExtractEventPayload<typeof userRegistered>; // { userId: string; email: string }
 ```
 
