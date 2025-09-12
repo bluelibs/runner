@@ -1,6 +1,6 @@
 {
   "name": "@bluelibs/runner",
-  "version": "4.6.0-alpha.1",
+  "version": "4.6.0",
   "description": "BlueLibs Runner",
   "sideEffects": false,
   "main": "dist/universal/index.cjs",
@@ -114,9 +114,9 @@
   ],
   "license": "MIT",
   "dependencies": {
-  "lru-cache": "^11.1.0",
-  "fastify": "^5.1.0",
-  "@fastify/multipart": "^9.0.0"
+    "lru-cache": "^11.1.0",
+    "fastify": "^5.1.0",
+    "@fastify/multipart": "^9.0.0"
   },
   "optionalDependencies": {
     "busboy": "^1.6.0"
