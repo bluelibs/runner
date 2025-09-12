@@ -46,5 +46,3 @@ export { Context } from "./context";
 
 // Re-export types at the package root so consumer declaration emits can reference them directly
 export type * from "./defs";
-// Tunnels API (HTTP client/server + resource)
-export * as tunnels from "./tunnels";
