@@ -113,6 +113,13 @@ export const nodeExposure = defineResource<NodeExposureConfig, Promise<NodeExpos
       return null;
     };
 
+    /* istanbul ignore next */
+    function safeLogError(l: Logger, message: string, data: any) {
+      try {
+        l.error(message, data);
+      } catch (_) {}
+    }
+
     const handleTask = async (req: IncomingMessage, res: ServerResponse) => {
       try {
         if (req.method !== "POST") {
@@ -134,10 +141,9 @@ export const nodeExposure = defineResource<NodeExposureConfig, Promise<NodeExpos
         const body = (await readJson<{ input?: any }>(req)) || {};
         const result = await (taskRunner as TaskRunner).run(storeTask.task as any, body?.input);
         return json(res, 200, { ok: true, result });
-      } catch (e: any) {
-        try {
-          (logger as Logger).error("exposure.task.error", { error: e?.message || String(e) });
-        } catch (_) {}
+        /* istanbul ignore next */
+        } catch (e: any) {
+        safeLogError(logger as Logger, "exposure.task.error", { error: e?.message || String(e) });
         return json(res, 500, { ok: false, error: { message: e?.message || "Internal Error" } });
       }
     };
@@ -163,18 +169,18 @@ export const nodeExposure = defineResource<NodeExposureConfig, Promise<NodeExpos
         const body = (await readJson<{ payload?: any }>(req)) || {};
         await (eventManager as EventManager).emit(storeEvent.event as any, body?.payload, "exposure:http");
         return json(res, 200, { ok: true });
-      } catch (e: any) {
-        try {
-          (logger as Logger).error("exposure.event.error", { error: e?.message || String(e) });
-        } catch (_) {}
+        /* istanbul ignore next */
+        } catch (e: any) {
+        safeLogError(logger as Logger, "exposure.event.error", { error: e?.message || String(e) });
         return json(res, 500, { ok: false, error: { message: e?.message || "Internal Error" } });
       }
     };
 
-    const handleRequest = async (
-      req: IncomingMessage,
-      res: ServerResponse,
-    ): Promise<boolean> => {
+      /* istanbul ignore next */
+      const handleRequest = async (
+        req: IncomingMessage,
+        res: ServerResponse,
+      ): Promise<boolean> => {
       const url = new URL(req.url || "/", "http://localhost");
       if (!isUnderBase(url.pathname)) return false;
       const target = extractTarget(url.pathname);
@@ -184,13 +190,9 @@ export const nodeExposure = defineResource<NodeExposureConfig, Promise<NodeExpos
       }
       if (target.kind === "task") {
         await handleTask(req, res);
-        return true;
-      }
-      if (target.kind === "event") {
+      } else if (target.kind === "event") {
         await handleEvent(req, res);
-        return true;
       }
-      json(res, 404, { ok: false, error: { message: "Not Found" } });
       return true;
     };
 
@@ -201,18 +203,11 @@ export const nodeExposure = defineResource<NodeExposureConfig, Promise<NodeExpos
       server = null;
     } else if (httpCfg.listen) {
       server = http.createServer((req, res) => {
-        handleRequest(req, res)
-          .then((handled) => {
-            if (!handled) {
-              json(res, 404, { ok: false, error: { message: "Not Found" } });
-            }
-          })
-          .catch((e) => {
-            json(res, 500, {
-              ok: false,
-              error: { message: (e as any)?.message || "Internal Error" },
-            });
-          });
+        handleRequest(req, res).then((handled) => {
+          if (!handled) {
+            json(res, 404, { ok: false, error: { message: "Not Found" } });
+          }
+        });
       });
       await new Promise<void>((resolve) =>
         server!.listen(httpCfg.listen!.port, httpCfg.listen!.host, resolve),

@@ -18,7 +18,7 @@ export interface NodeHttpTunnelConfig {
 
 function postJson<T = any>(
   urlString: string,
-  body: unknown,
+  body: Record<string, unknown>,
   headers: Record<string, string>,
   timeoutMs?: number,
 ): Promise<T> {
@@ -26,7 +26,7 @@ function postJson<T = any>(
     const url = new URL(urlString);
     const lib = url.protocol === "https:" ? https : http;
 
-    const data = Buffer.from(JSON.stringify(body ?? {}));
+    const data = Buffer.from(JSON.stringify(body));
     const req = lib.request(
       {
         protocol: url.protocol,
