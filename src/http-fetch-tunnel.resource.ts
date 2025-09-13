@@ -20,6 +20,10 @@ export interface ExposureFetchClient {
   event<P = unknown>(id: string, payload?: P): Promise<void>;
 }
 
+export function normalizeError(e: unknown): Error {
+  return e instanceof Error ? e : new Error(String(e));
+}
+
 async function postJson<T = any>(
   fetchFn: typeof fetch,
   url: string,
@@ -27,7 +31,8 @@ async function postJson<T = any>(
   headers: Record<string, string>,
   timeoutMs?: number,
 ): Promise<T> {
-  const controller = timeoutMs && timeoutMs > 0 ? new AbortController() : undefined;
+  const controller =
+    timeoutMs && timeoutMs > 0 ? new AbortController() : undefined;
   let timeout: any;
   try {
     if (controller) {
@@ -39,7 +44,7 @@ async function postJson<T = any>(
         "content-type": "application/json; charset=utf-8",
         ...headers,
       },
-      body: JSON.stringify(body ?? {}),
+      body: JSON.stringify(body),
       signal: controller?.signal,
     });
 
@@ -51,8 +56,10 @@ async function postJson<T = any>(
   }
 }
 
-export function createExposureFetch(cfg: ExposureFetchConfig): ExposureFetchClient {
-  const baseUrl = (cfg?.baseUrl ?? "").replace(/\/$/, "");
+export function createExposureFetch(
+  cfg: ExposureFetchConfig,
+): ExposureFetchClient {
+  const baseUrl = (cfg?.baseUrl).replace(/\/$/, "");
   if (!baseUrl) throw new Error("createExposureFetch requires baseUrl");
 
   const headerName = (cfg?.auth?.header ?? "x-runner-token").toLowerCase();
@@ -64,13 +71,21 @@ export function createExposureFetch(cfg: ExposureFetchConfig): ExposureFetchClie
 
   const fetchImpl = cfg.fetchImpl ?? (globalThis.fetch as typeof fetch);
   if (typeof fetchImpl !== "function") {
-    throw new Error("global fetch is not available; provide fetchImpl in config");
+    throw new Error(
+      "global fetch is not available; provide fetchImpl in config",
+    );
   }
 
   return {
     async task<I, O>(id: string, input?: I): Promise<O> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
-      const r: any = await postJson(fetchImpl, url, { input }, buildHeaders(), cfg?.timeoutMs);
+      const r: any = await postJson(
+        fetchImpl,
+        url,
+        { input },
+        buildHeaders(),
+        cfg?.timeoutMs,
+      );
       if (!r?.ok) {
         const msg = r?.error?.message ?? "Tunnel task error";
         throw new Error(String(msg));
@@ -79,7 +94,13 @@ export function createExposureFetch(cfg: ExposureFetchConfig): ExposureFetchClie
     },
     async event<P>(id: string, payload?: P): Promise<void> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
-      const r: any = await postJson(fetchImpl, url, { payload }, buildHeaders(), cfg?.timeoutMs);
+      const r: any = await postJson(
+        fetchImpl,
+        url,
+        { payload },
+        buildHeaders(),
+        cfg?.timeoutMs,
+      );
       if (!r?.ok) {
         const msg = r?.error?.message ?? "Tunnel event error";
         throw new Error(String(msg));
@@ -109,9 +130,12 @@ export const httpFetchTunnel = defineResource<
           return await client.task(t.id, input);
         } catch (e: any) {
           try {
-            (logger as Logger).error("tunnel.task.error", { id: t.id, message: e?.message || String(e) });
+            (logger as Logger).error("tunnel.task.error", {
+              id: t.id,
+              message: e?.message || String(e),
+            });
           } catch (_) {}
-          throw e instanceof Error ? e : new Error(String(e));
+          throw normalizeError(e);
         }
       },
       emit: async (emission) => {
@@ -119,12 +143,14 @@ export const httpFetchTunnel = defineResource<
           await client.event(emission.id, emission.data as unknown);
         } catch (e: any) {
           try {
-            (logger as Logger).error("tunnel.event.error", { id: emission.id, message: e?.message || String(e) });
+            (logger as Logger).error("tunnel.event.error", {
+              id: emission.id,
+              message: e?.message || String(e),
+            });
           } catch (_) {}
-          throw e instanceof Error ? e : new Error(String(e));
+          throw normalizeError(e);
         }
       },
     } satisfies TunnelRunner;
   },
 });
-

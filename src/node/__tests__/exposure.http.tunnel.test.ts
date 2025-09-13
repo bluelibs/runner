@@ -1,8 +1,13 @@
 import { z } from "zod";
-import { defineTask, defineEvent, defineHook, defineResource } from "../../define";
+import {
+  defineTask,
+  defineEvent,
+  defineHook,
+  defineResource,
+} from "../../define";
 import { run } from "../../run";
 import { nodeExposure } from "../exposure.resource";
-import { nodeHttpTunnel } from "../http-tunnel.resource";
+import { nodeHttpTunnel } from "../";
 import { globals } from "../../index";
 
 describe("Node HTTP Exposure + Tunnel (POST JSON)", () => {
@@ -126,7 +131,9 @@ describe("Node HTTP Exposure + Tunnel (POST JSON)", () => {
     const httpTunnel = nodeHttpTunnel.with({ baseUrl, auth: { token: TOKEN } });
     const clientTunnel = defineResource({
       id: "node.test.client.tunnel.notfound",
-      tags: [globals.tags.tunnel.with({ mode: "client", tasks: [missingClient.id] })],
+      tags: [
+        globals.tags.tunnel.with({ mode: "client", tasks: [missingClient.id] }),
+      ],
       register: [httpTunnel],
       dependencies: { httpTunnel: nodeHttpTunnel },
       init: async (_, { httpTunnel }) => httpTunnel,
@@ -145,10 +152,15 @@ describe("Node HTTP Exposure + Tunnel (POST JSON)", () => {
 
   it("returns unauthorized when token is wrong", async () => {
     const { rrServer, baseUrl } = await startServer();
-    const httpTunnel = nodeHttpTunnel.with({ baseUrl, auth: { token: "WRONG" } });
+    const httpTunnel = nodeHttpTunnel.with({
+      baseUrl,
+      auth: { token: "WRONG" },
+    });
     const clientTunnel = defineResource({
       id: "node.test.client.tunnel.unauth",
-      tags: [globals.tags.tunnel.with({ mode: "client", tasks: [sumClient.id] })],
+      tags: [
+        globals.tags.tunnel.with({ mode: "client", tasks: [sumClient.id] }),
+      ],
       register: [httpTunnel],
       dependencies: { httpTunnel: nodeHttpTunnel },
       init: async (_, { httpTunnel }) => httpTunnel,
@@ -170,7 +182,12 @@ describe("Node HTTP Exposure + Tunnel (POST JSON)", () => {
     const httpTunnel = nodeHttpTunnel.with({ baseUrl, auth: { token: TOKEN } });
     const clientTunnel = defineResource({
       id: "node.test.client.tunnel.validation",
-      tags: [globals.tags.tunnel.with({ mode: "client", tasks: [mustBePositiveClient.id] })],
+      tags: [
+        globals.tags.tunnel.with({
+          mode: "client",
+          tasks: [mustBePositiveClient.id],
+        }),
+      ],
       register: [httpTunnel],
       dependencies: { httpTunnel: nodeHttpTunnel },
       init: async (_, { httpTunnel }) => httpTunnel,
@@ -194,7 +211,9 @@ describe("Node HTTP Exposure + Tunnel (POST JSON)", () => {
     const httpTunnel = nodeHttpTunnel.with({ baseUrl, auth: { token: TOKEN } });
     const clientTunnel = defineResource({
       id: "node.test.client.tunnel.events",
-      tags: [globals.tags.tunnel.with({ mode: "client", events: [pingEvent.id] })],
+      tags: [
+        globals.tags.tunnel.with({ mode: "client", events: [pingEvent.id] }),
+      ],
       register: [httpTunnel],
       dependencies: { httpTunnel: nodeHttpTunnel },
       init: async (_, { httpTunnel }) => httpTunnel,
@@ -226,7 +245,9 @@ describe("Node HTTP Exposure + Tunnel (POST JSON)", () => {
     const httpTunnel = nodeHttpTunnel.with({ baseUrl, auth: { token: TOKEN } });
     const clientTunnelNF = defineResource({
       id: "node.test.client.tunnel.events.notfound",
-      tags: [globals.tags.tunnel.with({ mode: "client", events: [missingEvent.id] })],
+      tags: [
+        globals.tags.tunnel.with({ mode: "client", events: [missingEvent.id] }),
+      ],
       register: [httpTunnel],
       dependencies: { httpTunnel: nodeHttpTunnel },
       init: async (_, { httpTunnel }) => httpTunnel,
@@ -243,10 +264,15 @@ describe("Node HTTP Exposure + Tunnel (POST JSON)", () => {
     await expect(run(clientNF)).rejects.toThrow(/not found/i);
 
     // Unauthorized
-    const badHttpTunnel = nodeHttpTunnel.with({ baseUrl, auth: { token: "WRONG" } });
+    const badHttpTunnel = nodeHttpTunnel.with({
+      baseUrl,
+      auth: { token: "WRONG" },
+    });
     const clientTunnelUA = defineResource({
       id: "node.test.client.tunnel.events.unauth",
-      tags: [globals.tags.tunnel.with({ mode: "client", events: [pingEvent.id] })],
+      tags: [
+        globals.tags.tunnel.with({ mode: "client", events: [pingEvent.id] }),
+      ],
       register: [badHttpTunnel],
       dependencies: { httpTunnel: nodeHttpTunnel },
       init: async (_, { httpTunnel }) => httpTunnel,

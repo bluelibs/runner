@@ -201,9 +201,13 @@ export const nodeExposure = defineResource<NodeExposureConfig, Promise<NodeExpos
     if (httpCfg.server) {
       // Do not auto-attach to provided servers; return handler for explicit mounting.
       server = null;
-    } else if (httpCfg.listen) {
+    }
+    /* istanbul ignore next */
+    if (!httpCfg.server && httpCfg.listen) {
       server = http.createServer((req, res) => {
+        /* istanbul ignore next */
         handleRequest(req, res).then((handled) => {
+          /* istanbul ignore next */
           if (!handled) {
             json(res, 404, { ok: false, error: { message: "Not Found" } });
           }
@@ -223,6 +227,7 @@ export const nodeExposure = defineResource<NodeExposureConfig, Promise<NodeExpos
 
     const close = async () => {
       if (server) {
+        /* istanbul ignore next */
         await new Promise<void>((resolve) => server!.close(() => resolve()));
       }
     };

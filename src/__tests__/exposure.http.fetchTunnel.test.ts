@@ -2,8 +2,11 @@ import { z } from "zod";
 import { defineTask, defineEvent, defineHook, defineResource } from "../define";
 import { run } from "../run";
 import { globals } from "../index";
-import { nodeExposure } from "../node/exposure.resource";
-import { httpFetchTunnel, createExposureFetch } from "../http-fetch-tunnel.resource";
+import { nodeExposure } from "../node";
+import {
+  httpFetchTunnel,
+  createExposureFetch,
+} from "../http-fetch-tunnel.resource";
 
 describe("HTTP Exposure + Fetch Tunnel (POST JSON)", () => {
   const TOKEN = "super-secret";
@@ -93,7 +96,10 @@ describe("HTTP Exposure + Fetch Tunnel (POST JSON)", () => {
   it("runs tasks over fetch() JSON with auth (resource)", async () => {
     const { rrServer, baseUrl } = await startServer();
 
-    const fetchTunnel = httpFetchTunnel.with({ baseUrl, auth: { token: TOKEN } });
+    const fetchTunnel = httpFetchTunnel.with({
+      baseUrl,
+      auth: { token: TOKEN },
+    });
     const clientTunnel = defineResource({
       id: "fetch.test.client.tunnel.ok",
       tags: [
@@ -121,10 +127,15 @@ describe("HTTP Exposure + Fetch Tunnel (POST JSON)", () => {
 
   it("returns not found for missing task id on server (resource)", async () => {
     const { rrServer, baseUrl } = await startServer();
-    const fetchTunnel = httpFetchTunnel.with({ baseUrl, auth: { token: TOKEN } });
+    const fetchTunnel = httpFetchTunnel.with({
+      baseUrl,
+      auth: { token: TOKEN },
+    });
     const clientTunnel = defineResource({
       id: "fetch.test.client.tunnel.notfound",
-      tags: [globals.tags.tunnel.with({ mode: "client", tasks: [missingClient.id] })],
+      tags: [
+        globals.tags.tunnel.with({ mode: "client", tasks: [missingClient.id] }),
+      ],
       register: [fetchTunnel],
       dependencies: { fetchTunnel: httpFetchTunnel },
       init: async (_, { fetchTunnel }) => fetchTunnel,
@@ -143,10 +154,15 @@ describe("HTTP Exposure + Fetch Tunnel (POST JSON)", () => {
 
   it("returns unauthorized when token is wrong (resource)", async () => {
     const { rrServer, baseUrl } = await startServer();
-    const fetchTunnel = httpFetchTunnel.with({ baseUrl, auth: { token: "WRONG" } });
+    const fetchTunnel = httpFetchTunnel.with({
+      baseUrl,
+      auth: { token: "WRONG" },
+    });
     const clientTunnel = defineResource({
       id: "fetch.test.client.tunnel.unauth",
-      tags: [globals.tags.tunnel.with({ mode: "client", tasks: [sumClient.id] })],
+      tags: [
+        globals.tags.tunnel.with({ mode: "client", tasks: [sumClient.id] }),
+      ],
       register: [fetchTunnel],
       dependencies: { fetchTunnel: httpFetchTunnel },
       init: async (_, { fetchTunnel }) => fetchTunnel,
@@ -165,10 +181,18 @@ describe("HTTP Exposure + Fetch Tunnel (POST JSON)", () => {
 
   it("surfaces server-side validation errors from remote (resource)", async () => {
     const { rrServer, baseUrl } = await startServer();
-    const fetchTunnel = httpFetchTunnel.with({ baseUrl, auth: { token: TOKEN } });
+    const fetchTunnel = httpFetchTunnel.with({
+      baseUrl,
+      auth: { token: TOKEN },
+    });
     const clientTunnel = defineResource({
       id: "fetch.test.client.tunnel.validation",
-      tags: [globals.tags.tunnel.with({ mode: "client", tasks: [mustBePositiveClient.id] })],
+      tags: [
+        globals.tags.tunnel.with({
+          mode: "client",
+          tasks: [mustBePositiveClient.id],
+        }),
+      ],
       register: [fetchTunnel],
       dependencies: { fetchTunnel: httpFetchTunnel },
       init: async (_, { fetchTunnel }) => fetchTunnel,
@@ -189,10 +213,15 @@ describe("HTTP Exposure + Fetch Tunnel (POST JSON)", () => {
     const { rrServer, baseUrl } = await startServer();
     clientEvents = [];
 
-    const fetchTunnel = httpFetchTunnel.with({ baseUrl, auth: { token: TOKEN } });
+    const fetchTunnel = httpFetchTunnel.with({
+      baseUrl,
+      auth: { token: TOKEN },
+    });
     const clientTunnel = defineResource({
       id: "fetch.test.client.tunnel.events",
-      tags: [globals.tags.tunnel.with({ mode: "client", events: [pingEvent.id] })],
+      tags: [
+        globals.tags.tunnel.with({ mode: "client", events: [pingEvent.id] }),
+      ],
       register: [fetchTunnel],
       dependencies: { fetchTunnel: httpFetchTunnel },
       init: async (_, { fetchTunnel }) => fetchTunnel,
@@ -217,10 +246,13 @@ describe("HTTP Exposure + Fetch Tunnel (POST JSON)", () => {
   it("works via createExposureFetch() without a tunnel resource", async () => {
     const { rrServer, baseUrl } = await startServer();
     const client = createExposureFetch({ baseUrl, auth: { token: TOKEN } });
-    const sum = await client.task<{ a: number; b: number }, number>(sumTask.id, {
-      a: 3,
-      b: 4,
-    });
+    const sum = await client.task<{ a: number; b: number }, number>(
+      sumTask.id,
+      {
+        a: 3,
+        b: 4,
+      },
+    );
     expect(sum).toBe(7);
 
     await client.event(pingEvent.id, { msg: "E2" });
@@ -228,4 +260,3 @@ describe("HTTP Exposure + Fetch Tunnel (POST JSON)", () => {
     await rrServer.dispose();
   });
 });
-
