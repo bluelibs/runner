@@ -2,6 +2,7 @@ import { defineTask, defineResource } from "../define";
 import { run } from "../run";
 import { isTask, isPhantomTask } from "../define";
 import { globalTags } from "../globals/globalTags";
+import type { TunnelRunner } from "../globals/resources/tunnel/types";
 
 describe("Phantom tasks", () => {
   it("creates a phantom task that registers and returns undefined when executed directly", async () => {
@@ -70,8 +71,10 @@ describe("Phantom tasks", () => {
 
     const tunnelRes = defineResource({
       id: "app.resources.phantom.tunnel",
-      tags: [globalTags.tunnel.with({ mode: "client", tasks: [ph.id] })],
-      init: async () => ({
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        tasks: [ph.id],
         run: async (task: any, input: any) => `TUN:${task.id}:${input?.v}`,
       }),
     });

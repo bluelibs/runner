@@ -14,6 +14,7 @@ import { globalResources } from "./globals/globalResources";
 import { globalMiddlewares } from "./globals/globalMiddleware";
 import { globalTags } from "./globals/globalTags";
 import { run } from "./run";
+import { tunnels } from "./globals/tunnels";
 import { createTestResource } from "./testing";
 import { resource as resourceFn } from "./definers/builders/resource";
 import { task as taskFn } from "./definers/builders/task";
@@ -23,12 +24,14 @@ import {
   taskMiddleware as taskMiddlewareFn,
   resourceMiddleware as resourceMiddlewareFn,
 } from "./definers/builders/middleware";
+import { tag as tagFn } from "./definers/builders/tag";
 
 const globals = {
   events: globalEvents,
   resources: globalResources,
   middleware: globalMiddlewares,
   tags: globalTags,
+  tunnels,
 };
 
 export { globals };
@@ -52,6 +55,7 @@ export const r = Object.freeze({
   task: taskFn,
   event: eventFn,
   hook: hookFn,
+  tag: tagFn,
   middleware: Object.freeze({
     task: taskMiddlewareFn,
     resource: resourceMiddlewareFn,

@@ -82,7 +82,9 @@ describe("nodeExposure - misc branches", () => {
 
     await handlers.handleTask(req, res);
     expect(statusCode).toBe(200);
-    const parsed = JSON.parse(Buffer.concat(resBody).toString("utf8"));
+    const parsed = JSON.parse(
+      Buffer.concat(resBody as readonly Uint8Array[]).toString("utf8"),
+    );
     expect(parsed.ok).toBe(true);
 
     await rr.dispose();
@@ -255,7 +257,7 @@ describe("nodeExposure - misc branches", () => {
     let status = 0;
     const res: any = { setHeader() {}, statusCode: 0, end() { status = this.statusCode; } };
     await handlers.handleEvent(req, res);
-    expect(status).toBe(500);
+    expect(status).toBe(400);
     await rr.dispose();
   });
 });

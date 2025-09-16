@@ -1,4 +1,4 @@
-import { r, resource, definitions, run } from "../..";
+import { r, resource, definitions, run, tag } from "../..";
 
 describe("resource builder", () => {
   it("build() returns branded resource with id", () => {
@@ -58,26 +58,17 @@ describe("resource builder", () => {
     await rr.dispose();
   });
 
-  it("supports configSchema, resultSchema and lock mutator", () => {
+  it("supports configSchema, resultSchema and meta", () => {
     const res = r
       .resource("tests.builder.r3")
       .configSchema<{ foo: number }>({ parse: (x: any) => x })
       .resultSchema<number>({ parse: (x: any) => x })
+      .meta({ title: "Configured" } as any)
       .init(async () => Promise.resolve(42))
-      .lock((def) => {
-        def.meta = { title: "Locked" } as any;
-      });
+      .build();
 
     expect(res.id).toBe("tests.builder.r3");
-    expect(res.meta).toEqual({ title: "Locked" });
-  });
-
-  it("lock without mutator returns resource as-built", () => {
-    const res = r
-      .resource("tests.builder.r4")
-      .init(async () => Promise.resolve(1))
-      .lock();
-    expect(res.id).toBe("tests.builder.r4");
+    expect(res.meta).toEqual({ title: "Configured" });
   });
 
   it("resource middleware built via builder wraps init result", async () => {
@@ -131,7 +122,7 @@ describe("resource builder", () => {
   });
 
   it("resource tags are accessible in middleware during init", async () => {
-    const tg = (await import("../..")).tag({ id: "tests.builder.tag" });
+    const tg = tag({ id: "tests.builder.tag" });
     const seen: string[] = [];
     const rmw = r.middleware
       .resource("tests.builder.rm.tags")

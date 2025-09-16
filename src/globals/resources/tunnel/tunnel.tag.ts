@@ -1,9 +1,8 @@
 import { defineTag } from "../../../define";
-import type { TunnelTagConfig } from "./types";
+import type { TunnelRunner } from "./types";
 
-// Tag carries config only; does not enforce output contract to support
-// both wrapper resources and direct runner resources.
-export const tunnelTag = defineTag<TunnelTagConfig>({
+// Marks a resource as a tunnel and enforces its value to satisfy TunnelRunner.
+export const tunnelTag = defineTag<void, void, TunnelRunner>({
   id: "globals.tags.tunnel",
   meta: {
     title: "Tunnel",

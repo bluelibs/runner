@@ -5,8 +5,9 @@ import { defineTask } from "../../definers/defineTask";
 import { defineEvent } from "../../definers/defineEvent";
 import { run } from "../../run";
 import { nodeExposure } from "../exposure.resource";
+const D = process.env.RUNNER_TEST_NET === "1" ? describe : describe.skip;
 
-describe("nodeExposure - unit edge cases", () => {
+D("nodeExposure - unit edge cases", () => {
   const TOKEN = "unit-secret";
 
   const testTask = defineTask<{ v: number }, Promise<number>>({
@@ -64,7 +65,16 @@ describe("nodeExposure - unit edge cases", () => {
         (res) => {
           const chunks: Buffer[] = [];
           res.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
-          res.on("end", () => resolve({ status: res.statusCode || 0, text: Buffer.concat(chunks).toString("utf8") }));
+          res.on(
+            "end",
+            () =>
+              resolve({
+                status: res.statusCode || 0,
+                text: Buffer.concat(chunks as readonly Uint8Array[]).toString(
+                  "utf8",
+                ),
+              }),
+          );
         },
       );
       req.on("error", reject);
@@ -80,6 +90,47 @@ describe("nodeExposure - unit edge cases", () => {
     expect(r1.status).toBe(405);
     const r2 = await request({ method: "GET", url: `${baseUrl}/event/${encodeURIComponent(testEvent.id)}`, headers: h });
     expect(r2.status).toBe(405);
+    await rr.dispose();
+  });
+
+  it("returns 400 INVALID_JSON when JSON parsing fails", async () => {
+    const { rr, baseUrl } = await startExposureServer();
+    const h = { "x-runner-token": TOKEN, "content-type": "application/json" };
+    const res = await request({
+      method: "POST",
+      url: `${baseUrl}/task/${encodeURIComponent(testTask.id)}`,
+      headers: h,
+      body: '{',
+    });
+    expect(res.status).toBe(400);
+    const payload = JSON.parse(res.text);
+    expect(payload?.error?.code).toBe("INVALID_JSON");
+    await rr.dispose();
+  });
+
+  it("treats aborted JSON bodies as internal errors", async () => {
+    const { rr, handlers } = await startExposureServer();
+    const { Readable } = require("stream");
+    const req: any = new Readable({ read() {} });
+    req.method = "POST";
+    req.url = `/__runner/task/${encodeURIComponent(testTask.id)}`;
+    req.headers = { "x-runner-token": TOKEN, "content-type": "application/json" };
+    const res: any = {
+      statusCode: 0,
+      headers: new Map(),
+      setHeader(key: string, value: string) {
+        this.headers.set(key, value);
+      },
+      end(payload?: any) {
+        this.payload = payload;
+      },
+    };
+    setImmediate(() => {
+      req.emit("aborted");
+      req.push(null);
+    });
+    await handlers.handleTask(req, res);
+    expect(res.statusCode).toBe(500);
     await rr.dispose();
   });
 
@@ -214,15 +265,276 @@ describe("nodeExposure - unit edge cases", () => {
     await rr.dispose();
   });
 
-  it("does not auto-attach when httpCfg.server is provided (server stays null)", async () => {
-    const externalServer = http.createServer((_req, res) => res.end("ok"));
-    // Note: we do not listen() on purpose; exposure should not auto-attach
+  it("multipart: returns 400 INVALID_MULTIPART on bad __manifest JSON", async () => {
+    const { rr, baseUrl } = await startExposureServer();
+    const boundary = "----unitboundary123";
+    const body = [
+      `--${boundary}\r\n` +
+        'Content-Disposition: form-data; name="__manifest"\r\n' +
+        'Content-Type: application/json; charset=utf-8\r\n\r\n' +
+        '{bad\r\n' +
+        `--${boundary}--\r\n`,
+    ].join("");
+
+    const res = await new Promise<{ status: number; text: string }>((resolve, reject) => {
+      const req = http.request(
+        `${baseUrl}/task/${encodeURIComponent(testTask.id)}`,
+        {
+          method: "POST",
+          headers: {
+            "x-runner-token": TOKEN,
+            "content-type": `multipart/form-data; boundary=${boundary}`,
+            "content-length": String(Buffer.byteLength(body)),
+          },
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+          res.on(
+            "end",
+            () =>
+              resolve({
+                status: res.statusCode || 0,
+                text: Buffer.concat(chunks as readonly Uint8Array[]).toString(
+                  "utf8",
+                ),
+              }),
+          );
+        },
+      );
+      req.on("error", reject);
+      req.end(body);
+    });
+
+    expect(res.status).toBe(400);
+    const json = JSON.parse(res.text);
+    expect(json?.error?.code).toBe("INVALID_MULTIPART");
+    await rr.dispose();
+  });
+
+  it("multipart: returns 400 MISSING_MANIFEST when __manifest is omitted", async () => {
+    const { rr, baseUrl } = await startExposureServer();
+    const boundary = "----unitboundary456";
+    const body = [
+      `--${boundary}\r\n` +
+        'Content-Disposition: form-data; name="file:F1"; filename="x.txt"\r\n' +
+        'Content-Type: text/plain\r\n\r\n' +
+        'abc\r\n' +
+        `--${boundary}--\r\n`,
+    ].join("");
+
+    const res = await new Promise<{ status: number; text: string }>((resolve, reject) => {
+      const req = http.request(
+        `${baseUrl}/task/${encodeURIComponent(testTask.id)}`,
+        {
+          method: "POST",
+          headers: {
+            "x-runner-token": TOKEN,
+            "content-type": `multipart/form-data; boundary=${boundary}`,
+            "content-length": String(Buffer.byteLength(body)),
+          },
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+          res.on(
+            "end",
+            () =>
+              resolve({
+                status: res.statusCode || 0,
+                text: Buffer.concat(chunks as readonly Uint8Array[]).toString(
+                  "utf8",
+                ),
+              }),
+          );
+        },
+      );
+      req.on("error", reject);
+      req.end(body);
+    });
+
+    expect(res.status).toBe(400);
+    const json = JSON.parse(res.text);
+    expect(json?.error?.code).toBe("MISSING_MANIFEST");
+    await rr.dispose();
+  });
+
+  it("multipart: returns 500 when manifest references missing file part", async () => {
+    const { rr, baseUrl } = await startExposureServer();
+    const boundary = "----unitboundary789";
+    const badId = "F1";
+    const body = [
+      // __manifest referencing file id F1
+      `--${boundary}\r\n` +
+        'Content-Disposition: form-data; name="__manifest"\r\n' +
+        'Content-Type: application/json; charset=utf-8\r\n\r\n' +
+        JSON.stringify({ input: { file: { $ejson: "File", id: badId, meta: { name: "x.txt" } } } }) +
+        '\r\n' +
+        // Provide a different file id so hydration fails to find it
+        `--${boundary}\r\n` +
+        'Content-Disposition: form-data; name="file:OTHER"; filename="x.txt"\r\n' +
+        'Content-Type: text/plain\r\n\r\n' +
+        'abc\r\n' +
+        `--${boundary}--\r\n`,
+    ].join("");
+
+    const res = await new Promise<{ status: number; text: string }>((resolve, reject) => {
+      const req = http.request(
+        `${baseUrl}/task/${encodeURIComponent(testTask.id)}`,
+        {
+          method: "POST",
+          headers: {
+            "x-runner-token": TOKEN,
+            "content-type": `multipart/form-data; boundary=${boundary}`,
+            "content-length": String(Buffer.byteLength(body)),
+          },
+        },
+        (res) => {
+          const chunks: Buffer[] = [];
+          res.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
+          res.on(
+            "end",
+            () =>
+              resolve({
+                status: res.statusCode || 0,
+                text: Buffer.concat(chunks as readonly Uint8Array[]).toString(
+                  "utf8",
+                ),
+              }),
+          );
+        },
+      );
+      req.on("error", reject);
+      req.end(body);
+    });
+
+    expect(res.status).toBe(500);
+    expect(res.text).toContain("error");
+    await rr.dispose();
+  });
+
+  it("createRequestListener provides a standalone listener with automatic 404", async () => {
+    const { rr, handlers } = await startExposureServer();
+    const listener = handlers.createRequestListener();
+    const server = http.createServer(listener);
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    const addr = server.address();
+    if (!addr || typeof addr === "string") throw new Error("No server address");
+    const origin = `http://127.0.0.1:${addr.port}`;
+
+    const miss = await request({ method: "POST", url: `${origin}/outside`, body: "{}" });
+    expect(miss.status).toBe(404);
+
+    const headers = { "x-runner-token": TOKEN, "content-type": "application/json" };
+    const ok = await request({
+      method: "POST",
+      url: `${origin}${handlers.basePath}/task/${encodeURIComponent(testTask.id)}`,
+      headers,
+      body: JSON.stringify({ input: { v: 3 } }),
+    });
+    expect(ok.status).toBe(200);
+
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await rr.dispose();
+  });
+
+  it("attachTo mounts and detaches an external server", async () => {
+    const { rr, handlers } = await startExposureServer();
+    const external = http.createServer((_req, res) => {
+      res.statusCode = 200;
+      res.end("fallback");
+    });
+    await new Promise<void>((resolve) => external.listen(0, "127.0.0.1", resolve));
+    const detach = handlers.attachTo(external);
+    const addr = external.address();
+    if (!addr || typeof addr === "string") throw new Error("No server address");
+    const base = `http://127.0.0.1:${addr.port}${handlers.basePath}`;
+    const headers = { "x-runner-token": TOKEN, "content-type": "application/json" };
+
+    const first = await request({
+      method: "POST",
+      url: `${base}/task/${encodeURIComponent(testTask.id)}`,
+      headers,
+      body: JSON.stringify({ input: { v: 2 } }),
+    });
+    expect(first.status).toBe(200);
+    const parsed = JSON.parse(first.text);
+    expect(parsed.ok).toBe(true);
+
+    detach();
+
+    const fallback = await request({
+      method: "POST",
+      url: `${base}/task/${encodeURIComponent(testTask.id)}`,
+      headers,
+      body: JSON.stringify({ input: { v: 2 } }),
+    });
+    expect(fallback.text).toBe("fallback");
+    expect(fallback.status).toBe(200);
+
+    await new Promise<void>((resolve) => external.close(() => resolve()));
+    await rr.dispose();
+  });
+
+  it("createServer returns a ready-to-use HTTP server", async () => {
+    const { rr, handlers } = await startExposureServer();
+    const extra = handlers.createServer();
+    await new Promise<void>((resolve) => extra.listen(0, "127.0.0.1", resolve));
+    const addr = extra.address();
+    if (!addr || typeof addr === "string") throw new Error("No server address");
+    const origin = `http://127.0.0.1:${addr.port}`;
+    const headers = { "x-runner-token": TOKEN, "content-type": "application/json" };
+
+    const ok = await request({
+      method: "POST",
+      url: `${origin}${handlers.basePath}/task/${encodeURIComponent(testTask.id)}`,
+      headers,
+      body: JSON.stringify({ input: { v: 9 } }),
+    });
+    expect(ok.status).toBe(200);
+
+    const miss = await request({ method: "POST", url: `${origin}/nope`, body: "{}" });
+    expect(miss.status).toBe(404);
+
+    await new Promise<void>((resolve) => extra.close(() => resolve()));
+    await rr.dispose();
+  });
+
+  it("auto-attaches to a provided server and detaches on dispose", async () => {
+    const externalServer = http.createServer((req, res) => {
+      res.statusCode = 200;
+      res.end("external");
+    });
+    await new Promise<void>((resolve) => externalServer.listen(0, "127.0.0.1", resolve));
     const exposure = nodeExposure.with({ http: { server: externalServer, auth: { token: TOKEN } } });
     const app = defineResource({ id: "unit.exposure.serverProvided", register: [testTask, testEvent, exposure] });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
-    expect(handlers.server).toBeNull();
+    expect(handlers.server).toBe(externalServer);
+    const addr = externalServer.address();
+    if (!addr || typeof addr === "string") throw new Error("No server address");
+    const base = `http://127.0.0.1:${addr.port}${handlers.basePath}`;
+
+    const headers = { "x-runner-token": TOKEN, "content-type": "application/json" };
+    const first = await request({
+      method: "POST",
+      url: `${base}/task/${encodeURIComponent(testTask.id)}`,
+      headers,
+      body: JSON.stringify({ input: { v: 7 } }),
+    });
+    expect(first.status).toBe(200);
+
     await rr.dispose();
-    externalServer.close();
+
+    const fallback = await request({
+      method: "POST",
+      url: `${base}/task/${encodeURIComponent(testTask.id)}`,
+      headers,
+      body: JSON.stringify({ input: { v: 7 } }),
+    });
+    expect(fallback.text).toBe("external");
+    expect(fallback.status).toBe(200);
+
+    await new Promise<void>((resolve) => externalServer.close(() => resolve()));
   });
 });

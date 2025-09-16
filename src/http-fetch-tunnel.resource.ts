@@ -2,6 +2,17 @@ import { defineResource } from "./define";
 import type { TunnelRunner } from "./globals/resources/tunnel/types";
 import { globalResources } from "./globals/globalResources";
 import type { Logger } from "./models/Logger";
+import {
+  assertOkEnvelope,
+  ProtocolEnvelope,
+  toTunnelError,
+} from "./globals/resources/tunnel/protocol";
+import {
+  getDefaultSerializer,
+  Serializer,
+} from "./globals/resources/tunnel/serializer";
+import { normalizeError as _normalizeError } from "./globals/resources/tunnel/error-utils";
+export { normalizeError } from "./globals/resources/tunnel/error-utils";
 
 export interface ExposureFetchAuthConfig {
   header?: string; // default: x-runner-token
@@ -13,6 +24,11 @@ export interface ExposureFetchConfig {
   auth?: ExposureFetchAuthConfig;
   timeoutMs?: number; // optional request timeout
   fetchImpl?: typeof fetch; // custom fetch (optional)
+  serializer?: Serializer; // optional serializer (defaults to JSON)
+  onRequest?: (ctx: {
+    url: string;
+    headers: Record<string, string>;
+  }) => void | Promise<void>;
 }
 
 export interface ExposureFetchClient {
@@ -20,9 +36,7 @@ export interface ExposureFetchClient {
   event<P = unknown>(id: string, payload?: P): Promise<void>;
 }
 
-export function normalizeError(e: unknown): Error {
-  return e instanceof Error ? e : new Error(String(e));
-}
+// normalizeError is re-exported from error-utils for public API
 
 async function postJson<T = any>(
   fetchFn: typeof fetch,
@@ -30,6 +44,11 @@ async function postJson<T = any>(
   body: unknown,
   headers: Record<string, string>,
   timeoutMs?: number,
+  serializer?: Serializer,
+  onRequest?: (ctx: {
+    url: string;
+    headers: Record<string, string>;
+  }) => void | Promise<void>,
 ): Promise<T> {
   const controller =
     timeoutMs && timeoutMs > 0 ? new AbortController() : undefined;
@@ -38,18 +57,22 @@ async function postJson<T = any>(
     if (controller) {
       timeout = setTimeout(() => controller.abort(), timeoutMs);
     }
+    const reqHeaders = {
+      "content-type": "application/json; charset=utf-8",
+      ...headers,
+    } as Record<string, string>;
+    if (onRequest) await onRequest({ url, headers: reqHeaders });
     const res = await fetchFn(url, {
       method: "POST",
-      headers: {
-        "content-type": "application/json; charset=utf-8",
-        ...headers,
-      },
-      body: JSON.stringify(body),
+      headers: reqHeaders,
+      body: (serializer ?? getDefaultSerializer()).stringify(body),
       signal: controller?.signal,
     });
 
     const text = await res.text();
-    const json = text ? (JSON.parse(text) as T) : (undefined as unknown as T);
+    const json = text
+      ? (serializer ?? getDefaultSerializer()).parse<T>(text)
+      : (undefined as unknown as T);
     return json;
   } finally {
     if (timeout) clearTimeout(timeout);
@@ -79,78 +102,29 @@ export function createExposureFetch(
   return {
     async task<I, O>(id: string, input?: I): Promise<O> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
-      const r: any = await postJson(
+      const r: ProtocolEnvelope<O> = await postJson(
         fetchImpl,
         url,
         { input },
         buildHeaders(),
         cfg?.timeoutMs,
+        cfg?.serializer,
+        cfg?.onRequest,
       );
-      if (!r?.ok) {
-        const msg = r?.error?.message ?? "Tunnel task error";
-        throw new Error(String(msg));
-      }
-      return r.result as O;
+      return assertOkEnvelope<O>(r, { fallbackMessage: "Tunnel task error" });
     },
     async event<P>(id: string, payload?: P): Promise<void> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
-      const r: any = await postJson(
+      const r: ProtocolEnvelope<void> = await postJson(
         fetchImpl,
         url,
         { payload },
         buildHeaders(),
         cfg?.timeoutMs,
+        cfg?.serializer,
+        cfg?.onRequest,
       );
-      if (!r?.ok) {
-        const msg = r?.error?.message ?? "Tunnel event error";
-        throw new Error(String(msg));
-      }
+      assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });
     },
   } satisfies ExposureFetchClient;
 }
-
-// Universal fetch-based tunnel runner resource
-export const httpFetchTunnel = defineResource<
-  ExposureFetchConfig,
-  Promise<TunnelRunner>,
-  { logger: typeof globalResources.logger }
->({
-  id: "platform.universal.resources.httpFetchTunnel",
-  meta: {
-    title: "HTTP Fetch Tunnel",
-    description:
-      "Client-side tunnel runner using fetch() to call a remote nodeExposure over HTTP JSON (POST-only).",
-  },
-  dependencies: { logger: globalResources.logger },
-  async init(cfg, { logger }) {
-    const client = createExposureFetch(cfg);
-    return {
-      run: async (t, input) => {
-        try {
-          return await client.task(t.id, input);
-        } catch (e: any) {
-          try {
-            (logger as Logger).error("tunnel.task.error", {
-              id: t.id,
-              message: e?.message || String(e),
-            });
-          } catch (_) {}
-          throw normalizeError(e);
-        }
-      },
-      emit: async (emission) => {
-        try {
-          await client.event(emission.id, emission.data as unknown);
-        } catch (e: any) {
-          try {
-            (logger as Logger).error("tunnel.event.error", {
-              id: emission.id,
-              message: e?.message || String(e),
-            });
-          } catch (_) {}
-          throw normalizeError(e);
-        }
-      },
-    } satisfies TunnelRunner;
-  },
-});

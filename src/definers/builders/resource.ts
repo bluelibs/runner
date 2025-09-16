@@ -281,31 +281,6 @@ export interface ResourceFluentBuilder<
     TTags,
     TMiddleware
   >;
-  lock(
-    mutator?: (
-      def: IResourceDefinition<
-        TConfig,
-        TValue,
-        TDeps,
-        TContext,
-        any,
-        any,
-        TMeta,
-        TTags,
-        TMiddleware
-      >,
-    ) => void | IResourceDefinition<
-      TConfig,
-      TValue,
-      TDeps,
-      TContext,
-      any,
-      any,
-      TMeta,
-      TTags,
-      TMiddleware
-    >,
-  ): IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>;
   build(): IResource<
     TConfig,
     TValue,
@@ -658,55 +633,6 @@ function makeResourceBuilder<
         TTags,
         TMiddleware
       >(next);
-    },
-    lock(
-      mutator?: (
-        def: IResourceDefinition<
-          TConfig,
-          TValue,
-          TDeps,
-          TContext,
-          any,
-          any,
-          TMeta,
-          TTags,
-          TMiddleware
-        >,
-      ) => void | IResourceDefinition<
-        TConfig,
-        TValue,
-        TDeps,
-        TContext,
-        any,
-        any,
-        TMeta,
-        TTags,
-        TMiddleware
-      >,
-    ) {
-      const def: IResourceDefinition<
-        TConfig,
-        TValue,
-        TDeps,
-        TContext,
-        any,
-        any,
-        TMeta,
-        TTags,
-        TMiddleware
-      > = { ...state } as unknown as IResourceDefinition<
-        TConfig,
-        TValue,
-        TDeps,
-        TContext,
-        any,
-        any,
-        TMeta,
-        TTags,
-        TMiddleware
-      >;
-      const finalDef = mutator ? mutator(def) || def : def;
-      return defineResource(finalDef);
     },
     build() {
       return defineResource({

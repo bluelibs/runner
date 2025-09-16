@@ -10,14 +10,13 @@ export type TunnelEventSelector =
   | Array<string | IEvent<any>>
   | ((event: IEvent<any>) => boolean);
 
-export interface TunnelTagConfig {
-  // Whether the tunnel is client-side or server-side. Defualts to "none"
-  mode?: TunnelMode;
-  // Array of task ids or task definitions, or a filter function
-  tasks?: TunnelTaskSelector;
-  // Array of event ids or event definitions, or a filter function
-  events?: TunnelEventSelector;
-}
+export type EventDeliveryMode =
+  | "mirror"
+  | "remote-only"
+  | "local-only"
+  | "remote-first";
+
+export interface TunnelTagConfig {}
 
 export type TunnelTaskRunner = (
   task: ITask<any, any, any, any, any, any>,
@@ -25,6 +24,11 @@ export type TunnelTaskRunner = (
 ) => Promise<any>;
 
 export interface TunnelRunner {
+  transport?: "http" | string;
+  mode?: TunnelMode;
+  tasks?: TunnelTaskSelector;
+  events?: TunnelEventSelector;
+  eventDeliveryMode?: EventDeliveryMode;
   // Called when a tunneled task runs; receives the task definition
   run?: TunnelTaskRunner;
   // Called when a tunneled event is emitted; receives the event definition

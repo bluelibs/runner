@@ -2,6 +2,7 @@ import { defineTask, defineResource, defineEvent, defineHook } from "../define";
 import { run } from "../run";
 import { globalTags } from "../globals/globalTags";
 import { IEventEmission } from "../types/event";
+import type { TunnelRunner } from "../globals/resources/tunnel/types";
 
 describe("Tunnel Tag & Middleware", () => {
   it("overrides selected tasks via ids array", async () => {
@@ -17,8 +18,10 @@ describe("Tunnel Tag & Middleware", () => {
     // Resource exposing a tunnel runner
     const tunnelRes = defineResource({
       id: "app.resources.tunnel",
-      tags: [globalTags.tunnel.with({ mode: "client", tasks: [t1.id] })],
-      init: async () => ({
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        tasks: [t1.id],
         run: async (task: any, input: any) => `TUN:${task.id}:${input?.v}`,
       }),
     });
@@ -57,13 +60,10 @@ describe("Tunnel Tag & Middleware", () => {
 
     const tunnelRes = defineResource({
       id: "app.resources.tunnel.filter",
-      tags: [
-        globalTags.tunnel.with({
-          mode: "client",
-          tasks: (task) => task.id.startsWith("app.tasks."),
-        }),
-      ],
-      init: async () => ({
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        tasks: (task: any) => task.id.startsWith("app.tasks."),
         run: async (task: any, input: any) => `FT:${task.id}:${input?.v}`,
       }),
     });
@@ -91,13 +91,10 @@ describe("Tunnel Tag & Middleware", () => {
   it("throws when tasks includes a missing string id", async () => {
     const tunnelRes = defineResource({
       id: "app.resources.tunnel.missingId",
-      tags: [
-        globalTags.tunnel.with({
-          mode: "client",
-          tasks: ["app.tasks.unknown"],
-        }),
-      ],
-      init: async () => ({
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        tasks: ["app.tasks.unknown"],
         run: async (task: any, input: any) => `TUN:${task.id}:${input?.v}`,
       }),
     });
@@ -121,10 +118,10 @@ describe("Tunnel Tag & Middleware", () => {
 
     const tunnelRes = defineResource({
       id: "app.resources.tunnel.unreg",
-      tags: [
-        globalTags.tunnel.with({ mode: "client", tasks: [notRegistered] }),
-      ],
-      init: async () => ({
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        tasks: [notRegistered as any],
         run: async (task: any, input: any) => `TUN:${task.id}:${input?.v}`,
       }),
     });
@@ -152,8 +149,10 @@ describe("Tunnel Tag & Middleware", () => {
 
     const tunnelRes = defineResource({
       id: "app.resources.tunnel.objects",
-      tags: [globalTags.tunnel.with({ mode: "client", tasks: [t1] })],
-      init: async () => ({
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        tasks: [t1],
         run: async (task: any, input: any) => `OBJ:${task.id}:${input?.v}`,
       }),
     });
@@ -192,13 +191,10 @@ describe("Tunnel Events", () => {
     const captured: Array<{ id: string; v: string }> = [];
     const tunnelRes = defineResource({
       id: "app.resources.tunnel.events",
-      tags: [
-        globalTags.tunnel.with({
-          mode: "client",
-          events: [ev.id],
-        }),
-      ],
-      init: async () => ({
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        events: [ev.id],
         emit: async (eventEmission: IEventEmission<any>) => {
           captured.push({ id: eventEmission.id, v: eventEmission.data?.v });
         },
@@ -224,13 +220,12 @@ describe("Tunnel Events", () => {
   it("throws when events includes a missing id", async () => {
     const tunnelRes = defineResource({
       id: "app.events.tunnel.missing",
-      tags: [
-        globalTags.tunnel.with({
-          mode: "client",
-          events: ["app.events.unknown"],
-        }),
-      ],
-      init: async () => ({ emit: async () => {} }),
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        events: ["app.events.unknown"],
+        emit: async () => {},
+      }),
     });
 
     const app = defineResource({
@@ -250,13 +245,15 @@ describe("Tunnel Events", () => {
 
     const missingEmit = defineResource({
       id: "app.tunnel.missingEmit",
-      tags: [globalTags.tunnel.with({ mode: "client", events: [ev.id] })],
-      init: async () => ({}),
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> =>
+        ({ mode: "client", events: [ev.id] } as any),
     });
     const missingRun = defineResource({
       id: "app.tunnel.missingRun",
-      tags: [globalTags.tunnel.with({ mode: "client", tasks: [t.id] })],
-      init: async () => ({}),
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> =>
+        ({ mode: "client", tasks: [t.id] } as any),
     });
 
     await expect(
@@ -285,8 +282,9 @@ describe("Tunnel Events", () => {
     });
     const tunnelRes = defineResource({
       id: "app.resources.tunnel.none",
-      tags: [globalTags.tunnel.with({ tasks: [t1.id] })],
-      init: async () => ({
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        tasks: [t1.id],
         run: async () => `NOPE`,
       }),
     });
@@ -328,14 +326,11 @@ describe("Tunnel Events", () => {
 
     const tunnelRes = defineResource({
       id: "app.resources.tunnel.server",
-      tags: [
-        globalTags.tunnel.with({
-          mode: "server",
-          tasks: [t1.id],
-          events: [ev.id],
-        }),
-      ],
-      init: async () => ({
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "server",
+        tasks: [t1.id],
+        events: [ev.id],
         run: async () => `NOPE`,
         emit: async () => {},
       }),
@@ -366,13 +361,10 @@ describe("Tunnel Events", () => {
     const captured: Array<number> = [];
     const tunnelRes = defineResource({
       id: "app.resources.tunnel.fn",
-      tags: [
-        globalTags.tunnel.with({
-          mode: "client",
-          events: (e) => e.id === ev.id,
-        }),
-      ],
-      init: async () => ({
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        events: (e: any) => e.id === ev.id,
         emit: async (e: IEventEmission<any>) => captured.push(e.data?.p),
       }),
     });
@@ -394,8 +386,10 @@ describe("Tunnel Events", () => {
     const captured: string[] = [];
     const tunnelRes = defineResource({
       id: "app.resources.tunnel.obj",
-      tags: [globalTags.tunnel.with({ mode: "client", events: [ev] })],
-      init: async () => ({
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        events: [ev],
         emit: async (e: IEventEmission<any>) => captured.push(e.data?.z),
       }),
     });

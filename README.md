@@ -20,6 +20,7 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 | [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)                                                 | Docs                                                                                                               | Design notes, deep dives, and context         |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example                                                                                                            | Full Express + OpenAPI + SQLite demo          |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example                                                                                                            | Full Fastify + MikroORM + PostgreSQL demo     |
+| [Example: Streaming Append Route](https://github.com/bluelibs/runner/blob/main/examples/streaming-append.example.ts) | Example                                                                                                            | Demonstrates request/response streaming       |
 | [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)       | Chatbot                                                                                                            | Ask questions interactively, or feed README.md to your own AI |
 
 ### Community & Policies

@@ -5,11 +5,15 @@ import type { Store } from "../../models/Store";
 import type { ITask, IEvent, IEventEmission } from "../../defs";
 import type {
   TunnelRunner,
-  TunnelTagConfig,
   TunnelTaskSelector,
   TunnelEventSelector,
 } from "../resources/tunnel/types";
 import { symbolTunneledTask } from "../../types/symbols";
+
+const originalRuns = new WeakMap<
+  ITask<any, any, any, any, any, any>,
+  Function
+>();
 
 export const tunnelResourceMiddleware = defineResourceMiddleware<
   void,
@@ -28,24 +32,24 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
     // Initialize the resource and get its value (tunnel runner)
     const value = (await next(resource.config)) as TunnelRunner;
 
-    // Extract the tunnel configuration from the resource's tags
-    const cfg = globalTags.tunnel.extract(
-      resource.definition,
-    ) as TunnelTagConfig;
+    const mode = value.mode || "none";
+    const delivery = value.eventDeliveryMode || "mirror";
+    const tasks = value.tasks ? resolveTasks(store, value.tasks) : [];
+    const events = value.events
+      ? resolveEvents(store, value.events as any)
+      : [];
 
-    const mode = cfg.mode || "none";
-    const tasks = cfg.tasks ? resolveTasks(store, cfg.tasks) : [];
-    const events = cfg.events ? resolveEvents(store, cfg.events as any) : [];
-
-    if (tasks.length > 0 && typeof value.run !== "function") {
-      throw new Error(
-        "Tunnel resource value must implement run(task, input) when tasks[] is configured.",
-      );
-    }
-    if (events.length > 0 && typeof value.emit !== "function") {
-      throw new Error(
-        "Tunnel resource value must implement emit(event, payload) when events[] is configured.",
-      );
+    if (mode === "client") {
+      if (tasks.length > 0 && typeof value.run !== "function") {
+        throw new Error(
+          "Tunnel resource value must implement run(task, input) when tasks[] is configured.",
+        );
+      }
+      if (events.length > 0 && typeof value.emit !== "function") {
+        throw new Error(
+          "Tunnel resource value must implement emit(event, payload) when events[] is configured.",
+        );
+      }
     }
 
     // If there is no mode, or we are server, we don't override anything
@@ -55,30 +59,50 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
       return value;
     }
 
-    // Override selected tasks' run() to delegate to tunnel runner
+    // Override selected tasks' run() to delegate to tunnel runner (reversible)
     for (const t of tasks) {
+      if (!originalRuns.has(t)) {
+        originalRuns.set(t, t.run as any);
+      }
       t.run = (async (input: any) => {
         return value.run!(t as any, input);
       }) as any;
-      // Mark task as tunneled locally so the caller side can adjust middleware policy
       (t as any)[symbolTunneledTask] = "client";
     }
 
     if (events.length > 0) {
       const selectedEventIds = new Set(events.map((e) => e.id));
       // Install a global emission interceptor for selected events
+      // Install an emission interceptor for this tunnel instance as well
       eventManager.intercept(
         async (next: any, emission: IEventEmission<any>) => {
-          if (selectedEventIds.has(emission.id)) {
-            // TODO: maybe a Promise.all() ?
-            // New semantics: emit both locally and remotely.
-            // Local emission (respects stopPropagation locally)
-            await next(emission);
-            // Remote emission (always forwarded)
+          if (!selectedEventIds.has(emission.id)) {
+            return next(emission);
+          }
+
+          if (delivery === "local-only") {
+            return next(emission);
+          }
+
+          if (delivery === "remote-only") {
+            // Forward remotely only; skip local listeners
             return value.emit!(emission);
           }
 
-          return next(emission);
+          if (delivery === "remote-first") {
+            try {
+              await value.emit!(emission);
+            } catch (_) {
+              // Remote failed; fall back to local
+              return next(emission);
+            }
+            // Remote succeeded; skip local
+            return;
+          }
+
+          // mirror (default): local then remote; propagate remote failure
+          await next(emission);
+          return value.emit!(emission);
         },
       );
     }

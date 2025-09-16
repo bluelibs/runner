@@ -1,4 +1,5 @@
 import { resource, task, run, taskMiddleware, globals } from "..";
+import type { TunnelRunner } from "../globals/resources/tunnel/types";
 
 describe("Tunnel Policy (task-level whitelist)", () => {
   it("runs only whitelisted client middlewares when tunneled (by id)", async () => {
@@ -31,13 +32,18 @@ describe("Tunnel Policy (task-level whitelist)", () => {
     // Tunnel overrides .run; local chain should filter middlewares by tag whitelist
     const tunnel = resource({
       id: "tests.policy.tunnel",
-      tags: [globals.tags.tunnel.with({ mode: "client", tasks: [t] })],
-      init: async () => ({
+      tags: [globals.tags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        tasks: [t],
         run: async () => "remote", // remote handler
       }),
     });
 
-    const app = resource({ id: "tests.policy.app", register: [mwA, mwB, t, tunnel] });
+    const app = resource({
+      id: "tests.policy.app",
+      register: [mwA, mwB, t, tunnel],
+    });
     const rr = await run(app);
     const out = await rr.runTask(t.id, { v: 1 });
 
@@ -75,13 +81,18 @@ describe("Tunnel Policy (task-level whitelist)", () => {
 
     const tunnel = resource({
       id: "tests.policy.tunnel2",
-      tags: [globals.tags.tunnel.with({ mode: "client", tasks: [t] })],
-      init: async () => ({
+      tags: [globals.tags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        tasks: [t],
         run: async () => "remote", // remote handler
       }),
     });
 
-    const app = resource({ id: "tests.policy.app2", register: [mwA, mwB, t, tunnel] });
+    const app = resource({
+      id: "tests.policy.app2",
+      register: [mwA, mwB, t, tunnel],
+    });
     const rr = await run(app);
     const out = await rr.runTask(t.id, { v: 1 });
 
@@ -117,11 +128,18 @@ describe("Tunnel Policy (task-level whitelist)", () => {
 
     const tunnel = resource({
       id: "tests.policy.tunnel3",
-      tags: [globals.tags.tunnel.with({ mode: "client", tasks: [t] })],
-      init: async () => ({ run: async () => "remote" }),
+      tags: [globals.tags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        tasks: [t],
+        run: async () => "remote",
+      }),
     });
 
-    const app = resource({ id: "tests.policy.app3", register: [mwA, mwB, t, tunnel] });
+    const app = resource({
+      id: "tests.policy.app3",
+      register: [mwA, mwB, t, tunnel],
+    });
     const rr = await run(app);
     const out = await rr.runTask(t.id, { v: 1 });
 
@@ -159,11 +177,18 @@ describe("Tunnel Policy (task-level whitelist)", () => {
 
     const tunnel = resource({
       id: "tests.policy.tunnel5",
-      tags: [globals.tags.tunnel.with({ mode: "client", tasks: [t] })],
-      init: async () => ({ run: async () => "remote" }),
+      tags: [globals.tags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        tasks: [t],
+        run: async () => "remote",
+      }),
     });
 
-    const app = resource({ id: "tests.policy.app5", register: [mwA, mwB, t, tunnel] });
+    const app = resource({
+      id: "tests.policy.app5",
+      register: [mwA, mwB, t, tunnel],
+    });
     const rr = await run(app);
     const out = await rr.runTask(t.id, { v: 1 });
 
@@ -200,11 +225,18 @@ describe("Tunnel Policy (task-level whitelist)", () => {
 
     const tunnel = resource({
       id: "tests.policy.tunnel4",
-      tags: [globals.tags.tunnel.with({ mode: "client", tasks: [t] })],
-      init: async () => ({ run: async () => "remote" }),
+      tags: [globals.tags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        tasks: [t],
+        run: async () => "remote",
+      }),
     });
 
-    const app = resource({ id: "tests.policy.app4", register: [mwA, mwB, t, tunnel] });
+    const app = resource({
+      id: "tests.policy.app4",
+      register: [mwA, mwB, t, tunnel],
+    });
     const rr = await run(app);
     const out = await rr.runTask(t.id, { v: 1 });
 

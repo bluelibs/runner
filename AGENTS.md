@@ -1,9 +1,15 @@
 - Be passionate about what you do, be precise, thoughtful and clear.
+- The code should be designed as re-usable without being over-engineered.
+- The code should be friendly, code readability are a big plus.
+- Keep functions small, decouple early on. Make code be read like a story.
 - When doing a tasks, first think about the contracts and interfaces, then think about the acceptance criteria, and only then think about implementation.
 - Type-strictness is a must, avoid type casting unless forced to
 - 100% test coverage is a must and mandatory after every change (npm run coverage)
+- When encountering a global <100% coverage on files/concerns you didn't work on, ignore those files.
 - AI.md contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
 - This package is multi-platform (readmes/MULTIPLATFORM.md) be sure to take this into account when implementing changes
 - Node specific code goes under ./src/node/ folder. It is exported only for node.
 - Always run the tests, don't assume that you're fixed work.
 - When running commands, don't run them with bash -lc, or zsh -lc, run the commands directly.
+- Use only relative imports
+- Be truthful and avoid ignoring files in test configs as a way to achieve 100%.
