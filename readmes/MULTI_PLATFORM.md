@@ -424,7 +424,7 @@ All registration methods return disposers. Tests should:
 ### Handling unreachable branches (coverage without hacks)
 
 - Some branches exist for completeness but are unreachable by construction. Example:
-  - In `UniversalPlatformAdapter`, the `switch(kind === "browser")` path is effectively unreachable when the earlier `document/addEventListener` check holds true. We keep the branch to document intent, but exclude it from coverage with `/* istanbul ignore next */` comments.
+  - In `UniversalPlatformAdapter`, the `switch(kind === "browser")` path is effectively unreachable when the earlier `document/addEventListener` check holds true. We keep the branch to document intent, but exclude it from coverage with `` comments.
 - Avoid brittle hacks like rewriting module source at runtime or deep prototype overrides to force coverage on unreachable paths.
 
 ### Patterns we used in tests

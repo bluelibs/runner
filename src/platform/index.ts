@@ -40,12 +40,7 @@ export function getDetectedEnvironment(): PlatformId {
     detectedEnvironment = __TARGET__ as PlatformId;
     return detectedEnvironment;
   }
-  // Default to node when target is undefined (dev default)
-  if (typeof __TARGET__ === "undefined") {
-    detectedEnvironment = "node";
-    return detectedEnvironment;
-  }
-  // Fallback to runtime detection only for explicit universal target
+  // For undefined or explicit universal target, use runtime detection
   detectedEnvironment = detectEnvironment();
   return detectedEnvironment;
 }
@@ -54,24 +49,24 @@ export function isNode(): boolean {
   if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
     return __TARGET__ === "node";
   }
-  if (typeof __TARGET__ === "undefined") return true; // dev default
-  return getDetectedEnvironment() === "node";
+  // Use fresh runtime detection to allow tests to mutate globals within a single run
+  return detectEnvironment() === "node";
 }
 
 export function isBrowser(): boolean {
   if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
     return __TARGET__ === "browser";
   }
-  if (typeof __TARGET__ === "undefined") return false; // dev default
-  return getDetectedEnvironment() === "browser";
+  // Use fresh runtime detection to allow tests to mutate globals within a single run
+  return detectEnvironment() === "browser";
 }
 
 export function isUniversal(): boolean {
   if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
     return __TARGET__ === "universal";
   }
-  if (typeof __TARGET__ === "undefined") return false; // dev default
-  return getDetectedEnvironment() === "universal";
+  // Use fresh runtime detection to allow tests to mutate globals within a single run
+  return detectEnvironment() === "universal";
 }
 
 export type { IPlatformAdapter, IAsyncLocalStorage } from "./types";

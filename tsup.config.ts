@@ -47,8 +47,11 @@ export default defineConfig([
   withCommon({
     outDir: "dist/node",
     platform: "node",
+    // Include a dedicated Node subpath entry alongside the main index
+    entry: { index: "src/index.ts", node: "src/node/index.ts" },
     format: ["esm", "cjs"],
-    dts: false,
+    // Emit types for the Node subpath as well
+    dts: true,
     clean: false,
     esbuildOptions: makeEsbuildOptions("node"),
     outExtension({ format }) {

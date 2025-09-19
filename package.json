@@ -22,6 +22,12 @@
       "require": "./dist/universal/index.cjs",
       "default": "./dist/universal/index.mjs"
     },
+    "./node": {
+      "types": "./dist/node/node.d.ts",
+      "import": "./dist/node/node.mjs",
+      "require": "./dist/node/node.cjs",
+      "default": "./dist/node/node.mjs"
+    },
     "./edge": {
       "import": "./dist/edge/index.mjs",
       "default": "./dist/edge/index.mjs"
@@ -63,6 +69,8 @@
     "test": "jest --verbose --runInBand",
     "test:dev": "jest --verbose --watch",
     "coverage": "jest --verbose --coverage",
+    "coverage:ai": "node ./scripts/run-coverage-ai.mjs",
+    "verbose:coverage": "jest --verbose --coverage --verbose=false --silent --noStackTrace --bail=1",
     "test:clean": "jest --clearCache",
     "testonly": "npm test",
     "test:ci": "jest --verbose --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
@@ -83,6 +91,7 @@
     "@typescript-eslint/eslint-plugin": "8.39.0",
     "@typescript-eslint/parser": "8.39.0",
     "benchmark": "^2.1.4",
+    "busboy": "^1.6.0",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "6.3.0",
     "eslint-plugin-prettier": "3.1.1",
@@ -114,6 +123,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@bluelibs/ejson": "^1.5.0",
     "lru-cache": "^11.1.0"
   },
   "optionalDependencies": {

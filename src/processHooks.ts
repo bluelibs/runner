@@ -63,13 +63,7 @@ function installGlobalShutdownHooksOnce() {
         activeDisposers.delete(d);
       }
     } finally {
-      try {
-        platform.exit(0);
-      } catch (e) {
-        if (!(e instanceof PlatformUnsupportedFunction)) {
-          throw e;
-        }
-      }
+      platform.exit(0);
     }
   };
   platform.onShutdownSignal(handler);

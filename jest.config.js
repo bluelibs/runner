@@ -2,14 +2,14 @@ module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
   testMatch: ["<rootDir>/src/**/*.test.ts"],
-  testPathIgnorePatterns: ["<rootDir>/src/__tests__/benchmark/"],
+  testPathIgnorePatterns: ["<rootDir>/src/__tests__/benchmark"],
   moduleNameMapper: {
     "^#/(.*)$": "<rootDir>/src/$1",
   },
   collectCoverageFrom: [
     "src/**/*.{ts,tsx}",
     "!src/**/*.d.ts",
-    "!src/**/__tests__/**",
+    "!src/__tests__/**",
   ],
   setupFilesAfterEnv: ["<rootDir>/src/__tests__/jest.setup.ts"],
   coverageDirectory: "coverage",

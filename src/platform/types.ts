@@ -45,6 +45,8 @@ export function isNode(): boolean {
 }
 
 export function isBrowser(): boolean {
+  // JSDOM environment in tests may define window/document as objects
+  // Treat their presence as browser-like
   return !!(typeof window !== "undefined" && typeof document !== "undefined");
 }
 

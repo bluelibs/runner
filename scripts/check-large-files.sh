@@ -40,9 +40,12 @@ results=()
 while IFS= read -r -d '' file; do
   # Count non-empty lines (approx. LOC)
   count=$(grep -cEv '^[[:space:]]*$' "$file" || true)
+  # Count total characters (prefer multi-byte; fallback to bytes to avoid locale issues)
+  chars=$( (wc -m < "$file" 2>/dev/null || wc -c < "$file") | tr -d ' ')
 
   if [ "$count" -gt "$THRESHOLD" ]; then
-    results+=("$count $file")
+    # Store: <non-empty-lines> <chars> <path>
+    results+=("$count $chars $file")
   fi
 done < <(find "$SRC_DIR" -type f ! -name "*.test.ts" -print0)
 
@@ -51,7 +54,13 @@ if [[ ${#results[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Sort by count desc and print
-printf "%s\n" "${results[@]}" | sort -nr -k1,1 | awk '{printf "%s\t%s\n", $1, $2}'
-
-
+# Sort by non-empty line count desc and print
+# Columns: non-empty-lines\tchars\tpath
+printf "%s\n" "${results[@]}" \
+  | sort -nr -k1,1 \
+  | awk '{
+      printf "%s\t%s\t", $1, $2;
+      for (i=3; i<=NF; i++) {
+        printf "%s%s", $i, (i < NF ? OFS : ORS);
+      }
+    }'

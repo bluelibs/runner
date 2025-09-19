@@ -1,0 +1,2 @@
+- Run ./scripts/get-pr-comments.sh
+- Analyse the comments and implement the fixes if the fixes are relevant.

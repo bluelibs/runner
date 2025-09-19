@@ -8,7 +8,7 @@ import {
 } from "../defs";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
-import { symbolFilePath, symbolTask } from "./symbols";
+import { symbolFilePath, symbolTask, symbolPhantomTask } from "./symbols";
 import {
   EnsureInputSatisfiesContracts,
   EnsureOutputSatisfiesContracts,
@@ -84,6 +84,8 @@ export interface ITask<
   > {
   [symbolFilePath]: string;
   [symbolTask]: true;
+  /** Present only for phantom tasks. */
+  [symbolPhantomTask]?: true;
   id: string;
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
@@ -94,3 +96,20 @@ export interface ITask<
   >;
   tags: TTags;
 }
+
+/** Narrowed type for phantom tasks (no-op run by default). */
+export type IPhantomTask<
+  TInput = any,
+  TResolved = any,
+  TDependencies extends DependencyMapType = {},
+  TMeta extends ITaskMeta = any,
+  TTags extends TagType[] = TagType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
+> = ITask<
+  TInput,
+  Promise<TResolved>,
+  TDependencies,
+  TMeta,
+  TTags,
+  TMiddleware
+> & { [symbolPhantomTask]: true };

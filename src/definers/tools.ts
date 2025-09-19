@@ -10,6 +10,7 @@ import {
   IEvent,
   symbolEvent,
   symbolTask,
+  symbolPhantomTask,
   symbolHook,
   symbolResourceWithConfig,
   symbolResource,
@@ -20,6 +21,7 @@ import {
   symbolOptionalDependency,
   symbolTag,
   ITag,
+  IPhantomTask,
 } from "../defs";
 
 /**
@@ -29,6 +31,13 @@ import {
  */
 export function isTask(definition: any): definition is ITask {
   return definition && definition[symbolTask];
+}
+
+/** Type guard: checks if a definition is a Phantom Task. */
+export function isPhantomTask(definition: any): definition is IPhantomTask {
+  return (
+    definition && definition[symbolTask] && Boolean(definition[symbolPhantomTask])
+  );
 }
 
 /**

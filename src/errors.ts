@@ -196,3 +196,18 @@ export class PlatformUnsupportedFunction extends RuntimeError {
     this.name = "PlatformUnsupportedFunction";
   }
 }
+
+/**
+ * CancellationError: used to signal client-initiated aborts (e.g., HTTP request aborted).
+ * Handlers can catch and map to 499 Client Closed Request without noisy logs.
+ */
+export class CancellationError extends RuntimeError {
+  constructor(message = "Operation cancelled") {
+    super(message);
+    this.name = "CancellationError";
+  }
+}
+
+export function isCancellationError(err: unknown): err is CancellationError {
+  return !!err && (err as any).name === "CancellationError";
+}

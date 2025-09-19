@@ -14,6 +14,7 @@ import {
 } from "../types/storeTypes";
 import { Logger } from "./Logger";
 import { globalEvents } from "../globals/globalEvents";
+import { globalTags } from "../globals/globalTags";
 import { ValidationError, LockedError } from "../errors";
 import * as utils from "../define";
 import { symbol } from "zod";
@@ -27,6 +28,7 @@ import {
   symbolResourceMiddleware,
 } from "../types/symbols";
 import { isResourceMiddleware, isTaskMiddleware } from "../define";
+import { symbolTunneledTask } from "../types/symbols";
 
 /**
  * Interceptor for task middleware execution
@@ -251,31 +253,44 @@ export class MiddlewareManager {
     TDeps extends DependencyMapType,
   >(task: ITask<TInput, TOutput, TDeps>) {
     const storeTask = this.store.tasks.get(task.id)!;
+    const tDef = storeTask.task as ITask<TInput, TOutput, TDeps>;
 
     // Base next executes the task with validation
     let next = async (input: any) => {
       // Extract raw input from execution input if needed
       let rawInput = input;
 
-      if (task.inputSchema) {
+      // Choose which task definition is authoritative for execution:
+      // - Use store (tDef) when task is locally tunneled so tunnel overrides apply
+      // - Otherwise, respect the passed-in task object (preserves override tests behavior)
+      const isLocallyTunneled =
+        (task as any)[symbolTunneledTask] === "client" ||
+        (tDef as any)[symbolTunneledTask] === "client";
+      const runnerTask = (isLocallyTunneled ? tDef : task) as ITask<
+        TInput,
+        TOutput,
+        TDeps
+      >;
+
+      if (runnerTask.inputSchema) {
         try {
-          rawInput = task.inputSchema.parse(rawInput);
+          rawInput = runnerTask.inputSchema.parse(rawInput);
         } catch (error) {
           throw new ValidationError(
             "Task input",
-            task.id,
+            runnerTask.id,
             error instanceof Error ? error : new Error(String(error)),
           );
         }
       }
 
       const deps = storeTask.computedDependencies;
-      const rawResult = await task.run.call(null, rawInput, deps);
-      if (task.resultSchema) {
+      const rawResult = await runnerTask.run.call(null, rawInput, deps);
+      if (runnerTask.resultSchema) {
         try {
-          return task.resultSchema.parse(rawResult);
+          return runnerTask.resultSchema.parse(rawResult);
         } catch (error) {
-          throw new ValidationError("Task result", task.id, error as any);
+          throw new ValidationError("Task result", runnerTask.id, error as any);
         }
       }
       return rawResult;
@@ -330,7 +345,23 @@ export class MiddlewareManager {
       next = currentNext;
     }
 
-    const createdMiddlewares = this.getApplicableTaskMiddlewares(task);
+    let createdMiddlewares = this.getApplicableTaskMiddlewares(task);
+
+    // If task is tunneled locally (client side), enforce per-task tunnel policy tag (whitelist)
+    const isLocallyTunneledPolicy =
+      (task as any)[symbolTunneledTask] === "client" ||
+      (tDef as any)[symbolTunneledTask] === "client";
+    if (isLocallyTunneledPolicy && globalTags.tunnelPolicy.exists(tDef)) {
+      const cfg = globalTags.tunnelPolicy.extract(task) as any;
+      const allowList = (cfg?.client as any[] | undefined) || undefined;
+      if (Array.isArray(allowList)) {
+        const toId = (x: any) => (typeof x === "string" ? x : x?.id);
+        const allowed = new Set(allowList.map(toId).filter(Boolean));
+        createdMiddlewares = createdMiddlewares.filter((m) =>
+          allowed.has(m.id),
+        );
+      }
+    }
     if (createdMiddlewares.length === 0) {
       return next;
     }

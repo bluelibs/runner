@@ -1,6 +1,7 @@
 import { defineTag } from "../define";
-import { DebugConfig } from "./resources/debug";
 import { debugTag } from "./resources/debug/debug.tag";
+import { tunnelTag } from "./resources/tunnel/tunnel.tag";
+import { tunnelPolicyTag } from "./resources/tunnel/tunnel.policy.tag";
 
 export const globalTags = {
   system: defineTag<{
@@ -24,4 +25,6 @@ export const globalTags = {
     },
   }),
   debug: debugTag,
+  tunnel: tunnelTag,
+  tunnelPolicy: tunnelPolicyTag,
 };
