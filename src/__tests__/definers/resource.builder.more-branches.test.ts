@@ -50,14 +50,14 @@ describe("resource builder - register function+function merge branch", () => {
     await rr.dispose();
   });
 
-  it("init object-style works (preferred)", async () => {
+  it("init handles context state via the classic signature", async () => {
     const a = resource({ id: "tests.builder.init.obj.a", init: async () => 5 });
     const app = r
       .resource("tests.builder.init.obj")
       .register([a])
       .dependencies({ a })
       .context(() => ({ hits: 0 }))
-      .init(async ({ deps, ctx }) => {
+      .init(async (_cfg, deps, ctx) => {
         ctx.hits++;
         return Promise.resolve(deps.a + ctx.hits);
       })
@@ -67,4 +67,66 @@ describe("resource builder - register function+function merge branch", () => {
     expect(rr.value).toBe(6);
     await rr.dispose();
   });
+
+  it("init single-arg config signature works", async () => {
+    const app = r
+      .resource("tests.builder.init.singlearg")
+      .init(async (_cfg: void) => {
+        return Promise.resolve("ok");
+      })
+      .build();
+
+    const rr = await run(app);
+    expect(rr.value).toBe("ok");
+    await rr.dispose();
+  });
+
+  it("init zero-argument function remains compatible", async () => {
+    function zeroInit() {
+      return Promise.resolve("zero");
+    }
+
+    const app = r
+      .resource("tests.builder.init.zero")
+      .init(zeroInit)
+      .build();
+
+    const rr = await run(app);
+    expect(rr.value).toBe("zero");
+    await rr.dispose();
+  });
+
+  it("init accepts arrow functions without parentheses", async () => {
+    // Using an arrow without parentheses exercises the builder when length-based heuristics
+    // are inconclusive; the function should still be wired unchanged.
+    const fn: any = eval("cfg => 11");
+
+    const app = r.resource("tests.builder.init.arrow.noparens").init(fn).build();
+
+    const rr = await run(app);
+    expect(rr.value).toBe(11);
+    await rr.dispose();
+  });
+
+  it("init accepts proxied functions", async () => {
+    const base = () => Promise.resolve("exotic");
+    const proxied = new Proxy(base, {
+      get(target, prop, receiver) {
+        if (prop === "toString") {
+          return () => "fnWithoutParens";
+        }
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+
+    const app = r
+      .resource("tests.builder.init.exotic")
+      .init(proxied as any)
+      .build();
+
+    const rr = await run(app);
+    expect(rr.value).toBe("exotic");
+    await rr.dispose();
+  });
+
 });

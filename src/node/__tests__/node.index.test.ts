@@ -6,4 +6,11 @@ describe("node/index.ts exports", () => {
     // smoke-check a root export exists too (tag builder)
     expect(typeof (nodeExports as any).tag).toBe("function");
   });
+
+  it("re-exports createHttpSmartClient and is callable", () => {
+    const fn = (nodeExports as any).createHttpSmartClient;
+    expect(typeof fn).toBe("function");
+    const client = fn({ baseUrl: "http://localhost:0" });
+    expect(typeof client.task).toBe("function");
+  });
 });

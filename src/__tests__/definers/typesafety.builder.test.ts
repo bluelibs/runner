@@ -59,7 +59,7 @@ describe.skip("builders typesafety", () => {
       .task("task")
       .dependencies({ baseTask, event })
       .inputSchema<InputTask>({ parse: (x: any) => x })
-      .run(async ({ input, deps }) => {
+      .run(async (input, deps) => {
         deps.event({ message: input.message });
         // @ts-expect-error
         deps.event({ messagex: input.message });
@@ -100,11 +100,19 @@ describe.skip("builders typesafety", () => {
       .init(async (config?: string) => "Resource Value")
       .build();
 
+    const testResource3 = r
+      .resource("test.resource3")
+      .init(async (_: { name: string }) => {
+        return "OK";
+      })
+      .build();
+
     const testResource = r
       .resource("test.resource")
       .middleware([])
       .dependencies({ task, dummyResource, event, eventWithoutArguments })
       .register([
+        testResource3.with({ name: "Hello, World!" }),
         middlewareTaskOnly,
         middlewareWithConfig,
         middlewareWithOptionalConfig,
@@ -241,14 +249,14 @@ describe.skip("builders typesafety", () => {
     const depTask = r
       .task("types.dep")
       .inputSchema<{ v: string }>({ parse: (x: any) => x })
-      .run(async ({ input }) => input.v.toUpperCase())
+      .run(async (input) => input.v.toUpperCase())
       .build();
 
     const main = r
       .task("types.main")
       .dependencies({ depTask })
       .inputSchema<Input>({ parse: (x: any) => x })
-      .run(async ({ input, deps }) => {
+      .run(async (input, deps) => {
         const v = await deps.depTask({ v: String(input.x) });
         return Number(v) + 1;
       })
@@ -350,7 +358,7 @@ describe.skip("builders typesafety", () => {
     const task4 = r
       .task("task4")
       .tags([tag3WithInputContract])
-      .run(async ({ input }) => {
+      .run(async (input) => {
         input.a;
         // @ts-expect-error
         input.b;
@@ -364,7 +372,7 @@ describe.skip("builders typesafety", () => {
     const resource4 = r
       .resource("resource")
       .tags([tag3WithInputContract])
-      .init(async ({ config }) => {
+      .init(async (config) => {
         config.a;
         (config as any).b;
       })
@@ -376,7 +384,7 @@ describe.skip("builders typesafety", () => {
       .task("task")
       .inputSchema(z.object({ name: z.string() }))
       .resultSchema(z.object({ name: z.string() }))
-      .run(async ({ input }) => {
+      .run(async (input) => {
         input.name;
         (input as any).age;
 
@@ -398,7 +406,7 @@ describe.skip("builders typesafety", () => {
     const resource = r
       .resource("resource")
       .configSchema(z.object({ ttl: z.number().positive() }))
-      .init(async ({ config: cfg }) => {
+      .init(async (cfg) => {
         cfg.ttl;
         (cfg as any).ttl2;
       })

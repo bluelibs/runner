@@ -5,7 +5,8 @@ import { getDefaultSerializer } from "../globals/resources/tunnel/serializer";
 import type { ProtocolEnvelope } from "../globals/resources/tunnel/protocol";
 import { assertOkEnvelope } from "../globals/resources/tunnel/protocol";
 import type { InputFileMeta } from "../types/inputFile";
-import { buildNodeManifest } from "./upload/manifest.node";
+// Avoid `.node` bare import which triggers tsup native addon resolver
+import { buildNodeManifest } from "./upload/manifest.node.ts";
 
 export interface HttpSmartClientAuthConfig {
   header?: string; // default: x-runner-token
@@ -221,7 +222,10 @@ async function postOctetStream(
       let settled = false;
       const cleanup: Array<() => void> = [];
 
-      const resolveOnce = (value: { stream: Readable; res: http.IncomingMessage }) => {
+      const resolveOnce = (value: {
+        stream: Readable;
+        res: http.IncomingMessage;
+      }) => {
         settled = true;
         cleanup.forEach((fn) => fn());
         resolve(value);
@@ -247,7 +251,8 @@ async function postOctetStream(
           // any immediate source errors (propagated via req.destroy)
           // to reject the promise first.
           setImmediate(() => {
-            if (!settled) resolveOnce({ stream: res as unknown as Readable, res });
+            if (!settled)
+              resolveOnce({ stream: res as unknown as Readable, res });
           });
         },
       );

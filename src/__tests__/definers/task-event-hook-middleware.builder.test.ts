@@ -1,6 +1,21 @@
 import { r, run, definitions, resource } from "../..";
 
 describe("task/event/hook/middleware builders", () => {
+  it("task builder infers input type from run signature", async () => {
+    const task = r
+      .task("tests.builder.task.infer")
+      .run(async (input: { a: number; b: number }) =>
+        Promise.resolve(input.a + input.b),
+      )
+      .build();
+
+    const app = resource({ id: "tests.app.task.infer", register: [task] });
+    const rr = await run(app);
+    const out = await rr.runTask(task, { a: 1, b: 2 });
+    expect(out).toBe(3);
+    await rr.dispose();
+  });
+
   it("task builder produces branded task and run(input, deps) works", async () => {
     const svc = resource({
       id: "tests.svc",
@@ -12,10 +27,12 @@ describe("task/event/hook/middleware builders", () => {
       .task("tests.builder.task")
       .dependencies({ svc })
       .inputSchema<{ a: number; b: number }>({ parse: (x: any) => x })
-      .run(async (
-        input: { a: number; b: number },
-        deps: { svc: { add: (a: number, b: number) => number } },
-      ) => Promise.resolve(deps.svc.add(input.a, input.b)))
+      .run(
+        async (
+          input: { a: number; b: number },
+          deps: { svc: { add: (a: number, b: number) => number } },
+        ) => Promise.resolve(deps.svc.add(input.a, input.b)),
+      )
       .build();
 
     expect((task as any)[definitions.symbolTask]).toBe(true);
@@ -143,7 +160,7 @@ describe("task/event/hook/middleware builders", () => {
     const task = r
       .task("tests.builder.task.runobj")
       .inputSchema<number>({ parse: (x: any) => x })
-      .runObj(async ({ input }) => Promise.resolve((input as number) + 3))
+      .run(async (input) => Promise.resolve((input as number) + 3))
       .build();
     const app = resource({ id: "tests.app.task.runobj", register: [task] });
     const rr = await run(app);
@@ -164,16 +181,15 @@ describe("task/event/hook/middleware builders", () => {
       .dependencies({ svc })
       .inputSchema<{ a: number; b: number }>({ parse: (x: any) => x })
       // Use single-parameter destructuring to trigger the looksDestructured branch
-      .run(async ({
-        input,
-        deps,
-      }: {
-        input: { a: number; b: number };
-        deps: { svc: { sum: (a: number, b: number) => number } };
-      }) => Promise.resolve(deps.svc.sum(input.a, input.b)))
+      .run(async (input, deps) =>
+        Promise.resolve(deps.svc.sum(input.a, input.b)),
+      )
       .build();
 
-    const app = resource({ id: "tests.app.task.destructured", register: [svc, task] });
+    const app = resource({
+      id: "tests.app.task.destructured",
+      register: [svc, task],
+    });
     const rr = await run(app);
     const out = await rr.runTask(task, { a: 10, b: 5 });
     expect(out).toBe(15);

@@ -118,6 +118,33 @@ export interface IResourceDefinition<
   tags?: TTags;
 }
 
+
+/**
+ * Helper alias describing the canonical resource init call signature.
+ * Shared with fluent builders to keep init typing consistent.
+ */
+export type ResourceInitFn<
+  TConfig,
+  TValue extends Promise<any>,
+  TDependencies extends DependencyMapType,
+  TContext,
+  TMeta extends IResourceMeta,
+  TTags extends TagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[],
+> = NonNullable<
+  IResourceDefinition<
+    TConfig,
+    TValue,
+    TDependencies,
+    TContext,
+    any,
+    any,
+    TMeta,
+    TTags,
+    TMiddleware
+  >["init"]
+>;
+
 export interface IResource<
   TConfig = void,
   TValue extends Promise<any> = Promise<any>,

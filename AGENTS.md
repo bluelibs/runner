@@ -15,6 +15,7 @@
 - Be truthful and avoid ignoring files in test configs as a way to achieve 100%.
 - Work with agent-enabled TODO lists! TODO lists help you remain on-track.
 - All imports should be put on top, unless an optimization or something specific, default to top imports as preference instead of inline.
+- Do not ask the user if you should do something that is likely the user would want to do
 </general>
 
 <specifics>

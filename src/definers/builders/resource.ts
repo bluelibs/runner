@@ -6,6 +6,7 @@ import type {
   IValidationSchema,
   OverridableElements,
   RegisterableItems,
+  ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   TagType,
 } from "../../defs";
@@ -28,14 +29,28 @@ type BuilderState<
   middleware?: TMiddleware;
   tags?: TTags;
   context?: () => TContext;
-  // Store init/dispose with generic-safe unknown parameter types to avoid contract coupling at build time.
-  init?: (config: unknown, dependencies: unknown, context: unknown) => unknown;
-  dispose?: (
-    value: unknown,
-    config: unknown,
-    dependencies: unknown,
-    context: unknown,
-  ) => Promise<void>;
+  init?: ResourceInitFn<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  dispose?: NonNullable<
+    IResourceDefinition<
+      TConfig,
+      TValue,
+      TDeps,
+      TContext,
+      any,
+      any,
+      TMeta,
+      TTags,
+      TMiddleware
+    >["dispose"]
+  >;
   configSchema?: IValidationSchema<any>;
   resultSchema?: IValidationSchema<any>;
   meta?: TMeta;
@@ -50,22 +65,62 @@ function clone<
   TMeta extends IResourceMeta,
   TTags extends TagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
+  TNextConfig = TConfig,
+  TNextValue extends Promise<any> = TValue,
+  TNextDeps extends DependencyMapType = TDeps,
+  TNextContext = TContext,
+  TNextMeta extends IResourceMeta = TMeta,
+  TNextTags extends TagType[] = TTags,
+  TNextMiddleware extends ResourceMiddlewareAttachmentType[] = TMiddleware,
 >(
   s: BuilderState<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>,
   patch: Partial<
-    BuilderState<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>
+    BuilderState<
+      TNextConfig,
+      TNextValue,
+      TNextDeps,
+      TNextContext,
+      TNextMeta,
+      TNextTags,
+      TNextMiddleware
+    >
   >,
-) {
-  return Object.freeze({ ...s, ...patch }) as BuilderState<
-    TConfig,
-    TValue,
-    TDeps,
-    TContext,
-    TMeta,
-    TTags,
-    TMiddleware
+): BuilderState<
+  TNextConfig,
+  TNextValue,
+  TNextDeps,
+  TNextContext,
+  TNextMeta,
+  TNextTags,
+  TNextMiddleware
+> {
+  return Object.freeze({
+    // We reuse the frozen state while widening generics, hence the temporary cast.
+    ...(s as unknown as BuilderState<
+      TNextConfig,
+      TNextValue,
+      TNextDeps,
+      TNextContext,
+      TNextMeta,
+      TNextTags,
+      TNextMiddleware
+    >),
+    ...patch,
+  }) as BuilderState<
+    TNextConfig,
+    TNextValue,
+    TNextDeps,
+    TNextContext,
+    TNextMeta,
+    TNextTags,
+    TNextMiddleware
   >;
 }
+
+type ShouldReplaceConfig<T> = [T] extends [void] ? true : [T] extends [undefined] ? true : false;
+type ResolveConfig<TExisting, TProposed> = ShouldReplaceConfig<TExisting> extends true
+  ? TProposed
+  : TExisting;
 
 type RegisterInput<TConfig> =
   | RegisterableItems
@@ -80,6 +135,7 @@ type RegisterState<TConfig> =
 function toRegisterArray(items: RegisterableItems | Array<RegisterableItems>) {
   return Array.isArray(items) ? [...items] : [items];
 }
+
 
 function normalizeRegisterFunction<TConfig>(
   fn: (config: TConfig) => RegisterableItems | Array<RegisterableItems>,
@@ -223,81 +279,18 @@ export interface ResourceFluentBuilder<
     TTags,
     TMiddleware
   >;
-  // Overload 1: object style ({ config, deps, ctx }) => Promise<...>
-  init<TNewValue extends Promise<any>>(
-    fn: (input: {
-      config: Parameters<
-        NonNullable<
-          IResourceDefinition<
-            TConfig,
-            TNewValue,
-            TDeps,
-            TContext,
-            any,
-            any,
-            TMeta,
-            TTags,
-            TMiddleware
-          >["init"]
-        >
-      >[0];
-      deps: Parameters<
-        NonNullable<
-          IResourceDefinition<
-            TConfig,
-            TNewValue,
-            TDeps,
-            TContext,
-            any,
-            any,
-            TMeta,
-            TTags,
-            TMiddleware
-          >["init"]
-        >
-      >[1];
-      ctx: Parameters<
-        NonNullable<
-          IResourceDefinition<
-            TConfig,
-            TNewValue,
-            TDeps,
-            TContext,
-            any,
-            any,
-            TMeta,
-            TTags,
-            TMiddleware
-          >["init"]
-        >
-      >[2];
-    }) => TNewValue,
-  ): ResourceFluentBuilder<
-    TConfig,
-    TNewValue,
-    TDeps,
-    TContext,
-    TMeta,
-    TTags,
-    TMiddleware
-  >;
-  // Overload 2: traditional (config, deps, ctx) => Promise<...>
-  init<TNewValue extends Promise<any>>(
-    fn: NonNullable<
-      IResourceDefinition<
-        TConfig,
-        TNewValue,
-        TDeps,
-        TContext,
-        any,
-        any,
-        TMeta,
-        TTags,
-        TMiddleware
-      >["init"]
+  init<TNewConfig = TConfig, TNewValue extends Promise<any> = TValue>(
+    fn: ResourceInitFn<
+      ResolveConfig<TConfig, TNewConfig>,
+      TNewValue,
+      TDeps,
+      TContext,
+      TMeta,
+      TTags,
+      TMiddleware
     >,
   ): ResourceFluentBuilder<
-    TConfig,
+    ResolveConfig<TConfig, TNewConfig>,
     TNewValue,
     TDeps,
     TContext,
@@ -388,12 +381,35 @@ function makeResourceBuilder<
   TTags,
   TMiddleware
 > {
-  const b: ResourceFluentBuilder<any, any, any, any, any, any, any> = {
+  const builder: ResourceFluentBuilder<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  > = {
     id: state.id,
     dependencies<TNewDeps extends DependencyMapType>(
       deps: TNewDeps | ((config: TConfig) => TNewDeps),
     ) {
-      const next = clone(state, { dependencies: deps as any });
+      const next = clone<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        TConfig,
+        TValue,
+        TNewDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(state, { dependencies: deps });
       return makeResourceBuilder<
         TConfig,
         TValue,
@@ -402,22 +418,12 @@ function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(
-        next as unknown as BuilderState<
-          TConfig,
-          TValue,
-          TNewDeps,
-          TContext,
-          TMeta,
-          TTags,
-          TMiddleware
-        >,
-      );
+      >(next);
     },
     register(items, options) {
       const override = options?.override ?? false;
       const next = clone(state, {
-        register: mergeRegister(state.register, items, override) as any,
+        register: mergeRegister(state.register, items, override),
       });
       return makeResourceBuilder<
         TConfig,
@@ -430,7 +436,22 @@ function makeResourceBuilder<
       >(next);
     },
     middleware<TNewMw extends ResourceMiddlewareAttachmentType[]>(mw: TNewMw) {
-      const next = clone(state, { middleware: mw as unknown as any });
+      const next = clone<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TNewMw
+      >(state, { middleware: mw });
       return makeResourceBuilder<
         TConfig,
         TValue,
@@ -439,20 +460,25 @@ function makeResourceBuilder<
         TMeta,
         TTags,
         TNewMw
-      >(
-        next as unknown as BuilderState<
-          TConfig,
-          TValue,
-          TDeps,
-          TContext,
-          TMeta,
-          TTags,
-          TNewMw
-        >,
-      );
+      >(next);
     },
     tags<TNewTags extends TagType[]>(tags: TNewTags) {
-      const next = clone(state, { tags: tags as unknown as any });
+      const next = clone<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TNewTags,
+        TMiddleware
+      >(state, { tags });
       return makeResourceBuilder<
         TConfig,
         TValue,
@@ -461,20 +487,25 @@ function makeResourceBuilder<
         TMeta,
         TNewTags,
         TMiddleware
-      >(
-        next as unknown as BuilderState<
-          TConfig,
-          TValue,
-          TDeps,
-          TContext,
-          TMeta,
-          TNewTags,
-          TMiddleware
-        >,
-      );
+      >(next);
     },
     context<TNewCtx>(factory: () => TNewCtx) {
-      const next = clone(state, { context: factory as any });
+      const next = clone<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        TConfig,
+        TValue,
+        TDeps,
+        TNewCtx,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(state, { context: factory });
       return makeResourceBuilder<
         TConfig,
         TValue,
@@ -483,20 +514,25 @@ function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(
-        next as unknown as BuilderState<
-          TConfig,
-          TValue,
-          TDeps,
-          TNewCtx,
-          TMeta,
-          TTags,
-          TMiddleware
-        >,
-      );
+      >(next);
     },
     configSchema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
-      const next = clone(state, { configSchema: schema });
+      const next = clone<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        TNewConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(state, { configSchema: schema });
       return makeResourceBuilder<
         TNewConfig,
         TValue,
@@ -505,20 +541,25 @@ function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(
-        next as unknown as BuilderState<
-          TNewConfig,
-          TValue,
-          TDeps,
-          TContext,
-          TMeta,
-          TTags,
-          TMiddleware
-        >,
-      );
+      >(next);
     },
     resultSchema<TResolved>(schema: IValidationSchema<TResolved>) {
-      const next = clone(state, { resultSchema: schema });
+      const next = clone<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        TConfig,
+        Promise<TResolved>,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(state, { resultSchema: schema });
       return makeResourceBuilder<
         TConfig,
         Promise<TResolved>,
@@ -527,69 +568,61 @@ function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(
-        next as unknown as BuilderState<
-          TConfig,
-          Promise<TResolved>,
-          TDeps,
-          TContext,
-          TMeta,
-          TTags,
-          TMiddleware
-        >,
-      );
+      >(next);
     },
-    init<TNewValue extends Promise<any>>(fn: any) {
-      const wrapped = (
-        config: unknown,
-        dependencies: unknown,
-        context: unknown,
-      ) => {
-        if ((fn as any).length >= 3) {
-          return fn(config, dependencies, context);
-        }
-        const src = Function.prototype.toString.call(fn);
-        const match = src.match(/^[^(]*\(([^)]*)\)/);
-        let params = "";
-        if (match) {
-          params = match[1];
-        }
-        const looksDestructured = params.includes("{");
-        if (looksDestructured) {
-          return fn({ config, deps: dependencies, ctx: context });
-        }
-        return fn(config);
-      };
-      const next = clone(state, { init: wrapped });
-      return makeResourceBuilder<
-        TConfig,
+    init<TNewConfig = TConfig, TNewValue extends Promise<any> = TValue>(
+      fn: ResourceInitFn<
+        ResolveConfig<TConfig, TNewConfig>,
         TNewValue,
         TDeps,
         TContext,
         TMeta,
         TTags,
         TMiddleware
-      >(
-        next as unknown as BuilderState<
+      >,
+    ) {
+      const next = clone<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        ResolveConfig<TConfig, TNewConfig>,
+        TNewValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(state, { init: fn });
+      return makeResourceBuilder<
+        ResolveConfig<TConfig, TNewConfig>,
+        TNewValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(next);
+    },
+    dispose(
+      fn: NonNullable<
+        IResourceDefinition<
           TConfig,
-          TNewValue,
+          TValue,
           TDeps,
           TContext,
+          any,
+          any,
           TMeta,
           TTags,
           TMiddleware
-        >,
-      );
-    },
-    dispose(fn) {
-      const next = clone(state, {
-        dispose: fn as unknown as (
-          value: unknown,
-          config: unknown,
-          dependencies: unknown,
-          context: unknown,
-        ) => Promise<void>,
-      });
+        >["dispose"]
+      >,
+    ) {
+      const next = clone(state, { dispose: fn });
       return makeResourceBuilder<
         TConfig,
         TValue,
@@ -601,7 +634,22 @@ function makeResourceBuilder<
       >(next);
     },
     meta<TNewMeta extends IResourceMeta>(m: TNewMeta) {
-      const next = clone(state, { meta: m as unknown as any });
+      const next = clone<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware,
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TNewMeta,
+        TTags,
+        TMiddleware
+      >(state, { meta: m });
       return makeResourceBuilder<
         TConfig,
         TValue,
@@ -610,17 +658,7 @@ function makeResourceBuilder<
         TNewMeta,
         TTags,
         TMiddleware
-      >(
-        next as unknown as BuilderState<
-          TConfig,
-          TValue,
-          TDeps,
-          TContext,
-          TNewMeta,
-          TTags,
-          TMiddleware
-        >,
-      );
+      >(next);
     },
     overrides(o: Array<OverridableElements>) {
       const next = clone(state, { overrides: o });
@@ -635,30 +673,34 @@ function makeResourceBuilder<
       >(next);
     },
     build() {
-      return defineResource({
-        ...(state as unknown as IResourceDefinition<
-          TConfig,
-          TValue,
-          TDeps,
-          TContext,
-          any,
-          any,
-          TMeta,
-          TTags,
-          TMiddleware
-        >),
-      });
+      const definition: IResourceDefinition<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        any,
+        any,
+        TMeta,
+        TTags,
+        TMiddleware
+      > = {
+        id: state.id,
+        dependencies: state.dependencies,
+        register: state.register,
+        middleware: state.middleware,
+        tags: state.tags,
+        context: state.context,
+        init: state.init,
+        dispose: state.dispose,
+        configSchema: state.configSchema,
+        resultSchema: state.resultSchema,
+        meta: state.meta,
+        overrides: state.overrides,
+      };
+      return defineResource(definition);
     },
   };
-  return b as ResourceFluentBuilder<
-    TConfig,
-    TValue,
-    TDeps,
-    TContext,
-    TMeta,
-    TTags,
-    TMiddleware
-  >;
+  return builder;
 }
 
 // Overload allows callers to seed the config type at the entry point for convenience
@@ -695,19 +737,19 @@ export function resourceBuilder(
     ResourceMiddlewareAttachmentType[]
   > = Object.freeze({
     id,
-    dependencies: {} as any,
-    register: [] as any,
-    middleware: [] as any,
-    tags: [] as any,
-    context: undefined as any,
-    init: undefined as any,
-    dispose: undefined as any,
-    configSchema: undefined as any,
-    resultSchema: undefined as any,
-    meta: {} as any,
-    overrides: [] as any,
+    dependencies: undefined,
+    register: undefined,
+    middleware: [],
+    tags: [],
+    context: undefined,
+    init: undefined,
+    dispose: undefined,
+    configSchema: undefined,
+    resultSchema: undefined,
+    meta: undefined,
+    overrides: undefined,
   });
-  return makeResourceBuilder(initial) as any;
+  return makeResourceBuilder(initial);
 }
 
 export const resource = resourceBuilder;

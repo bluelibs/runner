@@ -7,8 +7,7 @@ import { cacheResource } from "./middleware/cache.middleware";
 import { queueResource } from "./resources/queue.resource";
 import { globalTags } from "./globalTags";
 import { MiddlewareManager } from "../models/MiddlewareManager";
-import { Serializer } from "./resources/tunnel/serializer";
-import { EJSON } from "@bluelibs/ejson";
+import { EJSONModule } from "@bluelibs/ejson";
 
 const systemTag = globalTags.system;
 
@@ -60,12 +59,12 @@ export const globalResources = {
     },
     tags: [systemTag],
   }),
-  serializer: defineResource<void, Promise<EJSON>>({
+  serializer: defineResource<void, Promise<EJSONModule>>({
     id: "globals.resources.serializer",
     meta: {
       title: "Serializer",
       description:
-        "Serializes and deserializes data. By default it uses EJSON. An extended version of EJSON that works with all types.",
+        "Serializes and deserializes data. Uses an isolated EJSONModule instance so you can register custom types without affecting global state.",
     },
     tags: [systemTag],
   }),

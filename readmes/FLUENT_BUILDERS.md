@@ -211,10 +211,8 @@ Attach to resources or tasks via `.middleware([mw])` and ensure they’re regist
 
 Note on `.init()`:
 
-- `.init` supports both styles:
-  - Object-style: `({ config, deps, ctx }) => Promise<Value>`
-  - Traditional: `(config, deps, ctx) => Promise<Value>`
-- Prefer the object-style for ergonomic destructuring and clearer intent.
+- `.init` uses the classic `(config, deps, ctx)` signature; destructure inside the body when needed.
+- If you skip seeding a config type, annotate the first argument in `init` and the builder will adopt that type.
 
 Note on `.middleware()` and `.tags()`:
 
@@ -255,7 +253,7 @@ await rr.dispose();
 
 - Builder generics propagate across the chain: config, value/result, dependencies, context, meta, tags, and middleware are strongly typed.
 - You can pre-seed a resource’s config type at the entry point: `r.resource<MyConfig>(id)` — this provides typed `config` for `.dependencies((config) => ...)` and `.register((config) => ...)` callables.
-- `init`/`run` accept object-style destructuring: `({ config, deps, ctx })` and `({ input, deps })`.
+- Resource `.init` follows `(config, deps, ctx)`; task `.run` still supports the object-style helper `({ input, deps })` and will adopt the typed first parameter when you skip `.configSchema()`.
 - Tags and middleware must be registered; otherwise, sanity checks will fail at runtime. Builders keep tag and middleware types intact for compile-time checks.
 - Schemas can be passed as plain objects with `parse` or libraries like `zod`—inference will flow accordingly.
 

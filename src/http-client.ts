@@ -86,11 +86,10 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
 
       // Node Duplex path (request body is a Node Readable)
       if (isNodeReadable(input)) {
-        // Delegate duplex path to Node Smart client to keep tests hermetic and avoid real network fetch
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const {
-          createHttpSmartClient,
-        } = require("./node/http-smart-client.node");
+        // Delegate duplex path to Node Smart client (Node-only)
+        const { createHttpSmartClient } = await import(
+          "./node/http-smart-client.node.ts"
+        );
         return await createHttpSmartClient({
           baseUrl,
           auth: cfg.auth,
@@ -116,10 +115,9 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
           });
         }
         // Node multipart path (can handle both nodeFiles and webFiles by converting blobs to buffers)
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const {
-          createHttpSmartClient,
-        } = require("./node/http-smart-client.node");
+        const { createHttpSmartClient } = await import(
+          "./node/http-smart-client.node.ts"
+        );
         // Convert any web blobs into buffers (reads entirely in memory)
         if (manifest.webFiles.length > 0) {
           for (const wf of manifest.webFiles) {

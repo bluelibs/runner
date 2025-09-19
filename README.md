@@ -1071,29 +1071,34 @@ const emailerConfigSchema = z.object({
   from: z.string().email(),
 });
 
-const emailer = r.resource("app.emailer")
-  .configSchema(emailerConfigSchema) // No need for <T>
+const emailer = r
+  .resource("app.emailer")
+  .configSchema(emailerConfigSchema)
   .init(async ({ config }) => ({
     send: (to: string, body: string) => {
-      console.log(`Sending from ${config.from} to ${to} via ${config.smtpUrl}: ${body}`);
+      console.log(
+        `Sending from ${config.from} to ${to} via ${config.smtpUrl}: ${body}`,
+      );
     },
   }))
   .build();
 
 // Without a schema library, you can provide the type explicitly
-const greeter = r.resource<{ name: string }>("app.greeter")
-  .init(async ({ config }) => ({
+const greeter = r
+  .resource("app.greeter")
+  .init(async (_: { name: string }) => ({
     greet: () => `Hello, ${config.name}!`,
   }))
   .build();
 
-const app = r.resource("app")
+const app = r
+  .resource("app")
   .register([
-    emailer.with({ 
+    emailer.with({
       smtpUrl: "smtp://example.com",
-      from: "noreply@example.com" 
+      from: "noreply@example.com",
     }),
-    greeter.with({ name: "World" })
+    greeter.with({ name: "World" }),
   ])
   .dependencies({ emailer, greeter })
   .init(async (_, { emailer, greeter }) => {

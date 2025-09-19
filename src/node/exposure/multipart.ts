@@ -1,10 +1,14 @@
 import type { IncomingHttpHeaders } from "http";
 import { PassThrough } from "node:stream";
-import busboyFactory = require("busboy");
+// Use top-level require for busboy to ensure CJS interop under Jest
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const busboyFactory: (cfg: { headers: IncomingHttpHeaders }) => any = require("busboy");
 import type { FileInfo, FieldInfo } from "busboy";
 
 import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
-import { NodeInputFile } from "../inputFile.node";
+// Import with explicit .ts extension to prevent tsup from resolving it
+// via the native-node-modules plugin (which looks for paths ending in .node)
+import { NodeInputFile } from "../inputFile.node.ts";
 import type { InputFileMeta, EjsonFileSentinel } from "../../types/inputFile";
 import { jsonErrorResponse } from "./httpResponse";
 import type { JsonResponse } from "./types";
@@ -53,6 +57,8 @@ export async function parseMultipartInput(
   let manifestSeen = false;
   let readyResolved = false;
   let finalizeSettled = false;
+  // Track if upstream request aborted/errored to give it precedence
+  let requestAborted = false;
 
   let resolveReady: (value: MultipartResult) => void;
   const readyPromise = new Promise<MultipartResult>((resolve) => {
@@ -97,7 +103,7 @@ export async function parseMultipartInput(
     return entry;
   };
 
-  let busboy: ReturnType<typeof busboyFactory> | undefined;
+  let busboyInst: any | undefined;
 
   const endAllStreamsSafely = () => {
     // Ensure any PassThrough streams created for expected files are closed
@@ -105,14 +111,6 @@ export async function parseMultipartInput(
       if (!entry.connected) {
         try {
           entry.stream.end();
-          // In case end() on writable does not propagate, explicitly end readable
-          // Signal EOF for the readable side if supported
-          const push: unknown = (
-            entry.stream as unknown as { push?: (chunk: any) => boolean }
-          ).push;
-          if (typeof push === "function") {
-            push.call(entry.stream, null);
-          }
         } catch {
           // best-effort; ignore
         }
@@ -121,11 +119,19 @@ export async function parseMultipartInput(
   };
 
   const fail = (response: JsonResponse) => {
-    if (busboy && typeof (req as any).unpipe === "function") {
-      (req as any).unpipe(busboy);
+    try {
+      if (busboyInst && typeof (req as any).unpipe === "function") {
+        (req as any).unpipe(busboyInst as any);
+      }
+    } catch {
+      // ignore
     }
-    if (typeof (req as any).resume === "function") {
-      (req as any).resume();
+    try {
+      if (typeof (req as any).resume === "function") {
+        (req as any).resume();
+      }
+    } catch {
+      // ignore
     }
     // Prevent tasks from hanging waiting on never-connected streams
     endAllStreamsSafely();
@@ -137,7 +143,7 @@ export async function parseMultipartInput(
   };
 
   try {
-    busboy = busboyFactory({ headers: req.headers });
+    busboyInst = busboyFactory({ headers: req.headers });
   } catch {
     fail(
       jsonErrorResponse(400, "Invalid multipart payload", "INVALID_MULTIPART"),
@@ -145,13 +151,13 @@ export async function parseMultipartInput(
     return await readyPromise;
   }
 
-  busboy.on("field", (name: string, value: string, _info: FieldInfo) => {
-    if (name !== "__manifest") {
-      return;
-    }
+  busboyInst.on("field", (name: string, value: unknown, _info: FieldInfo) => {
+    if (name !== "__manifest") return;
     manifestSeen = true;
-    manifestRaw += value;
     try {
+      // Safely coerce to string; this may throw for exotic objects
+      const text = typeof value === "string" ? value : String(value);
+      manifestRaw += text;
       const manifest = manifestRaw
         ? getDefaultSerializer().parse<{ input?: unknown }>(manifestRaw)
         : undefined;
@@ -169,7 +175,7 @@ export async function parseMultipartInput(
     }
   });
 
-  busboy.on(
+  busboyInst.on(
     "file",
     (name: string, stream: NodeJS.ReadableStream, info: FileInfo) => {
       if (typeof name !== "string" || !name.startsWith("file:")) {
@@ -206,11 +212,10 @@ export async function parseMultipartInput(
 
   const handleCompletion = () => {
     if (!readyResolved) {
-      if (!manifestSeen) {
-        fail(jsonErrorResponse(400, "Missing manifest", "MISSING_MANIFEST"));
-      } else {
-        fail(jsonErrorResponse(400, "Invalid manifest", "INVALID_MULTIPART"));
-      }
+      // If we reached completion without resolving the manifest,
+      // treat this as a missing manifest. With current field handler
+      // logic, a seen-but-invalid manifest fails earlier.
+      fail(jsonErrorResponse(400, "Missing manifest", "MISSING_MANIFEST"));
       return;
     }
     for (const entry of files.values()) {
@@ -234,16 +239,17 @@ export async function parseMultipartInput(
     settleFinalize({ ok: true });
   };
 
-  busboy.once("error", () => {
-    fail(
-      jsonErrorResponse(500, "Invalid multipart payload", "INVALID_MULTIPART"),
-    );
+  // Proxy busboy parser errors to INVALID_MULTIPART, but prefer request aborts.
+  busboyInst.once("error", () => {
+    // Even if a request abort happened, subsequent fail() is a no-op due to settled state
+    fail(jsonErrorResponse(400, "Invalid multipart payload", "INVALID_MULTIPART"));
   });
 
-  busboy.on("close", handleCompletion);
-  busboy.on("finish", handleCompletion);
+  busboyInst.on("close", handleCompletion);
+  busboyInst.on("finish", handleCompletion);
 
   const onAbort = () => {
+    requestAborted = true;
     fail(jsonErrorResponse(499, "Client Closed Request", "REQUEST_ABORTED"));
   };
   req.on("error", onAbort);
@@ -253,7 +259,7 @@ export async function parseMultipartInput(
     signal.addEventListener("abort", onAbort as any, { once: true });
   }
 
-  req.pipe(busboy);
+  req.pipe(busboyInst);
 
   return await readyPromise;
 }

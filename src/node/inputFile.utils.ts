@@ -2,6 +2,7 @@ import type { InputFile } from "../types/inputFile";
 import { pipeline, Transform } from "stream";
 import type { Readable } from "stream";
 import * as fs from "fs";
+import * as path from "path";
 
 /**
  * Read an InputFile's contents fully into memory as a Buffer.
@@ -38,7 +39,7 @@ export async function writeInputFileToPath(
   targetPath: string,
 ): Promise<{ bytesWritten: number }> {
   const { stream } = await file.resolve();
-  await fs.promises.mkdir(require("path").dirname(targetPath), {
+  await fs.promises.mkdir(path.dirname(targetPath), {
     recursive: true,
   });
   const write = fs.createWriteStream(targetPath);

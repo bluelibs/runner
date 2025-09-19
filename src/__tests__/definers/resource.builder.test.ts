@@ -67,6 +67,23 @@ describe("resource builder", () => {
     }
   });
 
+  it("register merges array base with lazy callbacks", () => {
+    const alpha = resource({ id: "tests.builder.fnfn.alpha", init: async () => 1 });
+    const beta = resource({ id: "tests.builder.fnfn.beta", init: async () => 2 });
+
+    const composed = r
+      .resource("tests.builder.register.array-fn")
+      .register([alpha])
+      .register(() => [beta])
+      .build();
+
+    expect(typeof composed.register).toBe("function");
+    if (typeof composed.register === "function") {
+      const ids = composed.register({} as any).map((rSrc) => rSrc.id);
+      expect(ids).toEqual([alpha.id, beta.id]);
+    }
+  });
+
   it("chains dependencies, tags, middleware, meta, overrides, register, context", () => {
     const a = resource({ id: "tests.a", init: async () => 1 });
     const b = resource({ id: "tests.b", init: async () => 2 });
@@ -79,7 +96,7 @@ describe("resource builder", () => {
       .context(() => ({ c: 0 }))
       .meta({ title: "X" } as any)
       .overrides([])
-      .init(async ({ deps, ctx }) => {
+      .init(async (_cfg, deps, ctx) => {
         ctx.c++;
         return Promise.resolve(deps.a + deps.b + ctx.c);
       })
@@ -94,14 +111,14 @@ describe("resource builder", () => {
     expect(app.meta).toEqual({ title: "X" });
   });
 
-  it("init supports object-style destructuring", async () => {
+  it("init propagates dependencies and context through the classic signature", async () => {
     const a = resource({ id: "tests.a2", init: async () => 5 });
     const app = r
       .resource("tests.builder.app2")
       .register([a])
       .dependencies({ a })
       .context(() => ({ hits: 0 }))
-      .init(async ({ deps, ctx }) => {
+      .init(async (_cfg, deps, ctx) => {
         ctx.hits++;
         return Promise.resolve(deps.a + ctx.hits);
       })
@@ -111,6 +128,18 @@ describe("resource builder", () => {
     const val = rr.getResourceValue(app);
     expect(val).toBe(6);
     await rr.dispose();
+  });
+
+  it("infers config type from init signature when unspecified", () => {
+    const res = r
+      .resource("tests.builder.app.config-infer")
+      .init(async (cfg: { flag: boolean }) => {
+        return Promise.resolve(cfg.flag ? "Y" : "N");
+      })
+      .build();
+
+    const configured = res.with({ flag: true });
+    expect(configured.config.flag).toBe(true);
   });
 
   it("supports configSchema, resultSchema and meta", () => {
