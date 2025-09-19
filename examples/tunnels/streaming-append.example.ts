@@ -8,7 +8,12 @@
 import { resource, run, task } from "../../src";
 import { Readable, Transform } from "stream";
 import type { InputFile } from "../../src/types/inputFile";
-import { nodeExposure, createNodeFile, createHttpSmartClient } from "../../src/node";
+import {
+  nodeExposure,
+  createNodeFile,
+  createHttpSmartClient,
+} from "../../src/node";
+// @ts-ignore
 import { createSlowReadable, getExposureBaseUrl } from "./utils";
 
 function appendMagic(value: string): string {
@@ -36,7 +41,9 @@ function createAppendTransform(): Transform {
 function tap(label: string): Transform {
   return new Transform({
     transform(chunk, _enc, cb) {
-      const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+      const text = Buffer.isBuffer(chunk)
+        ? chunk.toString("utf8")
+        : String(chunk);
       // Required demo log: "send" / "receive"
       // eslint-disable-next-line no-console
       console.log(label, text);
@@ -74,8 +81,13 @@ const appendTask = task({
   },
 });
 
-const exposure = nodeExposure.with({ http: { basePath: "/__runner", listen: { port: 0 } } });
-const app = resource({ id: "examples.streaming.append.app", register: [appendTask, exposure] });
+const exposure = nodeExposure.with({
+  http: { basePath: "/__runner", listen: { port: 0 } },
+});
+const app = resource({
+  id: "examples.streaming.append.app",
+  register: [appendTask, exposure],
+});
 
 export async function runStreamingAppendExample(): Promise<void> {
   const rr = await run(app);
@@ -99,7 +111,9 @@ export async function runStreamingAppendExample(): Promise<void> {
     } as any)) as string;
     console.log(`[result] ${result}`);
     if (result !== expected) {
-      throw new Error("HTTP client result did not match expected transform output");
+      throw new Error(
+        "HTTP client result did not match expected transform output",
+      );
     }
   } finally {
     await rr.dispose();

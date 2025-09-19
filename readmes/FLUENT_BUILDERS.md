@@ -5,7 +5,7 @@ This guide shows how to use the new fluent Builder API exposed via a single `r` 
 ### Import
 
 ```ts
-import { r, run, resource, definitions } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 ```
 
 You’ll primarily use `r`:
@@ -14,6 +14,7 @@ You’ll primarily use `r`:
 - `r.task(id)`
 - `r.event(id)`
 - `r.hook(id)`
+- `r.tag(id)`
 - `r.middleware.task(id)`
 - `r.middleware.resource(id)`
 

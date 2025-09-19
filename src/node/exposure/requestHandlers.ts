@@ -21,6 +21,7 @@ import type {
 import { ExposureRequestContext } from "./requestContext";
 import { CancellationError, isCancellationError } from "../../errors";
 import { applyCorsActual, handleCorsPreflight } from "./cors";
+import { createAbortControllerForRequest, getContentType } from "./utils";
 
 interface RequestProcessingDeps {
   store: NodeExposureDeps["store"];
@@ -88,31 +89,10 @@ export function createRequestHandlers(
     }
 
     // Cancellation wiring per request
-    const controller = new AbortController();
-    const onAbort = () => {
-      try {
-        controller.abort(new CancellationError("Client Closed Request"));
-      } catch {}
-    };
-    // Tolerate unit-test stubs that implement only .on
-    const addReqListener = (
-      typeof (req as any).once === "function"
-        ? (req as any).once
-        : (req as any).on
-    )?.bind(req as any);
-    if (addReqListener) addReqListener("aborted", onAbort);
-    const addResListener = (
-      typeof (res as any).once === "function"
-        ? (res as any).once
-        : (res as any).on
-    )?.bind(res as any);
-    if (addResListener) addResListener("close", onAbort);
+    const controller = createAbortControllerForRequest(req, res);
 
     try {
-      const contentTypeRaw = (req.headers as any)["content-type"];
-      const contentType = Array.isArray(contentTypeRaw)
-        ? String(contentTypeRaw[0] || "")
-        : String(contentTypeRaw || "");
+      const contentType = getContentType(req.headers);
       const url = requestUrl(req);
 
       // Provide request context while executing the task
@@ -318,24 +298,7 @@ export function createRequestHandlers(
     }
 
     // Cancellation wiring for events as well
-    const controller = new AbortController();
-    const onAbortEvt = () => {
-      try {
-        controller.abort(new CancellationError("Client Closed Request"));
-      } catch {}
-    };
-    const addEvtReqListener = (
-      typeof (req as any).once === "function"
-        ? (req as any).once
-        : (req as any).on
-    )?.bind(req as any);
-    if (addEvtReqListener) addEvtReqListener("aborted", onAbortEvt);
-    const addEvtResListener = (
-      typeof (res as any).once === "function"
-        ? (res as any).once
-        : (res as any).on
-    )?.bind(res as any);
-    if (addEvtResListener) addEvtResListener("close", onAbortEvt);
+    const controller = createAbortControllerForRequest(req, res);
     try {
       const body = await readJsonBody<{ payload?: unknown }>(
         req,

@@ -106,9 +106,11 @@ export async function parseMultipartInput(
         try {
           entry.stream.end();
           // In case end() on writable does not propagate, explicitly end readable
-          const push = (entry.stream as any).push as ((chunk: any) => boolean) | undefined;
+          // Signal EOF for the readable side if supported
+          const push: unknown = (
+            entry.stream as unknown as { push?: (chunk: any) => boolean }
+          ).push;
           if (typeof push === "function") {
-            // push(null) signals EOF for the readable side
             push.call(entry.stream, null);
           }
         } catch {
@@ -137,7 +139,9 @@ export async function parseMultipartInput(
   try {
     busboy = busboyFactory({ headers: req.headers });
   } catch {
-    fail(jsonErrorResponse(400, "Invalid multipart payload", "INVALID_MULTIPART"));
+    fail(
+      jsonErrorResponse(400, "Invalid multipart payload", "INVALID_MULTIPART"),
+    );
     return await readyPromise;
   }
 
@@ -161,9 +165,7 @@ export async function parseMultipartInput(
         resolveReady({ ok: true, value: hydrated, finalize: finalizePromise });
       }
     } catch {
-      fail(
-        jsonErrorResponse(400, "Invalid manifest", "INVALID_MULTIPART"),
-      );
+      fail(jsonErrorResponse(400, "Invalid manifest", "INVALID_MULTIPART"));
     }
   });
 
@@ -178,8 +180,7 @@ export async function parseMultipartInput(
       type ExtendedFileInfo = FileInfo & {
         size?: number;
         lastModified?: number;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        extra?: any;
+        extra?: Record<string, unknown>;
       };
       const ext = info as ExtendedFileInfo;
       const entry = ensureEntry(
@@ -234,7 +235,9 @@ export async function parseMultipartInput(
   };
 
   busboy.once("error", () => {
-    fail(jsonErrorResponse(500, "Invalid multipart payload", "INVALID_MULTIPART"));
+    fail(
+      jsonErrorResponse(500, "Invalid multipart payload", "INVALID_MULTIPART"),
+    );
   });
 
   busboy.on("close", handleCompletion);
@@ -307,19 +310,28 @@ function applyMeta(
   if (meta.name !== undefined) {
     if (source === "manifest") {
       file.name = meta.name;
-    } else if (!manifestHas("name") && (!file.name || file.name === DEFAULT_NAME)) {
+    } else if (
+      !manifestHas("name") &&
+      (!file.name || file.name === DEFAULT_NAME)
+    ) {
       file.name = meta.name;
     }
   }
 
   if (meta.type !== undefined) {
-    if (source === "manifest" || (!manifestHas("type") && file.type === undefined)) {
+    if (
+      source === "manifest" ||
+      (!manifestHas("type") && file.type === undefined)
+    ) {
       file.type = meta.type;
     }
   }
 
   if (meta.size !== undefined) {
-    if (source === "manifest" || (!manifestHas("size") && file.size === undefined)) {
+    if (
+      source === "manifest" ||
+      (!manifestHas("size") && file.size === undefined)
+    ) {
       file.size = meta.size;
     }
   }
@@ -334,7 +346,10 @@ function applyMeta(
   }
 
   if (meta.extra !== undefined) {
-    if (source === "manifest" || (!manifestHas("extra") && file.extra === undefined)) {
+    if (
+      source === "manifest" ||
+      (!manifestHas("extra") && file.extra === undefined)
+    ) {
       file.extra = meta.extra;
     }
   }

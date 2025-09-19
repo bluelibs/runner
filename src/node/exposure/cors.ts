@@ -55,12 +55,8 @@ function appendVaryHeader(res: ServerResponse, field: string): void {
   const prevStr = Array.isArray(prev) ? prev.join(", ") : String(prev);
   const parts = prevStr
     .split(/\s*,\s*/)
-    .map(function (s) {
-      return s.trim();
-    })
-    .filter(function (s) {
-      return !!s;
-    });
+    .map((s) => s.trim())
+    .filter((s) => s);
   if (parts.indexOf(field) < 0) parts.push(field);
   res.setHeader("Vary", parts.join(", "));
 }
