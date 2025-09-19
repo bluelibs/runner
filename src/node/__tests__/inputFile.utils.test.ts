@@ -13,7 +13,7 @@ describe("inputFile.utils", () => {
       Readable.from(payload) as any,
     );
     const buf = await readInputFileToBuffer(file as any);
-    expect(buf.equals(payload)).toBe(true);
+    expect(buf.equals(payload as any)).toBe(true);
   });
 
   it("writeInputFileToPath writes to disk and reports bytes", async () => {
@@ -29,7 +29,7 @@ describe("inputFile.utils", () => {
     const { bytesWritten } = await writeInputFileToPath(file as any, target);
     expect(bytesWritten).toBe(payload.length);
     const disk = await fs.promises.readFile(target);
-    expect(disk.equals(payload)).toBe(true);
+    expect(disk.equals(payload as any)).toBe(true);
   });
 
   it("handles string and non-buffer chunks for readInputFileToBuffer", async () => {
