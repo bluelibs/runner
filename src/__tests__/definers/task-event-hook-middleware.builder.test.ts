@@ -1,7 +1,7 @@
 import { r, run, definitions, resource } from "../..";
 
 describe("task/event/hook/middleware builders", () => {
-  it("task builder produces branded task and runObj works", async () => {
+  it("task builder produces branded task and run(input, deps) works", async () => {
     const svc = resource({
       id: "tests.svc",
       init: async () => ({
@@ -12,9 +12,10 @@ describe("task/event/hook/middleware builders", () => {
       .task("tests.builder.task")
       .dependencies({ svc })
       .inputSchema<{ a: number; b: number }>({ parse: (x: any) => x })
-      .runObj(async ({ input, deps }) =>
-        Promise.resolve(deps.svc.add(input!.a, input!.b)),
-      )
+      .run(async (
+        input: { a: number; b: number },
+        deps: { svc: { add: (a: number, b: number) => number } },
+      ) => Promise.resolve(deps.svc.add(input.a, input.b)))
       .build();
 
     expect((task as any)[definitions.symbolTask]).toBe(true);
@@ -108,6 +109,74 @@ describe("task/event/hook/middleware builders", () => {
     const rr = await run(app);
     const out = await rr.runTask(task, 1);
     expect(out).toBe(2);
+    await rr.dispose();
+  });
+
+  it("task builder run handles single param without parentheses (regex miss)", async () => {
+    const task = r
+      .task("tests.builder.task.noparens")
+      .inputSchema<number>({ parse: (x: any) => x })
+      // Non-async arrow with single param, no parentheses in toString
+      .run((input: number) => Promise.resolve(input + 9))
+      .build();
+    const app = resource({ id: "tests.app.task.noparens", register: [task] });
+    const rr = await run(app);
+    const out = await rr.runTask(task, 1);
+    expect(out).toBe(10);
+    await rr.dispose();
+  });
+
+  it("task builder supports traditional 2-arg run signature", async () => {
+    const task = r
+      .task("tests.builder.task.twoargs")
+      .inputSchema<number>({ parse: (x: any) => x })
+      .run(async (input: number, _deps: any) => Promise.resolve(input + 2))
+      .build();
+    const app = resource({ id: "tests.app.task.twoargs", register: [task] });
+    const rr = await run(app);
+    const out = await rr.runTask(task, 5);
+    expect(out).toBe(7);
+    await rr.dispose();
+  });
+
+  it("task builder runObj delegates to object style", async () => {
+    const task = r
+      .task("tests.builder.task.runobj")
+      .inputSchema<number>({ parse: (x: any) => x })
+      .runObj(async ({ input }) => Promise.resolve((input as number) + 3))
+      .build();
+    const app = resource({ id: "tests.app.task.runobj", register: [task] });
+    const rr = await run(app);
+    const out = await rr.runTask(task, 4);
+    expect(out).toBe(7);
+    await rr.dispose();
+  });
+
+  it("task builder run auto-detects destructured single-arg and passes { input, deps }", async () => {
+    const svc = resource({
+      id: "tests.builder.svc.detect",
+      init: async () => ({
+        sum: (a: number, b: number) => a + b,
+      }),
+    });
+    const task = r
+      .task("tests.builder.task.destructured")
+      .dependencies({ svc })
+      .inputSchema<{ a: number; b: number }>({ parse: (x: any) => x })
+      // Use single-parameter destructuring to trigger the looksDestructured branch
+      .run(async ({
+        input,
+        deps,
+      }: {
+        input: { a: number; b: number };
+        deps: { svc: { sum: (a: number, b: number) => number } };
+      }) => Promise.resolve(deps.svc.sum(input.a, input.b)))
+      .build();
+
+    const app = resource({ id: "tests.app.task.destructured", register: [svc, task] });
+    const rr = await run(app);
+    const out = await rr.runTask(task, { a: 10, b: 5 });
+    expect(out).toBe(15);
     await rr.dispose();
   });
 

@@ -80,16 +80,37 @@ export async function createExposureServer(
     });
   }
 
+  let closing = false;
+  let closed = false;
+  let closePromise: Promise<void> | null = null;
   const close = async () => {
-    while (attachments.length > 0) {
-      const detach = attachments.pop();
-      if (detach) {
-        detach();
+    if (closed) return;
+    if (closing) {
+      // Another caller is already closing; await completion
+      if (closePromise) await closePromise;
+      return;
+    }
+    closing = true;
+    closePromise = (async () => {
+      try {
+        while (attachments.length > 0) {
+          const detach = attachments.pop();
+          if (detach) {
+            try {
+              detach();
+            } catch {
+              // best-effort detach; ignore
+            }
+          }
+        }
+        if (ownsServer && server) {
+          await stopHttpServer(server);
+        }
+      } finally {
+        closed = true;
       }
-    }
-    if (ownsServer && server) {
-      await stopHttpServer(server);
-    }
+    })();
+    await closePromise;
   };
 
   return {

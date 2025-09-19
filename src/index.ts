@@ -67,6 +67,7 @@ export * from "./models";
 export * from "./globals/types";
 export * as Errors from "./errors";
 export { Context } from "./context";
+export { EJSON } from "@bluelibs/ejson";
 
 // Re-export types at the package root so consumer declaration emits can reference them directly
 export type * from "./defs";

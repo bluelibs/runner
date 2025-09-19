@@ -1,35 +1,77 @@
 import type { IncomingMessage } from "http";
 
+import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
 import { jsonErrorResponse } from "./httpResponse";
 import type { JsonResponse } from "./types";
+import { CancellationError } from "../../errors";
 
-export async function readRequestBody(req: IncomingMessage): Promise<Buffer> {
+export async function readRequestBody(
+  req: IncomingMessage,
+  signal?: AbortSignal,
+): Promise<Buffer> {
   return await new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on("data", (chunk) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-    });
-    req.on("end", () => {
+    let aborted = false;
+
+    const onAbort = () => {
+      if (aborted) return;
+      aborted = true;
+      cleanup();
+      reject(new CancellationError("Request aborted"));
+    };
+    const onError = (err: unknown) => {
+      cleanup();
+      reject(err as Error);
+    };
+    const onEnd = () => {
+      if (aborted) return;
+      cleanup();
       resolve(Buffer.concat(chunks as readonly Uint8Array[]));
-    });
-    req.on("error", reject);
-    req.on("aborted", () => reject(new Error("Request aborted")));
+    };
+    const onData = (chunk: any) => {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    };
+
+    const cleanup = () => {
+      const off = (req as any).off ?? (req as any).removeListener;
+      if (typeof off === "function") {
+        off.call(req, "data", onData);
+        off.call(req, "end", onEnd);
+        off.call(req, "error", onError as any);
+        off.call(req, "aborted", onAbort as any);
+      }
+      signal?.removeEventListener("abort", onAbort as EventListener);
+    };
+
+    const add = ((req as any).once ?? (req as any).on)?.bind(req as any);
+    add?.("data", onData);
+    add?.("end", onEnd);
+    add?.("error", onError as any);
+    add?.("aborted", onAbort as any);
+    if (signal) {
+      if (signal.aborted) return onAbort();
+      signal.addEventListener("abort", onAbort as EventListener, { once: true });
+    }
   });
 }
 
 export async function readJsonBody<T>(
   req: IncomingMessage,
+  signal?: AbortSignal,
 ): Promise<{ ok: true; value: T | undefined } | { ok: false; response: JsonResponse }> {
-  const body = await readRequestBody(req);
+  const body = await readRequestBody(req, signal);
   if (body.length === 0) {
     return { ok: true, value: undefined };
   }
   try {
-    return { ok: true, value: JSON.parse(body.toString("utf8")) as T };
+    return {
+      ok: true,
+      value: getDefaultSerializer().parse<T>(body.toString("utf8")),
+    };
   } catch {
     return {
       ok: false,
-      response: jsonErrorResponse(400, "Invalid JSON body", "INVALID_JSON"),
+      response: jsonErrorResponse(400, "Invalid EJSON body", "INVALID_JSON"),
     };
   }
 }

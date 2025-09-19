@@ -357,7 +357,9 @@ export class MiddlewareManager {
       if (Array.isArray(allowList)) {
         const toId = (x: any) => (typeof x === "string" ? x : x?.id);
         const allowed = new Set(allowList.map(toId).filter(Boolean));
-        createdMiddlewares = createdMiddlewares.filter((m) => allowed.has(m.id));
+        createdMiddlewares = createdMiddlewares.filter((m) =>
+          allowed.has(m.id),
+        );
       }
     }
     if (createdMiddlewares.length === 0) {

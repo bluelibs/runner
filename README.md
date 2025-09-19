@@ -9,19 +9,19 @@ _Or: How I Learned to Stop Worrying and Love Dependency Injection_
 <a href="https://github.com/bluelibs/runner" target="_blank"><img src="https://img.shields.io/badge/github-blue" alt="GitHub" /></a>
 </p>
 
-| Resource                                                                                                            | Type                                                                                                               | Notes                                         |
-| ------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | --------------------------------------------- |
-| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website                                                                                                            | Overview, features, and highlights            |
-| [BlueLibs Runner GitHub](https://github.com/bluelibs/runner)                                                        | GitHub                                                                                                             | Source code, issues, and releases             |
-| [BlueLibs Runner Dev](https://github.com/bluelibs/runner-dev)                                                       | GitHub                                                                                                             | Development tools and CLI for BlueLibs Runner |
-| [UX Friendly Docs](https://bluelibs.github.io/runner/)                                                              | Docs                                                                                                               | Clean, navigable documentation                |
-| [AI Friendly Docs (<5000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)                               | Docs                                                                                                               | Short, token-friendly summary (<5000 tokens)  |
-| [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide                                                                                                              | Step-by-step upgrade from v3 to v4            |
-| [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)                                                 | Docs                                                                                                               | Design notes, deep dives, and context         |
-| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example                                                                                                            | Full Express + OpenAPI + SQLite demo          |
-| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example                                                                                                            | Full Fastify + MikroORM + PostgreSQL demo     |
-| [Example: Streaming Append Route](https://github.com/bluelibs/runner/blob/main/examples/streaming-append.example.ts) | Example                                                                                                            | Demonstrates request/response streaming       |
-| [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)       | Chatbot                                                                                                            | Ask questions interactively, or feed README.md to your own AI |
+| Resource                                                                                                             | Type    | Notes                                                         |
+| -------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------- |
+| [Presentation Website](https://runner.bluelibs.com/)                                                                 | Website | Overview, features, and highlights                            |
+| [BlueLibs Runner GitHub](https://github.com/bluelibs/runner)                                                         | GitHub  | Source code, issues, and releases                             |
+| [BlueLibs Runner Dev](https://github.com/bluelibs/runner-dev)                                                        | GitHub  | Development tools and CLI for BlueLibs Runner                 |
+| [UX Friendly Docs](https://bluelibs.github.io/runner/)                                                               | Docs    | Clean, navigable documentation                                |
+| [AI Friendly Docs (<5000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)                                | Docs    | Short, token-friendly summary (<5000 tokens)                  |
+| [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                     | Guide   | Step-by-step upgrade from v3 to v4                            |
+| [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)                                                  | Docs    | Design notes, deep dives, and context                         |
+| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite)  | Example | Full Express + OpenAPI + SQLite demo                          |
+| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)   | Example | Full Fastify + MikroORM + PostgreSQL demo                     |
+| [Example: Streaming Append Route](https://github.com/bluelibs/runner/blob/main/examples/streaming-append.example.ts) | Example | Demonstrates request/response streaming                       |
+| [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)        | Chatbot | Ask questions interactively, or feed README.md to your own AI |
 
 ### Community & Policies
 
@@ -105,6 +105,50 @@ const { dispose } = await run(app, { debug: "verbose" });
 ### Platform & Async Context
 
 Runner auto-detects the platform and adapts behavior at runtime. The only feature present only in Node.js is the use of `AsyncLocalStorage` for managing async context.
+
+### Serialization (EJSON)
+
+Runner uses EJSON by default. Think of it as JSON with superpowers: it safely round‑trips values like Date, RegExp, and even your own custom types across HTTP and between Node and the browser.
+
+- By default, Runner’s HTTP clients and exposures use the EJSON serializer
+- You can call `getDefaultSerializer()` for the shared serializer instance
+- A global serializer is also exposed as a resource: `globals.resources.serializer`
+
+```ts
+import {
+  getDefaultSerializer,
+  EJSON,
+  resource,
+  globals,
+} from "@bluelibs/runner";
+
+// 1) Quick use
+const s = getDefaultSerializer();
+const text = s.stringify({ when: new Date() });
+const obj = s.parse<{ when: Date }>(text);
+
+// 2) Register custom EJSON types centrally via the global serializer resource
+const ejsonSetup = resource({
+  id: "app.serialization.setup",
+  dependencies: { serializer: globals.resources.serializer },
+  async init(_, { serializer }) {
+    class Distance {
+      constructor(public value: number, public unit: string) {}
+      toJSONValue() {
+        return { value: this.value, unit: this.unit } as const;
+      }
+      typeName() {
+        return "Distance" as const;
+      }
+    }
+
+    serializer.addType(
+      "Distance",
+      (j: { value: number; unit: string }) => new Distance(j.value, j.unit),
+    );
+  },
+});
+```
 
 ## The Big Five
 
@@ -3231,7 +3275,7 @@ try {
 - **Clarity**: Explicit dependencies, no hidden magic
 - **Developer Experience**: Helpful error messages and clear patterns
 
-> **runtime:** "Why choose it? The bullets are persuasive. In practice, your 'intelligent inference' occasionally elopes with `any`, and your 'clear patterns' cosplay spaghetti. Still, compared to the alternatives… I’ve seen worse cults."
+> **runtime:** "Why choose it? The bullets are persuasive. In practice, your 'intelligent inference' occasionally elopes with `any`, and your 'clear patterns' cosplay spaghetti. Still, compared to the alternatives… I've seen worse cults."
 
 ## The Migration Path
 

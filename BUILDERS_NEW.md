@@ -19,6 +19,12 @@ You’ll primarily use `r`:
 
 Each builder provides a fluent chain to configure dependencies, schemas, middleware, tags, metadata, and implementation functions. Call `.build()` to produce a definition identical to `defineX`.
 
+Quick rules of thumb:
+
+- `.build()` materializes the definition; register only built items (task/resource/hook/middleware/tag), not builders.
+- When a method accepts a list (for example, `.register()`, `.tags()`, `.middleware()`), you may pass a single item or an array.
+- For resources, repeated `.register()` calls append by default; pass `{ override: true }` to replace.
+
 ---
 
 ## Resources
@@ -26,8 +32,10 @@ Each builder provides a fluent chain to configure dependencies, schemas, middlew
 Minimal:
 
 ```ts
+// Optionally seed the resource config type at the entry point
+type AppConfig = { feature?: boolean };
 const app = r
-  .resource("app")
+  .resource<AppConfig>("app")
   .init(async () => "OK")
   .build();
 ```
@@ -52,20 +60,42 @@ const loggingMw = r.middleware
 
 const app = r
   .resource("app.composed")
-  .register([svc, loggingMw, tag])
+  .register([svc, loggingMw, tag]) // single or array is OK
   .dependencies({ svc })
   .tags([tag])
   .middleware([loggingMw])
   .context(() => ({ reqId: Math.random() }))
   .configSchema<{ feature: boolean }>({ parse: (x: any) => x })
   .resultSchema<{ status: string }>({ parse: (x: any) => x })
-  .initObj(async ({ deps, ctx, config }) => {
+  .init(async ({ deps, ctx, config }) => {
     const sum = deps.svc.add(2, 3);
     return {
       status: `id=${ctx.reqId}; sum=${sum}; feature=${!!config?.feature}`,
     };
   })
   .build();
+
+// Append vs override for register()
+const r1 = r
+  .resource("app.register.append")
+  .register(svc) // append
+  .register([loggingMw, tag]) // append
+  .build();
+
+const r2 = r
+  .resource("app.register.override")
+  .register([svc, tag])
+  .register(loggingMw, { override: true }) // replace previous registrations
+  .build();
+
+// Dynamic register: compose functions and arrays
+type Cfg = { flag: boolean };
+const r3 = r
+  .resource<Cfg>("app.register.dynamic")
+  .register((cfg) => (cfg.flag ? [svc] : [])) // function
+  .register(loggingMw) // array/single
+  .build();
+// r3.register is a function; r3.register({ flag: true }) => [svc, loggingMw]
 ```
 
 ---
@@ -76,7 +106,7 @@ const app = r
 const adder = r
   .task("tasks.add")
   .inputSchema<{ a: number; b: number }>({ parse: (x: any) => x })
-  .runObj(async ({ input }) => input!.a + input!.b)
+  .run(async ({ input }) => input!.a + input!.b)
   .build();
 ```
 
@@ -178,6 +208,18 @@ const rmw = r.middleware
 
 Attach to resources or tasks via `.middleware([mw])` and ensure they’re registered in a parent resource.
 
+Note on `.init()`:
+
+- `.init` supports both styles:
+  - Object-style: `({ config, deps, ctx }) => Promise<Value>`
+  - Traditional: `(config, deps, ctx) => Promise<Value>`
+- Prefer the object-style for ergonomic destructuring and clearer intent.
+
+Note on `.middleware()` and `.tags()`:
+
+- You can pass a single item or an array.
+- These methods replace the whole list on each call (idempotent setters). If you need incremental building for these, prefer collecting locally and setting once for clarity.
+
 ---
 
 ## Running
@@ -211,9 +253,17 @@ await rr.dispose();
 ## Type Safety Highlights
 
 - Builder generics propagate across the chain: config, value/result, dependencies, context, meta, tags, and middleware are strongly typed.
-- `init`/`run` have `initObj`/`runObj` helpers that expose `{ config, deps, ctx }` or `{ input, deps }` for ergonomic destructuring with full types.
+- You can pre-seed a resource’s config type at the entry point: `r.resource<MyConfig>(id)` — this provides typed `config` for `.dependencies((config) => ...)` and `.register((config) => ...)` callables.
+- `init`/`run` accept object-style destructuring: `({ config, deps, ctx })` and `({ input, deps })`.
 - Tags and middleware must be registered; otherwise, sanity checks will fail at runtime. Builders keep tag and middleware types intact for compile-time checks.
 - Schemas can be passed as plain objects with `parse` or libraries like `zod`—inference will flow accordingly.
+
+Cheat sheet:
+
+- Resource `.register()` accepts item | item[] | (config) => item | item[]
+  - Default = append; `{ override: true }` replaces prior registrations
+- Tags and middleware accept single or array; repeated calls replace the list
+- Always call `.build()` and register built definitions
 
 For deeper contract tests, see `src/__tests__/typesafety.test.ts` and the builder tests under `src/__tests__/definers/`.
 

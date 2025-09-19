@@ -9,6 +9,7 @@ npm install @bluelibs/runner
 ## Platform & Browser
 
 - Auto‑detects platform at runtime. In browsers, `exit()` is unsupported and throws. Env reads use `globalThis.__ENV__`, `process.env`, or `globalThis.env`.
+- Unified HTTP client is available via `createHttpClient` and works across Node and browsers for JSON/EJSON and uploads.
 
 ```ts
 import { setPlatform, PlatformAdapter } from "@bluelibs/runner/platform";
@@ -16,6 +17,97 @@ setPlatform(new PlatformAdapter("browser"));
 //
 globalThis.__ENV__ = { API_URL: "https://example.test" };
 ```
+
+## HTTP Client (Unified)
+
+One client for everything (Node + browser): JSON/EJSON, uploads, Node-only duplex.
+
+```ts
+import { createHttpClient } from "@bluelibs/runner";
+const client = createHttpClient({
+  baseUrl: "/__runner",
+  auth: { token: "secret" },
+});
+
+// JSON/EJSON
+await client.task("app.tasks.add", { a: 1, b: 2 });
+
+// Browser upload
+import { createFile as createWebFile } from "@bluelibs/runner/platform/createFile";
+await client.task("app.tasks.upload", {
+  file: createWebFile({ name: "a.bin" }, blob),
+});
+
+// Node upload / duplex (optional)
+import { createNodeFile } from "@bluelibs/runner/node";
+await client.task("app.tasks.upload", {
+  file: createNodeFile({ name: "a.txt" }, { buffer: Buffer.from([1]) }),
+});
+```
+
+- Duplex request-body streams are Node-only (auto-delegated).
+- Browser uploads use `FormData` under the hood.
+
+## Tunnels: server and client can co‑exist
+
+You can expose your app over HTTP (server) and also consume another Runner over HTTP (client) in the same process. Enable either/both with env flags.
+
+```ts
+import { resource, globals } from "@bluelibs/runner";
+import { nodeExposure } from "@bluelibs/runner/node";
+
+// Client tunnel resource (mode: "client"): call remote Runner over HTTP
+export const httpClientTunnel = resource({
+  id: "app.tunnels.http",
+  tags: [globals.tags.tunnel],
+  async init() {
+    return {
+      mode: "client",
+      transport: "http",
+      tasks: (t) => t.id.startsWith("app.tasks."),
+      events: (e) => e.id.startsWith("app.events."),
+      client: globals.tunnels.http.createClient({
+        url: process.env.TUNNEL_URL || "http://127.0.0.1:7070/__runner",
+        auth: process.env.RUNNER_TOKEN
+          ? { token: process.env.RUNNER_TOKEN }
+          : undefined,
+      }),
+    } as const;
+  },
+});
+
+// App resource: register exposure (server) and/or tunnel client based on env
+export const app = resource({
+  id: "app",
+  register: [
+    // Host HTTP exposure if EXPOSE_HTTP is set
+    ...(process.env.EXPOSE_HTTP === "1"
+      ? [
+          nodeExposure.with({
+            http: {
+              basePath: "/__runner",
+              listen: {
+                port: Number(process.env.PORT ?? 7070),
+                host: "127.0.0.1",
+              },
+              auth: process.env.RUNNER_TOKEN
+                ? { token: process.env.RUNNER_TOKEN }
+                : undefined,
+            },
+          }),
+        ]
+      : []),
+    // Enable client tunnel if CALL_REMOTE is set
+    ...(process.env.CALL_REMOTE === "1" ? [httpClientTunnel] : []),
+    // ...your tasks/resources...
+  ],
+});
+```
+
+Notes:
+
+- Both can be active: your app can expose its own tasks while also calling another Runner remotely.
+- Prefer `createHttpClient` for app code that must run in browsers and Node; for Node‑only streaming/duplex, use `createHttpSmartClient` from `@bluelibs/runner/node`.
 
 ## Core Philosophy
 
@@ -254,6 +346,101 @@ export const handler = async (event: any, context: any) => {
   );
 };
 ```
+
+### CORS (Node exposure)
+
+When hosting the HTTP exposure in Node, you can enable CORS via `nodeExposure.with({ http: { cors } })`.
+
+Config shape:
+
+```ts
+{
+  origin?: string | string[] | RegExp | ((origin?: string) => string | null | undefined);
+  methods?: string[]; // default ["POST", "OPTIONS"]
+  allowedHeaders?: string[]; // default: echo Access-Control-Request-Headers
+  exposedHeaders?: string[];
+  credentials?: boolean; // adds Access-Control-Allow-Credentials: true
+  maxAge?: number; // seconds, for preflight cache
+  varyOrigin?: boolean; // default true; appends Vary: Origin when echoing
+}
+```
+
+Defaults are permissive (`*`) unless `credentials` is true, in which case the request origin is echoed and `Vary: Origin` is appended.
+
+## Serialization (EJSON)
+
+EJSON is "JSON with superpowers": it safely encodes values like Date, RegExp, and custom types into plain text so they round‑trip across HTTP and between Node and the browser.
+
+Runner standardizes request/response payloads and internal envelopes using EJSON. Keep extensions isolated: register your custom EJSON types in a resource’s init() or after ready.
+
+```ts
+import {
+  resource,
+  globals,
+  EJSON,
+  getDefaultSerializer,
+} from "@bluelibs/runner";
+
+// Option A: register in a dedicated resource during init
+const ejsonSetup = resource({
+  id: "app.serialization.ejsonSetup",
+  async init() {
+    class Distance {
+      constructor(public value: number, public unit: string) {}
+      toJSONValue() {
+        return { value: this.value, unit: this.unit } as const;
+      }
+      typeName() {
+        return "Distance" as const;
+      }
+    }
+    EJSON.addType(
+      "Distance",
+      (j: { value: number; unit: string }) => new Distance(j.value, j.unit),
+    );
+  },
+});
+
+// Option B: register after system ready
+const registerAfterReady = resource({
+  id: "app.serialization.registerAfterReady",
+  dependencies: { eventManager: globals.resources.eventManager },
+  async init(_, { eventManager }) {
+    eventManager.on(globals.events.ready.id, () => {
+      // Register types here if you prefer post-ready
+    });
+  },
+});
+
+// Default serializer (EJSON-based)
+const s = getDefaultSerializer();
+const text = s.stringify({ when: new Date(), regex: /x/i });
+const obj = s.parse<{ when: Date; regex: RegExp }>(text);
+
+// Direct EJSON access
+const raw = EJSON.stringify({ now: new Date() });
+const parsed = EJSON.parse(raw);
+
+// Global serializer resource (Runner EJSON instance)
+const registerViaGlobal = resource({
+  id: "app.serialization.global",
+  dependencies: { serializer: globals.resources.serializer },
+  async init(_, { serializer }) {
+    // Same API as EJSON above; register custom types centrally
+    // Example reusing the Distance type from above
+    serializer.addType(
+      "Distance",
+      (j: { value: number; unit: string }) => new Distance(j.value, j.unit),
+    );
+  },
+});
+```
+
+Notes:
+
+- HTTP clients (http-fetch-tunnel, Node smart client) default to Runner’s EJSON serializer; override via `createHttpClient({ serializer })` if needed.
+- If you enable credentials in CORS, origin reflection is used; EJSON works transparently in browsers and Node.
+- A global serializer is exposed as a resource at `globals.resources.serializer` (Runner’s EJSON instance). Use it to register EJSON types in one place.
 
 ## Middleware (global or local)
 

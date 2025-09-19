@@ -69,6 +69,8 @@
     "test": "jest --verbose --runInBand",
     "test:dev": "jest --verbose --watch",
     "coverage": "jest --verbose --coverage",
+    "coverage:ai": "node ./scripts/run-coverage-ai.mjs",
+    "verbose:coverage": "jest --verbose --coverage --verbose=false --silent --noStackTrace --bail=1",
     "test:clean": "jest --clearCache",
     "testonly": "npm test",
     "test:ci": "jest --verbose --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
@@ -80,7 +82,6 @@
     "benchmark:compare": "node ./scripts/compare-benchmarks.mjs ./baseline.json ./benchmark-results.json ./benchmarks.config.json"
   },
   "devDependencies": {
-    "@bluelibs/ejson": "^1.3.5",
     "@types/benchmark": "^2.1.5",
     "@types/busboy": "^1.5.4",
     "@types/express": "^5.0.3",
@@ -122,6 +123,7 @@
   ],
   "license": "MIT",
   "dependencies": {
+    "@bluelibs/ejson": "^1.4.0",
     "lru-cache": "^11.1.0"
   },
   "optionalDependencies": {

@@ -12,6 +12,61 @@ describe("resource builder", () => {
     expect(typeof (res as any)[definitions.symbolFilePath]).toBe("string");
   });
 
+  it("register appends by default and overrides when requested", () => {
+    const shared = resource({
+      id: "tests.builder.append.shared",
+      init: async () => 1,
+    });
+    const extra = resource({
+      id: "tests.builder.append.extra",
+      init: async () => 2,
+    });
+    const append = r
+      .resource("tests.builder.append")
+      .register(shared)
+      .register([extra])
+      .build();
+
+    expect(Array.isArray(append.register)).toBe(true);
+    if (Array.isArray(append.register)) {
+      expect(append.register.map((rSrc) => rSrc.id)).toEqual([
+        shared.id,
+        extra.id,
+      ]);
+    }
+
+    const override = r
+      .resource("tests.builder.override")
+      .register([shared, extra])
+      .register(shared, { override: true })
+      .build();
+
+    expect(Array.isArray(override.register)).toBe(true);
+    if (Array.isArray(override.register)) {
+      expect(override.register.map((rSrc) => rSrc.id)).toEqual([shared.id]);
+    }
+  });
+
+  it("register merges dynamic callbacks into a single function", () => {
+    const alpha = resource({
+      id: "tests.builder.fn.alpha",
+      init: async () => 1,
+    });
+    const beta = resource({ id: "tests.builder.fn.beta", init: async () => 2 });
+
+    const composed = r
+      .resource("tests.builder.registerfn")
+      .register(() => [alpha])
+      .register(beta)
+      .build();
+
+    expect(typeof composed.register).toBe("function");
+    if (typeof composed.register === "function") {
+      const result = composed.register().map((rSrc) => rSrc.id);
+      expect(result).toEqual([alpha.id, beta.id]);
+    }
+  });
+
   it("chains dependencies, tags, middleware, meta, overrides, register, context", () => {
     const a = resource({ id: "tests.a", init: async () => 1 });
     const b = resource({ id: "tests.b", init: async () => 2 });
@@ -24,7 +79,7 @@ describe("resource builder", () => {
       .context(() => ({ c: 0 }))
       .meta({ title: "X" } as any)
       .overrides([])
-      .init(async (_cfg, deps, ctx) => {
+      .init(async ({ deps, ctx }) => {
         ctx.c++;
         return Promise.resolve(deps.a + deps.b + ctx.c);
       })
@@ -39,14 +94,14 @@ describe("resource builder", () => {
     expect(app.meta).toEqual({ title: "X" });
   });
 
-  it("initObj sugar supports destructuring", async () => {
+  it("init supports object-style destructuring", async () => {
     const a = resource({ id: "tests.a2", init: async () => 5 });
     const app = r
       .resource("tests.builder.app2")
       .register([a])
       .dependencies({ a })
       .context(() => ({ hits: 0 }))
-      .initObj(async ({ deps, ctx }) => {
+      .init(async ({ deps, ctx }) => {
         ctx.hits++;
         return Promise.resolve(deps.a + ctx.hits);
       })
@@ -147,5 +202,40 @@ describe("resource builder", () => {
     const rr = await run(app);
     expect(seen).toContain(tg.id);
     await rr.dispose();
+  });
+
+  it("register merges function + function and supports override", () => {
+    const gamma = resource({
+      id: "tests.builder.fnfn.gamma",
+      init: async () => 3,
+    });
+    const delta = resource({
+      id: "tests.builder.fnfn.delta",
+      init: async () => 4,
+    });
+
+    const merged = r
+      .resource("tests.builder.fnfn")
+      .register(() => [gamma])
+      .register(() => [delta])
+      .build();
+
+    expect(typeof merged.register).toBe("function");
+    if (typeof merged.register === "function") {
+      const ids = merged.register().map((rSrc) => rSrc.id);
+      expect(ids).toEqual([gamma.id, delta.id]);
+    }
+
+    const overridden = r
+      .resource("tests.builder.fnfn.override")
+      .register(() => [gamma])
+      .register(() => [delta], { override: true })
+      .build();
+
+    expect(typeof overridden.register).toBe("function");
+    if (typeof overridden.register === "function") {
+      const ids = overridden.register().map((rSrc) => rSrc.id);
+      expect(ids).toEqual([delta.id]);
+    }
   });
 });

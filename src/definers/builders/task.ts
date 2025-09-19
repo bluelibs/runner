@@ -81,20 +81,9 @@ export interface TaskFluentBuilder<
     TTags,
     TMiddleware
   >;
+  // Overload 1: object style ({ input, deps }) => Promise<...>
   run<TNewOutput extends Promise<any>>(
-    fn: NonNullable<
-      ITaskDefinition<
-        TInput,
-        TNewOutput,
-        TDeps,
-        TMeta,
-        TTags,
-        TMiddleware
-      >["run"]
-    >,
-  ): TaskFluentBuilder<TInput, TNewOutput, TDeps, TMeta, TTags, TMiddleware>;
-  runObj<TNewOutput extends Promise<any>>(
-    fn: (input: {
+    fn: (args: {
       input: Parameters<
         NonNullable<
           ITaskDefinition<
@@ -119,8 +108,73 @@ export interface TaskFluentBuilder<
           >["run"]
         >
       >[1];
-    }) => TNewOutput,
+    }) => ReturnType<
+      NonNullable<
+        ITaskDefinition<
+          TInput,
+          TNewOutput,
+          TDeps,
+          TMeta,
+          TTags,
+          TMiddleware
+        >["run"]
+      >
+    >,
   ): TaskFluentBuilder<TInput, TNewOutput, TDeps, TMeta, TTags, TMiddleware>;
+  // Overload 2: traditional (input, deps) => Promise<...>
+  run<TNewOutput extends Promise<any>>(
+    fn: NonNullable<
+      ITaskDefinition<
+        TInput,
+        TNewOutput,
+        TDeps,
+        TMeta,
+        TTags,
+        TMiddleware
+      >["run"]
+    >,
+  ): TaskFluentBuilder<TInput, TNewOutput, TDeps, TMeta, TTags, TMiddleware>;
+  // Back-compat: runObj() delegates to run() (object style)
+  runObj<TNewOutput extends Promise<any>>(
+    fn: (args: {
+      input: Parameters<
+        NonNullable<
+          ITaskDefinition<
+            TInput,
+            TNewOutput,
+            TDeps,
+            TMeta,
+            TTags,
+            TMiddleware
+          >["run"]
+        >
+      >[0];
+      deps: Parameters<
+        NonNullable<
+          ITaskDefinition<
+            TInput,
+            TNewOutput,
+            TDeps,
+            TMeta,
+            TTags,
+            TMiddleware
+          >["run"]
+        >
+      >[1];
+    }) => ReturnType<
+      NonNullable<
+        ITaskDefinition<
+          TInput,
+          TNewOutput,
+          TDeps,
+          TMeta,
+          TTags,
+          TMiddleware
+        >["run"]
+      >
+    >,
+  ): TaskFluentBuilder<TInput, TNewOutput, TDeps, TMeta, TTags, TMiddleware>;
+
   meta<TNewMeta extends ITaskMeta>(
     m: TNewMeta,
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TNewMeta, TTags, TMiddleware>;
@@ -234,72 +288,23 @@ function makeTaskBuilder<
         >,
       );
     },
-    run<TNewOutput extends Promise<any>>(
-      fn: NonNullable<
-        ITaskDefinition<
-          TInput,
-          TNewOutput,
-          TDeps,
-          TMeta,
-          TTags,
-          TMiddleware
-        >["run"]
-      >,
-    ) {
-      const next = clone(state, {
-        run: fn as unknown as (
-          input: unknown,
-          dependencies: unknown,
-        ) => unknown,
-      });
-      return makeTaskBuilder<
-        TInput,
-        TNewOutput,
-        TDeps,
-        TMeta,
-        TTags,
-        TMiddleware
-      >(
-        next as unknown as BuilderState<
-          TInput,
-          TNewOutput,
-          TDeps,
-          TMeta,
-          TTags,
-          TMiddleware
-        >,
-      );
-    },
-    runObj<TNewOutput extends Promise<any>>(
-      fn: (input: {
-        input: Parameters<
-          NonNullable<
-            ITaskDefinition<
-              TInput,
-              TNewOutput,
-              TDeps,
-              TMeta,
-              TTags,
-              TMiddleware
-            >["run"]
-          >
-        >[0];
-        deps: Parameters<
-          NonNullable<
-            ITaskDefinition<
-              TInput,
-              TNewOutput,
-              TDeps,
-              TMeta,
-              TTags,
-              TMiddleware
-            >["run"]
-          >
-        >[1];
-      }) => TNewOutput,
-    ) {
-      const wrapped = (input: unknown, deps: unknown) =>
-        fn({ input: input as any, deps: deps as any });
+    run<TNewOutput extends Promise<any>>(fn: any) {
+      const wrapped = (input: unknown, deps: unknown) => {
+        if ((fn as any).length >= 2) {
+          return fn(input, deps);
+        }
+        const src = Function.prototype.toString.call(fn);
+        const match = src.match(/^[^(]*\(([^)]*)\)/);
+        let params = "";
+        if (match) {
+          params = match[1];
+        }
+        const looksDestructured = params.includes("{");
+        if (looksDestructured) {
+          return fn({ input, deps });
+        }
+        return fn(input);
+      };
       const next = clone(state, { run: wrapped });
       return makeTaskBuilder<
         TInput,
@@ -319,6 +324,28 @@ function makeTaskBuilder<
         >,
       );
     },
+    runObj<TNewOutput extends Promise<any>>(fn: any) {
+      const wrapped = (input: unknown, deps: unknown) => fn({ input, deps });
+      const next = clone(state, { run: wrapped });
+      return makeTaskBuilder<
+        TInput,
+        TNewOutput,
+        TDeps,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(
+        next as unknown as BuilderState<
+          TInput,
+          TNewOutput,
+          TDeps,
+          TMeta,
+          TTags,
+          TMiddleware
+        >,
+      );
+    },
+
     meta<TNewMeta extends ITaskMeta>(m: TNewMeta) {
       const next = clone(state, { meta: m as unknown as any });
       return makeTaskBuilder<

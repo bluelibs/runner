@@ -1410,8 +1410,8 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     };
 
     await handlers.handleTask(req, res);
-    expect(status).toBe(500);
-    expect(payload?.error?.message).toBe("Request aborted");
+    expect(status).toBe(499);
+    expect(payload?.error?.code).toBe("REQUEST_ABORTED");
 
     await rr.dispose();
   });

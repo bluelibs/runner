@@ -67,6 +67,71 @@ function clone<
   >;
 }
 
+type RegisterInput<TConfig> =
+  | RegisterableItems
+  | Array<RegisterableItems>
+  | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>);
+
+type RegisterState<TConfig> =
+  | Array<RegisterableItems>
+  | ((config: TConfig) => Array<RegisterableItems>)
+  | undefined;
+
+function toRegisterArray(items: RegisterableItems | Array<RegisterableItems>) {
+  return Array.isArray(items) ? [...items] : [items];
+}
+
+function normalizeRegisterFunction<TConfig>(
+  fn: (config: TConfig) => RegisterableItems | Array<RegisterableItems>,
+) {
+  return (config: TConfig) => toRegisterArray(fn(config));
+}
+
+function mergeRegister<TConfig>(
+  existing: RegisterState<TConfig>,
+  addition: RegisterInput<TConfig>,
+  override: boolean,
+): RegisterState<TConfig> {
+  const isFunctionAddition = typeof addition === "function";
+  const normalizedAddition = isFunctionAddition
+    ? normalizeRegisterFunction(
+        addition as (
+          config: TConfig,
+        ) => RegisterableItems | Array<RegisterableItems>,
+      )
+    : toRegisterArray(addition as RegisterableItems | Array<RegisterableItems>);
+
+  if (override || !existing) {
+    return isFunctionAddition
+      ? (normalizedAddition as (config: TConfig) => Array<RegisterableItems>)
+      : (normalizedAddition as Array<RegisterableItems>);
+  }
+
+  if (typeof existing === "function") {
+    if (isFunctionAddition) {
+      const additionFn = normalizedAddition as (
+        config: TConfig,
+      ) => Array<RegisterableItems>;
+      return (config: TConfig) => [...existing(config), ...additionFn(config)];
+    }
+    const additionArray = normalizedAddition as Array<RegisterableItems>;
+    return (config: TConfig) => [...existing(config), ...additionArray];
+  }
+
+  const existingArray = existing as Array<RegisterableItems>;
+  if (isFunctionAddition) {
+    const additionFn = normalizedAddition as (
+      config: TConfig,
+    ) => Array<RegisterableItems>;
+    return (config: TConfig) => [...existingArray, ...additionFn(config)];
+  }
+
+  return [
+    ...existingArray,
+    ...(normalizedAddition as Array<RegisterableItems>),
+  ];
+}
+
 export interface ResourceFluentBuilder<
   TConfig = void,
   TValue extends Promise<any> = Promise<any>,
@@ -90,8 +155,10 @@ export interface ResourceFluentBuilder<
   >;
   register(
     items:
+      | RegisterableItems
       | Array<RegisterableItems>
-      | ((config: TConfig) => Array<RegisterableItems>),
+      | ((config: TConfig) => RegisterableItems | Array<RegisterableItems>),
+    options?: { override?: boolean },
   ): ResourceFluentBuilder<
     TConfig,
     TValue,
@@ -156,30 +223,8 @@ export interface ResourceFluentBuilder<
     TTags,
     TMiddleware
   >;
+  // Overload 1: object style ({ config, deps, ctx }) => Promise<...>
   init<TNewValue extends Promise<any>>(
-    fn: NonNullable<
-      IResourceDefinition<
-        TConfig,
-        TNewValue,
-        TDeps,
-        TContext,
-        any,
-        any,
-        TMeta,
-        TTags,
-        TMiddleware
-      >["init"]
-    >,
-  ): ResourceFluentBuilder<
-    TConfig,
-    TNewValue,
-    TDeps,
-    TContext,
-    TMeta,
-    TTags,
-    TMiddleware
-  >;
-  initObj<TNewValue extends Promise<any>>(
     fn: (input: {
       config: Parameters<
         NonNullable<
@@ -227,6 +272,30 @@ export interface ResourceFluentBuilder<
         >
       >[2];
     }) => TNewValue,
+  ): ResourceFluentBuilder<
+    TConfig,
+    TNewValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  // Overload 2: traditional (config, deps, ctx) => Promise<...>
+  init<TNewValue extends Promise<any>>(
+    fn: NonNullable<
+      IResourceDefinition<
+        TConfig,
+        TNewValue,
+        TDeps,
+        TContext,
+        any,
+        any,
+        TMeta,
+        TTags,
+        TMiddleware
+      >["init"]
+    >,
   ): ResourceFluentBuilder<
     TConfig,
     TNewValue,
@@ -345,8 +414,11 @@ function makeResourceBuilder<
         >,
       );
     },
-    register(items) {
-      const next = clone(state, { register: items as any });
+    register(items, options) {
+      const override = options?.override ?? false;
+      const next = clone(state, {
+        register: mergeRegister(state.register, items, override) as any,
+      });
       return makeResourceBuilder<
         TConfig,
         TValue,
@@ -467,99 +539,27 @@ function makeResourceBuilder<
         >,
       );
     },
-    init<TNewValue extends Promise<any>>(
-      fn: NonNullable<
-        IResourceDefinition<
-          TConfig,
-          TNewValue,
-          TDeps,
-          TContext,
-          any,
-          any,
-          TMeta,
-          TTags,
-          TMiddleware
-        >["init"]
-      >,
-    ) {
-      const next = clone(state, {
-        init: fn as unknown as (
-          config: unknown,
-          dependencies: unknown,
-          context: unknown,
-        ) => unknown,
-      });
-      return makeResourceBuilder<
-        TConfig,
-        TNewValue,
-        TDeps,
-        TContext,
-        TMeta,
-        TTags,
-        TMiddleware
-      >(
-        next as unknown as BuilderState<
-          TConfig,
-          TNewValue,
-          TDeps,
-          TContext,
-          TMeta,
-          TTags,
-          TMiddleware
-        >,
-      );
-    },
-    initObj<TNewValue extends Promise<any>>(
-      fn: (input: {
-        config: Parameters<
-          NonNullable<
-            IResourceDefinition<
-              TConfig,
-              TNewValue,
-              TDeps,
-              TContext,
-              any,
-              any,
-              TMeta,
-              TTags,
-              TMiddleware
-            >["init"]
-          >
-        >[0];
-        deps: Parameters<
-          NonNullable<
-            IResourceDefinition<
-              TConfig,
-              TNewValue,
-              TDeps,
-              TContext,
-              any,
-              any,
-              TMeta,
-              TTags,
-              TMiddleware
-            >["init"]
-          >
-        >[1];
-        ctx: Parameters<
-          NonNullable<
-            IResourceDefinition<
-              TConfig,
-              TNewValue,
-              TDeps,
-              TContext,
-              any,
-              any,
-              TMeta,
-              TTags,
-              TMiddleware
-            >["init"]
-          >
-        >[2];
-      }) => TNewValue,
-    ) {
-      const wrapped = (config: unknown, deps: unknown, ctx: unknown) =>
-        fn({ config: config as any, deps: deps as any, ctx: ctx as any });
+    init<TNewValue extends Promise<any>>(fn: any) {
+      const wrapped = (
+        config: unknown,
+        dependencies: unknown,
+        context: unknown,
+      ) => {
+        if ((fn as any).length >= 3) {
+          return fn(config, dependencies, context);
+        }
+        const src = Function.prototype.toString.call(fn);
+        const match = src.match(/^[^(]*\(([^)]*)\)/);
+        let params = "";
+        if (match) {
+          params = match[1];
+        }
+        const looksDestructured = params.includes("{");
+        if (looksDestructured) {
+          return fn({ config, deps: dependencies, ctx: context });
+        }
+        return fn(config);
+      };
       const next = clone(state, { init: wrapped });
       return makeResourceBuilder<
         TConfig,
@@ -661,6 +661,19 @@ function makeResourceBuilder<
   >;
 }
 
+// Overload allows callers to seed the config type at the entry point for convenience
+export function resourceBuilder<TConfig = void>(
+  id: string,
+): ResourceFluentBuilder<
+  TConfig,
+  Promise<any>,
+  {},
+  any,
+  IResourceMeta,
+  TagType[],
+  ResourceMiddlewareAttachmentType[]
+>;
+
 export function resourceBuilder(
   id: string,
 ): ResourceFluentBuilder<
@@ -694,7 +707,7 @@ export function resourceBuilder(
     meta: {} as any,
     overrides: [] as any,
   });
-  return makeResourceBuilder(initial);
+  return makeResourceBuilder(initial) as any;
 }
 
 export const resource = resourceBuilder;

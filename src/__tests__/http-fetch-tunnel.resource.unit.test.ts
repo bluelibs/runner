@@ -1,4 +1,5 @@
 import { createExposureFetch } from "../http-fetch-tunnel.resource";
+import { EJSON, type Serializer } from "../globals/resources/tunnel/serializer";
 
 describe("http-fetch-tunnel.resource (unit)", () => {
   it("createExposureFetch: throws when baseUrl is empty or '/'", () => {
@@ -113,4 +114,61 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     await client.task("t.id");
     expect(calls[0].url).toBe("http://api/task/t.id");
   });
+
+  it("createExposureFetch: defaults to Runner EJSON serializer for requests and responses", async () => {
+    const seen: Array<{ url: string; init: any }> = [];
+    const requestDate = new Date("2024-03-01T02:03:04.005Z");
+    const responseDate = new Date("2024-03-02T03:04:05.006Z");
+
+    const fetchImpl: typeof fetch = (async (url: any, init: any) => {
+      seen.push({ url, init });
+      const envelope = { ok: true, result: { seenAt: responseDate } };
+      return {
+        text: async () => EJSON.stringify(envelope),
+      } as any;
+    }) as any;
+
+    const client = createExposureFetch({ baseUrl: "http://api", fetchImpl });
+    const result = await client.task<{ seenAt: Date }, { seenAt: Date }>("task.id", {
+      seenAt: requestDate,
+    });
+
+    expect(seen).toHaveLength(1);
+    expect(typeof seen[0].init.body).toBe("string");
+    expect(seen[0].init.body).toBe(
+      EJSON.stringify({ input: { seenAt: requestDate } }),
+    );
+    expect(result.seenAt).toBeInstanceOf(Date);
+    expect(result.seenAt.getTime()).toBe(responseDate.getTime());
+  });
+
+  it("createExposureFetch: honors a custom serializer when provided", async () => {
+    const stringify = jest.fn((value: unknown) =>
+      JSON.stringify({ wrapped: value }),
+    );
+    const parse = jest.fn((text: string) => JSON.parse(text).wrapped);
+    const serializer: Serializer = { stringify, parse };
+
+    const fetchImpl: typeof fetch = (async (_url: any, init: any) => {
+      expect(init.body).toBe(JSON.stringify({ wrapped: { input: { foo: "bar" } } }));
+      return {
+        text: async () => JSON.stringify({ wrapped: { ok: true, result: 99 } }),
+      } as any;
+    }) as any;
+
+    const client = createExposureFetch({
+      baseUrl: "http://api",
+      fetchImpl,
+      serializer,
+    });
+
+    const out = await client.task<{ foo: string }, number>("task.id", { foo: "bar" });
+
+    expect(out).toBe(99);
+    expect(stringify).toHaveBeenCalledWith({ input: { foo: "bar" } });
+    expect(parse).toHaveBeenCalledWith(
+      JSON.stringify({ wrapped: { ok: true, result: 99 } }),
+    );
+  });
+
 });

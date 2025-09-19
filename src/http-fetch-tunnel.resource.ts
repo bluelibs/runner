@@ -24,7 +24,7 @@ export interface ExposureFetchConfig {
   auth?: ExposureFetchAuthConfig;
   timeoutMs?: number; // optional request timeout
   fetchImpl?: typeof fetch; // custom fetch (optional)
-  serializer?: Serializer; // optional serializer (defaults to JSON)
+  serializer?: Serializer; // optional serializer (defaults to Runner's EJSON)
   onRequest?: (ctx: {
     url: string;
     headers: Record<string, string>;
@@ -38,7 +38,7 @@ export interface ExposureFetchClient {
 
 // normalizeError is re-exported from error-utils for public API
 
-async function postJson<T = any>(
+async function postSerialized<T = any>(
   fetchFn: typeof fetch,
   url: string,
   body: unknown,
@@ -102,7 +102,7 @@ export function createExposureFetch(
   return {
     async task<I, O>(id: string, input?: I): Promise<O> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
-      const r: ProtocolEnvelope<O> = await postJson(
+      const r: ProtocolEnvelope<O> = await postSerialized(
         fetchImpl,
         url,
         { input },
@@ -115,7 +115,7 @@ export function createExposureFetch(
     },
     async event<P>(id: string, payload?: P): Promise<void> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
-      const r: ProtocolEnvelope<void> = await postJson(
+      const r: ProtocolEnvelope<void> = await postSerialized(
         fetchImpl,
         url,
         { payload },

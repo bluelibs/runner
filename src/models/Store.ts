@@ -44,6 +44,7 @@ import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middlewar
 import { OnUnhandledError } from "./UnhandledError";
 import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
+import { EJSON } from "@bluelibs/ejson";
 
 // Re-export types for backward compatibility
 export {
@@ -135,6 +136,7 @@ export class Store {
     builtInResourcesMap.set(globalResources.eventManager, this.eventManager);
     builtInResourcesMap.set(globalResources.logger, this.logger);
     builtInResourcesMap.set(globalResources.taskRunner, this.taskRunner!);
+    builtInResourcesMap.set(globalResources.serializer, EJSON);
     builtInResourcesMap.set(
       globalResources.middlewareManager,
       this.middlewareManager,

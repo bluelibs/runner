@@ -270,7 +270,7 @@ describe("nodeExposure - more edge branches", () => {
 
     setImmediate(() => req.emit("error", new Error("fail")));
     await handlers.handleTask(req, res);
-    expect(status).toBe(500);
+    expect(status).toBe(499);
     const out = payload
       ? JSON.parse((payload as any).toString("utf8"))
       : undefined;
