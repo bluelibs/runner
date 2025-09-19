@@ -60,20 +60,16 @@ import { nodeExposure } from "@bluelibs/runner/node";
 export const httpClientTunnel = resource({
   id: "app.tunnels.http",
   tags: [globals.tags.tunnel],
-  async init() {
-    return {
-      mode: "client",
-      transport: "http",
-      tasks: (t) => t.id.startsWith("app.tasks."),
-      events: (e) => e.id.startsWith("app.events."),
-      client: globals.tunnels.http.createClient({
-        url: process.env.TUNNEL_URL || "http://127.0.0.1:7070/__runner",
-        auth: process.env.RUNNER_TOKEN
-          ? { token: process.env.RUNNER_TOKEN }
-          : undefined,
-      }),
-    } as const;
-  },
+  init: async () => ({
+    mode: "client", // can be "server", "both", or "none".
+    transport: "http",
+    tasks: (t) => t.id.startsWith("app.tasks."),
+    events: (e) => e.id.startsWith("app.events."),
+    client: globals.tunnels.http.createClient({
+      url: process.env.TUNNEL_URL || "http://127.0.0.1:7070/__runner",
+      auth: { token: process.env.RUNNER_TOKEN },
+    }),
+  }),
 });
 
 // App resource: register exposure (server) and/or tunnel client based on env
@@ -107,7 +103,10 @@ export const app = resource({
 Notes:
 
 - Both can be active: your app can expose its own tasks while also calling another Runner remotely.
-- Prefer `createHttpClient` for app code that must run in browsers and Node; for Node‑only streaming/duplex, use `createHttpSmartClient` from `@bluelibs/runner/node`.
+- **Security**: To restrict which tasks/events are exposed, register a tunnel resource with `mode: "server"` or `mode: "both"` and explicit `tasks` and `events` ID arrays.
+- **Clients**:
+  - `createHttpClient`: Unified for Node/browser (JSON, uploads).
+  - `createHttpSmartClient` (Node-only): For streaming/duplex.
 
 ## Core Philosophy
 
@@ -675,6 +674,36 @@ const app = resource({
   },
 });
 ```
+
+## Fluent Builders (`r.*`)
+
+An alternative, ergonomic API for defining components. It's fully type-safe and compiles to standard definitions with zero runtime overhead.
+
+```ts
+import { r } from "@bluelibs/runner";
+import { z } from "zod";
+
+// With a Zod schema, input type is inferred
+const myTask = r
+  .task("app.tasks.myTask")
+  .inputSchema(z.object({ message: z.string() }))
+  .run(async ({ input }) => {
+    console.log(input.message); // input is { message: string }
+  })
+  .build();
+
+// Without a schema, you can provide the type to the run function
+const simpleTask = r
+  .task("app.tasks.simple")
+  .run(async (input: { id: number }) => {
+    console.log(input.id);
+  })
+  .build();
+```
+
+- Use schema libraries like `zod` for automatic type inference.
+- Call `.build()` to get the final definition.
+- See `readmes/FLUENT_BUILDERS.md` for more.
 
 ## Testing
 

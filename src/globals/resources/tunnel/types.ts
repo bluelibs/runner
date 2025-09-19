@@ -1,6 +1,6 @@
 import type { ITask, IEvent, IEventEmission } from "../../../defs";
 
-export type TunnelMode = "client" | "server" | "none";
+export type TunnelMode = "client" | "server" | "both" | "none";
 
 export type TunnelTaskSelector =
   | Array<string | ITask<any, any, any, any, any, any>>

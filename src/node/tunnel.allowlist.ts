@@ -25,7 +25,7 @@ export function computeAllowList(store: Store): TunnelAllowList {
   for (const entry of tunnelEntries) {
     const v = entry?.value;
     if (!v || typeof v !== "object") continue;
-    if (v.mode !== "server") continue;
+    if (v.mode !== "server" && v.mode !== "both") continue;
     if (v.transport && v.transport !== "http") continue;
 
     // Resolve tasks
@@ -69,7 +69,7 @@ export function computeAllowList(store: Store): TunnelAllowList {
 
   const enabled = tunnelEntries.some(
     (r) =>
-      r?.value?.mode === "server" &&
+      (r?.value?.mode === "server" || r?.value?.mode === "both") &&
       (!r.value.transport || r.value.transport === "http"),
   );
 

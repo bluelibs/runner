@@ -88,6 +88,44 @@ describe("Tunnel Tag & Middleware", () => {
     await rr.dispose();
   });
 
+  it("overrides selected tasks in 'both' mode", async () => {
+    const t1 = defineTask<{ v: string }, Promise<string>>({
+      id: "app.tasks.both1",
+      run: async (input) => `ORIG1:${input?.v}`,
+    });
+    const t2 = defineTask<{ v: string }, Promise<string>>({
+      id: "app.tasks.both2",
+      run: async (input) => `ORIG2:${input?.v}`,
+    });
+
+    const tunnelRes = defineResource({
+      id: "app.resources.tunnel.both",
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "both",
+        tasks: [t1.id],
+        run: async (task: any, input: any) => `BOTH:${task.id}:${input?.v}`,
+      }),
+    });
+
+    const app = defineResource({
+      id: "app.both.mode",
+      register: [t1, t2, tunnelRes],
+      dependencies: { t1, t2 },
+      init: async (_, { t1, t2 }) => {
+        const a = await t1({ v: "A" });
+        const b = await t2({ v: "B" });
+        return { a, b };
+      },
+    });
+
+    const rr = await run(app);
+    const value = rr.value as any;
+    expect(value.a).toBe("BOTH:app.tasks.both1:A");
+    expect(value.b).toBe("ORIG2:B");
+    await rr.dispose();
+  });
+
   it("throws when tasks includes a missing string id", async () => {
     const tunnelRes = defineResource({
       id: "app.resources.tunnel.missingId",

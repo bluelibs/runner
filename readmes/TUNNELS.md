@@ -311,7 +311,7 @@ nodeExposure.with({
 
 ## 9) Server-Side Allow Lists
 
-When `nodeExposure` initializes, it inspects tunnel resources that return `mode: "server"` and `transport: "http"`. The helper `computeAllowList` collects explicit task/event IDs from those resources so only allow-listed items are served when a server-mode HTTP tunnel is present.
+When `nodeExposure` initializes, it inspects tunnel resources that return `mode: "server"` or `mode: "both"` and `transport: "http"`. The helper `computeAllowList` collects explicit task/event IDs from those resources so only allow-listed items are served when a server-mode HTTP tunnel is present.
 
 To opt in, register a tunnel resource that returns server metadata:
 

@@ -39,7 +39,7 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
       ? resolveEvents(store, value.events as any)
       : [];
 
-    if (mode === "client") {
+    if (mode === "client" || mode === "both") {
       if (tasks.length > 0 && typeof value.run !== "function") {
         throw new Error(
           "Tunnel resource value must implement run(task, input) when tasks[] is configured.",

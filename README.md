@@ -150,6 +150,52 @@ const ejsonSetup = resource({
 });
 ```
 
+### Tunnels: Bridging Runners
+
+Tunnels are a powerful feature for building distributed systems. They let you expose your tasks and events over HTTP, making them callable from other processes, services, or even a browser UI. This allows a server and client to co-exist, enabling one Runner instance to securely call another.
+
+Here's a sneak peek of how you can expose your application and configure a client tunnel to consume a remote Runner:
+
+```typescript
+import { resource, globals } from "@bluelibs/runner";
+import { nodeExposure } from "@bluelibs/runner/node";
+
+// 1. Expose your local tasks and events over HTTP
+const app = resource({
+  id: "app",
+  register: [
+    // ... your tasks and events
+    nodeExposure.with({
+      http: {
+        basePath: "/__runner",
+        listen: { port: 7070 },
+      },
+    }),
+  ],
+});
+
+// 2. In another app, define a tunnel resource to call a remote Runner
+const httpClientTunnel = resource({
+  id: "app.tunnels.http",
+  tags: [globals.tags.tunnel],
+  async init() {
+    return {
+      mode: "client",
+      transport: "http",
+      // Selectively forward tasks starting with "remote.tasks."
+      tasks: (t) => t.id.startsWith("remote.tasks."),
+      client: globals.tunnels.http.createClient({
+        url: "http://remote-runner:8080/__runner",
+      }),
+    } as const;
+  },
+});
+```
+
+This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
+
+For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
+
 ## The Big Five
 
 The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using the runner effectively.
@@ -1008,6 +1054,60 @@ const handleRequest = resource({
   },
 });
 ```
+
+## Fluent Builders (`r.*`)
+
+For a more ergonomic and chainable way to define your components, Runner offers a fluent builder API under the `r` namespace. These builders are fully type-safe, improve readability for complex definitions, and compile to the standard Runner definitions with zero runtime overhead.
+
+Here’s a quick taste of how it looks, with and without `zod` for validation:
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+import { z } from "zod";
+
+// With Zod, the config type is inferred automatically
+const emailerConfigSchema = z.object({
+  smtpUrl: z.string().url(),
+  from: z.string().email(),
+});
+
+const emailer = r.resource("app.emailer")
+  .configSchema(emailerConfigSchema) // No need for <T>
+  .init(async ({ config }) => ({
+    send: (to: string, body: string) => {
+      console.log(`Sending from ${config.from} to ${to} via ${config.smtpUrl}: ${body}`);
+    },
+  }))
+  .build();
+
+// Without a schema library, you can provide the type explicitly
+const greeter = r.resource<{ name: string }>("app.greeter")
+  .init(async ({ config }) => ({
+    greet: () => `Hello, ${config.name}!`,
+  }))
+  .build();
+
+const app = r.resource("app")
+  .register([
+    emailer.with({ 
+      smtpUrl: "smtp://example.com",
+      from: "noreply@example.com" 
+    }),
+    greeter.with({ name: "World" })
+  ])
+  .dependencies({ emailer, greeter })
+  .init(async (_, { emailer, greeter }) => {
+    console.log(greeter.greet());
+    emailer.send("test@example.com", "This is a test.");
+  })
+  .build();
+
+await run(app);
+```
+
+The builder API provides a clean, step-by-step way to construct everything from simple tasks to complex resources with middleware, tags, and schemas.
+
+For a complete guide and more examples, check out the [full Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).
 
 ## Type Helpers
 

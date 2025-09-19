@@ -66,8 +66,8 @@ const app = r
   .tags([tag])
   .middleware([loggingMw])
   .context(() => ({ reqId: Math.random() }))
-  .configSchema<{ feature: boolean }>({ parse: (x: any) => x })
-  .resultSchema<{ status: string }>({ parse: (x: any) => x })
+  .configSchema<{ feature: boolean }>({ parse: (x: any) => x }) // or configSchema(zodObject)
+  .resultSchema<{ status: string }>({ parse: (x: any) => x }) // or resultSchema(zodObject)
   .init(async ({ deps, ctx, config }) => {
     const sum = deps.svc.add(2, 3);
     return {

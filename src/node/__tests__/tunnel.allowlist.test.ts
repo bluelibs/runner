@@ -48,11 +48,13 @@ describe("computeAllowList (server-mode http tunnels)", () => {
     await rr.dispose();
   });
 
-
   it("handles stores lacking resources map and skips non-object tunnel values", () => {
     const fakeStore = {
       resources: new Map([
-        ["bad", { resource: { id: "bad", tags: [globalTags.tunnel] }, value: null }],
+        [
+          "bad",
+          { resource: { id: "bad", tags: [globalTags.tunnel] }, value: null },
+        ],
         [
           "srv",
           {
@@ -130,6 +132,39 @@ describe("computeAllowList (server-mode http tunnels)", () => {
     expect(list.taskIds.has(t3.id)).toBe(false);
     expect(list.eventIds.has(e1.id)).toBe(true);
     expect(list.eventIds.has(e2.id)).toBe(false);
+    await rr.dispose();
+  });
+
+  it("treats 'both' mode like server for allow-list", async () => {
+    const t1 = defineTask<{ v: number }, Promise<number>>({
+      id: "allow.both.t1",
+      run: async ({ v }) => v,
+    });
+    const e1 = defineEvent<{ n: number }>({ id: "allow.both.e1" });
+
+    const srvBoth = defineResource({
+      id: "allow.both",
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "both",
+        transport: "http",
+        tasks: [t1.id],
+        events: [e1.id],
+        run: async () => 1,
+        emit: async () => {},
+      }),
+    });
+
+    const app = defineResource({
+      id: "allow.both.app",
+      register: [t1, e1, srvBoth],
+    });
+    const rr = await run(app);
+    const store = await rr.getResourceValue(globalResources.store as any);
+    const list = computeAllowList(store);
+    expect(list.enabled).toBe(true);
+    expect(list.taskIds.has(t1.id)).toBe(true);
+    expect(list.eventIds.has(e1.id)).toBe(true);
     await rr.dispose();
   });
 
