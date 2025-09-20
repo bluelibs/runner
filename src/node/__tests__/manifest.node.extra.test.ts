@@ -1,4 +1,4 @@
-import { buildNodeManifest } from "../upload/manifest.node";
+import { buildNodeManifest } from "../upload/manifest";
 
 describe("buildNodeManifest - extra branches", () => {
   it("keeps File sentinel without _node and does not collect it", () => {
@@ -12,4 +12,3 @@ describe("buildNodeManifest - extra branches", () => {
     expect((m.input as any).file1.id).toBe("X");
   });
 });
-

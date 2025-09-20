@@ -377,6 +377,24 @@ describe.skip("builders typesafety", () => {
         (config as any).b;
       })
       .build();
+
+    const resource5 = r
+      .resource<{ a: string }>("resource5")
+      .init(async (config) => {
+        config.a;
+        // @ts-expect-error
+        config.b;
+      })
+      .build();
+
+    const resource6 = r
+      .resource("resource6")
+      .init(async (config: { a: string }) => {
+        config.a;
+        // @ts-expect-error
+        config.b;
+      })
+      .build();
   });
 
   it("should correctly infer schemas from validation options", async () => {

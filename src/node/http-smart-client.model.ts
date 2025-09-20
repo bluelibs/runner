@@ -6,7 +6,7 @@ import type { ProtocolEnvelope } from "../globals/resources/tunnel/protocol";
 import { assertOkEnvelope } from "../globals/resources/tunnel/protocol";
 import type { InputFileMeta } from "../types/inputFile";
 // Avoid `.node` bare import which triggers tsup native addon resolver
-import { buildNodeManifest } from "./upload/manifest.node.ts";
+import { buildNodeManifest } from "./upload/manifest";
 
 export interface HttpSmartClientAuthConfig {
   header?: string; // default: x-runner-token

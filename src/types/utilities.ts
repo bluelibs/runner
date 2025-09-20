@@ -195,11 +195,13 @@ export type ResourceDependencyValuesType<T extends DependencyMapType> = {
  * - Middleware
  * - Events
  */
-export type RegisterableItems<T = any> =
+export type RegisterableItems =
   | IResourceWithConfig<any, any, any, any, any, any, any>
   | IResource<void, any, any, any, any, any, any> // For void configs
   | IResource<{ [K in any]?: any }, any, any, any, any, any, any> // For optional config
-  | ITask<any, any, any, any>
+  // Accept tasks with any tags and middleware generics to avoid variance issues
+  // when registering tasks that already have configured middleware.
+  | ITask<any, any, any, any, any, any>
   | IHook<any, any>
   | ITaskMiddleware<any, any, any, any>
   | IResourceMiddleware<any, any, any, any>

@@ -1,7 +1,7 @@
 import { Readable } from "stream";
 import * as fs from "fs";
-import { NodeInputFile } from "../inputFile.node";
-import { toPassThrough } from "../inputFile.node";
+import { NodeInputFile } from "../inputFile.model";
+import { toPassThrough } from "../inputFile.model";
 
 describe("NodeInputFile", () => {
   it("resolves stream once and supports toTempFile", async () => {
@@ -93,7 +93,10 @@ describe("NodeInputFile", () => {
   it("toTempFile accepts explicit directory (branch)", async () => {
     const payload = Buffer.from("DIR");
     const tempDir = (await import("os")).tmpdir();
-    const f = new NodeInputFile({ name: "dir.txt" } as any, Readable.from(payload) as any);
+    const f = new NodeInputFile(
+      { name: "dir.txt" } as any,
+      Readable.from(payload) as any,
+    );
     const { path, bytesWritten } = await f.toTempFile(tempDir);
     expect(bytesWritten).toBe(payload.length);
     const content = await (await import("fs")).promises.readFile(path);

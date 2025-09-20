@@ -2,13 +2,15 @@ import type { IncomingHttpHeaders } from "http";
 import { PassThrough } from "node:stream";
 // Use top-level require for busboy to ensure CJS interop under Jest
 // eslint-disable-next-line @typescript-eslint/no-var-requires
-const busboyFactory: (cfg: { headers: IncomingHttpHeaders }) => any = require("busboy");
+const busboyFactory: (cfg: {
+  headers: IncomingHttpHeaders;
+}) => any = require("busboy");
 import type { FileInfo, FieldInfo } from "busboy";
 
 import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
 // Import with explicit .ts extension to prevent tsup from resolving it
 // via the native-node-modules plugin (which looks for paths ending in .node)
-import { NodeInputFile } from "../inputFile.node.ts";
+import { NodeInputFile } from "../inputFile.model";
 import type { InputFileMeta, EjsonFileSentinel } from "../../types/inputFile";
 import { jsonErrorResponse } from "./httpResponse";
 import type { JsonResponse } from "./types";
@@ -242,7 +244,9 @@ export async function parseMultipartInput(
   // Proxy busboy parser errors to INVALID_MULTIPART, but prefer request aborts.
   busboyInst.once("error", () => {
     // Even if a request abort happened, subsequent fail() is a no-op due to settled state
-    fail(jsonErrorResponse(400, "Invalid multipart payload", "INVALID_MULTIPART"));
+    fail(
+      jsonErrorResponse(400, "Invalid multipart payload", "INVALID_MULTIPART"),
+    );
   });
 
   busboyInst.on("close", handleCompletion);

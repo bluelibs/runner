@@ -2,7 +2,7 @@ import { Readable } from "stream";
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
-import { NodeInputFile } from "../inputFile.node";
+import { NodeInputFile } from "../inputFile.model";
 import { readInputFileToBuffer, writeInputFileToPath } from "../index";
 
 describe("inputFile.utils", () => {

@@ -22,6 +22,7 @@ import { ExposureRequestContext } from "./requestContext";
 import { CancellationError, isCancellationError } from "../../errors";
 import { applyCorsActual, handleCorsPreflight } from "./cors";
 import { createAbortControllerForRequest, getContentType } from "./utils";
+import { computeAllowList } from "../tunnel.allowlist";
 
 interface RequestProcessingDeps {
   store: NodeExposureDeps["store"];
@@ -37,6 +38,7 @@ interface RequestProcessingDeps {
 export interface NodeExposureRequestHandlers {
   handleTask: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
   handleEvent: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+  handleDiscovery: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
   handleRequest: RequestHandler;
 }
 
@@ -210,8 +212,17 @@ export function createRequestHandlers(
         respondJson(res, body.response);
         return;
       }
+      const payload = (() => {
+        if (!body.value || typeof body.value !== "object") {
+          return body.value as unknown;
+        }
+        if (Object.prototype.hasOwnProperty.call(body.value as Record<string, unknown>, "input")) {
+          return (body.value as Record<string, unknown>).input;
+        }
+        return body.value as unknown;
+      })();
       const result = await provide(() =>
-        taskRunner.run(storeTask.task, body.value?.input),
+        taskRunner.run(storeTask.task, payload),
       );
       if (
         !res.writableEnded &&
@@ -365,6 +376,37 @@ export function createRequestHandlers(
     await processEventRequest(req, res, target.id);
   };
 
+  const handleDiscovery = async (
+    req: IncomingMessage,
+    res: ServerResponse,
+  ): Promise<void> => {
+    // Allow GET and POST for discovery
+    if (req.method !== "GET" && req.method !== "POST") {
+      respondJson(res, METHOD_NOT_ALLOWED_RESPONSE);
+      return;
+    }
+    const auth = authenticator(req);
+    if (!auth.ok) {
+      applyCorsActual(req, res, cors);
+      respondJson(res, auth.response);
+      return;
+    }
+    const list = computeAllowList(store);
+    applyCorsActual(req, res, cors);
+    respondJson(
+      res,
+      jsonOkResponse({
+        result: {
+          allowList: {
+            enabled: list.enabled,
+            tasks: Array.from(list.taskIds),
+            events: Array.from(list.eventIds),
+          },
+        },
+      }),
+    );
+  };
+
   const handleRequest: RequestHandler = async (req, res) => {
     const url = requestUrl(req);
     const target = router.extract(url.pathname);
@@ -380,12 +422,15 @@ export function createRequestHandlers(
     if (target.kind === "task") {
       if (handleCorsPreflight(req, res, cors)) return true;
       await processTaskRequest(req, res, target.id);
-    } else {
+    } else if (target.kind === "event") {
       if (handleCorsPreflight(req, res, cors)) return true;
       await processEventRequest(req, res, target.id);
+    } else if (target.kind === "discovery") {
+      if (handleCorsPreflight(req, res, cors)) return true;
+      await handleDiscovery(req, res);
     }
     return true;
   };
 
-  return { handleTask, handleEvent, handleRequest };
+  return { handleTask, handleEvent, handleDiscovery, handleRequest };
 }

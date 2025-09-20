@@ -25,13 +25,15 @@ export function createRouter(basePath: string): ExposureRouter {
       return null;
     }
     const segments = rest.split("/").filter(Boolean);
-    if (segments.length < 2) {
-      return null;
-    }
     const [kind, ...idParts] = segments;
+    if (kind === "discovery") {
+      // Discovery endpoint does not use an id
+      return { kind: "discovery", id: "" };
+    }
     if (kind !== "task" && kind !== "event") {
       return null;
     }
+    if (idParts.length < 1) return null;
     const joined = idParts.join("/");
     let id: string;
     try {

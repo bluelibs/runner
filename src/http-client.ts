@@ -88,7 +88,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       if (isNodeReadable(input)) {
         // Delegate duplex path to Node Smart client (Node-only)
         const { createHttpSmartClient } = await import(
-          "./node/http-smart-client.node.ts"
+          "./node/http-smart-client.model"
         );
         return await createHttpSmartClient({
           baseUrl,
@@ -116,7 +116,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
         }
         // Node multipart path (can handle both nodeFiles and webFiles by converting blobs to buffers)
         const { createHttpSmartClient } = await import(
-          "./node/http-smart-client.node.ts"
+          "./node/http-smart-client.model"
         );
         // Convert any web blobs into buffers (reads entirely in memory)
         if (manifest.webFiles.length > 0) {

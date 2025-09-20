@@ -1,11 +1,13 @@
-
 import * as http from "http";
 import { Readable, Writable } from "stream";
-import { createHttpSmartClient } from "../http-smart-client.node";
+import { createHttpSmartClient } from "../http-smart-client.model";
 import { createNodeFile } from "../files";
 import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
 
-function asIncoming(res: Readable, headers: Record<string, string>): http.IncomingMessage {
+function asIncoming(
+  res: Readable,
+  headers: Record<string, string>,
+): http.IncomingMessage {
   (res as any).headers = headers;
   return res as any as http.IncomingMessage;
 }
@@ -54,29 +56,42 @@ describe("createHttpSmartClient - multipart", () => {
 
   it("sets filename as a separate Content-Disposition parameter (not inside name)", async () => {
     let capturedBody = Buffer.alloc(0);
-    const reqSpy = jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
-      const env = { ok: true, result: "OK" };
-      const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
-      const res = Readable.from([body]);
+    const reqSpy = jest
+      .spyOn(http, "request")
+      .mockImplementation((opts: any, cb: any) => {
+        const env = { ok: true, result: "OK" };
+        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const res = Readable.from([body]);
 
-      const sink = new Writable({
-        write(chunk, _enc, next) {
-          capturedBody = Buffer.concat([capturedBody, Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk))]);
-          next();
-        },
-        final(next) { next(); },
+        const sink = new Writable({
+          write(chunk, _enc, next) {
+            capturedBody = Buffer.concat([
+              capturedBody,
+              Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)),
+            ]);
+            next();
+          },
+          final(next) {
+            next();
+          },
+        }) as any;
+        // minimal stubs used by client code
+        sink.on = (_: any, __: any) => sink;
+        sink.setTimeout = () => sink;
+        sink.destroy = () => undefined;
+        // Respond on next tick to allow encoder to start piping headers/body first
+        setImmediate(() =>
+          cb(asIncoming(res, { "content-type": "application/json" })),
+        );
+        return sink;
       }) as any;
-      // minimal stubs used by client code
-      sink.on = (_: any, __: any) => sink;
-      sink.setTimeout = () => sink;
-      sink.destroy = () => undefined;
-      // Respond on next tick to allow encoder to start piping headers/body first
-      setImmediate(() => cb(asIncoming(res, { "content-type": "application/json" })));
-      return sink;
-    }) as any;
 
     const client = createHttpSmartClient({ baseUrl });
-    const file = createNodeFile({ name: "payload.txt", type: "text/plain" }, { stream: Readable.from("hi") }, "FX");
+    const file = createNodeFile(
+      { name: "payload.txt", type: "text/plain" },
+      { stream: Readable.from("hi") },
+      "FX",
+    );
     const out = await client.task("upload", { file } as any);
     expect(out).toBe("OK");
     expect(reqSpy).toHaveBeenCalled();
@@ -87,7 +102,9 @@ describe("createHttpSmartClient - multipart", () => {
     // __manifest part is present
     expect(text).toContain('Content-Disposition: form-data; name="__manifest"');
     // File part uses a clean name and a separate filename parameter
-    expect(text).toContain('Content-Disposition: form-data; name="file:FX"; filename="payload.txt"');
+    expect(text).toContain(
+      'Content-Disposition: form-data; name="file:FX"; filename="payload.txt"',
+    );
     // Note: Previously, the filename was erroneously injected into the name value.
     // The correct format uses a separate filename parameter as asserted above.
   });
@@ -104,7 +121,9 @@ describe("createHttpSmartClient - multipart", () => {
           ]);
           next();
         },
-        final(next) { next(); },
+        final(next) {
+          next();
+        },
       }) as any;
       sink.on = (_: any, __: any) => sink;
       sink.setTimeout = () => sink;
@@ -115,7 +134,9 @@ describe("createHttpSmartClient - multipart", () => {
         Buffer.from(getDefaultSerializer().stringify(env), "utf8"),
       ]);
       // respond on next tick after some body has been written
-      setImmediate(() => cb(asIncoming(res, { "content-type": "application/json" })));
+      setImmediate(() =>
+        cb(asIncoming(res, { "content-type": "application/json" })),
+      );
       return sink;
     }) as any;
 

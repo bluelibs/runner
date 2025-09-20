@@ -243,16 +243,26 @@ Our package.json shows the full strategy:
 {
   "exports": {
     ".": {
-      "browser": "./dist/browser/index.mjs",
-      "node": "./dist/node/index.mjs",
-      "import": "./dist/universal/index.mjs"
-    },
-    "./edge": "./dist/edge/index.mjs"
+      "types": "./dist/index.d.ts",
+      "browser": {
+        "import": "./dist/browser/index.mjs",
+        "require": "./dist/browser/index.cjs",
+        "default": "./dist/browser/index.mjs"
+      },
+      "node": {
+        "types": "./dist/node/node.d.ts",
+        "import": "./dist/node/node.mjs",
+        "require": "./dist/node/node.cjs"
+      },
+      "import": "./dist/universal/index.mjs",
+      "require": "./dist/universal/index.cjs",
+      "default": "./dist/universal/index.mjs"
+    }
   }
 }
 ```
 
-**Result:** Node.js bundlers automatically get the Node-optimized version, browsers get the browser-optimized version, and everything else gets the universal version with runtime detection.
+**Result:** Node.js bundlers automatically get the Node-optimized bundle (and its Node-only type declarations) even when you import from `@bluelibs/runner`. Consumers that explicitly target `@bluelibs/runner/node` hit the same runtime + declarations, while browsers and universal runtimes continue to receive the appropriate builds with runtime detection fallback.
 
 ## 🔄 Backwards Compatibility
 

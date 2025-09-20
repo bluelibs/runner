@@ -1,9 +1,10 @@
 import type { IncomingMessage, ServerResponse } from "http";
 
-export type RequestKind = "task" | "event";
+export type RequestKind = "task" | "event" | "discovery";
 
 export interface RequestTarget {
   kind: RequestKind;
+  // For discovery, id is not used; keep for compatibility
   id: string;
 }
 

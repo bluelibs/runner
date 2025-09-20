@@ -1,6 +1,6 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
-import { createHttpSmartClient } from "../http-smart-client.node";
+import { createHttpSmartClient } from "../http-smart-client.model";
 
 describe("createHttpSmartClient - octet-stream source error", () => {
   const baseUrl = "http://127.0.0.1:7777/__runner";
@@ -11,7 +11,11 @@ describe("createHttpSmartClient - octet-stream source error", () => {
 
   it("propagates source stream error via req.destroy() → promise rejects", async () => {
     // Use a real Writable so Readable.pipe(req) works and unpipe is supported
-    const req: any = new Writable({ write(_c,_e,n){ n(); } });
+    const req: any = new Writable({
+      write(_c, _e, n) {
+        n();
+      },
+    });
     req.setTimeout = () => req;
 
     // http.request mock wires callback with a dummy IncomingMessage and returns req

@@ -1,5 +1,5 @@
 import { Readable } from "stream";
-import { buildNodeManifest } from "../upload/manifest.node";
+import { buildNodeManifest } from "../upload/manifest";
 
 describe("buildNodeManifest (node)", () => {
   it("collects file sources and strips local sidecars", () => {
@@ -38,4 +38,3 @@ describe("buildNodeManifest (node)", () => {
     expect("_node" in clone.arr[0].nested).toBe(false);
   });
 });
-

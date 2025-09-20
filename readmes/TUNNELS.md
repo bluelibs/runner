@@ -44,10 +44,13 @@ import { nodeExposure } from "@bluelibs/runner/node";
 
 const add = r
   .task("app.tasks.add")
-  .run(async ({ input }: { input: { a: number; b: number } }) => input.a + input.b)
+  .run(async (input: { a: number; b: number }) => input.a + input.b)
   .build();
 
-const notify = r.event("app.events.notify").payloadSchema<{ message: string }>({ parse: (v) => v }).build();
+const notify = r
+  .event("app.events.notify")
+  .payloadSchema<{ message: string }>({ parse: (v) => v })
+  .build();
 
 export const app = r
   .resource("app")
@@ -351,7 +354,7 @@ Example usage inside a task:
 ```ts
 const processUpload = r
   .task("app.tasks.processUpload")
-  .run(async ({ input }: { input: { file: InputFile<NodeJS.ReadableStream> } }) => {
+  .run(async (input: { file: InputFile<NodeJS.ReadableStream> }) => {
     const { file } = input;
     // Option A: stream directly
     const { stream } = await file.resolve();
@@ -372,7 +375,7 @@ const processUpload = r
   .build();
 ```
 
-Node helpers (see `src/node/inputFile.node.ts`):
+Node helpers (see `src/node/inputFile.model.ts`):
 
 - `NodeInputFile` constructor for building files from Node streams in tests/tools.
 - `toPassThrough(stream)` returns a distinct pass‑through copy (keeps upstream reusable).
@@ -416,12 +419,14 @@ Note: In browsers, read with the File/Blob APIs at the edge of your app (e.g., `
 It is possible to introduce compression for both responses and requests, but it requires coordination between the Node exposure (server) and the Node Smart client. Browsers and most fetch implementations already auto‑decompress responses; request compression needs explicit support.
 
 - Server responses (server → client)
+
   - Negotiate via `Accept-Encoding` and compress JSON and streamed responses (gzip/br/deflate).
   - JSON path: compress the serialized payload, set `Content-Encoding`, keep `content-type` as JSON. If you don’t pre‑buffer, omit `content-length` and use chunked transfer.
   - Stream path: wrap the outgoing stream in a zlib transform (gzip/brotli), set `Content-Encoding`, skip if the task already wrote a compressed stream.
   - Alternative: enable compression at a reverse proxy (nginx, Caddy, CDN). Easiest path for response compression, works for browsers and Node fetch clients; does not help request compression.
 
 - Client requests (client → server)
+
   - Server: if `Content-Encoding` is present, transparently decompress before parsing JSON/multipart or forwarding duplex streams to tasks. Busboy expects plain multipart, so decompression must occur before piping to the parser.
   - Unified client (fetch): browsers typically do not gzip request bodies and disallow manual `Accept-Encoding`; keep using plain JSON/multipart in the browser.
   - Node Smart client: can optionally gzip request bodies.
@@ -430,10 +435,12 @@ It is possible to introduce compression for both responses and requests, but it 
     - Duplex/octet‑stream: optionally gzip the request stream and set `Content-Encoding: gzip` if the server supports it.
 
 - Receiving compressed responses in Node clients
+
   - Fetch/unified client: generally auto‑decompresses when the server compresses.
   - Smart client: advertise `Accept-Encoding: gzip, deflate, br` and, on response, decompress based on `Content-Encoding` before JSON parsing; for streamed responses, return a decompressed stream to callers.
 
 - Operational guidance
+
   - Default off; enable when the client advertises support and payloads are large enough (threshold) to justify CPU cost.
   - Skip already‑compressed formats (images, archives); compress `application/json` and other text types.
   - Security: be mindful of compression side‑channel risks (for example, BREACH‑style issues) when reflecting attacker‑controlled data next to secrets in compressed responses.

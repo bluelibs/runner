@@ -15,8 +15,9 @@
         "default": "./dist/browser/index.mjs"
       },
       "node": {
-        "import": "./dist/node/index.mjs",
-        "require": "./dist/node/index.cjs"
+        "types": "./dist/node/node.d.ts",
+        "import": "./dist/node/node.mjs",
+        "require": "./dist/node/node.cjs"
       },
       "import": "./dist/universal/index.mjs",
       "require": "./dist/universal/index.cjs",
@@ -33,6 +34,19 @@
       "default": "./dist/edge/index.mjs"
     },
     "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "node": [
+        "dist/node/node.d.ts"
+      ],
+      "node/*": [
+        "dist/node/*.d.ts"
+      ],
+      "*": [
+        "dist/index.d.ts"
+      ]
+    }
   },
   "homepage": "https://runner.bluelibs.com",
   "repository": {
@@ -63,7 +77,7 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsup --config tsup.config.ts --sourcemap",
+    "build": "tsc -p tsconfig.declarations.json && tsup --config tsup.config.ts --sourcemap",
     "clean": "rm -rf dist",
     "watch": "tsup --config tsup.config.ts --watch",
     "test": "jest --verbose --runInBand",
@@ -117,6 +131,10 @@
   },
   "files": [
     "dist",
+    "node.js",
+    "node.d.ts",
+    "index.d.ts",
+    "node",
     "README.md",
     "AI.md",
     "LICENSE.md"

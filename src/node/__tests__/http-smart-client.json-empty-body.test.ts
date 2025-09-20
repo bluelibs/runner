@@ -1,8 +1,11 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
-import { createHttpSmartClient } from "../http-smart-client.node";
+import { createHttpSmartClient } from "../http-smart-client.model";
 
-function asIncoming(res: Readable, headers: Record<string, string>): http.IncomingMessage {
+function asIncoming(
+  res: Readable,
+  headers: Record<string, string>,
+): http.IncomingMessage {
   (res as any).headers = headers;
   return res as any as http.IncomingMessage;
 }
@@ -17,9 +20,20 @@ describe("createHttpSmartClient - JSON empty body path", () => {
   it("JSON fallback with empty body triggers default error", async () => {
     jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
       // Respond with no data at all
-      const res = new Readable({ read() { this.push(null); } });
-      cb(asIncoming(res, { }));
-      const sink = new Writable({ write(_c,_e,n){ n(); }, final(n){ n(); } }) as any;
+      const res = new Readable({
+        read() {
+          this.push(null);
+        },
+      });
+      cb(asIncoming(res, {}));
+      const sink = new Writable({
+        write(_c, _e, n) {
+          n();
+        },
+        final(n) {
+          n();
+        },
+      }) as any;
       sink.on = (_: any, __: any) => sink;
       sink.setTimeout = () => sink;
       sink.destroy = () => undefined;
@@ -27,7 +41,8 @@ describe("createHttpSmartClient - JSON empty body path", () => {
     }) as any;
 
     const client = createHttpSmartClient({ baseUrl });
-    await expect(client.task("x", { a: 1 } as any)).rejects.toThrow(/Tunnel task error/);
+    await expect(client.task("x", { a: 1 } as any)).rejects.toThrow(
+      /Tunnel task error/,
+    );
   });
 });
-

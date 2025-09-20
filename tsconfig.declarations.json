@@ -1,12 +1,15 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    // Build-specific overrides
+    "declaration": true,
+    "declarationMap": false,
+    "emitDeclarationOnly": true,
     "module": "ESNext",
     "moduleResolution": "Bundler",
-    "emitDeclarationOnly": false,
     "outDir": "dist",
-    "types": ["node"]
+    "types": ["node"],
+    "stripInternal": false,
+    "skipLibCheck": true
   },
   "include": ["src"],
   "exclude": [

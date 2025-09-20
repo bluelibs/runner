@@ -35,6 +35,10 @@ export interface NodeExposureHandlers {
   ) => Promise<boolean>;
   handleTask: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
   handleEvent: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
+  handleDiscovery: (
+    req: IncomingMessage,
+    res: ServerResponse,
+  ) => Promise<void>;
   createRequestListener: () => http.RequestListener;
   createServer: () => http.Server;
   attachTo: (server: http.Server) => () => void;

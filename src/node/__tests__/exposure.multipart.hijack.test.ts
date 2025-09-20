@@ -18,8 +18,13 @@ describe("nodeExposure multipart hijack", () => {
       },
     });
 
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), basePath: "/__runner" } });
-    const app = defineResource({ id: "multipart.hijack.app", register: [t, exposure] });
+    const exposure = nodeExposure.with({
+      http: { server: http.createServer(), basePath: "/__runner" },
+    });
+    const app = defineResource({
+      id: "multipart.hijack.app",
+      register: [t, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
@@ -38,7 +43,9 @@ describe("nodeExposure multipart hijack", () => {
     const req: any = new (require("stream").Readable)({ read() {} });
     req.method = "POST";
     req.url = `/__runner/task/${encodeURIComponent(t.id)}`;
-    req.headers = { "content-type": `multipart/form-data; boundary=${boundary}` };
+    req.headers = {
+      "content-type": `multipart/form-data; boundary=${boundary}`,
+    };
     setImmediate(() => {
       req.push(body);
       req.push(null);
@@ -55,7 +62,7 @@ describe("nodeExposure multipart hijack", () => {
         this.headersSent = true;
         if (!buf) return true;
         const b = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
-        payload = Buffer.concat([payload, b]);
+        payload = Buffer.concat([payload as any, b]);
         return true;
       },
       end(buf?: any) {
@@ -72,4 +79,3 @@ describe("nodeExposure multipart hijack", () => {
     await rr.dispose();
   });
 });
-

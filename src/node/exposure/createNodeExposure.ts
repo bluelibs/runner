@@ -20,7 +20,7 @@ export async function createNodeExposure(
   const router = createRouter(basePath);
   const allowList = createAllowListGuard(store);
 
-  const { handleTask, handleEvent, handleRequest } = createRequestHandlers({
+  const { handleTask, handleEvent, handleDiscovery, handleRequest } = createRequestHandlers({
     store,
     taskRunner,
     eventManager,
@@ -42,6 +42,7 @@ export async function createNodeExposure(
     handleRequest,
     handleTask,
     handleEvent,
+    handleDiscovery,
     createRequestListener: serverControls.createRequestListener,
     createServer: serverControls.createServer,
     attachTo: serverControls.attachTo,

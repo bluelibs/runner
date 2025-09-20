@@ -13,7 +13,7 @@ jest.mock("../http-fetch-tunnel.resource", () => {
   return { createExposureFetch };
 });
 
-jest.mock("../node/http-smart-client.node", () => {
+jest.mock("../node/http-smart-client.model", () => {
   const createHttpSmartClient = jest.fn((_cfg: any) => ({
     task: jest.fn(async (_id: string, _input: any) => "SMART-OK"),
     event: jest.fn(async () => {}),
@@ -55,13 +55,22 @@ describe("http-client", () => {
 
   it("browser multipart uses FormData and onRequest sees auth header", async () => {
     const blob = new Blob([Buffer.from("abc")], { type: "text/plain" });
-    const file = createWebFile({ name: "a.txt", type: "text/plain" }, blob, "F2");
+    const file = createWebFile(
+      { name: "a.txt", type: "text/plain" },
+      blob,
+      "F2",
+    );
     const calls: Array<{ url: string; headers: any; body: any }> = [];
     const fetchMock = jest.fn(async (url: any, init?: any) => {
       // Touch formdata to exercise code path (if available)
       const fd = init?.body as FormData;
-      if (fd && typeof (fd as any).get === "function") (fd as any).get("__manifest");
-      calls.push({ url: String(url), headers: init?.headers ?? {}, body: init?.body });
+      if (fd && typeof (fd as any).get === "function")
+        (fd as any).get("__manifest");
+      calls.push({
+        url: String(url),
+        headers: init?.headers ?? {},
+        body: init?.body,
+      });
       const env = { ok: true, result: "UP" };
       return {
         text: async () => getDefaultSerializer().stringify(env),
@@ -82,12 +91,18 @@ describe("http-client", () => {
   });
 
   it("browser multipart uses default filename when meta.name missing", async () => {
-    const blob = new Blob([Buffer.from("abc")], { type: "application/octet-stream" });
+    const blob = new Blob([Buffer.from("abc")], {
+      type: "application/octet-stream",
+    });
     // Intentionally pass meta without name to exercise default filename branch
     const file = createWebFile({} as any, blob, "FDEF");
-    const fetchMock = jest.fn(async (url: any, init?: any) => ({
-      text: async () => getDefaultSerializer().stringify({ ok: true, result: "DEF" }),
-    } as any));
+    const fetchMock = jest.fn(
+      async (url: any, init?: any) =>
+        ({
+          text: async () =>
+            getDefaultSerializer().stringify({ ok: true, result: "DEF" }),
+        } as any),
+    );
     const client = createHttpClient({ baseUrl, fetchImpl: fetchMock as any });
     const r = await client.task("t.upload.def", { file } as any);
     expect(r).toBe("DEF");
@@ -95,10 +110,18 @@ describe("http-client", () => {
   });
 
   it("node multipart converts web blobs to buffers and delegates to smart client", async () => {
-    const { createHttpSmartClient } = require("../node/http-smart-client.node");
+    const {
+      createHttpSmartClient,
+    } = require("../node/http-smart-client.model");
     // One node file, one web file
-    const nodeSentinel = createNodeFile({ name: "n.bin" }, { buffer: Buffer.from([1,2]) }, "N2");
-    const webBlob = new Blob([Buffer.from("xyz")], { type: "application/octet-stream" });
+    const nodeSentinel = createNodeFile(
+      { name: "n.bin" },
+      { buffer: Buffer.from([1, 2]) },
+      "N2",
+    );
+    const webBlob = new Blob([Buffer.from("xyz")], {
+      type: "application/octet-stream",
+    });
     const webSentinel = createWebFile({ name: "w.bin" }, webBlob, "W2");
 
     // Customize smart client return for this test
@@ -107,7 +130,10 @@ describe("http-client", () => {
       event: jest.fn(async () => {}),
     });
     const client = createHttpClient({ baseUrl, auth: { token: "t" } });
-    const r = await client.task("t.upload.node", { a: nodeSentinel, b: webSentinel } as any);
+    const r = await client.task("t.upload.node", {
+      a: nodeSentinel,
+      b: webSentinel,
+    } as any);
     expect(r).toBe("SMART-MP");
     expect(createHttpSmartClient).toHaveBeenCalledTimes(1);
     const args = (createHttpSmartClient as jest.Mock).mock.calls[0][0];
@@ -115,7 +141,9 @@ describe("http-client", () => {
   });
 
   it("duplex path delegates to smart client when input is Node Readable", async () => {
-    const { createHttpSmartClient } = require("../node/http-smart-client.node");
+    const {
+      createHttpSmartClient,
+    } = require("../node/http-smart-client.model");
     (createHttpSmartClient as jest.Mock).mockReturnValueOnce({
       task: jest.fn(async () => "SMART-DUPLEX"),
       event: jest.fn(async () => {}),
@@ -130,15 +158,20 @@ describe("http-client", () => {
   it("falls back to global fetch when fetchImpl not provided (web multipart)", async () => {
     const origFetch = (globalThis as any).fetch;
     (globalThis as any).fetch = jest.fn(async (_url: any, _init?: any) => ({
-      text: async () => getDefaultSerializer().stringify({ ok: true, result: "GUP" }),
+      text: async () =>
+        getDefaultSerializer().stringify({ ok: true, result: "GUP" }),
     }));
     try {
       const blob = new Blob([Buffer.from("abc")], { type: "text/plain" });
-      const file = createWebFile({ name: "a.txt", type: "text/plain" }, blob, "F3");
+      const file = createWebFile(
+        { name: "a.txt", type: "text/plain" },
+        blob,
+        "F3",
+      );
       const client = createHttpClient({ baseUrl, auth: { token: "tk" } });
       const r = await client.task("t.upload.web2", { file } as any);
       expect(r).toBe("GUP");
-      expect((globalThis.fetch as any)).toHaveBeenCalledTimes(1);
+      expect(globalThis.fetch as any).toHaveBeenCalledTimes(1);
     } finally {
       (globalThis as any).fetch = origFetch;
     }
@@ -148,5 +181,3 @@ describe("http-client", () => {
     expect(() => createHttpClient({ baseUrl: "" as any })).toThrow();
   });
 });
-
-

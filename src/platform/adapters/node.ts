@@ -46,9 +46,39 @@ export class NodePlatformAdapter implements IPlatformAdapter {
     let instance: any;
     const ensure = () => {
       if (!this.alsClass) {
-        throw new PlatformUnsupportedFunction(
-          "createAsyncLocalStorage: Platform not initialized",
-        );
+        // Lazy-hydrate when init() wasn't awaited. We avoid static
+        // node-only imports for multi-platform builds by using a
+        // runtime-only require resolved via eval, so bundlers don't
+        // include it for non-node targets.
+        let als: any | undefined;
+        const forceNoop =
+          typeof process !== "undefined" &&
+          !!process.env?.RUNNER_FORCE_NOOP_ALS;
+        if (!forceNoop) {
+          try {
+            // In Node test/runtime, require is available and faster;
+            // this path is used only in node builds/tests.
+            // eslint-disable-next-line @typescript-eslint/no-var-requires
+            const mod: any = require("async_hooks");
+            als = (mod as any)?.AsyncLocalStorage;
+          } catch (_) {
+            als = undefined;
+          }
+        }
+
+        // If we couldn't resolve a real AsyncLocalStorage, provide a minimal, no-op
+        // implementation so that early calls don't throw. Full semantics are
+        // available after explicit init().
+        this.alsClass = als
+          ? als
+          : (class NoopAsyncLocalStorage<U> {
+              getStore(): U | undefined {
+                return undefined;
+              }
+              run<V>(_store: U, callback: () => V): V {
+                return callback();
+              }
+            } as any);
       }
       return (instance ??= new this.alsClass());
     };
