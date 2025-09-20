@@ -39,26 +39,26 @@ As your app grows, other processes need to call your tasks: workers, CLIs, brows
 Server: host an exposure next to your tasks/events.
 
 ```ts
-import { resource, defineTask, defineEvent } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { nodeExposure } from "@bluelibs/runner/node";
 
-const add = defineTask<{ a: number; b: number }, Promise<number>>({
-  id: "app.tasks.add",
-  run: async ({ a, b }) => a + b,
-});
+const add = r
+  .task("app.tasks.add")
+  .run(async ({ input }: { input: { a: number; b: number } }) => input.a + input.b)
+  .build();
 
-const notify = defineEvent<{ message: string }>({ id: "app.events.notify" });
+const notify = r.event("app.events.notify").payloadSchema<{ message: string }>({ parse: (v) => v }).build();
 
-export const app = resource({
-  id: "app",
-  register: [
+export const app = r
+  .resource("app")
+  .register([
     add,
     notify,
     nodeExposure.with({
       http: { basePath: "/__runner", listen: { port: 7070 } },
     }),
-  ],
-});
+  ])
+  .build();
 ```
 
 Client: call it from Node or the browser.
@@ -243,18 +243,20 @@ Manifest shape (for reference):
 }
 ```
 
+Important: “File” is not an EJSON custom type. Runner uses a special `$ejson: "File"` sentinel to mark file fields, which the unified/Node clients translate into multipart uploads and the server hydrates into `InputFile` instances. We do not register `EJSON.addType("File")` by default (and you shouldn’t either) because files are handled by the tunnel/manifest logic, not by the serializer. Use `EJSON.addType` only for your own domain objects (for example, Distance, Money, etc.).
+
 ## 7) Abort & timeouts
 
 Server: every request has an `AbortSignal` via `useExposureContext().signal`.
 
 ```ts
-import { defineTask } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { useExposureContext } from "@bluelibs/runner/node";
 import { CancellationError } from "@bluelibs/runner/errors";
 
-export const streamy = defineTask<void, Promise<void>>({
-  id: "app.tasks.streamy",
-  async run() {
+export const streamy = r
+  .task("app.tasks.streamy")
+  .run(async () => {
     const { signal } = useExposureContext();
     if (signal.aborted) throw new CancellationError("Client Closed Request");
     await new Promise((_, reject) => {
@@ -265,8 +267,8 @@ export const streamy = defineTask<void, Promise<void>>({
       );
       // do work, write to res, or read req...
     });
-  },
-});
+  })
+  .build();
 ```
 
 Clients: pass `timeoutMs` (unified, smart, mixed). Fetch clients use `AbortController` under the hood. JSON parsing obeys the same signal; multipart errors are surfaced as `499`.
@@ -317,18 +319,16 @@ When `nodeExposure` initializes, it inspects tunnel resources that return `mode:
 To opt in, register a tunnel resource that returns server metadata:
 
 ```ts
-export const serverTunnel = resource({
-  id: "app.tunnels.server",
-  tags: [globals.tags.tunnel],
-  async init() {
-    return {
-      mode: "server",
-      transport: "http",
-      tasks: ["app.tasks.add"],
-      events: ["app.events.notify"],
-    } satisfies TunnelRunner;
-  },
-});
+export const serverTunnel = r
+  .resource("app.tunnels.server")
+  .tags([globals.tags.tunnel])
+  .init(async () => ({
+    mode: "server" as const,
+    transport: "http" as const,
+    tasks: ["app.tasks.add"],
+    events: ["app.events.notify"],
+  }))
+  .build();
 ```
 
 Add this resource to the same `register` list as `nodeExposure`.
@@ -349,12 +349,10 @@ When requests contain files (multipart or via EJSON translation), Runner passes 
 Example usage inside a task:
 
 ```ts
-const processUpload = task<
-  { file: InputFile<NodeJS.ReadableStream> },
-  Promise<number>
->({
-  id: "app.tasks.processUpload",
-  async run({ file }) {
+const processUpload = r
+  .task("app.tasks.processUpload")
+  .run(async ({ input }: { input: { file: InputFile<NodeJS.ReadableStream> } }) => {
+    const { file } = input;
     // Option A: stream directly
     const { stream } = await file.resolve();
     let bytes = 0;
@@ -370,8 +368,8 @@ const processUpload = task<
     // const { path, bytesWritten } = await file.toTempFile();
 
     return bytes;
-  },
-});
+  })
+  .build();
 ```
 
 Node helpers (see `src/node/inputFile.node.ts`):

@@ -18,10 +18,12 @@ class UserService {
 }
 
 // ✅ ...use a resource that returns an API object.
-const userService = resource({
-  id: "app.services.user",
-  dependencies: { db: database },
-  init: async (_, { db }) => {
+import { r } from "@bluelibs/runner";
+
+const userService = r
+  .resource("app.services.user")
+  .dependencies({ db: database })
+  .init(async (_config, { db }) => {
     // Private state is managed by closures
     const cache = new Map<string, User>();
 
@@ -34,8 +36,8 @@ const userService = resource({
         return user;
       },
     };
-  },
-});
+  })
+  .build();
 ```
 
 ## Private State with Closures
@@ -43,9 +45,9 @@ const userService = resource({
 Variables declared inside `init` but outside the returned object are completely private.
 
 ```ts
-const secureWallet = resource({
-  id: "app.wallet",
-  init: async (config: { initialBalance: number }) => {
+const secureWallet = r
+  .resource("app.wallet")
+  .init(async (config: { initialBalance: number }) => {
     // ✅ Private state - invisible from the outside
     let balance = config.initialBalance;
 
@@ -62,8 +64,8 @@ const secureWallet = resource({
         balance -= amount;
       },
     };
-  },
-});
+  })
+  .build();
 ```
 
 ## Extension and Composition
@@ -73,14 +75,16 @@ const secureWallet = resource({
 `override()` lets you replace or extend a resource. To extend, you can create the original resource inside your override's `init` and wrap it. This is the **Decorator Pattern**.
 
 ```ts
-const baseEmailer = resource({
+const baseEmailer = r
+  .resource("app.emailer")
   id: "app.emailer",
   init: async (config: { apiKey: string }) => ({
     async send(to: string, subject: string, body: string) {
       // Real email logic...
     },
   }),
-});
+  })
+  .build();
 
 // Decorate the base emailer with logging
 const loggingEmailer = override(baseEmailer, {
@@ -121,7 +125,8 @@ const mockEmailer = override(baseEmailer, {
 The best way to compose resources is through dependency injection. For conditional logic, `.optional()` is very useful.
 
 ```ts
-const smartUserService = resource({
+const smartUserService = r
+  .resource("app.services.user.smart")
   id: "app.services.user.smart",
   dependencies: {
     db: database,
@@ -138,7 +143,8 @@ const smartUserService = resource({
       },
     };
   },
-});
+  })
+  .build();
 ```
 
 _Note: While you can manually call another resource's `.init()` for composition, prefer DI to keep your code decoupled._
@@ -148,31 +154,31 @@ _Note: While you can manually call another resource's `.init()` for composition,
 Contract tags enforce the return shape of a resource or task at compile time, acting as powerful, configurable interfaces.
 
 ```ts
-import { tag, task, resource } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Define contracts for expected data shapes
-const userContract = tag<void, void, { name: string }>({ id: "contract.user" });
-const ageContract = tag<void, void, { age: number }>({ id: "contract.age" });
+const userContract = r.tag<void, void, { name: string }>("contract.user").build();
+const ageContract = r.tag<void, void, { age: number }>("contract.age").build();
 
 // A task must return the intersection of all its contract shapes
-const getUserProfile = task({
-  id: "app.tasks.getUserProfile",
-  tags: [userContract, ageContract],
-  run: async () => {
+const getUserProfile = r
+  .task("app.tasks.getUserProfile")
+  .tags([userContract, ageContract])
+  .run(async () => {
     // ✅ TypeScript enforces this return shape: { name: string } & { age: number }
     return { name: "Ada", age: 37 };
-  },
-});
+  })
+  .build();
 
 // This works for resources too
-const profileService = resource({
-  id: "app.resources.profile",
-  tags: [userContract],
-  init: async () => {
+const profileService = r
+  .resource("app.resources.profile")
+  .tags([userContract])
+  .init(async () => {
     // ✅ Must return { name: string }
     return { name: "Ada" };
-  },
-});
+  })
+  .build();
 ```
 
 This approach is more flexible than traditional interfaces because contracts can be composed and discovered at runtime.
@@ -200,37 +206,36 @@ Use contract tags to discover and select implementations at runtime.
 
 ```ts
 // 1. Define the strategy contract
-const paymentStrategyContract = tag<
+const paymentStrategyContract = r.tag<
   void,
   void,
   { process(amount: number): Promise<boolean> }
->({
-  id: "contract.paymentStrategy",
-});
+>("contract.paymentStrategy").build();
 
 // 2. Implement concrete strategies
-const creditCardStrategy = resource({
-  id: "payment.strategies.creditCard",
-  tags: [paymentStrategyContract],
-  init: async () => ({
+const creditCardStrategy = r
+  .resource("payment.strategies.creditCard")
+  .tags([paymentStrategyContract])
+  .init(async () => ({
     async process(amount) {
       /* ... */ return true;
     },
-  }),
-});
+  }))
+  .build();
 
 // 3. Use the strategies
-const paymentProcessor = resource({
-  dependencies: { store: globals.resources.store },
-  init: async (_, { store }) => ({
+const paymentProcessor = r
+  .resource("app.payment.processor")
+  .dependencies({ store: globals.resources.store })
+  .init(async (_config, { store }) => ({
     async process(amount: number, method: string) {
       const strategies = store.getResourcesWithTag(paymentStrategyContract);
       const strategy = strategies.find((s) => s.id.includes(method));
       if (!strategy) throw new Error("Strategy not found");
       return strategy.value.process(amount);
     },
-  }),
-});
+  }))
+  .build();
 ```
 
 ### Observer Pattern
@@ -239,23 +244,25 @@ Use events and hooks for decoupled communication.
 
 ```ts
 // 1. The subject emits events
-const userRegistered = event<{ userId: string }>({ id: "user.registered" });
+const userRegistered = r.event("user.registered").payloadSchema<{ userId: string }>({ parse: (v) => v }).build();
 
-const userService = resource({
-  dependencies: { userRegistered },
-  init: async (_, { userRegistered }) => ({
+const userService = r
+  .resource("app.user.service")
+  .dependencies({ userRegistered })
+  .init(async (_config, { userRegistered }) => ({
     async createUser() {
       const userId = "u1";
-      await userRegistered(userRegistered, { userId });
+      await userRegistered.emit({ userId });
     },
-  }),
-});
+  }))
+  .build();
 
 // 2. Observers listen with hooks
-const welcomeEmailer = hook({
-  on: userRegistered,
-  run: async (e) => console.log(`Sending welcome email to ${e.data.userId}`),
-});
+const welcomeEmailer = r
+  .hook("app.hooks.welcome")
+  .on(userRegistered)
+  .run(async (e) => console.log(`Sending welcome email to ${e.data.userId}`))
+  .build();
 ```
 
 ## Key Takeaways

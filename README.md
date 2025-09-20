@@ -56,51 +56,82 @@ Here's a complete Express server in less lines than most frameworks need for the
 
 ```typescript
 import express from "express";
-import { resource, task, run } from "@bluelibs/runner";
+import { r, run, globals } from "@bluelibs/runner";
+import { nodeExposure } from "@bluelibs/runner/node";
 
 // A resource is anything you want to share across your app, a singleton
-const server = resource({
-  id: "app.server",
-  init: async (config: { port: number }) => {
-    const app = express();
-    const server = app.listen(config.port);
-    console.log(`Server running on port ${config.port}`);
-    return { app, server };
-  },
-  dispose: async ({ server }) => server.close(),
-});
+const server = r
+  .resource<{ port: number }>("app.server")
+  .context(() => ({ app: express() }))
+  .init(async ({ port }, _deps, ctx) => {
+    ctx.app.use(express.json());
+    const listener = ctx.app.listen(port);
+    console.log(`Server running on port ${port}`);
+    return { ...ctx, listener };
+  })
+  .dispose(async ({ listener }) => listener.close())
+  .build();
 
 // Tasks are your business logic - easily testable functions
-const createUser = task({
-  id: "app.tasks.createUser",
-  // That's how you depend "value": resource as singleton value, task as function, event as emittor
-  dependencies: { server },
-  run: async (userData: { name: string }, { server }) => {
-    // Your actual business logic here
-    return { id: "user-123", ...userData };
-  },
-});
+const createUser = r
+  .task("app.tasks.createUser")
+  .dependencies({ server, logger: globals.resources.logger })
+  .inputSchema<{ name: string }>({ parse: (value) => value })
+  .run(async ({ input }, { server, logger }) => {
+    await logger.info(`Creating ${input.name}`);
+    return { id: "user-123", name: input.name };
+  })
+  .build();
 
 // Wire everything together
-const app = resource({
-  id: "app",
-  // Here you make the system aware of resources, tasks, middleware, and events.
-  register: [server.with({ port: 3000 }), createUser],
-  dependencies: { server, createUser },
-  init: async (_, { server, createUser }) => {
+const app = r
+  .resource("app")
+  .register([
+    server.with({ port: 3000 }),
+    nodeExposure.with({
+      http: { basePath: "/__runner", listen: { port: 3000 } },
+    }),
+    createUser,
+  ])
+  .dependencies({ server, createUser })
+  .init(async (_config, { server, createUser }) => {
+    server.listener.on("listening", () => {
+      console.log("Runner HTTP server ready");
+    });
+
     server.app.post("/users", async (req, res) => {
       const user = await createUser(req.body);
       res.json(user);
     });
-  },
-});
+  })
+  .build();
 
 // That's it. Each run is fully isolated
-const { dispose, getResourceValue, runTask, emitEvent } = await run(app);
+const runtime = await run(app);
+const { dispose, runTask, getResourceValue, emitEvent } = runtime;
 
 // Or with debug logging enabled
-const { dispose } = await run(app, { debug: "verbose" });
+await run(app, { debug: "verbose" });
 ```
+
+### Classic API (still supported)
+
+Prefer fluent builders for new code, but the classic `define`-style API remains supported and can be mixed in the same app:
+
+```ts
+import { resource, task, run } from "@bluelibs/runner";
+
+const db = resource({ id: "app.db", init: async () => "conn" });
+const add = task({
+  id: "app.tasks.add",
+  run: async (i: { a: number; b: number }) => i.a + i.b,
+});
+
+const app = resource({ id: "app", register: [db, add] });
+await run(app);
+```
+
+See readmes/FLUENT_BUILDERS.md for migration tips and side‑by‑side patterns.
 
 ### Platform & Async Context
 
@@ -115,12 +146,7 @@ Runner uses EJSON by default. Think of it as JSON with superpowers: it safely ro
 - A global serializer is also exposed as a resource: `globals.resources.serializer`
 
 ```ts
-import {
-  getDefaultSerializer,
-  EJSON,
-  resource,
-  globals,
-} from "@bluelibs/runner";
+import { getDefaultSerializer, EJSON, r, globals } from "@bluelibs/runner";
 
 // 1) Quick use
 const s = getDefaultSerializer();
@@ -128,10 +154,10 @@ const text = s.stringify({ when: new Date() });
 const obj = s.parse<{ when: Date }>(text);
 
 // 2) Register custom EJSON types centrally via the global serializer resource
-const ejsonSetup = resource({
-  id: "app.serialization.setup",
-  dependencies: { serializer: globals.resources.serializer },
-  async init(_, { serializer }) {
+const ejsonSetup = r
+  .resource("app.serialization.setup")
+  .dependencies({ serializer: globals.resources.serializer })
+  .init(async (_config, { serializer }) => {
     class Distance {
       constructor(public value: number, public unit: string) {}
       toJSONValue() {
@@ -146,8 +172,8 @@ const ejsonSetup = resource({
       "Distance",
       (j: { value: number; unit: string }) => new Distance(j.value, j.unit),
     );
-  },
-});
+  })
+  .build();
 ```
 
 ### Tunnels: Bridging Runners
@@ -157,13 +183,13 @@ Tunnels are a powerful feature for building distributed systems. They let you ex
 Here's a sneak peek of how you can expose your application and configure a client tunnel to consume a remote Runner:
 
 ```typescript
-import { resource, globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 import { nodeExposure } from "@bluelibs/runner/node";
 
 // 1. Expose your local tasks and events over HTTP
-const app = resource({
-  id: "app",
-  register: [
+const app = r
+  .resource("app")
+  .register([
     // ... your tasks and events
     nodeExposure.with({
       http: {
@@ -171,25 +197,23 @@ const app = resource({
         listen: { port: 7070 },
       },
     }),
-  ],
-});
+  ])
+  .build();
 
 // 2. In another app, define a tunnel resource to call a remote Runner
-const httpClientTunnel = resource({
-  id: "app.tunnels.http",
-  tags: [globals.tags.tunnel],
-  async init() {
-    return {
-      mode: "client",
-      transport: "http",
-      // Selectively forward tasks starting with "remote.tasks."
-      tasks: (t) => t.id.startsWith("remote.tasks."),
-      client: globals.tunnels.http.createClient({
-        url: "http://remote-runner:8080/__runner",
-      }),
-    } as const;
-  },
-});
+const httpClientTunnel = r
+  .resource("app.tunnels.http")
+  .tags([globals.tags.tunnel])
+  .init(async () => ({
+    mode: "client" as const,
+    transport: "http" as const,
+    // Selectively forward tasks starting with "remote.tasks."
+    tasks: (t) => t.id.startsWith("remote.tasks."),
+    client: globals.tunnels.http.createClient({
+      url: "http://remote-runner:8080/__runner",
+    }),
+  }))
+  .build();
 ```
 
 This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
@@ -202,17 +226,19 @@ The framework is built around five core concepts: Tasks, Resources, Events, Midd
 
 ### Tasks
 
-Tasks are functions with superpowers. They're testable, and composable. Unlike classes that accumulate methods like a hoarder accumulates stuff, tasks do one thing well.
+Tasks are functions with superpowers. They're testable, composable, and fully typed. Unlike classes that accumulate methods like a hoarder accumulates stuff, tasks do one thing well.
 
 ```typescript
-const sendEmail = task({
-  id: "app.tasks.sendEmail",
-  dependencies: { emailService, logger },
-  run: async ({ to, subject, body }: EmailData, { emailService, logger }) => {
-    await logger.info(`Sending email to ${to}`);
-    return await emailService.send({ to, subject, body });
-  },
-});
+import { r } from "@bluelibs/runner";
+
+const sendEmail = r
+  .task("app.tasks.sendEmail")
+  .dependencies({ emailService, logger })
+  .run(async ({ input }, { emailService, logger }) => {
+    await logger.info(`Sending email to ${input.to}`);
+    return emailService.send(input);
+  })
+  .build();
 
 // Test it like a normal function (because it basically is)
 const result = await sendEmail.run(
@@ -240,32 +266,33 @@ Think of tasks as the "main characters" in your application story, not every sin
 
 ### Resources
 
-Resources are the singletons, the services, configs, and connections that live throughout your app's lifecycle. They initialize once and stick around until cleanup time. They have to be registered (via `register: []`) only once before they can be used.
+Resources are the singletons, the services, configs, and connections that live throughout your app's lifecycle. They initialize once and stick around until cleanup time. Register them via `.register([...])` so the container knows about them.
 
 ```typescript
-const database = resource({
-  id: "app.db",
-  init: async () => {
+import { r } from "@bluelibs/runner";
+
+const database = r
+  .resource("app.db")
+  .init(async () => {
     const client = new MongoClient(process.env.DATABASE_URL as string);
     await client.connect();
-
     return client;
-  },
-  dispose: async (client) => await client.close(),
-});
+  })
+  .dispose(async (client) => client.close())
+  .build();
 
-const userService = resource({
-  id: "app.services.user",
-  dependencies: { database },
-  init: async (_, { database }) => ({
+const userService = r
+  .resource("app.services.user")
+  .dependencies({ database })
+  .init(async (_config, { database }) => ({
     async createUser(userData: UserData) {
       return database.collection("users").insertOne(userData);
     },
     async getUser(id: string) {
       return database.collection("users").findOne({ _id: id });
     },
-  }),
-});
+  }))
+  .build();
 ```
 
 #### Resource Configuration
@@ -278,26 +305,26 @@ type SMTPConfig = {
   from: string;
 };
 
-const emailer = resource({
-  id: "app.emailer",
-  init: async (config: SMTPConfig) => ({
+const emailer = r
+  .resource<{ smtpUrl: string; from: string }>("app.emailer")
+  .init(async (config) => ({
     send: async (to: string, subject: string, body: string) => {
       // Use config.smtpUrl and config.from
     },
-  }),
-});
+  }))
+  .build();
 
 // Register with specific config
-const app = resource({
-  id: "app",
-  register: [
+const app = r
+  .resource("app")
+  .register([
     emailer.with({
       smtpUrl: "smtp://localhost",
       from: "noreply@myapp.com",
     }),
     // using emailer without with() will throw a type-error ;)
-  ],
-});
+  ])
+  .build();
 ```
 
 #### Private Context
@@ -305,28 +332,27 @@ const app = resource({
 For cases where you need to share variables between `init()` and `dispose()` methods (because sometimes cleanup is complicated), use the enhanced context pattern:
 
 ```typescript
-const dbResource = resource({
-  id: "db.service",
-  context: () => ({
-    connections: new Map(),
-    pools: [],
-  }),
-  async init(config, deps, ctx) {
+const dbResource = r
+  .resource("db.service")
+  .context(() => ({
+    connections: new Map<string, unknown>(),
+    pools: [] as Array<{ drain(): Promise<void> }>,
+  }))
+  .init(async (_config, _deps, ctx) => {
     const db = await connectToDatabase();
     ctx.connections.set("main", db);
     ctx.pools.push(createPool(db));
     return db;
-  },
-  async dispose(db, config, deps, ctx) {
-    // This is to avoid exposing internals as resource result.
+  })
+  .dispose(async (_db, _config, _deps, ctx) => {
     for (const pool of ctx.pools) {
       await pool.drain();
     }
-    for (const [name, conn] of ctx.connections) {
-      await conn.close();
+    for (const [, conn] of ctx.connections) {
+      await (conn as { close(): Promise<void> }).close();
     }
-  },
-});
+  })
+  .build();
 ```
 
 ### Events
@@ -334,34 +360,30 @@ const dbResource = resource({
 Events let different parts of your app talk to each other without tight coupling. It's like having a really good office messenger who never forgets anything.
 
 ```typescript
-const userRegistered = event<{ userId: string; email: string }>({
-  id: "app.events.userRegistered",
-});
+import { r } from "@bluelibs/runner";
 
-const registerUser = task({
-  id: "app.tasks.registerUser",
-  dependencies: { userService, userRegistered },
-  run: async (userData, { userService, userRegistered }) => {
-    const user = await userService.createUser(userData);
+const userRegistered = r
+  .event("app.events.userRegistered")
+  .payloadSchema<{ userId: string; email: string }>({ parse: (value) => value })
+  .build();
 
-    // Tell the world about it
-    await userRegistered({ userId: user.id, email: user.email });
+const registerUser = r
+  .task("app.tasks.registerUser")
+  .dependencies({ userService, userRegistered })
+  .run(async ({ input }, { userService, userRegistered }) => {
+    const user = await userService.createUser(input);
+    await userRegistered.emit({ userId: user.id, email: user.email });
     return user;
-  },
-});
+  })
+  .build();
 
-// Someone else handles the welcome email using a hook
-// This is great for building very modular apps
-import { hook } from "@bluelibs/runner";
-
-const sendWelcomeEmail = hook({
-  id: "app.hooks.sendWelcomeEmail",
-  on: userRegistered, // Listen to the event
-  run: async (eventData) => {
-    // Everything is type-safe, automatically inferred from the 'on' property
-    console.log(`Welcome email sent to ${eventData.data.email}`);
-  },
-});
+const sendWelcomeEmail = r
+  .hook("app.hooks.sendWelcomeEmail")
+  .on(userRegistered)
+  .run(async (event) => {
+    console.log(`Welcome email sent to ${event.data.email}`);
+  })
+  .build();
 ```
 
 #### Wildcard Events
@@ -369,16 +391,13 @@ const sendWelcomeEmail = hook({
 Sometimes you need to be the nosy neighbor of your application:
 
 ```typescript
-import { hook } from "@bluelibs/runner";
-
-const logAllEventsHook = hook({
-  id: "app.hooks.logAllEvents",
-  on: "*", // Listen to EVERYTHING
-  run(event) {
+const logAllEventsHook = r
+  .hook("app.hooks.logAllEvents")
+  .on("*")
+  .run((event) => {
     console.log("Event detected", event.id, event.data);
-    // Note: Be careful with dependencies here since some events fire before initialization
-  },
-});
+  })
+  .build();
 ```
 
 #### Excluding Events from Global Listeners
@@ -386,13 +405,13 @@ const logAllEventsHook = hook({
 Sometimes you have internal or system events that should not be picked up by wildcard listeners. Use the `excludeFromGlobalHooks` tag to prevent events from being sent to `"*"` listeners:
 
 ```typescript
-import { event, hook, globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
 // Internal event that won't be seen by global listeners
-const internalEvent = event({
-  id: "app.events.internal",
-  tags: [globals.tags.excludeFromGlobalHooks],
-});
+const internalEvent = r
+  .event("app.events.internal")
+  .tags([globals.tags.excludeFromGlobalHooks])
+  .build();
 ```
 
 **When to exclude events from global listeners:**
@@ -408,16 +427,14 @@ const internalEvent = event({
 The modern way to listen to events is through hooks. They are lightweight event listeners, similar to tasks, but with a few key differences.
 
 ```typescript
-import { hook } from "@bluelibs/runner";
-
-const myHook = hook({
-  id: "app.hooks.myEventHandler",
-  on: userRegistered,
-  dependencies: { logger },
-  run: async (event, { logger }) => {
+const myHook = r
+  .hook("app.hooks.myEventHandler")
+  .on(userRegistered)
+  .dependencies({ logger })
+  .run(async (event, { logger }) => {
     await logger.info(`User registered: ${event.data.email}`);
-  },
-});
+  })
+  .build();
 ```
 
 #### Multiple Events (type-safe intersection)
@@ -425,34 +442,43 @@ const myHook = hook({
 Hooks can listen to multiple events by providing an array to `on`. The `run(event)` payload is inferred as the common (intersection-like) shape across all provided event payloads. Use the `onAnyOf()` helper to preserve tuple inference ergonomics, and `isOneOf()` as a convenient runtime/type guard when needed.
 
 ```typescript
-import { hook, onAnyOf, isOneOf, event } from "@bluelibs/runner";
+import { r, onAnyOf, isOneOf } from "@bluelibs/runner";
 
-const eUser = event<{ id: string; email: string }>({ id: "app.events.user" });
-const eAdmin = event<{ id: string; role: "admin" | "superadmin" }>({
-  id: "app.events.admin",
-});
-const eGuest = event<{ id: string; guest: true }>({ id: "app.events.guest" });
+const eUser = r
+  .event("app.events.user")
+  .payloadSchema<{ id: string; email: string }>({ parse: (v) => v })
+  .build();
+const eAdmin = r
+  .event("app.events.admin")
+  .payloadSchema<{ id: string; role: "admin" | "superadmin" }>({
+    parse: (v) => v,
+  })
+  .build();
+const eGuest = r
+  .event("app.events.guest")
+  .payloadSchema<{ id: string; guest: true }>({ parse: (v) => v })
+  .build();
 
 // The common field across all three is { id: string }
-const auditUsers = hook({
-  id: "app.hooks.auditUsers",
-  on: [eUser, eAdmin, eGuest],
-  run: async (ev) => {
+const auditUsers = r
+  .hook("app.hooks.auditUsers")
+  .on([eUser, eAdmin, eGuest])
+  .run(async (ev) => {
     ev.data.id; // OK: common field inferred
     // ev.data.email; // TS error: not common to all
-  },
-});
+  })
+  .build();
 
 // Guard usage to refine at runtime (still narrows to common payload)
-const auditSome = hook({
-  id: "app.hooks.auditSome",
-  on: onAnyOf([eUser, eAdmin]), // to get a combined event
-  run: async (ev) => {
+const auditSome = r
+  .hook("app.hooks.auditSome")
+  .on(onAnyOf([eUser, eAdmin])) // to get a combined event
+  .run(async (ev) => {
     if (isOneOf(ev, [eUser, eAdmin])) {
       ev.data.id; // common field of eUser and eAdmin
     }
-  },
-});
+  })
+  .build();
 ```
 
 Notes:
@@ -480,13 +506,13 @@ The framework exposes a minimal system-level event for observability:
 ```typescript
 import { globals } from "@bluelibs/runner";
 
-const systemReadyHook = hook({
-  id: "app.hooks.systemReady",
-  on: globals.events.ready,
-  run: async () => {
+const systemReadyHook = r
+  .hook("app.hooks.systemReady")
+  .on(globals.events.ready)
+  .run(async () => {
     console.log("🚀 System is ready and operational!");
-  },
-});
+  })
+  .build();
 ```
 
 Available system event:
@@ -499,24 +525,23 @@ Available system event:
 Sometimes you need to prevent other event listeners from processing an event. The `stopPropagation()` method gives you fine-grained control over event flow:
 
 ```typescript
-import { event, hook } from "@bluelibs/runner";
-
-const criticalAlert = event<{
-  severity: "low" | "medium" | "high" | "critical";
-}>({
-  id: "app.events.alert",
-  meta: {
+const criticalAlert = r
+  .event("app.events.alert")
+  .payloadSchema<{ severity: "low" | "medium" | "high" | "critical" }>({
+    parse: (v) => v,
+  })
+  .meta({
     title: "System Alert Event",
     description: "Emitted when system issues are detected",
-  },
-});
+  })
+  .build();
 
 // High-priority handler that can stop propagation
-const emergencyHandler = hook({
-  id: "app.hooks.emergencyHandler",
-  on: criticalAlert,
-  order: -100, // Higher priority (lower numbers run first)
-  run: async (event) => {
+const emergencyHandler = r
+  .hook("app.hooks.emergencyHandler")
+  .on(criticalAlert)
+  .order(-100) // Higher priority (lower numbers run first)
+  .run(async (event) => {
     console.log(`Alert received: ${event.data.severity}`);
 
     if (event.data.severity === "critical") {
@@ -528,8 +553,8 @@ const emergencyHandler = hook({
 
       console.log("🛑 Event propagation stopped - emergency protocols active");
     }
-  },
-});
+  })
+  .build();
 ```
 
 > **runtime:** "'A really good office messenger.' That’s me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
@@ -541,23 +566,23 @@ Middleware wraps around your tasks and resources, adding cross-cutting concerns 
 Note: Middleware is now split by target. Use `taskMiddleware(...)` for task middleware and `resourceMiddleware(...)` for resource middleware.
 
 ```typescript
-import { taskMiddleware } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Task middleware with config
 type AuthMiddlewareConfig = { requiredRole: string };
-const authMiddleware = taskMiddleware<AuthMiddlewareConfig>({
-  id: "app.middleware.task.auth",
-  run: async ({ task, next }, _deps, config) => {
+const authMiddleware = r.middleware
+  .task("app.middleware.task.auth")
+  .run(async ({ task, next }, _deps, config: AuthMiddlewareConfig) => {
     // Must return the value
-    return await next(task.input);
-  },
-});
+    return await next(task.input as any);
+  })
+  .build();
 
-const adminTask = task({
-  id: "app.tasks.adminOnly",
-  middleware: [authMiddleware.with({ requiredRole: "admin" })],
-  run: async (input: { user: User }) => "Secret admin data",
-});
+const adminTask = r
+  .task("app.tasks.adminOnly")
+  .middleware([authMiddleware.with({ requiredRole: "admin" })])
+  .run(async ({ input }: { input: { user: User } }) => "Secret admin data")
+  .build();
 ```
 
 For middleware with input/output contracts:
@@ -568,42 +593,38 @@ type AuthConfig = { requiredRole: string };
 type AuthInput = { user: { role: string } };
 type AuthOutput = { user: { role: string; verified: boolean } };
 
-const authMiddleware = taskMiddleware<AuthConfig, AuthInput, AuthOutput>({
-  id: "app.middleware.task.auth",
-  run: async ({ task, next }, _deps, config) => {
-    if (task.input.user.role !== config.requiredRole) {
+const authMiddleware = r.middleware
+  .task("app.middleware.task.auth")
+  .run(async ({ task, next }, _deps, config: AuthConfig) => {
+    if ((task.input as AuthInput).user.role !== config.requiredRole) {
       throw new Error("Insufficient permissions");
     }
     const result = await next(task.input);
     return {
       user: {
-        ...task.input.user,
+        ...(task.input as AuthInput).user,
         verified: true,
       },
-    };
-  },
-});
+    } as AuthOutput;
+  })
+  .build();
 
 // For resources
-const resourceAuthMiddleware = resourceMiddleware<
-  AuthConfig,
-  AuthInput,
-  AuthOutput
->({
-  id: "app.middleware.resource.auth",
-  run: async ({ next }, _deps, config) => {
+const resourceAuthMiddleware = r.middleware
+  .resource("app.middleware.resource.auth")
+  .run(async ({ next }) => {
     // Resource middleware logic
     return await next();
-  },
-});
+  })
+  .build();
 
-const adminTask = task({
-  id: "app.tasks.adminOnly",
-  middleware: [authMiddleware.with({ requiredRole: "admin" })],
-  run: async (input: { user: { role: string } }) => ({
+const adminTask = r
+  .task("app.tasks.adminOnly")
+  .middleware([authMiddleware.with({ requiredRole: "admin" })])
+  .run(async ({ input }: { input: { user: { role: string } } }) => ({
     user: { role: input.user.role, verified: true },
-  }),
-});
+  }))
+  .build();
 ```
 
 #### Global Middleware
@@ -611,23 +632,19 @@ const adminTask = task({
 Want to add logging to everything? Authentication to all tasks? Global middleware has your back:
 
 ```typescript
-import { taskMiddleware, globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
-const logTaskMiddleware = taskMiddleware({
-  id: "app.middleware.log.task",
-  everywhere: true,
-  // or use a filter if you want to depend on certain tasks to exclude them from getting the middleware applied
-  everywhere(task) {
-    return true;
-  }, // true means it gets included.
-  dependencies: { logger: globals.resources.logger },
-  run: async ({ task, next }, { logger }) => {
+const logTaskMiddleware = r.middleware
+  .task("app.middleware.log.task")
+  .everywhere(() => true)
+  .dependencies({ logger: globals.resources.logger })
+  .run(async ({ task, next }, { logger }) => {
     logger.info(`Executing: ${String(task!.definition.id)}`);
     const result = await next(task!.input);
     logger.info(`Completed: ${String(task!.definition.id)}`);
     return result;
-  },
-});
+  })
+  .build();
 ```
 
 **Note:** A global middleware can depend on resources or tasks. However, any such resources or tasks will be excluded from the dependency tree (Task -> Middleware), and the middleware will not run for those specific tasks or resources. This approach gives middleware true flexibility and control.
@@ -649,26 +666,33 @@ Access `eventManager` via `globals.resources.eventManager` if needed.
 Middleware can now enforce type contracts using the `<Config, Input, Output>` signature:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 // Middleware that transforms input and output types
 type LogConfig = { includeTimestamp: boolean };
 type LogInput = { data: any };
 type LogOutput = { data: any; logged: boolean };
 
-const loggingMiddleware = taskMiddleware<LogConfig, LogInput, LogOutput>({
-  id: "app.middleware.logging",
-  run: async ({ task, next }, _deps, config) => {
-    console.log(config.includeTimestamp ? new Date() : "", task.input.data);
-    const result = await next(task.input);
+const loggingMiddleware = r.middleware
+  .task("app.middleware.logging")
+  .run(async ({ task, next }, _deps, config: LogConfig) => {
+    console.log(
+      config.includeTimestamp ? new Date() : "",
+      (task.input as LogInput).data,
+    );
+    const result = (await next(task.input)) as LogOutput;
     return { ...result, logged: true };
-  },
-});
+  })
+  .build();
 
 // Tasks using this middleware must conform to the Input/Output types
-const loggedTask = task({
-  id: "app.tasks.logged",
-  middleware: [loggingMiddleware.with({ includeTimestamp: true })],
-  run: async (input: { data: string }) => ({ data: input.data.toUpperCase() }),
-});
+const loggedTask = r
+  .task("app.tasks.logged")
+  .middleware([loggingMiddleware.with({ includeTimestamp: true })])
+  .run(async ({ input }: { input: { data: string } }) => ({
+    data: input.data.toUpperCase(),
+  }))
+  .build();
 ```
 
 > **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'."
@@ -680,25 +704,23 @@ Tags are metadata that can influence system behavior. Unlike meta properties, ta
 #### Basic Usage
 
 ```typescript
-import { tag, task, hook, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Simple string tags
-const apiTask = task({
-  id: "app.tasks.getUserData",
-  tags: ["api", "public", "cacheable"],
-  run: async (userId) => getUserFromDatabase(userId),
-});
+const apiTask = r
+  .task("app.tasks.getUserData")
+  .tags(["api", "public", "cacheable"])
+  .run(async ({ input }) => getUserFromDatabase(input as any))
+  .build();
 
 // Structured tags with configuration
-const httpTag = tag<{ method: string; path: string }>({
-  id: "http.route",
-});
+const httpTag = r.tag<{ method: string; path: string }>("http.route").build();
 
-const getUserTask = task({
-  id: "app.tasks.getUser",
-  tags: ["api", httpTag.with({ method: "GET", path: "/users/:id" })],
-  run: async ({ id }) => getUserFromDatabase(id),
-});
+const getUserTask = r
+  .task("app.tasks.getUser")
+  .tags(["api", httpTag.with({ method: "GET", path: "/users/:id" })])
+  .run(async ({ input }) => getUserFromDatabase((input as any).id))
+  .build();
 ```
 
 #### Discovering Components by Tags
@@ -706,17 +728,14 @@ const getUserTask = task({
 The core power of tags is runtime discovery. Use `store.getTasksWithTag()` to find components:
 
 ```typescript
-import { hook, globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
 // Auto-register HTTP routes based on tags
-const routeRegistration = hook({
-  id: "app.hooks.registerRoutes",
-  on: globals.events.ready,
-  dependencies: {
-    store: globals.resources.store,
-    server: expressServer,
-  },
-  run: async (_, { store, server }) => {
+const routeRegistration = r
+  .hook("app.hooks.registerRoutes")
+  .on(globals.events.ready)
+  .dependencies({ store: globals.resources.store, server: expressServer })
+  .run(async (_event, { store, server }) => {
     // Find all tasks with HTTP tags
     const apiTasks = store.getTasksWithTag(httpTag);
 
@@ -726,7 +745,7 @@ const routeRegistration = hook({
 
       const { method, path } = config;
       server.app[method.toLowerCase()](path, async (req, res) => {
-        const result = await taskDef({ ...req.params, ...req.body });
+        const result = await taskDef({ ...req.params, ...req.body } as any);
         res.json(result);
       });
     });
@@ -734,28 +753,28 @@ const routeRegistration = hook({
     // Also find by string tags
     const cacheableTasks = store.getTasksWithTag("cacheable");
     console.log(`Found ${cacheableTasks.length} cacheable tasks`);
-  },
-});
+  })
+  .build();
 ```
 
 #### Tag Extraction and Processing
 
 ```typescript
 // Check if a tag exists and extract its configuration
-const performanceTag = tag<{ warnAboveMs: number }>({
-  id: "performance.monitor",
-});
+const performanceTag = r
+  .tag<{ warnAboveMs: number }>("performance.monitor")
+  .build();
 
-const performanceMiddleware = taskMiddleware({
-  id: "app.middleware.performance",
-  run: async ({ task, next }) => {
+const performanceMiddleware = r.middleware
+  .task("app.middleware.performance")
+  .run(async ({ task, next }) => {
     // Check if task has performance monitoring enabled
     if (!performanceTag.exists(task.definition)) {
       return next(task.input);
     }
 
     // Extract the configuration
-    const config = performanceTag.extract(task.definition);
+    const config = performanceTag.extract(task.definition)!;
     const startTime = Date.now();
 
     try {
@@ -772,8 +791,8 @@ const performanceMiddleware = taskMiddleware({
       console.error(`Task failed after ${duration}ms`, error);
       throw error;
     }
-  },
-});
+  })
+  .build();
 ```
 
 #### System Tags
@@ -781,21 +800,21 @@ const performanceMiddleware = taskMiddleware({
 Built-in tags for framework behavior:
 
 ```typescript
-import { globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
-const internalTask = task({
-  id: "app.internal.cleanup",
-  tags: [
+const internalTask = r
+  .task("app.internal.cleanup")
+  .tags([
     globals.tags.system, // Excludes from debug logs
     globals.tags.debug.with({ logTaskInput: true }), // Per-component debug config
-  ],
-  run: async () => performCleanup(),
-});
+  ])
+  .run(async () => performCleanup())
+  .build();
 
-const internalEvent = event({
-  id: "app.events.internal",
-  tags: [globals.tags.excludeFromGlobalHooks], // Won't trigger wildcard listeners
-});
+const internalEvent = r
+  .event("app.events.internal")
+  .tags([globals.tags.excludeFromGlobalHooks]) // Won't trigger wildcard listeners
+  .build();
 ```
 
 #### Contract Tags
@@ -804,15 +823,15 @@ Enforce return value shapes at compile time:
 
 ```typescript
 // Tags that enforce type contracts
-const userContract = tag<void, void, { name: string }>({
-  id: "contract.user",
-});
+const userContract = r
+  .tag<void, void, { name: string }>("contract.user")
+  .build();
 
-const profileTask = task({
-  id: "app.tasks.getProfile",
-  tags: [userContract], // Must return { name: string }
-  run: async () => ({ name: "Ada" }), // ✅ Satisfies contract
-});
+const profileTask = r
+  .task("app.tasks.getProfile")
+  .tags([userContract]) // Must return { name: string }
+  .run(async () => ({ name: "Ada" })) // ✅ Satisfies contract
+  .build();
 ```
 
 ## run() and RunOptions
@@ -822,24 +841,18 @@ The `run()` function boots a root `resource` and returns a `RunResult` handle to
 Basic usage:
 
 ```ts
-import { resource, task } from "@bluelibs/runner";
-import { run } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 
-const ping = task({
-  id: "ping.task",
-  async run() {
-    return "pong";
-  },
-});
+const ping = r
+  .task("ping.task")
+  .run(async () => "pong")
+  .build();
 
-const app = resource({
-  id: "app",
-  register: [ping],
-  async init(_, {}) {
-    // your boot logic here
-    return "ready";
-  },
-});
+const app = r
+  .resource("app")
+  .register([ping])
+  .init(async () => "ready")
+  .build();
 
 const result = await run(app);
 console.log(result.value); // "ready"
@@ -920,22 +933,20 @@ _Resources can dynamically modify task behavior during initialization_
 Task interceptors (`task.intercept()`) are the modern replacement for component lifecycle events, allowing resources to dynamically modify task behavior without tight coupling.
 
 ```typescript
-import { task, resource, run } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 
-const calculatorTask = task({
-  id: "app.tasks.calculator",
-  run: async (input: { value: number }) => {
+const calculatorTask = r
+  .task("app.tasks.calculator")
+  .run(async ({ input }: { input: { value: number } }) => {
     console.log("3. Task is running...");
     return { result: input.value + 1 };
-  },
-});
+  })
+  .build();
 
-const interceptorResource = resource({
-  id: "app.interceptor",
-  dependencies: {
-    calculatorTask,
-  },
-  init: async (_, { calculatorTask }) => {
+const interceptorResource = r
+  .resource("app.interceptor")
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
     // Intercept the task to modify its behavior
     calculatorTask.intercept(async (next, input) => {
       console.log("1. Interceptor before task run");
@@ -943,20 +954,20 @@ const interceptorResource = resource({
       console.log("4. Interceptor after task run");
       return { ...result, intercepted: true };
     });
-  },
-});
+  })
+  .build();
 
-const app = resource({
-  id: "app",
-  register: [calculatorTask, interceptorResource],
-  dependencies: { calculatorTask },
-  init: async (_, { calculatorTask }) => {
+const app = r
+  .resource("app")
+  .register([calculatorTask, interceptorResource])
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
     console.log("2. Calling the task...");
     const result = await calculatorTask({ value: 10 });
     console.log("5. Final result:", result);
     // Final result: { result: 11, intercepted: true }
-  },
-});
+  })
+  .build();
 
 await run(app);
 ```
@@ -972,24 +983,26 @@ Sometimes you want your application to gracefully handle missing dependencies in
 Keep in mind that you have full control over dependency registration by functionalising `dependencies(config) => ({ ... })` and `register(config) => []`.
 
 ```typescript
-const emailService = resource({
-  id: "app.services.email",
-  init: async () => new EmailService(),
-});
+import { r } from "@bluelibs/runner";
 
-const paymentService = resource({
-  id: "app.services.payment",
-  init: async () => new PaymentService(),
-});
+const emailService = r
+  .resource("app.services.email")
+  .init(async () => new EmailService())
+  .build();
 
-const userRegistration = task({
-  id: "app.tasks.registerUser",
-  dependencies: {
+const paymentService = r
+  .resource("app.services.payment")
+  .init(async () => new PaymentService())
+  .build();
+
+const userRegistration = r
+  .task("app.tasks.registerUser")
+  .dependencies({
     database: userDatabase, // Required - will fail if not available
     emailService: emailService.optional(), // Optional - won't fail if missing
     analytics: analyticsService.optional(), // Optional - graceful degradation
-  },
-  run: async (userData, { database, emailService, analytics }) => {
+  })
+  .run(async ({ input }, { database, emailService, analytics }) => {
     // Create user (required)
     const user = await database.users.create(userData);
 
@@ -1030,29 +1043,31 @@ const userRegistration = task({
 Ever tried to pass user data through 15 function calls? Yeah, we've been there. Context fixes that without turning your code into a game of telephone. This is very different from the Private Context from resources.
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const UserContext = createContext<{ userId: string; role: string }>(
   "app.userContext",
 );
 
-const getUserData = task({
-  id: "app.tasks.getUserData",
-  middleware: [UserContext.require()], // This is a middleware that ensures the context is available before task runs, throws if not.
-  run: async () => {
+const getUserData = r
+  .task("app.tasks.getUserData")
+  .middleware([UserContext.require()]) // ensure context is available
+  .run(async () => {
     const user = UserContext.use(); // Available anywhere in the async chain
     return `Current user: ${user.userId} (${user.role})`;
-  },
-});
+  })
+  .build();
 
 // Provide context at the entry point
-const handleRequest = resource({
-  id: "app.requestHandler",
-  init: async () => {
+const handleRequest = r
+  .resource("app.requestHandler")
+  .init(async () => {
     return UserContext.provide({ userId: "123", role: "admin" }, async () => {
       // All tasks called within this scope have access to UserContext
       return await getUserData();
     });
-  },
-});
+  })
+  .build();
 ```
 
 ## Fluent Builders (`r.*`)
@@ -1086,8 +1101,8 @@ const emailer = r
 // Without a schema library, you can provide the type explicitly
 const greeter = r
   .resource("app.greeter")
-  .init(async (_: { name: string }) => ({
-    greet: () => `Hello, ${config.name}!`,
+  .init(async (cfg: { name: string }) => ({
+    greet: () => `Hello, ${cfg.name}!`,
   }))
   .build();
 
@@ -1119,7 +1134,7 @@ For a complete guide and more examples, check out the [full Fluent Builders docu
 These utility types help you extract the generics from tasks, resources, and events without re-declaring them. Import them from `@bluelibs/runner`.
 
 ```ts
-import { task, resource, event } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import type {
   ExtractTaskInput,
   ExtractTaskOutput,
@@ -1129,27 +1144,30 @@ import type {
 } from "@bluelibs/runner";
 
 // Task example
-const add = task({
-  id: "calc.add",
-  run: async (input: { a: number; b: number }) => input.a + input.b,
-});
+const add = r
+  .task("calc.add")
+  .run(
+    async ({ input }: { input: { a: number; b: number } }) => input.a + input.b,
+  )
+  .build();
 
 type AddInput = ExtractTaskInput<typeof add>; // { a: number; b: number }
 type AddOutput = ExtractTaskOutput<typeof add>; // number
 
 // Resource example
-const config = resource({
-  id: "app.config",
-  init: async (cfg: { baseUrl: string }) => ({ baseUrl: cfg.baseUrl }),
-});
+const config = r
+  .resource("app.config")
+  .init(async (cfg: { baseUrl: string }) => ({ baseUrl: cfg.baseUrl }))
+  .build();
 
 type ConfigInput = ExtractResourceConfig<typeof config>; // { baseUrl: string }
 type ConfigValue = ExtractResourceValue<typeof config>; // { baseUrl: string }
 
 // Event example
-const userRegistered = event<{ userId: string; email: string }>({
-  id: "app.events.userRegistered",
-});
+const userRegistered = r
+  .event("app.events.userRegistered")
+  .payloadSchema<{ userId: string; email: string }>({ parse: (v) => v })
+  .build();
 type UserRegisteredPayload = ExtractEventPayload<typeof userRegistered>; // { userId: string; email: string }
 ```
 
@@ -1184,15 +1202,15 @@ const requestMiddleware = taskMiddleware({
   },
 });
 
-const handleRequest = task({
-  id: "app.handleRequest",
-  middleware: [requestMiddleware],
-  run: async (input: { path: string }) => {
+const handleRequest = r
+  .task("app.handleRequest")
+  .middleware([requestMiddleware])
+  .run(async ({ input }: { input: { path: string } }) => {
     const request = RequestContext.use();
     console.log(`Processing ${input.path} (Request ID: ${request.requestId})`);
     return { success: true, requestId: request.requestId };
-  },
-});
+  })
+  .build();
 ```
 
 > **runtime:** "Context: global state with manners. You invented a teleporting clipboard for data and called it 'nice.' Forget to `provide()` once and I’ll unleash the 'Context not available' banshee scream exactly where your logs are least helpful."
@@ -1220,36 +1238,36 @@ process.on("SIGTERM", async () => {
 });
 
 // Resources with cleanup logic
-const databaseResource = resource({
-  id: "app.database",
-  init: async () => {
+const databaseResource = r
+  .resource("app.database")
+  .init(async () => {
     const connection = await connectToDatabase();
     console.log("Database connected");
     return connection;
-  },
-  dispose: async (connection) => {
+  })
+  .dispose(async (connection) => {
     await connection.close();
     // console.log("Database connection closed");
-  },
-});
+  })
+  .build();
 
-const serverResource = resource({
-  id: "app.server",
-  dependencies: { database: databaseResource },
-  init: async (config, { database }) => {
+const serverResource = r
+  .resource("app.server")
+  .dependencies({ database: databaseResource })
+  .init(async (config: { port: number }, { database }) => {
     const server = express().listen(config.port);
     console.log(`Server listening on port ${config.port}`);
     return server;
-  },
-  dispose: async (server) => {
-    return new Promise((resolve) => {
+  })
+  .dispose(async (server) => {
+    return new Promise<void>((resolve) => {
       server.close(() => {
         console.log("Server closed");
         resolve();
       });
     });
-  },
-});
+  })
+  .build();
 ```
 
 ### Error Boundary Integration
@@ -1328,25 +1346,25 @@ Because nobody likes waiting for the same expensive operation twice:
 ```typescript
 import { globals } from "@bluelibs/runner";
 
-const expensiveTask = task({
-  id: "app.tasks.expensive",
-  middleware: [
+const expensiveTask = r
+  .task("app.tasks.expensive")
+  .middleware([
     globals.middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
-      keyBuilder: (taskId, input) => `${taskId}-${input.userId}`, // optional key builder
+      keyBuilder: (taskId, input) => `${taskId}-${(input as any).userId}`, // optional key builder
     }),
-  ],
-  run: async ({ userId }) => {
+  ])
+  .run(async ({ input }: { input: { userId: string } }) => {
     // This expensive operation will be cached
-    return await doExpensiveCalculation(userId);
-  },
+    return await doExpensiveCalculation(input.userId);
+  })
 });
 
 // Global cache configuration
-const app = resource({
-  id: "app.cache",
-  register: [
+const app = r
+  .resource("app.cache")
+  .register([
     // You have to register it, cache resource is not enabled by default.
     globals.resources.cache.with({
       defaultOptions: {
@@ -1354,27 +1372,25 @@ const app = resource({
         ttl: 30 * 1000, // Default TTL
       },
     }),
-  ],
-});
+  ])
+  .build();
 ```
 
 Want Redis instead of the default LRU cache? No problem, just override the cache factory task:
 
 ```typescript
-import { task } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
-const redisCacheFactory = task({
-  id: "globals.tasks.cacheFactory", // Same ID as the default task
-  run: async (options: any) => {
-    return new RedisCache(options);
-  },
-});
+const redisCacheFactory = r
+  .task("globals.tasks.cacheFactory") // Same ID as the default task
+  .run(async ({ input }: { input: any }) => new RedisCache(input))
+  .build();
 
-const app = resource({
-  id: "app",
-  register: [globals.resources.cache],
-  overrides: [redisCacheFactory], // Override the default cache factory
-});
+const app = r
+  .resource("app")
+  .register([globals.resources.cache])
+  .overrides([redisCacheFactory]) // Override the default cache factory
+  .build();
 ```
 
 > **runtime:** "'Because nobody likes waiting.' Correct. You keep asking the same question like a parrot with Wi‑Fi, so I built a memory palace. Now you get instant answers until you change one variable and whisper 'cache invalidation' like a curse."
@@ -1409,13 +1425,11 @@ Here are real performance metrics from our comprehensive benchmark suite on an M
 
 ```typescript
 // This executes in ~0.005ms on average
-const userTask = task({
-  id: "user.create",
-  middleware: [auth, logging, metrics],
-  run: async (userData) => {
-    return database.users.create(userData);
-  },
-});
+const userTask = r
+  .task("user.create")
+  .middleware([auth, logging, metrics])
+  .run(async ({ input }) => database.users.create(input as any))
+  .build();
 
 // 1000 executions = ~5ms total time
 for (let i = 0; i < 1000; i++) {
@@ -1444,37 +1458,41 @@ for (let i = 0; i < 1000; i++) {
 **Middleware Ordering**: Place faster middleware first
 
 ```typescript
-const task = task({
+const task = r
+  .task("app.performance.example")
   middleware: [
     fastAuthCheck, // ~0.1ms
     slowRateLimiting, // ~2ms
     expensiveLogging, // ~5ms
   ],
-});
+  .run(async () => null)
+  .build();
 ```
 
 **Resource Reuse**: Resources are singletons—perfect for expensive setup
 
 ```typescript
-const database = resource({
-  init: async () => {
+const database = r
+  .resource("app.performance.db")
+  .init(async () => {
     // Expensive connection setup happens once
     const connection = await createDbConnection();
     return connection;
-  },
-});
+  })
+  .build();
 ```
 
 **Cache Strategically**: Use built-in caching for expensive operations
 
 ```typescript
-const expensiveTask = task({
-  middleware: [globals.middleware.cache.with({ ttl: 60000 })],
-  run: async (input) => {
+const expensiveTask = r
+  .task("app.performance.expensive")
+  .middleware([globals.middleware.cache.with({ ttl: 60000 })])
+  .run(async ({ input }) => {
     // This expensive computation is cached
     return performExpensiveCalculation(input);
-  },
-});
+  })
+  .build();
 ```
 
 #### Memory Considerations
@@ -1536,25 +1554,22 @@ For when things go wrong, but you know they'll probably work if you just try aga
 ```typescript
 import { globals } from "@bluelibs/runner";
 
-const flakyApiCall = task({
-  id: "app.tasks.flakyApiCall",
-  middleware: [
+const flakyApiCall = r
+  .task("app.tasks.flakyApiCall")
+  .middleware([
     globals.middleware.task.retry.with({
       retries: 5, // Try up to 5 times
       delayStrategy: (attempt) => 100 * Math.pow(2, attempt), // Exponential backoff
       stopRetryIf: (error) => error.message === "Invalid credentials", // Don't retry auth errors
     }),
-  ],
-  run: async () => {
+  ])
+  .run(async () => {
     // This might fail due to network issues, rate limiting, etc.
     return await fetchFromUnreliableService();
-  },
-});
+  })
+  .build();
 
-const app = resource({
-  id: "app",
-  register: [flakyApiCall],
-});
+const app = r.resource("app").register([flakyApiCall]).build();
 ```
 
 The retry middleware can be configured with:
@@ -1573,22 +1588,22 @@ timeout. Works for resources and tasks.
 ```typescript
 import { globals } from "@bluelibs/runner";
 
-const apiTask = task({
-  id: "app.tasks.externalApi",
-  middleware: [
+const apiTask = r
+  .task("app.tasks.externalApi")
+  .middleware([
     // Works for tasks and resources via globals.middleware.resource.timeout
     globals.middleware.task.timeout.with({ ttl: 5000 }), // 5 second timeout
-  ],
-  run: async () => {
+  ])
+  .run(async () => {
     // This operation will be aborted if it takes longer than 5 seconds
     return await fetch("https://slow-api.example.com/data");
-  },
-});
+  })
+  .build();
 
 // Combine with retry for robust error handling
-const resilientTask = task({
-  id: "app.tasks.resilient",
-  middleware: [
+const resilientTask = r
+  .task("app.tasks.resilient")
+  .middleware([
     // Order matters here. Imagine a big onion.
     // Works for resources as well via globals.middleware.resource.retry
     globals.middleware.task.retry.with({
@@ -1596,12 +1611,12 @@ const resilientTask = task({
       delayStrategy: (attempt) => 1000 * attempt, // 1s, 2s, 3s delays
     }),
     globals.middleware.task.timeout.with({ ttl: 10000 }), // 10 second timeout per attempt
-  ],
-  run: async () => {
+  ])
+  .run(async () => {
     // Each retry attempt gets its own 10-second timeout
     return await unreliableOperation();
-  },
-});
+  })
+  .build();
 ```
 
 How it works:
@@ -1630,14 +1645,12 @@ BlueLibs Runner comes with a built-in logging system that's structured, and does
 ### Basic Logging
 
 ```ts
-import { resource, globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
-const app = resource({
-  id: "app",
-  dependencies: {
-    logger: globals.resources.logger;
-  },
-  init: async () => {
+const app = r
+  .resource("app")
+  .dependencies({ logger: globals.resources.logger })
+  .init(async (_config, { logger }) => {
     logger.info("Starting business process"); // ✅ Visible by default
     logger.warn("This might take a while"); // ✅ Visible by default
     logger.error("Oops, something went wrong", {
@@ -1654,9 +1667,9 @@ const app = resource({
     logger.onLog(async (log) => {
       // Sub-loggers instantiated .with() share the same log listeners.
       // Catch logs
-    })
-  },
-})
+    });
+  })
+  .build();
 
 run(app, {
   logs: {
@@ -1695,10 +1708,10 @@ logger.critical("DEFCON 1: Everything is broken");
 The logger accepts rich, structured data that makes debugging actually useful:
 
 ```typescript
-const userTask = task({
-  id: "app.tasks.user.create",
-  dependencies: { logger: globals.resources.logger },
-  run: async (userData, { logger }) => {
+const userTask = r
+  .task("app.tasks.user.create")
+  .dependencies({ logger: globals.resources.logger })
+  .run(async ({ input }, { logger }) => {
     // Basic message
     logger.info("Creating new user");
 
@@ -1706,7 +1719,7 @@ const userTask = task({
     logger.info("User creation attempt", {
       source: userTask.id,
       data: {
-        email: userData.email,
+        email: (input as any).email,
         registrationSource: "web",
         timestamp: new Date().toISOString(),
       },
@@ -1714,7 +1727,7 @@ const userTask = task({
 
     // With error information
     try {
-      const user = await createUser(userData);
+      const user = await createUser(input as any);
       logger.info("User created successfully", {
         data: { userId: user.id, email: user.email },
       });
@@ -1722,13 +1735,13 @@ const userTask = task({
       logger.error("User creation failed", {
         error,
         data: {
-          attemptedEmail: userData.email,
+          attemptedEmail: (input as any).email,
           validationErrors: error.validationErrors,
         },
       });
     }
-  },
-});
+  })
+  .build();
 ```
 
 ### Context-Aware Logging
@@ -1740,10 +1753,10 @@ const RequestContext = createContext<{ requestId: string; userId: string }>(
   "app.requestContext",
 );
 
-const requestHandler = task({
-  id: "app.tasks.handleRequest",
-  dependencies: { logger: globals.resources.logger },
-  run: async (requestData, { logger }) => {
+const requestHandler = r
+  .task("app.tasks.handleRequest")
+  .dependencies({ logger: globals.resources.logger })
+  .run(async ({ input: requestData }, { logger }) => {
     const request = RequestContext.use();
 
     // Create a contextual logger with bound metadata with source and context
@@ -1769,8 +1782,8 @@ const requestHandler = task({
       error: new Error("Invalid input"),
       data: { stage: "validation" },
     });
-  },
-});
+  })
+  .build();
 ```
 
 ### Integration with Winston
@@ -1779,7 +1792,7 @@ Want to use Winston as your transport? No problem - integrate it seamlessly:
 
 ```typescript
 import winston from "winston";
-import { resource, globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
 // Create Winston logger, put it in a resource if used from various places.
 const winstonLogger = winston.createLogger({
@@ -1799,12 +1812,10 @@ const winstonLogger = winston.createLogger({
 });
 
 // Bridge BlueLibs logs to Winston using hooks
-const winstonBridgeResource = resource({
-  id: "app.resources.winstonBridge",
-  dependencies: {
-    logger: globals.resources.logger,
-  },
-  init: async (_, { logger }) => {
+const winstonBridgeResource = r
+  .resource("app.resources.winstonBridge")
+  .dependencies({ logger: globals.resources.logger })
+  .init(async (_config, { logger }) => {
     // Map log levels (BlueLibs -> Winston)
     const levelMapping = {
       trace: "silly",
@@ -1828,8 +1839,8 @@ const winstonBridgeResource = resource({
       const winstonLevel = levelMapping[log.level] || "info";
       winstonLogger.log(winstonLevel, log.message, winstonMeta);
     });
-  },
-});
+  })
+  .build();
 ```
 
 ### Custom Log Formatters
@@ -1859,13 +1870,11 @@ class JSONLogger extends Logger {
 }
 
 // Custom logger resource
-const customLogger = resource({
-  id: "app.logger.custom",
-  dependencies: { eventManager: globals.resources.eventManager },
-  init: async (_, { eventManager }) => {
-    return new JSONLogger(eventManager);
-  },
-});
+const customLogger = r
+  .resource("app.logger.custom")
+  .dependencies({ eventManager: globals.resources.eventManager })
+  .init(async (_config, { eventManager }) => new JSONLogger(eventManager))
+  .build();
 
 // Or you could simply add it as "globals.resources.logger" and override the default logger
 ```
@@ -1926,9 +1935,9 @@ run(app, { debug: "verbose" });
 **Custom Configuration**:
 
 ```typescript
-const app = resource({
-  id: "app",
-  register: [
+const app = r
+  .resource("app")
+  .register([
     globals.resources.debug.with({
       logTaskInput: true,
       logTaskResult: false,
@@ -1939,8 +1948,8 @@ const app = resource({
       // Hook/middleware lifecycle visibility is available via interceptors
       // ... other fine-grained options
     }),
-  ],
-});
+  ])
+  .build();
 ```
 
 ### Per-Component Debug Configuration
@@ -1950,20 +1959,20 @@ Use debug tags to configure debugging on individual components, when you're inte
 ```typescript
 import { globals } from "@bluelibs/runner";
 
-const criticalTask = task({
-  id: "app.tasks.critical",
-  tags: [
+const criticalTask = r
+  .task("app.tasks.critical")
+  .tags([
     globals.tags.debug.with({
       logTaskInput: true,
       logTaskResult: true,
       logTaskOnError: true,
     }),
-  ],
-  run: async (input) => {
+  ])
+  .run(async ({ input }) => {
     // This task will have verbose debug logging
-    return await processPayment(input);
-  },
-});
+    return await processPayment(input as any);
+  })
+  .build();
 ```
 
 ### Integration with Run Options
@@ -2079,35 +2088,35 @@ interface IMeta {
 ### Simple Documentation Example
 
 ```typescript
-const userService = resource({
-  id: "app.services.user",
-  meta: {
+const userService = r
+  .resource("app.services.user")
+  .meta({
     title: "User Management Service",
     description:
       "Handles user creation, authentication, and profile management",
-  },
-  dependencies: { database },
-  init: async (_, { database }) => ({
+  })
+  .dependencies({ database })
+  .init(async (_config, { database }) => ({
     createUser: async (userData) => {
       /* ... */
     },
     authenticateUser: async (credentials) => {
       /* ... */
     },
-  }),
-});
+  }))
+  .build();
 
-const sendWelcomeEmail = task({
-  id: "app.tasks.sendWelcomeEmail",
-  meta: {
+const sendWelcomeEmail = r
+  .task("app.tasks.sendWelcomeEmail")
+  .meta({
     title: "Send Welcome Email",
     description: "Sends a welcome email to newly registered users",
-  },
-  dependencies: { emailService },
-  run: async (userData, { emailService }) => {
+  } as any)
+  .dependencies({ emailService })
+  .run(async ({ input: userData }, { emailService }) => {
     // Email sending logic
-  },
-});
+  })
+  .build();
 ```
 
 ### Extending Metadata: Custom Properties
@@ -2133,31 +2142,31 @@ declare module "@bluelibs/runner" {
 }
 
 // Now use your custom properties
-const expensiveApiTask = task({
-  id: "app.tasks.ai.generateImage",
-  meta: {
+const expensiveApiTask = r
+  .task("app.tasks.ai.generateImage")
+  .meta({
     title: "AI Image Generation",
     description: "Uses OpenAI DALL-E to generate images from text prompts",
     author: "AI Team",
     version: "2.1.0",
     apiVersion: "v2",
     costLevel: "high", // Custom property!
-  },
-  run: async (prompt) => {
+  } as any)
+  .run(async ({ input: prompt }) => {
     // AI generation logic
-  },
-});
+  })
+  .build();
 
-const database = resource({
-  id: "app.database.primary",
-  meta: {
+const database = r
+  .resource("app.database.primary")
+  .meta({
     title: "Primary PostgreSQL Database",
     healthCheck: "/health/db", // Custom property!
     dependencies: ["postgresql", "connection-pool"],
     scalingPolicy: "auto",
-  },
-  // ... implementation
-});
+  } as any)
+  // .init(async () => { /* ... */ })
+  .build();
 ```
 
 Metadata transforms your components from anonymous functions into self-documenting, discoverable, and controllable building blocks. Use it wisely, and your future self (and your team) will thank you.
@@ -2171,10 +2180,10 @@ Sometimes you need to replace a component entirely. Maybe you're doing integrati
 You can now use a dedicated helper `override()` to safely override any property on tasks, resources, or middleware — except `id`. This ensures the identity is preserved, while allowing behavior changes.
 
 ```typescript
-const productionEmailer = resource({
-  id: "app.emailer",
-  init: async () => new SMTPEmailer(),
-});
+const productionEmailer = r
+  .resource("app.emailer")
+  .init(async () => new SMTPEmailer())
+  .build();
 
 // Option 1: Using override() to change behavior while preserving id (Recommended)
 const testEmailer = override(productionEmailer, {
@@ -2183,27 +2192,33 @@ const testEmailer = override(productionEmailer, {
 
 // Option 2: The system is really flexible, and override is just bringing in type safety, nothing else under the hood.
 // Using spread operator works the same way but does not provide type-safety.
-const testEmailer = resource({
-  ...productionEmailer,
-  init: async () => {},
-});
+const testEmailer = r
+  .resource("app.emailer")
+  .init(async () => ({} as any))
+  .build();
 
-const app = resource({
-  id: "app",
-  register: [productionEmailer],
-  overrides: [testEmailer], // This replaces the production version
-});
+const app = r
+  .resource("app")
+  .register([productionEmailer])
+  .overrides([testEmailer]) // This replaces the production version
+  .build();
 
 import { override } from "@bluelibs/runner";
 
 // Tasks
-const originalTask = task({ id: "app.tasks.compute", run: async () => 1 });
+const originalTask = r
+  .task("app.tasks.compute")
+  .run(async () => 1)
+  .build();
 const overriddenTask = override(originalTask, {
   run: async () => 2,
 });
 
 // Resources
-const originalResource = resource({ id: "app.db", init: async () => "conn" });
+const originalResource = r
+  .resource("app.db")
+  .init(async () => "conn")
+  .build();
 const overriddenResource = override(originalResource, {
   init: async () => "mock-conn",
 });
@@ -2269,10 +2284,10 @@ function namespaced(id: string) {
   return `mycompany.myapp.${id}`;
 }
 
-const userTask = task({
-  id: namespaced("tasks.user.create-user"),
-  // ...
-});
+const userTask = r
+  .task(namespaced("tasks.user.create-user"))
+  .run(async () => null)
+  .build();
 ```
 
 > **runtime:** "Naming conventions: aromatherapy for chaos. Lovely lavender labels on a single giant map I maintain anyway. But truly—keep the IDs tidy. Future‑you deserves at least this mercy."
@@ -2285,26 +2300,24 @@ To keep things dead simple, we avoided poluting the D.I. with this concept. Ther
 // Assume MyClass is defined elsewhere
 // class MyClass { constructor(input: any, option: string) { ... } }
 
-const myFactory = resource({
-  id: "app.factories.myFactory",
-  init: async (config: { someOption: string }) => {
+const myFactory = r
+  .resource("app.factories.myFactory")
+  .init(async (config: { someOption: string }) => {
     // This resource's value is a factory function
-    return (input: any) => {
-      return new MyClass(input, config.someOption);
-    };
-  },
-});
+    return (input: any) => new MyClass(input, config.someOption);
+  })
+  .build();
 
-const app = resource({
-  id: "app",
+const app = r
+  .resource("app")
   // Configure the factory resource upon registration
-  register: [myFactory.with({ someOption: "configured-value" })],
-  dependencies: { myFactory },
-  init: async (_, { myFactory }) => {
+  .register([myFactory.with({ someOption: "configured-value" })])
+  .dependencies({ myFactory })
+  .init(async (_config, { myFactory }) => {
     // `myFactory` is now the configured factory function
     const instance = myFactory({ someInput: "hello" });
-  },
-});
+  })
+  .build();
 ```
 
 > **runtime:** "Factory by resource by function by class. A nesting doll of indirection so artisanal it has a Patreon. Not pollution—boutique smog. I will still call the constructor."
@@ -2342,20 +2355,20 @@ const userSchema = z.object({
   age: z.number().min(0).max(150),
 });
 
-const createUserTask = task({
-  id: "app.tasks.createUser",
-  inputSchema: userSchema, // Works directly with Zod!
-  run: async (userData) => {
+const createUserTask = r
+  .task("app.tasks.createUser")
+  .inputSchema(userSchema) // Works directly with Zod!
+  .run(async ({ input: userData }) => {
     // userData is validated and properly typed
-    return { id: "user-123", ...userData };
-  },
-});
+    return { id: "user-123", ...(userData as any) };
+  })
+  .build();
 
-const app = resource({
-  id: "app",
-  register: [createUserTask],
-  dependencies: { createUserTask },
-  init: async (_, { createUserTask }) => {
+const app = r
+  .resource("app")
+  .register([createUserTask])
+  .dependencies({ createUserTask })
+  .init(async (_config, { createUserTask }) => {
     // This works - valid input
     const user = await createUserTask({
       name: "John Doe",
@@ -2374,8 +2387,8 @@ const app = resource({
       console.log(error.message);
       // "Task input validation failed for app.tasks.createUser: ..."
     }
-  },
-});
+  })
+  .build();
 ```
 
 ### Resource Config Validation
@@ -2390,10 +2403,10 @@ const databaseConfigSchema = z.object({
   ssl: z.boolean().default(false), // Optional with default
 });
 
-const databaseResource = resource({
-  id: "app.resources.database",
-  configSchema: databaseConfigSchema, // Validation on .with()
-  init: async (config) => {
+const databaseResource = r
+  .resource("app.resources.database")
+  .configSchema(databaseConfigSchema) // Validation on .with()
+  .init(async (config) => {
     // config is already validated and has proper types
     return createConnection({
       host: config.host,
@@ -2401,8 +2414,8 @@ const databaseResource = resource({
       database: config.database,
       ssl: config.ssl,
     });
-  },
-});
+  })
+  .build();
 
 // Validation happens here, not during init!
 try {
@@ -2415,17 +2428,17 @@ try {
   // "Resource config validation failed for app.resources.database: ..."
 }
 
-const app = resource({
-  id: "app",
-  register: [
+const app = r
+  .resource("app")
+  .register([
     databaseResource.with({
       host: "localhost",
       port: 5432,
       database: "myapp",
       // ssl defaults to false
     }),
-  ],
-});
+  ])
+  .build();
 ```
 
 ### Event Payload Validation
@@ -2439,25 +2452,25 @@ const userActionSchema = z.object({
   timestamp: z.date().default(() => new Date()),
 });
 
-const userActionEvent = event({
-  id: "app.events.userAction",
-  payloadSchema: userActionSchema, // Validates on emit
-});
+const userActionEvent = r
+  .event("app.events.userAction")
+  .payloadSchema(userActionSchema) // Validates on emit
+  .build();
 
-const notificationHook = hook({
-  id: "app.tasks.sendNotification",
-  on: userActionEvent,
-  run: async (eventData) => {
+const notificationHook = r
+  .hook("app.tasks.sendNotification")
+  .on(userActionEvent)
+  .run(async (eventData) => {
     // eventData.data is validated and properly typed
     console.log(`User ${eventData.data.userId} was ${eventData.data.action}`);
-  },
-});
+  })
+  .build();
 
-const app = resource({
-  id: "app",
-  register: [userActionEvent, notificationHook],
-  dependencies: { userActionEvent },
-  init: async (_, { userActionEvent }) => {
+const app = r
+  .resource("app")
+  .register([userActionEvent, notificationHook])
+  .dependencies({ userActionEvent })
+  .init(async (_config, { userActionEvent }) => {
     // This works - valid payload
     await userActionEvent({
       userId: "123e4567-e89b-12d3-a456-426614174000",
@@ -2473,8 +2486,8 @@ const app = resource({
     } catch (error) {
       // "Event payload validation failed for app.events.userAction: ..."
     }
-  },
-});
+  })
+  .build();
 ```
 
 ### Middleware Config Validation
@@ -2488,10 +2501,10 @@ const timingConfigSchema = z.object({
   logSuccessful: z.boolean().default(true),
 });
 
-const timingMiddleware = taskMiddleware({ // or resourceMiddleware()
-  id: "app.middleware.timing",
-  configSchema: timingConfigSchema, // Validation on .with()
-  run: async ({ next }, _, config) => {
+const timingMiddleware = r.middleware
+  .task("app.middleware.timing") // or r.middleware.resource("...")
+  .configSchema(timingConfigSchema) // Validation on .with()
+  .run(async ({ next }, _, config) => {
     const start = Date.now();
     try {
       const result = await next();
@@ -2505,8 +2518,8 @@ const timingMiddleware = taskMiddleware({ // or resourceMiddleware()
       console.log(`Operation failed after ${duration}ms`);
       throw error;
     }
-  },
-});
+  })
+  .build();
 
 // Validation happens here, not during execution!
 try {
@@ -2518,17 +2531,17 @@ try {
   // "Middleware config validation failed for app.middleware.timing: ..."
 }
 
-const myTask = task({
-  id: "app.tasks.example",
-  middleware: [
+const myTask = r
+  .task("app.tasks.example")
+  .middleware([
     timingMiddleware.with({
       timeout: 5000,
       logLevel: "debug",
       logSuccessful: true,
     }),
-  ],
-  run: async () => "success",
-});
+  ])
+  .run(async () => "success")
+  .build();
 ```
 
 #### Advanced Validation Features
@@ -2548,15 +2561,15 @@ const advancedSchema = z
     path: ["amount"],
   });
 
-const paymentTask = task({
-  id: "app.tasks.payment",
-  inputSchema: advancedSchema,
-  run: async (payment) => {
+const paymentTask = r
+  .task("app.tasks.payment")
+  .inputSchema(advancedSchema)
+  .run(async ({ input: payment }) => {
     // payment.amount is now a number (transformed from string)
     // All validations have passed
     return processPayment(payment);
-  },
-});
+  })
+  .build();
 ```
 
 ### Error Handling
@@ -2643,13 +2656,14 @@ const userSchema = z.object({
 
 type UserData = z.infer<typeof userSchema>;
 
-const createUser = task({
-  inputSchema: userSchema,
-  run: async (input: UserData) => {
+const createUser = r
+  .task("app.tasks.createUser.zod")
+  .inputSchema(userSchema)
+  .run(async ({ input }: { input: UserData }) => {
     // Both runtime validation AND compile-time typing
     return { id: "user-123", ...input };
-  },
-});
+  })
+  .build();
 ```
 
 > **runtime:** "Validation: you hand me a velvet rope and a clipboard. 'Name? Email? Age within bounds?' I stamp passports or eject violators with a `ValidationError`. Dress code is types, darling."
@@ -2661,18 +2675,18 @@ We expose the internal services for advanced use cases (but try not to use them 
 ```typescript
 import { globals } from "@bluelibs/runner";
 
-const advancedTask = task({
-  id: "app.advanced",
-  dependencies: {
+const advancedTask = r
+  .task("app.advanced")
+  .dependencies({
     store: globals.resources.store,
     taskRunner: globals.resources.taskRunner,
     eventManager: globals.resources.eventManager,
-  },
-  run: async (_, { store, taskRunner, eventManager }) => {
+  })
+  .run(async (_param, { store, taskRunner, eventManager }) => {
     // Direct access to the framework internals
     // (Use with caution!)
-  },
-});
+  })
+  .build();
 ```
 
 ### Dynamic Dependencies
@@ -2681,37 +2695,36 @@ Dependencies can be defined in two ways - as a static object or as a function th
 
 ```typescript
 // Static dependencies (most common)
-const userService = resource({
-  id: "app.services.user",
-  dependencies: { database, logger }, // Object - evaluated immediately
-  init: async (_, { database, logger }) => {
+const userService = r
+  .resource("app.services.user")
+  .dependencies({ database, logger }) // Object - evaluated immediately
+  .init(async (_config, { database, logger }) => {
     // Dependencies are available here
-  },
-});
+  })
+  .build();
 
 // Dynamic dependencies (for circular references or conditional dependencies)
-const advancedService = resource({
-  id: "app.services.advanced",
+const advancedService = r
+  .resource("app.services.advanced")
   // A function gives you the chance
-  dependencies: (config) => ({
-    // Config is what you receive when you register tise resource with .with()
+  .dependencies((_config) => ({
+    // Config is what you receive when you register this resource with .with()
     // So you can have conditional dependencies based on resource configuration as well.
     database,
     logger,
     conditionalService:
       process.env.NODE_ENV === "production" ? serviceA : serviceB,
-  }), // Function - evaluated when needed
-  register: (config: ConfigType) => [
-    // Config is what you receive when you register the resource with .with()
+  })) // Function - evaluated when needed
+  .register((_config: ConfigType) => [
     // Register dependencies dynamically
     process.env.NODE_ENV === "production"
       ? serviceA.with({ config: "value" })
       : serviceB.with({ config: "value" }),
-  ],
-  init: async (_, { database, logger, conditionalService }) => {
+  ])
+  .init(async (_config, { database, logger, conditionalService }) => {
     // Same interface, different evaluation timing
-  },
-});
+  })
+  .build();
 ```
 
 The function pattern essentially gives you "just-in-time" dependency resolution instead of "eager" dependency resolution, which provides more flexibility and better handles complex dependency scenarios that arise in real-world applications.
@@ -2828,26 +2841,26 @@ import {
 } from "@bluelibs/runner";
 
 // Configuration
-const config = resource({
-  id: "app.config",
-  init: async () => ({
+const config = r
+  .resource("app.config")
+  .init(async () => ({
     port: parseInt(process.env.PORT || "3000"),
     databaseUrl: process.env.DATABASE_URL!,
     jwtSecret: process.env.JWT_SECRET!,
-  }),
-});
+  }))
+  .build();
 
 // Database
-const database = resource({
-  id: "app.database",
-  dependencies: { config },
-  init: async (_, { config }) => {
+const database = r
+  .resource("app.database")
+  .dependencies({ config })
+  .init(async (_config, { config }) => {
     const client = new MongoClient(config.databaseUrl);
     await client.connect();
     return client;
-  },
-  dispose: async (client) => await client.close(),
-});
+  })
+  .dispose(async (client) => await client.close())
+  .build();
 
 // Context for request data
 const RequestContext = createContext<{ userId?: string; role?: string }>(
@@ -2855,78 +2868,70 @@ const RequestContext = createContext<{ userId?: string; role?: string }>(
 );
 
 // Events
-const userRegistered = event<{ userId: string; email: string }>({
-  id: "app.events.userRegistered",
-});
+const userRegistered = r
+  .event("app.events.userRegistered")
+  .payloadSchema<{ userId: string; email: string }>({ parse: (v) => v })
+  .build();
 
 // Middleware
-const authMiddleware = taskMiddleware<{ requiredRole?: string }>({
-  id: "app.middleware.task.auth",
-  run: async ({ task, next }, deps, config) => {
+const authMiddleware = r.middleware
+  .task("app.middleware.task.auth")
+  .run(async ({ task, next }, deps, config?: { requiredRole?: string }) => {
     const context = RequestContext.use();
     if (config?.requiredRole && context.role !== config.requiredRole) {
       throw new Error("Insufficient permissions");
     }
     return next(task.input);
-  },
-});
+  })
+  .build();
 
 // Services
-const userService = resource({
-  id: "app.services.user",
-  dependencies: { database },
-  init: async (_, { database }) => ({
+const userService = r
+  .resource("app.services.user")
+  .dependencies({ database })
+  .init(async (_config, { database }) => ({
     async createUser(userData: { name: string; email: string }) {
       const users = database.collection("users");
       const result = await users.insertOne(userData);
       return { id: result.insertedId.toString(), ...userData };
     },
-  }),
-});
+  }))
+  .build();
 
 // Business Logic
-const registerUser = task({
-  id: "app.tasks.registerUser",
-  dependencies: { userService, userRegistered },
-  run: async (userData, { userService, userRegistered }) => {
+const registerUser = r
+  .task("app.tasks.registerUser")
+  .dependencies({ userService, userRegistered })
+  .run(async ({ input: userData }, { userService, userRegistered }) => {
     const user = await userService.createUser(userData);
     await userRegistered({ userId: user.id, email: user.email });
     return user;
-  },
-});
+  })
+  .build();
 
-const adminOnlyTask = task({
-  id: "app.tasks.adminOnly",
-  middleware: [authMiddleware.with({ requiredRole: "admin" })],
-  run: async () => {
-    return "Top secret admin data";
-  },
-});
+const adminOnlyTask = r
+  .task("app.tasks.adminOnly")
+  .middleware([authMiddleware.with({ requiredRole: "admin" })])
+  .run(async () => "Top secret admin data")
+  .build();
 
 // Event Handlers using hooks
-const sendWelcomeEmail = hook({
-  id: "app.hooks.sendWelcomeEmail",
-  on: userRegistered,
-  dependencies: { emailService },
-  run: async (event, { emailService }) => {
+const sendWelcomeEmail = r
+  .hook("app.hooks.sendWelcomeEmail")
+  .on(userRegistered)
+  .dependencies({ emailService })
+  .run(async (event, { emailService }) => {
     console.log(`Sending welcome email to ${event.data.email}`);
     await emailService.sendWelcome(event.data.email);
-  },
-});
+  })
+  .build();
 
 // Express server
-const server = resource({
-  id: "app.server",
-  register: [
-    config,
-    database,
-    userService,
-    registerUser,
-    adminOnlyTask,
-    sendWelcomeEmail,
-  ],
-  dependencies: { config, registerUser, adminOnlyTask },
-  init: async (_, { config, registerUser, adminOnlyTask }) => {
+const server = r
+  .resource("app.server")
+  .register([config, database, userService, registerUser, adminOnlyTask, sendWelcomeEmail])
+  .dependencies({ config, registerUser, adminOnlyTask })
+  .init(async (_config, { config, registerUser, adminOnlyTask }) => {
     const app = express();
     app.use(express.json());
 
@@ -3016,32 +3021,32 @@ This contains the classic `value` and `dispose()` but it also exposes `logger`, 
 Note: The default `printThreshold` inside tests is `null` not `info`. This is verified via `process.env.NODE_ENV === 'test'`, if you want to see the logs ensure you set it accordingly.
 
 ```typescript
-import { run, resource, task, event, override } from "@bluelibs/runner";
+import { run, r, override } from "@bluelibs/runner";
 
 // Your real app
-const app = resource({
-  id: "app",
-  register: [
+const app = r
+  .resource("app")
+  .register([
     /* tasks, resources, middleware */
-  ],
-});
+  ])
+  .build();
 
 // Optional: overrides for infra (hello, fast tests!)
-const testDb = resource({
-  id: "app.database",
-  init: async () => new InMemoryDb(),
-});
+const testDb = r
+  .resource("app.database")
+  .init(async () => new InMemoryDb())
+  .build();
 // If you use with override() it will enforce the same interface upon the overriden resource to ensure typesafety
 const mockMailer = override(realMailer, { init: async () => fakeMailer });
 
 // Create the test harness
-const harness = resource({
-  id: "test",
-  overrides: [mockMailer, testDb],
-});
+const harness = r.resource("test").overrides([mockMailer, testDb]).build();
 
 // A task you want to drive in your tests
-const registerUser = task({ id: "app.tasks.registerUser" /* ... */ });
+const registerUser = r
+  .task("app.tasks.registerUser")
+  .run(async () => ({}))
+  .build();
 
 // Boom: full ecosystem
 const { value: t, dispose } = await run(harness);

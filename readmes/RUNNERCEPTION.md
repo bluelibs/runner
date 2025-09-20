@@ -19,24 +19,24 @@ Sometimes you want an isolated dependency graph that lives inside a single resou
 ### Example: Per‑tenant private container
 
 ```ts
-import { resource, run, task } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 
 // --- Inner graph (private sub‑system) ---
-const greet = task({
-  id: "tenant.tasks.greet",
-  run: async (input: { name: string }) => `Hello, ${input.name}!`,
-});
+const greet = r
+  .task("tenant.tasks.greet")
+  .run(async ({ input }: { input: { name: string } }) => `Hello, ${input.name}!`)
+  .build();
 
-const tenantApp = resource({
-  id: "tenant.app",
-  register: [greet],
-  init: async () => ({ ready: true }),
-});
+const tenantApp = r
+  .resource("tenant.app")
+  .register([greet])
+  .init(async () => ({ ready: true }))
+  .build();
 
 // --- Outer resource that owns a private runner per tenant ---
-export const tenantContainer = resource({
-  id: "app.resources.tenantContainer",
-  init: async (config: { tenantId: string }) => {
+export const tenantContainer = r
+  .resource("app.resources.tenantContainer")
+  .init(async (config: { tenantId: string }) => {
     // Start a private container with its own debug/logging/overrides
     const inner = await run(tenantApp, {
       debug: "normal",
@@ -52,21 +52,21 @@ export const tenantContainer = resource({
       getInner: () => inner, // give full access only if you trust the caller
       disposeInner: () => inner.dispose(),
     };
-  },
-  dispose: async (facade) => {
+  })
+  .dispose(async (facade) => {
     // Ensure the inner container is fully disposed
     await facade.disposeInner();
-  },
-});
+  })
+  .build();
 
 // Usage in another task/resource
-export const welcome = task({
-  id: "app.tasks.welcome",
-  dependencies: { tenant: tenantContainer },
-  run: async (input: { name: string }, { tenant }) => {
+export const welcome = r
+  .task("app.tasks.welcome")
+  .dependencies({ tenant: tenantContainer })
+  .run(async ({ input }: { input: { name: string } }, { tenant }) => {
     return tenant.greet(input.name);
-  },
-});
+  })
+  .build();
 ```
 
 ### Example: Private adapters and policies
@@ -74,40 +74,37 @@ export const welcome = task({
 Give the inner container its own middleware, tags, and overrides without affecting the global graph.
 
 ```ts
-import { resource, run, task, globals, taskMiddleware } from "@bluelibs/runner";
+import { r, run, globals } from "@bluelibs/runner";
 
-const audit = taskMiddleware({
-  id: "tenant.middleware.audit",
-  run: async ({ task, next }) => {
+const audit = r.middleware
+  .task("tenant.middleware.audit")
+  .run(async ({ task, next }) => {
     const startedAt = Date.now();
     const result = await next(task.input);
     const tookMs = Date.now() - startedAt;
     // Ship audit logs somewhere tenant‑specific
     return result;
-  },
-});
+  })
+  .build();
 
-const expensive = task({
-  id: "tenant.tasks.expensive",
-  middleware: [
+const expensive = r
+  .task("tenant.tasks.expensive")
+  .middleware([
     globals.middleware.retry.with({ retries: 2 }),
     globals.middleware.timeout.with({ ttl: 5000 }),
     audit,
-  ],
-  run: async () => {
+  ])
+  .run(async () => {
     /* ... */
     return "ok";
-  },
-});
+  })
+  .build();
 
-const innerRoot = resource({
-  id: "tenant.innerRoot",
-  register: [expensive],
-});
+const innerRoot = r.resource("tenant.innerRoot").register([expensive]).build();
 
-export const privateRunner = resource({
-  id: "app.resources.privateRunner",
-  init: async (cfg: { logs?: boolean }) => {
+export const privateRunner = r
+  .resource("app.resources.privateRunner")
+  .init(async (cfg: { logs?: boolean }) => {
     const inner = await run(innerRoot, {
       logs: { printThreshold: cfg.logs ? "info" : null },
     });
@@ -115,9 +112,9 @@ export const privateRunner = resource({
       run: inner.runTask,
       dispose: inner.dispose,
     };
-  },
-  dispose: async (api) => api.dispose(),
-});
+  })
+  .dispose(async (api) => api.dispose())
+  .build();
 ```
 
 ### Tips and caveats
