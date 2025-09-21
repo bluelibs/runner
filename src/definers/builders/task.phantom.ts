@@ -7,6 +7,7 @@ import type {
   IPhantomTask,
 } from "../../defs";
 import { defineTask } from "../defineTask";
+import { cloneState, mergeArray, mergeDepsNoConfig } from "./utils";
 
 type PhantomBuilderState<
   TInput,
@@ -58,72 +59,20 @@ function clone<
   TNextTags,
   TNextMiddleware
 > {
-  return Object.freeze({
-    ...(s as unknown as PhantomBuilderState<
+  return cloneState<
+    PhantomBuilderState<TInput, TResolved, TDeps, TMeta, TTags, TMiddleware>,
+    PhantomBuilderState<
       TNextInput,
       TNextResolved,
       TNextDeps,
       TNextMeta,
       TNextTags,
       TNextMiddleware
-    >),
-    ...patch,
-  }) as PhantomBuilderState<
-    TNextInput,
-    TNextResolved,
-    TNextDeps,
-    TNextMeta,
-    TNextTags,
-    TNextMiddleware
-  >;
+    >
+  >(s as any, patch as any);
 }
 
-function mergeArray<T>(
-  existing: ReadonlyArray<T> | undefined,
-  addition: ReadonlyArray<T>,
-  override: boolean,
-): T[] {
-  const toArray = [...addition];
-  if (override || !existing) {
-    return toArray as T[];
-  }
-  return [...existing, ...toArray] as T[];
-}
-
-function mergeDepsNoConfig<
-  TExisting extends DependencyMapType,
-  TNew extends DependencyMapType,
->(
-  existing: TExisting | (() => TExisting) | undefined,
-  addition: TNew | (() => TNew),
-  override: boolean,
-): (TExisting & TNew) | (() => TExisting & TNew) {
-  const isFnExisting = typeof existing === "function";
-  const isFnAddition = typeof addition === "function";
-
-  if (override || !existing) {
-    return (addition as any) as (TExisting & TNew) | (() => TExisting & TNew);
-  }
-
-  if (isFnExisting && isFnAddition) {
-    const e = existing as () => TExisting;
-    const a = addition as () => TNew;
-    return (() => ({ ...(e() as any), ...(a() as any) })) as any;
-  }
-  if (isFnExisting && !isFnAddition) {
-    const e = existing as () => TExisting;
-    const a = addition as TNew;
-    return (() => ({ ...(e() as any), ...(a as any) })) as any;
-  }
-  if (!isFnExisting && isFnAddition) {
-    const e = existing as TExisting;
-    const a = addition as () => TNew;
-    return (() => ({ ...(e as any), ...(a() as any) })) as any;
-  }
-  const e = existing as TExisting;
-  const a = addition as TNew;
-  return ({ ...(e as any), ...(a as any) }) as any;
-}
+// mergeArray and mergeDepsNoConfig imported from ./utils
 
 export interface PhantomTaskFluentBuilder<
   TInput = undefined,
@@ -418,4 +367,3 @@ export function phantomTaskBuilder<
   });
   return makePhantomTaskBuilder(initial);
 }
-
