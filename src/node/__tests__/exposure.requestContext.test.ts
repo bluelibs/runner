@@ -2,7 +2,9 @@ import * as http from "http";
 import { defineResource } from "../../define";
 import { run } from "../../run";
 import { defineTask } from "../../definers/defineTask";
-import { nodeExposure, useExposureContext } from "../index";
+import { nodeExposure, useExposureContext, hasExposureContext } from "../index";
+import { ExposureRequestContext } from "../exposure/requestContext";
+import { storage } from "../../context";
 
 describe("nodeExposure request context (raw-body)", () => {
   it("provides req/res via useExposureContext() and allows raw-body streaming when content-type is application/octet-stream", async () => {
@@ -62,6 +64,32 @@ describe("nodeExposure request context (raw-body)", () => {
     expect(out.result).toBe(body);
 
     await rr.dispose();
-  });
-});
+  });  // close the it block
 
+  describe("hasExposureContext", () => {
+    it("returns false when no context is available", () => {
+      expect(hasExposureContext()).toBe(false);
+    });
+
+    it("returns true when exposure context is provided", () => {
+      const provideFn = ExposureRequestContext.provide;
+      const testValue = {
+        req: {} as any,
+        res: {} as any,
+        url: new URL("http://example.com"),
+        basePath: "/",
+        headers: {},
+        method: "POST",
+        signal: new AbortController().signal,
+      };
+      const testFn = () => hasExposureContext();
+      expect(provideFn(testValue, testFn)).toBe(true);
+    });
+
+    it("returns false when store exists but no exposure context key", () => {
+      storage.run(new Map(), () => {
+        expect(hasExposureContext()).toBe(false);
+      });
+    });
+  });  // close hasExposureContext describe
+});  // close outer describe

@@ -54,7 +54,7 @@ describe("http-client", () => {
   });
 
   it("browser multipart uses FormData and onRequest sees auth header", async () => {
-    const blob = new Blob([Buffer.from("abc")], { type: "text/plain" });
+    const blob = new Blob([Buffer.from("abc") as any], { type: "text/plain" });
     const file = createWebFile(
       { name: "a.txt", type: "text/plain" },
       blob,
@@ -91,7 +91,7 @@ describe("http-client", () => {
   });
 
   it("browser multipart uses default filename when meta.name missing", async () => {
-    const blob = new Blob([Buffer.from("abc")], {
+    const blob = new Blob([Buffer.from("abc") as any], {
       type: "application/octet-stream",
     });
     // Intentionally pass meta without name to exercise default filename branch
@@ -119,7 +119,7 @@ describe("http-client", () => {
       { buffer: Buffer.from([1, 2]) },
       "N2",
     );
-    const webBlob = new Blob([Buffer.from("xyz")], {
+    const webBlob = new Blob([Buffer.from("xyz") as any], {
       type: "application/octet-stream",
     });
     const webSentinel = createWebFile({ name: "w.bin" }, webBlob, "W2");
@@ -162,7 +162,9 @@ describe("http-client", () => {
         getDefaultSerializer().stringify({ ok: true, result: "GUP" }),
     }));
     try {
-      const blob = new Blob([Buffer.from("abc")], { type: "text/plain" });
+      const blob = new Blob([Buffer.from("abc") as any], {
+        type: "text/plain",
+      });
       const file = createWebFile(
         { name: "a.txt", type: "text/plain" },
         blob,

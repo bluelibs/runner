@@ -2,7 +2,7 @@
 // Re-export the main API plus Node-only symbols
 export * from "../index";
 export { nodeExposure } from "./exposure.resource";
-export { useExposureContext } from "./exposure/requestContext";
+export { hasExposureContext, useExposureContext } from "./exposure/requestContext";
 export { createNodeFile } from "./files";
 // Important: avoid importing a path that ends with `.node`
 // as tsup's native-node-modules plugin treats it as a native addon.

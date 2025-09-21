@@ -111,6 +111,63 @@ describe("resource builder", () => {
     expect(app.meta).toEqual({ title: "X" });
   });
 
+  it("resource middleware appends by default and overrides when requested", () => {
+    const rmw1 = r.middleware
+      .resource("tests.builder.rm.append.1")
+      .run(async ({ next }) => next())
+      .build();
+    const rmw2 = r.middleware
+      .resource("tests.builder.rm.append.2")
+      .run(async ({ next }) => next())
+      .build();
+
+    const appended = r
+      .resource("tests.builder.app.mw.append")
+      .register([rmw1, rmw2])
+      .middleware([rmw1])
+      .middleware([rmw2])
+      .init(async () => Promise.resolve("OK"))
+      .build();
+
+    expect(appended.middleware.map((m) => m.id)).toEqual([
+      rmw1.id,
+      rmw2.id,
+    ]);
+
+    const overridden = r
+      .resource("tests.builder.app.mw.override")
+      .register([rmw1, rmw2])
+      .middleware([rmw1])
+      .middleware([rmw2], { override: true })
+      .init(async () => Promise.resolve("OK"))
+      .build();
+
+    expect(overridden.middleware.map((m) => m.id)).toEqual([rmw2.id]);
+  });
+
+  it("resource overrides append by default and overrides when requested", () => {
+    const a = resource({ id: "tests.builder.override.a", init: async () => 1 });
+    const b = resource({ id: "tests.builder.override.b", init: async () => 2 });
+
+    const appended = r
+      .resource("tests.builder.overrides.append")
+      .overrides([a])
+      .overrides([b])
+      .init(async () => Promise.resolve("OK"))
+      .build();
+
+    expect(appended.overrides.map((x: any) => x?.id)).toEqual([a.id, b.id]);
+
+    const overridden = r
+      .resource("tests.builder.overrides.override")
+      .overrides([a])
+      .overrides([b], { override: true })
+      .init(async () => Promise.resolve("OK"))
+      .build();
+
+    expect(overridden.overrides.map((x: any) => x?.id)).toEqual([b.id]);
+  });
+
   it("init propagates dependencies and context through the classic signature", async () => {
     const a = resource({ id: "tests.a2", init: async () => 5 });
     const app = r
@@ -266,5 +323,34 @@ describe("resource builder", () => {
       const ids = overridden.register().map((rSrc) => rSrc.id);
       expect(ids).toEqual([delta.id]);
     }
+  });
+
+  it("resource dependencies covers function+function and object+function branches", async () => {
+    const a = resource({ id: "tests.builder.resdeps.ff.a", init: async () => 10 });
+    const b = resource({ id: "tests.builder.resdeps.ff.b", init: async () => 20 });
+
+    // function + function
+    const res1 = r
+      .resource("tests.builder.resdeps.ff")
+      .register([a, b])
+      .dependencies(() => ({ a }))
+      .dependencies(() => ({ b }))
+      .init(async (_cfg, deps: { a: number; b: number }) => deps.a + deps.b)
+      .build();
+    const rr1 = await run(res1);
+    expect(rr1.value).toBe(30);
+    await rr1.dispose();
+
+    // object + function
+    const res2 = r
+      .resource("tests.builder.resdeps.of")
+      .register([a, b])
+      .dependencies({ a })
+      .dependencies(() => ({ b }))
+      .init(async (_cfg, deps: { a: number; b: number }) => deps.a + deps.b)
+      .build();
+    const rr2 = await run(res2);
+    expect(rr2.value).toBe(30);
+    await rr2.dispose();
   });
 });

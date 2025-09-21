@@ -117,10 +117,13 @@ function clone<
   >;
 }
 
-type ShouldReplaceConfig<T> = [T] extends [void] ? true : [T] extends [undefined] ? true : false;
-type ResolveConfig<TExisting, TProposed> = ShouldReplaceConfig<TExisting> extends true
-  ? TProposed
-  : TExisting;
+type ShouldReplaceConfig<T> = [T] extends [void]
+  ? true
+  : [T] extends [undefined]
+  ? true
+  : false;
+type ResolveConfig<TExisting, TProposed> =
+  ShouldReplaceConfig<TExisting> extends true ? TProposed : TExisting;
 
 type RegisterInput<TConfig> =
   | RegisterableItems
@@ -135,7 +138,6 @@ type RegisterState<TConfig> =
 function toRegisterArray(items: RegisterableItems | Array<RegisterableItems>) {
   return Array.isArray(items) ? [...items] : [items];
 }
-
 
 function normalizeRegisterFunction<TConfig>(
   fn: (config: TConfig) => RegisterableItems | Array<RegisterableItems>,
@@ -188,6 +190,65 @@ function mergeRegister<TConfig>(
   ];
 }
 
+function mergeArray<T>(
+  existing: ReadonlyArray<T> | undefined,
+  addition: ReadonlyArray<T>,
+  override: boolean,
+): T[] {
+  const toArray = [...addition];
+  if (override || !existing) {
+    return toArray as T[];
+  }
+  return [...existing, ...toArray] as T[];
+}
+
+function mergeDependencies<
+  TConfig,
+  TExisting extends DependencyMapType,
+  TNew extends DependencyMapType,
+>(
+  existing: TExisting | ((config: TConfig) => TExisting) | undefined,
+  addition: TNew | ((config: TConfig) => TNew),
+  override: boolean,
+): (TExisting & TNew) | ((config: TConfig) => TExisting & TNew) {
+  const isFnExisting = typeof existing === "function";
+  const isFnAddition = typeof addition === "function";
+
+  if (override || !existing) {
+    return addition as any as
+      | (TExisting & TNew)
+      | ((config: TConfig) => TExisting & TNew);
+  }
+
+  if (isFnExisting && isFnAddition) {
+    const e = existing as (config: TConfig) => TExisting;
+    const a = addition as (config: TConfig) => TNew;
+    return ((config: TConfig) => ({
+      ...(e(config) as any),
+      ...(a(config) as any),
+    })) as any;
+  }
+  if (isFnExisting && !isFnAddition) {
+    const e = existing as (config: TConfig) => TExisting;
+    const a = addition as TNew;
+    return ((config: TConfig) => ({
+      ...(e(config) as any),
+      ...(a as any),
+    })) as any;
+  }
+  if (!isFnExisting && isFnAddition) {
+    const e = existing as TExisting;
+    const a = addition as (config: TConfig) => TNew;
+    return ((config: TConfig) => ({
+      ...(e as any),
+      ...(a(config) as any),
+    })) as any;
+  }
+  const e = existing as TExisting;
+  const a = addition as TNew;
+  return { ...(e as any), ...(a as any) } as any;
+}
+
 export interface ResourceFluentBuilder<
   TConfig = void,
   TValue extends Promise<any> = Promise<any>,
@@ -198,8 +259,23 @@ export interface ResourceFluentBuilder<
   TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
 > {
   id: string;
+  // Append signature (default)
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: TConfig) => TNewDeps),
+    options?: { override?: false },
+  ): ResourceFluentBuilder<
+    TConfig,
+    TValue,
+    TDeps & TNewDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  // Override signature (replace)
+  dependencies<TNewDeps extends DependencyMapType>(
+    deps: TNewDeps | ((config: TConfig) => TNewDeps),
+    options: { override: true },
   ): ResourceFluentBuilder<
     TConfig,
     TValue,
@@ -226,6 +302,7 @@ export interface ResourceFluentBuilder<
   >;
   middleware<TNewMw extends ResourceMiddlewareAttachmentType[]>(
     mw: TNewMw,
+    options?: { override?: boolean },
   ): ResourceFluentBuilder<
     TConfig,
     TValue,
@@ -334,6 +411,7 @@ export interface ResourceFluentBuilder<
   >;
   overrides(
     o: Array<OverridableElements>,
+    options?: { override?: boolean },
   ): ResourceFluentBuilder<
     TConfig,
     TValue,
@@ -391,9 +469,14 @@ function makeResourceBuilder<
     TMiddleware
   > = {
     id: state.id,
-    dependencies<TNewDeps extends DependencyMapType>(
+    dependencies<
+      TNewDeps extends DependencyMapType,
+      TIsOverride extends boolean = false,
+    >(
       deps: TNewDeps | ((config: TConfig) => TNewDeps),
+      options?: { override?: TIsOverride },
     ) {
+      const override = options?.override ?? false;
       const next = clone<
         TConfig,
         TValue,
@@ -404,21 +487,38 @@ function makeResourceBuilder<
         TMiddleware,
         TConfig,
         TValue,
-        TNewDeps,
+        any,
         TContext,
         TMeta,
         TTags,
         TMiddleware
-      >(state, { dependencies: deps });
+      >(state, {
+        dependencies: mergeDependencies<TConfig, TDeps, TNewDeps>(
+          state.dependencies as any,
+          deps as any,
+          override,
+        ) as any,
+      });
+      if (override) {
+        return makeResourceBuilder<
+          TConfig,
+          TValue,
+          TNewDeps,
+          TContext,
+          TMeta,
+          TTags,
+          TMiddleware
+        >(next as any);
+      }
       return makeResourceBuilder<
         TConfig,
         TValue,
-        TNewDeps,
+        TDeps & TNewDeps,
         TContext,
         TMeta,
         TTags,
         TMiddleware
-      >(next);
+      >(next as any);
     },
     register(items, options) {
       const override = options?.override ?? false;
@@ -435,7 +535,11 @@ function makeResourceBuilder<
         TMiddleware
       >(next);
     },
-    middleware<TNewMw extends ResourceMiddlewareAttachmentType[]>(mw: TNewMw) {
+    middleware<TNewMw extends ResourceMiddlewareAttachmentType[]>(
+      mw: TNewMw,
+      options?: { override?: boolean },
+    ) {
+      const override = options?.override ?? false;
       const next = clone<
         TConfig,
         TValue,
@@ -451,7 +555,9 @@ function makeResourceBuilder<
         TMeta,
         TTags,
         TNewMw
-      >(state, { middleware: mw });
+      >(state, {
+        middleware: mergeArray(state.middleware, mw, override) as any,
+      });
       return makeResourceBuilder<
         TConfig,
         TValue,
@@ -660,8 +766,11 @@ function makeResourceBuilder<
         TMiddleware
       >(next);
     },
-    overrides(o: Array<OverridableElements>) {
-      const next = clone(state, { overrides: o });
+    overrides(o: Array<OverridableElements>, options?: { override?: boolean }) {
+      const override = options?.override ?? false;
+      const next = clone(state, {
+        overrides: mergeArray(state.overrides, o, override),
+      });
       return makeResourceBuilder<
         TConfig,
         TValue,

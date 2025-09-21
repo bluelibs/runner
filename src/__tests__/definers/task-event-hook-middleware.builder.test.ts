@@ -129,6 +129,250 @@ describe("task/event/hook/middleware builders", () => {
     await rr.dispose();
   });
 
+  it("task dependencies append by default and can override", async () => {
+    const a = resource({ id: "tests.builder.task.deps.a", init: async () => 2 });
+    const b = resource({ id: "tests.builder.task.deps.b", init: async () => 3 });
+
+    const t1 = r
+      .task("tests.builder.task.deps.append")
+      .dependencies(() => ({ a }))
+      .dependencies({ b })
+      .run(async (_: void, deps: { a: number; b: number }) => deps.a + deps.b)
+      .build();
+
+    const app1 = resource({ id: "tests.app.task.deps.append", register: [a, b, t1] });
+    const rr1 = await run(app1);
+    expect(await rr1.runTask(t1, undefined as any)).toBe(5);
+    await rr1.dispose();
+
+    const t2 = r
+      .task("tests.builder.task.deps.override")
+      .dependencies({ a })
+      .dependencies({ b }, { override: true })
+      .run(async (_: void, deps: { b: number }) => deps.b)
+      .build();
+    const app2 = resource({ id: "tests.app.task.deps.override", register: [a, b, t2] });
+    const rr2 = await run(app2);
+    expect(await rr2.runTask(t2, undefined as any)).toBe(3);
+    await rr2.dispose();
+  });
+
+  it("task dependencies function+function merge branch", async () => {
+    const a = resource({ id: "tests.builder.task.deps.ff.a", init: async () => 4 });
+    const b = resource({ id: "tests.builder.task.deps.ff.b", init: async () => 6 });
+
+    const t = r
+      .task("tests.builder.task.deps.ff")
+      .dependencies(() => ({ a }))
+      .dependencies(() => ({ b }))
+      .run(async (_: void, deps: { a: number; b: number }) => deps.a + deps.b)
+      .build();
+
+    const app = resource({ id: "tests.app.task.deps.ff", register: [a, b, t] });
+    const rr = await run(app);
+    expect(await rr.runTask(t, undefined as any)).toBe(10);
+    await rr.dispose();
+  });
+
+  it("hook dependencies function+function merge branch", async () => {
+    const ev = r.event("tests.builder.hook.deps.ff.ev").build();
+    const a = resource({ id: "tests.builder.hook.deps.ff.a", init: async () => 1 });
+    const b = resource({ id: "tests.builder.hook.deps.ff.b", init: async () => 2 });
+    const seen: number[] = [];
+    const hk = r
+      .hook("tests.builder.hook.deps.ff")
+      .on(ev)
+      .dependencies(() => ({ a }))
+      .dependencies(() => ({ b }))
+      .run(async (_event, deps: { a: number; b: number }) => {
+        seen.push(deps.a + deps.b);
+      })
+      .build();
+    const app = resource({ id: "tests.app.hook.deps.ff", register: [a, b, ev, hk] });
+    const rr = await run(app);
+    await rr.emitEvent(ev, undefined as any);
+    expect(seen).toEqual([3]);
+    await rr.dispose();
+  });
+
+  it("resource middleware dependencies object+function branch", () => {
+    const a = resource({ id: "tests.builder.rmw.deps.of.a", init: async () => 1 });
+    const b = resource({ id: "tests.builder.rmw.deps.of.b", init: async () => 2 });
+    const rmw = r.middleware
+      .resource("tests.builder.rmw.deps.of")
+      .dependencies({ a })
+      .dependencies(() => ({ b }))
+      .run(async ({ next }) => next())
+      .build();
+    const depsObj =
+      typeof rmw.dependencies === "function"
+        ? (rmw.dependencies as any)()
+        : rmw.dependencies;
+    expect(Object.keys(depsObj)).toEqual(["a", "b"]);
+  });
+
+  it("resource middleware dependencies function+object branch", () => {
+    const a = resource({ id: "tests.builder.rmw.deps.fo.a", init: async () => 1 });
+    const b = resource({ id: "tests.builder.rmw.deps.fo.b", init: async () => 2 });
+    const rmw = r.middleware
+      .resource("tests.builder.rmw.deps.fo")
+      .dependencies(() => ({ a }))
+      .dependencies({ b })
+      .run(async ({ next }) => next())
+      .build();
+    const depsObj =
+      typeof rmw.dependencies === "function"
+        ? (rmw.dependencies as any)()
+        : rmw.dependencies;
+    expect(Object.keys(depsObj)).toEqual(["a", "b"]);
+  });
+
+  it("hook and middleware dependencies append by default", async () => {
+    // Hook dependencies append
+    const ev = r.event("tests.builder.deps.event").build();
+    const a = resource({ id: "tests.builder.deps.hook.a", init: async () => 1 });
+    const b = resource({ id: "tests.builder.deps.hook.b", init: async () => 2 });
+    const calls: number[] = [];
+    const hk = r
+      .hook("tests.builder.deps.hook")
+      .on(ev)
+      .dependencies(() => ({ a }))
+      .dependencies({ b })
+      .run(async (_event, deps: { a: number; b: number }) => {
+        calls.push(deps.a + deps.b);
+      })
+      .build();
+
+    // Task middleware dependencies append (no need to run, just verify merge outcome shape)
+    const tmw = r.middleware
+      .task("tests.builder.deps.tmw")
+      .dependencies(() => ({ a }))
+      .dependencies({ b })
+      .run(async ({ next, task }, deps: { a: number; b: number }) => {
+        // use deps to ensure type coverage
+        if (deps.a + deps.b > -1) {
+          return next(task.input);
+        }
+        return next(task.input);
+      })
+      .build();
+
+    const app = resource({ id: "tests.builder.deps.app", register: [a, b, ev, hk, tmw] });
+    const rr = await run(app);
+    await rr.emitEvent(ev, undefined as any);
+    expect(calls).toEqual([3]);
+    await rr.dispose();
+  });
+
+  it("hook dependencies override branch", async () => {
+    const ev = r.event("tests.builder.deps.ev2").build();
+    const a = resource({ id: "tests.builder.deps.hook2.a", init: async () => 1 });
+    const b = resource({ id: "tests.builder.deps.hook2.b", init: async () => 2 });
+    const seen: number[] = [];
+    const hk = r
+      .hook("tests.builder.deps.hook2")
+      .on(ev)
+      .dependencies({ a })
+      .dependencies({ b }, { override: true })
+      .run(async (_event, deps: { b: number }) => {
+        seen.push(deps.b);
+      })
+      .build();
+
+    const app = resource({ id: "tests.builder.deps.app2", register: [a, b, ev, hk] });
+    const rr = await run(app);
+    await rr.emitEvent(ev, undefined as any);
+    expect(seen).toEqual([2]);
+    await rr.dispose();
+  });
+
+  it("task middleware dependencies: function+function merge and override", () => {
+    const a = resource({ id: "tests.builder.tmw.deps.a", init: async () => 1 });
+    const b = resource({ id: "tests.builder.tmw.deps.b", init: async () => 2 });
+    const tmw = r.middleware
+      .task("tests.builder.tmw.deps.merge")
+      .dependencies(() => ({ a }))
+      .dependencies(() => ({ b }))
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+
+    // dependencies is function; call to get merged object
+    const depsObj =
+      typeof tmw.dependencies === "function"
+        ? (tmw.dependencies as any)()
+        : tmw.dependencies;
+    expect(Object.keys(depsObj)).toEqual(["a", "b"]);
+
+    const tmw2 = r.middleware
+      .task("tests.builder.tmw.deps.override")
+      .dependencies({ a })
+      .dependencies({ b }, { override: true })
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+    const depsObj2 =
+      typeof tmw2.dependencies === "function"
+        ? (tmw2.dependencies as any)()
+        : tmw2.dependencies;
+    expect(Object.keys(depsObj2)).toEqual(["b"]);
+  });
+
+  it("resource middleware dependencies: function+function merge and override", () => {
+    const a = resource({ id: "tests.builder.rmw.deps.a", init: async () => 1 });
+    const b = resource({ id: "tests.builder.rmw.deps.b", init: async () => 2 });
+    const rmw = r.middleware
+      .resource("tests.builder.rmw.deps.merge")
+      .dependencies(() => ({ a }))
+      .dependencies(() => ({ b }))
+      .run(async ({ next }) => next())
+      .build();
+    const depsObj =
+      typeof rmw.dependencies === "function"
+        ? (rmw.dependencies as any)()
+        : rmw.dependencies;
+    expect(Object.keys(depsObj)).toEqual(["a", "b"]);
+
+    const rmw2 = r.middleware
+      .resource("tests.builder.rmw.deps.override")
+      .dependencies({ a })
+      .dependencies({ b }, { override: true })
+      .run(async ({ next }) => next())
+      .build();
+    const depsObj2 =
+      typeof rmw2.dependencies === "function"
+        ? (rmw2.dependencies as any)()
+        : rmw2.dependencies;
+    expect(Object.keys(depsObj2)).toEqual(["b"]);
+  });
+
+  it("task middleware appends by default and overrides when requested", async () => {
+    const tmw1 = r.middleware
+      .task("tests.builder.tm.append.1")
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+    const tmw2 = r.middleware
+      .task("tests.builder.tm.append.2")
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+
+    const t1 = r
+      .task("tests.builder.task.mw.append")
+      .middleware([tmw1])
+      .middleware([tmw2])
+      .run(async () => Promise.resolve("ok"))
+      .build();
+
+    expect(t1.middleware.map((m) => m.id)).toEqual([tmw1.id, tmw2.id]);
+
+    const t2 = r
+      .task("tests.builder.task.mw.override")
+      .middleware([tmw1])
+      .middleware([tmw2], { override: true })
+      .run(async () => Promise.resolve("ok"))
+      .build();
+
+    expect(t2.middleware.map((m) => m.id)).toEqual([tmw2.id]);
+  });
+
   it("task builder run handles single param without parentheses (regex miss)", async () => {
     const task = r
       .task("tests.builder.task.noparens")

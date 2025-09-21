@@ -129,4 +129,48 @@ describe("resource builder - register function+function merge branch", () => {
     await rr.dispose();
   });
 
+  it("resource dependencies append by default and override when requested", async () => {
+    const a = resource({ id: "tests.builder.deps.a", init: async () => 5 });
+    const b = resource({ id: "tests.builder.deps.b", init: async () => 7 });
+
+    const appAppend = r
+      .resource("tests.builder.deps.append")
+      .register([a, b])
+      .dependencies(() => ({ a }))
+      .dependencies({ b })
+      .init(async (_cfg, deps: { a: number; b: number }) => deps.a + deps.b)
+      .build();
+
+    const rr1 = await run(appAppend);
+    expect(rr1.value).toBe(12);
+    await rr1.dispose();
+
+    const appOverride = r
+      .resource("tests.builder.deps.override")
+      .register([a, b])
+      .dependencies({ a })
+      .dependencies({ b }, { override: true })
+      .init(async (_cfg, deps: { b: number }) => deps.b)
+      .build();
+
+    const rr2 = await run(appOverride);
+    expect(rr2.value).toBe(7);
+    await rr2.dispose();
+  });
+
+  it("resource dependencies object+object append branch", async () => {
+    const a = resource({ id: "tests.builder.resdeps.oo.a", init: async () => 1 });
+    const b = resource({ id: "tests.builder.resdeps.oo.b", init: async () => 2 });
+    const app = r
+      .resource("tests.builder.resdeps.oo")
+      .register([a, b])
+      .dependencies({ a })
+      .dependencies({ b })
+      .init(async (_cfg, deps: { a: number; b: number }) => deps.a + deps.b)
+      .build();
+    const rr = await run(app);
+    expect(rr.value).toBe(3);
+    await rr.dispose();
+  });
+
 });

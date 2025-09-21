@@ -50,8 +50,15 @@ export interface HookFluentBuilder<
     on: TNewOn,
   ): HookFluentBuilder<TDeps, TNewOn, TMeta>;
   order(order: number): HookFluentBuilder<TDeps, TOn, TMeta>;
+  // Append signature (default)
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | (() => TNewDeps),
+    options?: { override?: false },
+  ): HookFluentBuilder<TDeps & TNewDeps, TOn, TMeta>;
+  // Override signature (replace)
+  dependencies<TNewDeps extends DependencyMapType>(
+    deps: TNewDeps | (() => TNewDeps),
+    options: { override: true },
   ): HookFluentBuilder<TNewDeps, TOn, TMeta>;
   tags<TNewTags extends TagType[]>(
     t: TNewTags,
@@ -91,10 +98,41 @@ function makeHookBuilder<
     },
     dependencies<TNewDeps extends DependencyMapType>(
       deps: TNewDeps | (() => TNewDeps),
+      options?: { override?: boolean },
     ) {
-      const next = clone(state, { dependencies: deps as any });
-      return makeHookBuilder<TNewDeps, TOn, TMeta>(
-        next as unknown as BuilderState<TNewDeps, TOn, TMeta>,
+      const override = options?.override ?? false;
+      const isFnExisting = typeof state.dependencies === "function";
+      const isFnAddition = typeof deps === "function";
+
+      let merged: any;
+      if (override || !state.dependencies) {
+        merged = deps as any;
+      } else if (isFnExisting && isFnAddition) {
+        const e = state.dependencies as () => TDeps;
+        const a = deps as () => TNewDeps;
+        merged = (() => ({ ...(e() as any), ...(a() as any) })) as any;
+      } else if (isFnExisting && !isFnAddition) {
+        const e = state.dependencies as () => TDeps;
+        const a = deps as TNewDeps;
+        merged = (() => ({ ...(e() as any), ...(a as any) })) as any;
+      } else if (!isFnExisting && isFnAddition) {
+        const e = state.dependencies as TDeps;
+        const a = deps as () => TNewDeps;
+        merged = (() => ({ ...(e as any), ...(a() as any) })) as any;
+      } else {
+        const e = state.dependencies as TDeps;
+        const a = deps as TNewDeps;
+        merged = ({ ...(e as any), ...(a as any) }) as any;
+      }
+
+      const next = clone(state, { dependencies: merged });
+      if (override) {
+        return makeHookBuilder<TNewDeps, TOn, TMeta>(
+          next as unknown as BuilderState<TNewDeps, TOn, TMeta>,
+        );
+      }
+      return makeHookBuilder<TDeps & TNewDeps, TOn, TMeta>(
+        next as unknown as BuilderState<TDeps & TNewDeps, TOn, TMeta>,
       );
     },
     tags<TNewTags extends TagType[]>(t: TNewTags) {

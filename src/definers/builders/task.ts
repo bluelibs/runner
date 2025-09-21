@@ -94,11 +94,33 @@ export interface TaskFluentBuilder<
   TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
 > {
   id: string;
+  // Append signature (default)
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | (() => TNewDeps),
-  ): TaskFluentBuilder<TInput, TOutput, TNewDeps, TMeta, TTags, TMiddleware>;
+    options?: { override?: false },
+  ): TaskFluentBuilder<
+    TInput,
+    TOutput,
+    TDeps & TNewDeps,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  // Override signature (replace)
+  dependencies<TNewDeps extends DependencyMapType>(
+    deps: TNewDeps | (() => TNewDeps),
+    options: { override: true },
+  ): TaskFluentBuilder<
+    TInput,
+    TOutput,
+    TNewDeps,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
   middleware<TNewMw extends TaskMiddlewareAttachmentType[]>(
     mw: TNewMw,
+    options?: { override?: boolean },
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TTags, TNewMw>;
   tags<TNewTags extends TagType[]>(
     t: TNewTags,
@@ -142,6 +164,53 @@ export interface TaskFluentBuilder<
   build(): ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
 }
 
+function mergeArray<T>(
+  existing: ReadonlyArray<T> | undefined,
+  addition: ReadonlyArray<T>,
+  override: boolean,
+): T[] {
+  const toArray = [...addition];
+  if (override || !existing) {
+    return toArray as T[];
+  }
+  return [...existing, ...toArray] as T[];
+}
+
+function mergeDepsNoConfig<
+  TExisting extends DependencyMapType,
+  TNew extends DependencyMapType,
+>(
+  existing: TExisting | (() => TExisting) | undefined,
+  addition: TNew | (() => TNew),
+  override: boolean,
+): (TExisting & TNew) | (() => TExisting & TNew) {
+  const isFnExisting = typeof existing === "function";
+  const isFnAddition = typeof addition === "function";
+
+  if (override || !existing) {
+    return (addition as any) as (TExisting & TNew) | (() => TExisting & TNew);
+  }
+
+  if (isFnExisting && isFnAddition) {
+    const e = existing as () => TExisting;
+    const a = addition as () => TNew;
+    return (() => ({ ...(e() as any), ...(a() as any) })) as any;
+  }
+  if (isFnExisting && !isFnAddition) {
+    const e = existing as () => TExisting;
+    const a = addition as TNew;
+    return (() => ({ ...(e() as any), ...(a as any) })) as any;
+  }
+  if (!isFnExisting && isFnAddition) {
+    const e = existing as TExisting;
+    const a = addition as () => TNew;
+    return (() => ({ ...(e as any), ...(a() as any) })) as any;
+  }
+  const e = existing as TExisting;
+  const a = addition as TNew;
+  return ({ ...(e as any), ...(a as any) }) as any;
+}
+
 function makeTaskBuilder<
   TInput,
   TOutput extends Promise<any>,
@@ -156,7 +225,9 @@ function makeTaskBuilder<
     id: state.id,
     dependencies<TNewDeps extends DependencyMapType>(
       deps: TNewDeps | (() => TNewDeps),
+      options?: { override?: boolean },
     ) {
+      const override = options?.override ?? false;
       const next = clone<
         TInput,
         TOutput,
@@ -166,21 +237,41 @@ function makeTaskBuilder<
         TMiddleware,
         TInput,
         TOutput,
-        TNewDeps,
+        any,
         TMeta,
         TTags,
         TMiddleware
-      >(state, { dependencies: deps });
+      >(state, {
+        dependencies: mergeDepsNoConfig<TDeps, TNewDeps>(
+          state.dependencies as any,
+          deps as any,
+          override,
+        ) as any,
+      });
+      if (override) {
+        return makeTaskBuilder<
+          TInput,
+          TOutput,
+          TNewDeps,
+          TMeta,
+          TTags,
+          TMiddleware
+        >(next as any);
+      }
       return makeTaskBuilder<
         TInput,
         TOutput,
-        TNewDeps,
+        TDeps & TNewDeps,
         TMeta,
         TTags,
         TMiddleware
-      >(next);
+      >(next as any);
     },
-    middleware<TNewMw extends TaskMiddlewareAttachmentType[]>(mw: TNewMw) {
+    middleware<TNewMw extends TaskMiddlewareAttachmentType[]>(
+      mw: TNewMw,
+      options?: { override?: boolean },
+    ) {
+      const override = options?.override ?? false;
       const next = clone<
         TInput,
         TOutput,
@@ -194,7 +285,9 @@ function makeTaskBuilder<
         TMeta,
         TTags,
         TNewMw
-      >(state, { middleware: mw });
+      >(state, {
+        middleware: mergeArray(state.middleware, mw, override) as any,
+      });
       return makeTaskBuilder<
         TInput,
         TOutput,

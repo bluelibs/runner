@@ -25,6 +25,9 @@ Quick rules of thumb:
 - `.build()` materializes the definition; register only built items (task/resource/hook/middleware/tag), not builders.
 - When a method accepts a list (for example, `.register()`, `.tags()`, `.middleware()`), you may pass a single item or an array.
 - For resources, repeated `.register()` calls append by default; pass `{ override: true }` to replace.
+- For resources and tasks, repeated `.middleware()` calls append by default; pass `{ override: true }` to replace.
+- For resources, repeated `.overrides()` calls append by default; pass `{ override: true }` to replace.
+- For resources, tasks, hooks and middleware, repeated `.dependencies()` calls append (shallow merge) by default; pass `{ override: true }` to replace. Mixed function/object deps are supported and merged consistently.
 
 ---
 
@@ -217,7 +220,33 @@ Note on `.init()`:
 Note on `.middleware()` and `.tags()`:
 
 - You can pass a single item or an array.
-- These methods replace the whole list on each call (idempotent setters). If you need incremental building for these, prefer collecting locally and setting once for clarity.
+- `.middleware()` appends by default; pass `{ override: true }` to replace the existing list. `.tags()` continues to replace the whole list on each call.
+
+Append vs override for `.middleware()` and `.overrides()`:
+
+```ts
+// Resource middleware append and override
+const rmid = r.middleware.resource("mw.rid").run(async ({ next }) => next()).build();
+const app = r
+  .resource("app.mw")
+  .middleware([rmid]) // append
+  .middleware([rmid], { override: true }) // replace
+  .build();
+
+// Task middleware append
+const tmid = r.middleware.task("mw.tid").run(async ({ next, task }) => next(task.input)).build();
+const t = r
+  .task("tasks.calc")
+  .middleware([tmid]) // append
+  .build();
+
+// Resource overrides append and override
+const res = r
+  .resource("app.overrides")
+  .overrides([someResource]) // append
+  .overrides([anotherResource], { override: true }) // replace
+  .build();
+```
 
 ---
 
@@ -273,3 +302,29 @@ For deeper contract tests, see `src/__tests__/typesafety.test.ts` and the builde
 - Existing `defineX` APIs remain. Builders are sugar and compile to the same definitions.
 - Import the single namespace `r` for all builders. You can still import `resource`, `task`, etc., to reference classic definitions or for mixing.
 - No runtime overhead, no breaking changes. Builders are fully tree-shakeable.
+Dependencies append examples:
+
+```ts
+// Resource deps: function + object merge
+const app = r
+  .resource("app.deps")
+  .dependencies((cfg) => ({ svcA }))
+  .dependencies({ svcB }) // merged with previous
+  .build();
+
+// Task deps: append and override
+const t = r
+  .task("tasks.t")
+  .dependencies({ a })
+  .dependencies({ b }) // append
+  .dependencies({ c }, { override: true }) // replace with only c
+  .build();
+
+// Hook deps
+const hk = r
+  .hook("hooks.h")
+  .on(ev)
+  .dependencies({ a })
+  .dependencies({ b })
+  .build();
+```

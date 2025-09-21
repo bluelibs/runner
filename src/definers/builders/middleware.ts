@@ -41,8 +41,15 @@ export interface TaskMiddlewareFluentBuilder<
   D extends DependencyMapType = {},
 > {
   id: string;
+  // Append signature (default)
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: C) => TNewDeps),
+    options?: { override?: false },
+  ): TaskMiddlewareFluentBuilder<C, In, Out, D & TNewDeps>;
+  // Override signature (replace)
+  dependencies<TNewDeps extends DependencyMapType>(
+    deps: TNewDeps | ((config: C) => TNewDeps),
+    options: { override: true },
   ): TaskMiddlewareFluentBuilder<C, In, Out, TNewDeps>;
   configSchema<TNew>(
     schema: IValidationSchema<TNew>,
@@ -69,10 +76,41 @@ function makeTaskMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
     id: state.id,
     dependencies<TNewDeps extends DependencyMapType>(
       deps: TNewDeps | ((config: C) => TNewDeps),
+      options?: { override?: boolean },
     ) {
-      const next = cloneTask(state, { dependencies: deps as any });
-      return makeTaskMiddlewareBuilder<C, In, Out, TNewDeps>(
-        next as unknown as TaskMwState<C, In, Out, TNewDeps>,
+      const override = options?.override ?? false;
+      const isFnExisting = typeof state.dependencies === "function";
+      const isFnAddition = typeof deps === "function";
+
+      let merged: any;
+      if (override || !state.dependencies) {
+        merged = deps as any;
+      } else if (isFnExisting && isFnAddition) {
+        const e = state.dependencies as (cfg: C) => D;
+        const a = deps as (cfg: C) => TNewDeps;
+        merged = ((cfg: C) => ({ ...(e(cfg) as any), ...(a(cfg) as any) })) as any;
+      } else if (isFnExisting && !isFnAddition) {
+        const e = state.dependencies as (cfg: C) => D;
+        const a = deps as TNewDeps;
+        merged = ((cfg: C) => ({ ...(e(cfg) as any), ...(a as any) })) as any;
+      } else if (!isFnExisting && isFnAddition) {
+        const e = state.dependencies as D;
+        const a = deps as (cfg: C) => TNewDeps;
+        merged = ((cfg: C) => ({ ...(e as any), ...(a(cfg) as any) })) as any;
+      } else {
+        const e = state.dependencies as D;
+        const a = deps as TNewDeps;
+        merged = ({ ...(e as any), ...(a as any) }) as any;
+      }
+
+      const next = cloneTask(state, { dependencies: merged });
+      if (override) {
+        return makeTaskMiddlewareBuilder<C, In, Out, TNewDeps>(
+          next as unknown as TaskMwState<C, In, Out, TNewDeps>,
+        );
+      }
+      return makeTaskMiddlewareBuilder<C, In, Out, D & TNewDeps>(
+        next as unknown as TaskMwState<C, In, Out, D & TNewDeps>,
       );
     },
     configSchema<TNew>(schema: IValidationSchema<TNew>) {
@@ -151,8 +189,15 @@ export interface ResourceMiddlewareFluentBuilder<
   D extends DependencyMapType = {},
 > {
   id: string;
+  // Append signature (default)
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | ((config: C) => TNewDeps),
+    options?: { override?: false },
+  ): ResourceMiddlewareFluentBuilder<C, In, Out, D & TNewDeps>;
+  // Override signature (replace)
+  dependencies<TNewDeps extends DependencyMapType>(
+    deps: TNewDeps | ((config: C) => TNewDeps),
+    options: { override: true },
   ): ResourceMiddlewareFluentBuilder<C, In, Out, TNewDeps>;
   configSchema<TNew>(
     schema: IValidationSchema<TNew>,
@@ -179,10 +224,41 @@ function makeResourceMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
     id: state.id,
     dependencies<TNewDeps extends DependencyMapType>(
       deps: TNewDeps | ((config: C) => TNewDeps),
+      options?: { override?: boolean },
     ) {
-      const next = cloneRes(state, { dependencies: deps as any });
-      return makeResourceMiddlewareBuilder<C, In, Out, TNewDeps>(
-        next as unknown as ResMwState<C, In, Out, TNewDeps>,
+      const override = options?.override ?? false;
+      const isFnExisting = typeof state.dependencies === "function";
+      const isFnAddition = typeof deps === "function";
+
+      let merged: any;
+      if (override || !state.dependencies) {
+        merged = deps as any;
+      } else if (isFnExisting && isFnAddition) {
+        const e = state.dependencies as (cfg: C) => D;
+        const a = deps as (cfg: C) => TNewDeps;
+        merged = ((cfg: C) => ({ ...(e(cfg) as any), ...(a(cfg) as any) })) as any;
+      } else if (isFnExisting && !isFnAddition) {
+        const e = state.dependencies as (cfg: C) => D;
+        const a = deps as TNewDeps;
+        merged = ((cfg: C) => ({ ...(e(cfg) as any), ...(a as any) })) as any;
+      } else if (!isFnExisting && isFnAddition) {
+        const e = state.dependencies as D;
+        const a = deps as (cfg: C) => TNewDeps;
+        merged = ((cfg: C) => ({ ...(e as any), ...(a(cfg) as any) })) as any;
+      } else {
+        const e = state.dependencies as D;
+        const a = deps as TNewDeps;
+        merged = ({ ...(e as any), ...(a as any) }) as any;
+      }
+
+      const next = cloneRes(state, { dependencies: merged });
+      if (override) {
+        return makeResourceMiddlewareBuilder<C, In, Out, TNewDeps>(
+          next as unknown as ResMwState<C, In, Out, TNewDeps>,
+        );
+      }
+      return makeResourceMiddlewareBuilder<C, In, Out, D & TNewDeps>(
+        next as unknown as ResMwState<C, In, Out, D & TNewDeps>,
       );
     },
     configSchema<TNew>(schema: IValidationSchema<TNew>) {

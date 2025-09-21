@@ -180,7 +180,8 @@ const sendEmail = r
 ```
 
 - `.dependencies()` accepts a literal map or a function `(config) => deps`.
-- `.middleware()` and `.tags()` replace the list each time; collect locally if you need conditionals.
+- `.middleware()` appends by default; pass `{ override: true }` to replace. `.tags()` replaces the list each time.
+- `.dependencies()` appends (shallow-merge) by default on resources, tasks, hooks, and middleware; pass `{ override: true }` to replace. Functions and objects are merged consistently.
 - Provide result validation with `.resultSchema()` when the function returns structured data.
 
 ### Events and Hooks
@@ -333,6 +334,7 @@ await client.task("app.tasks.upload", { file });
 ```
 
 - `createHttpSmartClient` (Node only) supports duplex streams.
+- For Node-specific features such as `useExposureContext` for handling aborts and streaming in exposed tasks, see TUNNELS.md.
 - Register authentication middleware or rate limiting on the exposure via middleware tags and filters.
 
 ## Serialization

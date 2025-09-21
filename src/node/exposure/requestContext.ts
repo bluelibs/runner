@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { createContext } from "../../context";
+import { createContext, getCurrentStore } from "../../context";
 
 export interface ExposureRequestContextValue {
   req: IncomingMessage;
@@ -18,4 +18,16 @@ export const ExposureRequestContext = createContext<ExposureRequestContextValue>
 
 export function useExposureContext(): ExposureRequestContextValue {
   return ExposureRequestContext.use();
+}
+
+/**
+ * Checks if the exposure request context is currently available without throwing an error.
+ * Useful for conditional logic in tasks that may or may not be exposed.
+ */
+export function hasExposureContext(): boolean {
+  const store = getCurrentStore();
+  if (!store) {
+    return false;
+  }
+  return store.has(ExposureRequestContext.id);
 }

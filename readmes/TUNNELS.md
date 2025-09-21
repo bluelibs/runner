@@ -15,6 +15,7 @@ Make tasks and events callable across processes – from a CLI, another service,
 5. Auth (static & dynamic)
 6. Uploads & files (EJSON sentinel, FormData, Node streams)
 7. Abort & timeouts
+  - 7.1) useExposureContext API
 8. CORS
 9. Server allow‑lists
 10. Examples you can run
@@ -250,31 +251,180 @@ Important: “File” is not an EJSON custom type. Runner uses a special `$ejson
 
 ## 7) Abort & timeouts
 
-Server: every request has an `AbortSignal` via `useExposureContext().signal`.
+Server: Access the full HTTP context via `useExposureContext()` from `@bluelibs/runner/node`, including `signal: AbortSignal` for aborts, `req` for request details, and `res` for streaming responses. This is available only in tasks exposed via `nodeExposure`.
 
+#### Enhanced Abort Example with Error Handling
 ```ts
 import { r } from "@bluelibs/runner";
 import { useExposureContext } from "@bluelibs/runner/node";
 import { CancellationError } from "@bluelibs/runner/errors";
 
-export const streamy = r
-  .task("app.tasks.streamy")
-  .run(async () => {
-    const { signal } = useExposureContext();
-    if (signal.aborted) throw new CancellationError("Client Closed Request");
-    await new Promise((_, reject) => {
-      signal.addEventListener(
-        "abort",
-        () => reject(new CancellationError("Client Closed Request")),
-        { once: true },
-      );
-      // do work, write to res, or read req...
-    });
+// Example long-running task with full context
+const longTask = r
+  .task("app.tasks.longTask")
+  .run(async (input: { workTime: number }) => {
+    const ctx = useExposureContext();  // Destructure as needed: { signal, req, res }
+    const { signal } = ctx;
+
+    // Early check
+    if (signal.aborted) {
+      throw new CancellationError("Task aborted before starting (client timeout/disconnect)");
+    }
+
+    // Log request context
+    console.log(`Task started for ${ctx.method} ${ctx.url.pathname}, User-Agent: ${ctx.headers['user-agent'] || 'unknown'}`);
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        let aborted = false;
+        const handler = () => {
+          aborted = true;
+          reject(new CancellationError("Processing aborted by client"));
+        };
+        signal.addEventListener('abort', handler, { once: true });
+
+        // Simulate work (e.g., file processing, API calls)
+        const timer = setTimeout(() => {
+          signal.removeEventListener('abort', handler);
+          if (!aborted) resolve();
+        }, input.workTime);
+
+        // Optional: Stream progress
+        if (typeof ctx.res.write === 'function') {
+          ctx.res.write(`Started processing for ${input.workTime}ms...\n`);
+        }
+      });
+
+      // Success
+      if (typeof ctx.res.end === 'function') {
+        ctx.res.write('Task completed successfully!');
+      }
+
+      return { status: 'success', message: 'Work done' };
+    } catch (err) {
+      if (err instanceof CancellationError) {
+        // Log and re-throw
+        console.warn(`Task longTask cancelled: ${err.message}`);
+        throw err;
+      }
+      throw err;  // Other errors propagate
+    }
   })
   .build();
 ```
 
-Clients: pass `timeoutMs` (unified, smart, mixed). Fetch clients use `AbortController` under the hood. JSON parsing obeys the same signal; multipart errors are surfaced as `499`.
+Key enhancements:
+- Full context (`ctx = useExposureContext()`) for logging and response writing.
+- Try-catch to handle `CancellationError` specifically (triggers HTTP 499).
+- Listener cleanup to prevent leaks.
+- Early aborted check and progress streaming.
+
+Clients: Pass `timeoutMs` (e.g., `{ timeoutMs: 30000 }` in client options). Uses `AbortController`; aborts trigger server `signal`. JSON/multipart parsing respects it; errors like parse fails or disconnect return 499. For duplex, abort stops piping.
+
+### 7.1) useExposureContext API
+
+`useExposureContext()` is a Node-only hook in `@bluelibs/runner/node` for accessing HTTP context in exposed tasks: aborts (`signal`), request info (`req`), response streaming (`res`).
+
+#### API Shape
+```ts
+import type { IncomingMessage, ServerResponse } from 'http';
+
+export interface ExposureRequestContextValue {
+  req: IncomingMessage;
+  res: ServerResponse;
+  url: URL;
+  basePath: string;
+  headers: IncomingMessage['headers'];
+  method?: string;
+  signal: AbortSignal;
+}
+```
+
+Use in task `.run()`: `const { signal, req, res } = useExposureContext();`
+
+For conditional access without errors in non-exposed tasks, use `hasExposureContext()`: `if (hasExposureContext()) { const ctx = useExposureContext(); ... }`
+
+#### Examples
+
+**Abort Handling:** (See expanded above.)
+
+**Streaming Response:**
+```ts
+import { r } from '@bluelibs/runner';
+import { useExposureContext } from '@bluelibs/runner/node';
+import { createReadStream } from 'fs';
+
+// Task streaming a file
+const streamFile = r
+  .task('app.tasks.streamFile')
+  .run(async (input: { filePath: string }) => {
+    const { res, signal } = useExposureContext();
+
+    res.writeHead(200, {
+      'Content-Type': 'application/octet-stream',
+      'Transfer-Encoding': 'chunked'
+    });
+
+    const stream = createReadStream(input.filePath);
+    stream.pipe(res);
+
+    signal.addEventListener('abort', () => stream.destroy(), { once: true });
+  })
+  .build();
+```
+
+**Request Introspection:**
+```ts
+const secureTask = r
+  .task('app.tasks.secure')
+  .run(async () => {
+    const { headers, req } = useExposureContext();
+
+    if (!headers.authorization) throw new Error('Unauthorized');
+
+    // Read body if needed
+    let body = '';
+    req.on('data', chunk => body += chunk);
+    await new Promise(res => req.on('end', res));
+
+    // Process body...
+    return { validated: true };
+  })
+  .build();
+```
+
+**Duplex:**
+```ts
+import { Transform } from 'stream';
+
+const duplexEcho = r
+  .task('app.tasks.duplexEcho')
+  .run(async () => {
+    const { req, res, signal } = useExposureContext();
+
+    const transform = new Transform({
+      transform(chunk, _, cb) {
+        this.push(chunk.toString().toUpperCase());
+        cb();
+      }
+    });
+
+    req.pipe(transform).pipe(res);
+
+    signal.addEventListener('abort', () => {
+      req.destroy();
+      res.end();
+    }, { once: true });
+  })
+  .build();
+```
+
+#### Warnings
+- Node-only; throws if called in browser or non-exposed tasks.
+- Security: Sanitize logged headers; avoid exposing secrets.
+- CORS: Misconfig can cause pre-aborts on signal.
+- Links: `examples/tunnels/streaming-duplex.example.ts`; tests in `src/node/exposure/__tests__/requestContext.test.ts`.
+- Errors: Use `CancellationError` for aborts.
 
 ## 8) CORS
 
@@ -409,10 +559,10 @@ Note: In browsers, read with the File/Blob APIs at the edge of your app (e.g., `
 - [ ] Expose via `nodeExposure` (attach or listen)
 - [ ] Choose a client: `createHttpClient` (unified), Node: `createMixedHttpClient` / `createHttpSmartClient`, or pure fetch: `globals.tunnels.http.createClient` / `createExposureFetch`
 - [ ] File uploads: use `createNodeFile(...)` (Node) or `platform/createFile` (browser)
-- [ ] Streaming: duplex via `useExposureContext()` or server‑push via `respondStream()`
+- [ ] Streaming: duplex via `useExposureContext().req/res` or server-push via `respondStream()`
 - [ ] Serializer: extend EJSON types as needed; pass custom serializer to fetch‑based clients
 - [ ] CORS: set `http.cors` when calling from browsers/cross‑origin clients
-- [ ] Abort: handle `useExposureContext().signal` in tasks; configure `timeoutMs` in clients
+- [ ] Abort: handle `useExposureContext()` (signal, req, res) in tasks; configure `timeoutMs` in clients
 
 ## 13) Compression (gzip/br)
 
