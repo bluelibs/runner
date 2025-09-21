@@ -326,15 +326,15 @@ export const serverTunnel = r
   .resource("app.tunnels.server")
   .tags([globals.tags.tunnel])
   .init(async () => ({
-    mode: "server" as const,
-    transport: "http" as const,
+    mode: "server",
+    transport: "http",
     tasks: ["app.tasks.add"],
     events: ["app.events.notify"],
   }))
   .build();
 ```
 
-Add this resource to the same `register` list as `nodeExposure`.
+Add this resource and nodeExposure will scan all resources with this tag which are in the mode `server` and expose things properly.
 
 ## 10) Examples you can run
 
