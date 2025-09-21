@@ -136,6 +136,35 @@ const calc = r
   .build();
 ```
 
+### Phantom Tasks
+
+Create a no-op task that is intended to be routed through a tunnel (HTTP or custom). When run locally without a matching tunnel, it returns `undefined`. Use it to strongly type calls to remote services.
+
+```ts
+// Define a phantom task with typed input and resolved result
+const remoteHello = r.task
+  .phantom<{ name: string }, string>("app.tasks.remoteHello")
+  .build();
+
+// Register a tunnel that can execute it remotely
+const tunnel = r
+  .resource("app.tunnels.client")
+  .tags([globals.tags.tunnel])
+  .init(async () => ({
+    mode: "client" as const,
+    tasks: [remoteHello.id],
+    run: async (task, input) => `Hello ${input.name}!`,
+  }))
+  .build();
+
+const app = r.resource("app").register([remoteHello, tunnel]).build();
+```
+
+Notes:
+
+- Builder exposes the same knobs as normal tasks: `.dependencies()`, `.middleware()`, `.tags()`, `.meta()`, `.inputSchema()`, `.resultSchema()`.
+- The builder does not accept `.run()`; the runner injects a no-op function and brands the definition so tunnel middleware can intercept it.
+
 ---
 
 ## Events and Hooks
@@ -226,7 +255,10 @@ Append vs override for `.middleware()` and `.overrides()`:
 
 ```ts
 // Resource middleware append and override
-const rmid = r.middleware.resource("mw.rid").run(async ({ next }) => next()).build();
+const rmid = r.middleware
+  .resource("mw.rid")
+  .run(async ({ next }) => next())
+  .build();
 const app = r
   .resource("app.mw")
   .middleware([rmid]) // append
@@ -234,7 +266,10 @@ const app = r
   .build();
 
 // Task middleware append
-const tmid = r.middleware.task("mw.tid").run(async ({ next, task }) => next(task.input)).build();
+const tmid = r.middleware
+  .task("mw.tid")
+  .run(async ({ next, task }) => next(task.input))
+  .build();
 const t = r
   .task("tasks.calc")
   .middleware([tmid]) // append
@@ -302,7 +337,7 @@ For deeper contract tests, see `src/__tests__/typesafety.test.ts` and the builde
 - Existing `defineX` APIs remain. Builders are sugar and compile to the same definitions.
 - Import the single namespace `r` for all builders. You can still import `resource`, `task`, etc., to reference classic definitions or for mixing.
 - No runtime overhead, no breaking changes. Builders are fully tree-shakeable.
-Dependencies append examples:
+  Dependencies append examples:
 
 ```ts
 // Resource deps: function + object merge

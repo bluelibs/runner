@@ -8,6 +8,7 @@ import type {
   TaskMiddlewareAttachmentType,
 } from "../../defs";
 import { defineTask } from "../defineTask";
+import { phantomTaskBuilder, type PhantomTaskFluentBuilder } from "./task.phantom";
 
 type ShouldReplaceInput<T> = [T] extends [undefined] ? true : [T] extends [void] ? true : (0 extends 1 & T ? true : false);
 type ResolveInput<TExisting, TProposed> = ShouldReplaceInput<TExisting> extends true
@@ -163,6 +164,8 @@ export interface TaskFluentBuilder<
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TNewMeta, TTags, TMiddleware>;
   build(): ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
 }
+
+// PhantomTaskFluentBuilder is defined in task.phantom.ts
 
 function mergeArray<T>(
   existing: ReadonlyArray<T> | undefined,
@@ -490,4 +493,29 @@ export function taskBuilder(
   return makeTaskBuilder(initial);
 }
 
-export const task = taskBuilder;
+// Phantom task builder moved to task.phantom.ts
+
+export interface TaskBuilderWithPhantom {
+  (id: string): TaskFluentBuilder<
+    undefined,
+    Promise<any>,
+    {},
+    ITaskMeta,
+    TagType[],
+    TaskMiddlewareAttachmentType[]
+  >;
+  phantom: <TInput = undefined, TResolved = any>(
+    id: string,
+  ) => PhantomTaskFluentBuilder<
+    TInput,
+    TResolved,
+    {},
+    ITaskMeta,
+    TagType[],
+    TaskMiddlewareAttachmentType[]
+  >;
+}
+
+export const task: TaskBuilderWithPhantom = Object.assign(taskBuilder, {
+  phantom: phantomTaskBuilder,
+});
