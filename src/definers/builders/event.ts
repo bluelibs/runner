@@ -6,6 +6,7 @@ import type {
   TagType,
 } from "../../defs";
 import { defineEvent } from "../defineEvent";
+import { mergeArray } from "./utils";
 
 type BuilderState<TPayload> = Readonly<
   Required<
@@ -25,7 +26,10 @@ export interface EventFluentBuilder<TPayload = void> {
   payloadSchema<TNew>(
     schema: IValidationSchema<TNew>,
   ): EventFluentBuilder<TNew>;
-  tags<TNewTags extends TagType[]>(t: TNewTags): EventFluentBuilder<TPayload>;
+  tags<TNewTags extends TagType[]>(
+    t: TNewTags,
+    options?: { override?: boolean },
+  ): EventFluentBuilder<TPayload>;
   meta<TNewMeta extends IEventMeta>(m: TNewMeta): EventFluentBuilder<TPayload>;
   build(): IEvent<TPayload>;
 }
@@ -39,8 +43,10 @@ function makeEventBuilder<TPayload>(
       const next = clone(state, { payloadSchema: schema as any });
       return makeEventBuilder<TNew>(next as unknown as BuilderState<TNew>);
     },
-    tags<TNewTags extends TagType[]>(t: TNewTags) {
-      const next = clone(state, { tags: t as any });
+    tags<TNewTags extends TagType[]>(t: TNewTags, options?: { override?: boolean }) {
+      const override = options?.override ?? false;
+      const tags = mergeArray(state.tags as any, t as any, override);
+      const next = clone(state, { tags: tags as any });
       return makeEventBuilder<TPayload>(next);
     },
     meta<TNewMeta extends IEventMeta>(m: TNewMeta) {

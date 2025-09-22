@@ -117,8 +117,22 @@ export interface TaskFluentBuilder<
     mw: TNewMw,
     options?: { override?: boolean },
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TTags, TNewMw>;
+  // Append signature (default)
   tags<TNewTags extends TagType[]>(
     t: TNewTags,
+    options?: { override?: false },
+  ): TaskFluentBuilder<
+    TInput,
+    TOutput,
+    TDeps,
+    TMeta,
+    [...TTags, ...TNewTags],
+    TMiddleware
+  >;
+  // Override signature (replace)
+  tags<TNewTags extends TagType[]>(
+    t: TNewTags,
+    options: { override: true },
   ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TNewTags, TMiddleware>;
   inputSchema<TNewInput>(
     schema: IValidationSchema<TNewInput>,
@@ -249,7 +263,8 @@ function makeTaskBuilder<
         TNewMw
       >(next);
     },
-    tags<TNewTags extends TagType[]>(t: TNewTags) {
+    tags<TNewTags extends TagType[]>(t: TNewTags, options?: { override?: boolean }) {
+      const override = options?.override ?? false;
       const next = clone<
         TInput,
         TOutput,
@@ -261,17 +276,10 @@ function makeTaskBuilder<
         TOutput,
         TDeps,
         TMeta,
-        TNewTags,
+        [...TTags, ...TNewTags],
         TMiddleware
-      >(state, { tags: t });
-      return makeTaskBuilder<
-        TInput,
-        TOutput,
-        TDeps,
-        TMeta,
-        TNewTags,
-        TMiddleware
-      >(next);
+      >(state, { tags: mergeArray(state.tags, t, override) as any });
+      return makeTaskBuilder(next as any) as any;
     },
     inputSchema<TNewInput>(schema: IValidationSchema<TNewInput>) {
       const next = clone<

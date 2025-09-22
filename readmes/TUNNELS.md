@@ -22,6 +22,7 @@ Make tasks and events callable across processes – from a CLI, another service,
 11. Troubleshooting
 12. Reference checklist
 13. Compression (gzip/br)
+14. Phantom Tasks (fluent builder)
 
 ---
 
@@ -248,6 +249,31 @@ Manifest shape (for reference):
 ```
 
 Important: “File” is not an EJSON custom type. Runner uses a special `$ejson: "File"` sentinel to mark file fields, which the unified/Node clients translate into multipart uploads and the server hydrates into `InputFile` instances. We do not register `EJSON.addType("File")` by default (and you shouldn’t either) because files are handled by the tunnel/manifest logic, not by the serializer. Use `EJSON.addType` only for your own domain objects (for example, Distance, Money, etc.).
+
+### Transport modes at a glance
+
+- JSON/EJSON: default path when your input has no files. Great for simple DTOs.
+- Multipart (recommended for JSON + files): any input that includes a File sentinel is sent as multipart/form-data with:
+  - `__manifest`: JSON/EJSON of your full input, where File fields are left as EJSON File stubs
+  - `file:{id}` parts: the actual file bytes (stream or buffer in Node; Blob in browsers)
+  This path lets you mix arbitrary JSON fields with one or more streamed files in a single request.
+- Octet-stream (duplex): when the input itself is a Node `Readable`, the client uses `application/octet-stream`. This is for raw streaming and does not carry an additional JSON body. If you need JSON alongside a stream, wrap the stream in a File sentinel in a DTO and use the multipart path instead.
+
+Node example (DTO + stream via File sentinel):
+
+```ts
+import { createHttpSmartClient, createNodeFile } from "@bluelibs/runner/node";
+import { Readable } from "stream";
+
+const client = createHttpSmartClient({ baseUrl: "/__runner" });
+await client.task("app.tasks.upload", {
+  info: { title: "demo" },
+  file: createNodeFile(
+    { name: "a.txt", type: "text/plain" },
+    { stream: Readable.from("hello world") },
+  ),
+});
+```
 
 ## 7) Abort & timeouts
 
@@ -598,3 +624,61 @@ It is possible to introduce compression for both responses and requests, but it 
 - Practical paths
   - Fastest win: reverse proxy response compression (no code changes, immediate benefit to browsers and fetch clients).
   - Full stack: exposure negotiates/compresses responses and decompresses requests; Smart client advertises `Accept-Encoding`, decompresses responses, and can optionally compress requests.
+
+## 14) Phantom Tasks (fluent builder)
+
+Phantom tasks are typed placeholders that you intend to execute through a tunnel. They don’t implement `.run()`; instead, when a matching tunnel client is registered, the tunnel middleware routes calls to the remote Runner. If no tunnel matches, calling a phantom task returns `undefined` — a safe signal that routing is not configured.
+
+Why use them:
+
+- Typed contracts for remote actions without local implementations.
+- Clean separation of concerns: app code calls tasks; tunnels handle transport.
+- Works with allow‑lists; integrates with all HTTP clients in this guide.
+
+Define a phantom task and route via an HTTP tunnel client:
+
+```ts
+import { r, run, globals } from "@bluelibs/runner";
+
+// 1) Define a phantom task
+const remoteHello = r.task
+  .phantom<{ name: string }, string>("remote.tasks.hello")
+  .build();
+
+// 2) Register a tunnel client resource that knows how to run it remotely
+const httpClientTunnel = r
+  .resource("app.tunnels.httpClient")
+  .tags([globals.tags.tunnel])
+  .init(async () => {
+    const http = globals.tunnels.http.createClient({
+      url: process.env.REMOTE_URL ?? "http://127.0.0.1:7070/__runner",
+      onRequest: ({ headers }) => {
+        headers["x-runner-token"] = process.env.RUNNER_TOKEN ?? "";
+      },
+    });
+    return {
+      mode: "client" as const,
+      tasks: [remoteHello.id], // or a predicate: (t) => t.id.startsWith("remote.tasks.")
+      run: (task, input) => http.task(task.id, input),
+    };
+  })
+  .build();
+
+// 3) Compose your app
+const app = r
+  .resource("app")
+  .register([remoteHello, httpClientTunnel])
+  .build();
+
+// 4) Use it anywhere in your app
+const rr = await run(app);
+const greeting = await rr.runTask(remoteHello, { name: "Ada" });
+// → "Hello Ada!" (assuming the remote Runner exposes this task)
+await rr.dispose();
+```
+
+Notes:
+
+- Phantom builders expose `.dependencies()`, `.middleware()`, `.tags()`, `.meta()`, `.inputSchema()`, and `.resultSchema()`. They intentionally do not expose `.run()`.
+- Without a matching tunnel, calling the task resolves to `undefined`. This helps catch misconfiguration early (for example, missing client or wrong allow‑list).
+- You can combine phantom tasks with server allow‑lists (see section 9) to control what’s reachable when you host an exposure.

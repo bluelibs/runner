@@ -109,8 +109,22 @@ export interface PhantomTaskFluentBuilder<
     mw: TNewMw,
     options?: { override?: boolean },
   ): PhantomTaskFluentBuilder<TInput, TResolved, TDeps, TMeta, TTags, TNewMw>;
+  // Append signature (default)
   tags<TNewTags extends TagType[]>(
     t: TNewTags,
+    options?: { override?: false },
+  ): PhantomTaskFluentBuilder<
+    TInput,
+    TResolved,
+    TDeps,
+    TMeta,
+    [...TTags, ...TNewTags],
+    TMiddleware
+  >;
+  // Override signature (replace)
+  tags<TNewTags extends TagType[]>(
+    t: TNewTags,
+    options: { override: true },
   ): PhantomTaskFluentBuilder<TInput, TResolved, TDeps, TMeta, TNewTags, TMiddleware>;
   inputSchema<TNewInput>(
     schema: IValidationSchema<TNewInput>,
@@ -224,7 +238,8 @@ function makePhantomTaskBuilder<
         TNewMw
       >(next);
     },
-    tags<TNewTags extends TagType[]>(t: TNewTags) {
+    tags<TNewTags extends TagType[]>(t: TNewTags, options?: { override?: boolean }) {
+      const override = options?.override ?? false;
       const next = clone<
         TInput,
         TResolved,
@@ -236,17 +251,10 @@ function makePhantomTaskBuilder<
         TResolved,
         TDeps,
         TMeta,
-        TNewTags,
+        [...TTags, ...TNewTags],
         TMiddleware
-      >(state as any, { tags: t }) as any;
-      return makePhantomTaskBuilder<
-        TInput,
-        TResolved,
-        TDeps,
-        TMeta,
-        TNewTags,
-        TMiddleware
-      >(next);
+      >(state as any, { tags: mergeArray(state.tags as any, t, override) as any }) as any;
+      return makePhantomTaskBuilder(next as any) as any;
     },
     inputSchema<TNewInput>(schema: IValidationSchema<TNewInput>) {
       const next = clone<

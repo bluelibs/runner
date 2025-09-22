@@ -312,8 +312,23 @@ export interface ResourceFluentBuilder<
     TTags,
     TNewMw
   >;
+  // Append signature (default)
   tags<TNewTags extends TagType[]>(
     tags: TNewTags,
+    options?: { override?: false },
+  ): ResourceFluentBuilder<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    [...TTags, ...TNewTags],
+    TMiddleware
+  >;
+  // Override signature (replace)
+  tags<TNewTags extends TagType[]>(
+    tags: TNewTags,
+    options: { override: true },
   ): ResourceFluentBuilder<
     TConfig,
     TValue,
@@ -568,7 +583,8 @@ function makeResourceBuilder<
         TNewMw
       >(next);
     },
-    tags<TNewTags extends TagType[]>(tags: TNewTags) {
+    tags<TNewTags extends TagType[]>(tags: TNewTags, options?: { override?: boolean }) {
+      const override = options?.override ?? false;
       const next = clone<
         TConfig,
         TValue,
@@ -582,18 +598,11 @@ function makeResourceBuilder<
         TDeps,
         TContext,
         TMeta,
-        TNewTags,
+        [...TTags, ...TNewTags],
         TMiddleware
-      >(state, { tags });
-      return makeResourceBuilder<
-        TConfig,
-        TValue,
-        TDeps,
-        TContext,
-        TMeta,
-        TNewTags,
-        TMiddleware
-      >(next);
+      >(state, { tags: mergeArray(state.tags, tags, override) as any });
+      // Implementation is compatible with both overloads; cast to satisfy TS.
+      return makeResourceBuilder(next as any) as any;
     },
     context<TNewCtx>(factory: () => TNewCtx) {
       const next = clone<

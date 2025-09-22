@@ -74,6 +74,114 @@ describe("task/event/hook/middleware builders", () => {
     expect((rmw as any)[definitions.symbolResourceMiddleware]).toBe(true);
   });
 
+  it("tags append and override on event, hook, and middlewares", () => {
+    const tagA = r.tag("tests.builder.tag.A").build();
+    const tagB = r.tag("tests.builder.tag.B").build();
+
+    // Event tags append
+    const evAppend = r
+      .event("tests.builder.event.tags.append")
+      .tags([tagA])
+      .tags([tagB])
+      .build();
+    expect(evAppend.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
+
+    // Event tags override
+    const evOverride = r
+      .event("tests.builder.event.tags.override")
+      .tags([tagA])
+      .tags([tagB], { override: true })
+      .build();
+    expect(evOverride.tags.map((t) => t.id)).toEqual([tagB.id]);
+
+    // Event tags explicit false override
+    const evFalse = r
+      .event("tests.builder.event.tags.false")
+      .tags([tagA], { override: false })
+      .tags([tagB])
+      .build();
+    expect(evFalse.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
+
+    // Hook tags append/override
+    const ev = r.event("tests.builder.event.forhook.tags").build();
+    const hkAppend = r
+      .hook("tests.builder.hook.tags.append")
+      .on(ev)
+      .tags([tagA])
+      .tags([tagB])
+      .run(async () => {})
+      .build();
+    expect(hkAppend.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
+
+    const hkOverride = r
+      .hook("tests.builder.hook.tags.override")
+      .on(ev)
+      .tags([tagA])
+      .tags([tagB], { override: true })
+      .run(async () => {})
+      .build();
+    expect(hkOverride.tags.map((t) => t.id)).toEqual([tagB.id]);
+
+    const hkFalse = r
+      .hook("tests.builder.hook.tags.false")
+      .on(ev)
+      .tags([tagA], { override: false })
+      .tags([tagB])
+      .run(async () => {})
+      .build();
+    expect(hkFalse.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
+
+    // Task middleware tags append/override
+    const tmwAppend = r.middleware
+      .task("tests.builder.tm.tags.append")
+      .tags([tagA])
+      .tags([tagB])
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+    expect(tmwAppend.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
+
+    const tmwOverride = r.middleware
+      .task("tests.builder.tm.tags.override")
+      .tags([tagA])
+      .tags([tagB], { override: true })
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+    expect(tmwOverride.tags.map((t) => t.id)).toEqual([tagB.id]);
+
+    const tmwFalse = r.middleware
+      .task("tests.builder.tm.tags.false")
+      .tags([tagA], { override: false })
+      .tags([tagB])
+      .run(async ({ next, task }) => next(task.input))
+      .build();
+    expect(tmwFalse.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
+
+    // Resource middleware tags append/override
+    const rmwAppend = r.middleware
+      .resource("tests.builder.rm.tags.append")
+      .tags([tagA])
+      .tags([tagB])
+      .run(async ({ next }) => next())
+      .build();
+    expect(rmwAppend.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
+
+    const rmwOverride = r.middleware
+      .resource("tests.builder.rm.tags.override")
+      .tags([tagA])
+      .tags([tagB], { override: true })
+      .run(async ({ next }) => next())
+      .build();
+    expect(rmwOverride.tags.map((t) => t.id)).toEqual([tagB.id]);
+
+    const rmwFalse = r.middleware
+      .resource("tests.builder.rm.tags.false")
+      .tags([tagA], { override: false })
+      .tags([tagB])
+      .run(async ({ next }) => next())
+      .build();
+    expect(rmwFalse.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
+  });
+
   it("event builder supports payloadSchema, tags and meta", () => {
     const ev = r
       .event("tests.builder.event.meta")

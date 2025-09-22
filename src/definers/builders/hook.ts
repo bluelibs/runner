@@ -7,6 +7,7 @@ import type {
   TagType,
 } from "../../defs";
 import { defineHook } from "../defineHook";
+import { mergeArray } from "./utils";
 
 type BuilderState<
   TDeps extends DependencyMapType,
@@ -62,6 +63,7 @@ export interface HookFluentBuilder<
   ): HookFluentBuilder<TNewDeps, TOn, TMeta>;
   tags<TNewTags extends TagType[]>(
     t: TNewTags,
+    options?: { override?: boolean },
   ): HookFluentBuilder<TDeps, TOn, TMeta>;
   meta<TNewMeta extends ITaskMeta>(
     m: TNewMeta,
@@ -135,8 +137,10 @@ function makeHookBuilder<
         next as unknown as BuilderState<TDeps & TNewDeps, TOn, TMeta>,
       );
     },
-    tags<TNewTags extends TagType[]>(t: TNewTags) {
-      const next = clone(state, { tags: t as any });
+    tags<TNewTags extends TagType[]>(t: TNewTags, options?: { override?: boolean }) {
+      const override = options?.override ?? false;
+      const tags = mergeArray(state.tags as any, t as any, override);
+      const next = clone(state, { tags: tags as any });
       return makeHookBuilder<TDeps, TOn, TMeta>(next);
     },
     meta<TNewMeta extends ITaskMeta>(m: TNewMeta) {

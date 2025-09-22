@@ -26,6 +26,7 @@ Quick rules of thumb:
 - When a method accepts a list (for example, `.register()`, `.tags()`, `.middleware()`), you may pass a single item or an array.
 - For resources, repeated `.register()` calls append by default; pass `{ override: true }` to replace.
 - For resources and tasks, repeated `.middleware()` calls append by default; pass `{ override: true }` to replace.
+- For resources, tasks, hooks, events, and middleware, repeated `.tags()` calls append by default; pass `{ override: true }` to replace.
 - For resources, repeated `.overrides()` calls append by default; pass `{ override: true }` to replace.
 - For resources, tasks, hooks and middleware, repeated `.dependencies()` calls append (shallow merge) by default; pass `{ override: true }` to replace. Mixed function/object deps are supported and merged consistently.
 
@@ -249,7 +250,7 @@ Note on `.init()`:
 Note on `.middleware()` and `.tags()`:
 
 - You can pass a single item or an array.
-- `.middleware()` appends by default; pass `{ override: true }` to replace the existing list. `.tags()` continues to replace the whole list on each call.
+- `.middleware()` and `.tags()` append by default; pass `{ override: true }` to replace the existing list.
 
 Append vs override for `.middleware()` and `.overrides()`:
 
@@ -280,6 +281,16 @@ const res = r
   .resource("app.overrides")
   .overrides([someResource]) // append
   .overrides([anotherResource], { override: true }) // replace
+  .build();
+
+// Tags append and override
+const tagA = r.tag("tag.A").build();
+const tagB = r.tag("tag.B").build();
+const tagged = r
+  .task("app.tags")
+  .tags([tagA]) // append
+  .tags([tagB]) // append
+  // .tags([tagB], { override: true }) // replace
   .build();
 ```
 
@@ -325,7 +336,7 @@ Cheat sheet:
 
 - Resource `.register()` accepts item | item[] | (config) => item | item[]
   - Default = append; `{ override: true }` replaces prior registrations
-- Tags and middleware accept single or array; repeated calls replace the list
+- Tags and middleware accept single or array; repeated calls append by default; pass `{ override: true }` to replace
 - Always call `.build()` and register built definitions
 
 For deeper contract tests, see `src/__tests__/typesafety.test.ts` and the builder tests under `src/__tests__/definers/`.

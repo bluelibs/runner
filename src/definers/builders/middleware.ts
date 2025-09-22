@@ -10,6 +10,7 @@ import type {
 } from "../../defs";
 import { defineTaskMiddleware } from "../defineTaskMiddleware";
 import { defineResourceMiddleware } from "../defineResourceMiddleware";
+import { mergeArray } from "./utils";
 
 // Task middleware builder
 type TaskMwState<C, In, Out, D extends DependencyMapType> = Readonly<
@@ -62,6 +63,7 @@ export interface TaskMiddlewareFluentBuilder<
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
   tags<TNewTags extends TagType[]>(
     t: TNewTags,
+    options?: { override?: boolean },
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
   everywhere(
     flag: boolean | ((task: any) => boolean),
@@ -127,8 +129,10 @@ function makeTaskMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
       const next = cloneTask(state, { meta: m as any });
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },
-    tags<TNewTags extends TagType[]>(t: TNewTags) {
-      const next = cloneTask(state, { tags: t as any });
+    tags<TNewTags extends TagType[]>(t: TNewTags, options?: { override?: boolean }) {
+      const override = options?.override ?? false;
+      const tags = mergeArray(state.tags as any, t as any, override);
+      const next = cloneTask(state, { tags: tags as any });
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },
     everywhere(flag) {
@@ -210,6 +214,7 @@ export interface ResourceMiddlewareFluentBuilder<
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
   tags<TNewTags extends TagType[]>(
     t: TNewTags,
+    options?: { override?: boolean },
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
   everywhere(
     flag: boolean | ((resource: any) => boolean),
@@ -275,8 +280,10 @@ function makeResourceMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
       const next = cloneRes(state, { meta: m as any });
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },
-    tags<TNewTags extends TagType[]>(t: TNewTags) {
-      const next = cloneRes(state, { tags: t as any });
+    tags<TNewTags extends TagType[]>(t: TNewTags, options?: { override?: boolean }) {
+      const override = options?.override ?? false;
+      const tags = mergeArray(state.tags as any, t as any, override);
+      const next = cloneRes(state, { tags: tags as any });
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },
     everywhere(flag) {

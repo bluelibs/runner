@@ -117,7 +117,7 @@ describe("Phantom tasks - fluent builders", () => {
         : ph1.dependencies;
     expect(Object.keys(depsMerged)).toEqual(["t1", "t2"]);
     expect(ph1.middleware.map((m) => m.id)).toEqual([tmw1.id, tmw2.id]);
-    expect(ph1.tags.map((t) => t.id)).toEqual([tagB.id]);
+    expect(ph1.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
     expect(ph1.inputSchema).toBeTruthy();
     expect(ph1.resultSchema).toBeTruthy();
     expect(ph1.meta).toBeTruthy();
