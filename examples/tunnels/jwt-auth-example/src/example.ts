@@ -145,7 +145,6 @@ function writeUnauthorized(res: ServerResponse, reason: string): void {
 type JwtVerifyResult =
   | { ok: true; claims: JwtClaims }
   | { ok: false; reason: string };
-type SignJwtInput = Omit<JwtClaims, "exp">;
 
 function verifyJwt(token: string, secret: string): JwtVerifyResult {
   try {
@@ -181,28 +180,4 @@ function verifyJwt(token: string, secret: string): JwtVerifyResult {
       error instanceof Error && error.message ? error.message : "Invalid token";
     return { ok: false, reason: message };
   }
-}
-
-function signJwt(
-  payload: SignJwtInput,
-  secret: string,
-  options?: { expiresInSeconds?: number },
-): string {
-  const signOptions: SignOptions = {
-    algorithm: "HS256",
-    ...(options?.expiresInSeconds != null
-      ? { expiresIn: options.expiresInSeconds }
-      : {}),
-  };
-  return jwt.sign(payload, secret, signOptions);
-}
-
-function buildBaseUrl(address: AddressInfo, basePath: string): string {
-  const normalizedBase =
-    basePath === "/"
-      ? ""
-      : basePath.endsWith("/")
-      ? basePath.slice(0, -1)
-      : basePath;
-  return `http://127.0.0.1:${address.port}${normalizedBase}`;
 }

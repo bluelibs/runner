@@ -6,8 +6,12 @@
  * - Client uploads slowly; server responds per chunk
  */
 
-import { resource, run, task } from "../../src";
-import { nodeExposure, useExposureContext, createHttpSmartClient } from "../../src/node";
+import { globals, resource, run, task } from "../../src";
+import {
+  nodeExposure,
+  useExposureContext,
+  createHttpSmartClient,
+} from "../../src/node";
 import { Readable, Transform } from "stream";
 import { createSlowReadable } from "./utils";
 
@@ -87,7 +91,9 @@ export async function runStreamingDuplexExample(): Promise<void> {
     const slow = createSlowStream(payload, 20).pipe(
       new Transform({
         transform(chunk, _enc, cb) {
-          const text = Buffer.isBuffer(chunk) ? chunk.toString("utf8") : String(chunk);
+          const text = Buffer.isBuffer(chunk)
+            ? chunk.toString("utf8")
+            : String(chunk);
           // eslint-disable-next-line no-console
           console.log("send", text);
           cb(null, chunk);
@@ -100,7 +106,8 @@ export async function runStreamingDuplexExample(): Promise<void> {
       .map((c) => transformChunk(c))
       .join("");
 
-    const client = createHttpSmartClient({ baseUrl });
+    const serializer = rr.getResourceValue(globals.resources.serializer);
+    const client = createHttpSmartClient({ baseUrl, serializer });
     const res = (await client.task(duplexTask.id, slow)) as Readable;
     await new Promise<void>((resolve, reject) => {
       const chunks: Buffer[] = [];
@@ -112,8 +119,11 @@ export async function runStreamingDuplexExample(): Promise<void> {
           chunks.push(buf);
         })
         .on("end", () => {
-          const out = Buffer.concat(chunks as readonly Uint8Array[]).toString("utf8");
-          if (out !== expected) return reject(new Error(`Unexpected response: ${out}`));
+          const out = Buffer.concat(chunks as readonly Uint8Array[]).toString(
+            "utf8",
+          );
+          if (out !== expected)
+            return reject(new Error(`Unexpected response: ${out}`));
           resolve();
         })
         .on("error", reject);

@@ -670,4 +670,21 @@ describe.skip("typesafety", () => {
 
     expect(true).toBe(true);
   });
+
+  it("Should work with generics and task run", async () => {
+    const task = defineTask({
+      id: "task",
+      run: async <T = any>(input: T): Promise<T> => {
+        return input;
+      },
+    });
+
+    const resource = defineResource({
+      id: "resource",
+      register: [task],
+    });
+
+    const rr = await run(resource);
+    const result = await rr.runTask(task, { name: "123" });
+  });
 });
