@@ -37,6 +37,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       timeoutMs: 5,
       fetchImpl: stubFetch,
       auth: { token: "T" },
+      serializer: EJSON,
     });
     const out = await client.task("t.id", { a: 1 });
     expect(out).toBe(42);
@@ -58,6 +59,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const c1 = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchErrMsg,
+      serializer: EJSON,
     });
     await expect(c1.event("e.id", { x: 1 })).rejects.toThrow(/boom/);
 
@@ -68,6 +70,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const c2 = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchNoMsg,
+      serializer: EJSON,
     });
     await expect(c2.event("e.id", { y: 1 })).rejects.toThrow(
       /Tunnel event error/,
@@ -81,6 +84,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const c = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchEmpty,
+      serializer: EJSON,
     });
     await expect(c.event("e.id", { y: 2 })).rejects.toThrow(
       /Tunnel event error/,
@@ -94,6 +98,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const c = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchNoMsg,
+      serializer: EJSON,
     });
     await expect(c.task("t.id", { z: 1 })).rejects.toThrow(/Tunnel task error/);
   });
@@ -110,6 +115,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const client = createExposureFetch({
       baseUrl: "http://api/",
       fetchImpl: stubFetch,
+      serializer: EJSON,
     });
     await client.task("t.id");
     expect(calls[0].url).toBe("http://api/task/t.id");
@@ -128,10 +134,17 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       } as any;
     }) as any;
 
-    const client = createExposureFetch({ baseUrl: "http://api", fetchImpl });
-    const result = await client.task<{ seenAt: Date }, { seenAt: Date }>("task.id", {
-      seenAt: requestDate,
+    const client = createExposureFetch({
+      baseUrl: "http://api",
+      fetchImpl,
+      serializer: EJSON,
     });
+    const result = await client.task<{ seenAt: Date }, { seenAt: Date }>(
+      "task.id",
+      {
+        seenAt: requestDate,
+      },
+    );
 
     expect(seen).toHaveLength(1);
     expect(typeof seen[0].init.body).toBe("string");
@@ -147,10 +160,13 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       JSON.stringify({ wrapped: value }),
     );
     const parse = jest.fn((text: string) => JSON.parse(text).wrapped);
-    const serializer: Serializer = { stringify, parse };
+    const addType = jest.fn();
+    const serializer: Serializer = { stringify, parse, addType };
 
     const fetchImpl: typeof fetch = (async (_url: any, init: any) => {
-      expect(init.body).toBe(JSON.stringify({ wrapped: { input: { foo: "bar" } } }));
+      expect(init.body).toBe(
+        JSON.stringify({ wrapped: { input: { foo: "bar" } } }),
+      );
       return {
         text: async () => JSON.stringify({ wrapped: { ok: true, result: 99 } }),
       } as any;
@@ -162,7 +178,9 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       serializer,
     });
 
-    const out = await client.task<{ foo: string }, number>("task.id", { foo: "bar" });
+    const out = await client.task<{ foo: string }, number>("task.id", {
+      foo: "bar",
+    });
 
     expect(out).toBe(99);
     expect(stringify).toHaveBeenCalledWith({ input: { foo: "bar" } });
@@ -170,5 +188,4 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       JSON.stringify({ wrapped: { ok: true, result: 99 } }),
     );
   });
-
 });

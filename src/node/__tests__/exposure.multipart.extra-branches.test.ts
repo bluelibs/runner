@@ -11,7 +11,9 @@ jest.mock("busboy", () => {
     once(event: string, cb: Function) {
       const wrapper = (...args: any[]) => {
         // remove wrapper before calling
-        this.handlers[event] = (this.handlers[event] ?? []).filter((f) => f !== wrapper);
+        this.handlers[event] = (this.handlers[event] ?? []).filter(
+          (f) => f !== wrapper,
+        );
         cb(...args);
       };
       (this.handlers[event] ??= []).push(wrapper);
@@ -32,7 +34,11 @@ jest.mock("busboy", () => {
   };
 });
 
-import { parseMultipartInput, type MultipartRequest } from "../exposure/multipart";
+import {
+  parseMultipartInput,
+  type MultipartRequest,
+} from "../exposure/multipart";
+import { EJSON } from "../../globals/resources/tunnel/serializer";
 import type { JsonResponse } from "../exposure/types";
 
 function expectErrorCode(response: JsonResponse, expected: string): void {
@@ -78,7 +84,7 @@ describe("parseMultipartInput - extra mocked branches", () => {
       busboy.emit("finish");
     });
 
-    const result = await parseMultipartInput(req);
+    const result = await parseMultipartInput(req, undefined, EJSON);
     expect(result.ok).toBe(false);
     if (!result.ok) expectErrorCode(result.response, "MISSING_MANIFEST");
   });
@@ -89,7 +95,7 @@ describe("parseMultipartInput - extra mocked branches", () => {
       busboy.emit("finish");
     });
 
-    const result = await parseMultipartInput(req);
+    const result = await parseMultipartInput(req, undefined, EJSON);
     expect(result.ok).toBe(false);
     if (!result.ok) expectErrorCode(result.response, "MISSING_MANIFEST");
   });
@@ -108,10 +114,13 @@ describe("parseMultipartInput - extra mocked branches", () => {
         pipe() {},
         resume() {},
       };
-      busboy.emit("file", "file:ID1", fileStream, { filename: "a.txt", mimeType: "text/plain" });
+      busboy.emit("file", "file:ID1", fileStream, {
+        filename: "a.txt",
+        mimeType: "text/plain",
+      });
     });
 
-    const result = await parseMultipartInput(req);
+    const result = await parseMultipartInput(req, undefined, EJSON);
     expect(result.ok).toBe(false);
     if (!result.ok) expectErrorCode(result.response, "STREAM_ERROR");
   });
@@ -122,7 +131,7 @@ describe("parseMultipartInput - extra mocked branches", () => {
       setImmediate(() => busboy.emit("error", new Error("bad")));
     });
 
-    const result = await parseMultipartInput(req);
+    const result = await parseMultipartInput(req, undefined, EJSON);
     expect(result.ok).toBe(false);
     if (!result.ok) expectErrorCode(result.response, "INVALID_MULTIPART");
   });
@@ -130,7 +139,9 @@ describe("parseMultipartInput - extra mocked branches", () => {
   it("file info can set size/lastModified/extra via 'file' source (branch)", async () => {
     const req = createMockRequest(baseHeaders, (busboy) => {
       const fileStream: any = {
-        on() { return fileStream; },
+        on() {
+          return fileStream;
+        },
         pipe() {},
         resume() {},
       };
@@ -146,7 +157,7 @@ describe("parseMultipartInput - extra mocked branches", () => {
       busboy.emit("error", new Error("stop"));
     });
 
-    const result = await parseMultipartInput(req);
+    const result = await parseMultipartInput(req, undefined, EJSON);
     expect(result.ok).toBe(false);
     if (!result.ok) expectErrorCode(result.response, "INVALID_MULTIPART");
   });

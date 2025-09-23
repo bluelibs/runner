@@ -15,7 +15,9 @@ Make tasks and events callable across processes – from a CLI, another service,
 5. Auth (static & dynamic)
 6. Uploads & files (EJSON sentinel, FormData, Node streams)
 7. Abort & timeouts
-  - 7.1) useExposureContext API
+
+- 7.1) useExposureContext API
+
 8. CORS
 9. Server allow‑lists
 10. Examples you can run
@@ -168,6 +170,60 @@ await client.task("app.tasks.add", { a: 1, b: 2 });
 await client.event("app.events.notify", { message: "hi" });
 ```
 
+### 4.5 Serializer (EJSON) and DI
+
+Runner ships with an EJSON-based serializer that you should access via DI. The `Serializer` surface is intentionally small: `stringify(value)`, `parse(text)`, and `addType(name, factory)` (for custom domain types).
+
+- Prefer resolving the global serializer resource and passing it to clients.
+- Use `getDefaultSerializer()` only outside DI (for standalone helpers, tests, etc.).
+
+Example: register custom types once via the global serializer, then pass it into clients.
+
+```ts
+import { r, globals } from "@bluelibs/runner";
+import { createHttpClient } from "@bluelibs/runner";
+import {
+  createHttpSmartClient,
+  createMixedHttpClient,
+} from "@bluelibs/runner/node";
+
+// 1) Register EJSON custom types using the global serializer resource
+const ejsonSetup = r
+  .resource("app.serialization.setup")
+  .dependencies({ serializer: globals.resources.serializer })
+  .init(async (_config, { serializer }) => {
+    class Distance {
+      constructor(public value: number, public unit: string) {}
+      toJSONValue() {
+        return { value: this.value, unit: this.unit } as const;
+      }
+      typeName() {
+        return "Distance" as const;
+      }
+    }
+
+    serializer.addType(
+      "Distance",
+      (j: { value: number; unit: string }) => new Distance(j.value, j.unit),
+    );
+  })
+  .build();
+
+// 2) Pass the serializer into any HTTP clients you create
+const clientUnified = createHttpClient({ baseUrl: "/__runner", serializer });
+const clientSmart = createHttpSmartClient({ baseUrl: "/__runner", serializer });
+const clientMixed = createMixedHttpClient({ baseUrl: "/__runner", serializer });
+const clientFetch = globals.tunnels.http.createClient({
+  url: "/__runner",
+  serializer,
+});
+```
+
+Notes:
+
+- Files are not custom EJSON types. Continue using File sentinels (see Uploads & files below).
+- If you must use the serializer outside DI, call `getDefaultSerializer()`.
+
 ## 5) Auth (static & dynamic)
 
 All clients support an auth header. Static config is easiest; for dynamic tokens (per request), use `onRequest` to set headers.
@@ -256,7 +312,7 @@ Important: “File” is not an EJSON custom type. Runner uses a special `$ejson
 - Multipart (recommended for JSON + files): any input that includes a File sentinel is sent as multipart/form-data with:
   - `__manifest`: JSON/EJSON of your full input, where File fields are left as EJSON File stubs
   - `file:{id}` parts: the actual file bytes (stream or buffer in Node; Blob in browsers)
-  This path lets you mix arbitrary JSON fields with one or more streamed files in a single request.
+    This path lets you mix arbitrary JSON fields with one or more streamed files in a single request.
 - Octet-stream (duplex): when the input itself is a Node `Readable`, the client uses `application/octet-stream`. This is for raw streaming and does not carry an additional JSON body. If you need JSON alongside a stream, wrap the stream in a File sentinel in a DTO and use the multipart path instead.
 
 Node example (DTO + stream via File sentinel):
@@ -280,6 +336,7 @@ await client.task("app.tasks.upload", {
 Server: Access the full HTTP context via `useExposureContext()` from `@bluelibs/runner/node`, including `signal: AbortSignal` for aborts, `req` for request details, and `res` for streaming responses. This is available only in tasks exposed via `nodeExposure`.
 
 #### Enhanced Abort Example with Error Handling
+
 ```ts
 import { r } from "@bluelibs/runner";
 import { useExposureContext } from "@bluelibs/runner/node";
@@ -289,16 +346,22 @@ import { CancellationError } from "@bluelibs/runner/errors";
 const longTask = r
   .task("app.tasks.longTask")
   .run(async (input: { workTime: number }) => {
-    const ctx = useExposureContext();  // Destructure as needed: { signal, req, res }
+    const ctx = useExposureContext(); // Destructure as needed: { signal, req, res }
     const { signal } = ctx;
 
     // Early check
     if (signal.aborted) {
-      throw new CancellationError("Task aborted before starting (client timeout/disconnect)");
+      throw new CancellationError(
+        "Task aborted before starting (client timeout/disconnect)",
+      );
     }
 
     // Log request context
-    console.log(`Task started for ${ctx.method} ${ctx.url.pathname}, User-Agent: ${ctx.headers['user-agent'] || 'unknown'}`);
+    console.log(
+      `Task started for ${ctx.method} ${ctx.url.pathname}, User-Agent: ${
+        ctx.headers["user-agent"] || "unknown"
+      }`,
+    );
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -307,39 +370,40 @@ const longTask = r
           aborted = true;
           reject(new CancellationError("Processing aborted by client"));
         };
-        signal.addEventListener('abort', handler, { once: true });
+        signal.addEventListener("abort", handler, { once: true });
 
         // Simulate work (e.g., file processing, API calls)
         const timer = setTimeout(() => {
-          signal.removeEventListener('abort', handler);
+          signal.removeEventListener("abort", handler);
           if (!aborted) resolve();
         }, input.workTime);
 
         // Optional: Stream progress
-        if (typeof ctx.res.write === 'function') {
+        if (typeof ctx.res.write === "function") {
           ctx.res.write(`Started processing for ${input.workTime}ms...\n`);
         }
       });
 
       // Success
-      if (typeof ctx.res.end === 'function') {
-        ctx.res.write('Task completed successfully!');
+      if (typeof ctx.res.end === "function") {
+        ctx.res.write("Task completed successfully!");
       }
 
-      return { status: 'success', message: 'Work done' };
+      return { status: "success", message: "Work done" };
     } catch (err) {
       if (err instanceof CancellationError) {
         // Log and re-throw
         console.warn(`Task longTask cancelled: ${err.message}`);
         throw err;
       }
-      throw err;  // Other errors propagate
+      throw err; // Other errors propagate
     }
   })
   .build();
 ```
 
 Key enhancements:
+
 - Full context (`ctx = useExposureContext()`) for logging and response writing.
 - Try-catch to handle `CancellationError` specifically (triggers HTTP 499).
 - Listener cleanup to prevent leaks.
@@ -352,15 +416,16 @@ Clients: Pass `timeoutMs` (e.g., `{ timeoutMs: 30000 }` in client options). Uses
 `useExposureContext()` is a Node-only hook in `@bluelibs/runner/node` for accessing HTTP context in exposed tasks: aborts (`signal`), request info (`req`), response streaming (`res`).
 
 #### API Shape
+
 ```ts
-import type { IncomingMessage, ServerResponse } from 'http';
+import type { IncomingMessage, ServerResponse } from "http";
 
 export interface ExposureRequestContextValue {
   req: IncomingMessage;
   res: ServerResponse;
   url: URL;
   basePath: string;
-  headers: IncomingMessage['headers'];
+  headers: IncomingMessage["headers"];
   method?: string;
   signal: AbortSignal;
 }
@@ -375,43 +440,45 @@ For conditional access without errors in non-exposed tasks, use `hasExposureCont
 **Abort Handling:** (See expanded above.)
 
 **Streaming Response:**
+
 ```ts
-import { r } from '@bluelibs/runner';
-import { useExposureContext } from '@bluelibs/runner/node';
-import { createReadStream } from 'fs';
+import { r } from "@bluelibs/runner";
+import { useExposureContext } from "@bluelibs/runner/node";
+import { createReadStream } from "fs";
 
 // Task streaming a file
 const streamFile = r
-  .task('app.tasks.streamFile')
+  .task("app.tasks.streamFile")
   .run(async (input: { filePath: string }) => {
     const { res, signal } = useExposureContext();
 
     res.writeHead(200, {
-      'Content-Type': 'application/octet-stream',
-      'Transfer-Encoding': 'chunked'
+      "Content-Type": "application/octet-stream",
+      "Transfer-Encoding": "chunked",
     });
 
     const stream = createReadStream(input.filePath);
     stream.pipe(res);
 
-    signal.addEventListener('abort', () => stream.destroy(), { once: true });
+    signal.addEventListener("abort", () => stream.destroy(), { once: true });
   })
   .build();
 ```
 
 **Request Introspection:**
+
 ```ts
 const secureTask = r
-  .task('app.tasks.secure')
+  .task("app.tasks.secure")
   .run(async () => {
     const { headers, req } = useExposureContext();
 
-    if (!headers.authorization) throw new Error('Unauthorized');
+    if (!headers.authorization) throw new Error("Unauthorized");
 
     // Read body if needed
-    let body = '';
-    req.on('data', chunk => body += chunk);
-    await new Promise(res => req.on('end', res));
+    let body = "";
+    req.on("data", (chunk) => (body += chunk));
+    await new Promise((res) => req.on("end", res));
 
     // Process body...
     return { validated: true };
@@ -420,11 +487,12 @@ const secureTask = r
 ```
 
 **Duplex:**
+
 ```ts
-import { Transform } from 'stream';
+import { Transform } from "stream";
 
 const duplexEcho = r
-  .task('app.tasks.duplexEcho')
+  .task("app.tasks.duplexEcho")
   .run(async () => {
     const { req, res, signal } = useExposureContext();
 
@@ -432,20 +500,25 @@ const duplexEcho = r
       transform(chunk, _, cb) {
         this.push(chunk.toString().toUpperCase());
         cb();
-      }
+      },
     });
 
     req.pipe(transform).pipe(res);
 
-    signal.addEventListener('abort', () => {
-      req.destroy();
-      res.end();
-    }, { once: true });
+    signal.addEventListener(
+      "abort",
+      () => {
+        req.destroy();
+        res.end();
+      },
+      { once: true },
+    );
   })
   .build();
 ```
 
 #### Warnings
+
 - Node-only; throws if called in browser or non-exposed tasks.
 - Security: Sanitize logged headers; avoid exposing secrets.
 - CORS: Misconfig can cause pre-aborts on signal.
@@ -586,7 +659,7 @@ Note: In browsers, read with the File/Blob APIs at the edge of your app (e.g., `
 - [ ] Choose a client: `createHttpClient` (unified), Node: `createMixedHttpClient` / `createHttpSmartClient`, or pure fetch: `globals.tunnels.http.createClient` / `createExposureFetch`
 - [ ] File uploads: use `createNodeFile(...)` (Node) or `platform/createFile` (browser)
 - [ ] Streaming: duplex via `useExposureContext().req/res` or server-push via `respondStream()`
-- [ ] Serializer: extend EJSON types as needed; pass custom serializer to fetch‑based clients
+- [ ] Serializer: register EJSON types via `globals.resources.serializer`; pass the serializer to all HTTP clients (unified, smart, mixed, pure fetch)
 - [ ] CORS: set `http.cors` when calling from browsers/cross‑origin clients
 - [ ] Abort: handle `useExposureContext()` (signal, req, res) in tasks; configure `timeoutMs` in clients
 
@@ -665,10 +738,7 @@ const httpClientTunnel = r
   .build();
 
 // 3) Compose your app
-const app = r
-  .resource("app")
-  .register([remoteHello, httpClientTunnel])
-  .build();
+const app = r.resource("app").register([remoteHello, httpClientTunnel]).build();
 
 // 4) Use it anywhere in your app
 const rr = await run(app);

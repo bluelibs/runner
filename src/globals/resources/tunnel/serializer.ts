@@ -3,6 +3,10 @@ import { EJSON } from "@bluelibs/ejson";
 export interface Serializer {
   stringify(value: unknown): string;
   parse<T = unknown>(text: string): T;
+  addType<TJson = unknown, T = unknown>(
+    name: string,
+    factory: (json: TJson) => T,
+  ): void;
 }
 
 export const EjsonSerializer: Serializer = {
@@ -11,6 +15,12 @@ export const EjsonSerializer: Serializer = {
   },
   parse<T = unknown>(text: string): T {
     return EJSON.parse(text) as T;
+  },
+  addType<TJson = unknown, T = unknown>(
+    name: string,
+    factory: (json: TJson) => T,
+  ): void {
+    EJSON.addType(name, factory as (json: any) => T);
   },
 };
 

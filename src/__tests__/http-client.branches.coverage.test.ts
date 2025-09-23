@@ -1,4 +1,5 @@
 import { createHttpClient } from "../http-client";
+import { EJSON } from "../globals/resources/tunnel/serializer";
 import { createWebFile } from "../platform/createWebFile";
 import { getDefaultSerializer } from "../globals/resources/tunnel/serializer";
 
@@ -7,23 +8,37 @@ describe("http-client branches coverage", () => {
 
   it("postMultipartBrowser: empty response yields undefined envelope and assertOkEnvelope throws", async () => {
     const blob = new Blob([Buffer.from("abc")], { type: "text/plain" });
-    const file = createWebFile({ name: "a.txt", type: "text/plain" }, blob, "FE1");
-    const fetchMock = async () => ({ text: async () => "" }) as any;
-    const client = createHttpClient({ baseUrl, fetchImpl: fetchMock as any });
+    const file = createWebFile(
+      { name: "a.txt", type: "text/plain" },
+      blob,
+      "FE1",
+    );
+    const fetchMock = async () => ({ text: async () => "" } as any);
+    const client = createHttpClient({
+      baseUrl,
+      fetchImpl: fetchMock as any,
+      serializer: EJSON,
+    });
     await expect(client.task("t.empty", { file } as any)).rejects.toBeTruthy();
   });
 
   it("postMultipartBrowser: non-json content-type still parsed by text path", async () => {
-    const blob = new Blob([Buffer.from("x")], { type: "application/octet-stream" });
+    const blob = new Blob([Buffer.from("x")], {
+      type: "application/octet-stream",
+    });
     const file = createWebFile({ name: "b.bin" }, blob, "FE2");
-    const fetchMock = async () => ({
-      text: async () => getDefaultSerializer().stringify({ ok: true, result: 5 }),
-      headers: { get: () => "text/plain" },
-    }) as any;
-    const client = createHttpClient({ baseUrl, fetchImpl: fetchMock as any });
+    const fetchMock = async () =>
+      ({
+        text: async () =>
+          getDefaultSerializer().stringify({ ok: true, result: 5 }),
+        headers: { get: () => "text/plain" },
+      } as any);
+    const client = createHttpClient({
+      baseUrl,
+      fetchImpl: fetchMock as any,
+      serializer: EJSON,
+    });
     const r = await client.task("t.nonjson", { file } as any);
     expect(r).toBe(5);
   });
 });
-
-

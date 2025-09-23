@@ -5,6 +5,7 @@ import {
   parseMultipartInput,
   type MultipartRequest,
 } from "../exposure/multipart";
+import { EJSON } from "../../globals/resources/tunnel/serializer";
 import type { JsonResponse } from "../exposure/types";
 import type { InputFile } from "../../types/inputFile";
 
@@ -76,10 +77,15 @@ function createErroringRequest(
 }
 
 function part(boundary: string, headers: string[], body: string): string {
-  return `--${boundary}${CRLF}${headers.join(CRLF)}${CRLF}${CRLF}${body}${CRLF}`;
+  return `--${boundary}${CRLF}${headers.join(
+    CRLF,
+  )}${CRLF}${CRLF}${body}${CRLF}`;
 }
 
-function assertInputFile(value: unknown, label: string): asserts value is InputFile {
+function assertInputFile(
+  value: unknown,
+  label: string,
+): asserts value is InputFile {
   if (!value || typeof value !== "object") {
     throw new Error(`${label} is not an object`);
   }
@@ -103,7 +109,9 @@ function assertInputFile(value: unknown, label: string): asserts value is InputF
   }
 }
 
-function assertFilePair(value: unknown): asserts value is { fileA: InputFile; fileB: InputFile } {
+function assertFilePair(
+  value: unknown,
+): asserts value is { fileA: InputFile; fileB: InputFile } {
   if (!value || typeof value !== "object") {
     throw new Error("Expected multipart value to contain files");
   }
@@ -148,22 +156,38 @@ describe("parseMultipartInput", () => {
       },
     });
     const req = createMultipartRequest(boundary, [
-      part(boundary, ['Content-Disposition: form-data; name="ignored"'], "noop"),
-      part(boundary, [
-        'Content-Disposition: form-data; name="__manifest"',
-        "Content-Type: application/json; charset=utf-8",
-      ], manifest),
-      part(boundary, [
-        'Content-Disposition: form-data; name="file:A"; filename="foo.txt"',
-        "Content-Type: application/octet-stream",
-      ], "abc"),
-      part(boundary, [
-        'Content-Disposition: form-data; name="file:B"; filename="bar.bin"',
-        "Content-Type: application/octet-stream",
-      ], "xyz"),
+      part(
+        boundary,
+        ['Content-Disposition: form-data; name="ignored"'],
+        "noop",
+      ),
+      part(
+        boundary,
+        [
+          'Content-Disposition: form-data; name="__manifest"',
+          "Content-Type: application/json; charset=utf-8",
+        ],
+        manifest,
+      ),
+      part(
+        boundary,
+        [
+          'Content-Disposition: form-data; name="file:A"; filename="foo.txt"',
+          "Content-Type: application/octet-stream",
+        ],
+        "abc",
+      ),
+      part(
+        boundary,
+        [
+          'Content-Disposition: form-data; name="file:B"; filename="bar.bin"',
+          "Content-Type: application/octet-stream",
+        ],
+        "xyz",
+      ),
     ]);
 
-    const parsed = await parseMultipartInput(req);
+    const parsed = await parseMultipartInput(req, undefined, EJSON);
     if (!parsed.ok) {
       throw new Error("Expected multipart success");
     }
@@ -184,13 +208,17 @@ describe("parseMultipartInput", () => {
 
   it("fails when manifest is missing", async () => {
     const req = createMultipartRequest(boundary, [
-      part(boundary, [
-        'Content-Disposition: form-data; name="file:A"; filename="foo.txt"',
-        "Content-Type: application/octet-stream",
-      ], "abc"),
+      part(
+        boundary,
+        [
+          'Content-Disposition: form-data; name="file:A"; filename="foo.txt"',
+          "Content-Type: application/octet-stream",
+        ],
+        "abc",
+      ),
     ]);
 
-    const parsed = await parseMultipartInput(req);
+    const parsed = await parseMultipartInput(req, undefined, EJSON);
     if (parsed.ok) {
       throw new Error("Expected multipart failure for missing manifest");
     }
@@ -200,13 +228,17 @@ describe("parseMultipartInput", () => {
 
   it("fails when manifest JSON is invalid", async () => {
     const req = createMultipartRequest(boundary, [
-      part(boundary, [
-        'Content-Disposition: form-data; name="__manifest"',
-        "Content-Type: application/json; charset=utf-8",
-      ], "not-json"),
+      part(
+        boundary,
+        [
+          'Content-Disposition: form-data; name="__manifest"',
+          "Content-Type: application/json; charset=utf-8",
+        ],
+        "not-json",
+      ),
     ]);
 
-    const parsed = await parseMultipartInput(req);
+    const parsed = await parseMultipartInput(req, undefined, EJSON);
     if (parsed.ok) {
       throw new Error("Expected multipart failure for invalid manifest");
     }
@@ -217,7 +249,7 @@ describe("parseMultipartInput", () => {
   it("propagates request stream errors", async () => {
     const req = createErroringRequest(boundary, new Error("boom"));
 
-    const parsed = await parseMultipartInput(req);
+    const parsed = await parseMultipartInput(req, undefined, EJSON);
     if (parsed.ok) {
       const finalize = await parsed.finalize;
       if (finalize.ok) {
@@ -230,14 +262,11 @@ describe("parseMultipartInput", () => {
   });
 
   it("reports multipart parser errors (missing boundary)", async () => {
-    const req = createRequestFromBody(
-      "irrelevant",
-      {
-        "content-type": "multipart/form-data",
-      },
-    );
+    const req = createRequestFromBody("irrelevant", {
+      "content-type": "multipart/form-data",
+    });
 
-    const parsed = await parseMultipartInput(req);
+    const parsed = await parseMultipartInput(req, undefined, EJSON);
     if (parsed.ok) {
       const finalize = await parsed.finalize;
       if (finalize.ok) {
@@ -256,13 +285,17 @@ describe("parseMultipartInput", () => {
       },
     });
     const req = createMultipartRequest(boundary, [
-      part(boundary, [
-        'Content-Disposition: form-data; name="__manifest"',
-        "Content-Type: application/json; charset=utf-8",
-      ], manifest),
+      part(
+        boundary,
+        [
+          'Content-Disposition: form-data; name="__manifest"',
+          "Content-Type: application/json; charset=utf-8",
+        ],
+        manifest,
+      ),
     ]);
 
-    const parsed = await parseMultipartInput(req);
+    const parsed = await parseMultipartInput(req, undefined, EJSON);
     if (!parsed.ok) {
       throw new Error("Expected success before finalize");
     }

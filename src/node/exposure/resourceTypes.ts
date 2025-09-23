@@ -5,12 +5,14 @@ import { globalResources } from "../../globals/globalResources";
 import type { ResourceDependencyValuesType } from "../../defs";
 import type { NodeExposureHttpAuthConfig } from "./authenticator";
 import type { RequestHandler } from "./types";
+import type { Serializer } from "../../globals/resources/tunnel/serializer";
 
 export type NodeExposureDependencyMap = {
   store: typeof globalResources.store;
   taskRunner: typeof globalResources.taskRunner;
   eventManager: typeof globalResources.eventManager;
   logger: typeof globalResources.logger;
+  serializer: typeof globalResources.serializer;
 };
 
 export type NodeExposureDeps =
@@ -35,10 +37,7 @@ export interface NodeExposureHandlers {
   ) => Promise<boolean>;
   handleTask: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
   handleEvent: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
-  handleDiscovery: (
-    req: IncomingMessage,
-    res: ServerResponse,
-  ) => Promise<void>;
+  handleDiscovery: (req: IncomingMessage, res: ServerResponse) => Promise<void>;
   createRequestListener: () => http.RequestListener;
   createServer: () => http.Server;
   attachTo: (server: http.Server) => () => void;

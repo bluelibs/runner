@@ -10,6 +10,7 @@ jest.mock("../multipart", () => {
 });
 
 import { createRequestHandlers } from "../requestHandlers";
+import { EJSON } from "../../../globals/resources/tunnel/serializer";
 import { createRouter } from "../router";
 
 describe("requestHandlers multipart rethrow after finalize", () => {
@@ -29,7 +30,10 @@ describe("requestHandlers multipart rethrow after finalize", () => {
       info: () => {},
     };
     const authenticator = () => ({ ok: true as const });
-    const allowList = { ensureTask: () => null, ensureEvent: () => null } as any;
+    const allowList = {
+      ensureTask: () => null,
+      ensureEvent: () => null,
+    } as any;
     const router = createRouter("/__runner");
 
     const { handleTask } = createRequestHandlers({
@@ -40,13 +44,16 @@ describe("requestHandlers multipart rethrow after finalize", () => {
       authenticator: authenticator as any,
       allowList,
       router,
+      serializer: EJSON,
     });
 
     const req: any = {
       method: "POST",
       url: "/__runner/task/t",
       headers: { "content-type": "multipart/form-data; boundary=X" },
-      on() { return req; },
+      on() {
+        return req;
+      },
     };
     const chunks: Buffer[] = [];
     let status = 0;
@@ -56,16 +63,19 @@ describe("requestHandlers multipart rethrow after finalize", () => {
       end(payload?: any) {
         status = this.statusCode;
         if (payload != null)
-          chunks.push(Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)));
+          chunks.push(
+            Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)),
+          );
       },
     };
 
     await handleTask(req, res);
     const body = chunks.length
-      ? JSON.parse(Buffer.concat(chunks as readonly Uint8Array[]).toString("utf8"))
+      ? JSON.parse(
+          Buffer.concat(chunks as readonly Uint8Array[]).toString("utf8"),
+        )
       : undefined;
     expect(status).toBe(500);
     expect(body?.error?.message).toBe("task-bad");
   });
 });
-

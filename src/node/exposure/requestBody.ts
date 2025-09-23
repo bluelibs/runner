@@ -1,6 +1,6 @@
 import type { IncomingMessage } from "http";
 
-import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
+import type { Serializer } from "../../globals/resources/tunnel/serializer";
 import { jsonErrorResponse } from "./httpResponse";
 import type { JsonResponse } from "./types";
 import { CancellationError } from "../../errors";
@@ -50,7 +50,9 @@ export async function readRequestBody(
     add?.("aborted", onAbort as any);
     if (signal) {
       if (signal.aborted) return onAbort();
-      signal.addEventListener("abort", onAbort as EventListener, { once: true });
+      signal.addEventListener("abort", onAbort as EventListener, {
+        once: true,
+      });
     }
   });
 }
@@ -58,7 +60,10 @@ export async function readRequestBody(
 export async function readJsonBody<T>(
   req: IncomingMessage,
   signal?: AbortSignal,
-): Promise<{ ok: true; value: T | undefined } | { ok: false; response: JsonResponse }> {
+  serializer?: Serializer,
+): Promise<
+  { ok: true; value: T | undefined } | { ok: false; response: JsonResponse }
+> {
   const body = await readRequestBody(req, signal);
   if (body.length === 0) {
     return { ok: true, value: undefined };
@@ -66,7 +71,7 @@ export async function readJsonBody<T>(
   try {
     return {
       ok: true,
-      value: getDefaultSerializer().parse<T>(body.toString("utf8")),
+      value: (serializer as Serializer).parse<T>(body.toString("utf8")),
     };
   } catch {
     return {

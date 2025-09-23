@@ -1,6 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../http-smart-client.model";
+import { EJSON } from "../../globals/resources/tunnel/serializer";
 import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
 import { createNodeFile } from "../files";
 
@@ -14,7 +15,7 @@ function asIncoming(
 
 describe("createHttpSmartClient (unit)", () => {
   const baseUrl = "http://127.0.0.1:1234/__runner";
-  const client = createHttpSmartClient({ baseUrl });
+  const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
 
   afterEach(() => {
     jest.restoreAllMocks();
@@ -73,7 +74,7 @@ describe("createHttpSmartClient (unit)", () => {
       sink.destroy = () => undefined;
       return sink;
     }) as any;
-    const c = createHttpSmartClient({ baseUrl, onRequest });
+    const c = createHttpSmartClient({ baseUrl, onRequest, serializer: EJSON });
     const out = await c.task("x", { v: 1 } as any);
     expect(out).toBe(1);
     expect(onRequest).toHaveBeenCalledWith(
@@ -284,6 +285,7 @@ describe("createHttpSmartClient (unit)", () => {
     const c = createHttpSmartClient({
       baseUrl: "https://127.0.0.1/__runner",
       auth: { header: "x-token", token: "secret" },
+      serializer: EJSON,
     });
     const out = await c.task("sum", { a: 3, b: 4 } as any);
     expect(out).toBe(7);
@@ -323,7 +325,9 @@ describe("createHttpSmartClient (unit)", () => {
   });
 
   it("createHttpSmartClient throws on empty baseUrl", () => {
-    expect(() => createHttpSmartClient({ baseUrl: "" as any })).toThrow();
+    expect(() =>
+      createHttpSmartClient({ baseUrl: "" as any, serializer: EJSON } as any),
+    ).toThrow();
   });
   it("octet-stream: when input is Readable, returns response stream", async () => {
     const spy = jest
@@ -410,7 +414,7 @@ describe("createHttpSmartClient (unit)", () => {
       sink.destroy = () => undefined;
       return sink;
     }) as any;
-    const c = createHttpSmartClient({ baseUrl, onRequest });
+    const c = createHttpSmartClient({ baseUrl, onRequest, serializer: EJSON });
     await c.task("upload", {
       file: createNodeFile({ name: "x" }, { stream: Readable.from("x") }, "Fz"),
     } as any);

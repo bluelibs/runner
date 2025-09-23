@@ -12,7 +12,7 @@ export interface HttpCreateClientConfig {
   auth?: HttpClientAuthConfig;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
-  serializer?: Serializer;
+  serializer: Serializer;
   onRequest?: (ctx: {
     url: string;
     headers: Record<string, string>;

@@ -1,6 +1,5 @@
 import type { Readable } from "stream";
 import type { Serializer } from "./globals/resources/tunnel/serializer";
-import { getDefaultSerializer } from "./globals/resources/tunnel/serializer";
 import type { ProtocolEnvelope } from "./globals/resources/tunnel/protocol";
 import { assertOkEnvelope } from "./globals/resources/tunnel/protocol";
 import { createExposureFetch } from "./http-fetch-tunnel.resource";
@@ -16,7 +15,7 @@ export interface HttpClientConfig {
   auth?: HttpClientAuth;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
-  serializer?: Serializer;
+  serializer: Serializer;
   onRequest?: (ctx: {
     url: string;
     headers: Record<string, string>;
@@ -71,9 +70,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     const fetchImpl = cfg.fetchImpl ?? (globalThis.fetch as typeof fetch);
     const res = await fetchImpl(url, { method: "POST", body: fd, headers });
     const text = await res.text();
-    const json = text
-      ? (cfg.serializer ?? getDefaultSerializer()).parse(text)
-      : undefined;
+    const json = text ? cfg.serializer.parse(text) : undefined;
     return json as ProtocolEnvelope<any>;
   }
 
@@ -94,6 +91,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
           baseUrl,
           auth: cfg.auth,
           timeoutMs: cfg.timeoutMs,
+          serializer: cfg.serializer,
           onRequest: cfg.onRequest,
         }).task(id, input as any);
       }
@@ -101,9 +99,9 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       // Multipart path: gather both Node and Web files
       const manifest = buildUniversalManifest(input);
       if (manifest.nodeFiles.length > 0 || manifest.webFiles.length > 0) {
-        const manifestText = (
-          cfg.serializer ?? getDefaultSerializer()
-        ).stringify({ input: manifest.input });
+        const manifestText = cfg.serializer.stringify({
+          input: manifest.input,
+        });
         if (manifest.webFiles.length > 0 && manifest.nodeFiles.length === 0) {
           const r = await postMultipartBrowser(
             url,
@@ -134,6 +132,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
           baseUrl,
           auth: cfg.auth,
           timeoutMs: cfg.timeoutMs,
+          serializer: cfg.serializer,
           onRequest: cfg.onRequest,
         });
         // Use the underlying smart client multipart path by passing the original input structure

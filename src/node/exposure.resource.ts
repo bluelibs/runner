@@ -21,6 +21,7 @@ export const nodeExposure = defineResource({
     taskRunner: globalResources.taskRunner,
     eventManager: globalResources.eventManager,
     logger: globalResources.logger,
+    serializer: globalResources.serializer,
   },
   async init(cfg: NodeExposureConfig, deps) {
     return createNodeExposure(cfg, deps);

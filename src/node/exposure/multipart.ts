@@ -7,7 +7,7 @@ const busboyFactory: (cfg: {
 }) => any = require("busboy");
 import type { FileInfo, FieldInfo } from "busboy";
 
-import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
+import type { Serializer } from "../../globals/resources/tunnel/serializer";
 // Import with explicit .ts extension to prevent tsup from resolving it
 // via the native-node-modules plugin (which looks for paths ending in .node)
 import { NodeInputFile } from "../inputFile.model";
@@ -53,6 +53,7 @@ export interface MultipartRequest extends NodeJS.ReadableStream {
 export async function parseMultipartInput(
   req: MultipartRequest,
   signal?: AbortSignal,
+  serializer?: Serializer,
 ): Promise<MultipartResult> {
   const files = new Map<string, FileEntry>();
   let manifestRaw = "";
@@ -161,7 +162,7 @@ export async function parseMultipartInput(
       const text = typeof value === "string" ? value : String(value);
       manifestRaw += text;
       const manifest = manifestRaw
-        ? getDefaultSerializer().parse<{ input?: unknown }>(manifestRaw)
+        ? (serializer as Serializer).parse<{ input?: unknown }>(manifestRaw)
         : undefined;
       if (!manifest || typeof manifest !== "object") {
         fail(jsonErrorResponse(400, "Missing manifest", "MISSING_MANIFEST"));

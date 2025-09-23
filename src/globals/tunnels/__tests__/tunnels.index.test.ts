@@ -1,4 +1,5 @@
 import { tunnels } from "../index";
+import { EJSON } from "../../resources/tunnel/serializer";
 
 describe("globals.tunnels index", () => {
   it("http.createClient forwards url to createExposureFetch and returns a client", async () => {
@@ -10,7 +11,11 @@ describe("globals.tunnels index", () => {
       }) as any;
     }) as any;
 
-    const client = tunnels.http.createClient({ url: "http://x/__runner", fetchImpl });
+    const client = tunnels.http.createClient({
+      url: "http://x/__runner",
+      fetchImpl,
+      serializer: EJSON,
+    });
     expect(typeof client.task).toBe("function");
     expect(typeof client.event).toBe("function");
     // Exercise a simple call to ensure the object works
@@ -18,4 +23,3 @@ describe("globals.tunnels index", () => {
     expect(res).toBe(1);
   });
 });
-

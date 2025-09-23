@@ -1,6 +1,7 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
 import { createExposureFetch } from "../../http-fetch-tunnel.resource";
+import { EJSON } from "../../globals/resources/tunnel/serializer";
 
 describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
   it("normalizes baseUrl and serializes bodies (postJson lines)", async () => {
@@ -26,6 +27,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
       baseUrl: "http://example.test/__runner/",
       fetchImpl: fetchMock as any,
       timeoutMs: 1,
+      serializer: EJSON,
     });
     // task with defined input
     const r = await client.task<{ a: number }, number>("t1", { a: 1 });
@@ -58,6 +60,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
       baseUrl: "http://example.test/__runner",
       fetchImpl: fetchAbort as any,
       timeoutMs: 1,
+      serializer: EJSON,
     });
     await expect(client.task("t1", {})).rejects.toThrow(/aborted/);
   });
@@ -67,6 +70,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
       createExposureFetch({
         baseUrl: "http://example.test/__runner",
         fetchImpl: 123 as any,
+        serializer: EJSON,
       }),
     ).toThrow(/global fetch is not available/i);
   });
@@ -77,6 +81,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
     const client = createExposureFetch({
       baseUrl: "http://example.test/__runner",
       fetchImpl: emptyBodyFetch as any,
+      serializer: EJSON,
     });
     await expect(client.task("tid" as any, {})).rejects.toThrow(
       /Tunnel task error/,
@@ -91,6 +96,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
       createExposureFetch({
         baseUrl: "" as any,
         fetchImpl: (async () => ({ text: async () => "{}" } as any)) as any,
+        serializer: EJSON,
       }),
     ).toThrow(/requires baseUrl/i);
   });

@@ -1,7 +1,7 @@
 import * as http from "http";
 import * as https from "https";
 import { Readable, pipeline } from "stream";
-import { getDefaultSerializer } from "../globals/resources/tunnel/serializer";
+import type { Serializer } from "../globals/resources/tunnel/serializer";
 import type { ProtocolEnvelope } from "../globals/resources/tunnel/protocol";
 import { assertOkEnvelope } from "../globals/resources/tunnel/protocol";
 import type { InputFileMeta } from "../types/inputFile";
@@ -17,6 +17,7 @@ export interface HttpSmartClientConfig {
   baseUrl: string; // ex: http://localhost:7070/__runner
   auth?: HttpSmartClientAuthConfig;
   timeoutMs?: number; // optional request timeout for JSON/multipart
+  serializer: Serializer;
   onRequest?: (ctx: {
     url: string;
     headers: Record<string, string>;
@@ -64,7 +65,7 @@ async function postJson<T = any>(
   url: string,
   body: unknown,
 ): Promise<T> {
-  const serializer = getDefaultSerializer();
+  const serializer = cfg.serializer;
   const parsed = new URL(url);
   const lib = requestLib(parsed);
   const headers = {
@@ -277,6 +278,7 @@ async function postOctetStream(
 
 function parseMaybeJsonResponse<T = any>(
   res: http.IncomingMessage,
+  serializer: Serializer,
 ): Promise<T | Readable> {
   const contentType = String(res.headers["content-type"]);
   if (/^application\/json/i.test(contentType)) {
@@ -289,7 +291,7 @@ function parseMaybeJsonResponse<T = any>(
             "utf8",
           );
           const json = text
-            ? (getDefaultSerializer().parse(text) as T)
+            ? (serializer.parse(text) as T)
             : (undefined as unknown as T);
           resolve(json);
         } catch (e) {
@@ -307,6 +309,7 @@ export function createHttpSmartClient(
 ): HttpSmartClient {
   const baseUrl = cfg.baseUrl.replace(/\/$/, "");
   if (!baseUrl) throw new Error("createHttpSmartClient requires baseUrl");
+  const serializer = cfg.serializer;
 
   return {
     async task<I, O>(id: string, input?: I): Promise<O | Readable> {
@@ -322,7 +325,7 @@ export function createHttpSmartClient(
       // B) Multipart: detect EJSON File sentinels with local Node sources
       if (hasNodeFile(input)) {
         const manifest = buildNodeManifest(input);
-        const manifestText = getDefaultSerializer().stringify({
+        const manifestText = serializer.stringify({
           input: manifest.input,
         });
         const { res } = await postMultipart(
@@ -331,7 +334,10 @@ export function createHttpSmartClient(
           manifestText,
           manifest.files,
         );
-        const maybe = await parseMaybeJsonResponse<ProtocolEnvelope<O>>(res);
+        const maybe = await parseMaybeJsonResponse<ProtocolEnvelope<O>>(
+          res,
+          serializer,
+        );
         if (isReadable(maybe)) return maybe; // server streamed back directly
         return assertOkEnvelope<O>(maybe as ProtocolEnvelope<O>, {
           fallbackMessage: "Tunnel task error",

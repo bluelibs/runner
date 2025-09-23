@@ -7,10 +7,7 @@ import {
   ProtocolEnvelope,
   toTunnelError,
 } from "./globals/resources/tunnel/protocol";
-import {
-  getDefaultSerializer,
-  Serializer,
-} from "./globals/resources/tunnel/serializer";
+import { Serializer } from "./globals/resources/tunnel/serializer";
 import { normalizeError as _normalizeError } from "./globals/resources/tunnel/error-utils";
 export { normalizeError } from "./globals/resources/tunnel/error-utils";
 
@@ -24,7 +21,7 @@ export interface ExposureFetchConfig {
   auth?: ExposureFetchAuthConfig;
   timeoutMs?: number; // optional request timeout
   fetchImpl?: typeof fetch; // custom fetch (optional)
-  serializer?: Serializer; // optional serializer (defaults to Runner's EJSON)
+  serializer: Serializer; // required serializer (EJSON-compatible)
   onRequest?: (ctx: {
     url: string;
     headers: Record<string, string>;
@@ -65,13 +62,13 @@ async function postSerialized<T = any>(
     const res = await fetchFn(url, {
       method: "POST",
       headers: reqHeaders,
-      body: (serializer ?? getDefaultSerializer()).stringify(body),
+      body: (serializer as Serializer).stringify(body),
       signal: controller?.signal,
     });
 
     const text = await res.text();
     const json = text
-      ? (serializer ?? getDefaultSerializer()).parse<T>(text)
+      ? (serializer as Serializer).parse<T>(text)
       : (undefined as unknown as T);
     return json;
   } finally {
@@ -108,7 +105,7 @@ export function createExposureFetch(
         { input },
         buildHeaders(),
         cfg?.timeoutMs,
-        cfg?.serializer,
+        cfg.serializer,
         cfg?.onRequest,
       );
       return assertOkEnvelope<O>(r, { fallbackMessage: "Tunnel task error" });
@@ -121,7 +118,7 @@ export function createExposureFetch(
         { payload },
         buildHeaders(),
         cfg?.timeoutMs,
-        cfg?.serializer,
+        cfg.serializer,
         cfg?.onRequest,
       );
       assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });

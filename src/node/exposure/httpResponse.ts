@@ -1,11 +1,15 @@
 import type { ServerResponse } from "http";
 
-import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
+import type { Serializer } from "../../globals/resources/tunnel/serializer";
 import type { JsonResponse, StreamingResponse } from "./types";
 
 export const EJSON_CONTENT_TYPE = "application/json; charset=utf-8";
 
-export const NOT_FOUND_RESPONSE = jsonErrorResponse(404, "Not Found", "NOT_FOUND");
+export const NOT_FOUND_RESPONSE = jsonErrorResponse(
+  404,
+  "Not Found",
+  "NOT_FOUND",
+);
 
 export const METHOD_NOT_ALLOWED_RESPONSE = jsonErrorResponse(
   405,
@@ -31,12 +35,17 @@ export function jsonErrorResponse(
   return { status, body: { ok: false, error } };
 }
 
-export function respondJson(res: ServerResponse, response: JsonResponse): void {
+export function respondJson(
+  res: ServerResponse,
+  response: JsonResponse,
+  serializer?: Serializer,
+): void {
   if (res.writableEnded) {
     return;
   }
   const payload = Buffer.from(
-    getDefaultSerializer().stringify(response.body),
+    (serializer as Serializer | undefined)?.stringify(response.body) ??
+      JSON.stringify(response.body),
     "utf8",
   );
   res.statusCode = response.status;
@@ -78,9 +87,7 @@ export function respondStream(
   }
 
   const handleData = (chunk: unknown) => {
-    const payload = Buffer.isBuffer(chunk)
-      ? chunk
-      : Buffer.from(String(chunk));
+    const payload = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
     (res as any).write?.(payload);
   };
 

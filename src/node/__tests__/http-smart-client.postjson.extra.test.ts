@@ -1,6 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../http-smart-client.model";
+import { EJSON } from "../../globals/resources/tunnel/serializer";
 import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
 import { createNodeFile } from "../files";
 
@@ -47,7 +48,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
       sink.destroy = () => undefined;
       return sink;
     }) as any;
-    const client = createHttpSmartClient({ baseUrl });
+    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
     await expect(client.event("evt", { a: 1 } as any)).resolves.toBeUndefined();
   });
 
@@ -77,7 +78,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
       sink.destroy = () => undefined;
       return sink;
     }) as any;
-    const client = createHttpSmartClient({ baseUrl });
+    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
     const out = await client.task("upload", {
       file: createNodeFile({ name: "x" }, { buffer: Buffer.from([1]) }, "FX"),
     } as any);

@@ -1,5 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { createRequestHandlers } from "../requestHandlers";
+import { EJSON } from "../../../globals/resources/tunnel/serializer";
 
 function makeReq(): IncomingMessage {
   const listeners: Record<string, Function[]> = {};
@@ -60,7 +61,10 @@ describe("requestHandlers - content-type array non-empty branch (line 114)", () 
       },
       cors: undefined,
     };
-    const { handleTask } = createRequestHandlers(deps);
+    const { handleTask } = createRequestHandlers({
+      ...deps,
+      serializer: EJSON,
+    });
     const req = makeReq();
     const res = makeRes();
     await handleTask(req, res);

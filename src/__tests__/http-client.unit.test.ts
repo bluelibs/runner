@@ -24,7 +24,10 @@ jest.mock("../node/http-smart-client.model", () => {
 import { createHttpClient } from "../http-client";
 import { createWebFile } from "../platform/createWebFile";
 import { createFile as createNodeFile } from "../node/platform/createFile";
-import { getDefaultSerializer } from "../globals/resources/tunnel/serializer";
+import {
+  getDefaultSerializer,
+  EJSON,
+} from "../globals/resources/tunnel/serializer";
 
 describe("http-client", () => {
   const baseUrl = "http://127.0.0.1:7070/__runner";
@@ -35,7 +38,7 @@ describe("http-client", () => {
 
   it("JSON fallback uses exposure fetch", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
-    const client = createHttpClient({ baseUrl });
+    const client = createHttpClient({ baseUrl, serializer: EJSON });
     const result = await client.task("t.json", { a: 1 } as any);
     expect(result).toBe("JSON-OK");
     expect((createExposureFetch as any).__lastCfg.baseUrl).toBe(
@@ -46,7 +49,7 @@ describe("http-client", () => {
 
   it("event delegates to exposure fetch event", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
-    const client = createHttpClient({ baseUrl });
+    const client = createHttpClient({ baseUrl, serializer: EJSON });
     await client.event("e.hello", { x: true } as any);
     const event = (createExposureFetch as any).__event as jest.Mock;
     expect(event).toHaveBeenCalledTimes(1);
@@ -82,6 +85,7 @@ describe("http-client", () => {
       fetchImpl: fetchMock as any,
       auth: { token: "tok" },
       onRequest,
+      serializer: EJSON,
     });
     const r = await client.task("t.upload.web", { file } as any);
     expect(r).toBe("UP");
@@ -103,7 +107,11 @@ describe("http-client", () => {
             getDefaultSerializer().stringify({ ok: true, result: "DEF" }),
         } as any),
     );
-    const client = createHttpClient({ baseUrl, fetchImpl: fetchMock as any });
+    const client = createHttpClient({
+      baseUrl,
+      fetchImpl: fetchMock as any,
+      serializer: EJSON,
+    });
     const r = await client.task("t.upload.def", { file } as any);
     expect(r).toBe("DEF");
     expect(fetchMock).toHaveBeenCalledTimes(1);
@@ -129,7 +137,11 @@ describe("http-client", () => {
       task: jest.fn(async () => "SMART-MP"),
       event: jest.fn(async () => {}),
     });
-    const client = createHttpClient({ baseUrl, auth: { token: "t" } });
+    const client = createHttpClient({
+      baseUrl,
+      auth: { token: "t" },
+      serializer: EJSON,
+    });
     const r = await client.task("t.upload.node", {
       a: nodeSentinel,
       b: webSentinel,
@@ -148,7 +160,7 @@ describe("http-client", () => {
       task: jest.fn(async () => "SMART-DUPLEX"),
       event: jest.fn(async () => {}),
     });
-    const client = createHttpClient({ baseUrl });
+    const client = createHttpClient({ baseUrl, serializer: EJSON });
     const stream = Readable.from([Buffer.from("data")]);
     const r = await client.task("t.duplex", stream as any);
     expect(r).toBe("SMART-DUPLEX");
@@ -170,7 +182,11 @@ describe("http-client", () => {
         blob,
         "F3",
       );
-      const client = createHttpClient({ baseUrl, auth: { token: "tk" } });
+      const client = createHttpClient({
+        baseUrl,
+        auth: { token: "tk" },
+        serializer: EJSON,
+      });
       const r = await client.task("t.upload.web2", { file } as any);
       expect(r).toBe("GUP");
       expect(globalThis.fetch as any).toHaveBeenCalledTimes(1);
@@ -180,6 +196,8 @@ describe("http-client", () => {
   });
 
   it("throws on empty baseUrl", () => {
-    expect(() => createHttpClient({ baseUrl: "" as any })).toThrow();
+    expect(() =>
+      createHttpClient({ baseUrl: "" as any, serializer: EJSON } as any),
+    ).toThrow();
   });
 });

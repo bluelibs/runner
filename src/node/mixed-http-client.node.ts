@@ -14,7 +14,7 @@ export interface MixedHttpClientConfig {
   timeoutMs?: number;
   // Only used by the JSON/EJSON path
   fetchImpl?: typeof fetch;
-  serializer?: Serializer;
+  serializer: Serializer;
   // Propagated to both JSON and Smart client paths
   onRequest?: (ctx: {
     url: string;

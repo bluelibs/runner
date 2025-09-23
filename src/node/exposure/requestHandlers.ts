@@ -10,6 +10,7 @@ import {
 } from "./httpResponse";
 import { isMultipart, parseMultipartInput } from "./multipart";
 import { readJsonBody } from "./requestBody";
+import type { Serializer } from "../../globals/resources/tunnel/serializer";
 import { requestUrl, resolveTargetFromRequest } from "./router";
 import { errorMessage, safeLogError } from "./logging";
 import type { Authenticator, AllowListGuard, RequestHandler } from "./types";
@@ -33,6 +34,7 @@ interface RequestProcessingDeps {
   allowList: AllowListGuard;
   router: ExposureRouter;
   cors?: NodeExposureHttpCorsConfig;
+  serializer: Serializer;
 }
 
 export interface NodeExposureRequestHandlers {
@@ -54,6 +56,7 @@ export function createRequestHandlers(
     allowList,
     router,
   } = deps;
+  const serializer = deps.serializer;
   const cors = deps.cors;
 
   const processTaskRequest = async (
@@ -62,21 +65,21 @@ export function createRequestHandlers(
     taskId: string,
   ): Promise<void> => {
     if (req.method !== "POST") {
-      respondJson(res, METHOD_NOT_ALLOWED_RESPONSE);
+      respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
       return;
     }
 
     const auth = authenticator(req);
     if (!auth.ok) {
       applyCorsActual(req, res, cors);
-      respondJson(res, auth.response);
+      respondJson(res, auth.response, serializer);
       return;
     }
 
     const allowError = allowList.ensureTask(taskId);
     if (allowError) {
       applyCorsActual(req, res, cors);
-      respondJson(res, allowError);
+      respondJson(res, allowError, serializer);
       return;
     }
 
@@ -86,6 +89,7 @@ export function createRequestHandlers(
       respondJson(
         res,
         jsonErrorResponse(404, `Task ${taskId} not found`, "NOT_FOUND"),
+        serializer,
       );
       return;
     }
@@ -116,10 +120,11 @@ export function createRequestHandlers(
         const multipart = await parseMultipartInput(
           req as any,
           controller.signal,
+          serializer,
         );
         if (!multipart.ok) {
           applyCorsActual(req, res, cors);
-          respondJson(res, multipart.response);
+          respondJson(res, multipart.response, serializer);
           return;
         }
         const finalizePromise = multipart.finalize;
@@ -136,7 +141,7 @@ export function createRequestHandlers(
         if (!finalize.ok) {
           if (!res.writableEnded && !(res as any).headersSent) {
             applyCorsActual(req, res, cors);
-            respondJson(res, finalize.response);
+            respondJson(res, finalize.response, serializer);
           }
           return;
         }
@@ -167,7 +172,7 @@ export function createRequestHandlers(
         // skip the default JSON envelope.
         if (res.writableEnded || (res as any).headersSent) return;
         applyCorsActual(req, res, cors);
-        respondJson(res, jsonOkResponse({ result: taskResult }));
+        respondJson(res, jsonOkResponse({ result: taskResult }), serializer);
         return;
       }
 
@@ -199,24 +204,30 @@ export function createRequestHandlers(
         // If the task streamed a custom response, do not append JSON.
         if (res.writableEnded || (res as any).headersSent) return;
         applyCorsActual(req, res, cors);
-        respondJson(res, jsonOkResponse({ result }));
+        respondJson(res, jsonOkResponse({ result }), serializer);
         return;
       }
 
       const body = await readJsonBody<{ input?: unknown }>(
         req,
         controller.signal,
+        serializer,
       );
       if (!body.ok) {
         applyCorsActual(req, res, cors);
-        respondJson(res, body.response);
+        respondJson(res, body.response, serializer);
         return;
       }
       const payload = (() => {
         if (!body.value || typeof body.value !== "object") {
           return body.value as unknown;
         }
-        if (Object.prototype.hasOwnProperty.call(body.value as Record<string, unknown>, "input")) {
+        if (
+          Object.prototype.hasOwnProperty.call(
+            body.value as Record<string, unknown>,
+            "input",
+          )
+        ) {
           return (body.value as Record<string, unknown>).input;
         }
         return body.value as unknown;
@@ -246,7 +257,7 @@ export function createRequestHandlers(
       // If the task already wrote a response, do nothing further.
       if (res.writableEnded || (res as any).headersSent) return;
       applyCorsActual(req, res, cors);
-      respondJson(res, jsonOkResponse({ result }));
+      respondJson(res, jsonOkResponse({ result }), serializer);
     } catch (error) {
       if (isCancellationError(error)) {
         if (!res.writableEnded && !(res as any).headersSent) {
@@ -254,6 +265,7 @@ export function createRequestHandlers(
           respondJson(
             res,
             jsonErrorResponse(499, "Client Closed Request", "REQUEST_ABORTED"),
+            serializer,
           );
         }
         return;
@@ -270,6 +282,7 @@ export function createRequestHandlers(
       respondJson(
         res,
         jsonErrorResponse(500, displayMessage, "INTERNAL_ERROR"),
+        serializer,
       );
     }
   };
@@ -280,14 +293,14 @@ export function createRequestHandlers(
     eventId: string,
   ): Promise<void> => {
     if (req.method !== "POST") {
-      respondJson(res, METHOD_NOT_ALLOWED_RESPONSE);
+      respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
       return;
     }
 
     const auth = authenticator(req);
     if (!auth.ok) {
       applyCorsActual(req, res, cors);
-      respondJson(res, auth.response);
+      respondJson(res, auth.response, serializer);
       return;
     }
 
@@ -304,6 +317,7 @@ export function createRequestHandlers(
       respondJson(
         res,
         jsonErrorResponse(404, `Event ${eventId} not found`, "NOT_FOUND"),
+        serializer,
       );
       return;
     }
@@ -314,10 +328,11 @@ export function createRequestHandlers(
       const body = await readJsonBody<{ payload?: unknown }>(
         req,
         controller.signal,
+        serializer,
       );
       if (!body.ok) {
         applyCorsActual(req, res, cors);
-        respondJson(res, body.response);
+        respondJson(res, body.response, serializer);
         return;
       }
       await eventManager.emit(
@@ -326,7 +341,7 @@ export function createRequestHandlers(
         "exposure:http",
       );
       applyCorsActual(req, res, cors);
-      respondJson(res, jsonOkResponse());
+      respondJson(res, jsonOkResponse(), serializer);
     } catch (error) {
       if (isCancellationError(error)) {
         if (!res.writableEnded && !(res as any).headersSent) {
@@ -334,6 +349,7 @@ export function createRequestHandlers(
           respondJson(
             res,
             jsonErrorResponse(499, "Client Closed Request", "REQUEST_ABORTED"),
+            serializer,
           );
         }
         return;
@@ -350,6 +366,7 @@ export function createRequestHandlers(
       respondJson(
         res,
         jsonErrorResponse(500, displayMessage, "INTERNAL_ERROR"),
+        serializer,
       );
     }
   };
@@ -382,13 +399,13 @@ export function createRequestHandlers(
   ): Promise<void> => {
     // Allow GET and POST for discovery
     if (req.method !== "GET" && req.method !== "POST") {
-      respondJson(res, METHOD_NOT_ALLOWED_RESPONSE);
+      respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
       return;
     }
     const auth = authenticator(req);
     if (!auth.ok) {
       applyCorsActual(req, res, cors);
-      respondJson(res, auth.response);
+      respondJson(res, auth.response, serializer);
       return;
     }
     const list = computeAllowList(store);
@@ -404,6 +421,7 @@ export function createRequestHandlers(
           },
         },
       }),
+      serializer,
     );
   };
 
@@ -416,7 +434,7 @@ export function createRequestHandlers(
       }
       if (handleCorsPreflight(req, res, cors)) return true;
       applyCorsActual(req, res, cors);
-      respondJson(res, NOT_FOUND_RESPONSE);
+      respondJson(res, NOT_FOUND_RESPONSE, serializer);
       return true;
     }
     if (target.kind === "task") {

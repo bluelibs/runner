@@ -1,6 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../http-smart-client.model";
+import { EJSON } from "../../globals/resources/tunnel/serializer";
 import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
 import { createNodeFile } from "../files";
 
@@ -48,7 +49,7 @@ describe("createHttpSmartClient - extra branches", () => {
         expect(Object.keys(opts.headers || {})).not.toContain("x-runner-token");
         return sink;
       }) as any;
-    const client = createHttpSmartClient({ baseUrl });
+    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
     const out = await client.task("json", { a: 1 } as any);
     expect(out).toBe(9);
     expect(reqSpy).toHaveBeenCalled();
@@ -75,7 +76,7 @@ describe("createHttpSmartClient - extra branches", () => {
         sink.destroy = () => undefined;
         return sink;
       }) as any;
-    const client = createHttpSmartClient({ baseUrl });
+    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
     const input = {
       files: [
         {
@@ -116,7 +117,7 @@ describe("createHttpSmartClient - extra branches", () => {
       sink.destroy = () => undefined;
       return sink;
     }) as any;
-    const client = createHttpSmartClient({ baseUrl });
+    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
     const input = {
       f: createNodeFile({ name: "x" }, { stream: Readable.from("x") }, "FX"),
     } as const;
@@ -147,7 +148,7 @@ describe("createHttpSmartClient - extra branches", () => {
         sink.destroy = () => undefined;
         return sink;
       }) as any;
-    const client = createHttpSmartClient({ baseUrl });
+    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
     // meta as any to omit name/type and hit fallbacks in encoder
     const file = createNodeFile(
       {} as any,
@@ -187,7 +188,7 @@ describe("createHttpSmartClient - extra branches", () => {
         sink.destroy = () => undefined;
         return sink;
       }) as any;
-    const client = createHttpSmartClient({ baseUrl });
+    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
     const out = await client.task("upload", {
       file: createNodeFile({ name: "x" }, { buffer: Buffer.from([1]) }, "FX"),
     } as any);

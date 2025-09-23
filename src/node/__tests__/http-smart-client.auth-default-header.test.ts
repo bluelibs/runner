@@ -2,6 +2,7 @@ import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../http-smart-client.model";
 import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
+import { EJSON } from "../../globals/resources/tunnel/serializer";
 
 function asIncoming(
   res: Readable,
@@ -45,6 +46,7 @@ describe("createHttpSmartClient - auth default header", () => {
     const client = createHttpSmartClient({
       baseUrl,
       auth: { token: "secret" },
+      serializer: EJSON,
     });
     const out = await client.task("json", { a: 1 } as any);
     expect(out).toBe(1);
