@@ -139,32 +139,29 @@ Runner auto-detects the platform and adapts behavior at runtime. The only featur
 
 ### Serialization (EJSON)
 
-Runner uses EJSON by default. Think of it as JSON with superpowers: it safely round‑trips values like Date, RegExp, and even your own custom types across HTTP and between Node and the browser.
+Runner uses [EJSON](https://www.npmjs.com/package/@bluelibs/ejson) by default. Think of it as JSON with superpowers: it safely round‑trips values like Date, RegExp, and even your own custom types across HTTP and between Node and the browser.
 
 - By default, Runner’s HTTP clients and exposures use the EJSON serializer
 - You can call `getDefaultSerializer()` for the shared serializer instance
 - A global serializer is also exposed as a resource: `globals.resources.serializer`
 
 ```ts
-import { getDefaultSerializer, EJSON, r, globals } from "@bluelibs/runner";
-
-// 1) Quick use
-const s = getDefaultSerializer();
-const text = s.stringify({ when: new Date() });
-const obj = s.parse<{ when: Date }>(text);
+import { r, globals } from "@bluelibs/runner";
 
 // 2) Register custom EJSON types centrally via the global serializer resource
 const ejsonSetup = r
   .resource("app.serialization.setup")
   .dependencies({ serializer: globals.resources.serializer })
   .init(async (_config, { serializer }) => {
+    const text = s.stringify({ when: new Date() });
+    const obj = s.parse<{ when: Date }>(text);
     class Distance {
       constructor(public value: number, public unit: string) {}
       toJSONValue() {
         return { value: this.value, unit: this.unit } as const;
       }
       typeName() {
-        return "Distance" as const;
+        return "Distance";
       }
     }
 
@@ -186,10 +183,11 @@ Here's a sneak peek of how you can expose your application and configure a clien
 import { r, globals } from "@bluelibs/runner";
 import { nodeExposure } from "@bluelibs/runner/node";
 
-// 1. Expose your local tasks and events over HTTP
-const app = r
-  .resource("app")
-  .register([
+let app = r.resource("app");
+
+if (process.env.SERVER) {
+  // 1. Expose your local tasks and events over HTTP, only when server mode is active.
+  app.register([
     // ... your tasks and events
     nodeExposure.with({
       http: {
@@ -197,16 +195,17 @@ const app = r
         listen: { port: 7070 },
       },
     }),
-  ])
-  .build();
+  ]);
+}
+app = app.build();
 
 // 2. In another app, define a tunnel resource to call a remote Runner
-const httpClientTunnel = r
+const remoteTasksTunnel = r
   .resource("app.tunnels.http")
   .tags([globals.tags.tunnel])
   .init(async () => ({
-    mode: "client" as const,
-    transport: "http" as const,
+    mode: "client", // or "server", or "none", or "both" for emulating network infrastructure
+    transport: "http", // the only one supported for now
     // Selectively forward tasks starting with "remote.tasks."
     tasks: (t) => t.id.startsWith("remote.tasks."),
     client: globals.tunnels.http.createClient({
