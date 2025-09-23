@@ -34,7 +34,7 @@ const platform = getPlatform();
 export const storage = platform.createAsyncLocalStorage<Map<symbol, unknown>>();
 
 /** Returns the currently active store or undefined. */
-function getCurrentStore(): Map<symbol, unknown> | undefined {
+export function getCurrentStore(): Map<symbol, unknown> | undefined {
   return storage.getStore();
 }
 

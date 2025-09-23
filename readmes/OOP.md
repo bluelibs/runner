@@ -53,11 +53,12 @@ class UserService {
 }
 
 // Wire it up in Runner
-const userService = resource({
-  id: "app.services.user",
-  dependencies: { db: database, logger: loggerService },
-  init: async (config, { db, logger }) => new UserService(db, logger)
-});
+import { r } from "@bluelibs/runner";
+const userService = r
+  .resource("app.services.user")
+  .dependencies({ db: database, logger: loggerService })
+  .init(async (_config, { db, logger }) => new UserService(db, logger))
+  .build();
 ```
 
 ## When to Use Classes
@@ -183,17 +184,18 @@ class UserService {
   }
 }
 
-const userRepository = resource({
+const userRepository = r
+  .resource("app.repositories.user")
   id: "app.repositories.user",
   dependencies: { db: database },
   init: async (_, { db }) => new UserRepository(db)
-});
+  .build();
 
-const userService = resource({
-  id: "app.services.user",
-  dependencies: { repo: userRepository, logger: loggerService },
-  init: async (_, { repo, logger }) => new UserService(repo, logger)
-});
+const userService2 = r
+  .resource("app.services.user")
+  .dependencies({ repo: userRepository, logger: loggerService })
+  .init(async (_config, { repo, logger }) => new UserService(repo, logger))
+  .build();
 ```
 
 ### Factory Pattern
@@ -214,10 +216,10 @@ class ReportBuilder {
   }
 }
 
-const reportFactory = resource({
-  id: "app.factories.report",
-  dependencies: { templates: templateEngine },
-  init: async (config: { defaultLocale: string; defaultCurrency: string }, { templates }) => {
+const reportFactory = r
+  .resource("app.factories.report")
+  .dependencies({ templates: templateEngine })
+  .init(async (config: { defaultLocale: string; defaultCurrency: string }, { templates }) => {
     return (options?: { locale?: string; currency?: string }) => {
       return new ReportBuilder(
         options?.locale ?? config.defaultLocale,
@@ -225,18 +227,18 @@ const reportFactory = resource({
         templates
       );
     };
-  }
-});
+  })
+  .build();
 
 // Usage in a task
-const generateReport = task({
-  id: "app.tasks.generateReport",
-  dependencies: { reportFactory },
-  run: async (input: { type: string; data: any; locale?: string }, { reportFactory }) => {
+const generateReport = r
+  .task("app.tasks.generateReport")
+  .dependencies({ reportFactory })
+  .run(async ({ input }: { input: { type: string; data: any; locale?: string } }, { reportFactory }) => {
     const builder = reportFactory({ locale: input.locale });
     return builder.build({ type: input.type, data: input.data });
-  }
-});
+  })
+  .build();
 ```
 
 ## Advanced OOP Patterns
@@ -293,17 +295,18 @@ class ProductService extends BaseService {
 }
 
 // Wire them up
-const userService = resource({
+const userService3 = r
+  .resource("app.services.user")
   id: "app.services.user",
   dependencies: { logger: loggerService, repo: userRepository },
   init: async (_, { logger, repo }) => new UserService(logger, repo)
-});
+  .build();
 
-const productService = resource({
-  id: "app.services.product", 
-  dependencies: { logger: loggerService, repo: productRepository },
-  init: async (_, { logger, repo }) => new ProductService(logger, repo)
-});
+const productService = r
+  .resource("app.services.product")
+  .dependencies({ logger: loggerService, repo: productRepository })
+  .init(async (_config, { logger, repo }) => new ProductService(logger, repo))
+  .build();
 ```
 
 ### Polymorphism via Contract Tags
@@ -311,12 +314,12 @@ const productService = resource({
 Use contract tags to enforce interface compliance:
 
 ```ts
-import { tag } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Define a contract for notification services
-const notificationServiceContract = tag<void, void, {
+const notificationServiceContract = r.tag<void, void, {
   send(message: string, recipient: string): Promise<void>;
-}>({ id: "contract.notificationService" });
+}>("contract.notificationService").build();
 
 class EmailNotificationService {
   constructor(private readonly apiKey: string) {}
@@ -335,16 +338,18 @@ class SmsNotificationService {
 }
 
 // Resources implementing the contract
-const emailNotificationService = resource({
+const emailNotificationService = r
+  .resource("app.services.notifications.email")
   id: "app.services.notifications.email",
   tags: [notificationServiceContract],
   init: async (config: { apiKey: string }) => new EmailNotificationService(config.apiKey)
-});
+  .build();
 
-const smsNotificationService = resource({
-  id: "app.services.notifications.sms", 
-  tags: [notificationServiceContract],
-  init: async (config: { apiKey: string }) => new SmsNotificationService(config.apiKey)
+const smsNotificationService = r
+  .resource("app.services.notifications.sms")
+  .tags([notificationServiceContract])
+  .init(async (config: { apiKey: string }) => new SmsNotificationService(config.apiKey))
+  .build()
 });
 
 // Use polymorphically
@@ -453,19 +458,20 @@ class DatabaseService {
   }
 }
 
-const databaseService = resource({
+const databaseService = r
+  .resource("app.services.database")
   id: "app.services.database",
   // ✅ init() can be async - perfect for setup
   init: async (config: { connectionString: string }) => {
     const service = new DatabaseService(config.connectionString);
     await service.connect(); // Async initialization
     return service;
-  },
-  // ✅ dispose() ensures cleanup
-  dispose: async (service) => {
-    await service.close();
   }
-});
+  // ✅ dispose() ensures cleanup
+  .dispose(async (service) => {
+    await service.close();
+  })
+  .build();
 ```
 
 ### Validation and Contracts
@@ -504,18 +510,19 @@ class ApiClient {
   }
 }
 
-const apiClient = resource({
+const apiClient = r
+  .resource("app.services.apiClient")
   id: "app.services.apiClient",
   configSchema: apiClientConfigSchema, // Validates config at registration
   init: async (config) => {
     return new ApiClient(config.baseUrl, config.apiKey, config.timeout);
   }
-});
+  .build();
 
 // Usage with validation
-const app = resource({
-  id: "app",
-  register: [
+const app = r
+  .resource("app")
+  .register([
     apiClient.with({
       baseUrl: "https://api.example.com",
       apiKey: process.env.API_KEY!,

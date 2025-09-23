@@ -14,13 +14,24 @@ import { globalResources } from "./globals/globalResources";
 import { globalMiddlewares } from "./globals/globalMiddleware";
 import { globalTags } from "./globals/globalTags";
 import { run } from "./run";
+import { tunnels } from "./globals/tunnels";
 import { createTestResource } from "./testing";
+import { resource as resourceFn } from "./definers/builders/resource";
+import { task as taskFn } from "./definers/builders/task";
+import { event as eventFn } from "./definers/builders/event";
+import { hook as hookFn } from "./definers/builders/hook";
+import {
+  taskMiddleware as taskMiddlewareFn,
+  resourceMiddleware as resourceMiddlewareFn,
+} from "./definers/builders/middleware";
+import { tag as tagFn } from "./definers/builders/tag";
 
 const globals = {
   events: globalEvents,
   resources: globalResources,
   middleware: globalMiddlewares,
   tags: globalTags,
+  tunnels,
 };
 
 export { globals };
@@ -38,11 +49,26 @@ export {
   createTestResource,
 };
 
+// Expose only a single namespace `r` that contains all builder entry points
+export const r = Object.freeze({
+  resource: resourceFn,
+  task: taskFn,
+  event: eventFn,
+  hook: hookFn,
+  tag: tagFn,
+  middleware: Object.freeze({
+    task: taskMiddlewareFn,
+    resource: resourceMiddlewareFn,
+  }),
+});
+
 export * as definitions from "./defs";
 export * from "./models";
 export * from "./globals/types";
 export * as Errors from "./errors";
 export { Context } from "./context";
+export { PlatformAdapter, setPlatform } from "./platform";
+export { EJSON } from "@bluelibs/ejson";
 
 // Re-export types at the package root so consumer declaration emits can reference them directly
 export type * from "./defs";

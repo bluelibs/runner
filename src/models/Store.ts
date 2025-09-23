@@ -40,9 +40,11 @@ import {
   timeoutTaskMiddleware,
   timeoutResourceMiddleware,
 } from "../globals/middleware/timeout.middleware";
+import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middleware";
 import { OnUnhandledError } from "./UnhandledError";
 import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
+import { EJSON } from "@bluelibs/ejson";
 
 // Re-export types for backward compatibility
 export {
@@ -134,6 +136,7 @@ export class Store {
     builtInResourcesMap.set(globalResources.eventManager, this.eventManager);
     builtInResourcesMap.set(globalResources.logger, this.logger);
     builtInResourcesMap.set(globalResources.taskRunner, this.taskRunner!);
+    builtInResourcesMap.set(globalResources.serializer, EJSON);
     builtInResourcesMap.set(
       globalResources.middlewareManager,
       this.middlewareManager,
@@ -178,6 +181,7 @@ export class Store {
     const builtInResourceMiddlewares = [
       retryResourceMiddleware,
       timeoutResourceMiddleware,
+      tunnelResourceMiddleware,
     ];
     builtInResourceMiddlewares.forEach((middleware) => {
       this.registry.resourceMiddlewares.set(middleware.id, {

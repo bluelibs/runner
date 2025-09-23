@@ -1,95 +1,71 @@
 import { defineConfig } from "tsup";
+type BuildFormat = "cjs" | "esm" | "iife";
 
-const ENTRY = { index: "src/index.ts" } as const;
-const EXTERNAL = ["async_hooks", "node:async_hooks"] as const;
+const COMMON = {
+  splitting: false,
+  sourcemap: true,
+  treeshake: true,
+  minify: false,
+  tsconfig: "tsconfig.build.json",
+  external: ["async_hooks", "node:async_hooks"],
+  dts: false,
+  target: "es2022",
+};
 
-function withCommon(overrides: any = {}) {
-  return {
-    entry: ENTRY,
-    splitting: false,
-    sourcemap: true,
-    treeshake: true,
-    minify: false,
-    tsconfig: "tsconfig.build.json",
-    external: [...EXTERNAL],
-    target: "es2022",
-    ...overrides,
-  } as const;
-}
-
-function makeEsbuildOptions(targetName: string) {
-  return (options: any) => {
-    options.metafile = true;
-    options.target = "es2022";
-    options.define = {
-      ...(options.define || {}),
-      __TARGET__: JSON.stringify(targetName),
-    };
-    options.keepNames = true;
-    options.minifyIdentifiers = false;
+const makeEsbuildOptions = (target: string) => (options: any) => {
+  options.metafile = true;
+  options.target = "es2022";
+  options.define = {
+    ...(options.define || {}),
+    __TARGET__: JSON.stringify(target),
   };
-}
+  options.keepNames = true;
+  options.minifyIdentifiers = false;
+};
+
+const outExtension = (ctx: { format: BuildFormat }) => ({
+  js: ctx.format === "cjs" ? ".cjs" : ".mjs",
+});
 
 export default defineConfig([
-  // Universal (fallback)
-  withCommon({
+  {
+    ...COMMON,
+    entry: { index: "src/index.ts" },
     outDir: "dist/universal",
     platform: "neutral",
     format: ["esm", "cjs"],
     clean: true,
-    dts: false,
     esbuildOptions: makeEsbuildOptions("universal"),
-    outExtension({ format }) {
-      return { js: format === "cjs" ? ".cjs" : ".mjs" };
-    },
-  }),
-  // Node
-  withCommon({
+    outExtension,
+  },
+  {
+    ...COMMON,
+    entry: { node: "src/node/index.ts" },
     outDir: "dist/node",
     platform: "node",
     format: ["esm", "cjs"],
-    dts: false,
     clean: false,
     esbuildOptions: makeEsbuildOptions("node"),
-    outExtension({ format }) {
-      return { js: format === "cjs" ? ".cjs" : ".mjs" };
-    },
-  }),
-  // Browser
-  withCommon({
+    outExtension,
+  },
+  {
+    ...COMMON,
+    entry: { index: "src/index.ts" },
     outDir: "dist/browser",
     platform: "browser",
     format: ["esm", "cjs"],
-    dts: false,
     clean: false,
     esbuildOptions: makeEsbuildOptions("browser"),
-    outExtension({ format }) {
-      return { js: format === "cjs" ? ".cjs" : ".mjs" };
-    },
-  }),
-
-  // Edge (workers)
-  withCommon({
+    outExtension,
+  },
+  {
+    ...COMMON,
+    entry: { index: "src/index.ts" },
     outDir: "dist/edge",
     platform: "neutral",
     format: ["esm", "cjs"],
-    dts: false,
     clean: false,
     esbuildOptions: makeEsbuildOptions("edge"),
-    outExtension({ format }) {
-      return { js: format === "cjs" ? ".cjs" : ".mjs" };
-    },
-  }),
-  // Types at root for package types resolution
-  withCommon({
-    outDir: "dist",
-    platform: "neutral",
-    format: ["esm"],
-    dts: true,
-    clean: false,
-    esbuildOptions: makeEsbuildOptions("universal"),
-    outExtension() {
-      return { js: ".unused.js" } as any; // not referenced
-    },
-  }),
+    outExtension,
+  },
 ]);

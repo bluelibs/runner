@@ -1,0 +1,22 @@
+{
+  "name": "@runner-examples/jwt-auth",
+  "version": "0.1.0",
+  "private": true,
+  "description": "JWT auth over Runner tunnels (example package)",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "npm run build && node dist/index.js",
+    "check": "npm run start"
+  },
+  "devDependencies": {
+    "@types/jsonwebtoken": "^9.0.6",
+    "@types/node": "^20.11.30",
+    "jsonwebtoken": "^9.0.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.2"
+  },
+  "dependencies": {
+    "@bluelibs/runner": "file:../../.."
+  }
+}

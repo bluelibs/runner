@@ -28,6 +28,13 @@ export function detectEnvironment(): PlatformId {
     return "universal";
   }
 
+  // Heuristics for WebWorker-like environments (tests may only set importScripts)
+  if (
+    typeof (globalThis as any).importScripts === "function" &&
+    typeof window === "undefined"
+  ) {
+    return "edge";
+  }
   if (
     typeof (globalThis as any).WorkerGlobalScope !== "undefined" &&
     typeof self !== "undefined" &&

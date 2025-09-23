@@ -243,16 +243,26 @@ Our package.json shows the full strategy:
 {
   "exports": {
     ".": {
-      "browser": "./dist/browser/index.mjs",
-      "node": "./dist/node/index.mjs",
-      "import": "./dist/universal/index.mjs"
-    },
-    "./edge": "./dist/edge/index.mjs"
+      "types": "./dist/index.d.ts",
+      "browser": {
+        "import": "./dist/browser/index.mjs",
+        "require": "./dist/browser/index.cjs",
+        "default": "./dist/browser/index.mjs"
+      },
+      "node": {
+        "types": "./dist/node/node.d.ts",
+        "import": "./dist/node/node.mjs",
+        "require": "./dist/node/node.cjs"
+      },
+      "import": "./dist/universal/index.mjs",
+      "require": "./dist/universal/index.cjs",
+      "default": "./dist/universal/index.mjs"
+    }
   }
 }
 ```
 
-**Result:** Node.js bundlers automatically get the Node-optimized version, browsers get the browser-optimized version, and everything else gets the universal version with runtime detection.
+**Result:** Node.js bundlers automatically get the Node-optimized bundle (and its Node-only type declarations) even when you import from `@bluelibs/runner`. Consumers that explicitly target `@bluelibs/runner/node` hit the same runtime + declarations, while browsers and universal runtimes continue to receive the appropriate builds with runtime detection fallback.
 
 ## 🔄 Backwards Compatibility
 
@@ -424,7 +434,7 @@ All registration methods return disposers. Tests should:
 ### Handling unreachable branches (coverage without hacks)
 
 - Some branches exist for completeness but are unreachable by construction. Example:
-  - In `UniversalPlatformAdapter`, the `switch(kind === "browser")` path is effectively unreachable when the earlier `document/addEventListener` check holds true. We keep the branch to document intent, but exclude it from coverage with `/* istanbul ignore next */` comments.
+  - In `UniversalPlatformAdapter`, the `switch(kind === "browser")` path is effectively unreachable when the earlier `document/addEventListener` check holds true. We keep the branch to document intent, but exclude it from coverage with `` comments.
 - Avoid brittle hacks like rewriting module source at runtime or deep prototype overrides to force coverage on unreachable paths.
 
 ### Patterns we used in tests

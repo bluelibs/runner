@@ -2,8 +2,8 @@
 
 import { TagType } from "./tag";
 
-// A unique symbol key used only for typing (no runtime cost needed)
-export declare const CONTRACT: unique symbol;
+// A unique symbol key used both for typing and runtime branding
+export const CONTRACT: unique symbol = Symbol.for("runner.contract");
 export type CONTRACT = typeof CONTRACT;
 
 // Generic base for anything that carries input/output contracts

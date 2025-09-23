@@ -11,19 +11,18 @@
 #### Basic usage
 
 ```ts
-import { run } from "@bluelibs/runner";
-import { resource } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 
-const app = resource({
-  id: "app",
-  async init() {
+const app = r
+  .resource("app")
+  .init(async () => {
     // setup root
     return "ready" as const;
-  },
-  async dispose(value) {
+  })
+  .dispose(async (_value) => {
     // cleanup
-  },
-});
+  })
+  .build();
 
 const { value, dispose, taskRunner, eventManager } = await run(app, {
   // Hooks are enabled by default; set to false to disable in tests
@@ -41,20 +40,20 @@ await dispose();
 If any resource fails during initialization, `run()` throws and automatically disposes all previously initialized resources:
 
 ```ts
-const failing = resource({
-  id: "failing",
-  async init() {
+const failing = r
+  .resource("failing")
+  .init(async () => {
     throw new Error("boom");
-  },
-});
+  })
+  .build();
 
-const app = resource({
-  id: "app",
-  dependencies: { failing },
-  async init() {
+const app = r
+  .resource("app")
+  .dependencies({ failing })
+  .init(async () => {
     return "never-reached" as const;
-  },
-});
+  })
+  .build();
 
 await expect(run(app, { logs: { printStrategy: "none" } })).rejects.toThrow(
   "boom",

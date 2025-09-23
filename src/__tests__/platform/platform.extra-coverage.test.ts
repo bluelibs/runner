@@ -107,9 +107,10 @@ describe("Platform extra coverage", () => {
     (globalThis as any).addEventListener = originalAdd;
   });
 
-  it("node createAsyncLocalStorage throws when init wasn't called (triggered on use)", () => {
+  it("node createAsyncLocalStorage hydrates even when init wasn't awaited", () => {
     const adapter = new PlatformAdapter("node");
     const als = adapter.createAsyncLocalStorage();
-    expect(() => als.getStore()).toThrow(PlatformUnsupportedFunction);
+    expect(als.getStore()).toBeUndefined();
+    expect(() => als.run(new Map(), () => undefined)).not.toThrow();
   });
 });

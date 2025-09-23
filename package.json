@@ -1,6 +1,6 @@
 {
   "name": "@bluelibs/runner",
-  "version": "4.6.1",
+  "version": "4.7.0-alpha",
   "description": "BlueLibs Runner",
   "sideEffects": false,
   "main": "dist/universal/index.cjs",
@@ -15,18 +15,38 @@
         "default": "./dist/browser/index.mjs"
       },
       "node": {
-        "import": "./dist/node/index.mjs",
-        "require": "./dist/node/index.cjs"
+        "types": "./dist/node/node.d.ts",
+        "import": "./dist/node/node.mjs",
+        "require": "./dist/node/node.cjs"
       },
       "import": "./dist/universal/index.mjs",
       "require": "./dist/universal/index.cjs",
       "default": "./dist/universal/index.mjs"
+    },
+    "./node": {
+      "types": "./dist/node/node.d.ts",
+      "import": "./dist/node/node.mjs",
+      "require": "./dist/node/node.cjs",
+      "default": "./dist/node/node.mjs"
     },
     "./edge": {
       "import": "./dist/edge/index.mjs",
       "default": "./dist/edge/index.mjs"
     },
     "./package.json": "./package.json"
+  },
+  "typesVersions": {
+    "*": {
+      "node": [
+        "dist/node/node.d.ts"
+      ],
+      "node/*": [
+        "dist/node/*.d.ts"
+      ],
+      "*": [
+        "dist/index.d.ts"
+      ]
+    }
   },
   "homepage": "https://runner.bluelibs.com",
   "repository": {
@@ -57,12 +77,14 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsup --config tsup.config.ts --sourcemap",
+    "build": "tsc -p tsconfig.declarations.json && tsup --config tsup.config.ts --sourcemap",
     "clean": "rm -rf dist",
     "watch": "tsup --config tsup.config.ts --watch",
     "test": "jest --verbose --runInBand",
     "test:dev": "jest --verbose --watch",
     "coverage": "jest --verbose --coverage",
+    "coverage:ai": "node ./scripts/run-coverage-ai.mjs",
+    "verbose:coverage": "jest --verbose --coverage --verbose=false --silent --noStackTrace --bail=1",
     "test:clean": "jest --clearCache",
     "testonly": "npm test",
     "test:ci": "jest --verbose --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
@@ -83,6 +105,7 @@
     "@typescript-eslint/eslint-plugin": "8.39.0",
     "@typescript-eslint/parser": "8.39.0",
     "benchmark": "^2.1.4",
+    "busboy": "^1.6.0",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "6.3.0",
     "eslint-plugin-prettier": "3.1.1",
@@ -108,12 +131,17 @@
   },
   "files": [
     "dist",
+    "node.js",
+    "node.d.ts",
+    "index.d.ts",
+    "node",
     "README.md",
     "AI.md",
     "LICENSE.md"
   ],
   "license": "MIT",
   "dependencies": {
+    "@bluelibs/ejson": "^1.5.0",
     "lru-cache": "^11.1.0"
   },
   "optionalDependencies": {

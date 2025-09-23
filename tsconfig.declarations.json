@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "declaration": true,
+    "declarationMap": false,
+    "emitDeclarationOnly": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "outDir": "dist",
+    "types": ["node"],
+    "stripInternal": false,
+    "skipLibCheck": true
+  },
+  "include": ["src"],
+  "exclude": [
+    "examples/**",
+    "src/__tests__/**",
+    "src/**/__tests__/**",
+    "src/**/*.test.ts"
+  ]
+}

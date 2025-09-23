@@ -7,7 +7,7 @@ This guide covers higher‑level patterns you can build using Runner’s primiti
 Create a resource that returns a function which builds domain objects on demand. Configure once at boot; produce instances anywhere.
 
 ```ts
-import { resource, task } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 class PdfRenderer {
   constructor(
@@ -19,25 +19,25 @@ class PdfRenderer {
   }
 }
 
-export const pdfFactory = resource({
-  id: "app.factories.pdf",
-  init: async (config: { defaultFont: string; compress: boolean }) => {
+export const pdfFactory = r
+  .resource("app.factories.pdf")
+  .init(async (config: { defaultFont: string; compress: boolean }) => {
     return (overrides?: Partial<{ font: string; compress: boolean }>) => {
       const font = overrides?.font ?? config.defaultFont;
       const compress = overrides?.compress ?? config.compress;
       return new PdfRenderer(font, compress);
     };
-  },
-});
+  })
+  .build();
 
-export const exportReport = task({
-  id: "app.tasks.exportReport",
-  dependencies: { pdf: pdfFactory },
-  run: async (input: { doc: unknown }, { pdf }) => {
+export const exportReport = r
+  .task("app.tasks.exportReport")
+  .dependencies({ pdf: pdfFactory })
+  .run(async ({ input }: { input: { doc: unknown } }, { pdf }) => {
     const renderer = pdf({ font: "Inter" });
     return renderer.render(input.doc);
-  },
-});
+  })
+  .build();
 ```
 
 ### Strategy Pattern via Tags (select implementation at runtime)
@@ -45,48 +45,43 @@ export const exportReport = task({
 Use tags to mark strategy providers and pick one by config or input.
 
 ```ts
-import { tag, resource, task } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
 type PricingInput = { country: string; items: { price: number }[] };
 type PricingOutput = { total: number };
 
-const pricingStrategy = tag<void, PricingInput, PricingOutput>({
-  id: "pricing.strategy",
-});
+const pricingStrategy = r.tag<void, PricingInput, PricingOutput>("pricing.strategy").build();
 
-export const flatRate = resource({
-  id: "app.pricing.flat",
-  tags: [pricingStrategy],
-  init: async () => async (input: PricingInput) => ({
+export const flatRate = r
+  .resource("app.pricing.flat")
+  .tags([pricingStrategy])
+  .init(async () => async (input: PricingInput) => ({
     total: input.items.reduce((s, i) => s + i.price, 0),
-  }),
-});
+  }))
+  .build();
 
-export const byCountry = resource({
-  id: "app.pricing.byCountry",
-  tags: [pricingStrategy],
-  init: async () => async (input: PricingInput) => ({
+export const byCountry = r
+  .resource("app.pricing.byCountry")
+  .tags([pricingStrategy])
+  .init(async () => async (input: PricingInput) => ({
     total:
       input.items.reduce((s, i) => s + i.price, 0) *
       (input.country === "DE" ? 1.19 : 1.07),
-  }),
-});
+  }))
+  .build();
 
-export const priceOrder = task({
-  id: "app.tasks.priceOrder",
-  dependencies: {
-    store: globals.resources.store,
-  },
-  run: async (input: PricingInput, _deps, ctx) => {
-    const { store } = ctx.globals.resources; // convenience accessor
+export const priceOrder = r
+  .task("app.tasks.priceOrder")
+  .dependencies({ store: globals.resources.store })
+  .run(async ({ input }: { input: PricingInput }, { store }) => {
     const strategies = store.getResourcesWithTag(pricingStrategy);
     const choose = input.country === "DE" ? byCountry.id : flatRate.id;
     const strategy = strategies.find((s) => s.id === choose)?.value as (
       i: PricingInput,
     ) => Promise<PricingOutput>;
     return strategy(input);
-  },
-});
+  })
+  .build();
 ```
 
 ### Policy Injection via Middleware (cross‑cutting concerns)
@@ -94,11 +89,11 @@ export const priceOrder = task({
 Attach retry/timeout/caching or custom policies around tasks/resources without baking them into classes.
 
 ```ts
-import { task, taskMiddleware, globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
-const audit = taskMiddleware<{ source: string }>({
-  id: "app.middleware.audit",
-  run: async ({ task, next }, _deps, cfg) => {
+const audit = r.middleware
+  .task("app.middleware.audit")
+  .run(async ({ task, next }, _deps, cfg: { source: string }) => {
     const start = Date.now();
     try {
       const result = await next(task.input);
@@ -110,21 +105,21 @@ const audit = taskMiddleware<{ source: string }>({
     } finally {
       const tookMs = Date.now() - start;
     }
-  },
-});
+  })
+  .build();
 
-export const critical = task({
-  id: "app.tasks.critical",
-  middleware: [
+export const critical = r
+  .task("app.tasks.critical")
+  .middleware([
     globals.middleware.retry.with({ retries: 3 }),
     globals.middleware.timeout.with({ ttl: 10_000 }),
     audit.with({ source: "critical" }),
-  ],
-  run: async (input: unknown) => {
+  ])
+  .run(async () => {
     /* ... */
     return "ok";
-  },
-});
+  })
+  .build();
 ```
 
 ### Programmatic Wiring on Ready (discovery & interception)
@@ -132,18 +127,18 @@ export const critical = task({
 Scan the store on `globals.events.ready` and add behavior dynamically (routes, metrics, tracing, interceptors).
 
 ```ts
-import { hook, globals, tag } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
-const http = tag<{ method: "GET" | "POST"; path: string }>({ id: "http" });
+const http = r.tag<{ method: "GET" | "POST"; path: string }>("http").build();
 
-export const registerRoutes = hook({
-  id: "app.hooks.registerRoutes",
-  on: globals.events.ready,
-  dependencies: {
+export const registerRoutes = r
+  .hook("app.hooks.registerRoutes")
+  .on(globals.events.ready)
+  .dependencies({
     store: globals.resources.store,
     server: globals.resources.logger /* replace with your server */,
-  },
-  run: async (_, { store, server }) => {
+  })
+  .run(async (_e, { store, server }) => {
     const tasks = store.getTasksWithTag(http);
     for (const t of tasks) {
       const cfg = http.extract(t);
@@ -151,8 +146,8 @@ export const registerRoutes = hook({
       // server.app[cfg.config.method.toLowerCase()](cfg.config.path, ...) // see AI.md for full example
       server.info(`Registered ${cfg.config.method} ${cfg.config.path}`);
     }
-  },
-});
+  })
+  .build();
 ```
 
 ### Plugin Architecture (feature islands)
@@ -160,22 +155,22 @@ export const registerRoutes = hook({
 Ship features as bundles: a resource that registers tasks/resources/middleware/tags and exposes only a small public surface.
 
 ```ts
-import { resource, task } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
-const send = task({
-  id: "plugin.tasks.send",
-  run: async (i: { to: string; body: string }) => {
+const send = r
+  .task("plugin.tasks.send")
+  .run(async ({ input: i }: { input: { to: string; body: string } }) => {
     /*...*/
-  },
-});
+  })
+  .build();
 
-export const messagingPlugin = resource({
-  id: "app.plugins.messaging",
-  register: [send /*, more */],
-  init: async () => ({
+export const messagingPlugin = r
+  .resource("app.plugins.messaging")
+  .register([send /*, more */])
+  .init(async () => ({
     send: (args: { to: string; body: string }) => send(args),
-  }),
-});
+  }))
+  .build();
 ```
 
 ### Environment‑Specific Overrides (seams for testing and ops)
@@ -183,12 +178,12 @@ export const messagingPlugin = resource({
 Use overrides to swap implementations by environment or test harness.
 
 ```ts
-import { resource, override } from "@bluelibs/runner";
+import { r, override } from "@bluelibs/runner";
 
-const emailer = resource({
-  id: "app.emailer",
-  init: async () => ({ send: async () => {} }),
-});
+const emailer = r
+  .resource("app.emailer")
+  .init(async () => ({ send: async () => {} }))
+  .build();
 const mockEmailer = override(emailer, {
   id: "app.emailer.mock",
   init: async () => ({
@@ -198,13 +193,13 @@ const mockEmailer = override(emailer, {
   }),
 });
 
-export const app = resource({
-  id: "app",
-  register: [emailer],
-  overrides: [process.env.NODE_ENV === "test" ? mockEmailer : undefined].filter(
-    Boolean,
-  ) as any,
-});
+export const app = r
+  .resource("app")
+  .register([emailer])
+  .overrides([
+    (process.env.NODE_ENV === "test" ? mockEmailer : undefined)!,
+  ].filter(Boolean) as any)
+  .build();
 ```
 
 ### Scoped Containers (see Runnerception)
@@ -216,15 +211,15 @@ Start nested runners for isolated graphs (per tenant/region/job). See `RUNNERCEP
 Attach flags as tags and read them in middleware or ready hooks to enable/disable routes/tasks.
 
 ```ts
-import { tag, task } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
-const flag = tag<{ name: string; enabled: boolean }>({ id: "flag" });
+const flag = r.tag<{ name: string; enabled: boolean }>("flag").build();
 
-export const riskyOp = task({
-  id: "app.tasks.riskyOp",
-  tags: [flag.with({ name: "risky", enabled: false })],
-  run: async () => "ok",
-});
+export const riskyOp = r
+  .task("app.tasks.riskyOp")
+  .tags([flag.with({ name: "risky", enabled: false })])
+  .run(async () => "ok")
+  .build();
 ```
 
 ### Testing Patterns
