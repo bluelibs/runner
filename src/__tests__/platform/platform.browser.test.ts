@@ -16,7 +16,7 @@ class FakePromiseRejectionEvent extends Event {
 (global as any).PromiseRejectionEvent = FakePromiseRejectionEvent;
 
 import { detectEnvironment, PlatformAdapter } from "../../platform";
-import { createContext, storage } from "../../context";
+import { defineAsyncContext, storage } from "../../definers/defineAsyncContext";
 import { PlatformUnsupportedFunction } from "../../errors";
 import exp from "constants";
 describe("PlatformAdapter (Browser)", () => {
@@ -25,7 +25,9 @@ describe("PlatformAdapter (Browser)", () => {
 
     expect(detectEnvironment()).toBe("browser");
     expect(storage).toBeDefined();
-    expect(() => createContext("test")).toThrow(PlatformUnsupportedFunction);
+    expect(() => defineAsyncContext({ id: "test" })).toThrow(
+      PlatformUnsupportedFunction,
+    );
     expect(() => storage.getStore()).toThrow(PlatformUnsupportedFunction);
     expect(() => storage.run(new Map(), () => {})).toThrow(
       PlatformUnsupportedFunction,

@@ -1,8 +1,8 @@
-import { Context, ContextError } from "../../context";
+import { IAsyncContext, ContextError } from "../../definers/defineAsyncContext";
 import { defineTaskMiddleware } from "../../define";
 
 type RequireContextMiddlewareConfig = {
-  context: Context<any>;
+  context: IAsyncContext<any>;
 };
 
 export const requireContextTaskMiddleware = defineTaskMiddleware({

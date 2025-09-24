@@ -1,5 +1,5 @@
 import { createContext, task, run, resource } from "../index";
-import { ContextError } from "../context";
+import { ContextError } from "../definers/defineAsyncContext";
 import { Logger } from "../models/Logger";
 
 describe("Context System", () => {

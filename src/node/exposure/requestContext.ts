@@ -1,5 +1,8 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { createContext, getCurrentStore } from "../../context";
+import {
+  defineAsyncContext,
+  getCurrentStore,
+} from "../../definers/defineAsyncContext";
 
 export interface ExposureRequestContextValue {
   req: IncomingMessage;
@@ -12,9 +15,10 @@ export interface ExposureRequestContextValue {
   signal: AbortSignal;
 }
 
-export const ExposureRequestContext = createContext<ExposureRequestContextValue>(
-  "platform.node.exposure.request",
-);
+export const ExposureRequestContext =
+  defineAsyncContext<ExposureRequestContextValue>({
+    id: "platform.node.exposure.request",
+  });
 
 export function useExposureContext(): ExposureRequestContextValue {
   return ExposureRequestContext.use();

@@ -1,5 +1,5 @@
 import { requireContextTaskMiddleware } from "../../globals/middleware/requireContext.middleware";
-import { ContextError } from "../../context";
+import { ContextError } from "../../definers/defineAsyncContext";
 
 /**
  * Utility function to build a fake Context implementation that allows us to
