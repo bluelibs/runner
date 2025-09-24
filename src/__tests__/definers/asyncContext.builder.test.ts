@@ -5,6 +5,13 @@ describe("async context builder and defineAsyncContext", () => {
     type Ctx = { id: number };
     const ctx = r
       .asyncContext<Ctx>("tests.ctx.builder")
+      .configSchema({
+        parse(input: unknown) {
+          const d = input as Ctx;
+          if (typeof d?.id !== "number") throw new Error("invalid");
+          return d;
+        },
+      })
       .serialize((v) => JSON.stringify({ id: v.id + 1 }))
       .parse((s) => {
         const j = JSON.parse(s);
@@ -21,6 +28,13 @@ describe("async context builder and defineAsyncContext", () => {
   it("asyncContext (define) honors provided serialize/parse over default", () => {
     const ctx = asyncContext<{ v: string }>({
       id: "tests.ctx.custom",
+      configSchema: {
+        parse(input: unknown) {
+          const d = input as { v: string };
+          if (typeof d?.v !== "string") throw new Error("invalid");
+          return d;
+        },
+      },
       serialize: (d: { v: string }) => `#${d.v}`,
       parse: (s: string) => ({ v: s.slice(1) }),
     });
@@ -39,5 +53,22 @@ describe("async context builder and defineAsyncContext", () => {
     const decoded = ctx.parse(encoded);
     expect(decoded.when).toBeInstanceOf(Date);
     expect(decoded.when.toISOString()).toBe("2024-01-01T00:00:00.000Z");
+  });
+
+  it("validates value via configSchema.parse on provide", async () => {
+    const ctx = r
+      .asyncContext<{ id: number }>("tests.ctx.schema")
+      .configSchema({
+        parse(input: unknown) {
+          const d = input as { id: number };
+          if (typeof d?.id !== "number") throw new Error("invalid");
+          return d;
+        },
+      })
+      .build();
+
+    // Synchronous parse validation throws before returning Promise
+    const bad: any = { id: "x" };
+    expect(() => ctx.provide(bad, async () => undefined)).toThrow("invalid");
   });
 });

@@ -22,6 +22,12 @@ export class StoreValidator {
     if (this.registry.events.has(id)) {
       throw new DuplicateRegistrationError("Event", id);
     }
+    if (this.registry.errors.has(id)) {
+      throw new DuplicateRegistrationError("Error", id);
+    }
+    if (this.registry.asyncContexts.has(id)) {
+      throw new DuplicateRegistrationError("AsyncContext", id);
+    }
     if (this.registry.taskMiddlewares.has(id)) {
       throw new DuplicateRegistrationError("Middleware", id);
     }

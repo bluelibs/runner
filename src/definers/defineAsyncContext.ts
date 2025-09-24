@@ -6,8 +6,13 @@ import {
   PlatformUnsupportedFunction,
   RuntimeError,
 } from "../errors";
-import { IAsyncContext, IAsyncContextDefinition } from "../types/asyncContext";
+import {
+  IAsyncContext,
+  IAsyncContextDefinition,
+  ASYNC_CONTEXT_TYPES_LOADED,
+} from "../types/asyncContext";
 import { getDefaultSerializer } from "../globals/resources/tunnel/serializer";
+import { symbolAsyncContext, symbolOptionalDependency } from "../types/symbols";
 
 export { ContextError };
 
@@ -35,6 +40,7 @@ export function defineAsyncContext<T>(
   const ctxId = def.id;
 
   const use = (): T => {
+    void ASYNC_CONTEXT_TYPES_LOADED; // keep async context types included under coverage
     const store = getCurrentStore();
     if (!store || !store.has(ctxId)) {
       throw new ContextError(
@@ -59,8 +65,15 @@ export function defineAsyncContext<T>(
 
   const api = {
     id: ctxId,
+    [symbolAsyncContext]: true as const,
     use,
-    provide,
+    provide(value: T, fn: () => Promise<any> | any) {
+      // Validate provided context if schema exists
+      const validated = def.configSchema
+        ? def.configSchema.parse(value)
+        : value;
+      return provide(validated, fn);
+    },
     require(): ITaskMiddlewareConfigured {
       return requireContextTaskMiddleware.with({
         context: api as IAsyncContext<T>,
@@ -68,6 +81,12 @@ export function defineAsyncContext<T>(
     },
     serialize: def.serialize || ((data: T) => serializer.stringify(data)),
     parse: def.parse || ((data: string) => serializer.parse(data)),
+    optional() {
+      return {
+        inner: api as IAsyncContext<T>,
+        [symbolOptionalDependency]: true,
+      } as const;
+    },
   };
 
   return api;

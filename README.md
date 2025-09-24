@@ -744,6 +744,43 @@ const profileTask = r
   .build();
 ```
 
+### Errors
+
+Typed errors can be declared once and injected anywhere. Register them alongside other items and consume via dependencies. The injected value is the error helper itself, exposing `.throw()`, `.is()`, `.toString()`, and `id`.
+
+```ts
+import { r } from "@bluelibs/runner";
+
+// Fluent builder for errors
+const userNotFoundError = r
+  .error<{ code: number; message: string }>("app.errors.userNotFound")
+  .dataSchema(z.object({ ... }))
+  .build();
+
+const getUser = r
+  .task("app.tasks.getUser")
+  .dependencies({ userNotFoundError })
+  .run(async ({ input }, { userNotFoundError }) => {
+    userNotFoundError.throw({ code: 404, message: `User ${input} not found` });
+  })
+  .build();
+
+const root = r.resource("app").register([userNotFoundError, getUser]).build();
+```
+
+Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.
+
+```ts
+try {
+  userNotFoundError.throw({ code: 404, message: "User not found" });
+} catch (err) {
+  if (userNotFoundError.is(err)) {
+    // err.name === "app.errors.userNotFound", err.message === "User not found"
+    console.log(`Caught error: ${err.name} - ${err.message}`);
+  }
+}
+```
+
 ## run() and RunOptions
 
 The `run()` function boots a root `resource` and returns a `RunResult` handle to interact with your system.
@@ -1030,37 +1067,46 @@ This is just a glimpse. With tunnels, you can build microservices, CLIs, and adm
 
 For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
 
-## Context
+## Async Context
 
-Ever tried to pass user data through 15 function calls? Yeah, we've been there. Context fixes that without turning your code into a game of telephone. This is very different from the Private Context from resources.
+Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node). Use the fluent builder under `r.asyncContext` to create contexts that can be registered and injected as dependencies.
 
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const UserContext = createContext<{ userId: string; role: string }>(
-  "app.userContext",
-);
-
-const getUserData = r
-  .task("app.tasks.getUserData")
-  .middleware([UserContext.require()]) // ensure context is available
-  .run(async () => {
-    const user = UserContext.use(); // Available anywhere in the async chain
-    return `Current user: ${user.userId} (${user.role})`;
-  })
+const requestContext = r
+  .asyncContext<{ requestId: string }>("app.ctx.request")
+  // below is optional
+  .configSchema(z.object({ ... }))
+  .serialize((data) => JSON.stringify(data))
+  .parse((raw) => JSON.parse(raw))
   .build();
 
-// Provide context at the entry point
-const handleRequest = r
-  .resource("app.requestHandler")
-  .init(async () => {
-    return UserContext.provide({ userId: "123", role: "admin" }, async () => {
-      // All tasks called within this scope have access to UserContext
-      return await getUserData();
-    });
-  })
-  .build();
+// Provide and read within an async boundary
+await requestContext.provide({ requestId: "abc" }, async () => {
+  const ctx = requestContext.use(); // { requestId: "abc" }
+});
+
+// Require middleware for tasks that need the context
+const requireRequestContext = requestContext.require();
 ```
+
+- If you don't provide `serialize`/`parse`, Runner uses its default EJSON serializer to preserve Dates, RegExp, etc.
+- A legacy `createContext(name?)` exists for backwards compatibility; prefer `r.asyncContext` or `asyncContext({ id })`.
+
+- You can also inject async contexts as dependencies; the injected value is the helper itself. Contexts must be registered to be used.
+
+```typescript
+const whoAmI = r
+  .task("app.tasks.whoAmI")
+  .dependencies({ requestContext })
+  .run(async (_input, { requestContext }) => requestContext.use().requestId)
+  .build();
+
+const app = r.resource("app").register([requestContext, whoAmI]).build();
+```
+
+// Legacy section for Private Context - different from Async Context
 
 ## Fluent Builders (`r.*`)
 
@@ -1168,20 +1214,22 @@ type UserRegisteredPayload = ExtractEventPayload<typeof userRegistered>; // { us
 Context shines when combined with middleware for request-scoped data:
 
 ```typescript
-import { createContext, taskMiddleware } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { randomUUID } from "crypto";
 
-const RequestContext = createContext<{
-  requestId: string;
-  startTime: number;
-  userAgent?: string;
-}>("app.requestContext");
+const requestContext = r
+  .asyncContext<{
+    requestId: string;
+    startTime: number;
+    userAgent?: string;
+  }>("app.requestContext")
+  .build();
 
-const requestMiddleware = taskMiddleware({
-  id: "app.middleware.request",
-  run: async ({ task, next }) => {
+const requestMiddleware = r.middleware
+  .task("app.middleware.request")
+  .run(async ({ task, next }) => {
     // This works even in express middleware if needed.
-    return RequestContext.provide(
+    return requestContext.provide(
       {
         requestId: randomUUID(),
         startTime: Date.now(),
@@ -1191,14 +1239,14 @@ const requestMiddleware = taskMiddleware({
         return next(task?.input);
       },
     );
-  },
-});
+  })
+  .build();
 
 const handleRequest = r
   .task("app.handleRequest")
   .middleware([requestMiddleware])
   .run(async ({ input }: { input: { path: string } }) => {
-    const request = RequestContext.use();
+    const request = requestContext.use();
     console.log(`Processing ${input.path} (Request ID: ${request.requestId})`);
     return { success: true, requestId: request.requestId };
   })

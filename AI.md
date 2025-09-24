@@ -3,23 +3,27 @@
 > Token-friendly (<5000 tokens). This guide spotlights the fluent builder API (`r.*`) that ships with Runner 4.x. Classic `defineX` / `resource({...})` remain supported for backwards compatibility, but fluent builders are the default throughout.
 
 ## Table of Contents
-- [Install](#install)
-- [Quick Start](#quick-start)
-- [Platform Matrix](#platform-matrix)
-- [Fluent Builder Primer](#fluent-builder-primer)
-- [Core Concepts](#core-concepts)
-  - [Resources](#resources)
-  - [Tasks](#tasks)
-  - [Events and Hooks](#events-and-hooks)
-  - [Middleware](#middleware)
-  - [Tags](#tags)
-- [HTTP & Tunnels](#http--tunnels)
-- [Serialization](#serialization)
-- [Testing](#testing)
-- [Observability & Debugging](#observability--debugging)
-- [Advanced Patterns](#advanced-patterns)
-- [Interop With Classic APIs](#interop-with-classic-apis)
-- [Reference Links](#reference-links)
+
+- [BlueLibs Runner: Fluent Builder Field Guide](#bluelibs-runner-fluent-builder-field-guide)
+  - [Table of Contents](#table-of-contents)
+  - [Install](#install)
+  - [Quick Start](#quick-start)
+  - [Platform Matrix](#platform-matrix)
+  - [Fluent Builder Primer](#fluent-builder-primer)
+  - [Core Concepts](#core-concepts)
+    - [Resources](#resources)
+    - [Tasks](#tasks)
+    - [Events and Hooks](#events-and-hooks)
+    - [Middleware](#middleware)
+    - [Tags](#tags)
+    - [Async Context](#async-context)
+    - [Errors](#errors)
+  - [HTTP \& Tunnels](#http--tunnels)
+  - [Serialization](#serialization)
+  - [Testing](#testing)
+  - [Observability \& Debugging](#observability--debugging)
+  - [Advanced Patterns](#advanced-patterns)
+  - [Interop With Classic APIs](#interop-with-classic-apis)
 
 ## Install
 
@@ -91,14 +95,14 @@ await runtime.runTask(createUser, { name: "Ada" });
 
 ## Platform Matrix
 
-| Capability | Node.js | Browser | Workers (e.g. Cloudflare) |
-| --- | --- | --- | --- |
-| `run()` lifecycle | ✅ | ✅ | ✅ |
-| `nodeExposure`, Node tunnels | ✅ | ❌ | ❌ |
-| `createHttpClient` | ✅ | ✅ | ✅ |
-| Duplex upload (`createHttpSmartClient`) | ✅ | ❌ | ❌ |
-| File helpers (`createNodeFile`, `createWebFile`) | Node only | Browser only | Browser only |
-| Async context (AsyncLocalStorage) | ✅ | n/a | n/a |
+| Capability                                       | Node.js   | Browser      | Workers (e.g. Cloudflare) |
+| ------------------------------------------------ | --------- | ------------ | ------------------------- |
+| `run()` lifecycle                                | ✅        | ✅           | ✅                        |
+| `nodeExposure`, Node tunnels                     | ✅        | ❌           | ❌                        |
+| `createHttpClient`                               | ✅        | ✅           | ✅                        |
+| Duplex upload (`createHttpSmartClient`)          | ✅        | ❌           | ❌                        |
+| File helpers (`createNodeFile`, `createWebFile`) | Node only | Browser only | Browser only              |
+| Async context (AsyncLocalStorage)                | ✅        | n/a          | n/a                       |
 
 - Browser environments rely on `globalThis.__ENV__` or `globalThis.env` for configuration; Node uses `process.env`.
 - Runner will throw if you call Node-only helpers in the browser; keep shared code inside `src/` and Node-specific logic under `src/node/`.
@@ -110,7 +114,10 @@ The fluent API lives under the single `r` namespace:
 ```ts
 import { r } from "@bluelibs/runner";
 
-const task = r.task("demo.tasks.hello").run(async ({ input }) => input).build();
+const task = r
+  .task("demo.tasks.hello")
+  .run(async ({ input }) => input)
+  .build();
 ```
 
 Key rules:
@@ -280,6 +287,83 @@ const getHealth = r
 
 Retrieve tagged items by using `globals.resources.store` inside a hook or resource and calling `store.getTasksWithTag(tag)`.
 
+### Async Context
+
+Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node). Use the fluent builder under `r.asyncContext` or the classic `asyncContext({ ... })` export.
+
+```ts
+import { r } from "@bluelibs/runner";
+
+const requestContext = r
+  .asyncContext<{ requestId: string }>("app.ctx.request")
+  // below is optional
+  .configSchema(z.object({ ... }))
+  .serialize((data) => JSON.stringify(data))
+  .parse((raw) => JSON.parse(raw))
+  .build();
+
+// Provide and read within an async boundary
+await requestContext.provide({ requestId: "abc" }, async () => {
+  const ctx = requestContext.use(); // { requestId: "abc" }
+});
+
+// Require middleware for tasks that need the context
+const requireRequestContext = requestContext.require();
+```
+
+- If you don't provide `serialize`/`parse`, Runner uses its default EJSON serializer to preserve Dates, RegExp, etc.
+- A legacy `createContext(name?)` exists for backwards compatibility; prefer `r.asyncContext` or `asyncContext({ id })`.
+
+- You can also inject async contexts as dependencies; the injected value is the helper itself. Contexts must be registered to be used.
+
+```ts
+const whoAmI = r
+  .task("app.tasks.whoAmI")
+  .dependencies({ requestContext })
+  .run(async (_input, { requestContext }) => requestContext.use().requestId)
+  .build();
+
+const app = r.resource("app").register([requestContext, whoAmI]).build();
+```
+
+### Errors
+
+Define typed, namespaced errors with a fluent builder. Built helpers expose `throw`, `is`, and `toString`:
+
+```ts
+import { r, defineError } from "@bluelibs/runner";
+
+// Fluent builder
+const AppError = r
+  .error<{ code: number; message: string }>("app.errors.AppError")
+  .dataSchema({
+    parse(input) {
+      const d = input as { code: number; message: string };
+      if (typeof d?.code !== "number" || typeof d?.message !== "string") {
+        throw new Error("invalid");
+      }
+      return d;
+    },
+  })
+  .build();
+
+try {
+  AppError.throw({ code: 400, message: "Oops" });
+} catch (err) {
+  if (AppError.is(err)) {
+    // err.name === "app.errors.AppError", err.message === "Oops"
+  }
+}
+
+// Classic define-style
+const LegacyError = defineError<{ message: string }>({
+  id: "legacy.errors.Generic",
+  dataSchema: { parse: (d: unknown) => d as { message: string } },
+});
+```
+
+- Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.
+
 ## HTTP & Tunnels
 
 Run Node exposures and connect to remote Runners with fluent resources.
@@ -358,7 +442,10 @@ const serializerSetup = r
       }
     }
 
-    serializer.addType("Distance", (json) => new Distance(json.value, json.unit));
+    serializer.addType(
+      "Distance",
+      (json) => new Distance(json.value, json.unit),
+    );
   })
   .build();
 ```
@@ -379,7 +466,10 @@ Example:
 import { run } from "@bluelibs/runner";
 
 test("sends welcome email", async () => {
-  const app = r.resource("spec.app").register([sendWelcomeEmail, registerUser]).build();
+  const app = r
+    .resource("spec.app")
+    .register([sendWelcomeEmail, registerUser])
+    .build();
   const runtime = await run(app);
   await runtime.runTask(registerUser, { email: "user@example.com" });
   await runtime.dispose();
@@ -412,11 +502,3 @@ const modern = r.resource("modern").register([classic]).build();
 ```
 
 Fluent builders produce the exact same runtime definitions, so you can mix both styles within one project.
-
-## Reference Links
-
-- `readmes/FLUENT_BUILDERS.md` – deep dive into fluent APIs.
-- `readmes/TUNNELS.md` – streaming, authentication, deployment tips.
-- `README.md` – project overview and additional examples.
-- `AI.md` (this file) – copy/paste friendly summary.
-- `MULTIPLATFORM.md` – cross-platform gotchas and recommended structure.

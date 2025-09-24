@@ -6,6 +6,8 @@ import { IHook } from "./hook";
 import { IEvent, IEventDefinition } from "./event";
 import { ITag } from "./tag";
 import { symbolOptionalDependency } from "./symbols";
+import { IErrorHelper } from "./error";
+import type { IAsyncContext } from "./asyncContext";
 
 export * from "./symbols";
 
@@ -68,9 +70,13 @@ export type DependencyMapType = Record<
   | ITask<any, any, any, any, any, any>
   | IResource<any, any, any, any, any, any, any>
   | IEvent<any>
+  | IErrorHelper<any>
+  | IAsyncContext<any>
   | IOptionalDependency<ITask<any, any, any, any, any, any>>
   | IOptionalDependency<IResource<any, any, any, any, any, any, any>>
   | IOptionalDependency<IEvent<any>>
+  | IOptionalDependency<IErrorHelper<any>>
+  | IOptionalDependency<IAsyncContext<any>>
 >;
 
 /** Wrapper type marking a dependency as optional at wiring time */
@@ -151,6 +157,10 @@ export type DependencyValueType<T> = T extends ITask<any, any, any>
   ? ResourceDependency<ExtractResourceValue<T>>
   : T extends IEventDefinition<any>
   ? EventDependency<ExtractEventPayload<T>>
+  : T extends IErrorHelper<any>
+  ? T
+  : T extends IAsyncContext<any>
+  ? T
   : T extends IOptionalDependency<infer U>
   ? DependencyValueType<U> | undefined
   : never;
@@ -180,6 +190,10 @@ export type ResourceDependencyValueType<T> = T extends ITask<any, any, any>
   ? ResourceDependency<ExtractResourceValue<T>>
   : T extends IEventDefinition<any>
   ? EventDependency<ExtractEventPayload<T>>
+  : T extends IErrorHelper<any>
+  ? T
+  : T extends IAsyncContext<any>
+  ? T
   : T extends IOptionalDependency<infer U>
   ? ResourceDependencyValueType<U> | undefined
   : never;
@@ -206,4 +220,6 @@ export type RegisterableItems =
   | ITaskMiddleware<any, any, any, any>
   | IResourceMiddleware<any, any, any, any>
   | IEvent<any>
+  | IAsyncContext<any>
+  | IErrorHelper<any>
   | ITag<any, any, any>;

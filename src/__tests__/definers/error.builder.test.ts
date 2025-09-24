@@ -4,6 +4,15 @@ describe("error builder", () => {
   it("build() returns an ErrorHelper that can throw and type-narrow via is()", () => {
     const AppError = r
       .error<{ code: number; message: string }>("tests.errors.app")
+      .dataSchema({
+        parse(input: unknown) {
+          const d = input as { code: number; message: string };
+          if (typeof d?.code !== "number" || typeof d?.message !== "string") {
+            throw new Error("invalid");
+          }
+          return d;
+        },
+      })
       .serialize((d) => JSON.stringify(d))
       .parse((s) => JSON.parse(s))
       .build();
@@ -20,5 +29,23 @@ describe("error builder", () => {
         expect(AppError.toString(err)).toBe("Boom");
       }
     }
+  });
+
+  it("validates data via dataSchema.parse before throwing", () => {
+    const TypedError = r
+      .error<{ code: number; message: string }>("tests.errors.typed")
+      .dataSchema({
+        parse(input: unknown) {
+          const d = input as { code: number; message: string };
+          if (typeof d?.code !== "number" || typeof d?.message !== "string") {
+            throw new Error("invalid");
+          }
+          return d;
+        },
+      })
+      .build();
+
+    const bad: any = { code: "x", message: 1 };
+    expect(() => TypedError.throw(bad)).toThrowError("invalid");
   });
 });

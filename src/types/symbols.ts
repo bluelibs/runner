@@ -14,6 +14,8 @@ export const symbolResourceWithConfig: unique symbol = Symbol.for(
   "runner.resourceWithConfig",
 );
 export const symbolEvent: unique symbol = Symbol.for("runner.event");
+/** @internal Marks an error helper definition */
+export const symbolError: unique symbol = Symbol.for("runner.error");
 export const symbolMiddleware: unique symbol = Symbol.for("runner.middleware");
 /** New brands for separated middleware kinds */
 export const symbolTaskMiddleware: unique symbol = Symbol.for(
@@ -50,3 +52,8 @@ export const symbolOptionalDependency: unique symbol = Symbol.for(
 
 /** @internal Path to aid anonymous id generation and error messages */
 export const symbolFilePath: unique symbol = Symbol.for("runner.filePath");
+
+/** @internal Marks an async context definition */
+export const symbolAsyncContext: unique symbol = Symbol.for(
+  "runner.asyncContext",
+);

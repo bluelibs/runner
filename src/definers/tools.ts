@@ -23,6 +23,9 @@ import {
   ITag,
   IPhantomTask,
 } from "../defs";
+import { IErrorHelper } from "../types/error";
+import { symbolAsyncContext, symbolError } from "../types/symbols";
+import type { IAsyncContext } from "../types/asyncContext";
 
 /**
  * Type guard: checks if a definition is a Task.
@@ -105,4 +108,14 @@ export function isOptional(
   definition: any,
 ): definition is IOptionalDependency<any> {
   return definition && definition[symbolOptionalDependency];
+}
+
+/** Type guard: checks if a definition is an Error helper. */
+export function isError(definition: any): definition is IErrorHelper<any> {
+  return Boolean(definition && definition[symbolError]);
+}
+
+/** Type guard: checks if a definition is an Async Context. */
+export function isAsyncContext(definition: any): definition is IAsyncContext<any> {
+  return Boolean(definition && definition[symbolAsyncContext]);
 }

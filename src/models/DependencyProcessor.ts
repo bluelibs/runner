@@ -305,6 +305,12 @@ export class DependencyProcessor {
       } else if (utils.isEvent(inner)) {
         const exists = this.store.events.get(inner.id) !== undefined;
         return exists ? this.extractEventDependency(inner, source) : undefined;
+      } else if (utils.isError(inner)) {
+        const exists = this.store.errors.get(inner.id) !== undefined;
+        return exists ? inner : undefined;
+      } else if (utils.isAsyncContext(inner)) {
+        const exists = this.store.asyncContexts.get(inner.id) !== undefined;
+        return exists ? inner : undefined;
       }
       throw new UnknownItemTypeError(inner);
     }
@@ -314,6 +320,16 @@ export class DependencyProcessor {
       return this.extractTaskDependency(object);
     } else if (utils.isEvent(object)) {
       return this.extractEventDependency(object, source);
+    } else if (utils.isError(object)) {
+      // For error helpers, the dependency value is the helper itself
+      return object;
+    } else if (utils.isAsyncContext(object)) {
+      // Require registration for async contexts
+      const exists = this.store.asyncContexts.get(object.id) !== undefined;
+      if (!exists) {
+        throw new DependencyNotFoundError(`AsyncContext ${object.id}`);
+      }
+      return object;
     } else {
       throw new UnknownItemTypeError(object);
     }

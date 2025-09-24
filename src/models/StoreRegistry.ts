@@ -27,6 +27,8 @@ import { StoreValidator } from "./StoreValidator";
 import { Store } from "./Store";
 import { task } from "..";
 import { IDependentNode } from "./utils/findCircularDependencies";
+import { IErrorHelper } from "../types/error";
+import type { IAsyncContext } from "../types/asyncContext";
 
 type StoringMode = "normal" | "override";
 export class StoreRegistry {
@@ -39,6 +41,8 @@ export class StoreRegistry {
     new Map();
   public hooks: Map<string, HookStoreElementType> = new Map();
   public tags: Map<string, ITag> = new Map();
+  public asyncContexts: Map<string, IAsyncContext<any>> = new Map();
+  public errors: Map<string, IErrorHelper<any>> = new Map();
 
   private validator: StoreValidator;
 
@@ -53,12 +57,16 @@ export class StoreRegistry {
   storeGenericItem<C>(item: RegisterableItems) {
     if (utils.isTask(item)) {
       this.storeTask<C>(item);
+    } else if (utils.isError(item)) {
+      this.storeError<C>(item as IErrorHelper<any>);
     } else if (utils.isHook && utils.isHook(item)) {
       this.storeHook<C>(item as IHook);
     } else if (utils.isResource(item)) {
       this.storeResource<C>(item);
     } else if (utils.isEvent(item)) {
       this.storeEvent<C>(item);
+    } else if (utils.isAsyncContext(item)) {
+      this.storeAsyncContext<C>(item as IAsyncContext<any>);
     } else if (utils.isTaskMiddleware(item)) {
       this.storeTaskMiddleware<C>(item as ITaskMiddleware<any>);
     } else if (utils.isResourceMiddleware(item)) {
@@ -70,6 +78,16 @@ export class StoreRegistry {
     } else {
       throw new UnknownItemTypeError(item);
     }
+  }
+
+  storeError<C>(item: IErrorHelper<any>) {
+    this.validator.checkIfIDExists(item.id);
+    this.errors.set(item.id, item);
+  }
+
+  storeAsyncContext<C>(item: IAsyncContext<any>) {
+    this.validator.checkIfIDExists(item.id);
+    this.asyncContexts.set(item.id, item);
   }
 
   storeTag(item: ITag<any, any, any>) {

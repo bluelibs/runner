@@ -97,6 +97,12 @@ export class Store {
   get events() {
     return this.registry.events;
   }
+  get errors() {
+    return this.registry.errors;
+  }
+  get asyncContexts() {
+    return this.registry.asyncContexts;
+  }
   get taskMiddlewares() {
     return this.registry.taskMiddlewares;
   }
