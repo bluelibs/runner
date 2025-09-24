@@ -49,7 +49,9 @@ export async function run<C, V extends Promise<any>>(
   } = options || {};
 
   const {
-    printThreshold = getPlatform().getEnv("NODE_ENV") === "test" ? null : "info",
+    printThreshold = getPlatform().getEnv("NODE_ENV") === "test"
+      ? null
+      : "info",
     printStrategy = "pretty",
     bufferLogs = false,
   } = logs;

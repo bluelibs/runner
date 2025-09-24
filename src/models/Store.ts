@@ -45,6 +45,8 @@ import { OnUnhandledError } from "./UnhandledError";
 import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
 import { EJSON } from "@bluelibs/ejson";
+import { RunnerMode } from "../enums/RunnerMode";
+import { detectRunnerMode } from "../utils/detectRunnerMode";
 
 // Re-export types for backward compatibility
 export {
@@ -66,16 +68,20 @@ export class Store {
 
   #isLocked = false;
   #isInitialized = false;
+  public mode: RunnerMode;
 
   constructor(
     protected readonly eventManager: EventManager,
     protected readonly logger: Logger,
     public readonly onUnhandledError: OnUnhandledError,
+    mode?: RunnerMode,
   ) {
     this.registry = new StoreRegistry(this);
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
     this.middlewareManager = new MiddlewareManager(this, eventManager, logger);
+    
+    this.mode = detectRunnerMode(mode);
   }
 
   // Delegate properties to registry

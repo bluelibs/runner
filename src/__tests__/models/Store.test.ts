@@ -14,6 +14,7 @@ import {
   TaskRunner,
 } from "../../models";
 import { StoreRegistry } from "../../models/StoreRegistry";
+import { RunnerMode } from "../../enums/RunnerMode";
 
 describe("Store", () => {
   let eventManager: EventManager;
@@ -29,7 +30,7 @@ describe("Store", () => {
       bufferLogs: false,
     });
     onUnhandledError = jest.fn();
-    store = new Store(eventManager, logger, onUnhandledError);
+    store = new Store(eventManager, logger, onUnhandledError, RunnerMode.TEST);
   });
 
   it("should expose some helpers", () => {
