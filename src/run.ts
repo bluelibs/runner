@@ -5,7 +5,6 @@ import { EventManager } from "./models/EventManager";
 import { globalEvents } from "./globals/globalEvents";
 import { Store } from "./models/Store";
 import { findCircularDependencies } from "./models/utils/findCircularDependencies";
-import { CircularDependenciesError } from "./errors";
 import { Logger } from "./models/Logger";
 import { isResourceWithConfig } from "./define";
 import { debugResource } from "./globals/resources/debug";

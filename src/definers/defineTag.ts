@@ -8,7 +8,7 @@ import {
   symbolFilePath,
   symbolTagConfigured,
 } from "../defs";
-import { ValidationError } from "../errors";
+import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 
 /**
@@ -55,7 +55,11 @@ export function defineTag<
         try {
           tagConfig = definition.configSchema.parse(tagConfig);
         } catch (error) {
-          throw new ValidationError("Tag config", this.id, error as Error);
+          validationError.throw({
+            subject: "Tag config",
+            id: this.id,
+            originalError: error as Error,
+          });
         }
       }
       let config: TConfig;

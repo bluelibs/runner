@@ -1,5 +1,5 @@
 import type { IAsyncLocalStorage, IPlatformAdapter } from "../types";
-import { PlatformUnsupportedFunction } from "../../errors";
+import { platformUnsupportedFunctionError } from "../../errors";
 
 // A generic, non-detecting adapter that uses globalThis listeners and no Node APIs.
 export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
@@ -51,7 +51,7 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   }
 
   exit(): void {
-    throw new PlatformUnsupportedFunction("exit");
+    platformUnsupportedFunctionError.throw({ functionName: "exit" });
   }
 
   getEnv(key: string): string | undefined {
@@ -70,11 +70,15 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   createAsyncLocalStorage<T>(): IAsyncLocalStorage<T> {
     // Construct without throw; error only when used
     return {
-      getStore: () => {
-        throw new PlatformUnsupportedFunction("createAsyncLocalStorage");
+      getStore: (): any => {
+        platformUnsupportedFunctionError.throw({
+          functionName: "createAsyncLocalStorage",
+        });
       },
-      run: () => {
-        throw new PlatformUnsupportedFunction("createAsyncLocalStorage");
+      run: (_store: any, _callback: () => any): any => {
+        platformUnsupportedFunctionError.throw({
+          functionName: "createAsyncLocalStorage",
+        });
       },
     };
   }

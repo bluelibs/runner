@@ -7,11 +7,7 @@
 - [BlueLibs Runner: Fluent Builder Field Guide](#bluelibs-runner-fluent-builder-field-guide)
   - [Table of Contents](#table-of-contents)
   - [Install](#install)
-  - [Quick Start](#quick-start)
-  - [Platform Matrix](#platform-matrix)
-  - [Fluent Builder Primer](#fluent-builder-primer)
-  - [Core Concepts](#core-concepts)
-    - [Resources](#resources)
+  - [Resources](#resources)
     - [Tasks](#tasks)
     - [Events and Hooks](#events-and-hooks)
     - [Middleware](#middleware)
@@ -31,9 +27,7 @@
 npm install @bluelibs/runner
 ```
 
-Runner auto-detects its runtime. The Node bundle lives under `@bluelibs/runner/node`; browser helpers are under `@bluelibs/runner/platform`.
-
-## Quick Start
+## Resources
 
 ```ts
 import express from "express";
@@ -92,75 +86,6 @@ await runtime.runTask(createUser, { name: "Ada" });
 - `r.*.with(config)` produces a configured copy of the definition.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns helpers such as `runTask`, `getResourceValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
-
-## Platform Matrix
-
-| Capability                                       | Node.js   | Browser      | Workers (e.g. Cloudflare) |
-| ------------------------------------------------ | --------- | ------------ | ------------------------- |
-| `run()` lifecycle                                | ✅        | ✅           | ✅                        |
-| `nodeExposure`, Node tunnels                     | ✅        | ❌           | ❌                        |
-| `createHttpClient`                               | ✅        | ✅           | ✅                        |
-| Duplex upload (`createHttpSmartClient`)          | ✅        | ❌           | ❌                        |
-| File helpers (`createNodeFile`, `createWebFile`) | Node only | Browser only | Browser only              |
-| Async context (AsyncLocalStorage)                | ✅        | n/a          | n/a                       |
-
-- Browser environments rely on `globalThis.__ENV__` or `globalThis.env` for configuration; Node uses `process.env`.
-- Runner will throw if you call Node-only helpers in the browser; keep shared code inside `src/` and Node-specific logic under `src/node/`.
-
-## Fluent Builder Primer
-
-The fluent API lives under the single `r` namespace:
-
-```ts
-import { r } from "@bluelibs/runner";
-
-const task = r
-  .task("demo.tasks.hello")
-  .run(async ({ input }) => input)
-  .build();
-```
-
-Key rules:
-
-- Builders are immutable; every fluent call returns a new builder with tightened typings.
-- Call `.build()` once you finish configuring the definition.
-- `with(config)` clones the built definition with typed config overrides.
-- Use the same pattern across tasks, resources, hooks, middleware, and tags for consistent DX.
-
-## Core Concepts
-
-### Resources
-
-Resources encapsulate long-lived values such as database connections or service facades.
-
-```ts
-import { MongoClient } from "mongodb";
-import { r } from "@bluelibs/runner";
-
-const database = r
-  .resource<{ url: string }>("app.resources.database")
-  .init(async ({ url }) => {
-    const client = new MongoClient(url);
-    await client.connect();
-    return client;
-  })
-  .dispose(async (client) => client.close())
-  .build();
-
-const userService = r
-  .resource("app.resources.userService")
-  .dependencies({ database })
-  .init(async (_config, { database }) => ({
-    async create(user: { email: string }) {
-      return database.db().collection("users").insertOne(user);
-    },
-  }))
-  .build();
-```
-
-- `context(fn)` gives you a private object that survives `init` → `dispose`.
-- `configSchema` and `resultSchema` accept anything with a `parse()` method (Zod, custom validators).
-- Register resources inside other resources via `.register([...])`. Repeated calls append unless you pass `{ override: true }`.
 
 ### Tasks
 
@@ -308,12 +233,10 @@ await requestContext.provide({ requestId: "abc" }, async () => {
 });
 
 // Require middleware for tasks that need the context
-const requireRequestContext = requestContext.require();
+r.task('task').middleware([requestContext.require()]);
 ```
 
 - If you don't provide `serialize`/`parse`, Runner uses its default EJSON serializer to preserve Dates, RegExp, etc.
-- A legacy `createContext(name?)` exists for backwards compatibility; prefer `r.asyncContext` or `asyncContext({ id })`.
-
 - You can also inject async contexts as dependencies; the injected value is the helper itself. Contexts must be registered to be used.
 
 ```ts
@@ -343,7 +266,7 @@ try {
   AppError.throw({ code: 400, message: "Oops" });
 } catch (err) {
   if (AppError.is(err)) {
-    // err.name === "app.errors.AppError", err.message === "Oops"
+    // Do something
   }
 }
 ```

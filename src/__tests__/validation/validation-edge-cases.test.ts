@@ -6,7 +6,7 @@ import {
   defineTaskMiddleware,
 } from "../../define";
 import { run } from "../../run";
-import { ValidationError } from "../../errors";
+import { validationError } from "../../errors";
 import { IValidationSchema } from "../../defs";
 
 // Mock validation schema similar to the existing pattern
@@ -40,7 +40,7 @@ describe("Validation Edge Cases", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrow(ValidationError);
+    await expect(run(app)).rejects.toThrow();
     await expect(run(app)).rejects.toThrow(
       "Task input validation failed for task.nonErrorValidation: Non-error string thrown",
     );
@@ -59,7 +59,7 @@ describe("Validation Edge Cases", () => {
 
     expect(() => {
       resource.with({ invalid: "config" } as any);
-    }).toThrow(ValidationError);
+    }).toThrow();
     expect(() => {
       resource.with({ invalid: "config" } as any);
     }).toThrow(
@@ -80,7 +80,7 @@ describe("Validation Edge Cases", () => {
 
     expect(() => {
       middleware.with({ invalid: "config" } as any);
-    }).toThrow(ValidationError);
+    }).toThrow();
     expect(() => {
       middleware.with({ invalid: "config" } as any);
     }).toThrow(
@@ -115,7 +115,7 @@ describe("Validation Edge Cases", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrow(ValidationError);
+    await expect(run(app)).rejects.toThrow();
     await expect(run(app)).rejects.toThrow(
       "Event payload validation failed for event.nonErrorValidation: Event payload error string",
     );

@@ -1,10 +1,5 @@
 import { HookStoreElementType, ITag } from "../defs";
-import {
-  DependencyNotFoundError,
-  DuplicateRegistrationError,
-  MiddlewareNotRegisteredError,
-  TagNotFoundError,
-} from "../errors";
+import { duplicateRegistrationError, middlewareNotRegisteredError, tagNotFoundError } from "../errors";
 import { ITaggable } from "../defs";
 import { Store } from "./Store";
 import { StoreRegistry } from "./StoreRegistry";
@@ -14,31 +9,31 @@ export class StoreValidator {
 
   checkIfIDExists(id: string): void | never {
     if (this.registry.tasks.has(id)) {
-      throw new DuplicateRegistrationError("Task", id);
+      duplicateRegistrationError.throw({ type: "Task", id });
     }
     if (this.registry.resources.has(id)) {
-      throw new DuplicateRegistrationError("Resource", id);
+      duplicateRegistrationError.throw({ type: "Resource", id });
     }
     if (this.registry.events.has(id)) {
-      throw new DuplicateRegistrationError("Event", id);
+      duplicateRegistrationError.throw({ type: "Event", id });
     }
     if (this.registry.errors.has(id)) {
-      throw new DuplicateRegistrationError("Error", id);
+      duplicateRegistrationError.throw({ type: "Error", id });
     }
     if (this.registry.asyncContexts.has(id)) {
-      throw new DuplicateRegistrationError("AsyncContext", id);
+      duplicateRegistrationError.throw({ type: "AsyncContext", id });
     }
     if (this.registry.taskMiddlewares.has(id)) {
-      throw new DuplicateRegistrationError("Middleware", id);
+      duplicateRegistrationError.throw({ type: "Middleware", id });
     }
     if (this.registry.resourceMiddlewares.has(id)) {
-      throw new DuplicateRegistrationError("Middleware", id);
+      duplicateRegistrationError.throw({ type: "Middleware", id });
     }
     if (this.registry.tags.has(id)) {
-      throw new DuplicateRegistrationError("Tag", id);
+      duplicateRegistrationError.throw({ type: "Tag", id });
     }
     if (this.registry.hooks.has(id)) {
-      throw new DuplicateRegistrationError("Hook", id);
+      duplicateRegistrationError.throw({ type: "Hook", id });
     }
   }
 
@@ -47,11 +42,11 @@ export class StoreValidator {
       const middlewares = task.task.middleware;
       middlewares.forEach((middlewareAttachment) => {
         if (!this.registry.taskMiddlewares.has(middlewareAttachment.id)) {
-          throw new MiddlewareNotRegisteredError(
-            "task",
-            task.task.id,
-            middlewareAttachment.id,
-          );
+          middlewareNotRegisteredError.throw({
+            type: "task",
+            source: task.task.id,
+            middlewareId: middlewareAttachment.id,
+          });
         }
       });
     }
@@ -60,11 +55,11 @@ export class StoreValidator {
       const middlewares = resource.resource.middleware;
       middlewares.forEach((middlewareAttachment) => {
         if (!this.registry.resourceMiddlewares.has(middlewareAttachment.id)) {
-          throw new MiddlewareNotRegisteredError(
-            "resource",
-            resource.resource.id,
-            middlewareAttachment.id,
-          );
+          middlewareNotRegisteredError.throw({
+            type: "resource",
+            source: resource.resource.id,
+            middlewareId: middlewareAttachment.id,
+          });
         }
       });
     }
@@ -91,7 +86,7 @@ export class StoreValidator {
       if (tags) {
         for (const tag of tags) {
           if (!this.registry.tags.has(tag.id)) {
-            throw new TagNotFoundError(tag.id);
+            tagNotFoundError.throw({ id: tag.id });
           }
         }
       }

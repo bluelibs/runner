@@ -5,7 +5,7 @@ import {
   IEventDefinition,
   IEventEmission,
 } from "../defs";
-import { LockedError, ValidationError, EventCycleError } from "../errors";
+import { lockedError, eventCycleError, validationError } from "../errors";
 import { globalTags } from "../globals/globalTags";
 import { IHook } from "../types/hook";
 import { getPlatform, IAsyncLocalStorage } from "../platform";
@@ -138,11 +138,12 @@ export class EventManager {
       try {
         data = eventDefinition.payloadSchema.parse(data);
       } catch (error) {
-        throw new ValidationError(
-          "Event payload",
-          eventDefinition.id,
-          error instanceof Error ? error : new Error(String(error)),
-        );
+        validationError.throw({
+          subject: "Event payload",
+          id: eventDefinition.id,
+          originalError:
+            error instanceof Error ? error : new Error(String(error)),
+        });
       }
     }
 
@@ -233,10 +234,9 @@ export class EventManager {
             top.id === frame.id && currentHookId && currentHookId === source;
 
           if (!safeReEmitBySameHook) {
-            throw new EventCycleError([
-              ...currentStack.slice(cycleStart),
-              frame,
-            ]);
+            eventCycleError.throw({
+              path: [...currentStack.slice(cycleStart), frame],
+            });
           }
         }
       }
@@ -421,7 +421,7 @@ export class EventManager {
    */
   private checkLock() {
     if (this.#isLocked) {
-      throw new LockedError("EventManager");
+      lockedError.throw({ what: "EventManager" });
     }
   }
 

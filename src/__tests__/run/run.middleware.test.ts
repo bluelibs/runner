@@ -8,11 +8,7 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { globalEvents } from "../../globals/globalEvents";
-import {
-  DuplicateRegistrationError,
-  MiddlewareNotRegisteredError,
-  ValidationError,
-} from "../../errors";
+// error helpers migrated to message-based checks
 import z from "zod";
 import { globalResources } from "../../globals/globalResources";
 import { Logger } from "../../models";
@@ -186,8 +182,7 @@ describe("Middleware", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new MiddlewareNotRegisteredError("task", "test.task", nonExistentMw.id)
-        .message,
+      `Middleware inside task "test.task" depends on "${nonExistentMw.id}" but it's not registered. Did you forget to register it?`,
     );
   });
 
@@ -788,7 +783,7 @@ describe("Middleware.everywhere()", () => {
       register: [mw, m2w],
     });
     expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Middleware", "everywhere.middleware"),
+      "Middleware \"everywhere.middleware\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
     );
 
     const app2 = defineResource({
@@ -796,10 +791,7 @@ describe("Middleware.everywhere()", () => {
       register: [mwr, mwr2],
     });
     expect(run(app2)).rejects.toThrow(
-      new DuplicateRegistrationError(
-        "Middleware",
-        "everywhere.defineResourceMiddleware",
-      ),
+      "Middleware \"everywhere.defineResourceMiddleware\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
     );
   });
 
@@ -875,9 +867,9 @@ describe("Middleware.everywhere()", () => {
         run: async ({ next }) => next(),
       });
       // @ts-expect-error
-      expect(() => mwt.with({ name: 123 })).toThrowError(ValidationError);
+      expect(() => mwt.with({ name: 123 })).toThrowError();
       // @ts-expect-error
-      expect(() => mwr.with({ name: 123 })).toThrowError(ValidationError);
+      expect(() => mwr.with({ name: 123 })).toThrowError();
     });
   });
 

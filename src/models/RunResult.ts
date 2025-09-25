@@ -1,6 +1,6 @@
 import { DependencyMapType, IEvent, ITask } from "../defs";
 import { IResource } from "../defs";
-import { ResourceNotFoundError, RuntimeError } from "../errors";
+// For RunResult convenience API, preserve the original simple messages
 import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
 import { Store } from "./Store";
@@ -34,7 +34,7 @@ export class RunResult<V> {
     if (typeof task === "string") {
       const taskId = task;
       if (!this.store.tasks.has(taskId)) {
-        throw new RuntimeError(`Task "${taskId}" not found.`);
+        throw new Error(`Task "${taskId}" not found.`);
       }
       task = this.store.tasks.get(taskId)!.task;
     }
@@ -54,7 +54,7 @@ export class RunResult<V> {
     if (typeof event === "string") {
       const eventId = event;
       if (!this.store.events.has(eventId)) {
-        throw new RuntimeError(`Event "${eventId}" not found.`);
+        throw new Error(`Event "${eventId}" not found.`);
       }
       event = this.store.events.get(eventId)!.event;
     }
@@ -71,7 +71,7 @@ export class RunResult<V> {
   ): Output extends Promise<infer U> ? U : Output => {
     const resourceId = typeof resource === "string" ? resource : resource.id;
     if (!this.store.resources.has(resourceId)) {
-      throw new ResourceNotFoundError(resourceId);
+      throw new Error(`Resource "${resourceId}" not found.`);
     }
 
     return this.store.resources.get(resourceId)!.value;

@@ -25,8 +25,10 @@ describe("error builder", () => {
       if (AppError.is(err)) {
         // Name and message should reflect id and data.message
         expect(err.name).toBe("tests.errors.app");
-        expect(err.message).toBe("Boom");
-        expect(AppError.toString(err)).toBe("Boom");
+        expect(err.message).toBe('{"code":123,"message":"Boom"}');
+        expect(err.toString()).toBe(
+          'tests.errors.app: {"code":123,"message":"Boom"}',
+        );
       }
     }
   });
@@ -47,5 +49,17 @@ describe("error builder", () => {
 
     const bad: any = { code: "x", message: 1 };
     expect(() => TypedError.throw(bad)).toThrowError("invalid");
+  });
+
+  it("accepts format in builder chain (smoke)", () => {
+    const E = r
+      .error<{ message: string }>("tests.errors.display")
+      .format((d) => d.message)
+      .build();
+    try {
+      E.throw({ message: "hi" });
+    } catch (err) {
+      expect(E.is(err)).toBe(true);
+    }
   });
 });

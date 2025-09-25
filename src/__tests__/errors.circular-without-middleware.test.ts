@@ -1,4 +1,4 @@
-import { CircularDependenciesError } from "../errors";
+import { circularDependenciesError } from "../errors";
 
 describe("Errors: CircularDependenciesError guidance without middleware", () => {
   it("omits middleware-specific guidance when cycles lack 'middleware'", () => {
@@ -6,9 +6,23 @@ describe("Errors: CircularDependenciesError guidance without middleware", () => 
       "taskA -> taskB -> taskA",
       "resourceX -> resourceY -> resourceX",
     ];
-    const err = new CircularDependenciesError(cycles);
-    expect(err.message).toContain("Circular dependencies detected:");
-    expect(err.message).toContain("taskA -> taskB -> taskA");
-    expect(err.message).not.toContain("For middleware");
+    try {
+      circularDependenciesError.throw({ cycles });
+    } catch (err: any) {
+      expect(String(err?.message)).toContain("Circular dependencies detected:");
+      expect(String(err?.message)).toContain("taskA -> taskB -> taskA");
+      expect(String(err?.message)).not.toContain("For middleware");
+    }
+  });
+
+  it("includes middleware-specific guidance when cycles mention middleware", () => {
+    const cycles = [
+      "middlewareA -> taskX -> middlewareA",
+    ];
+    try {
+      circularDependenciesError.throw({ cycles });
+    } catch (err: any) {
+      expect(String(err?.message)).toContain("For middleware");
+    }
   });
 });

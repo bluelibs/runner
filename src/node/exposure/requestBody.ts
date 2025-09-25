@@ -3,7 +3,7 @@ import type { IncomingMessage } from "http";
 import type { Serializer } from "../../globals/resources/tunnel/serializer";
 import { jsonErrorResponse } from "./httpResponse";
 import type { JsonResponse } from "./types";
-import { CancellationError } from "../../errors";
+import { cancellationError } from "../../errors";
 
 export async function readRequestBody(
   req: IncomingMessage,
@@ -17,7 +17,14 @@ export async function readRequestBody(
       if (aborted) return;
       aborted = true;
       cleanup();
-      reject(new CancellationError("Request aborted"));
+      const err = (() => {
+        try {
+          cancellationError.throw({ reason: "Request aborted" });
+        } catch (e) {
+          return e as Error;
+        }
+      })();
+      reject(err);
     };
     const onError = (err: unknown) => {
       cleanup();

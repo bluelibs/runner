@@ -1,13 +1,15 @@
 import { Readable } from "stream";
 import type { IncomingMessage, ServerResponse } from "http";
 import { createRequestHandlers } from "../requestHandlers";
-import { CancellationError } from "../../../errors";
+import { cancellationError } from "../../../errors";
 
 jest.mock("../requestBody", () => ({
   readJsonBody: async () => {
-    throw new (require("../../../errors").CancellationError)(
-      "Client Closed Request",
-    );
+    try {
+      cancellationError.throw({ reason: "Client Closed Request" });
+    } catch (e) {
+      throw e;
+    }
   },
 }));
 

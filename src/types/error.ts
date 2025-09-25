@@ -11,15 +11,19 @@ export interface IErrorDefinition<
   id: string;
   serialize?: (data: TData) => string;
   parse?: (data: string) => TData;
+  format?: (data: TData) => string;
   /**
    * Validate error data on throw(). If provided, data is parsed first.
    */
   dataSchema?: IValidationSchema<TData>;
 }
 
-export type DefaultErrorType = {
-  message: string;
-};
+export interface IErrorDefinitionFinal<TData extends DefaultErrorType>
+  extends IErrorDefinition<TData> {
+  format: (data: TData) => string;
+}
+
+export type DefaultErrorType = Record<string, unknown>;
 
 /**
  * Runtime helper returned by defineError()/r.error().
@@ -34,8 +38,6 @@ export interface IErrorHelper<
   throw(data: TData): never;
   /** Type guard for checking if an unknown error is this error */
   is(error: unknown): boolean;
-  /** Stringify the error payload */
-  toString(error: Error): string;
   /** Brand symbol for runtime detection */
   [symbolError]: true;
   /** Return an optional dependency wrapper for this error */

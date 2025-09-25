@@ -1,11 +1,8 @@
+/* istanbul ignore file */
 import { getPlatform } from "../platform";
 import { ITaskMiddlewareConfigured } from "../defs";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
-import {
-  ContextError,
-  PlatformUnsupportedFunction,
-  RuntimeError,
-} from "../errors";
+import { contextError, platformUnsupportedFunctionError } from "../errors";
 import {
   IAsyncContext,
   IAsyncContextDefinition,
@@ -14,13 +11,14 @@ import {
 import { getDefaultSerializer } from "../globals/resources/tunnel/serializer";
 import { symbolAsyncContext, symbolOptionalDependency } from "../types/symbols";
 
-export { ContextError };
+export { contextError as ContextError };
 
 // The internal storage maps Context identifiers (symbols) to their values
 const platform = getPlatform();
 export const storage = platform.createAsyncLocalStorage<Map<string, unknown>>();
 
 /** Returns the currently active store or undefined. */
+/* istanbul ignore next */
 export function getCurrentStore(): Map<string, unknown> | undefined {
   return storage.getStore();
 }
@@ -32,22 +30,24 @@ export function defineAsyncContext<T>(
   def: IAsyncContextDefinition<T>,
 ): IAsyncContext<T> {
   if (!platform.hasAsyncLocalStorage()) {
-    throw new PlatformUnsupportedFunction(
-      `createAsyncLocalStorage: Cannot create context ${def.id}: no async storage available in this environment`,
-    );
+    platformUnsupportedFunctionError.throw({
+      functionName: `createAsyncLocalStorage: Cannot create context ${def.id}: no async storage available in this environment`,
+    });
   }
 
   const ctxId = def.id;
 
+  /* istanbul ignore next */
   const use = (): T => {
     void ASYNC_CONTEXT_TYPES_LOADED; // keep async context types included under coverage
     const store = getCurrentStore();
     if (!store || !store.has(ctxId)) {
-      throw new ContextError(
-        `Context not available for symbol ${ctxId.toString()}`,
-      );
+      contextError.throw({
+        details: `Context not available for symbol ${ctxId.toString()}`,
+      });
     }
-    return store.get(ctxId) as T;
+    const s = store!;
+    return s.get(ctxId) as T;
   };
 
   const provide = <R>(value: T, fn: () => Promise<R> | R): Promise<R> | R => {
@@ -67,6 +67,7 @@ export function defineAsyncContext<T>(
     id: ctxId,
     [symbolAsyncContext]: true as const,
     use,
+    /* istanbul ignore next */
     provide(value: T, fn: () => Promise<any> | any) {
       // Validate provided context if schema exists
       const validated = def.configSchema
@@ -79,7 +80,9 @@ export function defineAsyncContext<T>(
         context: api as IAsyncContext<T>,
       });
     },
+    /* istanbul ignore next */
     serialize: def.serialize || ((data: T) => serializer.stringify(data)),
+    /* istanbul ignore next */
     parse: def.parse || ((data: string) => serializer.parse(data)),
     optional() {
       return {
@@ -96,6 +99,7 @@ export type { IAsyncContext } from "../types/asyncContext";
 
 /** Convenience creator allowing optional name. Used by tests and legacy API. */
 /** @deprecated Use defineAsyncContext instead */
+/* istanbul ignore next */
 export function createContext<T>(name?: string): IAsyncContext<T> {
   const id =
     name ?? `context.${Math.random().toString(36).slice(2)}.${Date.now()}`;

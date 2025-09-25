@@ -69,6 +69,21 @@ describe("errors as registrable items and dependencies", () => {
     await r2.dispose();
   });
 
+  it("throws if non-optional error dependency is not registered", async () => {
+    const err = errorBuilder("spec.errors.nonOptional.missing").build();
+
+    const t = defineTask<void, Promise<void>>({
+      id: "spec.tasks.error.dep.missing",
+      dependencies: { err },
+      run: async () => {
+        // no-op
+      },
+    });
+
+    const app = defineResource({ id: "spec.app.error.dep.missing", register: [t] });
+    await expect(run(app)).rejects.toThrowError();
+  });
+
   it("exposes registered errors via store.errors getter", async () => {
     const myErr = errorBuilder("spec.errors.visible").build();
     const app = defineResource({ id: "spec.app.errors.visible", register: [myErr] });

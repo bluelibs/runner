@@ -20,7 +20,7 @@ import type {
   NodeExposureHttpCorsConfig,
 } from "./resourceTypes";
 import { ExposureRequestContext } from "./requestContext";
-import { CancellationError, isCancellationError } from "../../errors";
+import { isCancellationError } from "../../errors";
 import { applyCorsActual, handleCorsPreflight } from "./cors";
 import { createAbortControllerForRequest, getContentType } from "./utils";
 import { computeAllowList } from "../tunnel.allowlist";

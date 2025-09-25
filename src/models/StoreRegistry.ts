@@ -14,7 +14,7 @@ import {
   symbolResourceMiddleware,
 } from "../defs";
 import * as utils from "../define";
-import { UnknownItemTypeError } from "../errors";
+import { unknownItemTypeError } from "../errors";
 import {
   TaskStoreElementType,
   TaskMiddlewareStoreElementType,
@@ -76,7 +76,7 @@ export class StoreRegistry {
     } else if (utils.isTag(item)) {
       this.storeTag(item);
     } else {
-      throw new UnknownItemTypeError(item);
+      unknownItemTypeError.throw({ item });
     }
   }
 

@@ -1,4 +1,4 @@
-import { PlatformUnsupportedFunction } from "../../errors";
+import { platformUnsupportedFunctionError } from "../../errors";
 import { isWebWorker } from "../../platform/types";
 /**
  * Simple test to verify platform abstraction works in different environments
@@ -141,7 +141,7 @@ describe("Platform Abstraction", () => {
 
     expect(() => {
       universalAdapter.createAsyncLocalStorage<string>();
-    }).not.toThrow(PlatformUnsupportedFunction);
+    }).not.toThrow();
 
     // Test __ENV__ fallback
     (globalThis as any).__ENV__ = { TEST_VAR: "env_value" };

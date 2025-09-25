@@ -1,5 +1,5 @@
 import { PlatformAdapter } from "../../platform";
-import { PlatformUnsupportedFunction } from "../../errors";
+import { platformUnsupportedFunctionError } from "../../errors";
 
 // Capture baseline globals to restore after each test in this file
 const baselineAdd = (globalThis as any).addEventListener;

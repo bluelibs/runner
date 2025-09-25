@@ -33,12 +33,12 @@ function createReqStub(noopOff = false) {
 }
 
 describe("requestBody branches", () => {
-  it("already-aborted signal triggers immediate CancellationError (covers line 52)", async () => {
+  it("already-aborted signal triggers immediate cancellation error (covers line 52)", async () => {
     const req = createReqStub();
     const ac = new AbortController();
     ac.abort();
     await expect(readRequestBody(req, ac.signal)).rejects.toMatchObject({
-      name: "CancellationError",
+      name: "runner.errors.cancellation",
     });
   });
 
@@ -47,7 +47,7 @@ describe("requestBody branches", () => {
     const ac = new AbortController();
     const p = readRequestBody(req, ac.signal);
     ac.abort();
-    await expect(p).rejects.toMatchObject({ name: "CancellationError" });
+    await expect(p).rejects.toMatchObject({ name: "runner.errors.cancellation" });
     // emit end afterwards; if onEnd runs, it should early-return and not throw
     req.emit("end");
   });

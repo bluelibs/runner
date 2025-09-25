@@ -13,9 +13,9 @@ import {
 } from "./utils/findCircularDependencies";
 import { globalEventsArray } from "../globals/globalEvents";
 import {
-  CircularDependenciesError,
-  StoreAlreadyInitializedError,
-  EventEmissionCycleError,
+  circularDependenciesError,
+  storeAlreadyInitializedError,
+  eventEmissionCycleError,
 } from "../errors";
 import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
@@ -232,7 +232,7 @@ export class Store {
     const dependentNodes = this.registry.getDependentNodes();
     const circularDependencies = findCircularDependencies(dependentNodes);
     if (circularDependencies.cycles.length > 0) {
-      throw new CircularDependenciesError(circularDependencies.cycles);
+      circularDependenciesError.throw({ cycles: circularDependencies.cycles });
     }
   }
 
@@ -240,7 +240,7 @@ export class Store {
     const eventNodes = this.registry.buildEventEmissionGraph();
     const circular = findCircularDependencies(eventNodes);
     if (circular.cycles.length > 0) {
-      throw new EventEmissionCycleError(circular.cycles);
+      eventEmissionCycleError.throw({ cycles: circular.cycles });
     }
   }
 
@@ -249,7 +249,7 @@ export class Store {
     config: any,
   ) {
     if (this.#isInitialized) {
-      throw new StoreAlreadyInitializedError();
+      storeAlreadyInitializedError.throw({});
     }
 
     this.registerGlobalComponents();

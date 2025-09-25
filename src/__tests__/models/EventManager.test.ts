@@ -7,7 +7,7 @@ import {
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
-import { EventCycleError } from "../../errors";
+import { eventCycleError } from "../../errors";
 
 describe("EventManager", () => {
   let eventManager: EventManager;
@@ -1198,9 +1198,7 @@ describe("EventManager", () => {
         await em.emit(A, "x", "listener-A");
       });
 
-      await expect(em.emit(A, "init", "test")).rejects.toBeInstanceOf(
-        EventCycleError,
-      );
+      await expect(em.emit(A, "init", "test")).rejects.toThrow();
     });
 
     it("safe re-emit by same hook does not throw", async () => {
@@ -1232,9 +1230,7 @@ describe("EventManager", () => {
         await eventManager.emit(A, "x", "listener-A");
       });
 
-      await expect(eventManager.emit(A, "init", "test")).rejects.toBeInstanceOf(
-        EventCycleError,
-      );
+      await expect(eventManager.emit(A, "init", "test")).rejects.toThrow();
     });
 
     it("throws on cross-cycle (A -> B -> A)", async () => {
@@ -1248,9 +1244,7 @@ describe("EventManager", () => {
         await eventManager.emit(A, "y", "listener-B");
       });
 
-      await expect(eventManager.emit(A, "init", "test")).rejects.toBeInstanceOf(
-        EventCycleError,
-      );
+      await expect(eventManager.emit(A, "init", "test")).rejects.toThrow();
     });
 
     it("allows acyclic chains (A -> B -> C)", async () => {

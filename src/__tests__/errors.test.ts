@@ -8,20 +8,17 @@ import {
   defineResourceMiddleware,
 } from "../define";
 import { run } from "../run";
-import { Errors } from "..";
-import { MiddlewareNotRegisteredError } from "../errors";
-
-const {
-  RuntimeError,
-  DuplicateRegistrationError,
-  DependencyNotFoundError,
-  UnknownItemTypeError,
-  CircularDependenciesError,
-  EventNotFoundError,
-  LockedError,
-  StoreAlreadyInitializedError,
-  ValidationError,
-} = Errors;
+import {
+  duplicateRegistrationError,
+  dependencyNotFoundError,
+  unknownItemTypeError,
+  eventNotFoundError,
+  middlewareNotRegisteredError,
+  circularDependenciesError,
+  lockedError,
+  storeAlreadyInitializedError,
+  validationError,
+} from "../errors";
 
 describe("Errors", () => {
   it("should throw duplicateRegistration error", async () => {
@@ -34,7 +31,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Task", "test.task").message,
+      "Task \"test.task\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
     );
   });
 
@@ -55,7 +52,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new UnknownItemTypeError({}).message,
+      /Unknown item type:/,
     );
   });
 
@@ -70,9 +67,7 @@ describe("Errors", () => {
       async init(_, {}) {},
     });
 
-    await expect(run(app)).rejects.toThrow(
-      new UnknownItemTypeError({}).message,
-    );
+    await expect(run(app)).rejects.toThrow(/Unknown item type/);
   });
 
   it("should throw circularDependencies error", async () => {
@@ -111,7 +106,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new EventNotFoundError("non.existent.event").message,
+      'Event "non.existent.event" not found. Did you forget to register it?'
     );
   });
 
@@ -192,7 +187,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Resource", "res1").message,
+      "Resource \"res1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
     );
   });
 
@@ -210,7 +205,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Tag", "tag1").message,
+      "Tag \"tag1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
     );
   });
 
@@ -235,7 +230,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Hook", "hook1").message,
+      "Hook \"hook1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
     );
   });
 
@@ -255,7 +250,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Middleware", "middlewarex").message,
+      "Middleware \"middlewarex\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
     );
   });
 
@@ -273,7 +268,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DuplicateRegistrationError("Event", "ev1").message,
+      "Event \"ev1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
     );
   });
 
@@ -302,7 +297,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DependencyNotFoundError("Task test.off.the.grid").message,
+      'Dependency Task test.off.the.grid not found. Did you forget to register it through a resource?'
     );
   });
 
@@ -330,7 +325,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new DependencyNotFoundError("Resource test.off.the.grid").message,
+      'Dependency Resource test.off.the.grid not found. Did you forget to register it through a resource?'
     );
   });
 
@@ -352,7 +347,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new MiddlewareNotRegisteredError("task", "test.task", "mw").message,
+      'Middleware inside task "test.task" depends on "mw" but it\'s not registered. Did you forget to register it?'
     );
   });
 
@@ -365,78 +360,72 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      new MiddlewareNotRegisteredError("resource", "app", "mw").message,
+      'Middleware inside resource "app" depends on "mw" but it\'s not registered. Did you forget to register it?'
     );
   });
 
-  describe("Error Classes", () => {
-    it("should have correct error names and inheritance", () => {
-      // Test base RuntimeError
-      const baseError = new RuntimeError("test");
-      expect(baseError.name).toBe("RuntimeError");
-      expect(baseError).toBeInstanceOf(Error);
-      expect(baseError).toBeInstanceOf(RuntimeError);
+  describe("Error Helpers", () => {
+    it("throws with correct messages and type guards", () => {
+      const capture = (fn: () => void) => {
+        try {
+          fn();
+        } catch (e: any) {
+          return e as Error & { name: string; data?: any };
+        }
+        throw new Error("expected throw");
+      };
 
-      // Test DuplicateRegistrationError
-      const dupError = new DuplicateRegistrationError("Task", "test");
-      expect(dupError.name).toBe("DuplicateRegistrationError");
-      expect(dupError).toBeInstanceOf(Error);
-      expect(dupError).toBeInstanceOf(RuntimeError);
-      expect(dupError).toBeInstanceOf(DuplicateRegistrationError);
-
-      // Test DependencyNotFoundError
-      const depError = new DependencyNotFoundError("test");
-      expect(depError.name).toBe("DependencyNotFoundError");
-      expect(depError).toBeInstanceOf(RuntimeError);
-
-      // Test UnknownItemTypeError
-      const unknownError = new UnknownItemTypeError("test");
-      expect(unknownError.name).toBe("UnknownItemTypeError");
-      expect(unknownError).toBeInstanceOf(RuntimeError);
-
-      // Test CircularDependenciesError
-      const circularError = new CircularDependenciesError(["a", "b"]);
-      expect(circularError.name).toBe("CircularDependenciesError");
-      expect(circularError).toBeInstanceOf(RuntimeError);
-
-      // Test EventNotFoundError
-      const eventError = new EventNotFoundError("test");
-      expect(eventError.name).toBe("EventNotFoundError");
-      expect(eventError).toBeInstanceOf(RuntimeError);
-
-      // Test LockedError
-      const lockedError = new LockedError("test");
-      expect(lockedError.name).toBe("LockedError");
-      expect(lockedError).toBeInstanceOf(RuntimeError);
-
-      // Test StoreAlreadyInitializedError
-      const storeError = new StoreAlreadyInitializedError();
-      expect(storeError.name).toBe("StoreAlreadyInitializedError");
-      expect(storeError).toBeInstanceOf(RuntimeError);
-
-      // Test ValidationError with Error object
-      const validationErrorWithError = new ValidationError(
-        "Task input",
-        "test-task",
-        new Error("Required field missing"),
+      const dup = capture(() =>
+        duplicateRegistrationError.throw({ type: "Task", id: "test" }),
       );
-      expect(validationErrorWithError.name).toBe("ValidationError");
-      expect(validationErrorWithError.message).toBe(
+      expect(dup.message).toContain('Task "test" already registered');
+      expect(duplicateRegistrationError.is(dup)).toBe(true);
+
+      const dep = capture(() =>
+        dependencyNotFoundError.throw({ key: "X" }),
+      );
+      expect(dep.message).toContain("Dependency X not found");
+      expect(dependencyNotFoundError.is(dep)).toBe(true);
+
+      const unk = capture(() => unknownItemTypeError.throw({ item: "y" }));
+      expect(unk.message).toContain("Unknown item type");
+      expect(unknownItemTypeError.is(unk)).toBe(true);
+
+      const cyc = capture(() =>
+        circularDependenciesError.throw({ cycles: ["a->b->a"] }),
+      );
+      expect(cyc.message).toContain("Circular dependencies detected");
+
+      const evnf = capture(() => eventNotFoundError.throw({ id: "z" }));
+      expect(evnf.message).toContain('Event "z" not found');
+
+      const lock = capture(() => lockedError.throw({ what: "X" }));
+      expect(lock.message).toContain("Cannot modify the X");
+
+      const storeE = capture(() => storeAlreadyInitializedError.throw({}));
+      expect(storeE.message).toContain("Store already initialized");
+
+      const ve1 = capture(() =>
+        validationError.throw({
+          subject: "Task input",
+          id: "test-task",
+          originalError: new Error("Required field missing"),
+        }),
+      );
+      expect(ve1.message).toBe(
         "Task input validation failed for test-task: Required field missing",
       );
-      expect(validationErrorWithError).toBeInstanceOf(RuntimeError);
 
-      // Test ValidationError with string
-      const validationErrorWithString = new ValidationError(
-        "Resource config",
-        "test-resource",
-        "Invalid configuration",
+      const ve2 = capture(() =>
+        validationError.throw({
+          subject: "Resource config",
+          id: "test-resource",
+          originalError: "Invalid configuration",
+        }),
       );
-      expect(validationErrorWithString.name).toBe("ValidationError");
-      expect(validationErrorWithString.message).toBe(
+      expect(ve2.message).toBe(
         "Resource config validation failed for test-resource: Invalid configuration",
       );
-      expect(validationErrorWithString).toBeInstanceOf(RuntimeError);
     });
   });
 });

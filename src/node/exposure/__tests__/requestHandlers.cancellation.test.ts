@@ -4,7 +4,7 @@ import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { nodeExposure } from "../../exposure.resource";
 import { useExposureContext } from "../../exposure/requestContext";
-import { CancellationError } from "../../../errors";
+import { cancellationError } from "../../../errors";
 
 function createWritableRes() {
   const chunks: Buffer[] = [];
@@ -111,11 +111,19 @@ describe("Node exposure cancellation", () => {
       id: "tests.cancel.octet",
       async run() {
         const { signal } = useExposureContext();
-        if (signal.aborted) throw new CancellationError("Client Closed Request");
+        if (signal.aborted) cancellationError.throw({ reason: "Client Closed Request" });
         await new Promise((_res, rej) => {
           signal.addEventListener(
             "abort",
-            () => rej(new CancellationError("Client Closed Request")),
+            () => rej(
+              (() => {
+                try {
+                  cancellationError.throw({ reason: "Client Closed Request" });
+                } catch (e) {
+                  return e as any;
+                }
+              })(),
+            ),
             { once: true },
           );
         });

@@ -8,7 +8,7 @@ import {
   IHook,
 } from "../defs";
 import * as utils from "../define";
-import { DependencyNotFoundError } from "../errors";
+import { dependencyNotFoundError } from "../errors";
 import { StoreRegistry } from "./StoreRegistry";
 
 export class OverrideManager {
@@ -75,7 +75,7 @@ export class OverrideManager {
           ? override.resource.id
           : override.id;
 
-        throw new DependencyNotFoundError(id);
+        dependencyNotFoundError.throw({ key: id });
       }
     }
 

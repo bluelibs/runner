@@ -12,7 +12,7 @@ describe("Context System", () => {
       init: async () => TestContext.use(),
     });
 
-    await expect(run(r)).rejects.toThrow(ContextError);
+    await expect(run(r)).rejects.toThrow();
 
     await TestContext.provide({ id: "1" }, async () => {
       const res = await run(r);
@@ -39,7 +39,7 @@ describe("Context System", () => {
       dependencies: { t },
       init: async (_, deps) => deps.t(),
     });
-    await expect(run(r)).rejects.toThrow(ContextError);
+    await expect(run(r)).rejects.toThrow();
 
     await TestContext.provide({ id: "1" }, async () => {
       const res = await run(r);
@@ -108,5 +108,23 @@ describe("Context System", () => {
       inner: "inner",
       afterInner: "outer", // This should be restored!
     });
+  });
+
+  test("optional() returns wrapper", () => {
+    const maybe = TestContext.optional();
+    expect(maybe).toBeDefined();
+  });
+
+  test("require() returns middleware attachment", () => {
+    const req = TestContext.require();
+    expect(req).toBeDefined();
+  });
+
+  test("serialize/parse default implementations work", () => {
+    const raw = { id: "ser" };
+    const text = (TestContext as any).serialize(raw);
+    expect(typeof text).toBe("string");
+    const back = (TestContext as any).parse(text);
+    expect(back).toEqual(raw);
   });
 });

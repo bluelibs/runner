@@ -15,7 +15,7 @@ import {
 import { Logger } from "./Logger";
 import { globalEvents } from "../globals/globalEvents";
 import { globalTags } from "../globals/globalTags";
-import { ValidationError, LockedError } from "../errors";
+import { validationError, lockedError } from "../errors";
 import * as utils from "../define";
 import { symbol } from "zod";
 import { ITaskMiddlewareExecutionInput } from "../types/taskMiddleware";
@@ -91,7 +91,7 @@ export class MiddlewareManager {
    */
   private checkLock() {
     if (this.#isLocked) {
-      throw new LockedError("MiddlewareManager");
+      lockedError.throw({ what: "MiddlewareManager" });
     }
   }
 
@@ -276,11 +276,12 @@ export class MiddlewareManager {
         try {
           rawInput = runnerTask.inputSchema.parse(rawInput);
         } catch (error) {
-          throw new ValidationError(
-            "Task input",
-            runnerTask.id,
-            error instanceof Error ? error : new Error(String(error)),
-          );
+          validationError.throw({
+            subject: "Task input",
+            id: runnerTask.id,
+            originalError:
+              error instanceof Error ? error : new Error(String(error)),
+          });
         }
       }
 
@@ -290,7 +291,11 @@ export class MiddlewareManager {
         try {
           return runnerTask.resultSchema.parse(rawResult);
         } catch (error) {
-          throw new ValidationError("Task result", runnerTask.id, error as any);
+          validationError.throw({
+            subject: "Task result",
+            id: runnerTask.id,
+            originalError: error as any,
+          });
         }
       }
       return rawResult;
@@ -433,11 +438,11 @@ export class MiddlewareManager {
         try {
           return resource.resultSchema.parse(rawValue);
         } catch (error) {
-          throw new ValidationError(
-            "Resource result",
-            resource.id,
-            error as any,
-          );
+          validationError.throw({
+            subject: "Resource result",
+            id: resource.id,
+            originalError: error as any,
+          });
         }
       }
       return rawValue as any;
