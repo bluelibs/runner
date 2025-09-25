@@ -4,7 +4,7 @@ import { EventManager } from "../../models/EventManager";
 import { defineResource } from "../../define";
 import { Logger, OnUnhandledError } from "../../models";
 import { globalResources } from "../../globals/globalResources";
-import { RunnerMode } from "../../enums/RunnerMode";
+import { RunnerMode } from "../../types/runner";
 
 describe("ResourceInitializer", () => {
   let store: Store;

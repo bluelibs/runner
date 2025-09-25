@@ -321,12 +321,13 @@ export class DependencyProcessor {
     } else if (utils.isEvent(object)) {
       return this.extractEventDependency(object, source);
     } else if (utils.isError(object)) {
+      if (this.store.errors.get(object.id) === undefined) {
+        throw new DependencyNotFoundError(`Error ${object.id}`);
+      }
       // For error helpers, the dependency value is the helper itself
       return object;
     } else if (utils.isAsyncContext(object)) {
-      // Require registration for async contexts
-      const exists = this.store.asyncContexts.get(object.id) !== undefined;
-      if (!exists) {
+      if (this.store.asyncContexts.get(object.id) === undefined) {
         throw new DependencyNotFoundError(`AsyncContext ${object.id}`);
       }
       return object;

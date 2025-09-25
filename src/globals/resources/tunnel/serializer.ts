@@ -3,7 +3,7 @@ import { EJSON } from "@bluelibs/ejson";
 export interface Serializer {
   stringify(value: unknown): string;
   parse<T = unknown>(text: string): T;
-  addType<TJson = unknown, T = unknown>(
+  addType?<TJson = unknown, T = unknown>(
     name: string,
     factory: (json: TJson) => T,
   ): void;

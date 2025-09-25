@@ -33,7 +33,7 @@ export function defineAsyncContext<T>(
 ): IAsyncContext<T> {
   if (!platform.hasAsyncLocalStorage()) {
     throw new PlatformUnsupportedFunction(
-      `createAsyncLocalStorage: Cannot create context ${name}: no async storage available in this environment`,
+      `createAsyncLocalStorage: Cannot create context ${def.id}: no async storage available in this environment`,
     );
   }
 

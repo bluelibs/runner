@@ -331,20 +331,12 @@ const app = r.resource("app").register([requestContext, whoAmI]).build();
 Define typed, namespaced errors with a fluent builder. Built helpers expose `throw`, `is`, and `toString`:
 
 ```ts
-import { r, defineError } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 // Fluent builder
 const AppError = r
   .error<{ code: number; message: string }>("app.errors.AppError")
-  .dataSchema({
-    parse(input) {
-      const d = input as { code: number; message: string };
-      if (typeof d?.code !== "number" || typeof d?.message !== "string") {
-        throw new Error("invalid");
-      }
-      return d;
-    },
-  })
+  .dataSchema(zod) // or { parse(obj) => obj }
   .build();
 
 try {
@@ -354,12 +346,6 @@ try {
     // err.name === "app.errors.AppError", err.message === "Oops"
   }
 }
-
-// Classic define-style
-const LegacyError = defineError<{ message: string }>({
-  id: "legacy.errors.Generic",
-  dataSchema: { parse: (d: unknown) => d as { message: string } },
-});
 ```
 
 - Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.
@@ -409,6 +395,7 @@ import { createFile as createWebFile } from "@bluelibs/runner/platform/createFil
 const client = createHttpClient({
   baseUrl: "/__runner",
   auth: { token: "secret" },
+  serializer: JSON,
 });
 
 await client.task("app.tasks.getHealth");

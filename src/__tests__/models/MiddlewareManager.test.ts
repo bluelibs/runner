@@ -10,7 +10,7 @@ import {
 } from "../../define";
 import { OnUnhandledError } from "../../index";
 import { globalEvents } from "../../globals/globalEvents";
-import { RunnerMode } from "../../enums/RunnerMode";
+import { RunnerMode } from "../../types/runner";
 
 describe("MiddlewareManager", () => {
   let store: Store;
@@ -342,9 +342,14 @@ describe("MiddlewareManager", () => {
 
     it("should handle task middleware interceptor errors", async () => {
       const errors: any[] = [];
-      const store = new Store(eventManager, logger, (e) => {
-        errors.push(e);
-      }, RunnerMode.TEST);
+      const store = new Store(
+        eventManager,
+        logger,
+        (e) => {
+          errors.push(e);
+        },
+        RunnerMode.TEST,
+      );
       const manager = new MiddlewareManager(store, eventManager, logger);
 
       manager.intercept("task", async (next: any, input: any) => {
@@ -368,9 +373,14 @@ describe("MiddlewareManager", () => {
 
     it("should handle resource middleware interceptor errors", async () => {
       const errors: any[] = [];
-      const store = new Store(eventManager, logger, (e) => {
-        errors.push(e);
-      }, RunnerMode.TEST);
+      const store = new Store(
+        eventManager,
+        logger,
+        (e) => {
+          errors.push(e);
+        },
+        RunnerMode.TEST,
+      );
       const manager = new MiddlewareManager(store, eventManager, logger);
 
       manager.intercept("resource", async (next: any, input: any) => {

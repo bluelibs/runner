@@ -101,20 +101,52 @@ export function createRequestHandlers(
       const contentType = getContentType(req.headers);
       const url = requestUrl(req);
 
-      // Provide request context while executing the task
-      const provide = <T>(fn: () => Promise<T>) =>
-        ExposureRequestContext.provide(
-          {
-            req,
-            res,
-            url,
-            basePath: router.basePath,
-            headers: req.headers,
-            method: req.method,
-            signal: controller.signal,
-          },
-          fn,
-        );
+      // Build a composed provider: first user async contexts (if any), then exposure context
+      const buildProvider = <T>(fn: () => Promise<T>) => {
+        // Read context header if present
+        const rawHeader = (req.headers as any)["x-runner-context"] as
+          | string
+          | string[]
+          | undefined;
+        let headerText: string | undefined;
+        if (Array.isArray(rawHeader)) headerText = rawHeader[0];
+        else if (typeof rawHeader === "string") headerText = rawHeader;
+
+        let userWrapped = fn;
+        if (headerText) {
+          try {
+            const map = serializer.parse<Record<string, string>>(headerText);
+            // Compose provides for known contexts present in the map
+            for (const [id, ctx] of store.asyncContexts.entries()) {
+              const raw = (map as any)[id];
+              if (typeof raw === "string") {
+                try {
+                  const value = ctx.parse(raw);
+                  const prev = userWrapped;
+                  userWrapped = async () => await ctx.provide(value, prev);
+                } catch {}
+              }
+            }
+          } catch {
+            // ignore bad header
+          }
+        }
+        // Always wrap with exposure request context
+        const run = () =>
+          ExposureRequestContext.provide(
+            {
+              req,
+              res,
+              url,
+              basePath: router.basePath,
+              headers: req.headers,
+              method: req.method,
+              signal: controller.signal,
+            },
+            userWrapped,
+          );
+        return run();
+      };
 
       if (isMultipart(contentType)) {
         const multipart = await parseMultipartInput(
@@ -131,7 +163,7 @@ export function createRequestHandlers(
         let taskError: unknown = undefined;
         let taskResult: unknown;
         try {
-          taskResult = await provide(() =>
+          taskResult = await buildProvider(() =>
             taskRunner.run(storeTask.task, multipart.value),
           );
         } catch (err) {
@@ -179,7 +211,7 @@ export function createRequestHandlers(
       // Raw-body streaming mode: when content-type is application/octet-stream
       // we do not pre-consume the request body and allow task to read from context.req
       if (/^application\/octet-stream(?:;|$)/i.test(contentType)) {
-        const result = await provide(() =>
+        const result = await buildProvider(() =>
           taskRunner.run(storeTask.task, undefined),
         );
         if (
@@ -232,7 +264,7 @@ export function createRequestHandlers(
         }
         return body.value as unknown;
       })();
-      const result = await provide(() =>
+      const result = await buildProvider(() =>
         taskRunner.run(storeTask.task, payload),
       );
       if (
@@ -270,6 +302,19 @@ export function createRequestHandlers(
         }
         return;
       }
+      // Detect application-defined errors and surface minimal identity
+      let appErrorExtra: Record<string, unknown> | undefined;
+      try {
+        for (const helper of store.errors.values()) {
+          if (helper.is(error)) {
+            const errAny = error as any;
+            appErrorExtra = { id: errAny?.name, data: errAny?.data };
+            break;
+          }
+        }
+      } catch {
+        // best-effort only
+      }
       const logMessage = errorMessage(error);
       const displayMessage =
         error instanceof Error && error.message
@@ -281,7 +326,7 @@ export function createRequestHandlers(
       applyCorsActual(req, res, cors);
       respondJson(
         res,
-        jsonErrorResponse(500, displayMessage, "INTERNAL_ERROR"),
+        jsonErrorResponse(500, displayMessage, "INTERNAL_ERROR", appErrorExtra),
         serializer,
       );
     }
@@ -335,11 +380,38 @@ export function createRequestHandlers(
         respondJson(res, body.response, serializer);
         return;
       }
-      await eventManager.emit(
-        storeEvent.event,
-        body.value?.payload,
-        "exposure:http",
-      );
+      // Build context providers for events as well
+      const rawHeader = (req.headers as any)["x-runner-context"] as
+        | string
+        | string[]
+        | undefined;
+      let headerText: string | undefined;
+      if (Array.isArray(rawHeader)) headerText = rawHeader[0];
+      else if (typeof rawHeader === "string") headerText = rawHeader;
+      // Compose user contexts; events do not need exposure req context
+      let runEmit = async () => {
+        await eventManager.emit(
+          storeEvent.event,
+          body.value?.payload,
+          "exposure:http",
+        );
+      };
+      if (headerText) {
+        try {
+          const map = serializer.parse<Record<string, string>>(headerText);
+          for (const [id, ctx] of store.asyncContexts.entries()) {
+            const raw = (map as any)[id];
+            if (typeof raw === "string") {
+              try {
+                const value = ctx.parse(raw);
+                const prev = runEmit;
+                runEmit = async () => await ctx.provide(value, prev);
+              } catch {}
+            }
+          }
+        } catch {}
+      }
+      await runEmit();
       applyCorsActual(req, res, cors);
       respondJson(res, jsonOkResponse(), serializer);
     } catch (error) {
@@ -354,6 +426,19 @@ export function createRequestHandlers(
         }
         return;
       }
+      // Detect application-defined errors and surface minimal identity
+      let appErrorExtra: Record<string, unknown> | undefined;
+      try {
+        for (const helper of store.errors.values()) {
+          if (helper.is(error)) {
+            const errAny = error as any;
+            appErrorExtra = { id: errAny?.name, data: errAny?.data };
+            break;
+          }
+        }
+      } catch {
+        // best-effort only
+      }
       const logMessage = errorMessage(error);
       const displayMessage =
         error instanceof Error && error.message
@@ -365,7 +450,7 @@ export function createRequestHandlers(
       applyCorsActual(req, res, cors);
       respondJson(
         res,
-        jsonErrorResponse(500, displayMessage, "INTERNAL_ERROR"),
+        jsonErrorResponse(500, displayMessage, "INTERNAL_ERROR", appErrorExtra),
         serializer,
       );
     }

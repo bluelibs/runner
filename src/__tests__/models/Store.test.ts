@@ -14,7 +14,7 @@ import {
   TaskRunner,
 } from "../../models";
 import { StoreRegistry } from "../../models/StoreRegistry";
-import { RunnerMode } from "../../enums/RunnerMode";
+import { RunnerMode } from "../../types/runner";
 
 describe("Store", () => {
   let eventManager: EventManager;

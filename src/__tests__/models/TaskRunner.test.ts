@@ -3,7 +3,7 @@ import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
 import { Logger } from "../../models";
-import { RunnerMode } from "../../enums/RunnerMode";
+import { RunnerMode } from "../../types/runner";
 
 describe("TaskRunner", () => {
   let store: Store;

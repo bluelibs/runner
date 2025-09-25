@@ -1,5 +1,5 @@
 import { r, run } from "../index";
-import { RunnerMode } from "../enums/RunnerMode";
+import { RunnerMode } from "../types/runner";
 
 describe("Mode Detection", () => {
   it("should default to dev mode when NODE_ENV is not set", async () => {
@@ -7,9 +7,9 @@ describe("Mode Detection", () => {
     delete process.env.NODE_ENV;
     const root = r.resource("test").build();
     const result = await run(root);
-    
+
     expect(result.store.mode).toBe(RunnerMode.DEV);
-    
+
     await result.dispose();
   });
 
@@ -17,9 +17,9 @@ describe("Mode Detection", () => {
     process.env.NODE_ENV = "test";
     const root = r.resource("test").build();
     const result = await run(root);
-    
+
     expect(result.store.mode).toBe(RunnerMode.TEST);
-    
+
     await result.dispose();
   });
 
@@ -27,9 +27,9 @@ describe("Mode Detection", () => {
     process.env.NODE_ENV = "production";
     const root = r.resource("test").build();
     const result = await run(root);
-    
+
     expect(result.store.mode).toBe(RunnerMode.PROD);
-    
+
     await result.dispose();
   });
 
@@ -37,9 +37,9 @@ describe("Mode Detection", () => {
     process.env.NODE_ENV = "development";
     const root = r.resource("test").build();
     const result = await run(root);
-    
+
     expect(result.store.mode).toBe(RunnerMode.DEV);
-    
+
     await result.dispose();
   });
 });

@@ -1,4 +1,4 @@
-import { ITaskMiddlewareConfigured } from "defs";
+import type { ITaskMiddlewareConfigured } from "defs";
 export const ASYNC_CONTEXT_TYPES_LOADED = true as const;
 import { symbolAsyncContext, symbolOptionalDependency } from "./symbols";
 import type { IValidationSchema, IOptionalDependency } from "./utilities";

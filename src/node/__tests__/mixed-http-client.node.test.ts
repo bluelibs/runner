@@ -1,6 +1,6 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
-import { createMixedHttpClient } from "../mixed-http-client.node";
+import { createHttpMixedClient } from "../http-mixed-client";
 import { EJSON } from "../../globals/resources/tunnel/serializer";
 import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
 import { createNodeFile } from "../files";
@@ -39,7 +39,7 @@ describe("createMixedHttpClient (unit)", () => {
       } as any;
     };
 
-    const client = createMixedHttpClient({
+    const client = createHttpMixedClient({
       baseUrl,
       fetchImpl: fetchMock as any,
       serializer: EJSON,
@@ -74,7 +74,7 @@ describe("createMixedHttpClient (unit)", () => {
         return sink;
       }) as any;
 
-    const client = createMixedHttpClient({ baseUrl, serializer: EJSON });
+    const client = createHttpMixedClient({ baseUrl, serializer: EJSON });
     const input = Readable.from("hello");
     const out = (await client.task("duplex", input)) as Readable;
     const chunks: Buffer[] = [];
@@ -113,7 +113,7 @@ describe("createMixedHttpClient (unit)", () => {
         return sink;
       }) as any;
 
-    const client = createMixedHttpClient({ baseUrl, serializer: EJSON });
+    const client = createHttpMixedClient({ baseUrl, serializer: EJSON });
     const input = {
       file: createNodeFile(
         { name: "a.txt" },
@@ -149,7 +149,7 @@ describe("createMixedHttpClient (unit)", () => {
         return sink;
       }) as any;
 
-    const client = createMixedHttpClient({ baseUrl, serializer: EJSON });
+    const client = createHttpMixedClient({ baseUrl, serializer: EJSON });
     const input = {
       arr: [
         {
@@ -179,7 +179,7 @@ describe("createMixedHttpClient (unit)", () => {
       } as any;
     };
 
-    const client = createMixedHttpClient({
+    const client = createHttpMixedClient({
       baseUrl,
       fetchImpl: fetchMock as any,
       serializer: EJSON,
@@ -191,7 +191,7 @@ describe("createMixedHttpClient (unit)", () => {
 
   it("throws when baseUrl is empty", () => {
     expect(() =>
-      createMixedHttpClient({ baseUrl: "" as any, serializer: EJSON } as any),
+      createHttpMixedClient({ baseUrl: "" as any, serializer: EJSON } as any),
     ).toThrow();
   });
 });
