@@ -330,6 +330,7 @@ await client.task("app.tasks.upload", { file });
 - `createHttpSmartClient` (Node only) supports duplex streams.
 - For Node-specific features such as `useExposureContext` for handling aborts and streaming in exposed tasks, see TUNNELS.md.
 - Register authentication middleware or rate limiting on the exposure via middleware tags and filters.
+- Single-owner policy: a task may be tunneled by exactly one tunnel resource. Runner enforces exclusivity at init time and throws if two tunnels select the same task. This is tracked via an internal symbol on the task linking it to the owning tunnel.
 
 ## Serialization
 

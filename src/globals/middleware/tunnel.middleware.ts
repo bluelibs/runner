@@ -8,7 +8,8 @@ import type {
   TunnelTaskSelector,
   TunnelEventSelector,
 } from "../resources/tunnel/types";
-import { symbolTunneledTask } from "../../types/symbols";
+import { symbolTunneledTask, symbolTunneledBy } from "../../types/symbols";
+import { tunnelOwnershipConflictError } from "../../errors";
 
 const originalRuns = new WeakMap<
   ITask<any, any, any, any, any, any>,
@@ -61,6 +62,16 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
 
     // Override selected tasks' run() to delegate to tunnel runner (reversible)
     for (const t of tasks) {
+      // Enforce single-owner policy: a task can be tunneled by only one resource
+      const currentOwner: string | undefined = (t as any)[symbolTunneledBy];
+      const resourceId = resource.definition.id;
+      if (currentOwner && currentOwner !== resourceId) {
+        tunnelOwnershipConflictError.throw({
+          taskId: t.id,
+          currentOwnerId: currentOwner,
+          attemptedOwnerId: resourceId,
+        });
+      }
       if (!originalRuns.has(t)) {
         originalRuns.set(t, t.run as any);
       }
@@ -68,6 +79,7 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
         return value.run!(t as any, input);
       }) as any;
       (t as any)[symbolTunneledTask] = "client";
+      (t as any)[symbolTunneledBy] = resourceId;
     }
 
     if (events.length > 0) {

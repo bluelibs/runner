@@ -39,6 +39,7 @@ As your app grows, other processes need to call your tasks: workers, CLIs, brows
 - Exposure: `nodeExposure` hosts `POST /task/{id}` and `POST /event/{id}`.
 - Client: one of the HTTP clients calls those endpoints (fetch, unified, or Node smart/mixed for streaming).
 - Optional server allow‑lists: restrict which ids are reachable.
+ - Exclusivity: each task can be owned by at most one tunnel client. If two tunnel resources select the same task, Runner throws during init to prevent ambiguous routing.
 
 ## 3) Quick start (3 minutes)
 
@@ -754,6 +755,7 @@ Notes:
 - Phantom builders expose `.dependencies()`, `.middleware()`, `.tags()`, `.meta()`, `.inputSchema()`, and `.resultSchema()`. They intentionally do not expose `.run()`.
 - Without a matching tunnel, calling the task resolves to `undefined`. This helps catch misconfiguration early (for example, missing client or wrong allow‑list).
 - You can combine phantom tasks with server allow‑lists (see section 9) to control what’s reachable when you host an exposure.
+ - Single-owner rule: phantom or regular tasks routed through tunnels still follow exclusivity. The first tunnel that selects a task becomes its owner; subsequent tunnels attempting to select the same task cause init to fail with a clear error message.
 
 ## 15) Typed Errors Over Tunnels
 

@@ -179,6 +179,19 @@ export const cancellationError = error<{ reason?: string } & DefaultErrorType>(
   .format(({ reason }) => reason || "Operation cancelled")
   .build();
 
+// Tunnel ownership conflict (exclusive owner per task)
+export const tunnelOwnershipConflictError = error<
+  {
+    taskId: string;
+    currentOwnerId: string;
+    attemptedOwnerId: string;
+  } & DefaultErrorType
+>("runner.errors.tunnelOwnershipConflict")
+  .format(({ taskId, currentOwnerId, attemptedOwnerId }) =>
+    `Task "${taskId}" is already tunneled by resource "${currentOwnerId}". Resource "${attemptedOwnerId}" cannot tunnel it again. Ensure each task is owned by a single tunnel client.`,
+  )
+  .build();
+
 export function isCancellationError(err: unknown): boolean {
   return cancellationError.is(err);
 }
