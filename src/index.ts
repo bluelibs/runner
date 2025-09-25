@@ -16,6 +16,7 @@ import { globalEvents } from "./globals/globalEvents";
 import { globalResources } from "./globals/globalResources";
 import { globalMiddlewares } from "./globals/globalMiddleware";
 import { globalTags } from "./globals/globalTags";
+import { debug } from "./globals/debug";
 import { run } from "./run";
 import { tunnels } from "./globals/tunnels";
 import { createTestResource } from "./testing";
@@ -37,6 +38,7 @@ const globals = {
   middleware: globalMiddlewares,
   tags: globalTags,
   tunnels,
+  debug,
 };
 
 export { globals };

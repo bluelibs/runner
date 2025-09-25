@@ -1992,6 +1992,26 @@ const app = r
   .build();
 ```
 
+### Accessing Debug Levels Programmatically
+
+The debug configuration levels can now be accessed through the globals namespace via `globals.debug.levels`:
+
+```typescript
+import { globals } from "@bluelibs/runner";
+
+// Use in custom configurations
+const customConfig = {
+  ...globals.debug.levels.normal, // or .debug
+  logTaskInput: true, // Override specific settings
+};
+
+// Register with custom configuration
+const app = r
+  .resource("app")
+  .register([globals.resources.debug.with(customConfig)])
+  .build();
+```
+
 ### Per-Component Debug Configuration
 
 Use debug tags to configure debugging on individual components, when you're interested in just a few verbose ones.

@@ -9,8 +9,10 @@ import { globalEvents } from "../../../globals/globalEvents";
 import { debugResource } from "../../../globals/resources/debug/debug.resource";
 
 import { globalResources } from "../../../globals/globalResources";
-import { levelVerbose } from "../../../globals/resources/debug";
+import { debug } from "../../../globals/debug";
 import { ILog } from "../../../models";
+
+const { verbose: levelVerbose } = debug.levels;
 
 Error.stackTraceLimit = Infinity;
 
