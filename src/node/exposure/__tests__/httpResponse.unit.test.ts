@@ -46,6 +46,16 @@ describe("httpResponse helpers", () => {
     expect((without.body as any).error.code).toBeUndefined();
   });
 
+  it("jsonErrorResponse merges extra fields into error payload", () => {
+    const res = jsonErrorResponse(500, "Oops", "INTERNAL_ERROR", {
+      id: "tests.errors.app",
+      data: { code: 1, message: "Oops" },
+    });
+    const err = (res.body as any).error;
+    expect(err.id).toBe("tests.errors.app");
+    expect(err.data).toEqual({ code: 1, message: "Oops" });
+  });
+
   it("respondStream pipes a plain Readable with defaults", () => {
     const { Readable } = require("stream") as typeof import("stream");
     let ended = false;

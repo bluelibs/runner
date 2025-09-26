@@ -4,6 +4,8 @@ import type { ProtocolEnvelope } from "./globals/resources/tunnel/protocol";
 import { assertOkEnvelope } from "./globals/resources/tunnel/protocol";
 import { createExposureFetch } from "./http-fetch-tunnel.resource";
 import { buildUniversalManifest } from "./tunnels/buildUniversalManifest";
+import type { IAsyncContext } from "./types/asyncContext";
+import type { IErrorHelper } from "./types/error";
 
 export interface HttpClientAuth {
   header?: string;
@@ -20,6 +22,8 @@ export interface HttpClientConfig {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;
+  contexts?: Array<IAsyncContext<any>>;
+  errorRegistry?: Map<string, IErrorHelper<any>>;
 }
 
 export interface HttpClient {
@@ -52,6 +56,8 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     fetchImpl: cfg.fetchImpl,
     serializer: cfg.serializer,
     onRequest: cfg.onRequest,
+    contexts: cfg.contexts,
+    errorRegistry: cfg.errorRegistry,
   });
 
   async function postMultipartBrowser(
@@ -66,6 +72,18 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       fd.append(`file:${f.id}`, f.blob as unknown as Blob, filename);
     }
     const headers = toHeaders(cfg.auth);
+    if (cfg.contexts && cfg.contexts.length > 0) {
+      const map: Record<string, string> = {};
+      for (const ctx of cfg.contexts) {
+        try {
+          const v = ctx.use();
+          map[ctx.id] = ctx.serialize(v as any);
+        } catch {}
+      }
+      if (Object.keys(map).length > 0) {
+        headers["x-runner-context"] = cfg.serializer.stringify(map);
+      }
+    }
     if (cfg.onRequest) await cfg.onRequest({ url, headers });
     const fetchImpl = cfg.fetchImpl ?? (globalThis.fetch as typeof fetch);
     const res = await fetchImpl(url, { method: "POST", body: fd, headers });
@@ -93,6 +111,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
           timeoutMs: cfg.timeoutMs,
           serializer: cfg.serializer,
           onRequest: cfg.onRequest,
+          contexts: cfg.contexts,
         }).task(id, input as any);
       }
 
@@ -108,9 +127,18 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
             manifestText,
             manifest.webFiles,
           );
-          return assertOkEnvelope<O>(r as ProtocolEnvelope<O>, {
-            fallbackMessage: "Tunnel task error",
-          });
+          try {
+            return assertOkEnvelope<O>(r as ProtocolEnvelope<O>, {
+              fallbackMessage: "Tunnel task error",
+            });
+          } catch (e) {
+            const te = e as any;
+            if (te && cfg.errorRegistry && te.id && te.data) {
+              const helper = cfg.errorRegistry.get(String(te.id));
+              if (helper) helper.throw(te.data);
+            }
+            throw e;
+          }
         }
         // Node multipart path (can handle both nodeFiles and webFiles by converting blobs to buffers)
         const { createHttpSmartClient } = await import(
@@ -134,17 +162,45 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
           timeoutMs: cfg.timeoutMs,
           serializer: cfg.serializer,
           onRequest: cfg.onRequest,
+          contexts: cfg.contexts,
         });
         // Use the underlying smart client multipart path by passing the original input structure
-        return await client.task(id, manifest.input as any);
+        try {
+          return await client.task(id, manifest.input as any);
+        } catch (e) {
+          const te = e as any;
+          if (te && cfg.errorRegistry && te.id && te.data) {
+            const helper = cfg.errorRegistry.get(String(te.id));
+            if (helper) helper.throw(te.data);
+          }
+          throw e;
+        }
       }
 
       // JSON/EJSON fallback
-      return await fetchClient.task<I, O>(id, input as I);
+      try {
+        return await fetchClient.task<I, O>(id, input as I);
+      } catch (e) {
+        const te = e as any;
+        if (te && cfg.errorRegistry && te.id && te.data) {
+          const helper = cfg.errorRegistry.get(String(te.id));
+          if (helper) helper.throw(te.data);
+        }
+        throw e;
+      }
     },
 
     async event<P>(id: string, payload?: P): Promise<void> {
-      return await fetchClient.event<P>(id, payload);
+      try {
+        return await fetchClient.event<P>(id, payload);
+      } catch (e) {
+        const te = e as any;
+        if (te && cfg.errorRegistry && te.id && te.data) {
+          const helper = cfg.errorRegistry.get(String(te.id));
+          if (helper) helper.throw(te.data);
+        }
+        throw e;
+      }
     },
   };
 }

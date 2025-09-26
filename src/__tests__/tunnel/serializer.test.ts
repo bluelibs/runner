@@ -46,7 +46,7 @@ describe("tunnel serializer", () => {
     }
 
     const s = getDefaultSerializer();
-    s.addType(
+    s.addType?.(
       "Distance",
       (j: { value: number; unit: string }) => new Distance(j.value, j.unit),
     );

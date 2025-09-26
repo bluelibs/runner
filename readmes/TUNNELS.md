@@ -25,6 +25,8 @@ Make tasks and events callable across processes – from a CLI, another service,
 12. Reference checklist
 13. Compression (gzip/br)
 14. Phantom Tasks (fluent builder)
+15. Typed Errors Over Tunnels
+16. Async Context Propagation
 
 ---
 
@@ -37,6 +39,7 @@ As your app grows, other processes need to call your tasks: workers, CLIs, brows
 - Exposure: `nodeExposure` hosts `POST /task/{id}` and `POST /event/{id}`.
 - Client: one of the HTTP clients calls those endpoints (fetch, unified, or Node smart/mixed for streaming).
 - Optional server allow‑lists: restrict which ids are reachable.
+ - Exclusivity: each task can be owned by at most one tunnel client. If two tunnel resources select the same task, Runner throws during init to prevent ambiguous routing.
 
 ## 3) Quick start (3 minutes)
 
@@ -752,3 +755,78 @@ Notes:
 - Phantom builders expose `.dependencies()`, `.middleware()`, `.tags()`, `.meta()`, `.inputSchema()`, and `.resultSchema()`. They intentionally do not expose `.run()`.
 - Without a matching tunnel, calling the task resolves to `undefined`. This helps catch misconfiguration early (for example, missing client or wrong allow‑list).
 - You can combine phantom tasks with server allow‑lists (see section 9) to control what’s reachable when you host an exposure.
+ - Single-owner rule: phantom or regular tasks routed through tunnels still follow exclusivity. The first tunnel that selects a task becomes its owner; subsequent tunnels attempting to select the same task cause init to fail with a clear error message.
+
+## 15) Typed Errors Over Tunnels
+
+You can surface your application errors end‑to‑end with type safety. Server tasks/events throw typed errors; clients can rethrow them as the exact same type — not just a generic `TunnelError`.
+
+What’s included (works cross‑tunnel as long as data is serializable):
+
+- The JSON envelope can include `error.id` and `error.data` next to `code`/`message` when the server catches a known app error.
+- Clients can opt‑in to rethrow typed errors by passing an `errorRegistry` to HTTP clients.
+
+Define an app error:
+
+```ts
+import { r } from "@bluelibs/runner";
+export const AppError = r.error<{ code: number; message: string }>("app.errors.generic").build();
+```
+
+Throw it server‑side:
+
+```ts
+const dangerous = r.task("app.tasks.dangerous").run(async () => {
+  AppError.throw({ code: 123, message: "Boom" });
+}).build();
+```
+
+Rethrow typed on the client (opt‑in):
+
+```ts
+import { createHttpClient } from "@bluelibs/runner";
+const client = createHttpClient({ baseUrl: "/__runner", serializer, errorRegistry: new Map([[AppError.id, AppError]]) });
+await client.task("app.tasks.dangerous");
+```
+
+Notes:
+
+- Error `data` must be EJSON‑serializable. Register custom domain types on the global serializer resource if needed.
+- Without `errorRegistry`, clients keep throwing `TunnelError` with `code/message` — no breaking changes.
+- Server status codes remain the same (e.g., `500 INTERNAL_ERROR`); `id`/`data` in the envelope are for richer client handling.
+
+## 16) Async Context Propagation
+
+Send request‑scoped context from client to server automatically — useful for tracing, request ids, and other non‑sensitive metadata.
+
+Define an async context:
+
+```ts
+import { asyncContext } from "@bluelibs/runner";
+export const requestInfo = asyncContext<{ requestId: string }>("app.contexts.requestInfo").build();
+```
+
+Provide and send from the client:
+
+```ts
+const client = createHttpClient({ baseUrl: "/__runner", serializer, contexts: [requestInfo] });
+await requestInfo.provide({ requestId: "abc-123" }, async () => {
+  await client.task("app.tasks.work");
+});
+```
+
+Use on the server:
+
+```ts
+const work = r.task("app.tasks.work").run(async () => {
+  const { requestId } = requestInfo.use();
+  // requestId === "abc-123"
+}).build();
+```
+
+Transport and serialization (works cross‑tunnel as long as values are serializable):
+
+- The client attaches `x-runner-context` header with an EJSON‑stringified map `{ [context.id]: serializedValue }` for JSON, multipart, and octet‑stream.
+- The Node exposure parses `x-runner-context` and hydrates known contexts for the duration of the task/event execution.
+- By default, contexts serialize via Runner’s EJSON; you can override `serialize/parse` per context if needed.
+- Only include non‑sensitive metadata; use HTTPS; allow `x-runner-context` in your CORS config when using custom rules.

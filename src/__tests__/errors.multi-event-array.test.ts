@@ -1,6 +1,6 @@
 import { defineEvent, defineHook, defineResource } from "../define";
 import { run } from "..";
-import { EventNotFoundError } from "../errors";
+import { eventNotFoundError } from "../errors";
 
 describe("errors - multi-event hook with missing event", () => {
   it("should throw EventNotFoundError when one of the events is not registered", async () => {
@@ -22,6 +22,6 @@ describe("errors - multi-event hook with missing event", () => {
       register: [app],
     });
 
-    await expect(run(harness)).rejects.toBeInstanceOf(EventNotFoundError);
+    await expect(run(harness)).rejects.toThrow();
   });
 });

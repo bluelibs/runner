@@ -1,5 +1,5 @@
 import type { IAsyncLocalStorage, IPlatformAdapter } from "../types";
-import { PlatformUnsupportedFunction } from "../../errors";
+// no platformUnsupportedFunctionError used here; node has platform support
 import { loadAsyncLocalStorageClass } from "./node-als";
 
 export class NodePlatformAdapter implements IPlatformAdapter {

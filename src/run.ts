@@ -5,7 +5,6 @@ import { EventManager } from "./models/EventManager";
 import { globalEvents } from "./globals/globalEvents";
 import { Store } from "./models/Store";
 import { findCircularDependencies } from "./models/utils/findCircularDependencies";
-import { CircularDependenciesError } from "./errors";
 import { Logger } from "./models/Logger";
 import { isResourceWithConfig } from "./define";
 import { debugResource } from "./globals/resources/debug";
@@ -49,7 +48,9 @@ export async function run<C, V extends Promise<any>>(
   } = options || {};
 
   const {
-    printThreshold = getPlatform().getEnv("NODE_ENV") === "test" ? null : "info",
+    printThreshold = getPlatform().getEnv("NODE_ENV") === "test"
+      ? null
+      : "info",
     printStrategy = "pretty",
     bufferLogs = false,
   } = logs;

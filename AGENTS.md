@@ -23,3 +23,11 @@
 - This package is multi-platform (readmes/MULTIPLATFORM.md) be sure to take this into account when implementing changes
 - AI.md contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
 </specifics>
+
+<new_feature>
+
+- When building new features/enhancements/changes
+- Must be implemented with care without affecting the system and not over-polute files.
+- Must retain 100% test coverage.
+- Ensure AI.md (minimal version of README) and README.md is properly updated
+  </new_feature>

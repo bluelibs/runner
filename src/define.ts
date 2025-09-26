@@ -20,4 +20,6 @@ export {
   isResourceMiddleware,
   isTag,
   isOptional,
+  isError,
+  isAsyncContext,
 } from "./definers/tools";

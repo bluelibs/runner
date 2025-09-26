@@ -5,6 +5,7 @@ import type { Serializer } from "../globals/resources/tunnel/serializer";
 import type { ProtocolEnvelope } from "../globals/resources/tunnel/protocol";
 import { assertOkEnvelope } from "../globals/resources/tunnel/protocol";
 import type { InputFileMeta } from "../types/inputFile";
+import type { IAsyncContext } from "../types/asyncContext";
 // Avoid `.node` bare import which triggers tsup native addon resolver
 import { buildNodeManifest } from "./upload/manifest";
 
@@ -22,6 +23,7 @@ export interface HttpSmartClientConfig {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;
+  contexts?: Array<IAsyncContext<any>>;
 }
 
 export interface HttpSmartClient {
@@ -72,6 +74,18 @@ async function postJson<T = any>(
     "content-type": "application/json; charset=utf-8",
     ...toHeaders(cfg.auth),
   } as Record<string, string>;
+  if (cfg.contexts && cfg.contexts.length > 0) {
+    const map: Record<string, string> = {};
+    for (const ctx of cfg.contexts) {
+      try {
+        const v = ctx.use();
+        map[ctx.id] = ctx.serialize(v as any);
+      } catch {}
+    }
+    if (Object.keys(map).length > 0) {
+      headers["x-runner-context"] = cfg.serializer.stringify(map);
+    }
+  }
   if (cfg.onRequest) await cfg.onRequest({ url, headers });
   return await new Promise<T>((resolve, reject) => {
     const req = lib.request(
@@ -182,6 +196,18 @@ async function postMultipart(
     "content-type": `multipart/form-data; boundary=${boundary}`,
     ...toHeaders(cfg.auth),
   };
+  if (cfg.contexts && cfg.contexts.length > 0) {
+    const map: Record<string, string> = {};
+    for (const ctx of cfg.contexts) {
+      try {
+        const v = ctx.use();
+        map[ctx.id] = ctx.serialize(v as any);
+      } catch {}
+    }
+    if (Object.keys(map).length > 0) {
+      headers["x-runner-context"] = cfg.serializer.stringify(map);
+    }
+  }
   if (cfg.onRequest) await cfg.onRequest({ url, headers });
 
   return await new Promise<{ stream: Readable; res: http.IncomingMessage }>(
@@ -217,6 +243,18 @@ async function postOctetStream(
     "content-type": "application/octet-stream",
     ...toHeaders(cfg.auth),
   };
+  if (cfg.contexts && cfg.contexts.length > 0) {
+    const map: Record<string, string> = {};
+    for (const ctx of cfg.contexts) {
+      try {
+        const v = ctx.use();
+        map[ctx.id] = ctx.serialize(v as any);
+      } catch {}
+    }
+    if (Object.keys(map).length > 0) {
+      headers["x-runner-context"] = cfg.serializer.stringify(map);
+    }
+  }
   if (cfg.onRequest) await cfg.onRequest({ url, headers });
   return await new Promise<{ stream: Readable; res: http.IncomingMessage }>(
     (resolve, reject) => {

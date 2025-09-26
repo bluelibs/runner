@@ -14,6 +14,8 @@ export const symbolResourceWithConfig: unique symbol = Symbol.for(
   "runner.resourceWithConfig",
 );
 export const symbolEvent: unique symbol = Symbol.for("runner.event");
+/** @internal Marks an error helper definition */
+export const symbolError: unique symbol = Symbol.for("runner.error");
 export const symbolMiddleware: unique symbol = Symbol.for("runner.middleware");
 /** New brands for separated middleware kinds */
 export const symbolTaskMiddleware: unique symbol = Symbol.for(
@@ -28,6 +30,10 @@ export const symbolMiddlewareConfigured: unique symbol = Symbol.for(
 /** Marks a task that has been patched by a tunnel. Value is the local side mode. */
 export const symbolTunneledTask: unique symbol = Symbol.for(
   "runner.tunneledTask",
+);
+/** Records which tunnel resource owns the task patching (exclusivity). */
+export const symbolTunneledBy: unique symbol = Symbol.for(
+  "runner.tunneledBy",
 );
 /** @internal Marks hook definitions (event listeners without middleware) */
 export const symbolHook: unique symbol = Symbol.for("runner.hook");
@@ -50,3 +56,8 @@ export const symbolOptionalDependency: unique symbol = Symbol.for(
 
 /** @internal Path to aid anonymous id generation and error messages */
 export const symbolFilePath: unique symbol = Symbol.for("runner.filePath");
+
+/** @internal Marks an async context definition */
+export const symbolAsyncContext: unique symbol = Symbol.for(
+  "runner.asyncContext",
+);

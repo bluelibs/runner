@@ -35,4 +35,45 @@ describe("createHttpSmartClient - octet-stream source error", () => {
     setImmediate(() => src.emit("error", new Error("boom")));
     await expect(p).rejects.toBeTruthy();
   });
+
+  it("adds x-runner-context header for octet-stream when contexts are provided", async () => {
+    const captured: any[] = [];
+    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
+      captured.push(opts.headers);
+      const res = new Readable({ read() {} });
+      (res as any).headers = { "content-type": "application/octet-stream" };
+      setImmediate(() => cb(res as any));
+      // Writable sink
+      const sink: any = new (require("stream").Writable)({
+        write(_c: any, _e: any, n: any) {
+          n();
+        },
+      });
+      sink.setTimeout = () => sink;
+      sink.on = (_: any, __: any) => sink;
+      sink.destroy = () => undefined;
+      return sink;
+    }) as any;
+
+    const contexts = [
+      {
+        id: "ctx.os",
+        use: () => ({ z: 9 }),
+        serialize: (v: any) => JSON.stringify(v),
+        parse: (s: string) => JSON.parse(s),
+        provide: (v: any, fn: any) => fn(),
+        require: () => ({} as any),
+      },
+    ];
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: EJSON,
+      contexts: contexts as any,
+    });
+    const src = new Readable({ read() { this.push(null); } });
+    const out = await client.task("duplex.ctx", src as any);
+    expect(out).toBeDefined();
+    const hdrs = captured[0] as Record<string, string>;
+    expect(typeof hdrs["x-runner-context"]).toBe("string");
+  });
 });

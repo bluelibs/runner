@@ -7,7 +7,7 @@ import {
   symbolMiddlewareConfigured,
   IResourceMiddlewareConfigured,
 } from "../defs";
-import { ValidationError } from "../errors";
+import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 
 export function defineResourceMiddleware<
@@ -65,11 +65,11 @@ export function defineResourceMiddleware<
           try {
             config = obj.configSchema.parse(config);
           } catch (error) {
-            throw new ValidationError(
-              "Middleware config",
-              obj.id,
-              error as Error,
-            );
+            validationError.throw({
+              subject: "Middleware config",
+              id: obj.id,
+              originalError: error as Error,
+            });
           }
         }
         return wrap({

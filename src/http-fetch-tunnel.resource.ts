@@ -1,13 +1,10 @@
-import { defineResource } from "./define";
-import type { TunnelRunner } from "./globals/resources/tunnel/types";
-import { globalResources } from "./globals/globalResources";
-import type { Logger } from "./models/Logger";
 import {
   assertOkEnvelope,
   ProtocolEnvelope,
-  toTunnelError,
 } from "./globals/resources/tunnel/protocol";
 import { Serializer } from "./globals/resources/tunnel/serializer";
+import type { IAsyncContext } from "./types/asyncContext";
+import type { IErrorHelper } from "./types/error";
 import { normalizeError as _normalizeError } from "./globals/resources/tunnel/error-utils";
 export { normalizeError } from "./globals/resources/tunnel/error-utils";
 
@@ -26,6 +23,8 @@ export interface ExposureFetchConfig {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;
+  contexts?: Array<IAsyncContext<any>>;
+  errorRegistry?: Map<string, IErrorHelper<any>>;
 }
 
 export interface ExposureFetchClient {
@@ -46,6 +45,7 @@ async function postSerialized<T = any>(
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>,
+  contextHeaderText?: string,
 ): Promise<T> {
   const controller =
     timeoutMs && timeoutMs > 0 ? new AbortController() : undefined;
@@ -58,6 +58,7 @@ async function postSerialized<T = any>(
       "content-type": "application/json; charset=utf-8",
       ...headers,
     } as Record<string, string>;
+    if (contextHeaderText) reqHeaders["x-runner-context"] = contextHeaderText;
     if (onRequest) await onRequest({ url, headers: reqHeaders });
     const res = await fetchFn(url, {
       method: "POST",
@@ -76,6 +77,13 @@ async function postSerialized<T = any>(
   }
 }
 
+/**
+ * This functions communicates with the exposure server over HTTP.
+ * It uses the @readmes/TUNNEL_HTTP_POLICY.md strategy.
+ *
+ * @param cfg
+ * @returns
+ */
 export function createExposureFetch(
   cfg: ExposureFetchConfig,
 ): ExposureFetchClient {
@@ -96,6 +104,22 @@ export function createExposureFetch(
     );
   }
 
+  const buildContextHeader = () => {
+    if (!cfg.contexts || cfg.contexts.length === 0) return undefined;
+    const map: Record<string, string> = {};
+    for (const ctx of cfg.contexts) {
+      try {
+        const v = ctx.use();
+        map[ctx.id] = ctx.serialize(v as any);
+      } catch {
+        // context absent; ignore
+      }
+    }
+    const keys = Object.keys(map);
+    if (keys.length === 0) return undefined;
+    return cfg.serializer.stringify(map);
+  };
+
   return {
     async task<I, O>(id: string, input?: I): Promise<O> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
@@ -107,8 +131,19 @@ export function createExposureFetch(
         cfg?.timeoutMs,
         cfg.serializer,
         cfg?.onRequest,
+        buildContextHeader(),
       );
-      return assertOkEnvelope<O>(r, { fallbackMessage: "Tunnel task error" });
+      try {
+        return assertOkEnvelope<O>(r, { fallbackMessage: "Tunnel task error" });
+      } catch (e) {
+        // Optionally rethrow typed errors if registry present
+        const te = e as any;
+        if (te && cfg.errorRegistry && te.id && te.data) {
+          const helper = cfg.errorRegistry.get(String(te.id));
+          if (helper) helper.throw(te.data);
+        }
+        throw e;
+      }
     },
     async event<P>(id: string, payload?: P): Promise<void> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
@@ -120,8 +155,18 @@ export function createExposureFetch(
         cfg?.timeoutMs,
         cfg.serializer,
         cfg?.onRequest,
+        buildContextHeader(),
       );
-      assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });
+      try {
+        assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });
+      } catch (e) {
+        const te = e as any;
+        if (te && cfg.errorRegistry && te.id && te.data) {
+          const helper = cfg.errorRegistry.get(String(te.id));
+          if (helper) helper.throw(te.data);
+        }
+        throw e;
+      }
     },
   } satisfies ExposureFetchClient;
 }

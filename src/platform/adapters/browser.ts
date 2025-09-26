@@ -1,5 +1,5 @@
 import type { IAsyncLocalStorage, IPlatformAdapter, PlatformId } from "../types";
-import { PlatformUnsupportedFunction } from "../../errors";
+import { platformUnsupportedFunctionError } from "../../errors";
 
 export class BrowserPlatformAdapter implements IPlatformAdapter {
   readonly id: PlatformId = "browser";
@@ -41,7 +41,7 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
   }
 
   exit() {
-    throw new PlatformUnsupportedFunction("exit");
+    platformUnsupportedFunctionError.throw({ functionName: "exit" });
   }
 
   getEnv(key: string) {
@@ -60,11 +60,15 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
   createAsyncLocalStorage<T>(): IAsyncLocalStorage<T> {
     // Return a wrapper that throws on use; creation itself shouldn't crash callers
     return {
-      getStore: () => {
-        throw new PlatformUnsupportedFunction("createAsyncLocalStorage");
+      getStore: (): any => {
+        platformUnsupportedFunctionError.throw({
+          functionName: "createAsyncLocalStorage",
+        });
       },
-      run: () => {
-        throw new PlatformUnsupportedFunction("createAsyncLocalStorage");
+      run: (_store: any, _callback: () => any): any => {
+        platformUnsupportedFunctionError.throw({
+          functionName: "createAsyncLocalStorage",
+        });
       },
     };
   }

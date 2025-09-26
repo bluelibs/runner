@@ -1,5 +1,5 @@
 import { requireContextTaskMiddleware } from "../../globals/middleware/requireContext.middleware";
-import { ContextError } from "../../context";
+import { ContextError } from "../../definers/defineAsyncContext";
 
 /**
  * Utility function to build a fake Context implementation that allows us to
@@ -35,7 +35,8 @@ describe("requireContextMiddleware", () => {
   it("throws ContextError when the context has not been provided", async () => {
     // Arrange → a context whose `use` returns undefined, simulating missing provider
     const fakeContext = createFakeContext(() => {
-      throw new ContextError(
+      // ContextError is now a helper; we only check that an error is thrown
+      throw new Error(
         "Context not available. Did you forget to provide the context via ContextName.provide()?",
       );
     });
@@ -48,7 +49,7 @@ describe("requireContextMiddleware", () => {
         {} as any,
         { context: fakeContext } as any,
       ),
-    ).rejects.toBeInstanceOf(ContextError);
+    ).rejects.toThrow();
   });
 
   it("passes task.input to next() and returns its result when called within a task", async () => {

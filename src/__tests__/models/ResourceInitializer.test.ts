@@ -4,6 +4,7 @@ import { EventManager } from "../../models/EventManager";
 import { defineResource } from "../../define";
 import { Logger, OnUnhandledError } from "../../models";
 import { globalResources } from "../../globals/globalResources";
+import { RunnerMode } from "../../types/runner";
 
 describe("ResourceInitializer", () => {
   let store: Store;
@@ -20,7 +21,7 @@ describe("ResourceInitializer", () => {
       bufferLogs: false,
     });
     onUnhandledError = jest.fn();
-    store = new Store(eventManager, logger, onUnhandledError);
+    store = new Store(eventManager, logger, onUnhandledError, RunnerMode.TEST);
     resourceInitializer = new ResourceInitializer(store, eventManager, logger);
   });
 

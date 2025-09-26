@@ -17,6 +17,8 @@ You’ll primarily use `r`:
 - `r.tag(id)`
 - `r.middleware.task(id)`
 - `r.middleware.resource(id)`
+- `r.error(id)`
+- `r.asyncContext(id)`
 
 Each builder provides a fluent chain to configure dependencies, schemas, middleware, tags, metadata, and implementation functions. Call `.build()` to produce a definition identical to `defineX`.
 

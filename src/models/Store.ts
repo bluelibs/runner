@@ -13,9 +13,9 @@ import {
 } from "./utils/findCircularDependencies";
 import { globalEventsArray } from "../globals/globalEvents";
 import {
-  CircularDependenciesError,
-  StoreAlreadyInitializedError,
-  EventEmissionCycleError,
+  circularDependenciesError,
+  storeAlreadyInitializedError,
+  eventEmissionCycleError,
 } from "../errors";
 import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
@@ -45,6 +45,8 @@ import { OnUnhandledError } from "./UnhandledError";
 import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
 import { EJSON } from "@bluelibs/ejson";
+import { RunnerMode } from "../types/runner";
+import { detectRunnerMode } from "../utils/detectRunnerMode";
 
 // Re-export types for backward compatibility
 export {
@@ -66,16 +68,20 @@ export class Store {
 
   #isLocked = false;
   #isInitialized = false;
+  public mode: RunnerMode;
 
   constructor(
     protected readonly eventManager: EventManager,
     protected readonly logger: Logger,
     public readonly onUnhandledError: OnUnhandledError,
+    mode?: RunnerMode,
   ) {
     this.registry = new StoreRegistry(this);
     this.validator = this.registry.getValidator();
     this.overrideManager = new OverrideManager(this.registry);
     this.middlewareManager = new MiddlewareManager(this, eventManager, logger);
+
+    this.mode = detectRunnerMode(mode);
   }
 
   // Delegate properties to registry
@@ -90,6 +96,12 @@ export class Store {
   }
   get events() {
     return this.registry.events;
+  }
+  get errors() {
+    return this.registry.errors;
+  }
+  get asyncContexts() {
+    return this.registry.asyncContexts;
   }
   get taskMiddlewares() {
     return this.registry.taskMiddlewares;
@@ -220,7 +232,7 @@ export class Store {
     const dependentNodes = this.registry.getDependentNodes();
     const circularDependencies = findCircularDependencies(dependentNodes);
     if (circularDependencies.cycles.length > 0) {
-      throw new CircularDependenciesError(circularDependencies.cycles);
+      circularDependenciesError.throw({ cycles: circularDependencies.cycles });
     }
   }
 
@@ -228,7 +240,7 @@ export class Store {
     const eventNodes = this.registry.buildEventEmissionGraph();
     const circular = findCircularDependencies(eventNodes);
     if (circular.cycles.length > 0) {
-      throw new EventEmissionCycleError(circular.cycles);
+      eventEmissionCycleError.throw({ cycles: circular.cycles });
     }
   }
 
@@ -237,7 +249,7 @@ export class Store {
     config: any,
   ) {
     if (this.#isInitialized) {
-      throw new StoreAlreadyInitializedError();
+      storeAlreadyInitializedError.throw({});
     }
 
     this.registerGlobalComponents();

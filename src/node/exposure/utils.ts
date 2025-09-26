@@ -3,7 +3,7 @@ import type {
   IncomingMessage,
   ServerResponse,
 } from "http";
-import { CancellationError } from "../../errors";
+import { cancellationError } from "../../errors";
 
 /**
  * Extract a normalized Content-Type header value from request headers.
@@ -48,7 +48,16 @@ export function createAbortControllerForRequest(
   const controller = new AbortController();
   const onAbort = () => {
     try {
-      controller.abort(new CancellationError("Client Closed Request"));
+      controller.abort(
+        // pass a typed error instance
+        (() => {
+          try {
+            cancellationError.throw({ reason: "Client Closed Request" });
+          } catch (e) {
+            return e as any;
+          }
+        })(),
+      );
     } catch {}
   };
   attachRequestListener(req, "aborted", onAbort);

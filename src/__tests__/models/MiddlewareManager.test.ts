@@ -10,6 +10,7 @@ import {
 } from "../../define";
 import { OnUnhandledError } from "../../index";
 import { globalEvents } from "../../globals/globalEvents";
+import { RunnerMode } from "../../types/runner";
 
 describe("MiddlewareManager", () => {
   let store: Store;
@@ -25,7 +26,7 @@ describe("MiddlewareManager", () => {
       bufferLogs: false,
     });
     onUnhandledError = jest.fn();
-    store = new Store(eventManager, logger, onUnhandledError);
+    store = new Store(eventManager, logger, onUnhandledError, RunnerMode.TEST);
     // Get the store's existing middleware manager
     manager = (store as any).middlewareManager;
   });
@@ -341,9 +342,14 @@ describe("MiddlewareManager", () => {
 
     it("should handle task middleware interceptor errors", async () => {
       const errors: any[] = [];
-      const store = new Store(eventManager, logger, (e) => {
-        errors.push(e);
-      });
+      const store = new Store(
+        eventManager,
+        logger,
+        (e) => {
+          errors.push(e);
+        },
+        RunnerMode.TEST,
+      );
       const manager = new MiddlewareManager(store, eventManager, logger);
 
       manager.intercept("task", async (next: any, input: any) => {
@@ -367,9 +373,14 @@ describe("MiddlewareManager", () => {
 
     it("should handle resource middleware interceptor errors", async () => {
       const errors: any[] = [];
-      const store = new Store(eventManager, logger, (e) => {
-        errors.push(e);
-      });
+      const store = new Store(
+        eventManager,
+        logger,
+        (e) => {
+          errors.push(e);
+        },
+        RunnerMode.TEST,
+      );
       const manager = new MiddlewareManager(store, eventManager, logger);
 
       manager.intercept("resource", async (next: any, input: any) => {

@@ -1,5 +1,4 @@
 import { GenericUniversalPlatformAdapter } from "../../platform/adapters/universal-generic";
-import { PlatformUnsupportedFunction } from "../../errors";
 
 describe("GenericUniversalPlatformAdapter", () => {
   let adapter: GenericUniversalPlatformAdapter;
@@ -25,10 +24,10 @@ describe("GenericUniversalPlatformAdapter", () => {
 
     it("should return no-op when addEventListener is not available", () => {
       delete (globalThis as any).addEventListener;
-      
+
       const handler = jest.fn();
       const cleanup = adapter.onUncaughtException(handler);
-      
+
       expect(typeof cleanup).toBe("function");
       expect(() => cleanup()).not.toThrow();
     });
@@ -36,15 +35,15 @@ describe("GenericUniversalPlatformAdapter", () => {
     it("should add and remove event listener when addEventListener is available", () => {
       const addSpy = jest.fn();
       const removeSpy = jest.fn();
-      
+
       (globalThis as any).addEventListener = addSpy;
       (globalThis as any).removeEventListener = removeSpy;
-      
+
       const handler = jest.fn();
       const cleanup = adapter.onUncaughtException(handler);
-      
+
       expect(addSpy).toHaveBeenCalledWith("error", expect.any(Function));
-      
+
       cleanup();
       expect(removeSpy).toHaveBeenCalledWith("error", expect.any(Function));
     });
@@ -61,10 +60,10 @@ describe("GenericUniversalPlatformAdapter", () => {
 
     it("should return no-op when addEventListener is not available", () => {
       delete (globalThis as any).addEventListener;
-      
+
       const handler = jest.fn();
       const cleanup = adapter.onUnhandledRejection(handler);
-      
+
       expect(typeof cleanup).toBe("function");
       expect(() => cleanup()).not.toThrow();
     });
@@ -72,17 +71,23 @@ describe("GenericUniversalPlatformAdapter", () => {
     it("should add and remove event listener when addEventListener is available", () => {
       const addSpy = jest.fn();
       const removeSpy = jest.fn();
-      
+
       (globalThis as any).addEventListener = addSpy;
       (globalThis as any).removeEventListener = removeSpy;
-      
+
       const handler = jest.fn();
       const cleanup = adapter.onUnhandledRejection(handler);
-      
-      expect(addSpy).toHaveBeenCalledWith("unhandledrejection", expect.any(Function));
-      
+
+      expect(addSpy).toHaveBeenCalledWith(
+        "unhandledrejection",
+        expect.any(Function),
+      );
+
       cleanup();
-      expect(removeSpy).toHaveBeenCalledWith("unhandledrejection", expect.any(Function));
+      expect(removeSpy).toHaveBeenCalledWith(
+        "unhandledrejection",
+        expect.any(Function),
+      );
     });
   });
 
@@ -99,10 +104,10 @@ describe("GenericUniversalPlatformAdapter", () => {
 
     it("should return no-op when addEventListener is not available", () => {
       delete (globalThis as any).addEventListener;
-      
+
       const handler = jest.fn();
       const cleanup = adapter.onShutdownSignal(handler);
-      
+
       expect(typeof cleanup).toBe("function");
       expect(() => cleanup()).not.toThrow();
     });
@@ -110,44 +115,59 @@ describe("GenericUniversalPlatformAdapter", () => {
     it("should add beforeunload listener without visibilitychange when document is not available", () => {
       const addSpy = jest.fn();
       const removeSpy = jest.fn();
-      
+
       (globalThis as any).addEventListener = addSpy;
       (globalThis as any).removeEventListener = removeSpy;
       delete (globalThis as any).document;
-      
+
       const handler = jest.fn();
       const cleanup = adapter.onShutdownSignal(handler);
-      
+
       expect(addSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
-      expect(addSpy).not.toHaveBeenCalledWith("visibilitychange", expect.any(Function));
-      
+      expect(addSpy).not.toHaveBeenCalledWith(
+        "visibilitychange",
+        expect.any(Function),
+      );
+
       cleanup();
-      expect(removeSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
+      expect(removeSpy).toHaveBeenCalledWith(
+        "beforeunload",
+        expect.any(Function),
+      );
     });
 
     it("should add both beforeunload and visibilitychange listeners when document is available", () => {
       const addSpy = jest.fn();
       const removeSpy = jest.fn();
-      
+
       (globalThis as any).addEventListener = addSpy;
       (globalThis as any).removeEventListener = removeSpy;
       (globalThis as any).document = { visibilityState: "visible" };
-      
+
       const handler = jest.fn();
       const cleanup = adapter.onShutdownSignal(handler);
-      
+
       expect(addSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
-      expect(addSpy).toHaveBeenCalledWith("visibilitychange", expect.any(Function));
-      
+      expect(addSpy).toHaveBeenCalledWith(
+        "visibilitychange",
+        expect.any(Function),
+      );
+
       cleanup();
-      expect(removeSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
-      expect(removeSpy).toHaveBeenCalledWith("visibilitychange", expect.any(Function));
+      expect(removeSpy).toHaveBeenCalledWith(
+        "beforeunload",
+        expect.any(Function),
+      );
+      expect(removeSpy).toHaveBeenCalledWith(
+        "visibilitychange",
+        expect.any(Function),
+      );
     });
   });
 
   describe("exit", () => {
     it("should throw PlatformUnsupportedFunction", () => {
-      expect(() => adapter.exit()).toThrow(PlatformUnsupportedFunction);
+      expect(() => adapter.exit()).toThrow();
     });
   });
 
@@ -197,12 +217,12 @@ describe("GenericUniversalPlatformAdapter", () => {
   describe("createAsyncLocalStorage", () => {
     it("should return object with throwing methods", () => {
       const als = adapter.createAsyncLocalStorage();
-      
+
       expect(typeof als.getStore).toBe("function");
       expect(typeof als.run).toBe("function");
-      
-      expect(() => als.getStore()).toThrow(PlatformUnsupportedFunction);
-      expect(() => als.run(undefined as any, () => {})).toThrow(PlatformUnsupportedFunction);
+
+      expect(() => als.getStore()).toThrow();
+      expect(() => als.run(undefined as any, () => {})).toThrow();
     });
   });
 

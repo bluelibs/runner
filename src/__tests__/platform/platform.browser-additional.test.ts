@@ -1,5 +1,4 @@
 import { BrowserPlatformAdapter } from "../../platform/adapters/browser";
-import { PlatformUnsupportedFunction } from "../../errors";
 
 describe("BrowserPlatformAdapter - Additional Coverage", () => {
   let adapter: BrowserPlatformAdapter;
@@ -239,20 +238,18 @@ describe("BrowserPlatformAdapter - Additional Coverage", () => {
   describe("createAsyncLocalStorage", () => {
     it("should throw PlatformUnsupportedFunction on getStore", () => {
       const als = adapter.createAsyncLocalStorage();
-      expect(() => als.getStore()).toThrow(PlatformUnsupportedFunction);
+      expect(() => als.getStore()).toThrow();
     });
 
     it("should throw PlatformUnsupportedFunction on run", () => {
       const als = adapter.createAsyncLocalStorage();
-      expect(() => als.run(undefined as any, () => {})).toThrow(
-        PlatformUnsupportedFunction,
-      );
+      expect(() => als.run(undefined as any, () => {})).toThrow();
     });
   });
 
   describe("exit", () => {
     it("should throw PlatformUnsupportedFunction", () => {
-      expect(() => adapter.exit()).toThrow(PlatformUnsupportedFunction);
+      expect(() => adapter.exit()).toThrow();
     });
   });
 

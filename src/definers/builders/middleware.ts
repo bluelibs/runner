@@ -7,6 +7,8 @@ import type {
   IValidationSchema,
   IMiddlewareMeta,
   TagType,
+  ITask,
+  IResource,
 } from "../../defs";
 import { defineTaskMiddleware } from "../defineTaskMiddleware";
 import { defineResourceMiddleware } from "../defineResourceMiddleware";
@@ -66,7 +68,7 @@ export interface TaskMiddlewareFluentBuilder<
     options?: { override?: boolean },
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
   everywhere(
-    flag: boolean | ((task: any) => boolean),
+    flag: boolean | ((task: ITask<any, any, any, any>) => boolean),
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
   build(): ITaskMiddleware<C, In, Out, D>;
 }
@@ -90,7 +92,10 @@ function makeTaskMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
       } else if (isFnExisting && isFnAddition) {
         const e = state.dependencies as (cfg: C) => D;
         const a = deps as (cfg: C) => TNewDeps;
-        merged = ((cfg: C) => ({ ...(e(cfg) as any), ...(a(cfg) as any) })) as any;
+        merged = ((cfg: C) => ({
+          ...(e(cfg) as any),
+          ...(a(cfg) as any),
+        })) as any;
       } else if (isFnExisting && !isFnAddition) {
         const e = state.dependencies as (cfg: C) => D;
         const a = deps as TNewDeps;
@@ -102,7 +107,7 @@ function makeTaskMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
       } else {
         const e = state.dependencies as D;
         const a = deps as TNewDeps;
-        merged = ({ ...(e as any), ...(a as any) }) as any;
+        merged = { ...(e as any), ...(a as any) } as any;
       }
 
       const next = cloneTask(state, { dependencies: merged });
@@ -129,14 +134,17 @@ function makeTaskMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
       const next = cloneTask(state, { meta: m as any });
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },
-    tags<TNewTags extends TagType[]>(t: TNewTags, options?: { override?: boolean }) {
+    tags<TNewTags extends TagType[]>(
+      t: TNewTags,
+      options?: { override?: boolean },
+    ) {
       const override = options?.override ?? false;
       const tags = mergeArray(state.tags as any, t as any, override);
       const next = cloneTask(state, { tags: tags as any });
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },
     everywhere(flag) {
-      const next = cloneTask(state, { everywhere: flag as any });
+      const next = cloneTask(state, { everywhere: flag });
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },
     build() {
@@ -217,7 +225,7 @@ export interface ResourceMiddlewareFluentBuilder<
     options?: { override?: boolean },
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
   everywhere(
-    flag: boolean | ((resource: any) => boolean),
+    flag: boolean | ((resource: IResource<any, any, any, any, any>) => boolean),
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
   build(): IResourceMiddleware<C, In, Out, D>;
 }
@@ -241,7 +249,10 @@ function makeResourceMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
       } else if (isFnExisting && isFnAddition) {
         const e = state.dependencies as (cfg: C) => D;
         const a = deps as (cfg: C) => TNewDeps;
-        merged = ((cfg: C) => ({ ...(e(cfg) as any), ...(a(cfg) as any) })) as any;
+        merged = ((cfg: C) => ({
+          ...(e(cfg) as any),
+          ...(a(cfg) as any),
+        })) as any;
       } else if (isFnExisting && !isFnAddition) {
         const e = state.dependencies as (cfg: C) => D;
         const a = deps as TNewDeps;
@@ -253,7 +264,7 @@ function makeResourceMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
       } else {
         const e = state.dependencies as D;
         const a = deps as TNewDeps;
-        merged = ({ ...(e as any), ...(a as any) }) as any;
+        merged = { ...(e as any), ...(a as any) } as any;
       }
 
       const next = cloneRes(state, { dependencies: merged });
@@ -280,14 +291,17 @@ function makeResourceMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
       const next = cloneRes(state, { meta: m as any });
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },
-    tags<TNewTags extends TagType[]>(t: TNewTags, options?: { override?: boolean }) {
+    tags<TNewTags extends TagType[]>(
+      t: TNewTags,
+      options?: { override?: boolean },
+    ) {
       const override = options?.override ?? false;
       const tags = mergeArray(state.tags as any, t as any, override);
       const next = cloneRes(state, { tags: tags as any });
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },
     everywhere(flag) {
-      const next = cloneRes(state, { everywhere: flag as any });
+      const next = cloneRes(state, { everywhere: flag });
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },
     build() {

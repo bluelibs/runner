@@ -13,7 +13,6 @@ import {
   DependencyValuesType,
 } from "./defs";
 import { EventManager, Logger, Store, TaskRunner } from "./models";
-import { ResourceNotFoundError } from "./errors";
 
 let testResourceCounter = 0;
 

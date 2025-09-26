@@ -27,10 +27,16 @@ export function jsonErrorResponse(
   status: number,
   message: string,
   code?: string,
+  extra?: Record<string, unknown>,
 ): JsonResponse {
   const error: Record<string, unknown> = { message };
   if (code) {
-    error.code = code;
+    (error as any).code = code;
+  }
+  if (extra && typeof extra === "object") {
+    for (const [k, v] of Object.entries(extra)) {
+      (error as any)[k] = v;
+    }
   }
   return { status, body: { ok: false, error } };
 }

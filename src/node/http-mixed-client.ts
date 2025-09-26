@@ -56,7 +56,7 @@ function hasNodeFile(value: unknown): boolean {
  * Unified Node client that mixes JSON/EJSON fetch for standard calls and
  * Smart client for streaming/multipart. Keeps transport details out of app code.
  */
-export function createMixedHttpClient(
+export function createHttpMixedClient(
   cfg: MixedHttpClientConfig,
 ): MixedHttpClient {
   const baseUrl = cfg.baseUrl?.replace(/\/$/, "");

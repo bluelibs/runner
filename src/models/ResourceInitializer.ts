@@ -6,7 +6,6 @@ import {
 import { EventManager } from "./EventManager";
 import { Store } from "./Store";
 import { Logger } from "./Logger";
-import { ValidationError } from "../errors";
 import { MiddlewareManager } from "./MiddlewareManager";
 
 export class ResourceInitializer {

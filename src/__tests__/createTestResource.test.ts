@@ -7,7 +7,6 @@ import {
   globals,
   event,
 } from "..";
-import { ResourceNotFoundError } from "../errors";
 
 describe("createTestResource", () => {
   it("runs tasks within the full ecosystem and returns results", async () => {

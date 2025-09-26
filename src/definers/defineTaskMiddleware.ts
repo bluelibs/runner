@@ -8,7 +8,7 @@ import {
   symbolMiddlewareConfigured,
   ITaskMiddlewareConfigured,
 } from "../defs";
-import { ValidationError } from "../errors";
+import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 
 export function defineTaskMiddleware<
@@ -67,11 +67,12 @@ export function defineTaskMiddleware<
           try {
             config = obj.configSchema.parse(config);
           } catch (error) {
-            throw new ValidationError(
-              "Middleware config",
-              obj.id,
-              error instanceof Error ? error : new Error(String(error)),
-            );
+            validationError.throw({
+              subject: "Middleware config",
+              id: obj.id,
+              originalError:
+                error instanceof Error ? error : new Error(String(error)),
+            });
           }
         }
         return wrap({

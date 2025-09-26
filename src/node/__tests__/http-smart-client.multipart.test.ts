@@ -173,4 +173,54 @@ describe("createHttpSmartClient - multipart", () => {
     // Sanity: ensure we captured some body bytes
     expect(captured.length).toBeGreaterThan(0);
   });
+
+  it("adds x-runner-context header for multipart when contexts are provided", async () => {
+    const reqSpy = jest
+      .spyOn(http, "request")
+      .mockImplementation((opts: any, cb: any) => {
+        const env = { ok: true, result: undefined };
+        const res = Readable.from([
+          Buffer.from(getDefaultSerializer().stringify(env), "utf8"),
+        ]);
+        setImmediate(() =>
+          cb(asIncoming(res, { "content-type": "application/json" })),
+        );
+        const sink = new Writable({
+          write(_chunk, _enc, next) {
+            next();
+          },
+          final(next) {
+            next();
+          },
+        }) as any;
+        sink.on = (_: any, __: any) => sink;
+        sink.setTimeout = () => sink;
+        sink.destroy = () => undefined;
+        // Assert context header
+        expect(typeof opts.headers["x-runner-context"]).toBe("string");
+        return sink;
+      }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: EJSON,
+      contexts: [
+        {
+          id: "ctx.mp2",
+          use: () => 1,
+          serialize: (v: any) => String(v),
+          parse: (s: string) => s,
+          provide: (v: any, fn: any) => fn(),
+          require: () => ({} as any),
+        } as any,
+      ],
+    });
+    const file = createNodeFile(
+      { name: "x" },
+      { stream: Readable.from("A") },
+      "FXH",
+    );
+    await client.task("upload.ctx2", { file } as any);
+    expect(reqSpy).toHaveBeenCalled();
+  });
 });

@@ -3,6 +3,7 @@ import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
 import { Logger } from "../../models";
+import { RunnerMode } from "../../types/runner";
 
 describe("TaskRunner", () => {
   let store: Store;
@@ -18,7 +19,7 @@ describe("TaskRunner", () => {
       bufferLogs: false,
     });
     const onUnhandledError = jest.fn();
-    store = new Store(eventManager, logger, onUnhandledError);
+    store = new Store(eventManager, logger, onUnhandledError, RunnerMode.TEST);
     taskRunner = new TaskRunner(store, eventManager, logger);
   });
 

@@ -84,4 +84,56 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     } as any);
     expect(out).toBe(123);
   });
+
+  it("adds x-runner-context header when contexts provided (JSON path)", async () => {
+    const captured: any[] = [];
+    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
+      // Capture headers for assertion
+      captured.push(opts.headers);
+      const payload = getDefaultSerializer().stringify({ ok: true, result: 42 });
+      const res = new Readable({
+        read() {
+          this.push(payload);
+          this.push(null);
+        },
+      });
+      cb(asIncoming(res, { "content-type": "application/json" }));
+      const sink = new Writable({
+        write(_c, _e, n) {
+          n();
+        },
+        final(n) {
+          n();
+        },
+      }) as any;
+      sink.on = (_: any, __: any) => sink;
+      sink.setTimeout = () => sink;
+      sink.destroy = () => undefined;
+      return sink;
+    }) as any;
+
+    const contexts = [
+      {
+        id: "ctx.demo",
+        use: () => ({ k: 1 }),
+        serialize: (v: any) => JSON.stringify(v),
+        parse: (s: string) => JSON.parse(s),
+        provide: (v: any, fn: any) => fn(),
+        require: () => ({} as any),
+      },
+    ];
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: EJSON,
+      contexts: contexts as any,
+    });
+    const out = await client.task("t.json", { a: 1 } as any);
+    expect(out).toBe(42);
+    const hdrs = captured[0] as Record<string, string>;
+    expect(typeof hdrs["x-runner-context"]).toBe("string");
+    const map = getDefaultSerializer().parse<Record<string, string>>(
+      hdrs["x-runner-context"],
+    );
+    expect(JSON.parse(map["ctx.demo"]).k).toBe(1);
+  });
 });

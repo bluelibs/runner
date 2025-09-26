@@ -86,12 +86,23 @@ describe("http-client", () => {
       auth: { token: "tok" },
       onRequest,
       serializer: EJSON,
+      contexts: [
+        {
+          id: "ctx.web",
+          use: () => ({ a: 1 }),
+          serialize: (v: any) => JSON.stringify(v),
+          parse: (s: string) => JSON.parse(s),
+          provide: (v: any, fn: any) => fn(),
+          require: () => ({} as any),
+        } as any,
+      ],
     });
     const r = await client.task("t.upload.web", { file } as any);
     expect(r).toBe("UP");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(onRequest).toHaveBeenCalledTimes(1);
     expect(calls[0].headers["x-runner-token"]).toBe("tok");
+    expect(typeof calls[0].headers["x-runner-context"]).toBe("string");
   });
 
   it("browser multipart uses default filename when meta.name missing", async () => {
@@ -115,6 +126,112 @@ describe("http-client", () => {
     const r = await client.task("t.upload.def", { file } as any);
     expect(r).toBe("DEF");
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("browser multipart rethrows typed app error via errorRegistry", async () => {
+    const blob = new Blob([Buffer.from("abc") as any], { type: "text/plain" });
+    const file = createWebFile({ name: "a.txt", type: "text/plain" }, blob, "FERR");
+    const serializer = getDefaultSerializer();
+    const fetchMock = jest.fn(async (url: any, init?: any) => {
+      const env = {
+        ok: false,
+        error: {
+          code: "INTERNAL_ERROR",
+          message: "boom",
+          id: "tests.errors.web",
+          data: { code: 11, message: "boom" },
+        },
+      };
+      return { text: async () => serializer.stringify(env) } as any;
+    });
+    const helper = {
+      id: "tests.errors.web",
+      throw: (data: any) => {
+        throw new Error("typed-web:" + String(data?.code));
+      },
+      is: () => false,
+      toString: () => "",
+    } as any;
+    const client = createHttpClient({
+      baseUrl,
+      fetchImpl: fetchMock as any,
+      serializer: EJSON,
+      errorRegistry: new Map([["tests.errors.web", helper]]),
+    });
+    await expect(client.task("t.upload.err", { file } as any)).rejects.toThrow(
+      /typed-web:11/,
+    );
+  });
+
+  it("event: rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
+    const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const { TunnelError } = require("../globals/resources/tunnel/protocol");
+    (createExposureFetch as any).__event.mockImplementationOnce(async () => {
+      throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
+        id: "tests.errors.ev",
+        data: { code: 8, message: "ev" },
+      });
+    });
+    const helper = {
+      id: "tests.errors.ev",
+      throw: (data: any) => {
+        throw new Error("typed-ev:" + String(data?.code));
+      },
+      is: () => false,
+      toString: () => "",
+    } as any;
+    const client = createHttpClient({
+      baseUrl,
+      serializer: EJSON,
+      errorRegistry: new Map([["tests.errors.ev", helper]]),
+    });
+    await expect(client.event("e.1", { a: 1 } as any)).rejects.toThrow(
+      /typed-ev:8/,
+    );
+  });
+
+  it("JSON fallback rethrows TunnelError when no registry present", async () => {
+    const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const { TunnelError } = require("../globals/resources/tunnel/protocol");
+    (createExposureFetch as any).__task.mockImplementationOnce(async () => {
+      throw new TunnelError("INTERNAL_ERROR", "json-raw");
+    });
+    const client = createHttpClient({ baseUrl, serializer: EJSON });
+    await expect(client.task("t.json.raw", { a: 1 } as any)).rejects.toThrow(
+      /json-raw/,
+    );
+  });
+
+  it("event rethrows TunnelError when no registry present", async () => {
+    const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const { TunnelError } = require("../globals/resources/tunnel/protocol");
+    (createExposureFetch as any).__event.mockImplementationOnce(async () => {
+      throw new TunnelError("INTERNAL_ERROR", "ev-raw");
+    });
+    const client = createHttpClient({ baseUrl, serializer: EJSON });
+    await expect(client.event("e.raw", { a: 1 } as any)).rejects.toThrow(
+      /ev-raw/,
+    );
+  });
+
+  it("smart client path rethrows TunnelError when no registry present", async () => {
+    const { createHttpSmartClient } = require("../node/http-smart-client.model");
+    const { TunnelError } = require("../globals/resources/tunnel/protocol");
+    (createHttpSmartClient as jest.Mock).mockReturnValueOnce({
+      task: jest.fn(async () => {
+        throw new TunnelError("INTERNAL_ERROR", "smart-raw");
+      }),
+      event: jest.fn(async () => {}),
+    });
+    const client = createHttpClient({ baseUrl, serializer: EJSON });
+    const nodeFile = require("../node/platform/createFile").createFile(
+      { name: "nf.bin" },
+      { buffer: Buffer.from([1]) },
+      "NF2",
+    );
+    await expect(
+      client.task("t.smart.raw", { file: nodeFile } as any),
+    ).rejects.toThrow(/smart-raw/);
   });
 
   it("node multipart converts web blobs to buffers and delegates to smart client", async () => {
@@ -167,6 +284,46 @@ describe("http-client", () => {
     expect(createHttpSmartClient).toHaveBeenCalledTimes(1);
   });
 
+  it("node smart client error is rethrown as typed when registry provided", async () => {
+    const {
+      createHttpSmartClient,
+    } = require("../node/http-smart-client.model");
+    const { TunnelError } = require("../globals/resources/tunnel/protocol");
+    (createHttpSmartClient as jest.Mock).mockReturnValueOnce({
+      task: jest.fn(async () => {
+        throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
+          id: "tests.errors.smart",
+          data: { code: 13, message: "s" },
+        });
+      }),
+      event: jest.fn(async () => {}),
+    });
+    const helper = {
+      id: "tests.errors.smart",
+      throw: (data: any) => {
+        throw new Error("typed-smart:" + String(data?.code));
+      },
+      is: () => false,
+      toString: () => "",
+    } as any;
+    const client = createHttpClient({
+      baseUrl,
+      serializer: EJSON,
+      errorRegistry: new Map([["tests.errors.smart", helper]]),
+    });
+    // Trigger smart client path via Node file sentinel (multipart)
+    const nodeFile = require("../node/platform/createFile").createFile(
+      { name: "nf.bin" },
+      { buffer: Buffer.from([1]) },
+      "NF1",
+    );
+    await expect(
+      client.task("t.smart", { file: nodeFile } as any),
+    ).rejects.toThrow(
+      /typed-smart:13/,
+    );
+  });
+
   it("falls back to global fetch when fetchImpl not provided (web multipart)", async () => {
     const origFetch = (globalThis as any).fetch;
     (globalThis as any).fetch = jest.fn(async (_url: any, _init?: any) => ({
@@ -199,5 +356,33 @@ describe("http-client", () => {
     expect(() =>
       createHttpClient({ baseUrl: "" as any, serializer: EJSON } as any),
     ).toThrow();
+  });
+
+  it("rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
+    const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const { TunnelError } = require("../globals/resources/tunnel/protocol");
+    // Make the mocked exposure fetch throw a TunnelError
+    (createExposureFetch as any).__task.mockImplementationOnce(async () => {
+      throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
+        id: "tests.errors.app",
+        data: { code: 5, message: "boom" },
+      });
+    });
+    const helper = {
+      id: "tests.errors.app",
+      throw: (data: any) => {
+        throw new Error("typed:" + String(data?.code));
+      },
+      is: () => false,
+      toString: () => "",
+    } as any;
+    const client = createHttpClient({
+      baseUrl,
+      serializer: EJSON,
+      errorRegistry: new Map([["tests.errors.app", helper]]),
+    });
+    await expect(client.task("t.json", { a: 1 } as any)).rejects.toThrow(
+      /typed:5/,
+    );
   });
 });

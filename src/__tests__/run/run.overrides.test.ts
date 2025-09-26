@@ -6,7 +6,6 @@ import {
   defineTaskMiddleware,
   defineResourceMiddleware,
 } from "../../define";
-import { DependencyNotFoundError } from "../../errors";
 import { run } from "../../run";
 import * as definitions from "../../defs";
 
@@ -256,7 +255,7 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrowError(
-      new DependencyNotFoundError("task2").message,
+      'Dependency task2 not found. Did you forget to register it through a resource?'
     );
   });
 
@@ -282,7 +281,7 @@ describe("run.overrides", () => {
     });
 
     await expect(run(app)).rejects.toThrowError(
-      new DependencyNotFoundError("override2").message,
+      'Dependency override2 not found. Did you forget to register it through a resource?'
     );
   });
 

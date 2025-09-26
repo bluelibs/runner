@@ -19,9 +19,9 @@ import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";
 import { TaskRunner } from "./TaskRunner";
 import {
-  DependencyNotFoundError,
-  EventNotFoundError,
-  UnknownItemTypeError,
+  dependencyNotFoundError,
+  eventNotFoundError,
+  unknownItemTypeError,
 } from "../errors";
 import { Logger } from "./Logger";
 
@@ -246,7 +246,7 @@ export class DependencyProcessor {
         } else if (Array.isArray(eventDefinition)) {
           for (const ed of eventDefinition) {
             if (this.store.events.get(ed.id) === undefined) {
-              throw new EventNotFoundError(ed.id);
+              eventNotFoundError.throw({ id: ed.id });
             }
           }
           this.eventManager.addListener(eventDefinition as any, handler, {
@@ -254,7 +254,7 @@ export class DependencyProcessor {
           });
         } else {
           if (this.store.events.get(eventDefinition.id) === undefined) {
-            throw new EventNotFoundError(eventDefinition.id);
+            eventNotFoundError.throw({ id: eventDefinition.id });
           }
           this.eventManager.addListener(eventDefinition as any, handler, {
             order,
@@ -305,8 +305,14 @@ export class DependencyProcessor {
       } else if (utils.isEvent(inner)) {
         const exists = this.store.events.get(inner.id) !== undefined;
         return exists ? this.extractEventDependency(inner, source) : undefined;
+      } else if (utils.isError(inner)) {
+        const exists = this.store.errors.get(inner.id) !== undefined;
+        return exists ? inner : undefined;
+      } else if (utils.isAsyncContext(inner)) {
+        const exists = this.store.asyncContexts.get(inner.id) !== undefined;
+        return exists ? inner : undefined;
       }
-      throw new UnknownItemTypeError(inner);
+      unknownItemTypeError.throw({ item: inner });
     }
     if (utils.isResource(object)) {
       return this.extractResourceDependency(object);
@@ -314,8 +320,19 @@ export class DependencyProcessor {
       return this.extractTaskDependency(object);
     } else if (utils.isEvent(object)) {
       return this.extractEventDependency(object, source);
+    } else if (utils.isError(object)) {
+      if (this.store.errors.get(object.id) === undefined) {
+        dependencyNotFoundError.throw({ key: `Error ${object.id}` });
+      }
+      // For error helpers, the dependency value is the helper itself
+      return object;
+    } else if (utils.isAsyncContext(object)) {
+      if (this.store.asyncContexts.get(object.id) === undefined) {
+        dependencyNotFoundError.throw({ key: `AsyncContext ${object.id}` });
+      }
+      return object;
     } else {
-      throw new UnknownItemTypeError(object);
+      unknownItemTypeError.throw({ item: object });
     }
   }
 
@@ -333,22 +350,23 @@ export class DependencyProcessor {
   async extractTaskDependency(object: ITask<any, any, {}>) {
     const storeTask = this.store.tasks.get(object.id);
     if (storeTask === undefined) {
-      throw new DependencyNotFoundError(`Task ${object.id}`);
+      dependencyNotFoundError.throw({ key: `Task ${object.id}` });
     }
 
-    if (!storeTask.isInitialized) {
+    const st = storeTask!;
+    if (!st.isInitialized) {
       // it's sanitised
       const dependencies = object.dependencies as DependencyMapType;
 
-      storeTask.computedDependencies = await this.extractDependencies(
+      st.computedDependencies = await this.extractDependencies(
         dependencies,
-        storeTask.task.id,
+        st.task.id,
       );
-      storeTask.isInitialized = true;
+      st.isInitialized = true;
     }
 
     return (input: unknown) => {
-      return this.taskRunner.run(storeTask.task, input);
+      return this.taskRunner.run(st.task, input);
     };
   }
 
@@ -356,12 +374,13 @@ export class DependencyProcessor {
     // check if it exists in the store with the value
     const storeResource = this.store.resources.get(object.id);
     if (storeResource === undefined) {
-      throw new DependencyNotFoundError(`Resource ${object.id}`);
+      dependencyNotFoundError.throw({ key: `Resource ${object.id}` });
     }
 
-    const { resource, config } = storeResource;
+    const sr = storeResource!;
+    const { resource, config } = sr;
 
-    if (!storeResource.isInitialized) {
+    if (!sr.isInitialized) {
       // check if it has an initialisation function that provides the value
       if (resource.init) {
         const depMap = (resource.dependencies || {}) as DependencyMapType;
@@ -374,14 +393,14 @@ export class DependencyProcessor {
             wrapped,
           );
 
-        storeResource.context = context;
-        storeResource.value = value;
+        sr.context = context;
+        sr.value = value;
       }
 
       // we need to initialize the resource
-      storeResource.isInitialized = true;
+      sr.isInitialized = true;
     }
 
-    return storeResource.value;
+    return sr.value;
   }
 }

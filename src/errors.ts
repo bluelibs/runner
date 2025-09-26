@@ -1,66 +1,51 @@
+import { error } from "./definers/builders/error";
+import type { DefaultErrorType, IErrorHelper } from "./types/error";
 import { detectEnvironment } from "./platform";
 
-/**
- * Base error class for all BlueLibs Runner errors
- */
-export class RuntimeError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "RuntimeError";
-  }
-}
-
-/**
- * Error thrown when attempting to register a component with a duplicate ID
- */
-export class DuplicateRegistrationError extends RuntimeError {
-  constructor(type: string, id: string) {
-    super(
+// Duplicate registration
+export const duplicateRegistrationError = error<
+  { type: string; id: string } & DefaultErrorType
+>("runner.errors.duplicateRegistration")
+  .format(
+    ({ type, id }) =>
       `${type} "${id.toString()}" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.`,
-    );
-    this.name = "DuplicateRegistrationError";
-  }
-}
+  )
+  .build();
 
-/**
- * Error thrown when a dependency is not found in the registry
- */
-export class DependencyNotFoundError extends RuntimeError {
-  constructor(key: string) {
-    super(
+// Dependency not found
+export const dependencyNotFoundError = error<
+  { key: string } & DefaultErrorType
+>("runner.errors.dependencyNotFound")
+  .format(
+    ({ key }) =>
       `Dependency ${key.toString()} not found. Did you forget to register it through a resource?`,
-    );
-    this.name = "DependencyNotFoundError";
-  }
-}
+  )
+  .build();
 
-/**
- * Error thrown when an unknown item type is encountered
- */
-export class UnknownItemTypeError extends RuntimeError {
-  constructor(item: any) {
-    super(
-      `Unknown item type: ${item}. Please ensure you are not using different versions of '@bluelibs/runner'`,
-    );
-    this.name = "UnknownItemTypeError";
-  }
-}
+// Unknown item type
+export const unknownItemTypeError = error<{ item: unknown } & DefaultErrorType>(
+  "runner.errors.unknownItemType",
+)
+  .format(
+    ({ item }) =>
+      `Unknown item type: ${String(
+        item,
+      )}. Please ensure you are not using different versions of '@bluelibs/runner'`,
+  )
+  .build();
 
-/**
- * Error thrown whenever a requested context is not available.
- */
-export class ContextError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "ContextError";
-  }
-}
+// Context error
+export const contextError = error<{ details?: string } & DefaultErrorType>(
+  "runner.errors.context",
+)
+  .format(({ details }) => details ?? "Context error")
+  .build();
 
-/**
- * Error thrown when circular dependencies are detected
- */
-export class CircularDependenciesError extends RuntimeError {
-  constructor(cycles: string[]) {
+// Circular dependencies
+export const circularDependenciesError = error<
+  { cycles: string[] } & DefaultErrorType
+>("runner.errors.circularDependencies")
+  .format(({ cycles }) => {
     const cycleDetails = cycles.map((cycle) => `  • ${cycle}`).join("\n");
     const hasMiddleware = cycles.some((cycle) => cycle.includes("middleware"));
 
@@ -76,138 +61,140 @@ export class CircularDependenciesError extends RuntimeError {
         "\n  • Consider using events for communication instead of direct dependencies";
     }
 
-    super(`Circular dependencies detected:\n${cycleDetails}${guidance}`);
-    this.name = "CircularDependenciesError";
-  }
-}
+    return `Circular dependencies detected:\n${cycleDetails}${guidance}`;
+  })
+  .build();
 
-/**
- * Error thrown when an event is not found in the registry
- */
-export class EventNotFoundError extends RuntimeError {
-  constructor(id: string) {
-    super(`Event "${id.toString()}" not found. Did you forget to register it?`);
-    this.name = "EventNotFoundError";
-  }
-}
+// Event not found
+export const eventNotFoundError = error<{ id: string } & DefaultErrorType>(
+  "runner.errors.eventNotFound",
+)
+  .format(
+    ({ id }) =>
+      `Event "${id.toString()}" not found. Did you forget to register it?`,
+  )
+  .build();
 
-/**
- * Error thrown when a resource is not found in the store
- */
-export class ResourceNotFoundError extends RuntimeError {
-  constructor(id: string) {
-    super(
+// Resource not found
+export const resourceNotFoundError = error<{ id: string } & DefaultErrorType>(
+  "runner.errors.resourceNotFound",
+)
+  .format(
+    ({ id }) =>
       `Resource "${id.toString()}" not found. Did you forget to register it or are you using the correct id?`,
-    );
-    this.name = "ResourceNotFoundError";
-  }
-}
+  )
+  .build();
 
-export class MiddlewareNotRegisteredError extends RuntimeError {
-  constructor(type: "task" | "resource", source: string, middlewareId: string) {
-    super(
+// Middleware not registered
+export const middlewareNotRegisteredError = error<
+  {
+    type: "task" | "resource";
+    source: string;
+    middlewareId: string;
+  } & DefaultErrorType
+>("runner.errors.middlewareNotRegistered")
+  .format(
+    ({ type, source, middlewareId }) =>
       `Middleware inside ${type} "${source}" depends on "${middlewareId}" but it's not registered. Did you forget to register it?`,
-    );
+  )
+  .build();
 
-    this.name = `MiddlewareNotRegisteredError: ${type} ${source} ${middlewareId}`;
-  }
-}
-
-/**
- * Error thrown when a tag is not found in the registry
- */
-export class TagNotFoundError extends RuntimeError {
-  constructor(id: string) {
-    super(
+// Tag not found
+export const tagNotFoundError = error<{ id: string } & DefaultErrorType>(
+  "runner.errors.tagNotFound",
+)
+  .format(
+    ({ id }) =>
       `Tag "${id}" not registered. Did you forget to register it inside a resource?`,
-    );
-    this.name = "TagNotRegisteredError";
-  }
-}
+  )
+  .build();
 
-/**
- * Error thrown when attempting to modify a locked component
- */
-export class LockedError extends RuntimeError {
-  constructor(what: string) {
-    super(`Cannot modify the ${what.toString()} when it is locked.`);
-    this.name = "LockedError";
-  }
-}
+// Locked
+export const lockedError = error<{ what: string } & DefaultErrorType>(
+  "runner.errors.locked",
+)
+  .format(
+    ({ what }) => `Cannot modify the ${what.toString()} when it is locked.`,
+  )
+  .build();
 
-/**
- * Error thrown when attempting to initialize a store that's already initialized
- */
-export class StoreAlreadyInitializedError extends RuntimeError {
-  constructor() {
-    super("Store already initialized. Cannot reinitialize.");
-    this.name = "StoreAlreadyInitializedError";
-  }
-}
+// Store already initialized
+export const storeAlreadyInitializedError = error<DefaultErrorType>(
+  "runner.errors.storeAlreadyInitialized",
+)
+  .format(() => "Store already initialized. Cannot reinitialize.")
+  .build();
 
-/**
- * Error thrown when validation fails for task input, resource config, middleware config, or event payload
- */
-export class ValidationError extends RuntimeError {
-  constructor(type: string, id: string, originalError: Error | string) {
+// Validation error
+export const validationError = error<
+  {
+    subject: string;
+    id: string;
+    originalError: string | Error;
+  } & DefaultErrorType
+>("runner.errors.validation")
+  .format(({ subject, id, originalError }) => {
     const errorMessage =
       originalError instanceof Error
         ? originalError.message
         : String(originalError);
-    super(`${type} validation failed for ${id.toString()}: ${errorMessage}`);
-    this.name = "ValidationError";
-  }
-}
+    return `${subject} validation failed for ${id.toString()}: ${errorMessage}`;
+  })
+  .build();
 
-/**
- * Error thrown when an event emission cycle is detected
- */
-export class EventCycleError extends RuntimeError {
-  constructor(path: Array<{ id: string; source: string }>) {
+// Event cycle (runtime)
+export const eventCycleError = error<
+  { path: Array<{ id: string; source: string }> } & DefaultErrorType
+>("runner.errors.eventCycle")
+  .format(({ path }) => {
     const chain = path.map((p) => `${p.id}←${p.source}`).join("  ->  ");
-    super(
-      `Event emission cycle detected:\n  ${chain}\n\nBreak the cycle by changing hook logic (avoid mutual emits) or gate with conditions/tags.`,
-    );
-    this.name = "EventCycleError";
-  }
-}
+    return `Event emission cycle detected:\n  ${chain}\n\nBreak the cycle by changing hook logic (avoid mutual emits) or gate with conditions/tags.`;
+  })
+  .build();
 
-/**
- * Error thrown when a compile-time event emission cycle is detected
- */
-export class EventEmissionCycleError extends RuntimeError {
-  constructor(cycles: string[]) {
+// Event emission cycles (compile-time/dry-run)
+export const eventEmissionCycleError = error<
+  { cycles: string[] } & DefaultErrorType
+>("runner.errors.eventEmissionCycle")
+  .format(({ cycles }) => {
     const list = cycles.map((c) => `  • ${c}`).join("\n");
-    super(
-      `Event emission cycles detected between hooks and events:\n${list}\n\nThis was detected at compile time (dry-run). Break the cycle by avoiding mutual emits between hooks or scoping hooks using tags.`,
-    );
-    this.name = "EventEmissionCycleError";
-  }
-}
+    return `Event emission cycles detected between hooks and events:\n${list}\n\nThis was detected at compile time (dry-run). Break the cycle by avoiding mutual emits between hooks or scoping hooks using tags.`;
+  })
+  .build();
 
-/**
- * Error thrown when a platform function is not supported in the current environment.
- */
-export class PlatformUnsupportedFunction extends RuntimeError {
-  constructor(functionName: string) {
-    super(
+// Platform unsupported function
+export const platformUnsupportedFunctionError = error<
+  { functionName: string } & DefaultErrorType
+>("runner.errors.platformUnsupportedFunction")
+  .format(
+    ({ functionName }) =>
       `Platform function not supported in this environment: ${functionName}. Detected platform: ${detectEnvironment()}.`,
-    );
-    this.name = "PlatformUnsupportedFunction";
-  }
+  )
+  .build();
+
+// Cancellation error (maps to HTTP 499 in exposure)
+export const cancellationError = error<{ reason?: string } & DefaultErrorType>(
+  "runner.errors.cancellation",
+)
+  .format(({ reason }) => reason || "Operation cancelled")
+  .build();
+
+// Tunnel ownership conflict (exclusive owner per task)
+export const tunnelOwnershipConflictError = error<
+  {
+    taskId: string;
+    currentOwnerId: string;
+    attemptedOwnerId: string;
+  } & DefaultErrorType
+>("runner.errors.tunnelOwnershipConflict")
+  .format(({ taskId, currentOwnerId, attemptedOwnerId }) =>
+    `Task "${taskId}" is already tunneled by resource "${currentOwnerId}". Resource "${attemptedOwnerId}" cannot tunnel it again. Ensure each task is owned by a single tunnel client.`,
+  )
+  .build();
+
+export function isCancellationError(err: unknown): boolean {
+  return cancellationError.is(err);
 }
 
-/**
- * CancellationError: used to signal client-initiated aborts (e.g., HTTP request aborted).
- * Handlers can catch and map to 499 Client Closed Request without noisy logs.
- */
-export class CancellationError extends RuntimeError {
-  constructor(message = "Operation cancelled") {
-    super(message);
-    this.name = "CancellationError";
-  }
-}
-
-export function isCancellationError(err: unknown): err is CancellationError {
-  return !!err && (err as any).name === "CancellationError";
-}
+// Backward-compatible namespace export for external imports (index.ts already re-exports * as Errors from here)
+export type { IErrorHelper } from "./types/error";

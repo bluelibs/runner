@@ -1,5 +1,4 @@
 import { getPlatform } from "./platform";
-import { PlatformUnsupportedFunction } from "./errors";
 
 const platform = getPlatform();
 

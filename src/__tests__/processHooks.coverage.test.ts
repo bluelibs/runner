@@ -1,5 +1,4 @@
 import { registerShutdownHook } from "../processHooks";
-import { PlatformUnsupportedFunction } from "../errors";
 
 describe("processHooks coverage", () => {
   it("covers exit try/catch branch when platform.exit throws PlatformUnsupportedFunction", async () => {
@@ -13,5 +12,4 @@ describe("processHooks coverage", () => {
     if (originalExit) (globalThis as any).process.exit = originalExit;
   });
 });
-
 

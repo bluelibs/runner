@@ -8,11 +8,15 @@ import {
   defineOverride,
   defineHook,
 } from "./define";
-import { createContext } from "./context";
+import {
+  defineAsyncContext,
+  createContext as oldCreateContext,
+} from "./definers/defineAsyncContext";
 import { globalEvents } from "./globals/globalEvents";
 import { globalResources } from "./globals/globalResources";
 import { globalMiddlewares } from "./globals/globalMiddleware";
 import { globalTags } from "./globals/globalTags";
+import { debug } from "./globals/debug";
 import { run } from "./run";
 import { tunnels } from "./globals/tunnels";
 import { createTestResource } from "./testing";
@@ -25,6 +29,8 @@ import {
   resourceMiddleware as resourceMiddlewareFn,
 } from "./definers/builders/middleware";
 import { tag as tagFn } from "./definers/builders/tag";
+import { error as errorFn } from "./definers/builders/error";
+import { asyncContext as asyncContextFn } from "./definers/builders/asyncContext";
 
 const globals = {
   events: globalEvents,
@@ -32,6 +38,7 @@ const globals = {
   middleware: globalMiddlewares,
   tags: globalTags,
   tunnels,
+  debug,
 };
 
 export { globals };
@@ -41,13 +48,17 @@ export {
   defineEvent as event,
   defineTaskMiddleware as taskMiddleware,
   defineResourceMiddleware as resourceMiddleware,
+  defineAsyncContext as asyncContext,
   defineTag as tag,
   defineOverride as override,
   defineHook as hook,
   run,
-  createContext,
   createTestResource,
 };
+
+// Legacy alias accepted in tests; with optional id support
+const createContext = oldCreateContext;
+export { createContext };
 
 // Expose only a single namespace `r` that contains all builder entry points
 export const r = Object.freeze({
@@ -56,6 +67,8 @@ export const r = Object.freeze({
   event: eventFn,
   hook: hookFn,
   tag: tagFn,
+  asyncContext: asyncContextFn,
+  error: errorFn,
   middleware: Object.freeze({
     task: taskMiddlewareFn,
     resource: resourceMiddlewareFn,
@@ -66,7 +79,6 @@ export * as definitions from "./defs";
 export * from "./models";
 export * from "./globals/types";
 export * as Errors from "./errors";
-export { Context } from "./context";
 export { PlatformAdapter, setPlatform } from "./platform";
 export { EJSON } from "@bluelibs/ejson";
 

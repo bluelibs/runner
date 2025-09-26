@@ -2,7 +2,9 @@ import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { globalResources } from "../../../globals/globalResources";
 import { debugResource } from "../../../globals/resources/debug/debug.resource";
-import { levelNormal } from "../../../globals/resources/debug/types";
+import { debug } from "../../../globals/debug";
+
+const { normal: levelNormal } = debug.levels;
 
 Error.stackTraceLimit = Infinity;
 

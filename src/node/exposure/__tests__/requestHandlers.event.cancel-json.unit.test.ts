@@ -4,9 +4,12 @@ import { createRequestHandlers } from "../requestHandlers";
 
 jest.mock("../requestBody", () => ({
   readJsonBody: async () => {
-    throw new (require("../../../errors").CancellationError)(
-      "Client Closed Request",
-    );
+    const { cancellationError } = require("../../../errors");
+    try {
+      cancellationError.throw({ reason: "Client Closed Request" });
+    } catch (e) {
+      throw e;
+    }
   },
 }));
 

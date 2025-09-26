@@ -12,7 +12,7 @@ import {
   ResourceMiddlewareAttachmentType,
   IResourceWithConfig,
 } from "../defs";
-import { ValidationError } from "../errors";
+import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 
 export function defineResource<
@@ -74,11 +74,12 @@ export function defineResource<
         try {
           config = constConfig.configSchema.parse(config);
         } catch (error) {
-          throw new ValidationError(
-            "Resource config",
+          validationError.throw({
+            subject: "Resource config",
             id,
-            error instanceof Error ? error : new Error(String(error)),
-          );
+            originalError:
+              error instanceof Error ? error : new Error(String(error)),
+          });
         }
       }
 

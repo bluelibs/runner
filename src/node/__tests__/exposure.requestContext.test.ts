@@ -4,7 +4,7 @@ import { run } from "../../run";
 import { defineTask } from "../../definers/defineTask";
 import { nodeExposure, useExposureContext, hasExposureContext } from "../index";
 import { ExposureRequestContext } from "../exposure/requestContext";
-import { storage } from "../../context";
+import { storage } from "../../definers/defineAsyncContext";
 
 describe("nodeExposure request context (raw-body)", () => {
   it("provides req/res via useExposureContext() and allows raw-body streaming when content-type is application/octet-stream", async () => {
@@ -17,15 +17,22 @@ describe("nodeExposure request context (raw-body)", () => {
         return await new Promise<string>((resolve, reject) => {
           const chunks: Buffer[] = [];
           req
-            .on("data", (c: any) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(String(c))))
+            .on("data", (c: any) =>
+              chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(String(c))),
+            )
             .on("end", () => resolve(Buffer.concat(chunks).toString("utf8")))
             .on("error", reject);
         });
       },
     });
 
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), basePath: "/__runner" } });
-    const app = defineResource({ id: "ctx.raw.app", register: [rawTask, exposure] });
+    const exposure = nodeExposure.with({
+      http: { server: http.createServer(), basePath: "/__runner" },
+    });
+    const app = defineResource({
+      id: "ctx.raw.app",
+      register: [rawTask, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
@@ -49,7 +56,8 @@ describe("nodeExposure request context (raw-body)", () => {
       statusCode: 0,
       end(buf?: any) {
         status = this.statusCode;
-        if (buf) payload = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
+        if (buf)
+          payload = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
       },
       writeHead(code: number) {
         this.statusCode = code;
@@ -64,7 +72,7 @@ describe("nodeExposure request context (raw-body)", () => {
     expect(out.result).toBe(body);
 
     await rr.dispose();
-  });  // close the it block
+  }); // close the it block
 
   describe("hasExposureContext", () => {
     it("returns false when no context is available", () => {
@@ -91,5 +99,5 @@ describe("nodeExposure request context (raw-body)", () => {
         expect(hasExposureContext()).toBe(false);
       });
     });
-  });  // close hasExposureContext describe
-});  // close outer describe
+  }); // close hasExposureContext describe
+}); // close outer describe
