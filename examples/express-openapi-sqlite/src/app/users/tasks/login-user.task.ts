@@ -1,7 +1,7 @@
 import z from "zod";
 import { usersRepository } from "../resources/users-repository.resource";
 import { httpRoute } from "../../http/tags/http.tag";
-import { task } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { LoginRequest, LoginResponse, ApiResponse } from "../types";
 import jwt from "jsonwebtoken";
 import { appConfig } from "../../app.config";
@@ -16,14 +16,14 @@ const loginSchema = z.object({
 /**
  * User login task
  */
-export const loginUserTask = task({
-  id: "app.tasks.auth.login",
-  dependencies: {
+export const loginUserTask = r
+  .task("app.tasks.auth.login")
+  .dependencies({
     userService: usersRepository,
     config: appConfig,
     verifyPasswordTask,
-  },
-  tags: [
+  })
+  .tags([
     httpRoute.post("/api/auth/login", {
       summary: "User login",
       description: "Authenticate user and return JWT token",
@@ -38,8 +38,8 @@ export const loginUserTask = task({
         }),
       }),
     }),
-  ],
-  run: async (
+  ])
+  .run(async (
     loginData: LoginRequest,
     { config, verifyPasswordTask },
   ): Promise<ApiResponse<LoginResponse>> => {
@@ -76,5 +76,5 @@ export const loginUserTask = task({
         error: error instanceof Error ? error.message : "Login failed",
       };
     }
-  },
-});
+  })
+  .build();

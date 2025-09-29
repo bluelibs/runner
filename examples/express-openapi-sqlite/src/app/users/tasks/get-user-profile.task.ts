@@ -1,4 +1,4 @@
-import { task } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { httpRoute } from "../../http/tags/http.tag";
 import { authMiddleware } from "../middleware/auth";
 import { UserContext } from "../contexts/user.context";
@@ -10,10 +10,10 @@ import z from "zod";
 /**
  * Get current user profile (protected route)
  */
-export const getUserProfileTask = task({
-  id: "app.tasks.auth.profile",
-  middleware: [authMiddleware.with({ requiresAuth: true })],
-  tags: [
+export const getUserProfileTask = r
+  .task("app.tasks.auth.profile")
+  .middleware([authMiddleware.with({ requiresAuth: true })])
+  .tags([
     httpRoute.get("/api/auth/profile", {
       summary: "Get current user profile",
       description: "Get the authenticated user's profile information",
@@ -24,8 +24,8 @@ export const getUserProfileTask = task({
         data: UserSchema,
       }),
     }),
-  ],
-  run: async (): Promise<ApiResponse<User>> => {
+  ])
+  .run(async (): Promise<ApiResponse<User>> => {
     try {
       // Get user from context (set by auth middleware)
       const userSession = UserContext.use();
@@ -47,5 +47,5 @@ export const getUserProfileTask = task({
         error: error instanceof Error ? error.message : "Failed to get profile",
       };
     }
-  },
-});
+  })
+  .build();

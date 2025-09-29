@@ -1,4 +1,4 @@
-import { globals, resource } from "@bluelibs/runner";
+import { globals, r } from "@bluelibs/runner";
 import sqlite3 from "sqlite3";
 
 export interface DatabaseConfig {
@@ -14,12 +14,10 @@ export interface Database {
   close: () => Promise<void>;
 }
 
-export const db = resource({
-  id: "app.resources.database",
-  dependencies: {
-    logger: globals.resources.logger,
-  },
-  init: async (config: DatabaseConfig, { logger }): Promise<Database> => {
+export const db = r
+  .resource<DatabaseConfig>("app.resources.database")
+  .dependencies({ logger: globals.resources.logger })
+  .init(async (config, { logger }): Promise<Database> => {
     const { filename = ":memory:", verbose = false } = config;
 
     const db = new sqlite3.Database(filename, (err) => {
@@ -94,9 +92,9 @@ export const db = resource({
       all,
       close,
     };
-  },
-  dispose: async (database: Database, _, { logger }) => {
+  })
+  .dispose(async (database, _, { logger }) => {
     await database.close();
     logger.info("Database connection closed");
-  },
-});
+  })
+  .build();

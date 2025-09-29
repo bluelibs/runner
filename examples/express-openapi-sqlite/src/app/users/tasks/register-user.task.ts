@@ -1,6 +1,6 @@
 import z from "zod";
 import { usersRepository } from "../resources/users-repository.resource";
-import { task } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { httpRoute } from "../../http/tags/http.tag";
 import {
   RegisterRequest,
@@ -22,10 +22,10 @@ const registerSchema = z.object({
 /**
  * User registration task
  */
-export const registerUserTask = task({
-  id: "app.tasks.auth.register",
-  dependencies: { appConfig, createUserTask },
-  tags: [
+export const registerUserTask = r
+  .task("app.tasks.auth.register")
+  .dependencies({ appConfig, createUserTask })
+  .tags([
     httpRoute.post("/api/auth/register", {
       summary: "Register a new user",
       description: "Create a new user account",
@@ -40,9 +40,9 @@ export const registerUserTask = task({
         }),
       }),
     }),
-  ],
-  inputSchema: registerSchema,
-  run: async (
+  ])
+  .inputSchema(registerSchema)
+  .run(async (
     userData: RegisterRequest,
     { appConfig, createUserTask },
   ): Promise<ApiResponse<LoginResponse>> => {
@@ -69,5 +69,5 @@ export const registerUserTask = task({
         error: error instanceof Error ? error.message : "Registration failed",
       };
     }
-  },
-});
+  })
+  .build();

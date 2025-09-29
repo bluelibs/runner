@@ -1,5 +1,5 @@
 // examples/express-openapi-sqlite/src/tasks/routeRegistration.ts
-import { hook, globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 import { Request, Response } from "express";
 import { httpTag } from "../tags/http.tag";
 import { RequestContext, RequestData } from "../contexts/request.context";
@@ -7,21 +7,16 @@ import { expressServerResource } from "../resources/express.resource";
 import swaggerUi from "swagger-ui-express";
 import { createDocument } from "zod-openapi";
 
-export const routeRegistrationHook = hook({
-  id: "app.hooks.routeRegistration",
-  on: globals.events.ready,
-  meta: {
-    title: "Route Registration Listener",
-    description:
-      "Listens for route registrations and registers them with the express server and assigns OpenAPI specs to it",
-  },
-  dependencies: {
+export const routeRegistrationHook = r
+  .hook("app.hooks.routeRegistration")
+  .on(globals.events.ready)
+  .dependencies({
     store: globals.resources.store,
     taskRunner: globals.resources.taskRunner,
     expressServer: expressServerResource,
     logger: globals.resources.logger,
-  },
-  run: async (_, { store, taskRunner, expressServer, logger }) => {
+  })
+  .run(async (_, { store, taskRunner, expressServer, logger }) => {
     const { app, port } = expressServer;
     const paths: Record<string, any> = {};
 
@@ -141,5 +136,5 @@ export const routeRegistrationHook = hook({
     logger.info(`🔗 Swagger UI available at http://localhost:${port}/api-docs`);
 
     return { routesRegistered };
-  },
-});
+  })
+  .build();

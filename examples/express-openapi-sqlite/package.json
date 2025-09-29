@@ -12,7 +12,7 @@
     "mcp": "runner-dev mcp"
   },
   "dependencies": {
-    "@bluelibs/runner": "^4.4.0",
+    "@bluelibs/runner": "file:../..",
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dedupe": "^4.0.3",
