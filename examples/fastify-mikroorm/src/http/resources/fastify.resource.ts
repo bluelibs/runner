@@ -3,7 +3,7 @@
  * - Namespace: http
  * - File: src/http/resources/fastify.resource.ts
  */
-import { globals, resource } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 import Fastify from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";
@@ -11,14 +11,14 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import { createErrorHandler } from "./helpers/createErrorHandler";
 
-export const fastify = resource({
-  id: "app.http.resources.fastify",
-  meta: {
+export const fastify = r
+  .resource("app.http.resources.fastify")
+  .meta({
     title: "Fastify HTTP Server",
     description:
       "High-performance HTTP server instance for handling web requests and API endpoints",
-  },
-  init: async () => {
+  })
+  .init(async () => {
     const fastify = Fastify();
 
     // Security & CORS
@@ -38,6 +38,6 @@ export const fastify = resource({
     fastify.setErrorHandler(createErrorHandler());
 
     return fastify;
-  },
-  dispose: async (fastify) => fastify.close(),
-});
+  })
+  .dispose(async (fastify) => fastify.close())
+  .build();

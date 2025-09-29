@@ -113,7 +113,7 @@ const r3 = r
 const adder = r
   .task("tasks.add")
   .inputSchema<{ a: number; b: number }>({ parse: (x: any) => x })
-  .run(async ({ input }) => input!.a + input!.b)
+  .run(async (input) => input!.a + input!.b)
   .build();
 ```
 

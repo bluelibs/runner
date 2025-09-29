@@ -3,7 +3,7 @@
  * - Namespace: http
  * - File: src/http/tags/http-route.tag.ts
  */
-import { tag } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 export interface HttpRouteConfig {
   // Optional config carried by the tag (available via extract())
@@ -16,10 +16,11 @@ export interface HttpRouteConfig {
   auth?: "public" | "optional" | "required";
 }
 
-export const httpRoute = tag<HttpRouteConfig>({
-  id: "app.http.tags.http-route",
-  meta: {
+export const httpRoute = r
+  .tag("app.http.tags.http-route")
+  .configSchema<HttpRouteConfig>({ parse: (x: any) => x })
+  .meta({
     title: "HTTP Route Tag",
     description: "Tag for marking tasks as HTTP endpoints with method and path configuration",
-  },
-});
+  })
+  .build();

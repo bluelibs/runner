@@ -1,4 +1,4 @@
-import { resource } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { BaseEntity, EntitySchema } from "@mikro-orm/core";
 import { User } from "./user.entity"; // Import User class for relation
 
@@ -9,13 +9,13 @@ export class Post extends BaseEntity {
   author!: User; // Relation to User
 }
 
-export const postEntity = resource({
-  id: "app.db.entities.resources.post",
-  meta: {
+export const postEntity = r
+  .resource("app.db.entities.resources.post")
+  .meta({
     title: "Post Entity Schema",
     description: "MikroORM entity schema for Post with user relationship and content fields",
-  },
-  init: async () =>
+  })
+  .init(async () =>
     new EntitySchema<Post>({
       name: "Post",
       class: Post,
@@ -31,5 +31,6 @@ export const postEntity = resource({
           inversedBy: (user) => user.posts,
         },
       },
-    }),
-});
+    })
+  )
+  .build();

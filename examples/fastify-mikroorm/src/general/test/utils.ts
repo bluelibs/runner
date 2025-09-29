@@ -1,4 +1,4 @@
-import { override, resource, run } from "@bluelibs/runner";
+import { override, r, run } from "@bluelibs/runner";
 import { ormConfig } from "#/db/resources/orm.config";
 import { SqliteDriver } from "@mikro-orm/sqlite";
 import type { DebugConfig } from "@bluelibs/runner";
@@ -22,11 +22,11 @@ export async function buildTestRunner(options: {
   overrides?: any[];
   debug?: DebugConfig | "normal" | "verbose";
 }) {
-  const harness = resource({
-    id: "test.harness",
-    register: [env, ...options.register],
-    overrides: [...(options.overrides || [])],
-  });
+  const harness = r
+    .resource("test.harness")
+    .register([env, ...options.register])
+    .overrides([...(options.overrides || [])])
+    .build();
 
   // By default we don't want tests to expose logs. Do it when necessary.
   return run(harness, {

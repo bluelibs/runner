@@ -1,4 +1,4 @@
-import { resource } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { postEntity } from "./post.entity";
 import { userEntity } from "./user.entity";
 
@@ -8,13 +8,13 @@ export const entitiesResourceMap = {
   User: userEntity,
 };
 
-export const entities = resource({
-  id: "app.db.resources.entities",
-  meta: {
+export const entities = r
+  .resource("app.db.resources.entities")
+  .meta({
     title: "Database Entities Collection",
     description: "Aggregated collection of all MikroORM entity schemas for the application",
-  },
-  register: [...Object.values(entitiesResourceMap)],
-  dependencies: entitiesResourceMap,
-  init: async (_, deps) => deps,
-});
+  })
+  .register([...Object.values(entitiesResourceMap)])
+  .dependencies(entitiesResourceMap)
+  .init(async (_, deps) => deps)
+  .build();

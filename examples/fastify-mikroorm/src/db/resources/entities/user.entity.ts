@@ -3,7 +3,7 @@
  * - Namespace: db
  * - File: src/db/resources/user-entity.resource.ts
  */
-import { resource } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import {
   BaseEntity,
   Collection,
@@ -22,15 +22,13 @@ export class User extends BaseEntity {
   posts = new Collection<Post>(this);
 }
 
-export const userEntity = resource({
-  id: "app.db.entities.resources.user",
-  meta: {
+export const userEntity = r
+  .resource("app.db.entities.resources.user")
+  .meta({
     title: "User Entity Schema",
     description: "MikroORM entity schema for User with authentication fields and post relationships",
-  },
-  // tags: [],
-  // dependencies: { /* other resources */ },
-  init: async () =>
+  })
+  .init(async () =>
     new EntitySchema<User>({
       name: "User",
       class: User,
@@ -47,5 +45,6 @@ export const userEntity = resource({
           mappedBy: (post) => post.author,
         },
       },
-    }),
-});
+    })
+  )
+  .build();

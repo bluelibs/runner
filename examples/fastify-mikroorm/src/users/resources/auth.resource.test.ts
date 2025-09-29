@@ -1,6 +1,6 @@
 import { buildTestRunner } from "#/general/test/utils";
 import { auth, AuthConfig, AuthValue } from "./auth.resource";
-import { globals, resource } from '@bluelibs/runner';
+import { r, globals } from '@bluelibs/runner';
 
 describe("auth resource", () => {
   const ORIG_ENV = { ...process.env };
@@ -297,18 +297,18 @@ describe("auth resource", () => {
       // Test case 1: env resource with falsy NODE_ENV, fallback to process.env
       process.env.NODE_ENV = "production";
       
-      const mockEnv = resource({
-        id: 'test.mock.env',
-        init: async () => ({ NODE_ENV: '' }), // Empty string (falsy)
-      });
-      
-      const authWithEmptyEnv = resource({
-        id: 'test.auth.empty.env',
-        dependencies: {
+      const mockEnv = r
+        .resource('test.mock.env')
+        .init(async () => ({ NODE_ENV: '' })) // Empty string (falsy)
+        .build();
+
+      const authWithEmptyEnv = r
+        .resource<AuthConfig>('test.auth.empty.env')
+        .dependencies({
           logger: globals.resources.logger,
           env: mockEnv,
-        },
-        init: async (cfg: AuthConfig, { logger, env }): Promise<AuthValue> => {
+        })
+        .init(async (cfg, { logger, env }): Promise<AuthValue> => {
           const secret = cfg.secret || process.env.AUTH_SECRET || 'dev-secret-change-me';
           const cookieName = cfg.cookieName || 'auth';
           const defaultExpiry = cfg.tokenExpiresInSeconds ?? 60 * 60 * 24 * 7;
@@ -336,9 +336,9 @@ describe("auth resource", () => {
             buildAuthCookie,
             clearAuthCookie: () => '',
           };
-        },
-      });
-      
+        })
+        .build();
+
       const rr1 = await buildTestRunner({ register: [mockEnv, authWithEmptyEnv.with({})] });
       const a1 = rr1.getResourceValue(authWithEmptyEnv);
       
@@ -350,12 +350,12 @@ describe("auth resource", () => {
       // Test case 2: No env dependency at all
       process.env.NODE_ENV = "development";
       
-      const authWithoutEnv = resource({
-        id: 'test.auth.without.env',
-        dependencies: {
+      const authWithoutEnv = r
+        .resource<AuthConfig>('test.auth.without.env')
+        .dependencies({
           logger: globals.resources.logger,
-        },
-        init: async (cfg: AuthConfig, { logger }): Promise<AuthValue> => {
+        })
+        .init(async (cfg, { logger }): Promise<AuthValue> => {
           const secret = cfg.secret || process.env.AUTH_SECRET || 'dev-secret-change-me';
           const cookieName = cfg.cookieName || 'auth';
           const defaultExpiry = cfg.tokenExpiresInSeconds ?? 60 * 60 * 24 * 7;
@@ -384,9 +384,9 @@ describe("auth resource", () => {
             buildAuthCookie,
             clearAuthCookie: () => '',
           };
-        },
-      });
-      
+        })
+        .build();
+
       const rr2 = await buildTestRunner({ register: [authWithoutEnv.with({})] });
       const a2 = rr2.getResourceValue(authWithoutEnv);
       

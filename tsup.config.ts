@@ -44,6 +44,7 @@ export default defineConfig([
     outDir: "dist/node",
     platform: "node",
     format: ["esm", "cjs"],
+    external: ["busboy", ...COMMON.external],
     clean: false,
     esbuildOptions: makeEsbuildOptions("node"),
     outExtension,

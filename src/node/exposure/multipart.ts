@@ -1,11 +1,12 @@
 import type { IncomingHttpHeaders } from "http";
 import { PassThrough } from "node:stream";
-// Use top-level require for busboy to ensure CJS interop under Jest
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+import * as Busboy from "busboy";
+import type { FileInfo, FieldInfo } from "busboy";
+
+// Handle both ESM and CJS interop
 const busboyFactory: (cfg: {
   headers: IncomingHttpHeaders;
-}) => any = require("busboy");
-import type { FileInfo, FieldInfo } from "busboy";
+}) => any = (Busboy as any).default || Busboy;
 
 import type { Serializer } from "../../globals/resources/tunnel/serializer";
 // Import with explicit .ts extension to prevent tsup from resolving it

@@ -1,4 +1,4 @@
-import { task } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { z } from "zod";
 import { httpRoute } from "#/http/tags";
 import { db } from "#/db/resources";
@@ -7,28 +7,28 @@ import { randomUUID } from "crypto";
 import { fastifyContext } from "#/http/fastify-context";
 import { HTTPError } from "#/http/http-error";
 
-export const registerUser = task({
-  id: "app.users.tasks.register",
-  meta: {
+export const registerUser = r
+  .task("app.users.tasks.register")
+  .meta({
     title: "User Registration",
     description: "Register new user with name, email and password, returning JWT token and user details",
-  },
-  inputSchema: z.object({
+  })
+  .inputSchema(z.object({
     name: z.string().min(1),
     email: z.string().email(),
     password: z.string().min(6),
-  }),
-  resultSchema: z
+  }))
+  .resultSchema(z
     .object({
       token: z.string(),
       user: z
         .object({ id: z.string(), name: z.string(), email: z.string() })
         .strict(),
     })
-    .strict(),
-  tags: [httpRoute.with({ method: "post", path: "/auth/register", auth: "public" })],
-  dependencies: { db, auth: authResource },
-  run: async (input, { db, auth }) => {
+    .strict())
+  .tags([httpRoute.with({ method: "post", path: "/auth/register", auth: "public" })])
+  .dependencies({ db, auth: authResource })
+  .run(async (input, { db, auth }) => {
     const { reply } = fastifyContext.use();
     const name = String(input.name || "").trim();
     const email = String(input.email || "").toLowerCase().trim();
@@ -59,5 +59,5 @@ export const registerUser = task({
       token,
       user: { id: user.id, name: user.name, email: user.email },
     };
-  },
-});
+  })
+  .build();

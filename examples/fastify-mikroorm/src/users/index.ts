@@ -1,4 +1,4 @@
-import { resource } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import {
   listAllUsers,
   registerUser,
@@ -10,15 +10,15 @@ import {
 import { auth } from "./resources";
 import { authorize } from "#/http/middleware/authorize.middleware";
 
-export const users = resource({
-  id: "app.users.resources.users",
-  meta: {
+export const users = r
+  .resource("app.users.resources.users")
+  .meta({
     title: "Users Module",
     description:
       "User management module containing authentication and user-related tasks",
-  },
+  })
   // We register the task here so that it can be used in the Fastify router
-  register: [
+  .register([
     // tasks
     listAllUsers,
     registerUser,
@@ -29,5 +29,5 @@ export const users = resource({
     // resources and middlewares
     auth,
     authorize,
-  ],
-});
+  ])
+  .build();

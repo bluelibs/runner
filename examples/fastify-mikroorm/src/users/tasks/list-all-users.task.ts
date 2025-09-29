@@ -3,7 +3,7 @@
  * - Namespace: users
  * - File: src/users/tasks/list-all-users.task.ts
  */
-import { task } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { z } from "zod";
 import { httpRoute } from "#/http/tags";
 import { db } from "#/db/resources";
@@ -17,31 +17,31 @@ export interface ListAllUsersResult {
   // Define result fields
 }
 
-export const listAllUsers = task({
-  id: "app.users.tasks.list-all-users",
-  meta: {
+export const listAllUsers = r
+  .task("app.users.tasks.list-all-users")
+  .meta({
     title: "List All Users",
     description: "Retrieve all users from the database for admin purposes",
-  },
-  inputSchema: z.undefined(),
-  resultSchema: z.array(
+  })
+  .inputSchema(z.undefined())
+  .resultSchema(z.array(
     z.object({ id: z.string(), name: z.string(), email: z.string() }),
-  ),
-  tags: [
+  ))
+  .tags([
     httpRoute.with({
       method: "get",
       path: "/users",
       auth: "required", // require authenticated user at router level
     }),
-  ],
-  middleware: [authorize.with({ roles: ["admin"] })],
-  dependencies: {
+  ])
+  .middleware([authorize.with({ roles: ["admin"] })])
+  .dependencies({
     db,
-  },
-  run: async (_input, { db }) => {
+  })
+  .run(async (_input, { db }) => {
     const em = db.em();
     const repository = await em.getRepository(db.entities.User);
     const result = await repository.findAll();
     return result.map((u) => ({ id: u.id, name: u.name, email: u.email }));
-  },
-});
+  })
+  .build();

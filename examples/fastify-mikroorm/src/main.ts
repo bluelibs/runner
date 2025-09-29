@@ -1,4 +1,4 @@
-import { run, resource } from "@bluelibs/runner";
+import { run, r } from "@bluelibs/runner";
 import { dev } from "@bluelibs/runner-dev";
 import { db, fixtures } from "./db/resources";
 import { http } from "./http";
@@ -6,11 +6,11 @@ import { users } from "./users";
 import { env } from "./general";
 
 // Minimal Runner app using runner-dev's dev resource
-export const app = resource({
-  id: "app.root",
+export const app = r
+  .resource("app.root")
   // Register fixtures after DB so seeding can run conditionally
-  register: [env, db, fixtures, http, users, dev.with({ port: 1337 })],
-});
+  .register([env, db, fixtures, http, users, dev.with({ port: 1337 })])
+  .build();
 
 run(app, {
   // debug: "normal",

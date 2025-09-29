@@ -1,4 +1,4 @@
-import { task } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { z } from "zod";
 import { httpRoute } from "#/http/tags";
 import { db } from "#/db/resources";
@@ -6,28 +6,28 @@ import { auth as authResource } from "#/users/resources/auth.resource";
 import { fastifyContext } from "#/http/fastify-context";
 import { HTTPError } from "#/http/http-error";
 
-export const loginUser = task({
-  id: "app.users.tasks.login",
-  meta: {
+export const loginUser = r
+  .task("app.users.tasks.login")
+  .meta({
     title: "User Login",
     description:
       "Authenticate user with email and password, returning JWT token and user details",
-  },
-  inputSchema: z.object({
+  })
+  .inputSchema(z.object({
     email: z.string().email(),
     password: z.string().min(1),
-  }),
-  resultSchema: z
+  }))
+  .resultSchema(z
     .object({
       token: z.string(),
       user: z
         .object({ id: z.string(), name: z.string(), email: z.string() })
         .strict(),
     })
-    .strict(),
-  tags: [httpRoute.with({ method: "post", path: "/auth/login", auth: "public" })],
-  dependencies: { db, auth: authResource },
-  run: async (input, { db, auth }) => {
+    .strict())
+  .tags([httpRoute.with({ method: "post", path: "/auth/login", auth: "public" })])
+  .dependencies({ db, auth: authResource })
+  .run(async (input, { db, auth }) => {
     const email = String(input.email || "")
       .toLowerCase()
       .trim();
@@ -57,5 +57,5 @@ export const loginUser = task({
       token,
       user: { id: user.id, name: user.name, email: user.email },
     };
-  },
-});
+  })
+  .build();

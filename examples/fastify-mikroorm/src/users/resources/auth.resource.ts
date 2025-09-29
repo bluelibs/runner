@@ -3,7 +3,7 @@
  * - Namespace: users
  * - File: src/users/resources/auth.resource.ts
  */
-import { globals, resource } from '@bluelibs/runner';
+import { r, globals } from '@bluelibs/runner';
 import { env } from '../../general/resources/env.resource';
 import { randomBytes, scrypt as _scrypt, timingSafeEqual, createHmac } from 'crypto';
 import { promisify } from 'util';
@@ -47,17 +47,17 @@ function b64urlDecode(input: string): Buffer {
   return Buffer.from(input + pad, 'base64');
 }
 
-export const auth = resource({
-  id: 'users.resources.auth',
-  meta: {
+export const auth = r
+  .resource<AuthConfig>('users.resources.auth')
+  .meta({
     title: "Authentication Service",
     description: "JWT token-based authentication with password hashing using scrypt and HMAC signing",
-  },
-  dependencies: {
+  })
+  .dependencies({
     logger: globals.resources.logger,
     env,
-  },
-  init: async (cfg: AuthConfig, { logger, env }): Promise<AuthValue> => {
+  })
+  .init(async (cfg, { logger, env }): Promise<AuthValue> => {
     const secret = cfg.secret || process.env.AUTH_SECRET || 'dev-secret-change-me';
     const cookieName = cfg.cookieName || 'auth';
     const defaultExpiry = cfg.tokenExpiresInSeconds ?? 60 * 60 * 24 * 7; // 7 days
@@ -144,5 +144,5 @@ export const auth = resource({
       buildAuthCookie,
       clearAuthCookie,
     };
-  },
-});
+  })
+  .build();

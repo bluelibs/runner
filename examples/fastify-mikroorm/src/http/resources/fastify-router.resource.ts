@@ -1,4 +1,4 @@
-import { globals, resource } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 import { httpRoute } from "#/http/tags";
 import { fastify } from "./fastify.resource";
 import { fastifyContext } from "#/http/fastify-context";
@@ -14,22 +14,22 @@ import { createHttpChildLogger } from "./helpers/createHttpChildLogger";
 import { runTaskWithHttpContext } from "./helpers/runTaskWithHttpContext";
 import type { TaskWithSchemas } from "./helpers/types";
 
-export const fastifyRouter = resource({
-  id: "app.http.resources.fastify-router",
-  meta: {
+export const fastifyRouter = r
+  .resource("app.http.resources.fastify-router")
+  .meta({
     title: "Fastify HTTP Router",
     description:
       "Automatically registers HTTP routes from tasks tagged with httpRoute configuration",
-  },
-  dependencies: {
+  })
+  .dependencies({
     store: globals.resources.store,
     taskRunner: globals.resources.taskRunner,
     fastify,
     logger: globals.resources.logger,
     auth: authResource,
     db,
-  },
-  init: async (_config, { store, taskRunner, fastify, logger, auth, db }) => {
+  })
+  .init(async (_config, { store, taskRunner, fastify, logger, auth, db }) => {
     store.getTasksWithTag(httpRoute).forEach((task) => {
       const config = httpRoute.extract(task)!;
       const schema = buildRouteSchema(task as TaskWithSchemas, config);
@@ -92,5 +92,5 @@ export const fastifyRouter = resource({
       });
     });
     return {};
-  },
-});
+  })
+  .build();

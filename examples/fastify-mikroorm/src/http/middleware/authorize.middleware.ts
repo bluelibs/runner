@@ -1,4 +1,4 @@
-import { taskMiddleware } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { fastifyContext } from "#/http/fastify-context";
 import { HTTPError } from "#/http/http-error";
 
@@ -16,9 +16,10 @@ export type AuthorizeConfig = {
  * - Prefer `fastifyContext.use().user?.role`
  * - Fallback to request header `x-user-role`
  */
-export const authorize = taskMiddleware<AuthorizeConfig>({
-  id: "http.middleware.task.authorize",
-  run: async ({ task, next }, _deps, config) => {
+export const authorize = r.middleware
+  .task("http.middleware.task.authorize")
+  .configSchema<AuthorizeConfig>({ parse: (x: any) => x })
+  .run(async ({ task, next }, _deps, config) => {
     const { user, request } = fastifyContext.use();
 
     const required = config?.required ?? true;
@@ -35,5 +36,5 @@ export const authorize = taskMiddleware<AuthorizeConfig>({
     }
 
     return next(task.input);
-  },
-});
+  })
+  .build();

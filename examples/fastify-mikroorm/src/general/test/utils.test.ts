@@ -1,16 +1,16 @@
 import { buildTestRunner } from "./utils";
-import { resource } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 
 describe("test utils", () => {
   it("builds runner without debug by default", async () => {
-    const r = resource({ id: "x", init: async () => ({}) });
-    const rr = await buildTestRunner({ register: [r] });
+    const res = r.resource("x").init(async () => ({})).build();
+    const rr = await buildTestRunner({ register: [res] });
     await rr.dispose();
   });
 
   it("supports debug option pass-through", async () => {
-    const r = resource({ id: "y", init: async () => ({}) });
-    const rr = await buildTestRunner({ register: [r], debug: "normal" });
+    const res = r.resource("y").init(async () => ({})).build();
+    const rr = await buildTestRunner({ register: [res], debug: "normal" });
     await rr.dispose();
   });
 });

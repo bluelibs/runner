@@ -1,18 +1,18 @@
-import { globals, resource } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 import { db } from "./db.resource";
 import { User } from "./entities/user.entity";
 import { Post } from "./entities/post.entity";
 import { randomUUID } from "crypto";
 import { auth as authResource } from "#/users/resources/auth.resource";
 
-export const fixtures = resource({
-  id: "app.db.resources.fixtures",
-  meta: {
+export const fixtures = r
+  .resource("app.db.resources.fixtures")
+  .meta({
     title: "Database Fixtures",
     description: "Seed initial user and post data for development and testing environments",
-  },
-  dependencies: { db, logger: globals.resources.logger, auth: authResource },
-  init: async (_, { db, logger, auth }) => {
+  })
+  .dependencies({ db, logger: globals.resources.logger, auth: authResource })
+  .init(async (_, { db, logger, auth }) => {
     const em = db.em();
 
     // Only seed when there are no users
@@ -69,5 +69,5 @@ export const fixtures = resource({
     );
 
     return true;
-  },
-});
+  })
+  .build();

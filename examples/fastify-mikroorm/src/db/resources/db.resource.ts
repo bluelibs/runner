@@ -3,7 +3,7 @@
  * - Namespace: db
  * - File: src/db/resources/db.resource.ts
  */
-import { globals, resource } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 import { Migrator } from "@mikro-orm/migrations";
 import { MikroORM } from "@mikro-orm/core";
 import { entitiesResourceMap, entities } from "./entities/index";
@@ -14,16 +14,15 @@ export interface DbConfig {
   // Add your config shape here
 }
 
-export const db = resource({
-  id: "app.db.resources.db",
-  meta: {
+export const db = r
+  .resource<DbConfig>("app.db.resources.db")
+  .meta({
     title: "Database Connection",
     description: "MikroORM database connection with entity management and migration support",
-  },
-  register: [ormConfig, entities],
-  // tags: [],
-  dependencies: { entities, ormConfig, logger: globals.resources.logger },
-  init: async (_config: DbConfig, { entities, ormConfig, logger }) => {
+  })
+  .register([ormConfig, entities])
+  .dependencies({ entities, ormConfig, logger: globals.resources.logger })
+  .init(async (_config, { entities, ormConfig, logger }) => {
     const orm = await MikroORM.init(ormConfig);
     logger.info("Database connected");
 
@@ -32,9 +31,9 @@ export const db = resource({
       em: () => orm.em.fork(),
       entities,
     };
-  },
-  dispose: async (value) => {
+  })
+  .dispose(async (value) => {
     // Ensure ORM connections are closed so tests/process exit cleanly
     await value.orm.close(true);
-  },
-});
+  })
+  .build();

@@ -13,6 +13,7 @@ describe("main entry", () => {
       jest.doMock("@bluelibs/runner", () => ({
         run: () => Promise.resolve({ logger: { info: jest.fn() } }),
         resource: (x: any) => x,
+        r: { resource: (id: string) => ({ register: () => ({ build: () => ({}) }) }) },
         globals: { resources: { logger: {} } },
       }));
       jest.doMock("@bluelibs/runner-dev", () => ({ dev: { with: (_: any) => ({}) } }));
@@ -35,6 +36,7 @@ describe("main entry", () => {
         jest.doMock("@bluelibs/runner", () => ({
           run: () => Promise.reject(error),
           resource: (x: any) => x,
+          r: { resource: (id: string) => ({ register: () => ({ build: () => ({}) }) }) },
           globals: { resources: { logger: {} } },
         }));
         jest.doMock("@bluelibs/runner-dev", () => ({ dev: { with: (_: any) => ({}) } }));

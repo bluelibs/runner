@@ -12,7 +12,7 @@ export function createErrorHandler() {
     }
     // Runner validation errors
     if (
-      err instanceof Errors.ValidationError ||
+      Errors.validationError.is(err) ||
       err?.name === "ValidationError"
     ) {
       return reply.status(400).send({ error: err.message });
