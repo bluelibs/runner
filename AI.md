@@ -50,7 +50,7 @@ const createUser = r
   .dependencies({ logger: globals.resources.logger })
   .inputSchema<{ name: string }>({ parse: (value) => value })
   .resultSchema<{ id: string; name: string }>({ parse: (value) => value })
-  .run(async ({ input }, { logger }) => {
+  .run(async (input, { logger }) => {
     await logger.info(`Creating user ${input.name}`);
     return { id: "user-1", name: input.name };
   })
@@ -104,7 +104,7 @@ const sendEmail = r
     loggingMiddleware.with({ label: "email" }),
     tracingMiddleware,
   ])
-  .run(async ({ input }, { emailer }) => {
+  .run(async (input, { emailer }) => {
     await emailer.send(input);
     return { delivered: true };
   })
@@ -131,9 +131,9 @@ const userRegistered = r
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userRegistered, userService })
-  .run(async ({ input }, deps) => {
+  .run(async (input, deps) => {
     const user = await deps.userService.create(input);
-    await deps.userRegistered.emit({ userId: user.id, email: user.email });
+    await deps.userRegistered({ userId: user.id, email: user.email });
     return user;
   })
   .build();

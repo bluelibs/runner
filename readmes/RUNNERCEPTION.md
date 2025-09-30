@@ -24,7 +24,7 @@ import { r, run } from "@bluelibs/runner";
 // --- Inner graph (private sub‑system) ---
 const greet = r
   .task("tenant.tasks.greet")
-  .run(async ({ input }: { input: { name: string } }) => `Hello, ${input.name}!`)
+  .run(async (input: { name: string }) => `Hello, ${input.name}!`)
   .build();
 
 const tenantApp = r
@@ -63,7 +63,7 @@ export const tenantContainer = r
 export const welcome = r
   .task("app.tasks.welcome")
   .dependencies({ tenant: tenantContainer })
-  .run(async ({ input }: { input: { name: string } }, { tenant }) => {
+  .run(async (input: { name: string }, { tenant }) => {
     return tenant.greet(input.name);
   })
   .build();

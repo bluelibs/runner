@@ -34,20 +34,17 @@ Think of Runner as your **object lifecycle manager** and **dependency coordinato
 @Injectable()
 class UserService {
   constructor(
-    @Inject('DATABASE') private db: Database,
-    @Inject('LOGGER') private logger: Logger
+    @Inject("DATABASE") private db: Database,
+    @Inject("LOGGER") private logger: Logger,
   ) {}
 }
 
 // ✅ Runner approach
 class UserService {
-  constructor(
-    private readonly db: Database,
-    private readonly logger: Logger
-  ) {}
-  
+  constructor(private readonly db: Database, private readonly logger: Logger) {}
+
   async createUser(userData: UserData): Promise<User> {
-    this.logger.info('Creating user', { email: userData.email });
+    this.logger.info("Creating user", { email: userData.email });
     return this.db.users.create(userData);
   }
 }
@@ -66,35 +63,37 @@ const userService = r
 Use classes for cohesive, stateful domains:
 
 ### Domain Services
+
 ```ts
 class PricingEngine {
   constructor(
     private readonly rules: PricingRule[],
-    private readonly currency: CurrencyService
+    private readonly currency: CurrencyService,
   ) {}
-  
+
   calculatePrice(product: Product, customer: Customer): Price {
     let basePrice = product.basePrice;
-    
+
     for (const rule of this.rules) {
       basePrice = rule.apply(basePrice, product, customer);
     }
-    
+
     return this.currency.convert(basePrice, customer.preferredCurrency);
   }
 }
 ```
 
 ### Adapters
+
 ```ts
 class DatabaseAdapter {
   constructor(private readonly client: MongoClient) {}
-  
+
   async findUser(id: string): Promise<User | null> {
-    const doc = await this.client.db().collection('users').findOne({ _id: id });
+    const doc = await this.client.db().collection("users").findOne({ _id: id });
     return doc ? this.mapToUser(doc) : null;
   }
-  
+
   private mapToUser(doc: any): User {
     return new User(doc._id, doc.name, doc.email);
   }
@@ -102,33 +101,37 @@ class DatabaseAdapter {
 ```
 
 ### Aggregates
+
 ```ts
 class Order {
   private constructor(
     public readonly id: string,
     private items: OrderItem[],
-    private status: OrderStatus
+    private status: OrderStatus,
   ) {}
-  
+
   static create(customerId: string, items: OrderItem[]): Order {
-    if (items.length === 0) throw new Error('Order must have items');
-    return new Order(generateId(), items, 'pending');
+    if (items.length === 0) throw new Error("Order must have items");
+    return new Order(generateId(), items, "pending");
   }
-  
+
   addItem(item: OrderItem): void {
-    if (this.status !== 'pending') {
-      throw new Error('Cannot modify confirmed order');
+    if (this.status !== "pending") {
+      throw new Error("Cannot modify confirmed order");
     }
     this.items.push(item);
   }
-  
+
   confirm(): void {
-    if (this.items.length === 0) throw new Error('Cannot confirm empty order');
-    this.status = 'confirmed';
+    if (this.items.length === 0) throw new Error("Cannot confirm empty order");
+    this.status = "confirmed";
   }
-  
+
   getTotal(): number {
-    return this.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    return this.items.reduce(
+      (sum, item) => sum + item.price * item.quantity,
+      0,
+    );
   }
 }
 ```
@@ -144,7 +147,7 @@ The simplest pattern - wrap a class instance in a resource:
 ```ts
 class EmailService {
   constructor(private readonly apiKey: string) {}
-  
+
   async send(to: string, subject: string, body: string): Promise<void> {
     // Email sending logic
   }
@@ -155,7 +158,7 @@ const emailService = resource({
   init: async (config: { apiKey: string }) => new EmailService(config.apiKey),
   dispose: async (service) => {
     // Cleanup if needed
-  }
+  },
 });
 ```
 
@@ -175,7 +178,7 @@ class UserService {
     private readonly repo: UserRepository,
     private readonly logger: Logger
   ) {}
-  
+
   async registerUser(userData: UserData): Promise<User> {
     this.logger.info('Registering user', { email: userData.email });
     const user = await this.repo.create(userData);
@@ -207,9 +210,9 @@ class ReportBuilder {
   constructor(
     private readonly locale: string,
     private readonly currency: string,
-    private readonly templates: TemplateEngine
+    private readonly templates: TemplateEngine,
   ) {}
-  
+
   build(data: ReportData): Report {
     const template = this.templates.get(data.type, this.locale);
     return new Report(template.render(data), this.currency);
@@ -219,25 +222,35 @@ class ReportBuilder {
 const reportFactory = r
   .resource("app.factories.report")
   .dependencies({ templates: templateEngine })
-  .init(async (config: { defaultLocale: string; defaultCurrency: string }, { templates }) => {
-    return (options?: { locale?: string; currency?: string }) => {
-      return new ReportBuilder(
-        options?.locale ?? config.defaultLocale,
-        options?.currency ?? config.defaultCurrency,
-        templates
-      );
-    };
-  })
+  .init(
+    async (
+      config: { defaultLocale: string; defaultCurrency: string },
+      { templates },
+    ) => {
+      return (options?: { locale?: string; currency?: string }) => {
+        return new ReportBuilder(
+          options?.locale ?? config.defaultLocale,
+          options?.currency ?? config.defaultCurrency,
+          templates,
+        );
+      };
+    },
+  )
   .build();
 
 // Usage in a task
 const generateReport = r
   .task("app.tasks.generateReport")
   .dependencies({ reportFactory })
-  .run(async ({ input }: { input: { type: string; data: any; locale?: string } }, { reportFactory }) => {
-    const builder = reportFactory({ locale: input.locale });
-    return builder.build({ type: input.type, data: input.data });
-  })
+  .run(
+    async (
+      input: { input: { type: string; data: any; locale?: string } },
+      { reportFactory },
+    ) => {
+      const builder = reportFactory({ locale: input.locale });
+      return builder.build({ type: input.type, data: input.data });
+    },
+  )
   .build();
 ```
 
@@ -250,7 +263,7 @@ While composition is preferred, inheritance can work well with Runner:
 ```ts
 abstract class BaseService {
   constructor(protected readonly logger: Logger) {}
-  
+
   protected async withLogging<T>(operation: string, fn: () => Promise<T>): Promise<T> {
     this.logger.info(`Starting ${operation}`);
     try {
@@ -271,7 +284,7 @@ class UserService extends BaseService {
   ) {
     super(logger);
   }
-  
+
   async createUser(userData: UserData): Promise<User> {
     return this.withLogging('createUser', async () => {
       return this.repo.create(userData);
@@ -286,7 +299,7 @@ class ProductService extends BaseService {
   ) {
     super(logger);
   }
-  
+
   async createProduct(productData: ProductData): Promise<Product> {
     return this.withLogging('createProduct', async () => {
       return this.repo.create(productData);
@@ -323,7 +336,7 @@ const notificationServiceContract = r.tag<void, void, {
 
 class EmailNotificationService {
   constructor(private readonly apiKey: string) {}
-  
+
   async send(message: string, recipient: string): Promise<void> {
     // Email implementation
   }
@@ -331,7 +344,7 @@ class EmailNotificationService {
 
 class SmsNotificationService {
   constructor(private readonly apiKey: string) {}
-  
+
   async send(message: string, recipient: string): Promise<void> {
     // SMS implementation
   }
@@ -360,7 +373,7 @@ const notificationProcessor = resource({
     return {
       async sendToAll(message: string, recipients: Array<{ type: string; address: string }>) {
         const services = store.getResourcesWithTag(notificationServiceContract);
-        
+
         for (const recipient of recipients) {
           const service = services.find(s => s.id.includes(recipient.type));
           if (service) {
@@ -380,8 +393,11 @@ Use middleware to add cross-cutting concerns to your classes:
 ```ts
 class PaymentService {
   constructor(private readonly gateway: PaymentGateway) {}
-  
-  async processPayment(amount: number, cardToken: string): Promise<PaymentResult> {
+
+  async processPayment(
+    amount: number,
+    cardToken: string,
+  ): Promise<PaymentResult> {
     return this.gateway.charge(amount, cardToken);
   }
 }
@@ -392,27 +408,29 @@ const enhancedPaymentService = resource({
   dependencies: { gateway: paymentGateway, logger: loggerService },
   middleware: [
     globals.middleware.resource.retry.with({ retries: 3 }),
-    globals.middleware.resource.timeout.with({ ttl: 30000 })
+    globals.middleware.resource.timeout.with({ ttl: 30000 }),
   ],
   init: async (_, { gateway, logger }) => {
     const service = new PaymentService(gateway);
-    
+
     // Wrap methods to add logging
     const originalProcess = service.processPayment.bind(service);
     service.processPayment = async (amount: number, cardToken: string) => {
-      logger.info('Processing payment', { amount });
+      logger.info("Processing payment", { amount });
       try {
         const result = await originalProcess(amount, cardToken);
-        logger.info('Payment processed', { transactionId: result.transactionId });
+        logger.info("Payment processed", {
+          transactionId: result.transactionId,
+        });
         return result;
       } catch (error) {
-        logger.error('Payment failed', { error });
+        logger.error("Payment failed", { error });
         throw error;
       }
     };
-    
+
     return service;
-  }
+  },
 });
 ```
 
@@ -426,30 +444,30 @@ Why `init()` is better than constructors:
 class DatabaseService {
   private client?: MongoClient;
   private isHealthy = false;
-  
+
   constructor(private readonly connectionString: string) {}
-  
+
   // ❌ Constructor can't be async
   // constructor(connectionString: string) {
   //   await MongoClient.connect(connectionString); // Won't work!
   // }
-  
+
   async connect(): Promise<void> {
     this.client = new MongoClient(this.connectionString);
     await this.client.connect();
     await this.runHealthCheck();
     this.isHealthy = true;
   }
-  
+
   private async runHealthCheck(): Promise<void> {
     await this.client!.db().admin().ping();
   }
-  
+
   async query(collection: string, filter: any): Promise<any[]> {
     if (!this.isHealthy) throw new Error('Database not connected');
     return this.client!.db().collection(collection).find(filter).toArray();
   }
-  
+
   async close(): Promise<void> {
     if (this.client) {
       await this.client.close();
@@ -493,11 +511,11 @@ class ApiClient {
     private readonly apiKey: string,
     private readonly timeout: number
   ) {}
-  
+
   async get<T>(path: string): Promise<T> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
-    
+
     try {
       const response = await fetch(`${this.baseUrl}${path}`, {
         headers: { 'Authorization': `Bearer ${this.apiKey}` },
@@ -541,54 +559,54 @@ class AnalyticsService {
   private client?: AnalyticsClient;
   private eventQueue: AnalyticsEvent[] = [];
   private flushInterval?: NodeJS.Timeout;
-  
+
   constructor(
     private readonly config: AnalyticsConfig,
-    private readonly logger: Logger
+    private readonly logger: Logger,
   ) {}
-  
+
   async initialize(): Promise<void> {
     // Connect to analytics service
     this.client = new AnalyticsClient(this.config);
     await this.client.connect();
-    
+
     // Load user segments from cache
     const segments = await this.loadUserSegments();
     await this.client.setSegments(segments);
-    
+
     // Start background flush
     this.flushInterval = setInterval(() => this.flush(), 5000);
-    
-    this.logger.info('Analytics service initialized');
+
+    this.logger.info("Analytics service initialized");
   }
-  
+
   private async loadUserSegments(): Promise<UserSegment[]> {
     // Complex initialization logic
     return [];
   }
-  
+
   async track(event: AnalyticsEvent): Promise<void> {
     this.eventQueue.push(event);
     if (this.eventQueue.length >= 100) {
       await this.flush();
     }
   }
-  
+
   private async flush(): Promise<void> {
     if (this.eventQueue.length === 0) return;
-    
+
     const events = this.eventQueue.splice(0);
     await this.client!.send(events);
   }
-  
+
   async shutdown(): Promise<void> {
     if (this.flushInterval) {
       clearInterval(this.flushInterval);
     }
-    
+
     // Flush remaining events
     await this.flush();
-    
+
     if (this.client) {
       await this.client.disconnect();
     }
@@ -605,7 +623,7 @@ const analyticsService = resource({
   },
   dispose: async (service) => {
     await service.shutdown(); // Proper cleanup
-  }
+  },
 });
 ```
 
@@ -621,22 +639,22 @@ class OrderService {
     private readonly userRepo: UserRepository,
     private readonly productRepo: ProductRepository,
     private readonly paymentService: PaymentService,
-    private readonly logger: Logger
+    private readonly logger: Logger,
   ) {}
-  
+
   async createOrder(userId: string, items: OrderItem[]): Promise<Order> {
     const user = await this.userRepo.findById(userId);
-    if (!user) throw new Error('User not found');
-    
+    if (!user) throw new Error("User not found");
+
     // Validate products exist
     for (const item of items) {
       const product = await this.productRepo.findById(item.productId);
       if (!product) throw new Error(`Product ${item.productId} not found`);
     }
-    
+
     const order = Order.create(userId, items);
-    this.logger.info('Order created', { orderId: order.id, userId });
-    
+    this.logger.info("Order created", { orderId: order.id, userId });
+
     return order;
   }
 }
@@ -647,14 +665,15 @@ const orderService = resource({
     userRepo: userRepository,
     productRepo: productRepository,
     paymentService: paymentService,
-    logger: loggerService
+    logger: loggerService,
   },
-  init: async (_, deps) => new OrderService(
-    deps.userRepo,
-    deps.productRepo, 
-    deps.paymentService,
-    deps.logger
-  )
+  init: async (_, deps) =>
+    new OrderService(
+      deps.userRepo,
+      deps.productRepo,
+      deps.paymentService,
+      deps.logger,
+    ),
 });
 ```
 
@@ -665,34 +684,34 @@ Sometimes you need to inject after construction:
 ```ts
 class CacheableService {
   private cache?: CacheService;
-  
+
   constructor(private readonly dataSource: DataSource) {}
-  
+
   setCache(cache: CacheService): void {
     this.cache = cache;
   }
-  
+
   async getData(key: string): Promise<any> {
     if (this.cache) {
       const cached = await this.cache.get(key);
       if (cached) return cached;
     }
-    
+
     const data = await this.dataSource.fetch(key);
-    
+
     if (this.cache) {
       await this.cache.set(key, data, { ttl: 300000 });
     }
-    
+
     return data;
   }
 }
 
 const cacheableService = resource({
   id: "app.services.cacheable",
-  dependencies: { 
+  dependencies: {
     dataSource: dataSourceService,
-    cache: cacheService.optional() // Optional dependency
+    cache: cacheService.optional(), // Optional dependency
   },
   init: async (_, { dataSource, cache }) => {
     const service = new CacheableService(dataSource);
@@ -700,7 +719,7 @@ const cacheableService = resource({
       service.setCache(cache);
     }
     return service;
-  }
+  },
 });
 ```
 
@@ -721,27 +740,30 @@ interface IUserRepository {
 class UserService {
   constructor(
     private readonly userRepo: IUserRepository,
-    private readonly notificationService: INotificationService
+    private readonly notificationService: INotificationService,
   ) {}
-  
+
   async registerUser(userData: UserData): Promise<User> {
     const user = await this.userRepo.create(userData);
-    await this.notificationService.send(
-      'Welcome to our platform!',
-      user.email
-    );
+    await this.notificationService.send("Welcome to our platform!", user.email);
     return user;
   }
 }
 
 // Implementations can vary
 class DatabaseUserRepository implements IUserRepository {
-  async findById(id: string): Promise<User | null> { /* ... */ }
-  async create(userData: UserData): Promise<User> { /* ... */ }
+  async findById(id: string): Promise<User | null> {
+    /* ... */
+  }
+  async create(userData: UserData): Promise<User> {
+    /* ... */
+  }
 }
 
 class EmailNotificationService implements INotificationService {
-  async send(message: string, recipient: string): Promise<void> { /* ... */ }
+  async send(message: string, recipient: string): Promise<void> {
+    /* ... */
+  }
 }
 
 // Wire with interfaces
@@ -749,10 +771,10 @@ const userService = resource({
   id: "app.services.user",
   dependencies: {
     userRepo: userRepository, // implements IUserRepository
-    notificationService: emailNotificationService // implements INotificationService
+    notificationService: emailNotificationService, // implements INotificationService
   },
-  init: async (_, { userRepo, notificationService }) => 
-    new UserService(userRepo, notificationService)
+  init: async (_, { userRepo, notificationService }) =>
+    new UserService(userRepo, notificationService),
 });
 ```
 
@@ -763,38 +785,38 @@ const userService = resource({
 Test classes directly without Runner:
 
 ```ts
-describe('UserService', () => {
+describe("UserService", () => {
   let userService: UserService;
   let mockRepo: jest.Mocked<IUserRepository>;
   let mockNotificationService: jest.Mocked<INotificationService>;
-  
+
   beforeEach(() => {
     mockRepo = {
       findById: jest.fn(),
-      create: jest.fn()
+      create: jest.fn(),
     };
-    
+
     mockNotificationService = {
-      send: jest.fn()
+      send: jest.fn(),
     };
-    
+
     userService = new UserService(mockRepo, mockNotificationService);
   });
-  
-  it('should create user and send notification', async () => {
-    const userData = { name: 'John', email: 'john@example.com' };
-    const createdUser = { id: '123', ...userData };
-    
+
+  it("should create user and send notification", async () => {
+    const userData = { name: "John", email: "john@example.com" };
+    const createdUser = { id: "123", ...userData };
+
     mockRepo.create.mockResolvedValue(createdUser);
     mockNotificationService.send.mockResolvedValue();
-    
+
     const result = await userService.registerUser(userData);
-    
+
     expect(result).toEqual(createdUser);
     expect(mockRepo.create).toHaveBeenCalledWith(userData);
     expect(mockNotificationService.send).toHaveBeenCalledWith(
-      'Welcome to our platform!',
-      'john@example.com'
+      "Welcome to our platform!",
+      "john@example.com",
     );
   });
 });
@@ -805,49 +827,49 @@ describe('UserService', () => {
 Test the full wiring:
 
 ```ts
-describe('UserService Integration', () => {
+describe("UserService Integration", () => {
   let testApp: any;
   let dispose: () => Promise<void>;
-  
+
   beforeEach(async () => {
     // Create test doubles
     const mockUserRepo = {
       findById: jest.fn(),
-      create: jest.fn()
+      create: jest.fn(),
     };
-    
+
     const mockNotificationService = {
-      send: jest.fn()
+      send: jest.fn(),
     };
-    
+
     // Create test harness
     const testHarness = resource({
       id: "test.harness",
       register: [userService],
       overrides: [
-        override(userRepository, { 
-          init: async () => mockUserRepo 
+        override(userRepository, {
+          init: async () => mockUserRepo,
         }),
-        override(emailNotificationService, { 
-          init: async () => mockNotificationService 
-        })
-      ]
+        override(emailNotificationService, {
+          init: async () => mockNotificationService,
+        }),
+      ],
     });
-    
+
     const result = await run(testHarness);
     testApp = result.value;
     dispose = result.dispose;
   });
-  
+
   afterEach(async () => {
     await dispose();
   });
-  
-  it('should register user through full system', async () => {
-    const userData = { name: 'Jane', email: 'jane@example.com' };
-    
+
+  it("should register user through full system", async () => {
+    const userData = { name: "Jane", email: "jane@example.com" };
+
     const result = await testApp.runTask(registerUserTask, userData);
-    
+
     expect(result.success).toBe(true);
     // Verify the full integration worked
   });
@@ -859,45 +881,48 @@ describe('UserService Integration', () => {
 Mix real and mock dependencies:
 
 ```ts
-describe('OrderService with real validation', () => {
+describe("OrderService with real validation", () => {
   let testApp: any;
   let dispose: () => Promise<void>;
-  
+
   beforeEach(async () => {
     const mockPaymentService = {
-      processPayment: jest.fn().mockResolvedValue({ success: true })
+      processPayment: jest.fn().mockResolvedValue({ success: true }),
     };
-    
+
     const testHarness = resource({
       id: "test.harness",
       register: [
         orderService,
         userRepository, // Real user repository
         productRepository, // Real product repository
-        logger // Real logger
+        logger, // Real logger
       ],
       overrides: [
-        override(paymentService, { 
-          init: async () => mockPaymentService 
-        })
-      ]
+        override(paymentService, {
+          init: async () => mockPaymentService,
+        }),
+      ],
     });
-    
+
     const result = await run(testHarness);
     testApp = result.value;
     dispose = result.dispose;
   });
-  
+
   afterEach(async () => {
     await dispose();
   });
-  
-  it('should create order with real validation but mock payment', async () => {
+
+  it("should create order with real validation but mock payment", async () => {
     // Test uses real user/product validation but mocked payment
-    const orderData = { userId: 'user123', items: [{ productId: 'prod456', quantity: 2 }] };
-    
+    const orderData = {
+      userId: "user123",
+      items: [{ productId: "prod456", quantity: 2 }],
+    };
+
     const result = await testApp.runTask(createOrderTask, orderData);
-    
+
     expect(result.orderId).toBeDefined();
   });
 });
@@ -914,22 +939,23 @@ class Product {
     public readonly id: string,
     public readonly name: string,
     public readonly price: number,
-    public readonly stock: number
+    public readonly stock: number,
   ) {}
-  
+
   isAvailable(quantity: number): boolean {
     return this.stock >= quantity;
   }
 }
 
 class Cart {
-  private items: Map<string, { product: Product; quantity: number }> = new Map();
-  
+  private items: Map<string, { product: Product; quantity: number }> =
+    new Map();
+
   addItem(product: Product, quantity: number): void {
     if (!product.isAvailable(quantity)) {
-      throw new Error('Insufficient stock');
+      throw new Error("Insufficient stock");
     }
-    
+
     const existing = this.items.get(product.id);
     if (existing) {
       existing.quantity += quantity;
@@ -937,7 +963,7 @@ class Cart {
       this.items.set(product.id, { product, quantity });
     }
   }
-  
+
   getTotal(): number {
     let total = 0;
     for (const { product, quantity } of this.items.values()) {
@@ -945,7 +971,7 @@ class Cart {
     }
     return total;
   }
-  
+
   getItems(): Array<{ product: Product; quantity: number }> {
     return Array.from(this.items.values());
   }
@@ -954,11 +980,11 @@ class Cart {
 // Services
 class ProductService {
   constructor(private readonly repo: IProductRepository) {}
-  
+
   async getProduct(id: string): Promise<Product | null> {
     return this.repo.findById(id);
   }
-  
+
   async searchProducts(query: string): Promise<Product[]> {
     return this.repo.search(query);
   }
@@ -967,21 +993,25 @@ class ProductService {
 class CartService {
   constructor(
     private readonly productService: ProductService,
-    private readonly logger: Logger
+    private readonly logger: Logger,
   ) {}
-  
+
   createCart(): Cart {
     return new Cart();
   }
-  
-  async addToCart(cart: Cart, productId: string, quantity: number): Promise<void> {
+
+  async addToCart(
+    cart: Cart,
+    productId: string,
+    quantity: number,
+  ): Promise<void> {
     const product = await this.productService.getProduct(productId);
     if (!product) {
-      throw new Error('Product not found');
+      throw new Error("Product not found");
     }
-    
+
     cart.addItem(product, quantity);
-    this.logger.info('Added to cart', { productId, quantity });
+    this.logger.info("Added to cart", { productId, quantity });
   }
 }
 
@@ -989,23 +1019,26 @@ class OrderService {
   constructor(
     private readonly paymentService: PaymentService,
     private readonly inventoryService: InventoryService,
-    private readonly logger: Logger
+    private readonly logger: Logger,
   ) {}
-  
+
   async checkout(cart: Cart, paymentInfo: PaymentInfo): Promise<Order> {
     const total = cart.getTotal();
-    
+
     // Process payment
-    const paymentResult = await this.paymentService.processPayment(total, paymentInfo);
-    
+    const paymentResult = await this.paymentService.processPayment(
+      total,
+      paymentInfo,
+    );
+
     // Reserve inventory
     for (const { product, quantity } of cart.getItems()) {
       await this.inventoryService.reserve(product.id, quantity);
     }
-    
+
     const order = Order.create(cart.getItems(), paymentResult);
-    this.logger.info('Order created', { orderId: order.id, total });
-    
+    this.logger.info("Order created", { orderId: order.id, total });
+
     return order;
   }
 }
@@ -1014,13 +1047,14 @@ class OrderService {
 const productService = resource({
   id: "ecommerce.services.product",
   dependencies: { repo: productRepository },
-  init: async (_, { repo }) => new ProductService(repo)
+  init: async (_, { repo }) => new ProductService(repo),
 });
 
 const cartService = resource({
   id: "ecommerce.services.cart",
   dependencies: { productService: productService, logger: loggerService },
-  init: async (_, { productService, logger }) => new CartService(productService, logger)
+  init: async (_, { productService, logger }) =>
+    new CartService(productService, logger),
 });
 
 const orderService = resource({
@@ -1028,13 +1062,10 @@ const orderService = resource({
   dependencies: {
     paymentService: paymentService,
     inventoryService: inventoryService,
-    logger: loggerService
+    logger: loggerService,
   },
-  init: async (_, deps) => new OrderService(
-    deps.paymentService,
-    deps.inventoryService,
-    deps.logger
-  )
+  init: async (_, deps) =>
+    new OrderService(deps.paymentService, deps.inventoryService, deps.logger),
 });
 ```
 
@@ -1050,27 +1081,27 @@ interface DomainEvent {
 
 class EventStore {
   private events: DomainEvent[] = [];
-  
+
   append(event: DomainEvent): void {
     this.events.push(event);
   }
-  
+
   getEvents(aggregateId: string): DomainEvent[] {
-    return this.events.filter(e => e.aggregateId === aggregateId);
+    return this.events.filter((e) => e.aggregateId === aggregateId);
   }
 }
 
 abstract class AggregateRoot {
   private uncommittedEvents: DomainEvent[] = [];
-  
+
   protected addEvent(event: DomainEvent): void {
     this.uncommittedEvents.push(event);
   }
-  
+
   getUncommittedEvents(): DomainEvent[] {
     return [...this.uncommittedEvents];
   }
-  
+
   markEventsAsCommitted(): void {
     this.uncommittedEvents = [];
   }
@@ -1080,27 +1111,27 @@ class User extends AggregateRoot {
   constructor(
     public readonly id: string,
     public name: string,
-    public email: string
+    public email: string,
   ) {
     super();
   }
-  
+
   updateEmail(newEmail: string): void {
     const oldEmail = this.email;
     this.email = newEmail;
-    
+
     this.addEvent({
-      type: 'UserEmailUpdated',
+      type: "UserEmailUpdated",
       aggregateId: this.id,
       timestamp: new Date(),
-      data: { oldEmail, newEmail }
+      data: { oldEmail, newEmail },
     });
   }
 }
 
 class UserRepository {
   constructor(private readonly eventStore: EventStore) {}
-  
+
   save(user: User): void {
     const events = user.getUncommittedEvents();
     for (const event of events) {
@@ -1108,21 +1139,21 @@ class UserRepository {
     }
     user.markEventsAsCommitted();
   }
-  
+
   load(id: string): User | null {
     const events = this.eventStore.getEvents(id);
     if (events.length === 0) return null;
-    
+
     // Rebuild from events (simplified)
     const firstEvent = events[0];
     const user = new User(id, firstEvent.data.name, firstEvent.data.email);
-    
+
     for (const event of events.slice(1)) {
-      if (event.type === 'UserEmailUpdated') {
+      if (event.type === "UserEmailUpdated") {
         user.email = event.data.newEmail;
       }
     }
-    
+
     return user;
   }
 }
@@ -1130,13 +1161,13 @@ class UserRepository {
 // Wire with Runner
 const eventStore = resource({
   id: "app.eventStore",
-  init: async () => new EventStore()
+  init: async () => new EventStore(),
 });
 
 const userRepository = resource({
   id: "app.repositories.user",
   dependencies: { eventStore },
-  init: async (_, { eventStore }) => new UserRepository(eventStore)
+  init: async (_, { eventStore }) => new UserRepository(eventStore),
 });
 ```
 
@@ -1149,20 +1180,20 @@ const userRepository = resource({
 class PricingEngine {
   constructor(
     private readonly taxService: ITaxService,
-    private readonly discountRules: DiscountRule[]
+    private readonly discountRules: DiscountRule[],
   ) {}
-  
+
   calculatePrice(item: Item, customer: Customer): Price {
     let price = item.basePrice;
-    
+
     // Apply discounts
     for (const rule of this.discountRules) {
       price = rule.apply(price, item, customer);
     }
-    
+
     // Add tax
     const tax = this.taxService.calculateTax(price, customer.location);
-    
+
     return new Price(price, tax);
   }
 }
@@ -1170,9 +1201,9 @@ class PricingEngine {
 // ❌ Bad - tightly coupled to framework
 @Component
 class PricingEngine {
-  @Inject('TAX_SERVICE') taxService: ITaxService;
-  @Inject('DISCOUNT_RULES') discountRules: DiscountRule[];
-  
+  @Inject("TAX_SERVICE") taxService: ITaxService;
+  @Inject("DISCOUNT_RULES") discountRules: DiscountRule[];
+
   // Same logic but now untestable without framework
 }
 ```
@@ -1192,7 +1223,7 @@ const cacheService = resource({
   dispose: async (service) => {
     await service.flush();
     await service.disconnect();
-  }
+  },
 });
 
 // ❌ Bad - manual lifecycle management scattered throughout app
@@ -1210,7 +1241,7 @@ class OrderProcessor {
     private readonly paymentService: IPaymentService,
     private readonly inventoryService: IInventoryService,
     private readonly notificationService: INotificationService,
-    private readonly logger: ILogger
+    private readonly logger: ILogger,
   ) {}
 }
 
@@ -1220,8 +1251,8 @@ class OrderProcessor {
     // Hidden dependencies - where do these come from?
     await PaymentGateway.charge(order.total);
     await InventorySystem.reserve(order.items);
-    await EmailService.send('Order confirmed', order.customerEmail);
-    console.log('Order processed'); // No structured logging
+    await EmailService.send("Order confirmed", order.customerEmail);
+    console.log("Order processed"); // No structured logging
   }
 }
 ```
@@ -1235,9 +1266,9 @@ const paymentService = resource({
   middleware: [
     globals.middleware.resource.retry.with({ retries: 3 }),
     globals.middleware.resource.timeout.with({ ttl: 30000 }),
-    globals.middleware.resource.cache.with({ ttl: 60000 })
+    globals.middleware.resource.cache.with({ ttl: 60000 }),
   ],
-  init: async (config) => new PaymentService(config)
+  init: async (config) => new PaymentService(config),
 });
 
 // ❌ Bad - policies baked into class
@@ -1246,13 +1277,15 @@ class PaymentService {
     let attempt = 0;
     while (attempt < 3) {
       try {
-        const timeout = setTimeout(() => { throw new Error('Timeout'); }, 30000);
+        const timeout = setTimeout(() => {
+          throw new Error("Timeout");
+        }, 30000);
         const result = await this.gateway.charge(amount);
         clearTimeout(timeout);
-        
+
         // Manual caching logic...
         this.cache.set(cacheKey, result);
-        
+
         return result;
       } catch (error) {
         attempt++;
@@ -1269,9 +1302,13 @@ class PaymentService {
 ```ts
 import { tag } from "@bluelibs/runner";
 
-const healthCheckContract = tag<void, void, {
-  health(): Promise<{ status: 'healthy' | 'unhealthy'; details?: any }>;
-}>({ id: "contract.healthCheck" });
+const healthCheckContract = tag<
+  void,
+  void,
+  {
+    health(): Promise<{ status: "healthy" | "unhealthy"; details?: any }>;
+  }
+>({ id: "contract.healthCheck" });
 
 // Services implement health checks
 const databaseService = resource({
@@ -1281,7 +1318,7 @@ const databaseService = resource({
     const service = new DatabaseService(config);
     await service.connect();
     return service;
-  }
+  },
 });
 
 // Automatic health check aggregation
@@ -1293,19 +1330,26 @@ const healthChecker = resource({
       async checkAll() {
         const services = store.getResourcesWithTag(healthCheckContract);
         const results = await Promise.allSettled(
-          services.map(s => s.value.health())
+          services.map((s) => s.value.health()),
         );
-        
+
         return {
-          overall: results.every(r => r.status === 'fulfilled' && r.value.status === 'healthy') ? 'healthy' : 'unhealthy',
+          overall: results.every(
+            (r) => r.status === "fulfilled" && r.value.status === "healthy",
+          )
+            ? "healthy"
+            : "unhealthy",
           services: results.map((r, i) => ({
             service: services[i].id,
-            result: r.status === 'fulfilled' ? r.value : { status: 'unhealthy', error: r.reason }
-          }))
+            result:
+              r.status === "fulfilled"
+                ? r.value
+                : { status: "unhealthy", error: r.reason },
+          })),
         };
-      }
+      },
     };
-  }
+  },
 });
 ```
 

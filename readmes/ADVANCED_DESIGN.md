@@ -33,7 +33,7 @@ export const pdfFactory = r
 export const exportReport = r
   .task("app.tasks.exportReport")
   .dependencies({ pdf: pdfFactory })
-  .run(async ({ input }: { input: { doc: unknown } }, { pdf }) => {
+  .run(async (input: { input: { doc: unknown } }, { pdf }) => {
     const renderer = pdf({ font: "Inter" });
     return renderer.render(input.doc);
   })
@@ -50,7 +50,9 @@ import { r, globals } from "@bluelibs/runner";
 type PricingInput = { country: string; items: { price: number }[] };
 type PricingOutput = { total: number };
 
-const pricingStrategy = r.tag<void, PricingInput, PricingOutput>("pricing.strategy").build();
+const pricingStrategy = r
+  .tag<void, PricingInput, PricingOutput>("pricing.strategy")
+  .build();
 
 export const flatRate = r
   .resource("app.pricing.flat")
@@ -73,7 +75,7 @@ export const byCountry = r
 export const priceOrder = r
   .task("app.tasks.priceOrder")
   .dependencies({ store: globals.resources.store })
-  .run(async ({ input }: { input: PricingInput }, { store }) => {
+  .run(async (input: { input: PricingInput }, { store }) => {
     const strategies = store.getResourcesWithTag(pricingStrategy);
     const choose = input.country === "DE" ? byCountry.id : flatRate.id;
     const strategy = strategies.find((s) => s.id === choose)?.value as (
@@ -196,9 +198,11 @@ const mockEmailer = override(emailer, {
 export const app = r
   .resource("app")
   .register([emailer])
-  .overrides([
-    (process.env.NODE_ENV === "test" ? mockEmailer : undefined)!,
-  ].filter(Boolean) as any)
+  .overrides(
+    [(process.env.NODE_ENV === "test" ? mockEmailer : undefined)!].filter(
+      Boolean,
+    ) as any,
+  )
   .build();
 ```
 

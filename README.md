@@ -76,7 +76,7 @@ const createUser = r
   .task("app.tasks.createUser")
   .dependencies({ server, logger: globals.resources.logger })
   .inputSchema<{ name: string }>({ parse: (value) => value })
-  .run(async ({ input }, { server, logger }) => {
+  .run(async (input, { server, logger }) => {
     await logger.info(`Creating ${input.name}`);
     return { id: "user-123", name: input.name };
   })
@@ -144,7 +144,7 @@ import { r } from "@bluelibs/runner";
 const sendEmail = r
   .task("app.tasks.sendEmail")
   .dependencies({ emailService, logger })
-  .run(async ({ input }, { emailService, logger }) => {
+  .run(async (input, { emailService, logger }) => {
     await logger.info(`Sending email to ${input.to}`);
     return emailService.send(input);
   })
@@ -280,9 +280,9 @@ const userRegistered = r
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userService, userRegistered })
-  .run(async ({ input }, { userService, userRegistered }) => {
+  .run(async (input, { userService, userRegistered }) => {
     const user = await userService.createUser(input);
-    await userRegistered.emit({ userId: user.id, email: user.email });
+    await userRegistered({ userId: user.id, email: user.email });
     return user;
   })
   .build();
@@ -491,7 +491,7 @@ const authMiddleware = r.middleware
 const adminTask = r
   .task("app.tasks.adminOnly")
   .middleware([authMiddleware.with({ requiredRole: "admin" })])
-  .run(async ({ input }: { input: { user: User } }) => "Secret admin data")
+  .run(async (input: { input: { user: User } }) => "Secret admin data")
   .build();
 ```
 
@@ -531,7 +531,7 @@ const resourceAuthMiddleware = r.middleware
 const adminTask = r
   .task("app.tasks.adminOnly")
   .middleware([authMiddleware.with({ requiredRole: "admin" })])
-  .run(async ({ input }: { input: { user: { role: string } } }) => ({
+  .run(async (input: { input: { user: { role: string } } }) => ({
     user: { role: input.user.role, verified: true },
   }))
   .build();
@@ -599,7 +599,7 @@ const loggingMiddleware = r.middleware
 const loggedTask = r
   .task("app.tasks.logged")
   .middleware([loggingMiddleware.with({ includeTimestamp: true })])
-  .run(async ({ input }: { input: { data: string } }) => ({
+  .run(async (input: { input: { data: string } }) => ({
     data: input.data.toUpperCase(),
   }))
   .build();
@@ -620,7 +620,7 @@ import { r } from "@bluelibs/runner";
 const apiTask = r
   .task("app.tasks.getUserData")
   .tags(["api", "public", "cacheable"])
-  .run(async ({ input }) => getUserFromDatabase(input as any))
+  .run(async (input) => getUserFromDatabase(input as any))
   .build();
 
 // Structured tags with configuration
@@ -629,7 +629,7 @@ const httpTag = r.tag<{ method: string; path: string }>("http.route").build();
 const getUserTask = r
   .task("app.tasks.getUser")
   .tags(["api", httpTag.with({ method: "GET", path: "/users/:id" })])
-  .run(async ({ input }) => getUserFromDatabase((input as any).id))
+  .run(async (input) => getUserFromDatabase((input as any).id))
   .build();
 ```
 
@@ -760,7 +760,7 @@ const userNotFoundError = r
 const getUser = r
   .task("app.tasks.getUser")
   .dependencies({ userNotFoundError })
-  .run(async ({ input }, { userNotFoundError }) => {
+  .run(async (input, { userNotFoundError }) => {
     userNotFoundError.throw({ code: 404, message: `User ${input} not found` });
   })
   .build();
@@ -884,7 +884,7 @@ import { r, run } from "@bluelibs/runner";
 
 const calculatorTask = r
   .task("app.tasks.calculator")
-  .run(async ({ input }: { input: { value: number } }) => {
+  .run(async (input: { input: { value: number } }) => {
     console.log("3. Task is running...");
     return { result: input.value + 1 };
   })
@@ -949,7 +949,7 @@ const userRegistration = r
     emailService: emailService.optional(), // Optional - won't fail if missing
     analytics: analyticsService.optional(), // Optional - graceful degradation
   })
-  .run(async ({ input }, { database, emailService, analytics }) => {
+  .run(async (input, { database, emailService, analytics }) => {
     // Create user (required)
     const user = await database.users.create(userData);
 
@@ -1185,9 +1185,7 @@ import type {
 // Task example
 const add = r
   .task("calc.add")
-  .run(
-    async ({ input }: { input: { a: number; b: number } }) => input.a + input.b,
-  )
+  .run(async (input: { input: { a: number; b: number } }) => input.a + input.b)
   .build();
 
 type AddInput = ExtractTaskInput<typeof add>; // { a: number; b: number }
@@ -1246,7 +1244,7 @@ const requestMiddleware = r.middleware
 const handleRequest = r
   .task("app.handleRequest")
   .middleware([requestMiddleware])
-  .run(async ({ input }: { input: { path: string } }) => {
+  .run(async (input: { input: { path: string } }) => {
     const request = requestContext.use();
     console.log(`Processing ${input.path} (Request ID: ${request.requestId})`);
     return { success: true, requestId: request.requestId };
@@ -1396,7 +1394,7 @@ const expensiveTask = r
       keyBuilder: (taskId, input) => `${taskId}-${(input as any).userId}`, // optional key builder
     }),
   ])
-  .run(async ({ input }: { input: { userId: string } }) => {
+  .run(async (input: { input: { userId: string } }) => {
     // This expensive operation will be cached
     return await doExpensiveCalculation(input.userId);
   })
@@ -1424,7 +1422,7 @@ import { r } from "@bluelibs/runner";
 
 const redisCacheFactory = r
   .task("globals.tasks.cacheFactory") // Same ID as the default task
-  .run(async ({ input }: { input: any }) => new RedisCache(input))
+  .run(async (input: { input: any }) => new RedisCache(input))
   .build();
 
 const app = r
@@ -1469,7 +1467,7 @@ Here are real performance metrics from our comprehensive benchmark suite on an M
 const userTask = r
   .task("user.create")
   .middleware([auth, logging, metrics])
-  .run(async ({ input }) => database.users.create(input as any))
+  .run(async (input) => database.users.create(input as any))
   .build();
 
 // 1000 executions = ~5ms total time
@@ -1529,7 +1527,7 @@ const database = r
 const expensiveTask = r
   .task("app.performance.expensive")
   .middleware([globals.middleware.cache.with({ ttl: 60000 })])
-  .run(async ({ input }) => {
+  .run(async (input) => {
     // This expensive computation is cached
     return performExpensiveCalculation(input);
   })
@@ -1752,7 +1750,7 @@ The logger accepts rich, structured data that makes debugging actually useful:
 const userTask = r
   .task("app.tasks.user.create")
   .dependencies({ logger: globals.resources.logger })
-  .run(async ({ input }, { logger }) => {
+  .run(async (input, { logger }) => {
     // Basic message
     logger.info("Creating new user");
 
@@ -2029,7 +2027,7 @@ const criticalTask = r
       logTaskOnError: true,
     }),
   ])
-  .run(async ({ input }) => {
+  .run(async (input) => {
     // This task will have verbose debug logging
     return await processPayment(input as any);
   })
@@ -2720,7 +2718,7 @@ type UserData = z.infer<typeof userSchema>;
 const createUser = r
   .task("app.tasks.createUser.zod")
   .inputSchema(userSchema)
-  .run(async ({ input }: { input: UserData }) => {
+  .run(async (input: { input: UserData }) => {
     // Both runtime validation AND compile-time typing
     return { id: "user-123", ...input };
   })

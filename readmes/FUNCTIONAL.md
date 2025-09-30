@@ -157,7 +157,9 @@ Contract tags enforce the return shape of a resource or task at compile time, ac
 import { r } from "@bluelibs/runner";
 
 // Define contracts for expected data shapes
-const userContract = r.tag<void, void, { name: string }>("contract.user").build();
+const userContract = r
+  .tag<void, void, { name: string }>("contract.user")
+  .build();
 const ageContract = r.tag<void, void, { age: number }>("contract.age").build();
 
 // A task must return the intersection of all its contract shapes
@@ -206,11 +208,11 @@ Use contract tags to discover and select implementations at runtime.
 
 ```ts
 // 1. Define the strategy contract
-const paymentStrategyContract = r.tag<
-  void,
-  void,
-  { process(amount: number): Promise<boolean> }
->("contract.paymentStrategy").build();
+const paymentStrategyContract = r
+  .tag<void, void, { process(amount: number): Promise<boolean> }>(
+    "contract.paymentStrategy",
+  )
+  .build();
 
 // 2. Implement concrete strategies
 const creditCardStrategy = r
@@ -244,7 +246,10 @@ Use events and hooks for decoupled communication.
 
 ```ts
 // 1. The subject emits events
-const userRegistered = r.event("user.registered").payloadSchema<{ userId: string }>({ parse: (v) => v }).build();
+const userRegistered = r
+  .event("user.registered")
+  .payloadSchema<{ userId: string }>({ parse: (v) => v })
+  .build();
 
 const userService = r
   .resource("app.user.service")
@@ -252,7 +257,7 @@ const userService = r
   .init(async (_config, { userRegistered }) => ({
     async createUser() {
       const userId = "u1";
-      await userRegistered.emit({ userId });
+      await userRegistered({ userId });
     },
   }))
   .build();
