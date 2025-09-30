@@ -1051,12 +1051,13 @@ app = app.build();
 const remoteTasksTunnel = r
   .resource("app.tunnels.http")
   .tags([globals.tags.tunnel])
-  .init(async () => ({
+  .dependencies({ createClient: globals.resource.httpClientFactory })
+  .init(async (_, { createClient }) => ({
     mode: "client", // or "server", or "none", or "both" for emulating network infrastructure
     transport: "http", // the only one supported for now
     // Selectively forward tasks starting with "remote.tasks."
     tasks: (t) => t.id.startsWith("remote.tasks."),
-    client: globals.tunnels.http.createClient({
+    client: createClient({
       url: "http://remote-runner:8080/__runner",
     }),
   }))

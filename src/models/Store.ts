@@ -155,6 +155,7 @@ export class Store {
     );
 
     this.registry.storeGenericItem(globalResources.queue);
+    this.registry.storeGenericItem(globalResources.httpClientFactory);
 
     for (const [resource, value] of builtInResourcesMap.entries()) {
       this.registry.storeGenericItem(resource);

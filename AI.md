@@ -309,7 +309,46 @@ const root = r
   .build();
 ```
 
-Use the unified HTTP client anywhere:
+### HTTP Client Factory (Recommended)
+
+The `globals.resources.httpClientFactory` automatically injects serializer, error registry, and async contexts from the store:
+
+```ts
+import { r, globals } from "@bluelibs/runner";
+
+const myTask = r
+  .task("app.tasks.callRemote")
+  .dependencies({ clientFactory: globals.resources.httpClientFactory })
+  .run(async (input, { clientFactory }) => {
+    // Client automatically has serializer, errors, and contexts injected
+    const client = clientFactory({
+      baseUrl: process.env.API_URL,
+      auth: { token: process.env.API_TOKEN },
+    });
+
+    return await client.task("remote.task", input);
+  })
+  .build();
+
+// Node streaming clients via Node DI factories
+import { globals as nodeGlobals } from "@bluelibs/runner/node";
+
+const nodeTask = r
+  .task("app.tasks.streamingCall")
+  .dependencies({ smartFactory: nodeGlobals.resources.httpSmartClientFactory })
+  .run(async (input, { smartFactory }) => {
+    const client = smartFactory({
+      baseUrl: process.env.API_URL,
+    });
+    // Supports duplex streams and multipart uploads
+    return await client.task("remote.streaming.task", input);
+  })
+  .build();
+```
+
+### Direct Client Creation (Legacy)
+
+You can also create clients directly without DI (manual serializer/error/context passing):
 
 ```ts
 import { createHttpClient } from "@bluelibs/runner";
