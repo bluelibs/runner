@@ -244,7 +244,7 @@ const generateReport = r
   .dependencies({ reportFactory })
   .run(
     async (
-      input: { input: { type: string; data: any; locale?: string } },
+      input: { type: string; data: any; locale?: string },
       { reportFactory },
     ) => {
       const builder = reportFactory({ locale: input.locale });

@@ -33,7 +33,7 @@ export const pdfFactory = r
 export const exportReport = r
   .task("app.tasks.exportReport")
   .dependencies({ pdf: pdfFactory })
-  .run(async (input: { input: { doc: unknown } }, { pdf }) => {
+  .run(async (input: { doc: unknown }, { pdf }) => {
     const renderer = pdf({ font: "Inter" });
     return renderer.render(input.doc);
   })

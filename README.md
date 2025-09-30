@@ -491,7 +491,7 @@ const authMiddleware = r.middleware
 const adminTask = r
   .task("app.tasks.adminOnly")
   .middleware([authMiddleware.with({ requiredRole: "admin" })])
-  .run(async (input: { input: { user: User } }) => "Secret admin data")
+  .run(async (input) => "Secret admin data")
   .build();
 ```
 
@@ -531,7 +531,7 @@ const resourceAuthMiddleware = r.middleware
 const adminTask = r
   .task("app.tasks.adminOnly")
   .middleware([authMiddleware.with({ requiredRole: "admin" })])
-  .run(async (input: { input: { user: { role: string } } }) => ({
+  .run(async (input: { user: { role: string } }) => ({
     user: { role: input.user.role, verified: true },
   }))
   .build();
@@ -599,7 +599,7 @@ const loggingMiddleware = r.middleware
 const loggedTask = r
   .task("app.tasks.logged")
   .middleware([loggingMiddleware.with({ includeTimestamp: true })])
-  .run(async (input: { input: { data: string } }) => ({
+  .run(async (input: { data: string }) => ({
     data: input.data.toUpperCase(),
   }))
   .build();
@@ -884,7 +884,7 @@ import { r, run } from "@bluelibs/runner";
 
 const calculatorTask = r
   .task("app.tasks.calculator")
-  .run(async (input: { input: { value: number } }) => {
+  .run(async (input: { value: number }) => {
     console.log("3. Task is running...");
     return { result: input.value + 1 };
   })
@@ -1185,7 +1185,7 @@ import type {
 // Task example
 const add = r
   .task("calc.add")
-  .run(async (input: { input: { a: number; b: number } }) => input.a + input.b)
+  .run(async (input: { a: number; b: number }) => input.a + input.b)
   .build();
 
 type AddInput = ExtractTaskInput<typeof add>; // { a: number; b: number }
@@ -1244,7 +1244,7 @@ const requestMiddleware = r.middleware
 const handleRequest = r
   .task("app.handleRequest")
   .middleware([requestMiddleware])
-  .run(async (input: { input: { path: string } }) => {
+  .run(async (input: { path: string }) => {
     const request = requestContext.use();
     console.log(`Processing ${input.path} (Request ID: ${request.requestId})`);
     return { success: true, requestId: request.requestId };
@@ -1394,7 +1394,7 @@ const expensiveTask = r
       keyBuilder: (taskId, input) => `${taskId}-${(input as any).userId}`, // optional key builder
     }),
   ])
-  .run(async (input: { input: { userId: string } }) => {
+  .run(async (input: { userId: string }) => {
     // This expensive operation will be cached
     return await doExpensiveCalculation(input.userId);
   })
