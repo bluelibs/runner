@@ -8,15 +8,26 @@ import { queueResource } from "./resources/queue.resource";
 import { globalTags } from "./globalTags";
 import { MiddlewareManager } from "../models/MiddlewareManager";
 import type { Serializer } from "./resources/tunnel/serializer";
+import { httpClientFactory } from "./resources/httpClientFactory.resource";
 
 const systemTag = globalTags.system;
 
-const store = defineResource<void, Promise<Store>>({
+export const store = defineResource<void, Promise<Store>>({
   id: "globals.resources.store",
   meta: {
     title: "Store",
     description:
       "A global store that can be used to store and retrieve tasks, resources, events and middleware",
+  },
+  tags: [systemTag],
+});
+
+export const serializer = defineResource<void, Promise<Serializer>>({
+  id: "globals.resources.serializer",
+  meta: {
+    title: "Serializer",
+    description:
+      "Serializes and deserializes data. Provides EJSON-compatible stringify/parse and custom type registration via addType.",
   },
   tags: [systemTag],
 });
@@ -59,15 +70,8 @@ export const globalResources = {
     },
     tags: [systemTag],
   }),
-  serializer: defineResource<void, Promise<Serializer>>({
-    id: "globals.resources.serializer",
-    meta: {
-      title: "Serializer",
-      description:
-        "Serializes and deserializes data. Provides EJSON-compatible stringify/parse and custom type registration via addType.",
-    },
-    tags: [systemTag],
-  }),
+  serializer,
   cache: cacheResource,
   queue: queueResource,
-};
+  httpClientFactory: httpClientFactory,
+} as const;

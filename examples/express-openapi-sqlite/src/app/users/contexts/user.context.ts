@@ -1,4 +1,4 @@
-import { createContext } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { UserSession } from "../types";
 
 /**
@@ -6,4 +6,4 @@ import { UserSession } from "../types";
  * This allows tasks to access the current authenticated user
  * throughout the request lifecycle.
  */
-export const UserContext = createContext<UserSession>("user.session");
+export const UserContext = r.asyncContext<UserSession>("user.session").build();

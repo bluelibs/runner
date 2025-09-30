@@ -1,6 +1,4 @@
-import { Readable } from "stream";
-
-// Mocks for transport layers used by http-client
+// Mocks for transport layers used by http-client (universal)
 jest.mock("../http-fetch-tunnel.resource", () => {
   const task = jest.fn(async (_id: string, _input: any) => "JSON-OK");
   const event = jest.fn(async (_id: string, _payload?: any) => {});
@@ -13,23 +11,12 @@ jest.mock("../http-fetch-tunnel.resource", () => {
   return { createExposureFetch };
 });
 
-jest.mock("../node/http-smart-client.model", () => {
-  const createHttpSmartClient = jest.fn((_cfg: any) => ({
-    task: jest.fn(async (_id: string, _input: any) => "SMART-OK"),
-    event: jest.fn(async () => {}),
-  }));
-  return { createHttpSmartClient };
-});
-
 import { createHttpClient } from "../http-client";
 import { createWebFile } from "../platform/createWebFile";
 import { createFile as createNodeFile } from "../node/platform/createFile";
-import {
-  getDefaultSerializer,
-  EJSON,
-} from "../globals/resources/tunnel/serializer";
+import { getDefaultSerializer, EJSON } from "../globals/resources/tunnel/serializer";
 
-describe("http-client", () => {
+describe("http-client (universal)", () => {
   const baseUrl = "http://127.0.0.1:7070/__runner";
 
   beforeEach(() => {
@@ -214,113 +201,24 @@ describe("http-client", () => {
     );
   });
 
-  it("smart client path rethrows TunnelError when no registry present", async () => {
-    const { createHttpSmartClient } = require("../node/http-smart-client.model");
-    const { TunnelError } = require("../globals/resources/tunnel/protocol");
-    (createHttpSmartClient as jest.Mock).mockReturnValueOnce({
-      task: jest.fn(async () => {
-        throw new TunnelError("INTERNAL_ERROR", "smart-raw");
-      }),
-      event: jest.fn(async () => {}),
-    });
+  it("throws helpful error when Node File sentinel present", async () => {
     const client = createHttpClient({ baseUrl, serializer: EJSON });
-    const nodeFile = require("../node/platform/createFile").createFile(
+    const nodeFile = createNodeFile(
       { name: "nf.bin" },
       { buffer: Buffer.from([1]) },
-      "NF2",
+      "NF_ERR",
     );
     await expect(
-      client.task("t.smart.raw", { file: nodeFile } as any),
-    ).rejects.toThrow(/smart-raw/);
+      client.task("t.node.file", { f: nodeFile } as any),
+    ).rejects.toThrow(/createHttpClient \(universal\) detected Node file input/i);
   });
 
-  it("node multipart converts web blobs to buffers and delegates to smart client", async () => {
-    const {
-      createHttpSmartClient,
-    } = require("../node/http-smart-client.model");
-    // One node file, one web file
-    const nodeSentinel = createNodeFile(
-      { name: "n.bin" },
-      { buffer: Buffer.from([1, 2]) },
-      "N2",
-    );
-    const webBlob = new Blob([Buffer.from("xyz") as any], {
-      type: "application/octet-stream",
-    });
-    const webSentinel = createWebFile({ name: "w.bin" }, webBlob, "W2");
-
-    // Customize smart client return for this test
-    (createHttpSmartClient as jest.Mock).mockReturnValueOnce({
-      task: jest.fn(async () => "SMART-MP"),
-      event: jest.fn(async () => {}),
-    });
-    const client = createHttpClient({
-      baseUrl,
-      auth: { token: "t" },
-      serializer: EJSON,
-    });
-    const r = await client.task("t.upload.node", {
-      a: nodeSentinel,
-      b: webSentinel,
-    } as any);
-    expect(r).toBe("SMART-MP");
-    expect(createHttpSmartClient).toHaveBeenCalledTimes(1);
-    const args = (createHttpSmartClient as jest.Mock).mock.calls[0][0];
-    expect(args.baseUrl).toBe(baseUrl.replace(/\/$/, ""));
-  });
-
-  it("duplex path delegates to smart client when input is Node Readable", async () => {
-    const {
-      createHttpSmartClient,
-    } = require("../node/http-smart-client.model");
-    (createHttpSmartClient as jest.Mock).mockReturnValueOnce({
-      task: jest.fn(async () => "SMART-DUPLEX"),
-      event: jest.fn(async () => {}),
-    });
+  it("throws helpful error when input is a Node Readable stream", async () => {
+    const { Readable } = require("stream");
     const client = createHttpClient({ baseUrl, serializer: EJSON });
     const stream = Readable.from([Buffer.from("data")]);
-    const r = await client.task("t.duplex", stream as any);
-    expect(r).toBe("SMART-DUPLEX");
-    expect(createHttpSmartClient).toHaveBeenCalledTimes(1);
-  });
-
-  it("node smart client error is rethrown as typed when registry provided", async () => {
-    const {
-      createHttpSmartClient,
-    } = require("../node/http-smart-client.model");
-    const { TunnelError } = require("../globals/resources/tunnel/protocol");
-    (createHttpSmartClient as jest.Mock).mockReturnValueOnce({
-      task: jest.fn(async () => {
-        throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
-          id: "tests.errors.smart",
-          data: { code: 13, message: "s" },
-        });
-      }),
-      event: jest.fn(async () => {}),
-    });
-    const helper = {
-      id: "tests.errors.smart",
-      throw: (data: any) => {
-        throw new Error("typed-smart:" + String(data?.code));
-      },
-      is: () => false,
-      toString: () => "",
-    } as any;
-    const client = createHttpClient({
-      baseUrl,
-      serializer: EJSON,
-      errorRegistry: new Map([["tests.errors.smart", helper]]),
-    });
-    // Trigger smart client path via Node file sentinel (multipart)
-    const nodeFile = require("../node/platform/createFile").createFile(
-      { name: "nf.bin" },
-      { buffer: Buffer.from([1]) },
-      "NF1",
-    );
-    await expect(
-      client.task("t.smart", { file: nodeFile } as any),
-    ).rejects.toThrow(
-      /typed-smart:13/,
+    await expect(client.task("t.duplex", stream)).rejects.toThrow(
+      /cannot send a Node stream/i,
     );
   });
 
@@ -386,3 +284,4 @@ describe("http-client", () => {
     );
   });
 });
+

@@ -1,5 +1,5 @@
 import { usersRepository } from "./resources/users-repository.resource";
-import { resource } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { registerUserTask } from "./tasks/register-user.task";
 import { loginUserTask } from "./tasks/login-user.task";
 import { getUserProfileTask } from "./tasks/get-user-profile.task";
@@ -8,9 +8,9 @@ import { authMiddleware } from "./middleware/auth";
 import { verifyPasswordTask } from "./tasks/verify-password.task";
 import { createUserTask } from "./tasks/create-user.task";
 
-export const users = resource({
-  id: "app.modules.users",
-  register: [
+export const users = r
+  .resource("app.modules.users")
+  .register([
     usersRepository,
     registerUserTask,
     loginUserTask,
@@ -19,5 +19,5 @@ export const users = resource({
     verifyPasswordTask,
     createUserTask,
     authMiddleware,
-  ],
-});
+  ])
+  .build();

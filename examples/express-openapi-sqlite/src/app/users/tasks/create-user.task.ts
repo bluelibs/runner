@@ -1,4 +1,4 @@
-import { task } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { RegisterRequest, User } from "../types";
 import { db } from "../../db/resources/database";
 import bcrypt from "bcryptjs";
@@ -16,11 +16,11 @@ const schema = z.object({
   name: z.string().min(1),
 });
 
-export const createUserTask = task({
-  id: "app.tasks.users.createUser",
-  inputSchema: schema,
-  dependencies: { db },
-  run: async (userData: CreateUserInput, { db }) => {
+export const createUserTask = r
+  .task("app.tasks.users.createUser")
+  .inputSchema(schema)
+  .dependencies({ db })
+  .run(async (userData: CreateUserInput, { db }) => {
     const { email, password, name } = userData;
 
     // Check if user already exists
@@ -56,5 +56,5 @@ export const createUserTask = task({
       id: user.id.toString(),
       createdAt: new Date(user.createdAt),
     };
-  },
-});
+  })
+  .build();

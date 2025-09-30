@@ -1,13 +1,13 @@
-import { tag } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { ApiResponse, HttpRouteConfig } from "../types";
 
 /**
  * HTTP tag for marking tasks as HTTP endpoints.
  * Contains route configuration including method, path, auth requirements, etc.
  */
-export const httpTag = tag<HttpRouteConfig, void, ApiResponse>({
-  id: "http.route",
-});
+export const httpTag = r
+  .tag<HttpRouteConfig>("http.route")
+  .build();
 
 /**
  * Helper to create HTTP route tags with common configurations

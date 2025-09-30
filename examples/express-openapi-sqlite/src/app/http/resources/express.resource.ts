@@ -1,4 +1,4 @@
-import { resource, task, globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 import express, { Express, Request, Response } from "express";
 import cors from "cors";
 import swaggerJSDoc from "swagger-jsdoc";
@@ -16,14 +16,14 @@ export interface ExpressServer {
   port: number;
 }
 
-export const expressServerResource = resource({
-  id: "app.resources.expressServer",
-  dependencies: {
+export const expressServerResource = r
+  .resource("app.resources.expressServer")
+  .dependencies({
     appConfig,
     logger: globals.resources.logger,
-  },
-  register: [httpTag],
-  init: async (_, { appConfig, logger }): Promise<ExpressServer> => {
+  })
+  .register([httpTag])
+  .init(async (_, { appConfig, logger }): Promise<ExpressServer> => {
     const { port } = appConfig;
 
     const app = express();
@@ -65,13 +65,13 @@ export const expressServerResource = resource({
     });
 
     return promise;
-  },
-  dispose: async ({ server }, _, { logger }) => {
+  })
+  .dispose(async ({ server }, _, { logger }) => {
     return new Promise<void>((resolve) => {
       server.close(() => {
         logger.info("Express server stopped");
         resolve();
       });
     });
-  },
-});
+  })
+  .build();

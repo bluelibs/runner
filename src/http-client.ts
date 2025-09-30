@@ -1,4 +1,3 @@
-import type { Readable } from "stream";
 import type { Serializer } from "./globals/resources/tunnel/serializer";
 import type { ProtocolEnvelope } from "./globals/resources/tunnel/protocol";
 import { assertOkEnvelope } from "./globals/resources/tunnel/protocol";
@@ -27,10 +26,7 @@ export interface HttpClientConfig {
 }
 
 export interface HttpClient {
-  task<I = unknown, O = unknown>(
-    id: string,
-    input?: I,
-  ): Promise<O | Readable | ReadableStream<Uint8Array>>;
+  task<I = unknown, O = unknown>(id: string, input?: I): Promise<O>;
   event<P = unknown>(id: string, payload?: P): Promise<void>;
 }
 
@@ -39,10 +35,6 @@ function toHeaders(auth?: HttpClientAuth): Record<string, string> {
   if (auth?.token)
     headers[(auth.header ?? "x-runner-token").toLowerCase()] = auth.token;
   return headers;
-}
-
-function isNodeReadable(value: unknown): value is Readable {
-  return !!value && typeof (value as any).pipe === "function";
 }
 
 export function createHttpClient(cfg: HttpClientConfig): HttpClient {
@@ -93,80 +85,25 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
   }
 
   return {
-    async task<I, O>(
-      id: string,
-      input?: I,
-    ): Promise<O | Readable | ReadableStream<Uint8Array>> {
+    async task<I, O>(id: string, input?: I): Promise<O> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
 
-      // Node Duplex path (request body is a Node Readable)
-      if (isNodeReadable(input)) {
-        // Delegate duplex path to Node Smart client (Node-only)
-        const { createHttpSmartClient } = await import(
-          "./node/http-smart-client.model"
+      // Guard: raw Node Readable-like inputs are not supported in universal client
+      if (input && typeof (input as any).pipe === "function") {
+        throw new Error(
+          "createHttpClient (universal) cannot send a Node stream. Use @bluelibs/runner/node createHttpSmartClient or createHttpMixedClient for duplex/streaming.",
         );
-        return await createHttpSmartClient({
-          baseUrl,
-          auth: cfg.auth,
-          timeoutMs: cfg.timeoutMs,
-          serializer: cfg.serializer,
-          onRequest: cfg.onRequest,
-          contexts: cfg.contexts,
-        }).task(id, input as any);
       }
 
-      // Multipart path: gather both Node and Web files
+      // Multipart path: browser files only (FormData). Node files are not supported here.
       const manifest = buildUniversalManifest(input);
-      if (manifest.nodeFiles.length > 0 || manifest.webFiles.length > 0) {
-        const manifestText = cfg.serializer.stringify({
-          input: manifest.input,
-        });
-        if (manifest.webFiles.length > 0 && manifest.nodeFiles.length === 0) {
-          const r = await postMultipartBrowser(
-            url,
-            manifestText,
-            manifest.webFiles,
-          );
-          try {
-            return assertOkEnvelope<O>(r as ProtocolEnvelope<O>, {
-              fallbackMessage: "Tunnel task error",
-            });
-          } catch (e) {
-            const te = e as any;
-            if (te && cfg.errorRegistry && te.id && te.data) {
-              const helper = cfg.errorRegistry.get(String(te.id));
-              if (helper) helper.throw(te.data);
-            }
-            throw e;
-          }
-        }
-        // Node multipart path (can handle both nodeFiles and webFiles by converting blobs to buffers)
-        const { createHttpSmartClient } = await import(
-          "./node/http-smart-client.model"
-        );
-        // Convert any web blobs into buffers (reads entirely in memory)
-        if (manifest.webFiles.length > 0) {
-          for (const wf of manifest.webFiles) {
-            const arrayBuf = await (wf.blob as any).arrayBuffer();
-            manifest.nodeFiles.push({
-              id: wf.id,
-              meta: wf.meta,
-              source: { type: "buffer", buffer: Buffer.from(arrayBuf) },
-            });
-          }
-          manifest.webFiles = [] as any;
-        }
-        const client = createHttpSmartClient({
-          baseUrl,
-          auth: cfg.auth,
-          timeoutMs: cfg.timeoutMs,
-          serializer: cfg.serializer,
-          onRequest: cfg.onRequest,
-          contexts: cfg.contexts,
-        });
-        // Use the underlying smart client multipart path by passing the original input structure
+      if (manifest.webFiles.length > 0) {
+        const manifestText = cfg.serializer.stringify({ input: manifest.input });
+        const r = await postMultipartBrowser(url, manifestText, manifest.webFiles);
         try {
-          return await client.task(id, manifest.input as any);
+          return assertOkEnvelope<O>(r as ProtocolEnvelope<O>, {
+            fallbackMessage: "Tunnel task error",
+          });
         } catch (e) {
           const te = e as any;
           if (te && cfg.errorRegistry && te.id && te.data) {
@@ -175,6 +112,13 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
           }
           throw e;
         }
+      }
+
+      // If Node files were detected, instruct user to use Node clients
+      if (manifest.nodeFiles.length > 0) {
+        throw new Error(
+          "createHttpClient (universal) detected Node file input. Use @bluelibs/runner/node createHttpSmartClient or createHttpMixedClient for Node streaming/multipart.",
+        );
       }
 
       // JSON/EJSON fallback
@@ -204,5 +148,3 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     },
   };
 }
-
-export type { Readable };

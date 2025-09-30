@@ -1,12 +1,12 @@
-import { resource } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import bcrypt from "bcryptjs";
 import { User, RegisterRequest } from "../types";
 import { db } from "../../db/resources/database";
 
-export const usersRepository = resource({
-  id: "app.resources.userService",
-  dependencies: { database: db },
-  init: async (_, { database }) => {
+export const usersRepository = r
+  .resource("app.resources.userService")
+  .dependencies({ database: db })
+  .init(async (_, { database }) => {
     return {
       async getUserByEmail(email: string): Promise<User | null> {
         const user = await database.get<User>(
@@ -50,5 +50,5 @@ export const usersRepository = resource({
         }));
       },
     };
-  },
-});
+  })
+  .build();

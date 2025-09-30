@@ -71,12 +71,37 @@ export const app = r
   .build();
 ```
 
-Client: call it from Node or the browser.
+Client: call it from Node or the browser using the factory (recommended) or direct client creation.
+
+**Recommended: Use HTTP Client Factory with DI**
+
+```ts
+import { r, globals } from "@bluelibs/runner";
+
+const callRemote = r
+  .task("app.tasks.callRemote")
+  .dependencies({ clientFactory: globals.resources.httpClientFactory })
+  .run(async (input, { clientFactory }) => {
+    // Factory auto-injects serializer, errorRegistry, and contexts
+    const client = clientFactory({
+      baseUrl: "http://127.0.0.1:7070/__runner",
+    });
+    return await client.task("app.tasks.add", { a: 1, b: 2 });
+  })
+  .build();
+```
+
+**Alternative: Direct client creation (legacy)**
 
 ```ts
 import { createHttpClient } from "@bluelibs/runner";
 
-const client = createHttpClient({ baseUrl: "http://127.0.0.1:7070/__runner" });
+const client = createHttpClient({
+  baseUrl: "http://127.0.0.1:7070/__runner",
+  serializer, // manual injection
+  errorRegistry, // manual injection
+  contexts, // manual injection
+});
 const sum = await client.task<{ a: number; b: number }, number>(
   "app.tasks.add",
   { a: 1, b: 2 },
@@ -87,15 +112,25 @@ const sum = await client.task<{ a: number; b: number }, number>(
 
 ### 4.1 Unified client (browser + node)
 
-One API everywhere: JSON/EJSON, browser uploads (FormData), Node uploads (streaming), Node‑only duplex.
+One API for JSON/EJSON and browser uploads (FormData). For Node streaming/multipart and duplex, use the Node clients (Smart/Mixed) below.
+
+**With factory (recommended):**
+
+```ts
+// Use clientFactory(...) within your tasks
+const client = clientFactory({ baseUrl: "/__runner" });
+```
+
+**Direct creation:**
 
 ```ts
 import { createHttpClient } from "@bluelibs/runner";
 import { createFile as createWebFile } from "@bluelibs/runner/platform/createFile";
-import { createNodeFile } from "@bluelibs/runner/node";
-import { Readable } from "stream";
 
-const client = createHttpClient({ baseUrl: "/__runner" });
+const client = createHttpClient({
+  baseUrl: "/__runner",
+  serializer, // required
+});
 
 // JSON/EJSON
 await client.task("app.tasks.add", { a: 1, b: 2 });
@@ -104,21 +139,35 @@ await client.task("app.tasks.add", { a: 1, b: 2 });
 await client.task("app.tasks.upload", {
   file: createWebFile({ name: "a.bin" }, new Blob([1])),
 });
-
-// Node upload (multipart) and duplex request stream
-await client.task("app.tasks.upload", {
-  file: createNodeFile({ name: "a.txt" }, { buffer: Buffer.from([1]) }),
-});
-await client.task("app.tasks.duplex", Readable.from("hello"));
 ```
 
 ### 4.2 Node Smart client (streaming/duplex)
+
+**With factory (recommended, Node DI):**
+
+```ts
+import { globals as nodeGlobals } from "@bluelibs/runner/node";
+
+const nodeTask = r
+  .task("app.tasks.useSmart")
+  .dependencies({ smartFactory: nodeGlobals.resources.httpSmartClientFactory })
+  .run(async (_, { smartFactory }) => {
+    const client = smartFactory({
+      baseUrl: "http://127.0.0.1:7070/__runner",
+    });
+    return await client.task("app.tasks.add", { a: 1, b: 2 });
+  })
+  .build();
+```
+
+**Direct creation:**
 
 ```ts
 import { createHttpSmartClient } from "@bluelibs/runner/node";
 
 const client = createHttpSmartClient({
   baseUrl: "http://127.0.0.1:7070/__runner",
+  serializer, // required
 });
 
 // JSON/EJSON tasks
@@ -136,12 +185,32 @@ resStream.on("data", (c) => process.stdout.write(c));
 
 ### 4.3 Node Mixed client (auto‑switch)
 
+**With factory (recommended, Node DI):**
+
 ```ts
-import { createMixedHttpClient, createNodeFile } from "@bluelibs/runner/node";
+import { globals as nodeGlobals } from "@bluelibs/runner/node";
+
+const nodeTask = r
+  .task("app.tasks.useMixed")
+  .dependencies({ mixedFactory: nodeGlobals.resources.httpMixedClientFactory })
+  .run(async (_, { mixedFactory }) => {
+    const client = mixedFactory({
+      baseUrl: "http://127.0.0.1:7070/__runner",
+    });
+    return await client.task("app.tasks.add", { a: 1, b: 2 });
+  })
+  .build();
+```
+
+**Direct creation:**
+
+```ts
+import { createHttpMixedClient, createNodeFile } from "@bluelibs/runner/node";
 import { Readable } from "stream";
 
-const client = createMixedHttpClient({
+const client = createHttpMixedClient({
   baseUrl: "http://127.0.0.1:7070/__runner",
+  serializer, // required
 });
 
 // Plain JSON/EJSON → fetch path

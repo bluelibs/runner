@@ -1,4 +1,4 @@
-import { task } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import { db } from "../../db/resources/database";
 import { User } from "../types";
 import bcrypt from "bcryptjs";
@@ -8,10 +8,10 @@ export interface VerifyPasswordInput {
   password: string;
 }
 
-export const verifyPasswordTask = task({
-  id: "app.tasks.users.verifyPassword",
-  dependencies: { db },
-  run: async (input: VerifyPasswordInput, { db }) => {
+export const verifyPasswordTask = r
+  .task("app.tasks.users.verifyPassword")
+  .dependencies({ db })
+  .run(async (input: VerifyPasswordInput, { db }) => {
     const user = await db.get<User & { password_hash: string }>(
       "SELECT id, email, name, password_hash, created_at FROM users WHERE email = ?",
       [input.email],
@@ -28,5 +28,5 @@ export const verifyPasswordTask = task({
       name: user.name,
       createdAt: new Date(user.createdAt),
     };
-  },
-});
+  })
+  .build();
