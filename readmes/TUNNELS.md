@@ -83,7 +83,7 @@ const callRemote = r
   .dependencies({ clientFactory: globals.resources.httpClientFactory })
   .run(async (input, { clientFactory }) => {
     // Factory auto-injects serializer, errorRegistry, and contexts
-    const client = clientFactory.createClient({
+    const client = clientFactory({
       baseUrl: "http://127.0.0.1:7070/__runner",
     });
     return await client.task("app.tasks.add", { a: 1, b: 2 });
@@ -112,7 +112,7 @@ const sum = await client.task<{ a: number; b: number }, number>(
 
 ### 4.1 Unified client (browser + node)
 
-One API everywhere: JSON/EJSON, browser uploads (FormData), Node uploads (streaming), Node‑only duplex.
+One API for JSON/EJSON and browser uploads (FormData). For Node streaming/multipart and duplex, use the Node clients (Smart/Mixed) below.
 
 **With factory (recommended):**
 
@@ -126,8 +126,6 @@ const client = clientFactory({ baseUrl: "/__runner" });
 ```ts
 import { createHttpClient } from "@bluelibs/runner";
 import { createFile as createWebFile } from "@bluelibs/runner/platform/createFile";
-import { createNodeFile } from "@bluelibs/runner/node";
-import { Readable } from "stream";
 
 const client = createHttpClient({
   baseUrl: "/__runner",
@@ -141,12 +139,6 @@ await client.task("app.tasks.add", { a: 1, b: 2 });
 await client.task("app.tasks.upload", {
   file: createWebFile({ name: "a.bin" }, new Blob([1])),
 });
-
-// Node upload (multipart) and duplex request stream
-await client.task("app.tasks.upload", {
-  file: createNodeFile({ name: "a.txt" }, { buffer: Buffer.from([1]) }),
-});
-await client.task("app.tasks.duplex", Readable.from("hello"));
 ```
 
 ### 4.2 Node Smart client (streaming/duplex)

@@ -1,7 +1,7 @@
 import type { Readable } from "stream";
 import { createExposureFetch } from "../http-fetch-tunnel.resource";
 import type { Serializer } from "../globals/resources/tunnel/serializer";
-import { createHttpClient } from "../http-client";
+import { createHttpSmartClient } from "./http-smart-client.model";
 import type { IAsyncContext } from "../types/asyncContext";
 
 export interface MixedHttpClientAuthConfig {
@@ -76,15 +76,13 @@ export function createHttpMixedClient(
     contexts: cfg.contexts,
     errorRegistry: cfg.errorRegistry,
   });
-  const smartClient = createHttpClient({
+  const smartClient = createHttpSmartClient({
     baseUrl,
     auth: cfg.auth,
     timeoutMs: cfg.timeoutMs,
-    fetchImpl: cfg.fetchImpl,
     serializer: cfg.serializer,
     onRequest: cfg.onRequest,
     contexts: cfg.contexts,
-    errorRegistry: cfg.errorRegistry,
   });
 
   return {
