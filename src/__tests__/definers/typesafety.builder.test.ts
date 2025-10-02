@@ -432,4 +432,34 @@ describe.skip("builders typesafety", () => {
 
     expect(true).toBe(true);
   });
+
+  it("should work correctly with middleware and contracts", async () => {
+    type InputType = { id: string };
+    type OutputType = { name: string };
+    type ConfigType = { ttl: number };
+    const mw = r.middleware
+      .task<ConfigType, InputType, OutputType>("mw")
+      .run(async ({ next }, deps, config) => {
+        // @ts-expect-error
+        next({ id: 123 });
+        // @ts-expect-error
+        next({ name: "123" });
+        return next({ id: "123" });
+      })
+      .build();
+
+    const t1 = r
+      .task("t1")
+      .inputSchema(z.object({ id: z.string() }))
+      .middleware([mw.with({ ttl: 123 })])
+      .run(async (input) => {
+        input.id;
+        // @ts-expect-error
+        input.name;
+        return { name: "123" };
+      })
+      .build();
+
+    expect(true).toBe(true);
+  });
 });

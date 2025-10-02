@@ -156,10 +156,13 @@ function makeTaskMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
   return b as TaskMiddlewareFluentBuilder<C, In, Out, D>;
 }
 
-export function taskMiddlewareBuilder(
-  id: string,
-): TaskMiddlewareFluentBuilder<any, void, void, {}> {
-  const initial: TaskMwState<any, void, void, {}> = Object.freeze({
+export function taskMiddlewareBuilder<
+  C,
+  In,
+  Out,
+  D extends DependencyMapType = {},
+>(id: string): TaskMiddlewareFluentBuilder<C, In, Out, D> {
+  const initial: TaskMwState<C, In, Out, D> = Object.freeze({
     id,
     dependencies: {} as any,
     configSchema: undefined as any,
@@ -168,6 +171,7 @@ export function taskMiddlewareBuilder(
     tags: [] as any,
     everywhere: undefined as any,
   });
+
   return makeTaskMiddlewareBuilder(initial);
 }
 
@@ -313,10 +317,13 @@ function makeResourceMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
   return b as ResourceMiddlewareFluentBuilder<C, In, Out, D>;
 }
 
-export function resourceMiddlewareBuilder(
-  id: string,
-): ResourceMiddlewareFluentBuilder<any, void, void, {}> {
-  const initial: ResMwState<any, void, void, {}> = Object.freeze({
+export function resourceMiddlewareBuilder<
+  C,
+  In,
+  Out,
+  D extends DependencyMapType = {},
+>(id: string): ResourceMiddlewareFluentBuilder<C, In, Out, D> {
+  const initial: ResMwState<C, In, Out, D> = Object.freeze({
     id,
     dependencies: {} as any,
     configSchema: undefined as any,
