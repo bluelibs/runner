@@ -484,7 +484,7 @@ const authMiddleware = r.middleware
   .task("app.middleware.task.auth")
   .run(async ({ task, next }, _deps, config: AuthMiddlewareConfig) => {
     // Must return the value
-    return await next(task.input as any);
+    return await next(task.input);
   })
   .build();
 
@@ -573,35 +573,62 @@ Access `eventManager` via `globals.resources.eventManager` if needed.
 
 #### Middleware Type Contracts
 
-Middleware can now enforce type contracts using the `<Config, Input, Output>` signature:
+Middleware can enforce type contracts on the tasks that use them, ensuring data integrity as it flows through the system. This is achieved by defining `Input` and `Output` types within the middleware's implementation.
+
+When a task uses this middleware, its own `run` method must conform to the `Input` and `Output` shapes defined by the middleware contract.
 
 ```typescript
 import { r } from "@bluelibs/runner";
 
-// Middleware that transforms input and output types
-type LogConfig = { includeTimestamp: boolean };
-type LogInput = { data: any };
-type LogOutput = { data: any; logged: boolean };
+// 1. Define the contract types for the middleware.
+type AuthConfig = { requiredRole: string };
+type AuthInput = { user: { role: string } }; // Task's input must have this shape.
+type AuthOutput = { executedBy: { role: string; verified: boolean } }; // Task's output must have this shape.
 
-const loggingMiddleware = r.middleware
-  .task("app.middleware.logging")
-  .run(async ({ task, next }, _deps, config: LogConfig) => {
-    console.log(
-      config.includeTimestamp ? new Date() : "",
-      (task.input as LogInput).data,
-    );
-    const result = (await next(task.input)) as LogOutput;
-    return { ...result, logged: true };
+// 2. Create the middleware using these types in its `run` method.
+const authMiddleware = r.middleware
+  .task<AuthConfig, AuthInput, AuthOutput>("app.middleware.auth")
+  .run(async ({ task, next }, _deps, config) => {
+    const input = task.input;
+    if (input.user.role !== config.requiredRole) {
+      throw new Error("Insufficient permissions");
+    }
+
+    // The task runs, and its result must match AuthOutput.
+    const result = await next(input);
+
+    // The middleware can further transform the output.
+    const output = result;
+    return {
+      ...output,
+      executedBy: {
+        ...output.executedBy,
+        verified: true, // The middleware adds its own data.
+      },
+    };
   })
   .build();
 
-// Tasks using this middleware must conform to the Input/Output types
-const loggedTask = r
-  .task("app.tasks.logged")
-  .middleware([loggingMiddleware.with({ includeTimestamp: true })])
-  .run(async (input: { data: string }) => ({
-    data: input.data.toUpperCase(),
-  }))
+// 3. Apply the middleware to a task.
+const adminTask = r
+  .task("app.tasks.adminOnly")
+  // If you use multiple middleware with contracts they get combined.
+  .middleware([authMiddleware.with({ requiredRole: "admin" })])
+  // If you use .inputSchema() the input must contain the contract types otherwise you end-up with InputContractViolation error.
+  // The `run` method is now strictly typed by the middleware's contract.
+  // Its input must be `AuthInput`, and its return value must be `AuthOutput`.
+  .run(async (input) => {
+    // `input.user.role` is available and fully typed.
+    console.log(`Task executed by user with role: ${input.user.role}`);
+
+    // Returning a shape that doesn't match AuthOutput will cause a compile-time error.
+    // return { wrong: "shape" }; // This would fail!
+    return {
+      executedBy: {
+        role: input.user.role,
+      },
+    };
+  })
   .build();
 ```
 
@@ -616,20 +643,13 @@ Tags are metadata that can influence system behavior. Unlike meta properties, ta
 ```typescript
 import { r } from "@bluelibs/runner";
 
-// Simple string tags
-const apiTask = r
-  .task("app.tasks.getUserData")
-  .tags(["api", "public", "cacheable"])
-  .run(async (input) => getUserFromDatabase(input as any))
-  .build();
-
 // Structured tags with configuration
 const httpTag = r.tag<{ method: string; path: string }>("http.route").build();
 
 const getUserTask = r
   .task("app.tasks.getUser")
-  .tags(["api", httpTag.with({ method: "GET", path: "/users/:id" })])
-  .run(async (input) => getUserFromDatabase((input as any).id))
+  .tags([httpTag.with({ method: "GET", path: "/users/:id" })])
+  .run(async (input) => getUserFromDatabase(input.id))
   .build();
 ```
 
@@ -655,7 +675,7 @@ const routeRegistration = r
 
       const { method, path } = config;
       server.app[method.toLowerCase()](path, async (req, res) => {
-        const result = await taskDef({ ...req.params, ...req.body } as any);
+        const result = await taskDef({ ...req.params, ...req.body });
         res.json(result);
       });
     });
@@ -732,15 +752,18 @@ const internalEvent = r
 Enforce return value shapes at compile time:
 
 ```typescript
-// Tags that enforce type contracts
+// Tags that enforce type contracts input/output for tasks or config/value for resources
+type InputType = { id: string };
+type OutputType = { name: string };
 const userContract = r
-  .tag<void, void, { name: string }>("contract.user")
+  // void = no config, no need for .with({ ... })
+  .tag<void, InputType, OutputType>("contract.user")
   .build();
 
 const profileTask = r
   .task("app.tasks.getProfile")
   .tags([userContract]) // Must return { name: string }
-  .run(async () => ({ name: "Ada" })) // ✅ Satisfies contract
+  .run(async (input) => ({ name: input.id + "Ada" })) // ✅ Satisfies contract
   .build();
 ```
 
@@ -1391,7 +1414,7 @@ const expensiveTask = r
     globals.middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
-      keyBuilder: (taskId, input) => `${taskId}-${(input as any).userId}`, // optional key builder
+      keyBuilder: (taskId, input: any) => `${taskId}-${input.userId}`, // optional key builder
     }),
   ])
   .run(async (input: { userId: string }) => {
@@ -1467,7 +1490,7 @@ Here are real performance metrics from our comprehensive benchmark suite on an M
 const userTask = r
   .task("user.create")
   .middleware([auth, logging, metrics])
-  .run(async (input) => database.users.create(input as any))
+  .run(async (input) => database.users.create(input))
   .build();
 
 // 1000 executions = ~5ms total time
@@ -1758,7 +1781,7 @@ const userTask = r
     logger.info("User creation attempt", {
       source: userTask.id,
       data: {
-        email: (input as any).email,
+        email: input.email,
         registrationSource: "web",
         timestamp: new Date().toISOString(),
       },
@@ -1766,7 +1789,7 @@ const userTask = r
 
     // With error information
     try {
-      const user = await createUser(input as any);
+      const user = await createUser(input);
       logger.info("User created successfully", {
         data: { userId: user.id, email: user.email },
       });
@@ -1774,7 +1797,7 @@ const userTask = r
       logger.error("User creation failed", {
         error,
         data: {
-          attemptedEmail: (input as any).email,
+          attemptedEmail: input.email,
           validationErrors: error.validationErrors,
         },
       });
@@ -2029,7 +2052,7 @@ const criticalTask = r
   ])
   .run(async (input) => {
     // This task will have verbose debug logging
-    return await processPayment(input as any);
+    return await processPayment(input);
   })
   .build();
 ```
@@ -2170,7 +2193,7 @@ const sendWelcomeEmail = r
   .meta({
     title: "Send Welcome Email",
     description: "Sends a welcome email to newly registered users",
-  } as any)
+  })
   .dependencies({ emailService })
   .run(async ({ input: userData }, { emailService }) => {
     // Email sending logic
@@ -2210,7 +2233,7 @@ const expensiveApiTask = r
     version: "2.1.0",
     apiVersion: "v2",
     costLevel: "high", // Custom property!
-  } as any)
+  })
   .run(async ({ input: prompt }) => {
     // AI generation logic
   })
@@ -2223,7 +2246,7 @@ const database = r
     healthCheck: "/health/db", // Custom property!
     dependencies: ["postgresql", "connection-pool"],
     scalingPolicy: "auto",
-  } as any)
+  })
   // .init(async () => { /* ... */ })
   .build();
 ```
@@ -2253,7 +2276,7 @@ const testEmailer = override(productionEmailer, {
 // Using spread operator works the same way but does not provide type-safety.
 const testEmailer = r
   .resource("app.emailer")
-  .init(async () => ({} as any))
+  .init(async () => ({}))
   .build();
 
 const app = r
@@ -2290,7 +2313,7 @@ const originalMiddleware = taskMiddleware({
 const overriddenMiddleware = override(originalMiddleware, {
   run: async ({ task, next }) => {
     const result = await next(task?.input);
-    return { wrapped: result } as any;
+    return { wrapped: result };
   },
 });
 
@@ -2419,7 +2442,7 @@ const createUserTask = r
   .inputSchema(userSchema) // Works directly with Zod!
   .run(async ({ input: userData }) => {
     // userData is validated and properly typed
-    return { id: "user-123", ...(userData as any) };
+    return { id: "user-123", ...userData };
   })
   .build();
 
