@@ -27,10 +27,6 @@ export const symbolResourceMiddleware: unique symbol = Symbol.for(
 export const symbolMiddlewareConfigured: unique symbol = Symbol.for(
   "runner.middlewareConfigured",
 );
-/** Marks a task that has been patched by a tunnel. Value is the local side mode. */
-export const symbolTunneledTask: unique symbol = Symbol.for(
-  "runner.tunneledTask",
-);
 /** Records which tunnel resource owns the task patching (exclusivity). */
 export const symbolTunneledBy: unique symbol = Symbol.for(
   "runner.tunneledBy",

@@ -8,7 +8,7 @@ import type {
   TunnelTaskSelector,
   TunnelEventSelector,
 } from "../resources/tunnel/types";
-import { symbolTunneledTask, symbolTunneledBy } from "../../types/symbols";
+import { symbolTunneledBy } from "../../types/symbols";
 import { tunnelOwnershipConflictError } from "../../errors";
 
 const originalRuns = new WeakMap<
@@ -78,7 +78,7 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
       t.run = (async (input: any) => {
         return value.run!(t as any, input);
       }) as any;
-      (t as any)[symbolTunneledTask] = "client";
+      t.isTunneled = true;
       (t as any)[symbolTunneledBy] = resourceId;
     }
 

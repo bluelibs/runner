@@ -8,7 +8,7 @@ import {
 } from "../defs";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
-import { symbolFilePath, symbolTask, symbolPhantomTask } from "./symbols";
+import { symbolFilePath, symbolTask, symbolPhantomTask, symbolTunneledBy } from "./symbols";
 import {
   EnsureInputSatisfiesContracts,
   EnsureOutputSatisfiesContracts,
@@ -83,6 +83,10 @@ export interface ITask<
   [symbolTask]: true;
   /** Present only for phantom tasks. */
   [symbolPhantomTask]?: true;
+  /** Indicates if the task is tunneled through a tunnel client. */
+  isTunneled?: boolean;
+  /** Records which tunnel resource owns the task (exclusivity). */
+  [symbolTunneledBy]?: string;
   id: string;
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;

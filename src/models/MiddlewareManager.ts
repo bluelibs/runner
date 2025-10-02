@@ -1,98 +1,78 @@
-import {
-  DependencyMapType,
-  ITask,
-  IResource,
-  ITaskMiddleware,
-  ResourceMiddlewareAttachmentType,
-  TagType,
-} from "../defs";
+import { DependencyMapType, ITask, IResource } from "../defs";
 import { EventManager } from "./EventManager";
 import { Store } from "./Store";
-import {
-  TaskMiddlewareStoreElementType,
-  ResourceMiddlewareStoreElementType,
-} from "../types/storeTypes";
 import { Logger } from "./Logger";
-import { globalEvents } from "../globals/globalEvents";
-import { globalTags } from "../globals/globalTags";
-import { validationError, lockedError } from "../errors";
-import * as utils from "../define";
-import { symbol } from "zod";
-import { ITaskMiddlewareExecutionInput } from "../types/taskMiddleware";
-import {
-  IResourceMiddlewareExecutionInput,
-  IResourceMiddleware,
-} from "../types/resourceMiddleware";
-import {
-  symbolTaskMiddleware,
-  symbolResourceMiddleware,
-} from "../types/symbols";
+import { ITaskMiddleware, IResourceMiddleware } from "../defs";
 import { isResourceMiddleware, isTaskMiddleware } from "../define";
-import { symbolTunneledTask } from "../types/symbols";
+import { InterceptorRegistry } from "./middleware/InterceptorRegistry";
+import { MiddlewareResolver } from "./middleware/MiddlewareResolver";
+import { TaskMiddlewareComposer } from "./middleware/TaskMiddlewareComposer";
+import { ResourceMiddlewareComposer } from "./middleware/ResourceMiddlewareComposer";
+import {
+  TaskMiddlewareInterceptor,
+  ResourceMiddlewareInterceptor,
+} from "./middleware/types";
 
-/**
- * Interceptor for task middleware execution
- */
-export type TaskMiddlewareInterceptor = (
-  next: (input: ITaskMiddlewareExecutionInput<any>) => Promise<any>,
-  input: ITaskMiddlewareExecutionInput<any>,
-) => Promise<any>;
-
-/**
- * Interceptor for resource middleware execution
- */
-export type ResourceMiddlewareInterceptor = (
-  next: (input: IResourceMiddlewareExecutionInput<any>) => Promise<any>,
-  input: IResourceMiddlewareExecutionInput<any>,
-) => Promise<any>;
+// Re-export types for backwards compatibility
+export type { TaskMiddlewareInterceptor, ResourceMiddlewareInterceptor };
 
 /**
  * Centralizes middleware composition and execution for both tasks and resources.
  * Keeps observability emissions and unhandled error routing consistent.
+ *
+ * This is a facade that delegates to specialized composer classes for maintainability.
  */
 export class MiddlewareManager {
-  // Interceptor storage
-  private taskMiddlewareInterceptors: TaskMiddlewareInterceptor[] = [];
-  private resourceMiddlewareInterceptors: ResourceMiddlewareInterceptor[] = [];
-
-  // Per-middleware interceptor storage
-  private perMiddlewareInterceptors: Map<string, TaskMiddlewareInterceptor[]> =
-    new Map();
-  private perResourceMiddlewareInterceptors: Map<
-    string,
-    ResourceMiddlewareInterceptor[]
-  > = new Map();
-
-  // Locking mechanism to prevent modifications after initialization
-  #isLocked = false;
+  private readonly interceptorRegistry: InterceptorRegistry;
+  private readonly middlewareResolver: MiddlewareResolver;
+  private readonly taskComposer: TaskMiddlewareComposer;
+  private readonly resourceComposer: ResourceMiddlewareComposer;
 
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
     protected readonly logger: Logger,
-  ) {}
+  ) {
+    this.interceptorRegistry = new InterceptorRegistry();
+    this.middlewareResolver = new MiddlewareResolver(store);
+    this.taskComposer = new TaskMiddlewareComposer(
+      store,
+      this.interceptorRegistry,
+      this.middlewareResolver,
+    );
+    this.resourceComposer = new ResourceMiddlewareComposer(
+      store,
+      this.interceptorRegistry,
+      this.middlewareResolver,
+    );
+  }
+
+  /**
+   * @internal
+   */
+  public get taskMiddlewareInterceptors() {
+    return this.interceptorRegistry.getGlobalTaskInterceptors();
+  }
+
+  /**
+   * @internal
+   */
+  public get resourceMiddlewareInterceptors() {
+    return this.interceptorRegistry.getGlobalResourceInterceptors();
+  }
 
   /**
    * Gets the current lock status of the MiddlewareManager
    */
-  get isLocked() {
-    return this.#isLocked;
+  get isLocked(): boolean {
+    return this.interceptorRegistry.isLocked;
   }
 
   /**
    * Locks the MiddlewareManager, preventing any further modifications to interceptors
    */
-  lock() {
-    this.#isLocked = true;
-  }
-
-  /**
-   * Throws an error if the MiddlewareManager is locked
-   */
-  private checkLock() {
-    if (this.#isLocked) {
-      lockedError.throw({ what: "MiddlewareManager" });
-    }
+  lock(): void {
+    this.interceptorRegistry.lock();
   }
 
   /**
@@ -107,14 +87,12 @@ export class MiddlewareManager {
     kind: "task" | "resource",
     interceptor: TaskMiddlewareInterceptor | ResourceMiddlewareInterceptor,
   ): void {
-    this.checkLock();
-
     if (kind === "task") {
-      this.taskMiddlewareInterceptors.push(
+      this.interceptorRegistry.addGlobalTaskInterceptor(
         interceptor as TaskMiddlewareInterceptor,
       );
     } else {
-      this.resourceMiddlewareInterceptors.push(
+      this.interceptorRegistry.addGlobalResourceInterceptor(
         interceptor as ResourceMiddlewareInterceptor,
       );
     }
@@ -133,114 +111,19 @@ export class MiddlewareManager {
       | IResourceMiddleware<any, any, any, any>,
     interceptor: TaskMiddlewareInterceptor | ResourceMiddlewareInterceptor,
   ): void {
-    this.checkLock();
-
-    // Determine the type based on the middleware's symbol
     if (isTaskMiddleware(middleware)) {
-      // Store per-middleware interceptor instead of adding to global pool
-      if (!this.perMiddlewareInterceptors.has(middleware.id)) {
-        this.perMiddlewareInterceptors.set(middleware.id, []);
-      }
-      this.perMiddlewareInterceptors
-        .get(middleware.id)!
-        .push(interceptor as TaskMiddlewareInterceptor);
+      this.interceptorRegistry.addTaskMiddlewareInterceptor(
+        middleware.id,
+        interceptor as TaskMiddlewareInterceptor,
+      );
     } else if (isResourceMiddleware(middleware)) {
-      // Store per-middleware interceptor instead of adding to global pool
-      if (!this.perResourceMiddlewareInterceptors.has(middleware.id)) {
-        this.perResourceMiddlewareInterceptors.set(middleware.id, []);
-      }
-      this.perResourceMiddlewareInterceptors
-        .get(middleware.id)!
-        .push(interceptor as ResourceMiddlewareInterceptor);
+      this.interceptorRegistry.addResourceMiddlewareInterceptor(
+        middleware.id,
+        interceptor as ResourceMiddlewareInterceptor,
+      );
     } else {
       throw new Error("Unknown middleware type");
     }
-  }
-
-  /**
-   * Wrap a middleware with its specific interceptors in onion style
-   */
-  private wrapMiddlewareWithInterceptors<TInput, TOutput extends Promise<any>>(
-    middleware: ITaskMiddleware<any, any, any, any>,
-    middlewareRunner: (input: TInput) => Promise<TOutput>,
-    interceptors: TaskMiddlewareInterceptor[],
-  ): (input: TInput) => Promise<TOutput> {
-    if (!interceptors.length) {
-      return middlewareRunner;
-    }
-
-    // Apply interceptors in reverse order (last added runs first)
-    const reversedInterceptors = [...interceptors].reverse();
-
-    let wrapped = middlewareRunner;
-    for (let i = reversedInterceptors.length - 1; i >= 0; i--) {
-      const interceptor = reversedInterceptors[i];
-      const nextFunction = wrapped;
-
-      wrapped = async (input: TInput) => {
-        // Create execution input for the interceptor
-        const executionInput: ITaskMiddlewareExecutionInput<any> = {
-          task: {
-            definition: null as any, // Will be filled by middleware.run
-            input: input,
-          },
-          next: nextFunction as any,
-        };
-
-        // Provide a next function that accepts an execution input and forwards the raw input
-        const wrappedNext = (
-          i: ITaskMiddlewareExecutionInput<any>,
-        ): Promise<any> => {
-          return nextFunction(i.task.input);
-        };
-
-        return interceptor(wrappedNext as any, executionInput);
-      };
-    }
-
-    return wrapped;
-  }
-
-  /**
-   * Wrap a resource middleware with its specific interceptors in onion style
-   */
-  private wrapResourceMiddlewareWithInterceptors<C, V extends Promise<any>>(
-    middleware: IResourceMiddleware<any, any, any, any>,
-    middlewareRunner: (config: C) => Promise<V>,
-    interceptors: ResourceMiddlewareInterceptor[],
-  ): (config: C) => Promise<V> {
-    if (!interceptors.length) {
-      return middlewareRunner;
-    }
-
-    // Apply interceptors in reverse order (last added runs first)
-    const reversedInterceptors = [...interceptors].reverse();
-
-    let wrapped = middlewareRunner;
-    for (let i = reversedInterceptors.length - 1; i >= 0; i--) {
-      const interceptor = reversedInterceptors[i];
-      const nextFunction = wrapped;
-
-      wrapped = async (config: C) => {
-        // Create execution input for the interceptor
-        const executionInput: IResourceMiddlewareExecutionInput<any> = {
-          resource: {
-            definition: null as any, // Will be filled by middleware.run
-            config: config,
-          },
-          next: nextFunction as any,
-        };
-
-        // Provide a next function that accepts an execution input and forwards the raw config
-        const wrappedNext = (input: IResourceMiddlewareExecutionInput<any>) => {
-          return nextFunction(input.resource.config);
-        };
-
-        return interceptor(wrappedNext as any, executionInput);
-      };
-    }
-
-    return wrapped;
   }
 
   /**
@@ -252,164 +135,7 @@ export class MiddlewareManager {
     TOutput extends Promise<any>,
     TDeps extends DependencyMapType,
   >(task: ITask<TInput, TOutput, TDeps>) {
-    const storeTask = this.store.tasks.get(task.id)!;
-    const tDef = storeTask.task as ITask<TInput, TOutput, TDeps>;
-
-    // Base next executes the task with validation
-    let next = async (input: any) => {
-      // Extract raw input from execution input if needed
-      let rawInput = input;
-
-      // Choose which task definition is authoritative for execution:
-      // - Use store (tDef) when task is locally tunneled so tunnel overrides apply
-      // - Otherwise, respect the passed-in task object (preserves override tests behavior)
-      const isLocallyTunneled =
-        (task as any)[symbolTunneledTask] === "client" ||
-        (tDef as any)[symbolTunneledTask] === "client";
-      const runnerTask = (isLocallyTunneled ? tDef : task) as ITask<
-        TInput,
-        TOutput,
-        TDeps
-      >;
-
-      if (runnerTask.inputSchema) {
-        try {
-          rawInput = runnerTask.inputSchema.parse(rawInput);
-        } catch (error) {
-          validationError.throw({
-            subject: "Task input",
-            id: runnerTask.id,
-            originalError:
-              error instanceof Error ? error : new Error(String(error)),
-          });
-        }
-      }
-
-      const deps = storeTask.computedDependencies;
-      const rawResult = await runnerTask.run.call(null, rawInput, deps);
-      if (runnerTask.resultSchema) {
-        try {
-          return runnerTask.resultSchema.parse(rawResult);
-        } catch (error) {
-          validationError.throw({
-            subject: "Task result",
-            id: runnerTask.id,
-            originalError: error as any,
-          });
-        }
-      }
-      return rawResult;
-    };
-
-    // Inject local per-task interceptors first (closest to the task)
-    if (storeTask.interceptors && storeTask.interceptors.length > 0) {
-      for (let i = storeTask.interceptors.length - 1; i >= 0; i--) {
-        const interceptor = storeTask.interceptors[i];
-        const nextFunction = next;
-        next = async (input) => interceptor(nextFunction, input);
-      }
-    }
-
-    // Apply task middleware interceptors (last added runs first)
-    if (this.taskMiddlewareInterceptors.length > 0) {
-      const reversedInterceptors = [
-        ...this.taskMiddlewareInterceptors,
-      ].reverse();
-
-      // Create the final execution input for the chain
-      const createExecutionInput = (
-        input: any,
-        nextFunc: any,
-      ): ITaskMiddlewareExecutionInput<any> => ({
-        task: {
-          definition: task,
-          input: input,
-        },
-        next: nextFunc,
-      });
-
-      // Build the interceptor chain
-      let currentNext = next;
-
-      for (let i = reversedInterceptors.length - 1; i >= 0; i--) {
-        const interceptor = reversedInterceptors[i];
-        const nextFunction = currentNext;
-
-        currentNext = async (input) => {
-          const executionInput = createExecutionInput(input, nextFunction);
-          // Create a wrapper function that matches the expected signature
-          const wrappedNext = (
-            i: ITaskMiddlewareExecutionInput<any>,
-          ): Promise<any> => {
-            return nextFunction(i.task.input);
-          };
-          return interceptor(wrappedNext, executionInput);
-        };
-      }
-
-      next = currentNext;
-    }
-
-    let createdMiddlewares = this.getApplicableTaskMiddlewares(task);
-
-    // If task is tunneled locally (client side), enforce per-task tunnel policy tag (whitelist)
-    const isLocallyTunneledPolicy =
-      (task as any)[symbolTunneledTask] === "client" ||
-      (tDef as any)[symbolTunneledTask] === "client";
-    if (isLocallyTunneledPolicy && globalTags.tunnelPolicy.exists(tDef)) {
-      const cfg = globalTags.tunnelPolicy.extract(task) as any;
-      const allowList = (cfg?.client as any[] | undefined) || undefined;
-      if (Array.isArray(allowList)) {
-        const toId = (x: any) => (typeof x === "string" ? x : x?.id);
-        const allowed = new Set(allowList.map(toId).filter(Boolean));
-        createdMiddlewares = createdMiddlewares.filter((m) =>
-          allowed.has(m.id),
-        );
-      }
-    }
-    if (createdMiddlewares.length === 0) {
-      return next;
-    }
-
-    // layer task middlewares (global first, then local), closest to the task runs last
-    for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
-      const middleware = createdMiddlewares[i];
-      const storeMiddleware = this.store.taskMiddlewares.get(middleware.id)!;
-
-      const nextFunction = next;
-
-      // Create the base middleware runner with events
-      const baseMiddlewareRunner = async (input: any) => {
-        // Attention: we use the store middleware run, because it might have been overidden.
-        // All middleware run() functions should be common accross all tasks.
-        return storeMiddleware.middleware.run(
-          {
-            task: {
-              definition: task,
-              input,
-            },
-            next: nextFunction,
-          },
-          storeMiddleware.computedDependencies,
-          middleware.config,
-        );
-      };
-
-      // Get interceptors for this specific middleware
-      const middlewareInterceptors =
-        this.perMiddlewareInterceptors.get(middleware.id) || [];
-
-      // Wrap the middleware with its interceptors (onion style)
-      const wrappedMiddleware = this.wrapMiddlewareWithInterceptors(
-        middleware,
-        baseMiddlewareRunner,
-        middlewareInterceptors,
-      );
-
-      next = wrappedMiddleware;
-    }
-
-    return next;
+    return this.taskComposer.compose(task);
   }
 
   /**
@@ -426,182 +152,45 @@ export class MiddlewareManager {
     dependencies: any,
     context: TContext,
   ): Promise<V | undefined> {
-    let next = async (cfg: C): Promise<V | undefined> => {
-      if (!resource.init) return undefined as unknown as V;
-      const rawValue = await resource.init.call(
-        null,
-        cfg,
-        dependencies,
-        context,
-      );
-      if (resource.resultSchema) {
-        try {
-          return resource.resultSchema.parse(rawValue);
-        } catch (error) {
-          validationError.throw({
-            subject: "Resource result",
-            id: resource.id,
-            originalError: error as any,
-          });
-        }
-      }
-      return rawValue as any;
-    };
-
-    const createdMiddlewares = this.getApplicableResourceMiddlewares(resource);
-    for (let i = createdMiddlewares.length - 1; i >= 0; i--) {
-      const middleware = createdMiddlewares[i];
-      const storeMiddleware = this.store.resourceMiddlewares.get(
-        middleware.id,
-      )!;
-
-      const nextFunction = next;
-
-      // Create the base resource middleware runner with events
-      const baseMiddlewareRunner = async (cfg: C) => {
-        try {
-          const result = await storeMiddleware.middleware.run(
-            {
-              resource: {
-                definition: resource,
-                config: cfg,
-              },
-              next: nextFunction,
-            },
-            storeMiddleware.computedDependencies,
-            middleware.config,
-          );
-
-          return result as any;
-        } catch (error: unknown) {
-          try {
-            await this.store.onUnhandledError({
-              error,
-              kind: "resourceInit",
-              source: resource.id,
-            });
-          } catch (_) {}
-
-          throw error;
-        }
-      };
-
-      // Get interceptors for this specific middleware
-      const middlewareInterceptors =
-        this.perResourceMiddlewareInterceptors.get(middleware.id) || [];
-
-      // Wrap the middleware with its interceptors (onion style)
-      const wrappedMiddleware = this.wrapResourceMiddlewareWithInterceptors(
-        middleware,
-        baseMiddlewareRunner,
-        middlewareInterceptors,
-      );
-
-      next = wrappedMiddleware;
-    }
-
-    // Apply resource middleware interceptors (last added runs first)
-    if (this.resourceMiddlewareInterceptors.length > 0) {
-      const reversedInterceptors = [
-        ...this.resourceMiddlewareInterceptors,
-      ].reverse();
-
-      // Create the final execution input for the chain
-      const createExecutionInput = (
-        config: C,
-        nextFunc: any,
-      ): IResourceMiddlewareExecutionInput<C> => ({
-        resource: {
-          definition: resource,
-          config: config,
-        },
-        next: nextFunc,
-      });
-
-      // Build the interceptor chain
-      let currentNext = next;
-
-      for (let i = reversedInterceptors.length - 1; i >= 0; i--) {
-        const interceptor = reversedInterceptors[i];
-        const nextFunction = currentNext;
-
-        currentNext = async (cfg: C) => {
-          const executionInput = createExecutionInput(cfg, nextFunction);
-          // Create a wrapper function that matches the expected signature
-          const wrappedNext = (
-            input: IResourceMiddlewareExecutionInput<any>,
-          ) => {
-            return nextFunction(input.resource.config);
-          };
-          return interceptor(wrappedNext, executionInput);
-        };
-      }
-
-      next = currentNext;
-    }
-
-    return next(config);
-  }
-
-  private getApplicableTaskMiddlewares<
-    TInput,
-    TOutput extends Promise<any>,
-    TDeps extends DependencyMapType,
-  >(task: ITask<TInput, TOutput, TDeps>) {
-    const existingMiddlewares = task.middleware;
-    const existingMiddlewareIds = existingMiddlewares.map((x) => x.id);
-    const globalMiddlewares = this.getEverywhereMiddlewareForTasks(task).filter(
-      (x) => !existingMiddlewareIds.includes(x.id),
-    );
-    return [...globalMiddlewares, ...existingMiddlewares];
-  }
-
-  private getApplicableResourceMiddlewares<
-    C,
-    V extends Promise<any>,
-    D extends DependencyMapType,
-    TContext,
-  >(resource: IResource<C, V, D, TContext>) {
-    const existingMiddlewares = resource.middleware;
-    const existingMiddlewareIds = existingMiddlewares.map((x) => x.id);
-    const globalMiddlewares = this.getEverywhereMiddlewareForResources(
+    return this.resourceComposer.runInit(
       resource,
-    ).filter((x) => !existingMiddlewareIds.includes(x.id));
-    return [...globalMiddlewares, ...existingMiddlewares];
+      config,
+      dependencies,
+      context,
+    );
   }
 
   /**
-   * @param task
-   * @returns
+   * Gets all "everywhere" middlewares that apply to the given task
+   * @deprecated Internal method exposed for testing - may be removed in future versions
    */
   getEverywhereMiddlewareForTasks(
-    task: ITask<any, any, any, any>,
+    task: ITask<any, any, any>,
   ): ITaskMiddleware[] {
     return Array.from(this.store.taskMiddlewares.values())
       .filter((x) => Boolean(x.middleware.everywhere))
       .filter((x) => {
         if (typeof x.middleware.everywhere === "function") {
-          return x.middleware.everywhere!(task);
+          return x.middleware.everywhere(task);
         }
-
         return true;
       })
       .map((x) => x.middleware);
   }
 
   /**
-   * Returns all global middleware for resource, which do not depend on the target resource.
+   * Gets all "everywhere" middlewares that apply to the given resource
+   * @deprecated Internal method exposed for testing - may be removed in future versions
    */
   getEverywhereMiddlewareForResources(
-    target: IResource<any, any, any, any>,
+    resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
     return Array.from(this.store.resourceMiddlewares.values())
       .filter((x) => Boolean(x.middleware.everywhere))
       .filter((x) => {
         if (typeof x.middleware.everywhere === "function") {
-          return x.middleware.everywhere!(target);
+          return x.middleware.everywhere(resource);
         }
-
         return true;
       })
       .map((x) => x.middleware);

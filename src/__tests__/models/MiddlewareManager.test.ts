@@ -2,6 +2,8 @@ import { MiddlewareManager } from "../../models/MiddlewareManager";
 import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { Logger } from "../../models/Logger";
+// Import from barrel file for coverage
+import * as MiddlewareExports from "../../models/middleware";
 import {
   defineTask,
   defineResource,
@@ -214,6 +216,48 @@ describe("MiddlewareManager", () => {
     expect(Array.isArray(result)).toBe(true);
   });
 
+  it("getEverywhereMiddlewareForResources includes middleware with everywhere: true", () => {
+    const r = defineResource({ id: "r.test" });
+    const mw = defineResourceMiddleware({
+      id: "mw.everywhere.true",
+      everywhere: true,
+      run: async ({ next }) => next(),
+    });
+    store.storeGenericItem(mw);
+    const result = manager.getEverywhereMiddlewareForResources(r);
+    expect(result.some((m) => m.id === "mw.everywhere.true")).toBe(true);
+  });
+
+  it("getEverywhereMiddlewareForResources filters with everywhere function", () => {
+    const r = defineResource({ id: "r.test.func" });
+    const mw = defineResourceMiddleware({
+      id: "mw.everywhere.func",
+      everywhere: (resource) => resource.id.startsWith("r.test"),
+      run: async ({ next }) => next(),
+    });
+    store.storeGenericItem(mw);
+    const result = manager.getEverywhereMiddlewareForResources(r);
+    expect(result.some((m) => m.id === "mw.everywhere.func")).toBe(true);
+  });
+
+  it("should access resourceMiddlewareInterceptors getter", () => {
+    // Access the deprecated getter for coverage
+    const interceptors = (manager as any).resourceMiddlewareInterceptors;
+    expect(Array.isArray(interceptors)).toBe(true);
+  });
+
+  it("getEverywhereMiddlewareForTasks includes middleware with everywhere: true", () => {
+    const task = defineTask({ id: "task.true", run: async () => 0 });
+    const mw = defineTaskMiddleware({
+      id: "mw.task.everywhere.true",
+      everywhere: true,
+      run: async ({ next, task }) => next(task?.input),
+    });
+    store.storeGenericItem(mw);
+    const res = manager.getEverywhereMiddlewareForTasks(task);
+    expect(res.some((m) => m.id === "mw.task.everywhere.true")).toBe(true);
+  });
+
   it("getEverywhereMiddlewareForTasks excludes middleware that depends on the task", () => {
     const task = defineTask({ id: "task.dep", run: async () => 0 });
     const mw = defineTaskMiddleware({
@@ -228,6 +272,75 @@ describe("MiddlewareManager", () => {
     store.storeGenericItem(mw);
     const res = manager.getEverywhereMiddlewareForTasks(task);
     expect(res).toHaveLength(0);
+  });
+
+  it("should export middleware classes from barrel file", () => {
+    // Execute barrel file exports for coverage
+    expect(MiddlewareExports.ValidationHelper).toBeDefined();
+    expect(MiddlewareExports.InterceptorRegistry).toBeDefined();
+    expect(MiddlewareExports.MiddlewareResolver).toBeDefined();
+    expect(MiddlewareExports.TaskMiddlewareComposer).toBeDefined();
+    expect(MiddlewareExports.ResourceMiddlewareComposer).toBeDefined();
+  });
+
+  it("should handle non-Error validation failures", async () => {
+    // Test ValidationHelper branch where error is not instanceof Error
+    const task = defineTask({
+      id: "task.nonError",
+      resultSchema: {
+        parse: (value: any) => {
+          throw "string error"; // throw non-Error
+        },
+      },
+      run: async () => 0,
+    });
+    store.tasks.set(task.id, {
+      task,
+      computedDependencies: {},
+      isInitialized: true,
+    } as any);
+
+    const runner = manager.composeTaskRunner(task);
+    await expect(runner(undefined)).rejects.toThrow();
+  });
+
+  it("should apply tunnel policy filter when task is tunneled", () => {
+    // Test MiddlewareResolver branch for tunnel policy
+    const { globalTags } = require("../../globals/globalTags");
+
+    const mw = defineTaskMiddleware({
+      id: "test.mw.tunnel",
+      run: async ({ next, task }) => next(task?.input),
+    });
+
+    const task = defineTask({
+      id: "task.tunneled",
+      tags: [globalTags.tunnelPolicy.with({ client: [mw.id] })],
+      middleware: [mw],
+      run: async () => 0,
+    });
+
+    // Mark task as tunneled
+    task.isTunneled = true;
+
+    store.taskMiddlewares.set(mw.id, {
+      middleware: mw,
+      computedDependencies: {},
+      isInitialized: true,
+    });
+
+    // Create a copy of the task for the store and mark it as tunneled too
+    const storeTask = { ...task };
+    storeTask.isTunneled = true;
+
+    store.tasks.set(task.id, {
+      task: storeTask,
+      computedDependencies: {},
+      isInitialized: true,
+    });
+
+    const runner = manager.composeTaskRunner(task);
+    expect(runner).toBeDefined();
   });
 
   describe("interceptors", () => {
