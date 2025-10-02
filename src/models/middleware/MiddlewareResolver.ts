@@ -75,7 +75,7 @@ export class MiddlewareResolver {
   /**
    * Gets all "everywhere" middlewares that apply to the given task
    */
-  private getEverywhereTaskMiddlewares(
+  public getEverywhereTaskMiddlewares(
     task: ITask<any, any, any>,
   ): ITaskMiddleware[] {
     return Array.from(this.store.taskMiddlewares.values())
@@ -92,7 +92,7 @@ export class MiddlewareResolver {
   /**
    * Gets all "everywhere" middlewares that apply to the given resource
    */
-  private getEverywhereResourceMiddlewares(
+  public getEverywhereResourceMiddlewares(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
     return Array.from(this.store.resourceMiddlewares.values())

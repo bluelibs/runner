@@ -167,15 +167,7 @@ export class MiddlewareManager {
   getEverywhereMiddlewareForTasks(
     task: ITask<any, any, any>,
   ): ITaskMiddleware[] {
-    return Array.from(this.store.taskMiddlewares.values())
-      .filter((x) => Boolean(x.middleware.everywhere))
-      .filter((x) => {
-        if (typeof x.middleware.everywhere === "function") {
-          return x.middleware.everywhere(task);
-        }
-        return true;
-      })
-      .map((x) => x.middleware);
+    return this.middlewareResolver.getEverywhereTaskMiddlewares(task);
   }
 
   /**
@@ -185,14 +177,6 @@ export class MiddlewareManager {
   getEverywhereMiddlewareForResources(
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
-    return Array.from(this.store.resourceMiddlewares.values())
-      .filter((x) => Boolean(x.middleware.everywhere))
-      .filter((x) => {
-        if (typeof x.middleware.everywhere === "function") {
-          return x.middleware.everywhere(resource);
-        }
-        return true;
-      })
-      .map((x) => x.middleware);
+    return this.middlewareResolver.getEverywhereResourceMiddlewares(resource);
   }
 }
