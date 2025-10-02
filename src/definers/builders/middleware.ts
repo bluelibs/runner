@@ -157,9 +157,9 @@ function makeTaskMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
 }
 
 export function taskMiddlewareBuilder<
-  C,
-  In,
-  Out,
+  C = void,
+  In = void,
+  Out = void,
   D extends DependencyMapType = {},
 >(id: string): TaskMiddlewareFluentBuilder<C, In, Out, D> {
   const initial: TaskMwState<C, In, Out, D> = Object.freeze({
@@ -318,9 +318,9 @@ function makeResourceMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
 }
 
 export function resourceMiddlewareBuilder<
-  C,
-  In,
-  Out,
+  C = void,
+  In = void,
+  Out = void,
   D extends DependencyMapType = {},
 >(id: string): ResourceMiddlewareFluentBuilder<C, In, Out, D> {
   const initial: ResMwState<C, In, Out, D> = Object.freeze({
