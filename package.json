@@ -1,6 +1,6 @@
 {
   "name": "@bluelibs/runner",
-  "version": "4.8.5",
+  "version": "4.8.6",
   "description": "BlueLibs Runner",
   "sideEffects": false,
   "main": "dist/universal/index.cjs",
