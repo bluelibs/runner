@@ -10,9 +10,11 @@ import type {
   ITask,
   IResource,
 } from "../../defs";
+import { symbolFilePath } from "../../defs";
 import { defineTaskMiddleware } from "../defineTaskMiddleware";
 import { defineResourceMiddleware } from "../defineResourceMiddleware";
 import { mergeArray } from "./utils";
+import { getCallerFile } from "../../tools/getCallerFile";
 
 // Task middleware builder
 type TaskMwState<C, In, Out, D extends DependencyMapType> = Readonly<
@@ -27,7 +29,9 @@ type TaskMwState<C, In, Out, D extends DependencyMapType> = Readonly<
       | "tags"
       | "everywhere"
     >
-  >
+  > & {
+    filePath: string;
+  }
 >;
 
 function cloneTask<C, In, Out, D extends DependencyMapType>(
@@ -148,9 +152,11 @@ function makeTaskMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },
     build() {
-      return defineTaskMiddleware({
+      const middleware = defineTaskMiddleware({
         ...(state as unknown as ITaskMiddlewareDefinition<C, In, Out, D>),
       });
+      (middleware as any)[symbolFilePath] = state.filePath;
+      return middleware;
     },
   };
   return b as TaskMiddlewareFluentBuilder<C, In, Out, D>;
@@ -162,8 +168,10 @@ export function taskMiddlewareBuilder<
   Out = void,
   D extends DependencyMapType = {},
 >(id: string): TaskMiddlewareFluentBuilder<C, In, Out, D> {
+  const filePath = getCallerFile();
   const initial: TaskMwState<C, In, Out, D> = Object.freeze({
     id,
+    filePath,
     dependencies: {} as any,
     configSchema: undefined as any,
     run: undefined as any,
@@ -188,7 +196,9 @@ type ResMwState<C, In, Out, D extends DependencyMapType> = Readonly<
       | "tags"
       | "everywhere"
     >
-  >
+  > & {
+    filePath: string;
+  }
 >;
 
 function cloneRes<C, In, Out, D extends DependencyMapType>(
@@ -309,9 +319,11 @@ function makeResourceMiddlewareBuilder<C, In, Out, D extends DependencyMapType>(
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },
     build() {
-      return defineResourceMiddleware({
+      const middleware = defineResourceMiddleware({
         ...(state as unknown as IResourceMiddlewareDefinition<C, In, Out, D>),
       });
+      (middleware as any)[symbolFilePath] = state.filePath;
+      return middleware;
     },
   };
   return b as ResourceMiddlewareFluentBuilder<C, In, Out, D>;
@@ -323,8 +335,10 @@ export function resourceMiddlewareBuilder<
   Out = void,
   D extends DependencyMapType = {},
 >(id: string): ResourceMiddlewareFluentBuilder<C, In, Out, D> {
+  const filePath = getCallerFile();
   const initial: ResMwState<C, In, Out, D> = Object.freeze({
     id,
+    filePath,
     dependencies: {} as any,
     configSchema: undefined as any,
     run: undefined as any,

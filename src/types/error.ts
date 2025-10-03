@@ -1,6 +1,7 @@
 import { symbolError, symbolOptionalDependency } from "./symbols";
 import type { IOptionalDependency } from "./utilities";
 import type { IValidationSchema } from "./utilities";
+import type { IErrorMeta } from "./meta";
 
 // Tiny runtime marker to help coverage include this file
 export const ERROR_TYPES_LOADED = true as const;
@@ -16,6 +17,7 @@ export interface IErrorDefinition<
    * Validate error data on throw(). If provided, data is parsed first.
    */
   dataSchema?: IValidationSchema<TData>;
+  meta?: IErrorMeta;
 }
 
 export interface IErrorDefinitionFinal<TData extends DefaultErrorType>

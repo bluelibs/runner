@@ -1,6 +1,7 @@
 import type { DefaultErrorType } from "../../types/error";
 import { defineError, ErrorHelper } from "../defineError";
 import type { IValidationSchema } from "../../types/utilities";
+import type { IErrorMeta } from "../../types/meta";
 
 type BuilderState<TData extends DefaultErrorType> = Readonly<{
   id: string;
@@ -8,6 +9,7 @@ type BuilderState<TData extends DefaultErrorType> = Readonly<{
   serialize?: (data: TData) => string;
   parse?: (raw: string) => TData;
   dataSchema?: IValidationSchema<TData>;
+  meta?: IErrorMeta;
 }>;
 
 function clone<TData extends DefaultErrorType>(
@@ -26,6 +28,7 @@ export interface ErrorFluentBuilder<
   dataSchema(schema: IValidationSchema<TData>): ErrorFluentBuilder<TData>;
   build(): ErrorHelper<TData>;
   format(fn: (data: TData) => string): ErrorFluentBuilder<TData>;
+  meta<TNewMeta extends IErrorMeta>(m: TNewMeta): ErrorFluentBuilder<TData>;
 }
 
 function makeErrorBuilder<TData extends DefaultErrorType>(
@@ -49,6 +52,10 @@ function makeErrorBuilder<TData extends DefaultErrorType>(
       const next = clone(state, { format: fn });
       return makeErrorBuilder(next);
     },
+    meta<TNewMeta extends IErrorMeta>(m: TNewMeta) {
+      const next = clone(state, { meta: m });
+      return makeErrorBuilder(next);
+    },
     build() {
       return defineError<TData>({
         id: state.id,
@@ -56,6 +63,7 @@ function makeErrorBuilder<TData extends DefaultErrorType>(
         parse: state.parse,
         dataSchema: state.dataSchema,
         format: state.format,
+        meta: state.meta,
       });
     },
   };
@@ -70,6 +78,7 @@ export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
     serialize: undefined,
     parse: undefined,
     dataSchema: undefined,
+    meta: {} as IErrorMeta,
   });
   return makeErrorBuilder(initial);
 }

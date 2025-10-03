@@ -2,6 +2,7 @@ export const ASYNC_CONTEXT_TYPES_LOADED = true as const;
 import { symbolAsyncContext, symbolOptionalDependency } from "./symbols";
 import { ITaskMiddlewareConfigured } from "./taskMiddleware";
 import type { IValidationSchema, IOptionalDependency } from "./utilities";
+import type { IAsyncContextMeta } from "./meta";
 
 export interface IAsyncContextDefinition<T> {
   id: string;
@@ -11,6 +12,7 @@ export interface IAsyncContextDefinition<T> {
    * When provided, context values will be validated when provide() is called.
    */
   configSchema?: IValidationSchema<T>;
+  meta?: IAsyncContextMeta;
 }
 
 /**

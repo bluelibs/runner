@@ -13,3 +13,5 @@ export interface IResourceMeta extends IMeta {}
 export interface IEventMeta extends IMeta {}
 export interface IMiddlewareMeta extends IMeta {}
 export interface ITagMeta extends IMeta {}
+export interface IErrorMeta extends IMeta {}
+export interface IAsyncContextMeta extends IMeta {}

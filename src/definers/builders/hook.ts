@@ -6,8 +6,10 @@ import type {
   ITaskMeta,
   TagType,
 } from "../../defs";
+import { symbolFilePath } from "../../defs";
 import { defineHook } from "../defineHook";
 import { mergeArray } from "./utils";
+import { getCallerFile } from "../../tools/getCallerFile";
 
 type BuilderState<
   TDeps extends DependencyMapType,
@@ -19,7 +21,9 @@ type BuilderState<
       IHookDefinition<TDeps, TOn, TMeta>,
       "id" | "dependencies" | "on" | "order" | "meta" | "run" | "tags"
     >
-  >
+  > & {
+    filePath: string;
+  }
 >;
 
 function clone<
@@ -154,17 +158,21 @@ function makeHookBuilder<
       return makeHookBuilder<TDeps, TOn, TMeta>(next);
     },
     build() {
-      return defineHook({
+      const hook = defineHook({
         ...(state as unknown as IHookDefinition<TDeps, TOn, TMeta>),
       });
+      (hook as any)[symbolFilePath] = state.filePath;
+      return hook;
     },
   };
   return b as HookFluentBuilder<TDeps, TOn, TMeta>;
 }
 
 export function hookBuilder(id: string): HookFluentBuilder<{}, any, ITaskMeta> {
+  const filePath = getCallerFile();
   const initial: BuilderState<{}, any, ITaskMeta> = Object.freeze({
     id,
+    filePath,
     dependencies: {} as any,
     on: "*" as any,
     order: undefined as any,

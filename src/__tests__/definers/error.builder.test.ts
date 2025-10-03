@@ -62,4 +62,16 @@ describe("error builder", () => {
       expect(E.is(err)).toBe(true);
     }
   });
+
+  it("accepts meta in builder chain (smoke)", () => {
+    const E = r
+      .error<{ message: string }>("tests.errors.meta")
+      .meta({ title: "Test Error", description: "A test error" })
+      .build();
+    try {
+      E.throw({ message: "test" });
+    } catch (err) {
+      expect(E.is(err)).toBe(true);
+    }
+  });
 });

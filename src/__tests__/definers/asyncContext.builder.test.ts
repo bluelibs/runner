@@ -71,4 +71,15 @@ describe("async context builder and defineAsyncContext", () => {
     const bad: any = { id: "x" };
     expect(() => ctx.provide(bad, async () => undefined)).toThrow("invalid");
   });
+
+  it("accepts meta in builder chain (smoke)", async () => {
+    const ctx = r
+      .asyncContext<{ id: number }>("tests.ctx.meta")
+      .meta({ title: "Test Context", description: "A test context" })
+      .build();
+
+    await ctx.provide({ id: 1 }, async () => {
+      expect(ctx.use()).toEqual({ id: 1 });
+    });
+  });
 });

@@ -5,13 +5,17 @@ import type {
   IValidationSchema,
   TagType,
 } from "../../defs";
+import { symbolFilePath } from "../../defs";
 import { defineEvent } from "../defineEvent";
 import { mergeArray } from "./utils";
+import { getCallerFile } from "../../tools/getCallerFile";
 
 type BuilderState<TPayload> = Readonly<
   Required<
     Pick<IEventDefinition<TPayload>, "id" | "meta" | "payloadSchema" | "tags">
-  >
+  > & {
+    filePath: string;
+  }
 >;
 
 function clone<TPayload>(
@@ -54,17 +58,21 @@ function makeEventBuilder<TPayload>(
       return makeEventBuilder<TPayload>(next);
     },
     build() {
-      return defineEvent({
+      const event = defineEvent({
         ...(state as unknown as IEventDefinition<TPayload>),
       });
+      (event as any)[symbolFilePath] = state.filePath;
+      return event;
     },
   };
   return b as EventFluentBuilder<TPayload>;
 }
 
 export function eventBuilder(id: string): EventFluentBuilder<void> {
+  const filePath = getCallerFile();
   const initial: BuilderState<void> = Object.freeze({
     id,
+    filePath,
     meta: {} as any,
     payloadSchema: undefined as any,
     tags: [] as any,

@@ -6,8 +6,10 @@ import type {
   TaskMiddlewareAttachmentType,
   IPhantomTask,
 } from "../../defs";
+import { symbolFilePath } from "../../defs";
 import { defineTask } from "../defineTask";
 import { cloneState, mergeArray, mergeDepsNoConfig } from "./utils";
+import { getCallerFile } from "../../tools/getCallerFile";
 
 type PhantomBuilderState<
   TInput,
@@ -18,6 +20,7 @@ type PhantomBuilderState<
   TMiddleware extends TaskMiddlewareAttachmentType[],
 > = Readonly<{
   id: string;
+  filePath: string;
   dependencies?: TDeps | (() => TDeps);
   middleware?: TMiddleware;
   meta?: TMeta;
@@ -338,6 +341,7 @@ function makePhantomTaskBuilder<
         meta: state.meta as any,
         tags: state.tags as any,
       });
+      (built as any)[symbolFilePath] = state.filePath;
       return built as IPhantomTask<TInput, TResolved, TDeps, TMeta, TTags, TMiddleware>;
     },
   };
@@ -357,6 +361,7 @@ export function phantomTaskBuilder<
   TagType[],
   TaskMiddlewareAttachmentType[]
 > {
+  const filePath = getCallerFile();
   const initial: PhantomBuilderState<
     TInput,
     TResolved,
@@ -366,6 +371,7 @@ export function phantomTaskBuilder<
     TaskMiddlewareAttachmentType[]
   > = Object.freeze({
     id,
+    filePath,
     dependencies: {} as any,
     middleware: [] as any,
     meta: {} as any,

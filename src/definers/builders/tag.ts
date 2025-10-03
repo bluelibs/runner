@@ -1,8 +1,11 @@
 import type { ITag, ITagMeta, IValidationSchema } from "../../defs";
+import { symbolFilePath } from "../../defs";
 import { defineTag } from "../defineTag";
+import { getCallerFile } from "../../tools/getCallerFile";
 
 type BuilderState<TConfig, TEnforceIn, TEnforceOut> = Readonly<{
   id: string;
+  filePath: string;
   meta?: ITagMeta;
   configSchema?: IValidationSchema<any>;
   config?: TConfig;
@@ -59,12 +62,14 @@ function makeTagBuilder<TConfig, TEnforceIn, TEnforceOut>(
       );
     },
     build() {
-      return defineTag<TConfig, TEnforceIn, TEnforceOut>({
+      const tag = defineTag<TConfig, TEnforceIn, TEnforceOut>({
         id: state.id,
         meta: state.meta,
         configSchema: state.configSchema as any,
         config: state.config as any,
       });
+      (tag as any)[symbolFilePath] = state.filePath;
+      return tag;
     },
   };
   return b as TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut>;
@@ -75,9 +80,11 @@ export function tagBuilder<
   TEnforceIn = void,
   TEnforceOut = void,
 >(id: string): TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut> {
+  const filePath = getCallerFile();
   const initial: BuilderState<TConfig, TEnforceIn, TEnforceOut> = Object.freeze(
     {
       id,
+      filePath,
       meta: {} as any,
       configSchema: undefined as any,
       config: undefined as any,

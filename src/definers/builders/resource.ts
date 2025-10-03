@@ -10,7 +10,9 @@ import type {
   ResourceMiddlewareAttachmentType,
   TagType,
 } from "../../defs";
+import { symbolFilePath } from "../../defs";
 import { defineResource } from "../defineResource";
+import { getCallerFile } from "../../tools/getCallerFile";
 
 type BuilderState<
   TConfig,
@@ -22,6 +24,7 @@ type BuilderState<
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 > = Readonly<{
   id: string;
+  filePath: string;
   dependencies?: TDeps | ((config: TConfig) => TDeps);
   register?:
     | Array<RegisterableItems>
@@ -815,7 +818,9 @@ function makeResourceBuilder<
         meta: state.meta,
         overrides: state.overrides,
       };
-      return defineResource(definition);
+      const resource = defineResource(definition);
+      (resource as any)[symbolFilePath] = state.filePath;
+      return resource;
     },
   };
   return builder;
@@ -845,6 +850,7 @@ export function resourceBuilder(
   TagType[],
   ResourceMiddlewareAttachmentType[]
 > {
+  const filePath = getCallerFile();
   const initial: BuilderState<
     void,
     Promise<any>,
@@ -855,6 +861,7 @@ export function resourceBuilder(
     ResourceMiddlewareAttachmentType[]
   > = Object.freeze({
     id,
+    filePath,
     dependencies: undefined,
     register: undefined,
     middleware: [],

@@ -7,9 +7,11 @@ import type {
   TagType,
   TaskMiddlewareAttachmentType,
 } from "../../defs";
+import { symbolFilePath } from "../../defs";
 import { defineTask } from "../defineTask";
 import { cloneState, mergeArray, mergeDepsNoConfig } from "./utils";
 import { phantomTaskBuilder, type PhantomTaskFluentBuilder } from "./task.phantom";
+import { getCallerFile } from "../../tools/getCallerFile";
 
 type ShouldReplaceInput<T> = [T] extends [undefined] ? true : [T] extends [void] ? true : (0 extends 1 & T ? true : false);
 type ResolveInput<TExisting, TProposed> = ShouldReplaceInput<TExisting> extends true
@@ -25,6 +27,7 @@ type BuilderState<
   TMiddleware extends TaskMiddlewareAttachmentType[],
 > = Readonly<{
   id: string;
+  filePath: string;
   dependencies?: TDeps | (() => TDeps);
   middleware?: TMiddleware;
   meta?: TMeta;
@@ -405,7 +408,7 @@ function makeTaskBuilder<
       >(next);
     },
     build() {
-      return defineTask({
+      const task = defineTask({
         ...(state as unknown as ITaskDefinition<
           TInput,
           TOutput,
@@ -415,6 +418,8 @@ function makeTaskBuilder<
           TMiddleware
         >),
       });
+      (task as any)[symbolFilePath] = state.filePath;
+      return task;
     },
   };
   return builder;
@@ -430,6 +435,7 @@ export function taskBuilder(
   TagType[],
   TaskMiddlewareAttachmentType[]
 > {
+  const filePath = getCallerFile();
   const initial: BuilderState<
     undefined,
     Promise<any>,
@@ -439,6 +445,7 @@ export function taskBuilder(
     TaskMiddlewareAttachmentType[]
   > = Object.freeze({
     id,
+    filePath,
     dependencies: {} as any,
     middleware: [] as any,
     meta: {} as any,
