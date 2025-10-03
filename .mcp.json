@@ -1,0 +1,20 @@
+{
+  "mcpServers": {
+    "web-search-prime": {
+      "type": "http",
+      "url": "https://api.z.ai/api/mcp/web_search_prime/mcp",
+      "headers": {
+        "Authorization": "Bearer 9b153d66239646ef96a38b43b523fc9e.CFKIroOkc2bbVmtp"
+      }
+    },
+    "zai-mcp-server": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@z_ai/mcp-server"],
+      "env": {
+        "Z_AI_API_KEY": "9b153d66239646ef96a38b43b523fc9e.CFKIroOkc2bbVmtp",
+        "Z_AI_MODE": "ZAI"
+      }
+    }
+  }
+}

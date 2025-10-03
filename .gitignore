@@ -10,7 +10,6 @@ typings
 yarn-error.log
 yarn.lock
 .vscode
-.aider*
 junit.xml
 /baseline.json
 /benchmark-results.json
