@@ -3,34 +3,18 @@ import {
   ProtocolEnvelope,
 } from "./globals/resources/tunnel/protocol";
 import { Serializer } from "./globals/resources/tunnel/serializer";
-import type { IAsyncContext } from "./types/asyncContext";
-import type { IErrorHelper } from "./types/error";
 import { normalizeError as _normalizeError } from "./globals/resources/tunnel/error-utils";
+import type {
+  ExposureFetchAuthConfig,
+  ExposureFetchConfig,
+  ExposureFetchClient,
+} from "./globals/resources/tunnel/types";
 export { normalizeError } from "./globals/resources/tunnel/error-utils";
-
-export interface ExposureFetchAuthConfig {
-  header?: string; // default: x-runner-token
-  token: string;
-}
-
-export interface ExposureFetchConfig {
-  baseUrl: string; // ex: http://localhost:7070/__runner
-  auth?: ExposureFetchAuthConfig;
-  timeoutMs?: number; // optional request timeout
-  fetchImpl?: typeof fetch; // custom fetch (optional)
-  serializer: Serializer; // required serializer (EJSON-compatible)
-  onRequest?: (ctx: {
-    url: string;
-    headers: Record<string, string>;
-  }) => void | Promise<void>;
-  contexts?: Array<IAsyncContext<any>>;
-  errorRegistry?: Map<string, IErrorHelper<any>>;
-}
-
-export interface ExposureFetchClient {
-  task<I = unknown, O = unknown>(id: string, input?: I): Promise<O>;
-  event<P = unknown>(id: string, payload?: P): Promise<void>;
-}
+export type {
+  ExposureFetchAuthConfig,
+  ExposureFetchConfig,
+  ExposureFetchClient,
+} from "./globals/resources/tunnel/types";
 
 // normalizeError is re-exported from error-utils for public API
 

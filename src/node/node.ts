@@ -9,11 +9,14 @@ import type { IResource } from "../defs";
 export { nodeExposure } from "./exposure.resource";
 export { hasExposureContext, useExposureContext } from "./exposure/requestContext";
 export { createNodeFile } from "./files";
+export type * from "./exposure/resourceTypes";
 // Important: avoid importing a path that ends with `.node`
 // as tsup's native-node-modules plugin treats it as a native addon.
 // Point explicitly to the TS module to keep bundling happy.
 export { createHttpSmartClient } from "./http-smart-client.model";
+export type * from "./http-smart-client.model";
 export { createHttpMixedClient } from "./http-mixed-client";
+export type * from "./http-mixed-client";
 export { readInputFileToBuffer, writeInputFileToPath } from "./inputFile.utils";
 
 import { httpSmartClientFactory } from "./resources/http-smart-client.factory.resource";

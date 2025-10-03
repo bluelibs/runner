@@ -155,12 +155,12 @@ export type DependencyValueType<T> = T extends ITask<any, any, any>
   ? TaskDependency<ExtractTaskInput<T>, ExtractTaskOutput<T>>
   : T extends IResource<any, any>
   ? ResourceDependency<ExtractResourceValue<T>>
-  : T extends IEventDefinition<any>
-  ? EventDependency<ExtractEventPayload<T>>
   : T extends IErrorHelper<any>
   ? T
   : T extends IAsyncContext<any>
   ? T
+  : T extends IEventDefinition<any>
+  ? EventDependency<ExtractEventPayload<T>>
   : T extends IOptionalDependency<infer U>
   ? DependencyValueType<U> | undefined
   : never;
@@ -188,12 +188,12 @@ export type ResourceDependencyValueType<T> = T extends ITask<any, any, any>
   ? TaskDependencyWithIntercept<ExtractTaskInput<T>, ExtractTaskOutput<T>>
   : T extends IResource<any, any>
   ? ResourceDependency<ExtractResourceValue<T>>
-  : T extends IEventDefinition<any>
-  ? EventDependency<ExtractEventPayload<T>>
   : T extends IErrorHelper<any>
   ? T
   : T extends IAsyncContext<any>
   ? T
+  : T extends IEventDefinition<any>
+  ? EventDependency<ExtractEventPayload<T>>
   : T extends IOptionalDependency<infer U>
   ? ResourceDependencyValueType<U> | undefined
   : never;

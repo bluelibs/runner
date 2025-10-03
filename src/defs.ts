@@ -25,6 +25,8 @@ export * from "./types/taskMiddleware";
 export * from "./types/resourceMiddleware";
 export * from "./types/meta";
 export * from "./types/runner";
+export * from "./types/asyncContext";
+export * from "./types/error";
 
 // Useful other types that are kind-of spread out.
 export { ICacheInstance } from "./globals/middleware/cache.middleware";

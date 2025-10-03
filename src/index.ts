@@ -82,5 +82,9 @@ export * as Errors from "./errors";
 export { PlatformAdapter, setPlatform } from "./platform";
 export { EJSON } from "@bluelibs/ejson";
 
+// HTTP and tunnel functionality
+export * from "./http-client";
+export * from "./http-fetch-tunnel.resource";
+
 // Re-export types at the package root so consumer declaration emits can reference them directly
 export type * from "./defs";
