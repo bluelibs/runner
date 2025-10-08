@@ -8,7 +8,7 @@ const COMMON = {
   minify: false,
   tsconfig: "tsconfig.build.json",
   external: ["async_hooks", "node:async_hooks"],
-  dts: false,
+  dts: true,
   target: "es2022",
 };
 
