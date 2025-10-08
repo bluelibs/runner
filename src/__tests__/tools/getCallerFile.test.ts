@@ -48,4 +48,16 @@ describe("getCallerFile", () => {
     expect(mw[symbolFilePath]).toContain("getCallerFile.test");
     expect(event[symbolFilePath]).toContain("getCallerFile.test");
   });
+
+  it("returns 'unknown' in non-node environments (mocked)", async () => {
+    jest.resetModules();
+    jest.doMock("../../platform", () => ({ isNode: () => false }));
+    const { getCallerFile: getCallerFileMocked } = await import(
+      "../../tools/getCallerFile"
+    );
+    const out = getCallerFileMocked();
+    expect(out).toBe("unknown");
+  });
+
+  // No need for further branch gymnastics; non-node path is constant
 });

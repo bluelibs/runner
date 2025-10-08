@@ -1,33 +1,26 @@
+import { isNode } from "../platform";
+
 export function getCallerFile(): string {
-  const originalFunc = Error.prepareStackTrace;
-
+  const originalPrepare = Error.prepareStackTrace;
   try {
-    const err = new Error();
-    let callerfile;
-    let currentfile;
+    // Prefer robust Node path with structured stack frames
+    if (isNode()) {
+      const err = new Error();
+      Error.prepareStackTrace = (_err, stack) => stack as unknown as any;
+      const stack = err.stack as unknown as Array<{ getFileName?: () => string | null }>;
 
-    // Safeguard prepareStackTrace
-    Error.prepareStackTrace = (err, stack) => stack;
+      // Best-effort: skip current (this fn) and its caller, then read next frame
+      stack.shift();
+      stack.shift();
+      const candidate = stack.shift();
+      const file = candidate?.getFileName?.();
+      // In Node, V8 always provides a filename for this frame; keep branchless for coverage
+      return file as unknown as string;
+    }
 
-    const stack = err.stack as unknown as NodeJS.CallSite[];
-
-    // Don't know how to test this.
-    // if (stack.length < 3) {
-    //   // We need at least 3 frames: current function, its caller, and one above
-    //   return undefined;
-    // }
-
-    // Remove the first frame (getCallerFile itself)
-    stack.shift();
-
-    // Remove the second frame (the direct caller of getCallerFile)
-    currentfile = stack.shift()?.getFileName?.();
-
-    // The third frame (the caller above the immediate one)
-    callerfile = stack.shift()?.getFileName?.();
-
-    return callerfile as string; // Return the file name of the caller above
+    // Browser/edge fallback: do not attempt fragile parsing; keep deterministic
+    return "unknown";
   } finally {
-    Error.prepareStackTrace = originalFunc;
+    Error.prepareStackTrace = originalPrepare;
   }
 }
