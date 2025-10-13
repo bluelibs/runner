@@ -1,6 +1,7 @@
 .DS_Store
 /todos
 TODO.md
+CLAUDE.md
 coverage
 dist
 /docs
