@@ -48,6 +48,21 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: npm run typedoc
 
+      - name: Delete existing GitHub Pages artifacts
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Get the list of artifacts for this repository
+          artifacts=$(curl -s -H "Authorization: Bearer $GITHUB_TOKEN" \
+            https://api.github.com/repos/${{ github.repository }}/actions/artifacts)
+
+          # Filter for "github-pages" artifacts and delete them
+          echo "$artifacts" | jq -r '.artifacts[] | select(.name == "github-pages") | .id' | while read id; do
+            curl -X DELETE -H "Authorization: Bearer $GITHUB_TOKEN" \
+              https://api.github.com/repos/${{ github.repository }}/actions/artifacts/$id
+          done
+
       - name: Setup Pages
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         uses: actions/configure-pages@v4
