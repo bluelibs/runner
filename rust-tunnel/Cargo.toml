@@ -21,3 +21,7 @@ path = "src/lib.rs"
 [[bin]]
 name = "rust-tunnel-server"
 path = "src/main.rs"
+
+[[bin]]
+name = "rust-tunnel-server-ipc"
+path = "src/main_ipc.rs"
