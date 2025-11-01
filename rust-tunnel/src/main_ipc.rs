@@ -19,24 +19,27 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "app.tasks.add".to_string(),
             "app.tasks.greet".to_string(),
             "app.tasks.echo".to_string(),
+            "app.tasks.admin.delete".to_string(),
         ],
         allowed_events: vec![
             "app.events.notify".to_string(),
             "app.events.log".to_string(),
         ],
         cors_origin: Some("*".to_string()),
+        delegate_auth: true,  // Node.js handles auth!
     };
 
     println!("🦀 Starting Rust HTTP Server + Node.js Worker (IPC)");
     println!("===================================================");
     println!();
     println!("Architecture:");
-    println!("  HTTP Request → [Rust] → IPC → [Node.js] → Execute Task");
+    println!("  HTTP Request → [Rust] → IPC → [Node.js]");
     println!("                   ↓             ↓");
-    println!("                 HTTP           Business");
-    println!("                 CORS           Logic");
-    println!("                 Auth");
-    println!("                 JSON");
+    println!("                 HTTP          Auth Logic");
+    println!("                 CORS          Task Execution");
+    println!("                 JSON          Your Code");
+    println!();
+    println!("Auth: DELEGATED to Node.js (flexible, customizable)");
     println!();
     println!("Base path: {}", config.base_path);
     println!("Port: {}", config.port);
@@ -58,7 +61,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!();
 
     // Path to the Node.js worker script
-    let worker_script = "node-worker.js".to_string();
+    // Use flexible auth worker which supports JWT, API keys, OAuth, RBAC, etc.
+    let worker_script = "node-worker-flexible-auth.js".to_string();
 
     // Start the IPC server
     start_tunnel_server_ipc(config, worker_script).await

@@ -27,6 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "app.events.log".to_string(),
         ],
         cors_origin: Some("*".to_string()),
+        delegate_auth: false,  // Rust handles simple token auth
     };
 
     // Create task registry

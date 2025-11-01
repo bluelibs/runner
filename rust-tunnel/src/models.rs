@@ -115,6 +115,9 @@ pub struct TunnelConfig {
     pub allowed_tasks: Vec<String>,
     pub allowed_events: Vec<String>,
     pub cors_origin: Option<String>,
+    /// If true, delegate authentication to Node.js worker
+    /// If false, use simple token auth in Rust
+    pub delegate_auth: bool,
 }
 
 impl Default for TunnelConfig {
@@ -127,6 +130,7 @@ impl Default for TunnelConfig {
             allowed_tasks: vec![],
             allowed_events: vec![],
             cors_origin: Some("*".to_string()),
+            delegate_auth: true,  // Default to Node.js auth
         }
     }
 }

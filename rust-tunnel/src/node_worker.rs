@@ -6,7 +6,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, oneshot};
 
 use crate::error::{TunnelError, TunnelResult};
-use crate::worker_protocol::{WorkerRequest, WorkerResponse};
+use crate::worker_protocol::{RequestContext, WorkerRequest, WorkerResponse};
 use serde_json::Value;
 
 type PendingResponses = Arc<Mutex<HashMap<u64, oneshot::Sender<WorkerResponse>>>>;
@@ -48,10 +48,34 @@ impl NodeWorker {
         })
     }
 
-    /// Execute a task in the Node.js worker
-    pub async fn execute_task(&self, task_id: String, input: Value) -> TunnelResult<Value> {
+    /// Authenticate a request with Node.js
+    pub async fn authenticate(&self, context: RequestContext) -> TunnelResult<()> {
         let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-        let request = WorkerRequest::Task { id, task_id, input };
+        let request = WorkerRequest::Auth { id, context };
+
+        let response = self.send_request(request).await?;
+
+        if response.ok {
+            Ok(())
+        } else {
+            let error = response.error.unwrap_or_else(|| crate::worker_protocol::WorkerError {
+                message: "Authentication failed".to_string(),
+                code: 401,
+                code_name: "UNAUTHORIZED".to_string(),
+            });
+
+            match error.code {
+                401 => Err(TunnelError::Unauthorized),
+                403 => Err(TunnelError::Forbidden),
+                _ => Err(TunnelError::InternalError(error.message)),
+            }
+        }
+    }
+
+    /// Execute a task in the Node.js worker
+    pub async fn execute_task(&self, task_id: String, input: Value, context: RequestContext) -> TunnelResult<Value> {
+        let id = self.request_id.fetch_add(1, Ordering::SeqCst);
+        let request = WorkerRequest::Task { id, task_id, input, context };
 
         let response = self.send_request(request).await?;
 
@@ -66,9 +90,9 @@ impl NodeWorker {
     }
 
     /// Emit an event in the Node.js worker
-    pub async fn emit_event(&self, event_id: String, payload: Value) -> TunnelResult<()> {
+    pub async fn emit_event(&self, event_id: String, payload: Value, context: RequestContext) -> TunnelResult<()> {
         let id = self.request_id.fetch_add(1, Ordering::SeqCst);
-        let request = WorkerRequest::Event { id, event_id, payload };
+        let request = WorkerRequest::Event { id, event_id, payload, context };
 
         let response = self.send_request(request).await?;
 
