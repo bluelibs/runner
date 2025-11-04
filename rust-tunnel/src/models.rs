@@ -140,3 +140,135 @@ pub type TaskResult = serde_json::Value;
 
 /// Event emission result (always empty)
 pub type EventResult = ();
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn test_success_response_new() {
+        let response = SuccessResponse::new(42);
+        assert!(response.ok);
+        assert_eq!(response.result, Some(42));
+    }
+
+    #[test]
+    fn test_success_response_empty() {
+        let response: SuccessResponse<()> = SuccessResponse::empty();
+        assert!(response.ok);
+        assert!(response.result.is_none());
+    }
+
+    #[test]
+    fn test_success_response_serialization() {
+        let response = SuccessResponse::new(json!({"value": 123}));
+        let serialized = serde_json::to_string(&response).unwrap();
+        assert!(serialized.contains("\"ok\":true"));
+        assert!(serialized.contains("\"value\":123"));
+    }
+
+    #[test]
+    fn test_error_response_unauthorized() {
+        let err = ErrorResponse::unauthorized();
+        assert!(!err.ok);
+        assert_eq!(err.error.code, 401);
+        assert_eq!(err.error.code_name, "UNAUTHORIZED");
+    }
+
+    #[test]
+    fn test_error_response_forbidden() {
+        let err = ErrorResponse::forbidden();
+        assert_eq!(err.error.code, 403);
+        assert_eq!(err.error.code_name, "FORBIDDEN");
+    }
+
+    #[test]
+    fn test_error_response_not_found() {
+        let err = ErrorResponse::not_found();
+        assert_eq!(err.error.code, 404);
+        assert_eq!(err.error.code_name, "NOT_FOUND");
+    }
+
+    #[test]
+    fn test_error_response_method_not_allowed() {
+        let err = ErrorResponse::method_not_allowed();
+        assert_eq!(err.error.code, 405);
+        assert_eq!(err.error.code_name, "METHOD_NOT_ALLOWED");
+    }
+
+    #[test]
+    fn test_error_response_invalid_json() {
+        let err = ErrorResponse::invalid_json("Bad JSON");
+        assert_eq!(err.error.code, 400);
+        assert_eq!(err.error.code_name, "INVALID_JSON");
+        assert!(err.error.message.contains("Bad JSON"));
+    }
+
+    #[test]
+    fn test_error_response_internal_error() {
+        let err = ErrorResponse::internal_error("Something broke");
+        assert_eq!(err.error.code, 500);
+        assert_eq!(err.error.code_name, "INTERNAL_ERROR");
+        assert!(err.error.message.contains("Something broke"));
+    }
+
+    #[test]
+    fn test_task_request_deserialization() {
+        let json = json!({"input": {"a": 5, "b": 3}});
+        let req: TaskRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.input["a"], 5);
+        assert_eq!(req.input["b"], 3);
+    }
+
+    #[test]
+    fn test_event_request_deserialization() {
+        let json = json!({"payload": {"message": "Hello"}});
+        let req: EventRequest = serde_json::from_value(json).unwrap();
+        assert_eq!(req.payload["message"], "Hello");
+    }
+
+    #[test]
+    fn test_allow_list_serialization() {
+        let allow_list = AllowList {
+            enabled: true,
+            tasks: vec!["task1".to_string(), "task2".to_string()],
+            events: vec!["event1".to_string()],
+        };
+        let serialized = serde_json::to_value(&allow_list).unwrap();
+        assert_eq!(serialized["enabled"], true);
+        assert_eq!(serialized["tasks"][0], "task1");
+        assert_eq!(serialized["events"][0], "event1");
+    }
+
+    #[test]
+    fn test_discovery_result_serialization() {
+        let discovery = DiscoveryResult {
+            allow_list: AllowList {
+                enabled: true,
+                tasks: vec!["test.task".to_string()],
+                events: vec![],
+            },
+        };
+        let serialized = serde_json::to_value(&discovery).unwrap();
+        assert!(serialized["allowList"]["enabled"].as_bool().unwrap());
+        assert_eq!(serialized["allowList"]["tasks"][0], "test.task");
+    }
+
+    #[test]
+    fn test_tunnel_config_default() {
+        let config = TunnelConfig::default();
+        assert_eq!(config.base_path, "/__runner");
+        assert_eq!(config.port, 7070);
+        assert_eq!(config.auth_header, "x-runner-token");
+        assert!(config.delegate_auth);
+    }
+
+    #[test]
+    fn test_tunnel_config_clone() {
+        let config = TunnelConfig::default();
+        let cloned = config.clone();
+        assert_eq!(config.port, cloned.port);
+        assert_eq!(config.base_path, cloned.base_path);
+    }
+}
