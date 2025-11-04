@@ -15,3 +15,7 @@ junit.xml
 /baseline.json
 /benchmark-results.json
 /tmp
+
+# Rust test binaries
+runner-native/standalone_test
+rust-tunnel/standalone_test
