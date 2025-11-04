@@ -20,7 +20,8 @@
     "build": "napi build --platform --release",
     "build:debug": "napi build --platform",
     "prepublishOnly": "napi prepublish -t npm",
-    "test": "node example.js",
+    "test": "node test.js",
+    "example": "node example.js",
     "version": "napi version"
   },
   "devDependencies": {
