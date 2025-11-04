@@ -7,71 +7,70 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use serde_json::Value;
 
-// ==============================================================================
-// REUSED FROM rust-tunnel/src/models.rs ✅
-// ==============================================================================
+mod models;
+mod error;
 
-#[derive(Debug, Clone)]
-pub struct TunnelConfig {
-    pub port: u16,
-    pub base_path: String,
-    pub cors_origins: Vec<String>,
-}
+use models::{SuccessResponse, ErrorResponse};
+use error::TunnelError;
 
 // ==============================================================================
-// NAPI-RS EXPOSED TYPES (NEW for native addon)
+// NAPI-RS TYPES (Exposed to JavaScript)
 // ==============================================================================
 
-/// Configuration for tunnel server (exposed to JavaScript)
+/// Configuration for tunnel server
 #[napi(object)]
-pub struct TunnelServerConfig {
+pub struct TunnelConfig {
+    /// Port to listen on
     pub port: u16,
+    /// Base path for routes (default: /__runner)
     pub base_path: Option<String>,
+    /// CORS allowed origins
     pub cors_origins: Option<Vec<String>>,
 }
 
-impl From<TunnelServerConfig> for TunnelConfig {
-    fn from(config: TunnelServerConfig) -> Self {
-        Self {
-            port: config.port,
-            base_path: config.base_path.unwrap_or_else(|| "/__runner".to_string()),
-            cors_origins: config.cors_origins.unwrap_or_else(|| vec!["*".to_string()]),
-        }
-    }
-}
+/// Task handler function type
+pub type TaskHandler = napi::threadsafe_function::ThreadsafeFunction<Value, ErrorStrategy::Fatal>;
 
-// ==============================================================================
-// TASK HANDLER STORAGE (Adapted from rust-tunnel)
-// ==============================================================================
-
-/// Stores JavaScript function handlers
+/// Route storage
 struct TaskRoute {
-    /// JavaScript function to call
-    handler: napi::threadsafe_function::ThreadsafeFunction<Value, Value>,
+    handler: TaskHandler,
 }
 
 // ==============================================================================
-// MAIN TUNNEL SERVER (NEW napi-rs wrapper)
+// TUNNEL SERVER
 // ==============================================================================
 
-/// Main tunnel server exposed to JavaScript
+/// High-performance HTTP tunnel server powered by Rust
 #[napi]
 pub struct TunnelServer {
-    config: TunnelConfig,
+    port: u16,
+    base_path: String,
+    cors_origins: Vec<String>,
     tasks: Arc<RwLock<HashMap<String, TaskRoute>>>,
-    runtime: Option<tokio::runtime::Runtime>,
+    events: Arc<RwLock<HashMap<String, TaskHandler>>>,
 }
 
 #[napi]
 impl TunnelServer {
     /// Create a new tunnel server
+    ///
+    /// Example:
+    /// ```javascript
+    /// const server = new TunnelServer({
+    ///   port: 7070,
+    ///   basePath: '/__runner',
+    ///   corsOrigins: ['*']
+    /// });
+    /// ```
     #[napi(constructor)]
-    pub fn new(config: TunnelServerConfig) -> Result<Self> {
-        Ok(Self {
-            config: config.into(),
+    pub fn new(config: TunnelConfig) -> Self {
+        Self {
+            port: config.port,
+            base_path: config.base_path.unwrap_or_else(|| "/__runner".to_string()),
+            cors_origins: config.cors_origins.unwrap_or_else(|| vec!["*".to_string()]),
             tasks: Arc::new(RwLock::new(HashMap::new())),
-            runtime: None,
-        })
+            events: Arc::new(RwLock::new(HashMap::new())),
+        }
     }
 
     /// Register a task handler
@@ -84,148 +83,255 @@ impl TunnelServer {
     /// ```
     #[napi(ts_args_type = "taskId: string, handler: (input: any) => Promise<any>")]
     pub fn register_task(
-        &mut self,
+        &self,
         task_id: String,
         #[napi(ts_arg_type = "(input: any) => Promise<any>")] handler: JsFunction,
     ) -> Result<()> {
-        // Create ThreadsafeFunction to call JavaScript from Rust
-        let tsfn: napi::threadsafe_function::ThreadsafeFunction<Value, Value> =
-            handler.create_threadsafe_function(0, |ctx| {
-                // Convert Rust Value to JsValue
-                ctx.env.to_js_value(&ctx.value)
+        // Create ThreadsafeFunction for calling JavaScript from Rust threads
+        let tsfn: TaskHandler = handler
+            .create_threadsafe_function(0, |ctx: ThreadSafeCallContext<Value>| {
+                Ok(vec![ctx.value])
             })?;
 
-        // Store the handler
         let tasks = self.tasks.clone();
         let task_id_clone = task_id.clone();
 
-        // We need to use blocking runtime for now
-        // In real implementation, use proper async handling
-        tokio::runtime::Handle::current().block_on(async move {
-            let mut tasks = tasks.write().await;
-            tasks.insert(task_id_clone, TaskRoute { handler: tsfn });
-        });
+        // Store the handler
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async move {
+                let mut tasks = tasks.write().await;
+                tasks.insert(task_id_clone, TaskRoute { handler: tsfn });
+            });
+        }).join().unwrap();
+
+        Ok(())
+    }
+
+    /// Register an event handler
+    ///
+    /// Example:
+    /// ```javascript
+    /// server.registerEvent('app.events.notify', async (payload) => {
+    ///   console.log('Event:', payload);
+    /// });
+    /// ```
+    #[napi(ts_args_type = "eventId: string, handler: (payload: any) => Promise<void>")]
+    pub fn register_event(
+        &self,
+        event_id: String,
+        #[napi(ts_arg_type = "(payload: any) => Promise<void>")] handler: JsFunction,
+    ) -> Result<()> {
+        let tsfn: TaskHandler = handler
+            .create_threadsafe_function(0, |ctx: ThreadSafeCallContext<Value>| {
+                Ok(vec![ctx.value])
+            })?;
+
+        let events = self.events.clone();
+        let event_id_clone = event_id.clone();
+
+        std::thread::spawn(move || {
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            rt.block_on(async move {
+                let mut events = events.write().await;
+                events.insert(event_id_clone, tsfn);
+            });
+        }).join().unwrap();
 
         Ok(())
     }
 
     /// Start the HTTP server
     ///
-    /// This starts a Rust HTTP server (Axum) that handles all HTTP concerns
-    /// and calls JavaScript handlers via ThreadsafeFunction (zero IPC!)
+    /// Returns a promise that resolves when server is ready
+    ///
+    /// Example:
+    /// ```javascript
+    /// await server.listen();
+    /// console.log('Server listening on port 7070');
+    /// ```
     #[napi]
-    pub fn listen(&mut self, env: Env) -> Result<AsyncTask<ServerTask>> {
+    pub async fn listen(&self) -> Result<()> {
+        use axum::{
+            extract::{Json as AxumJson, Path, State as AxumState},
+            routing::{get, post},
+            Router,
+        };
+        use tower_http::cors::{Any, CorsLayer};
+
         let tasks = self.tasks.clone();
-        let config = self.config.clone();
+        let events = self.events.clone();
+        let base_path = self.base_path.clone();
 
-        Ok(AsyncTask::new(ServerTask {
-            config,
-            tasks,
-        }))
-    }
-}
+        // Build Axum router
+        let app = Router::new()
+            .route(
+                &format!("{}/task/:task_id", base_path),
+                post({
+                    let tasks = tasks.clone();
+                    move |path, body| handle_task(tasks.clone(), path, body)
+                }),
+            )
+            .route(
+                &format!("{}/event/:event_id", base_path),
+                post({
+                    let events = events.clone();
+                    move |path, body| handle_event(events.clone(), path, body)
+                }),
+            )
+            .route(
+                &format!("{}/discovery", base_path),
+                get({
+                    let tasks = tasks.clone();
+                    let events = events.clone();
+                    move || handle_discovery(tasks.clone(), events.clone())
+                }).post({
+                    let tasks = tasks.clone();
+                    let events = events.clone();
+                    move || handle_discovery(tasks.clone(), events.clone())
+                }),
+            )
+            .layer(
+                CorsLayer::new()
+                    .allow_origin(Any)
+                    .allow_methods(Any)
+                    .allow_headers(Any),
+            );
 
-// ==============================================================================
-// ASYNC SERVER TASK (Runs Rust HTTP server in background)
-// ==============================================================================
-
-pub struct ServerTask {
-    config: TunnelConfig,
-    tasks: Arc<RwLock<HashMap<String, TaskRoute>>>,
-}
-
-#[napi]
-impl Task for ServerTask {
-    type Output = ();
-    type JsValue = ();
-
-    fn compute(&mut self) -> Result<Self::Output> {
-        // Create Tokio runtime for HTTP server
-        let runtime = tokio::runtime::Runtime::new()
+        // Start server
+        let addr = std::net::SocketAddr::from(([0, 0, 0, 0], self.port));
+        let listener = tokio::net::TcpListener::bind(addr)
+            .await
             .map_err(|e| Error::from_reason(e.to_string()))?;
 
-        runtime.block_on(async {
-            start_http_server(self.config.clone(), self.tasks.clone()).await
-        })?;
+        println!("🦀 Rust HTTP server listening on http://{}", addr);
+        println!("📡 Base path: {}", base_path);
+
+        axum::serve(listener, app)
+            .await
+            .map_err(|e| Error::from_reason(e.to_string()))?;
 
         Ok(())
     }
 
-    fn resolve(&mut self, _env: Env, _output: Self::Output) -> Result<Self::JsValue> {
-        Ok(())
+    /// Get list of registered task IDs
+    #[napi]
+    pub async fn get_task_ids(&self) -> Vec<String> {
+        let tasks = self.tasks.read().await;
+        tasks.keys().cloned().collect()
+    }
+
+    /// Get list of registered event IDs
+    #[napi]
+    pub async fn get_event_ids(&self) -> Vec<String> {
+        let events = self.events.read().await;
+        events.keys().cloned().collect()
     }
 }
 
 // ==============================================================================
-// HTTP SERVER (ADAPTED from rust-tunnel/src/lib.rs)
+// REQUEST HANDLERS
 // ==============================================================================
 
-async fn start_http_server(
-    config: TunnelConfig,
-    tasks: Arc<RwLock<HashMap<String, TaskRoute>>>,
-) -> Result<()> {
-    use axum::{
-        extract::{Json, Path},
-        routing::post,
-        Router,
-    };
-    use tower_http::cors::{Any, CorsLayer};
-
-    // Build router - SIMILAR to rust-tunnel but calls JS handlers!
-    let app = Router::new()
-        .route(
-            &format!("{}/task/:task_id", config.base_path),
-            post({
-                let tasks = tasks.clone();
-                move |path: Path<String>, body: Json<Value>| {
-                    handle_task(tasks.clone(), path, body)
-                }
-            }),
-        )
-        .layer(
-            CorsLayer::new()
-                .allow_origin(Any)
-                .allow_methods(Any)
-                .allow_headers(Any),
-        );
-
-    // Start server
-    let addr = std::net::SocketAddr::from(([0, 0, 0, 0], config.port));
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
-
-    println!("🦀 Rust HTTP server listening on {}", addr);
-
-    axum::serve(listener, app)
-        .await
-        .map_err(|e| Error::from_reason(e.to_string()))?;
-
-    Ok(())
+#[derive(serde::Deserialize)]
+struct TaskRequest {
+    input: Value,
 }
-
-// ==============================================================================
-// REQUEST HANDLER (NEW - calls JavaScript!)
-// ==============================================================================
 
 async fn handle_task(
     tasks: Arc<RwLock<HashMap<String, TaskRoute>>>,
     Path(task_id): Path<String>,
-    Json(input): Json<Value>,
-) -> Result<Json<Value>> {
+    AxumJson(request): AxumJson<TaskRequest>,
+) -> Result<AxumJson<SuccessResponse<Value>>, (axum::http::StatusCode, AxumJson<ErrorResponse>)> {
     // Get task handler
-    let tasks = tasks.read().await;
-    let route = tasks
-        .get(&task_id)
-        .ok_or_else(|| Error::from_reason(format!("Task not found: {}", task_id)))?;
+    let tasks_guard = tasks.read().await;
+    let route = tasks_guard.get(&task_id).ok_or_else(|| {
+        (
+            axum::http::StatusCode::NOT_FOUND,
+            AxumJson(ErrorResponse::not_found()),
+        )
+    })?;
 
-    // Call JavaScript handler via ThreadsafeFunction
-    // This is a DIRECT CALL with ZERO IPC overhead!
+    // Call JavaScript handler via ThreadsafeFunction (ZERO IPC overhead!)
     let result = route
         .handler
-        .call_async::<Promise<Value>>(input)
+        .call_async(Ok(request.input))
         .await
-        .map_err(|e| Error::from_reason(format!("Handler error: {}", e)))?;
+        .map_err(|e| {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                AxumJson(ErrorResponse::internal_error(e.to_string())),
+            )
+        })?;
 
-    Ok(Json(result))
+    Ok(AxumJson(SuccessResponse::new(result)))
+}
+
+#[derive(serde::Deserialize)]
+struct EventRequest {
+    payload: Value,
+}
+
+async fn handle_event(
+    events: Arc<RwLock<HashMap<String, TaskHandler>>>,
+    Path(event_id): Path<String>,
+    AxumJson(request): AxumJson<EventRequest>,
+) -> Result<AxumJson<SuccessResponse<()>>, (axum::http::StatusCode, AxumJson<ErrorResponse>)> {
+    let events_guard = events.read().await;
+    let handler = events_guard.get(&event_id).ok_or_else(|| {
+        (
+            axum::http::StatusCode::NOT_FOUND,
+            AxumJson(ErrorResponse::not_found()),
+        )
+    })?;
+
+    handler
+        .call_async(Ok(request.payload))
+        .await
+        .map_err(|e| {
+            (
+                axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+                AxumJson(ErrorResponse::internal_error(e.to_string())),
+            )
+        })?;
+
+    Ok(AxumJson(SuccessResponse::empty()))
+}
+
+#[derive(serde::Serialize)]
+struct AllowList {
+    enabled: bool,
+    tasks: Vec<String>,
+    events: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+struct DiscoveryResult {
+    #[serde(rename = "allowList")]
+    allow_list: AllowList,
+}
+
+async fn handle_discovery(
+    tasks: Arc<RwLock<HashMap<String, TaskRoute>>>,
+    events: Arc<RwLock<HashMap<String, TaskHandler>>>,
+) -> AxumJson<SuccessResponse<DiscoveryResult>> {
+    let task_ids: Vec<String> = {
+        let tasks_guard = tasks.read().await;
+        tasks_guard.keys().cloned().collect()
+    };
+
+    let event_ids: Vec<String> = {
+        let events_guard = events.read().await;
+        events_guard.keys().cloned().collect()
+    };
+
+    let result = DiscoveryResult {
+        allow_list: AllowList {
+            enabled: true,
+            tasks: task_ids,
+            events: event_ids,
+        },
+    };
+
+    AxumJson(SuccessResponse::new(result))
 }
