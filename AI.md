@@ -15,6 +15,8 @@
     - [Async Context](#async-context)
     - [Errors](#errors)
   - [HTTP \& Tunnels](#http--tunnels)
+    - [HTTP Client Factory (Recommended)](#http-client-factory-recommended)
+    - [Direct Client Creation (Legacy)](#direct-client-creation-legacy)
   - [Serialization](#serialization)
   - [Testing](#testing)
   - [Observability \& Debugging](#observability--debugging)

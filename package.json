@@ -93,7 +93,8 @@
     "typedoc": "typedoc --options typedoc.json",
     "benchmark": "jest --config jest.bench.config.js --verbose --runInBand",
     "benchmark:json": "BENCHMARK_OUTPUT=./benchmark-results.json NODE_OPTIONS=--expose-gc npm run benchmark",
-    "benchmark:compare": "node ./scripts/compare-benchmarks.mjs ./baseline.json ./benchmark-results.json ./benchmarks.config.json"
+    "benchmark:compare": "node ./scripts/compare-benchmarks.mjs ./baseline.json ./benchmark-results.json ./benchmarks.config.json",
+    "compose:readme": "node ./scripts/compose-readme.mjs"
   },
   "devDependencies": {
     "@types/benchmark": "^2.1.5",

@@ -1,0 +1,311 @@
+## Semaphore
+
+
+
+Ever had too many database connections competing for resources? Your connection pool under pressure? The `Semaphore` is here to manage concurrent operations like a professional traffic controller.
+
+Think of it as a VIP rope at an exclusive venue. Only a limited number of operations can proceed at once. The rest wait in an orderly queue like well-behaved async functions.
+
+```typescript
+import { Semaphore } from "@bluelibs/runner";
+
+// Create a semaphore that allows max 5 concurrent operations
+const dbSemaphore = new Semaphore(5);
+
+// Basic usage - acquire and release manually
+await dbSemaphore.acquire();
+try {
+  // Do your database magic here
+  const result = await db.query("SELECT * FROM users");
+  console.log(result);
+} finally {
+  dbSemaphore.release(); // Critical: always release to prevent bottlenecks
+}
+```
+
+Why manage permits manually when you can let the semaphore do the heavy lifting?
+
+```typescript
+// The elegant approach - automatic cleanup guaranteed!
+const users = await dbSemaphore.withPermit(async () => {
+  return await db.query("SELECT * FROM users WHERE active = true");
+});
+```
+
+Prevent operations from hanging indefinitely with configurable timeouts:
+
+```typescript
+try {
+  // Wait max 5 seconds, then throw timeout error
+  await dbSemaphore.acquire({ timeout: 5000 });
+  // Your code here
+} catch (error) {
+  console.log("Operation timed out waiting for permit");
+}
+
+// Or with withPermit
+const result = await dbSemaphore.withPermit(
+  async () => await slowDatabaseOperation(),
+  { timeout: 10000 }, // 10 second timeout
+);
+```
+
+Operations can be cancelled using AbortSignal:
+
+```typescript
+const controller = new AbortController();
+
+// Start an operation
+const operationPromise = dbSemaphore.withPermit(
+  async () => await veryLongOperation(),
+  { signal: controller.signal },
+);
+
+// Cancel the operation after 3 seconds
+setTimeout(() => {
+  controller.abort();
+}, 3000);
+
+try {
+  await operationPromise;
+} catch (error) {
+  console.log("Operation was cancelled");
+}
+```
+
+Want to know what's happening under the hood?
+
+```typescript
+// Get comprehensive metrics
+const metrics = dbSemaphore.getMetrics();
+console.log(`
+Semaphore Status Report:
+  Available permits: ${metrics.availablePermits}/${metrics.maxPermits}
+  Operations waiting: ${metrics.waitingCount}
+  Utilization: ${(metrics.utilization * 100).toFixed(1)}%
+  Disposed: ${metrics.disposed ? "Yes" : "No"}
+`);
+
+// Quick checks
+console.log(`Available permits: ${dbSemaphore.getAvailablePermits()}`);
+console.log(`Queue length: ${dbSemaphore.getWaitingCount()}`);
+console.log(`Is disposed: ${dbSemaphore.isDisposed()}`);
+```
+
+Properly dispose of semaphores when finished:
+
+```typescript
+// Reject all waiting operations and prevent new ones
+dbSemaphore.dispose();
+
+// All waiting operations will be rejected with:
+// Error: "Semaphore has been disposed"
+```
+
+### Real-World Examples
+
+#### Database Connection Pool Manager
+
+```typescript
+class DatabaseManager {
+  private semaphore = new Semaphore(10); // Max 10 concurrent queries
+
+  async query(sql: string, params?: any[]) {
+    return this.semaphore.withPermit(
+      async () => {
+        const connection = await this.pool.getConnection();
+        try {
+          return await connection.query(sql, params);
+        } finally {
+          connection.release();
+        }
+      },
+      { timeout: 30000 }, // 30 second timeout
+    );
+  }
+
+  async shutdown() {
+    this.semaphore.dispose();
+    await this.pool.close();
+  }
+}
+```
+
+#### Rate-Limited API Client
+
+```typescript
+class APIClient {
+  private rateLimiter = new Semaphore(5); // Max 5 concurrent requests
+
+  async fetchUser(id: string, signal?: AbortSignal) {
+    return this.rateLimiter.withPermit(
+      async () => {
+        const response = await fetch(`/api/users/${id}`, { signal });
+        return response.json();
+      },
+      { signal, timeout: 10000 },
+    );
+  }
+}
+```
+
+> **runtime:** "Semaphore: velvet rope for chaos. Five in, the rest practice patience and existential dread. I stamp hands, count permits, and break up race conditions before they form a band."
+
+## Queue
+
+_The orderly guardian of chaos, the diplomatic bouncer of async operations._
+
+The `Queue` class is your friendly neighborhood task coordinator. Think of it as a very polite but firm British queue-master who ensures everyone waits their turn, prevents cutting in line, and gracefully handles when it's time to close shop.
+
+Tasks execute one after another in first-in, first-out order. No cutting, no exceptions, no drama.
+
+Using the clever `AsyncLocalStorage`, our Queue can detect when a task tries to queue another task (the async equivalent of "yo dawg, I heard you like queues..."). When caught red-handed, it politely but firmly rejects with a deadlock error.
+
+The Queue provides cooperative cancellation through the Web Standard `AbortController`:
+
+- **Patient mode** (default): Waits for all queued tasks to complete naturally
+- **Cancel mode**: Signals running tasks to abort via `AbortSignal`, enabling early termination
+
+```typescript
+import { Queue } from "@bluelibs/runner";
+
+const queue = new Queue();
+
+// Queue up some work
+const result = await queue.run(async (signal) => {
+  // Your async task here
+  return "Task completed";
+});
+
+// Graceful shutdown
+await queue.dispose();
+```
+
+### AbortController Integration
+
+The Queue provides each task with an `AbortSignal` for cooperative cancellation. Tasks should periodically check this signal to enable early termination.
+
+### Examples
+
+**Example: Long-running Task**
+
+```typescript
+const queue = new Queue();
+
+// Task that respects cancellation
+const processLargeDataset = queue.run(async (signal) => {
+  const items = await fetchLargeDataset();
+
+  for (const item of items) {
+    // Check for cancellation before processing each item
+    if (signal.aborted) {
+      throw new Error("Operation was cancelled");
+    }
+
+    await processItem(item);
+  }
+
+  return "Dataset processed successfully";
+});
+
+// Cancel all running tasks
+await queue.dispose({ cancel: true });
+```
+
+**Network Request with Timeout**
+
+```typescript
+const queue = new Queue();
+
+const fetchWithCancellation = queue.run(async (signal) => {
+  try {
+    // Pass the signal to fetch for automatic cancellation
+    const response = await fetch("https://api.example.com/data", { signal });
+    return await response.json();
+  } catch (error) {
+    if (error.name === "AbortError") {
+      console.log("Request was cancelled");
+      throw error;
+    }
+    throw error;
+  }
+});
+
+// This will cancel the fetch request if still pending
+await queue.dispose({ cancel: true });
+```
+
+**Example: File Processing with Progress Tracking**
+
+```typescript
+const queue = new Queue();
+
+const processFiles = queue.run(async (signal) => {
+  const files = await getFileList();
+  const results = [];
+
+  for (let i = 0; i < files.length; i++) {
+    // Respect cancellation
+    signal.throwIfAborted();
+
+    const result = await processFile(files[i]);
+    results.push(result);
+
+    // Optional: Report progress
+    console.log(`Processed ${i + 1}/${files.length} files`);
+  }
+
+  return results;
+});
+```
+
+#### The Magic Behind the Curtain
+
+- `tail`: The promise chain that maintains FIFO execution order
+- `disposed`: Boolean flag indicating whether the queue accepts new tasks
+- `abortController`: Centralized cancellation controller that provides `AbortSignal` to all tasks
+- `executionContext`: AsyncLocalStorage-based deadlock detection mechanism
+
+#### Implement Cooperative Cancellation
+
+Tasks should regularly check the `AbortSignal` and respond appropriately:
+
+```typescript
+// Preferred: Use signal.throwIfAborted() for immediate termination
+signal.throwIfAborted();
+
+// Alternative: Check signal.aborted for custom handling
+if (signal.aborted) {
+  cleanup();
+  throw new Error("Operation cancelled");
+}
+```
+
+**Integrate with Native APIs**
+
+Many Web APIs accept `AbortSignal`:
+
+- `fetch(url, { signal })`
+- `setTimeout(callback, delay, { signal })`
+- Custom async operations
+
+**Avoid Nested Queuing**
+
+The Queue prevents deadlocks by rejecting attempts to queue tasks from within running tasks. Structure your code to avoid this pattern.
+
+**Handle AbortError Gracefully**
+
+```typescript
+try {
+  await queue.run(task);
+} catch (error) {
+  if (error.name === "AbortError") {
+    // Expected cancellation, handle appropriately
+    return;
+  }
+  throw error; // Re-throw unexpected errors
+}
+```
+
+> **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
+
