@@ -10,9 +10,9 @@ export interface AuthMiddlewareConfig {
 }
 
 export const authMiddleware = r.middleware
-  .task("app.middleware.auth")
+  .task<AuthMiddlewareConfig>("app.middleware.auth")
   .dependencies({ userService: usersRepository, appConfig })
-  .run(async ({ task, next }, { userService, appConfig }, config: AuthMiddlewareConfig) => {
+  .run(async ({ task, next }, { userService, appConfig }, config) => {
     const { jwtSecret } = appConfig;
     const { requiresAuth = true } = config;
 

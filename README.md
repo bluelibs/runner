@@ -481,8 +481,8 @@ import { r } from "@bluelibs/runner";
 // Task middleware with config
 type AuthMiddlewareConfig = { requiredRole: string };
 const authMiddleware = r.middleware
-  .task("app.middleware.task.auth")
-  .run(async ({ task, next }, _deps, config: AuthMiddlewareConfig) => {
+  .task<AuthMiddlewareConfig>("app.middleware.task.auth")
+  .run(async ({ task, next }, _deps, config) => {
     // Must return the value
     return await next(task.input);
   })
@@ -504,7 +504,7 @@ type AuthInput = { user: { role: string } };
 type AuthOutput = { user: { role: string; verified: boolean } };
 
 const authMiddleware = r.middleware
-  .task("app.middleware.task.auth")
+  .task<AuthConfig>("app.middleware.task.auth")
   .run(async ({ task, next }, _deps, config: AuthConfig) => {
     if ((task.input as AuthInput).user.role !== config.requiredRole) {
       throw new Error("Insufficient permissions");
