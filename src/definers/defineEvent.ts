@@ -19,6 +19,7 @@ export function defineEvent<TPayload = void>(
     [symbolFilePath]: callerFilePath,
     [symbolEvent]: true, // This is a workaround
     tags: eventConfig.tags || [],
+    parallel: eventConfig.parallel,
     optional() {
       return {
         inner: this,

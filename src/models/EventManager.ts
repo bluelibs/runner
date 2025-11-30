@@ -180,22 +180,14 @@ export class EventManager {
           return;
         }
 
-        const excludeFromGlobal = this.isExcludedFromGlobal(eventToEmit);
-
-        for (const listener of allListeners) {
-          if (propagationStopped) {
-            break;
-          }
-
-          // Skip handlers that identify themselves as the source of this event
-          // (prevents a listener from re-invoking itself).
-          if (listener.id && listener.id === eventToEmit.source) {
-            continue;
-          }
-
-          if (!listener.filter || listener.filter(eventToEmit)) {
-            await listener.handler(eventToEmit);
-          }
+        if (eventDefinition.parallel) {
+          await this.executeInParallel(allListeners, eventToEmit);
+        } else {
+          await this.executeSequentially(
+            allListeners,
+            eventToEmit,
+            () => propagationStopped,
+          );
         }
       };
 
@@ -476,16 +468,7 @@ export class EventManager {
     listeners.splice(low, 0, newListener);
   }
 
-  /**
-   * Returns true if the given emission carries the tag that marks
-   * it as excluded from global ("*") listeners.
-   *
-   * @param event - The event emission to check
-   * @returns true if event should exclude global listeners
-   */
-  private isExcludedFromGlobal(event: IEventEmission<any>): boolean {
-    return globalTags.excludeFromGlobalHooks.exists(event);
-  }
+
 
   /**
    * Retrieves cached merged listeners for an event, or creates them if not cached.
@@ -532,6 +515,85 @@ export class EventManager {
       this.cachedMergedListeners.delete(eventId);
     } else {
       this.globalListenersCacheValid = false;
+    }
+  }
+
+  /**
+   * Executes listeners sequentially.
+   *
+   * @param listeners - Sorted array of listeners
+   * @param event - The event emission object
+   * @param isPropagationStopped - Function to check if propagation has been stopped
+   */
+  private async executeSequentially(
+    listeners: IListenerStorage[],
+    event: IEventEmission<any>,
+    isPropagationStopped: () => boolean,
+  ): Promise<void> {
+    for (const listener of listeners) {
+      if (isPropagationStopped()) {
+        break;
+      }
+
+      // Skip handlers that identify themselves as the source of this event
+      if (listener.id && listener.id === event.source) {
+        continue;
+      }
+
+      if (!listener.filter || listener.filter(event)) {
+        await listener.handler(event);
+      }
+    }
+  }
+
+  /**
+   * Executes listeners in parallel batches based on order.
+   *
+   * @param listeners - Sorted array of listeners
+   * @param event - The event emission object
+   */
+  private async executeInParallel(
+    listeners: IListenerStorage[],
+    event: IEventEmission<any>,
+  ): Promise<void> {
+    let currentOrder = listeners[0].order;
+    let currentBatch: typeof listeners = [];
+
+    const executeBatch = async (batch: typeof listeners) => {
+      const promises = batch.map(async (listener) => {
+        // Skip handlers that identify themselves as the source of this event
+        if (listener.id && listener.id === event.source) {
+          return;
+        }
+
+        if (!listener.filter || listener.filter(event)) {
+          await listener.handler(event);
+        }
+      });
+      await Promise.all(promises);
+    };
+
+    for (const listener of listeners) {
+
+
+      if (listener.order !== currentOrder) {
+        // Execute previous batch
+        await executeBatch(currentBatch);
+        // Start new batch
+        currentBatch = [];
+        currentOrder = listener.order;
+
+        // Check propagation again after batch execution
+        if (event.isPropagationStopped()) {
+          break;
+        }
+      }
+      currentBatch.push(listener);
+    }
+
+    // Execute remaining batch
+    if (currentBatch.length > 0 && !event.isPropagationStopped()) {
+      await executeBatch(currentBatch);
     }
   }
 }

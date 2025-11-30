@@ -34,6 +34,11 @@ export interface IEventDefinition<TPayload = void> {
    */
   payloadSchema?: IValidationSchema<TPayload>;
   tags?: TagType[];
+  /**
+   * If true, listeners for this event will be executed in parallel.
+   * Order is not guaranteed.
+   */
+  parallel?: boolean;
 }
 
 /**
