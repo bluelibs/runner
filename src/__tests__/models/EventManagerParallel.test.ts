@@ -8,12 +8,16 @@ describe("EventManager Parallel Execution", () => {
 
   beforeEach(() => {
     eventManager = new EventManager({ runtimeCycleDetection: true });
-    parallelEvent = defineEvent<string>({ id: "parallelEvent", parallel: true });
+    parallelEvent = defineEvent<string>({
+      id: "parallelEvent",
+      parallel: true,
+    });
   });
 
   it("should execute listeners with the same order in parallel", async () => {
     const results: string[] = [];
-    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const delay = (ms: number) =>
+      new Promise((resolve) => setTimeout(resolve, ms));
 
     eventManager.addListener(
       parallelEvent,
@@ -21,7 +25,7 @@ describe("EventManager Parallel Execution", () => {
         await delay(50);
         results.push("slow");
       },
-      { order: 1 }
+      { order: 1 },
     );
 
     eventManager.addListener(
@@ -29,7 +33,7 @@ describe("EventManager Parallel Execution", () => {
       async () => {
         results.push("fast");
       },
-      { order: 1 }
+      { order: 1 },
     );
 
     await eventManager.emit(parallelEvent, "data", "test");
@@ -40,7 +44,8 @@ describe("EventManager Parallel Execution", () => {
 
   it("should execute batches sequentially", async () => {
     const results: string[] = [];
-    const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    const delay = (ms: number) =>
+      new Promise((resolve) => setTimeout(resolve, ms));
 
     // Batch 1 (Order 0)
     eventManager.addListener(
@@ -49,14 +54,14 @@ describe("EventManager Parallel Execution", () => {
         await delay(50);
         results.push("batch1-slow");
       },
-      { order: 0 }
+      { order: 0 },
     );
     eventManager.addListener(
       parallelEvent,
       async () => {
         results.push("batch1-fast");
       },
-      { order: 0 }
+      { order: 0 },
     );
 
     // Batch 2 (Order 1)
@@ -65,7 +70,7 @@ describe("EventManager Parallel Execution", () => {
       async () => {
         results.push("batch2");
       },
-      { order: 1 }
+      { order: 1 },
     );
 
     await eventManager.emit(parallelEvent, "data", "test");
@@ -85,7 +90,7 @@ describe("EventManager Parallel Execution", () => {
         results.push("batch1");
         event.stopPropagation();
       },
-      { order: 0 }
+      { order: 0 },
     );
 
     // Batch 2 (Order 1)
@@ -94,7 +99,7 @@ describe("EventManager Parallel Execution", () => {
       () => {
         results.push("batch2");
       },
-      { order: 1 }
+      { order: 1 },
     );
 
     await eventManager.emit(parallelEvent, "data", "test");
@@ -112,7 +117,7 @@ describe("EventManager Parallel Execution", () => {
         results.push("batch1-stopper");
         event.stopPropagation();
       },
-      { order: 0 }
+      { order: 0 },
     );
 
     eventManager.addListener(
@@ -120,7 +125,7 @@ describe("EventManager Parallel Execution", () => {
       () => {
         results.push("batch1-other");
       },
-      { order: 0 }
+      { order: 0 },
     );
 
     await eventManager.emit(parallelEvent, "data", "test");
@@ -143,7 +148,7 @@ describe("EventManager Parallel Execution", () => {
       () => {
         results.push("should-not-run");
       },
-      { order: 0 }
+      { order: 0 },
     );
 
     eventManager.addListener(
@@ -151,7 +156,7 @@ describe("EventManager Parallel Execution", () => {
       () => {
         results.push("should-not-run-either");
       },
-      { order: 1 }
+      { order: 1 },
     );
 
     await eventManager.emit(parallelEvent, "data", "test");
@@ -165,7 +170,7 @@ describe("EventManager Parallel Execution", () => {
       async () => {
         throw new Error("Parallel Error");
       },
-      { order: 0 }
+      { order: 0 },
     );
 
     eventManager.addListener(
@@ -173,11 +178,11 @@ describe("EventManager Parallel Execution", () => {
       async () => {
         // This one succeeds
       },
-      { order: 0 }
+      { order: 0 },
     );
 
     await expect(
-      eventManager.emit(parallelEvent, "data", "test")
+      eventManager.emit(parallelEvent, "data", "test"),
     ).rejects.toThrow("Parallel Error");
   });
   it("should skip listener if it is the source of the event", async () => {
@@ -189,7 +194,7 @@ describe("EventManager Parallel Execution", () => {
       async () => {
         results.push("should-not-run");
       },
-      { order: 0, id: sourceId }
+      { order: 0, id: sourceId },
     );
 
     eventManager.addListener(
@@ -197,7 +202,7 @@ describe("EventManager Parallel Execution", () => {
       async () => {
         results.push("should-run");
       },
-      { order: 0 }
+      { order: 0 },
     );
 
     await eventManager.emit(parallelEvent, "data", sourceId);
@@ -213,10 +218,10 @@ describe("EventManager Parallel Execution", () => {
       async () => {
         results.push("filtered-out");
       },
-      { 
+      {
         order: 0,
-        filter: () => false
-      }
+        filter: () => false,
+      },
     );
 
     eventManager.addListener(
@@ -224,10 +229,10 @@ describe("EventManager Parallel Execution", () => {
       async () => {
         results.push("filtered-in");
       },
-      { 
+      {
         order: 0,
-        filter: () => true
-      }
+        filter: () => true,
+      },
     );
 
     await eventManager.emit(parallelEvent, "data", "test");
