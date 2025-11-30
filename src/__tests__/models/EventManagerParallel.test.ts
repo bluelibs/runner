@@ -1,9 +1,4 @@
-import {
-  IEvent,
-  IEventEmission,
-  symbolEvent,
-  symbolFilePath,
-} from "../../defs";
+import { IEvent } from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 

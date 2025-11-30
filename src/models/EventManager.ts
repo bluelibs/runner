@@ -468,8 +468,6 @@ export class EventManager {
     listeners.splice(low, 0, newListener);
   }
 
-
-
   /**
    * Retrieves cached merged listeners for an event, or creates them if not cached.
    * Combines event-specific listeners with global listeners and sorts them by priority.
@@ -535,12 +533,7 @@ export class EventManager {
         break;
       }
 
-      // Skip handlers that identify themselves as the source of this event
-      if (listener.id && listener.id === event.source) {
-        continue;
-      }
-
-      if (!listener.filter || listener.filter(event)) {
+      if (this.shouldExecuteListener(listener, event)) {
         await listener.handler(event);
       }
     }
@@ -565,12 +558,7 @@ export class EventManager {
 
     const executeBatch = async (batch: typeof listeners) => {
       const promises = batch.map(async (listener) => {
-        // Skip handlers that identify themselves as the source of this event
-        if (listener.id && listener.id === event.source) {
-          return;
-        }
-
-        if (!listener.filter || listener.filter(event)) {
+        if (this.shouldExecuteListener(listener, event)) {
           await listener.handler(event);
         }
       });
@@ -578,8 +566,6 @@ export class EventManager {
     };
 
     for (const listener of listeners) {
-
-
       if (listener.order !== currentOrder) {
         // Execute previous batch
         await executeBatch(currentBatch);
@@ -599,5 +585,24 @@ export class EventManager {
     if (currentBatch.length > 0 && !event.isPropagationStopped()) {
       await executeBatch(currentBatch);
     }
+  }
+
+  /**
+   * Determines if a listener should be executed for the given event.
+   * Checks source exclusion (to prevent self-invocation) and filter conditions.
+   *
+   * @param listener - The listener to check
+   * @param event - The event emission object
+   * @returns true if the listener should be executed
+   */
+  private shouldExecuteListener(
+    listener: IListenerStorage,
+    event: IEventEmission<any>,
+  ): boolean {
+    // Skip handlers that identify themselves as the source of this event
+    if (listener.id && listener.id === event.source) {
+      return false;
+    }
+    return !listener.filter || listener.filter(event);
   }
 }
