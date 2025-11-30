@@ -497,9 +497,12 @@ r.hook("app.hooks.after")
   .build();
 ```
 
-- Listeners sharing the same `order` run together; the next `order` starts after the batch settles.
-- If any listener in a batch throws, the emission rejects and later batches are skipped.
-- `stopPropagation()` is evaluated between batches. If it is set before the first batch, nothing runs; setting it inside a batch does not cancel peers already executing in that batch.
+**Execution semantics:**
+
+- Listeners sharing the same `order` run concurrently within a batch; batches execute sequentially in ascending order.
+- All listeners in a batch run to completion even if some fail. If multiple listeners throw, an `AggregateError` containing all errors is thrown (or a single error if only one fails).
+- If any listener in a batch throws, later batches are skipped.
+- `stopPropagation()` is evaluated **between batches only**. Setting it inside a batch does not cancel peers already executing in that batch since parallel listeners cannot be stopped mid-flight.
 
 ### Middleware
 

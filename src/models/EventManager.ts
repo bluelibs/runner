@@ -541,6 +541,12 @@ export class EventManager {
 
   /**
    * Executes listeners in parallel batches based on order.
+   * Listeners with the same order value run concurrently within a batch.
+   * Batches are executed sequentially in ascending order priority.
+   *
+   * Error handling: All listeners in a batch run to completion (via Promise.allSettled).
+   * If any listener throws, an AggregateError is thrown after the batch completes,
+   * and subsequent batches will not run.
    *
    * @param listeners - Sorted array of listeners
    * @param event - The event emission object
@@ -549,28 +555,54 @@ export class EventManager {
     listeners: IListenerStorage[],
     event: IEventEmission<any>,
   ): Promise<void> {
-    if (event.isPropagationStopped()) {
+    // Guard against empty listeners array
+    if (listeners.length === 0 || event.isPropagationStopped()) {
       return;
     }
 
     let currentOrder = listeners[0].order;
     let currentBatch: typeof listeners = [];
 
+    /**
+     * Executes all listeners in a batch concurrently.
+     * Note: No propagation check during batch execution - all listeners in a
+     * batch run to completion since they execute in parallel and cannot be
+     * stopped mid-flight. Propagation is checked between batches.
+     */
     const executeBatch = async (batch: typeof listeners) => {
       const promises = batch.map(async (listener) => {
         if (this.shouldExecuteListener(listener, event)) {
           await listener.handler(event);
         }
       });
-      await Promise.all(promises);
+
+      // Use allSettled to ensure all listeners complete, then aggregate errors
+      const results = await Promise.allSettled(promises);
+      const errors = results
+        .filter((r): r is PromiseRejectedResult => r.status === "rejected")
+        .map((r) => r.reason);
+
+      if (errors.length > 0) {
+        if (errors.length === 1) {
+          throw errors[0];
+        }
+        // Create a composite error that contains all failures
+        const aggregateError = new Error(
+          `${errors.length} listeners failed in parallel batch`,
+        );
+        (aggregateError as any).errors = errors;
+        aggregateError.name = "AggregateError";
+        throw aggregateError;
+      }
     };
 
     for (const listener of listeners) {
       if (listener.order !== currentOrder) {
         // Execute previous batch
         await executeBatch(currentBatch);
-        // Start new batch
-        currentBatch = [];
+
+        // Reset batch for next order group
+        currentBatch.length = 0;
         currentOrder = listener.order;
 
         // Check propagation again after batch execution
