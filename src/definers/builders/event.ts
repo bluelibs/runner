@@ -56,7 +56,10 @@ function makeEventBuilder<TPayload>(
       const next = clone(state, { payloadSchema: schema as any });
       return makeEventBuilder<TNew>(next as unknown as BuilderState<TNew>);
     },
-    tags<TNewTags extends TagType[]>(t: TNewTags, options?: { override?: boolean }) {
+    tags<TNewTags extends TagType[]>(
+      t: TNewTags,
+      options?: { override?: boolean },
+    ) {
       const override = options?.override ?? false;
       const tags = mergeArray(state.tags as any, t as any, override);
       const next = clone(state, { tags: tags as any });
