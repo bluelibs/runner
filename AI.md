@@ -151,6 +151,7 @@ const sendWelcomeEmail = r
 - Use `.on(onAnyOf(...))` to listen to several events while keeping inference.
 - Hooks can set `.order(priority)`; lower numbers run first. Call `event.stopPropagation()` inside `run` to cancel downstream hooks.
 - Wildcard hooks use `.on("*")` and receive every emission except events tagged with `globals.tags.excludeFromGlobalHooks`.
+- Use `.parallel(true)` on event definitions to enable batched parallel execution. Listeners with the same order run concurrently; batches run sequentially. Failures in one batch prevent subsequent batches from running; propagation is checked between batches (if stopped up front, nothing runs).
 
 ### Middleware
 

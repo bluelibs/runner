@@ -467,7 +467,39 @@ const emergencyHandler = r
   .build();
 ```
 
-> **runtime:** "'A really good office messenger.' That’s me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
+> **runtime:** "'A really good office messenger.' That's me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high-fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid-stride. Rude. Effective. Slightly thrilling."
+
+#### Parallel Event Execution
+
+When an event fan-out needs more throughput, mark it as parallel to run same-priority listeners concurrently while preserving priority boundaries:
+
+```typescript
+const parallelEvent = r.event("app.events.parallel").parallel(true).build();
+
+r.hook("app.hooks.first")
+  .on(parallelEvent)
+  .order(0)
+  .run(async (event) => {
+    await doWork(event.data);
+  })
+  .build();
+
+r.hook("app.hooks.second")
+  .on(parallelEvent)
+  .order(0)
+  .run(async () => log.info("Runs alongside first"))
+  .build();
+
+r.hook("app.hooks.after")
+  .on(parallelEvent)
+  .order(1) // Waits for order 0 batch to complete
+  .run(async () => followUp())
+  .build();
+```
+
+- Listeners sharing the same `order` run together; the next `order` starts after the batch settles.
+- If any listener in a batch throws, the emission rejects and later batches are skipped.
+- `stopPropagation()` is evaluated between batches. If it is set before the first batch, nothing runs; setting it inside a batch does not cancel peers already executing in that batch.
 
 ### Middleware
 

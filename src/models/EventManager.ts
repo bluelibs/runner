@@ -556,6 +556,10 @@ export class EventManager {
     listeners: IListenerStorage[],
     event: IEventEmission<any>,
   ): Promise<void> {
+    if (event.isPropagationStopped()) {
+      return;
+    }
+
     let currentOrder = listeners[0].order;
     let currentBatch: typeof listeners = [];
 

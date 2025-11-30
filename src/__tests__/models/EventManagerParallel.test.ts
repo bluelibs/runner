@@ -135,6 +135,35 @@ describe("EventManager Parallel Execution", () => {
     expect(results).toContain("batch1-other");
   });
 
+  it("should skip all listeners when propagation is stopped by an interceptor", async () => {
+    const results: string[] = [];
+
+    eventManager.intercept(async (next, event) => {
+      event.stopPropagation();
+      await next(event);
+    });
+
+    eventManager.addListener(
+      parallelEvent,
+      () => {
+        results.push("should-not-run");
+      },
+      { order: 0 }
+    );
+
+    eventManager.addListener(
+      parallelEvent,
+      () => {
+        results.push("should-not-run-either");
+      },
+      { order: 1 }
+    );
+
+    await eventManager.emit(parallelEvent, "data", "test");
+
+    expect(results).toEqual([]);
+  });
+
   it("should handle errors in parallel execution", async () => {
     eventManager.addListener(
       parallelEvent,
