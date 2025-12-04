@@ -74,7 +74,9 @@ describe("requestHandlers - auth fail and missing task", () => {
         return 1;
       },
     } as unknown as NodeExposureDeps["taskRunner"];
-    const eventManager = { emit: async () => {} } as unknown as NodeExposureDeps["eventManager"];
+    const eventManager = {
+      emit: async () => {},
+    } as unknown as NodeExposureDeps["eventManager"];
     const logger = {
       info: async () => {},
       warn: async () => {},
@@ -121,7 +123,9 @@ describe("requestHandlers - auth fail and missing task", () => {
         return 1;
       },
     } as unknown as NodeExposureDeps["taskRunner"];
-    const eventManager = { emit: async () => {} } as unknown as NodeExposureDeps["eventManager"];
+    const eventManager = {
+      emit: async () => {},
+    } as unknown as NodeExposureDeps["eventManager"];
     const logger = {
       info: async () => {},
       warn: async () => {},
@@ -176,14 +180,19 @@ describe("requestHandlers - auth fail and missing task", () => {
         return 1;
       },
     } as unknown as NodeExposureDeps["taskRunner"];
-    const eventManager = { emit: async () => {} } as unknown as NodeExposureDeps["eventManager"];
+    const eventManager = {
+      emit: async () => {},
+    } as unknown as NodeExposureDeps["eventManager"];
     const logger = {
       info: async () => {},
       warn: async () => {},
       error: async () => {},
     } as unknown as NodeExposureDeps["logger"];
 
-    const router = makeRouter((_p: string) => ({ kind: "task", id: "blocked.task" }));
+    const router = makeRouter((_p: string) => ({
+      kind: "task",
+      id: "blocked.task",
+    }));
 
     const deps = {
       store,
@@ -213,7 +222,10 @@ describe("requestHandlers - auth fail and missing task", () => {
     const eventReq = makeJsonReq("/api/event/blocked.event");
     const eventRes = makeRes();
     // update router to event for this call
-    deps.router.extract = (_p: string) => ({ kind: "event", id: "blocked.event" });
+    deps.router.extract = (_p: string) => ({
+      kind: "event",
+      id: "blocked.event",
+    });
     await handleEvent(eventReq, eventRes);
     expect(eventRes._status).toBe(403);
     const eventJson = eventRes._buf

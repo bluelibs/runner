@@ -100,7 +100,10 @@ describe("nodeExposure auto-discovery (server-mode http)", () => {
     // Allowed task -> 200
     {
       const body = JSON.stringify({ input: { v: 1 } });
-      const req = makeReq(body, `/__runner/task/${encodeURIComponent(allowed.id)}`);
+      const req = makeReq(
+        body,
+        `/__runner/task/${encodeURIComponent(allowed.id)}`,
+      );
       const res = makeRes();
       await handlers.handleTask(req, res);
       expect(res.statusCode).toBe(200);

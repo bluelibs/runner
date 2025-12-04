@@ -10,7 +10,10 @@ import { nodeExposure } from "../exposure.resource";
 
 describe("nodeExposure - more edge branches", () => {
   type MockReq = Readable & IncomingMessage;
-  type MockRes = (ServerResponse | (ServerResponse & { body?: Buffer | null })) & {
+  type MockRes = (
+    | ServerResponse
+    | (ServerResponse & { body?: Buffer | null })
+  ) & {
     body?: Buffer | null;
   };
 
@@ -337,7 +340,10 @@ describe("nodeExposure - more edge branches", () => {
     const createServerSpy = jest
       .spyOn(http, "createServer")
       .mockImplementation(() => {
-        const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+        const listeners = new Map<
+          string,
+          Array<(...args: unknown[]) => void>
+        >();
         return {
           on(event: string, handler: (...args: unknown[]) => void) {
             const arr = listeners.get(event) ?? [];
@@ -478,8 +484,9 @@ describe("nodeExposure - more edge branches", () => {
       createServer: typeof http.createServer;
     };
     const realCreate = httpWithMutableCreate.createServer;
-    let capturedHandler: ((req: IncomingMessage, res: ServerResponse) => void) | null =
-      null;
+    let capturedHandler:
+      | ((req: IncomingMessage, res: ServerResponse) => void)
+      | null = null;
     const server = {
       listen: (...args: unknown[]) => {
         const cb = args.find((arg) => typeof arg === "function") as
@@ -499,7 +506,9 @@ describe("nodeExposure - more edge branches", () => {
         return { port: 0 } as { port: number };
       },
     } as unknown as http.Server;
-    httpWithMutableCreate.createServer = ((requestListener?: http.RequestListener) => {
+    httpWithMutableCreate.createServer = ((
+      requestListener?: http.RequestListener,
+    ) => {
       capturedHandler = (requestListener ?? null) as
         | ((req: IncomingMessage, res: ServerResponse) => void)
         | null;
