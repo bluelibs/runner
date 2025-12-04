@@ -265,6 +265,113 @@ describe("EventManager", () => {
     expect(results).toEqual([0, 1]);
   });
 
+  it("parallel listeners aggregate errors with listener ids", async () => {
+    const parallelEvent = defineEvent<string>({
+      id: "parallel",
+      parallel: true,
+    });
+    const results: string[] = [];
+
+    eventManager.addListener(
+      parallelEvent,
+      () => {
+        results.push("ok-1");
+      },
+      { order: 0, id: "l1" },
+    );
+
+    eventManager.addListener(
+      parallelEvent,
+      () => {
+        throw new Error("boom-1");
+      },
+      { order: 0, id: "l2" },
+    );
+
+    eventManager.addListener(
+      parallelEvent,
+      () => {
+        throw new Error("boom-2");
+      },
+      { order: 0, id: "l3" },
+    );
+
+    eventManager.addListener(
+      parallelEvent,
+      () => {
+        results.push("should-not-run");
+      },
+      { order: 1, id: "later" },
+    );
+
+    await expect(
+      eventManager.emit(parallelEvent, "data", "src"),
+    ).rejects.toMatchObject({
+      name: "AggregateError",
+    });
+
+    results.sort();
+    expect(results).toEqual(["ok-1"]);
+
+    try {
+      await eventManager.emit(parallelEvent, "data", "src");
+    } catch (err: any) {
+      expect(err.name).toBe("AggregateError");
+      expect(Array.isArray(err.errors)).toBe(true);
+      expect(err.errors.map((e: any) => e.listenerId)).toEqual(
+        expect.arrayContaining(["l2", "l3"]),
+      );
+      expect(err.errors.map((e: any) => e.listenerOrder)).toEqual([0, 0]);
+      expect(err.errors[0]).toBeInstanceOf(Error);
+    }
+  });
+
+  it("single parallel error is annotated with listener id", async () => {
+    const parallelEvent = defineEvent<string>({
+      id: "parallel-single",
+      parallel: true,
+    });
+
+    eventManager.addListener(
+      parallelEvent,
+      () => {
+        throw new Error("solo-bang");
+      },
+      { order: 0, id: "solo" },
+    );
+
+    try {
+      await eventManager.emit(parallelEvent, "data", "src");
+    } catch (err: any) {
+      expect(err.listenerId).toBe("solo");
+      expect(err.listenerOrder).toBe(0);
+      expect(err.message).toBe("solo-bang");
+    }
+  });
+
+  it("annotates non-object thrown values with listener metadata", async () => {
+    const parallelEvent = defineEvent<string>({
+      id: "parallel-nonobj",
+      parallel: true,
+    });
+
+    eventManager.addListener(
+      parallelEvent,
+      () => {
+        throw "primitive-error";
+      },
+      { order: 0, id: "primitive" },
+    );
+
+    await expect(
+      eventManager.emit(parallelEvent, "data", "src"),
+    ).rejects.toMatchObject({
+      listenerId: "primitive",
+      listenerOrder: 0,
+      message: "primitive-error",
+    });
+  });
+
   it("should handle handler throwing an error", async () => {
     const handler = jest.fn().mockImplementation(() => {
       throw new Error("Handler error");

@@ -570,6 +570,25 @@ export class EventManager {
      * stopped mid-flight. Propagation is checked between batches.
      */
     const executeBatch = async (batch: typeof listeners) => {
+      const annotateError = (
+        reason: unknown,
+        listener: IListenerStorage,
+      ) => {
+        const base =
+          reason && typeof reason === "object"
+            ? (reason as any)
+            : (new Error(String(reason)) as any);
+
+        if (base.listenerId === undefined) {
+          base.listenerId = listener.id;
+        }
+        if (base.listenerOrder === undefined) {
+          base.listenerOrder = listener.order;
+        }
+
+        return base as Error & { listenerId?: string; listenerOrder?: number };
+      };
+
       const promises = batch.map(async (listener) => {
         if (this.shouldExecuteListener(listener, event)) {
           await listener.handler(event);
@@ -579,14 +598,22 @@ export class EventManager {
       // Use allSettled to ensure all listeners complete, then aggregate errors
       const results = await Promise.allSettled(promises);
       const errors = results
-        .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-        .map((r) => r.reason);
+        .map((result, index) => ({ result, listener: batch[index] }))
+        .filter(
+          (
+            r,
+          ): r is {
+            result: PromiseRejectedResult;
+            listener: IListenerStorage;
+          } => r.result.status === "rejected",
+        )
+        .map(({ result, listener }) => annotateError(result.reason, listener));
 
       if (errors.length > 0) {
         if (errors.length === 1) {
           throw errors[0];
         }
-        // Create a composite error that contains all failures
+        // Create a composite error that contains all failures and their listener ids on each error object
         const aggregateError = new Error(
           `${errors.length} listeners failed in parallel batch`,
         );
