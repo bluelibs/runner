@@ -570,10 +570,7 @@ export class EventManager {
      * stopped mid-flight. Propagation is checked between batches.
      */
     const executeBatch = async (batch: typeof listeners) => {
-      const annotateError = (
-        reason: unknown,
-        listener: IListenerStorage,
-      ) => {
+      const annotateError = (reason: unknown, listener: IListenerStorage) => {
         const base =
           reason && typeof reason === "object"
             ? (reason as any)
