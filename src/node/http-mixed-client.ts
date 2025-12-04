@@ -3,6 +3,7 @@ import { createExposureFetch } from "../http-fetch-tunnel.resource";
 import type { Serializer } from "../globals/resources/tunnel/serializer";
 import { createHttpSmartClient } from "./http-smart-client.model";
 import type { IAsyncContext } from "../types/asyncContext";
+import type { IErrorHelper } from "../types/error";
 
 export interface MixedHttpClientAuthConfig {
   header?: string; // default: x-runner-token
@@ -22,7 +23,7 @@ export interface MixedHttpClientConfig {
     headers: Record<string, string>;
   }) => void | Promise<void>;
   contexts?: Array<IAsyncContext<any>>;
-  errorRegistry?: Map<string, any>;
+  errorRegistry?: Map<string, IErrorHelper<any>>;
 }
 
 export interface MixedHttpClient {
@@ -83,6 +84,7 @@ export function createHttpMixedClient(
     serializer: cfg.serializer,
     onRequest: cfg.onRequest,
     contexts: cfg.contexts,
+    errorRegistry: cfg.errorRegistry,
   });
 
   return {

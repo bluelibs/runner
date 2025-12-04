@@ -1249,6 +1249,17 @@ describe("EventManager", () => {
     spy.mockRestore();
   });
 
+  it("exposes getCachedMergedListeners for backward compatibility", () => {
+    const manager = new EventManager();
+    const registry = (manager as any).registry;
+    const spy = jest.spyOn(registry, "getCachedMergedListeners");
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (manager as any).getCachedMergedListeners("evt-bc");
+
+    expect(spy).toHaveBeenCalledWith("evt-bc");
+  });
+
   it("should still run hook interceptors for events tagged excludeFromGlobalHooks", async () => {
     const executionOrder: string[] = [];
     const hookInterceptor = jest.fn(async (next, hook, event) => {

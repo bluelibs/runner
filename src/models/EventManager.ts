@@ -5,7 +5,6 @@ import {
   IEventEmission,
 } from "../defs";
 import { lockedError, validationError } from "../errors";
-import { globalTags } from "../globals/globalTags";
 import { IHook } from "../types/hook";
 import {
   EventEmissionInterceptor,
@@ -102,13 +101,7 @@ export class EventManager {
 
     const frame = { id: eventDefinition.id, source };
     const processEmission = async () => {
-      const excludeFromGlobal =
-        globalTags.excludeFromGlobalHooks.exists(eventDefinition);
-
-      // Choose listeners: if globals are excluded, only use event-specific listeners
-      const allListeners = excludeFromGlobal
-        ? this.listeners.get(eventDefinition.id) || []
-        : this.getCachedMergedListeners(eventDefinition.id);
+      const allListeners = this.registry.getListenersForEmit(eventDefinition);
 
       let propagationStopped = false;
 
@@ -279,13 +272,11 @@ export class EventManager {
     );
 
     // Execute the hook with interceptors within current hook context
-    if (this.cycleContext.isEnabled) {
-      return await this.cycleContext.runHook(hook.id, () =>
-        executeWithInterceptors(hook, event),
-      );
-    }
-
-    return await executeWithInterceptors(hook, event);
+    return this.cycleContext.isEnabled
+      ? await this.cycleContext.runHook(hook.id, () =>
+          executeWithInterceptors(hook, event),
+        )
+      : await executeWithInterceptors(hook, event);
   }
 
   // ==================== PRIVATE METHODS ====================

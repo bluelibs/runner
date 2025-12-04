@@ -6,6 +6,7 @@ import type { ProtocolEnvelope } from "../globals/resources/tunnel/protocol";
 import { assertOkEnvelope } from "../globals/resources/tunnel/protocol";
 import type { InputFileMeta } from "../types/inputFile";
 import type { IAsyncContext } from "../types/asyncContext";
+import type { IErrorHelper } from "../types/error";
 // Avoid `.node` bare import which triggers tsup native addon resolver
 import { buildNodeManifest } from "./upload/manifest";
 
@@ -24,6 +25,7 @@ export interface HttpSmartClientConfig {
     headers: Record<string, string>;
   }) => void | Promise<void>;
   contexts?: Array<IAsyncContext<any>>;
+  errorRegistry?: Map<string, IErrorHelper<any>>;
 }
 
 export interface HttpSmartClient {
@@ -342,6 +344,17 @@ function parseMaybeJsonResponse<T = any>(
   return Promise.resolve(res as unknown as Readable);
 }
 
+function rethrowTyped(
+  registry: Map<string, IErrorHelper<any>> | undefined,
+  error: unknown,
+): never {
+  if (registry && error && (error as any).id && (error as any).data) {
+    const helper = registry.get(String((error as any).id));
+    if (helper) helper.throw((error as any).data);
+  }
+  throw error as any;
+}
+
 export function createHttpSmartClient(
   cfg: HttpSmartClientConfig,
 ): HttpSmartClient {
@@ -366,31 +379,45 @@ export function createHttpSmartClient(
         const manifestText = serializer.stringify({
           input: manifest.input,
         });
-        const { res } = await postMultipart(
-          cfg,
-          url,
-          manifestText,
-          manifest.files,
-        );
-        const maybe = await parseMaybeJsonResponse<ProtocolEnvelope<O>>(
-          res,
-          serializer,
-        );
-        if (isReadable(maybe)) return maybe; // server streamed back directly
-        return assertOkEnvelope<O>(maybe as ProtocolEnvelope<O>, {
-          fallbackMessage: "Tunnel task error",
-        }) as O;
+        try {
+          const { res } = await postMultipart(
+            cfg,
+            url,
+            manifestText,
+            manifest.files,
+          );
+          const maybe = await parseMaybeJsonResponse<ProtocolEnvelope<O>>(
+            res,
+            serializer,
+          );
+          if (isReadable(maybe)) return maybe; // server streamed back directly
+          return assertOkEnvelope<O>(maybe as ProtocolEnvelope<O>, {
+            fallbackMessage: "Tunnel task error",
+          }) as O;
+        } catch (error) {
+          rethrowTyped(cfg.errorRegistry, error);
+        }
       }
 
       // C) JSON/EJSON fallback
-      const r = await postJson<ProtocolEnvelope<O>>(cfg, url, { input });
-      return assertOkEnvelope<O>(r, { fallbackMessage: "Tunnel task error" });
+      try {
+        const r = await postJson<ProtocolEnvelope<O>>(cfg, url, { input });
+        return assertOkEnvelope<O>(r, {
+          fallbackMessage: "Tunnel task error",
+        });
+      } catch (error) {
+        rethrowTyped(cfg.errorRegistry, error);
+      }
     },
 
     async event<P>(id: string, payload?: P): Promise<void> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
-      const r = await postJson<ProtocolEnvelope<void>>(cfg, url, { payload });
-      assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });
+      try {
+        const r = await postJson<ProtocolEnvelope<void>>(cfg, url, { payload });
+        assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });
+      } catch (error) {
+        rethrowTyped(cfg.errorRegistry, error);
+      }
     },
   };
 }

@@ -8,11 +8,10 @@ export class CycleContext {
   readonly isEnabled: boolean;
 
   constructor(runtimeCycleDetection: boolean) {
-    if (getPlatform().hasAsyncLocalStorage() && runtimeCycleDetection) {
-      this.emissionStack =
-        getPlatform().createAsyncLocalStorage<IEmissionFrame[]>();
-      this.currentHookIdContext =
-        getPlatform().createAsyncLocalStorage<string>();
+    const platform = getPlatform();
+    if (platform.hasAsyncLocalStorage() && runtimeCycleDetection) {
+      this.emissionStack = platform.createAsyncLocalStorage<IEmissionFrame[]>();
+      this.currentHookIdContext = platform.createAsyncLocalStorage<string>();
       this.isEnabled = true;
     } else {
       this.emissionStack = null;

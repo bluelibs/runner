@@ -58,7 +58,8 @@ if [[ ${#results[@]} -eq 0 ]]; then
   exit 0
 fi
 
-# Styling for header (bold) and reset; works in most POSIX terminals
+# Styling for header (bold) and reset; works in most POSIX terminals.
+# Pass as -v to awk for portability across implementations.
 BOLD="$(printf '\033[1m')"
 RESET="$(printf '\033[0m')"
 
@@ -66,12 +67,12 @@ RESET="$(printf '\033[0m')"
 # Aligned columns: non-empty-lines chars tokens-est path
 printf "%s\n" "${results[@]}" \
   | sort -nr -k1,1 \
-  | BOLD="$BOLD" RESET="$RESET" awk '
+  | awk -v BOLD="$BOLD" -v RESET="$RESET" '
       BEGIN {
         header = sprintf("%-16s %-12s %-12s %s", "non-empty-lines", "chars", "tokens-est", "path");
         sep = "";
         for (i = 1; i <= length(header); i++) sep = sep "-";
-        printf "%s%s%s\n%s\n", ENVIRON["BOLD"], header, ENVIRON["RESET"], sep;
+        printf "%s%s%s\n%s\n", BOLD, header, RESET, sep;
       }
       {
         path="";

@@ -22,7 +22,7 @@ export function createAllowListGuard(store: Store): AllowListGuard {
         return null;
       }
       if (!list.taskIds.has(id)) {
-        return jsonErrorResponse(404, `Task ${id} not exposed`, "NOT_EXPOSED");
+        return jsonErrorResponse(403, `Task ${id} not exposed`, "FORBIDDEN");
       }
       return null;
     },
@@ -32,7 +32,7 @@ export function createAllowListGuard(store: Store): AllowListGuard {
         return null;
       }
       if (!list.eventIds.has(id)) {
-        return jsonErrorResponse(404, `Event ${id} not exposed`, "NOT_EXPOSED");
+        return jsonErrorResponse(403, `Event ${id} not exposed`, "FORBIDDEN");
       }
       return null;
     },
