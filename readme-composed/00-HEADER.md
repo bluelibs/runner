@@ -1,23 +1,10 @@
 <div align="center">
 
-```
-██████╗ ██╗     ██╗   ██╗███████╗██╗     ██╗██████╗ ███████╗
-██╔══██╗██║     ██║   ██║██╔════╝██║     ██║██╔══██╗██╔════╝
-██████╔╝██║     ██║   ██║█████╗  ██║     ██║██████╔╝███████╗
-██╔══██╗██║     ██║   ██║██╔══╝  ██║     ██║██╔══██╗╚════██║
-██████╔╝███████╗╚██████╔╝███████╗███████╗██║██████╔╝███████║
-╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝╚══════╝╚═╝╚═════╝ ╚══════╝
-██████╗ ██╗   ██╗███╗   ███╗███╗   ██╗███████╗██████╗
-██╔══██╗██║   ██║████╗ ████║████╗  ██║██╔════╝██╔══██╗
-██████╔╝██║   ██║██╔████╔██║██╔██╗ ██║█████╗  ██████╔╝
-██╔══██╗██║   ██║██║╚██╔╝██║██║╚██╗██║██╔══╝  ██╔══██╗
-██║  ██║╚██████╔╝██║ ╚═╝ ██║██║ ╚████║███████╗██║  ██║
-╚═╝  ╚═╝ ╚═════╝ ╚═╝     ╚═╝╚═╝  ╚═══╝╚══════╝╚═╝  ╚═╝
-```
+# BlueLibs Runner
 
-### _TypeScript-First Dependency Injection That Doesn't Suck_ ⚡
+### TypeScript-First Dependency Injection Framework
 
-**Build enterprise apps that are actually maintainable**
+**Build enterprise applications that are maintainable, testable, and scalable**
 
 <p align="center">
 <a href="https://github.com/bluelibs/runner/actions/workflows/ci.yml"><img src="https://github.com/bluelibs/runner/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build Status" /></a>
@@ -28,121 +15,116 @@
 </p>
 
 ```typescript
-// This is all you need to build production-ready apps
 import { r, run } from "@bluelibs/runner";
 
-const app = r.resource("app").register([yourTasks, yourServices]).build();
-await run(app); // 🚀 That's it. Type-safe, testable, scalable.
+// Define a task with dependencies and type-safe input/output
+const createUser = r
+  .task("users.create")
+  .dependencies({ db, mailer })
+  .run(async (input, { db, mailer }) => {
+    const user = await db.users.insert(input);
+    await mailer.sendWelcome(user.email);
+    return user;
+  })
+  .build();
+
+// Compose resources and run your application
+const app = r.resource("app").register([db, mailer, createUser]).build();
+const runtime = await run(app);
 ```
 
-**[📚 Read the Docs](https://bluelibs.github.io/runner/)** · **[🎮 Try the Examples](./examples)** · **[💬 Join Discord](#community--support)** · **[⭐ Star on GitHub](https://github.com/bluelibs/runner)**
+**[📚 Documentation](https://bluelibs.github.io/runner/)** · **[🎮 Examples](./examples)** · **[💬 Discord](#community--support)** · **[⭐ GitHub](https://github.com/bluelibs/runner)**
 
 </div>
 
 ---
 
-| Resource                                                                                                            | Type    | Notes                                                         |
-| ------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------- |
-| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website | Overview, features, and highlights                            |
-| [BlueLibs Runner GitHub](https://github.com/bluelibs/runner)                                                        | GitHub  | Source code, issues, and releases                             |
-| [BlueLibs Runner Dev](https://github.com/bluelibs/runner-dev)                                                       | GitHub  | Development tools and CLI for BlueLibs Runner                 |
-| [UX Friendly Docs](https://bluelibs.github.io/runner/)                                                              | Docs    | Clean, navigable documentation                                |
-| [AI Friendly Docs (<5000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)                               | Docs    | Short, token-friendly summary (<5000 tokens)                  |
-| [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade from v3 to v4                            |
-| [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)                                                 | Docs    | Design notes, deep dives, and context                         |
-| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | Full Express + OpenAPI + SQLite demo                          |
-| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full Fastify + MikroORM + PostgreSQL demo                     |
-| [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)       | Chatbot | Ask questions interactively, or feed README.md to your own AI |
+| Resource                                                                                                            | Type    | Description                                    |
+| ------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------- |
+| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website | Overview and features                          |
+| [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases              |
+| [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling                    |
+| [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference                    |
+| [AI-Friendly Docs](https://github.com/bluelibs/runner/blob/main/AI.md)                                              | Docs    | Compact summary (<5000 tokens)                 |
+| [Migration Guide (3.x → 4.x)](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade instructions              |
+| [Design Documents](https://github.com/bluelibs/runner/blob/main/readmes)                                            | Docs    | Architecture notes and deep dives              |
+| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification            |
+| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM                |
+| [AI Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)                   | Chatbot | Interactive Q&A assistant                      |
 
 ### Community & Policies
 
-- Code of Conduct: see [CODE_OF_CONDUCT](./CODE_OF_CONDUCT.md)
-- Contributing: see [CONTRIBUTING](./CONTRIBUTING.md)
-- Security: see [SECURITY](./SECURITY.md)
+- [Code of Conduct](./CODE_OF_CONDUCT.md)
+- [Contributing](./CONTRIBUTING.md)
+- [Security](./SECURITY.md)
 
 ---
 
-## 🎯 Why This Exists
+## Why Runner?
 
 <table>
 <tr>
 <td width="50%">
 
-### ❌ The Problem
+### The Problem
 
-You've been there. It's 2 AM, you're debugging why your "simple" dependency injection isn't working, and you're questioning every life choice that led you here.
+Modern dependency injection frameworks force difficult trade-offs:
 
-**Modern frameworks force you to choose:**
+- **Magic-heavy** — Decorators, reflection, and runtime tricks make debugging painful
+- **Boilerplate-heavy** — Manual wiring and factory patterns slow development
+- **Steep learning curves** — Months to become productive
 
-- 🪄 **Magic** (decorators, reflection, runtime tricks) → Impossible to debug
-- 🏗️ **Boilerplate** (manual wiring, factories) → Death by a thousand constructors
-- 📚 **Complexity** (learning curves steeper than Everest) → 6 months to productivity
-
-Your codebase becomes:
+The result is code that's hard to test, hard to understand, and hard to maintain:
 
 ```typescript
-// 3 months later...
 @Injectable()
 @Transactional()
 @Cacheable({ ttl: 60 })
-export class WhatDoesThisEvenDo {
+export class UserService {
   constructor(
-    private readonly dep1,
-    private readonly dep2,
-    private readonly dep3,
-  ) // ... 12 more dependencies
-  {} // Good luck testing this
+    private readonly db: Database,
+    private readonly cache: Cache,
+    private readonly logger: Logger,
+    // ... more dependencies
+  ) {}
 }
 ```
 
 </td>
 <td width="50%">
 
-### ✅ The Solution
+### The Solution
 
-**Runner gives you superpowers without the headaches:**
+Runner provides a functional, explicit approach:
 
 ```typescript
-// Clear, explicit, testable
 const createUser = r
   .task("users.create")
-  .dependencies({ db, emailer })
-  .run(async (input, { db, emailer }) => {
-    const user = await db.insert(input);
-    await emailer.send(user.email);
+  .dependencies({ db, logger })
+  .run(async (input, { db, logger }) => {
+    const user = await db.users.insert(input);
+    logger.info("User created", { userId: user.id });
     return user;
   })
   .build();
 
-// Test it easily
-await createUser.run(
-  { email: "test@example.com" },
-  { db: mockDb, emailer: mockEmailer },
-);
+// Easy to test with mock dependencies
+await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 ```
 
-**What you get:**
+**Benefits:**
 
-- ⚡ **Zero magic** - It's just functions and objects
-- 🎯 **Type-safe** - TypeScript knows everything
-- 🧪 **Testable** - Unit test in milliseconds
-- 📈 **Scalable** - From hobby project to enterprise
-- 🔍 **Debuggable** - Stack traces make sense
-- 💪 **Productive** - Build features, not infrastructure
+- **Zero magic** — Plain functions and objects
+- **Full type safety** — TypeScript inference throughout
+- **Simple testing** — Unit tests run in milliseconds
+- **Clear debugging** — Readable stack traces
+- **Gradual adoption** — Integrate into existing projects
 
 </td>
 </tr>
 </table>
 
-**The philosophy:** Functions > Classes · Explicit > Implicit · Simple > Clever
-
----
-
-## 👋 Welcome!
-
-Hey there! If you've ever felt like modern frameworks make simple things complicated, you're in the right place. We built Runner because we believe **building apps should be enjoyable**, not exhausting.
-
-Think of Runner as your thoughtful coding companion. It handles the boring stuff (dependency injection, lifecycle management, error handling) so you can focus on building features your users actually care about.
+**Design principles:** Functions over classes · Explicit over implicit · Simple over clever
 
 ---
 
@@ -150,16 +132,16 @@ Think of Runner as your thoughtful coding companion. It handles the boring stuff
 
 **Getting Started**
 
-- [🎯 Why This Exists](#-why-this-exists) - The problem we solve
+- [Why Runner?](#why-runner) - The problem we solve
 - [What Is This Thing?](#what-is-this-thing)
-- [🔥 Show Me the Magic](#-show-me-the-magic) - See it in action
-- [📊 How Does It Compare?](#-how-does-it-compare) - vs. other frameworks
-- [⚡ Performance at a Glance](#-performance-at-a-glance) - Real benchmarks
-- [🎁 What's in the Box?](#-whats-in-the-box) - Feature matrix
-- [Your First 5 Minutes](#your-first-5-minutes) - 🚀 **Start here!**
+- [Show Me the Magic](#-show-me-the-magic) - See it in action
+- [How Does It Compare?](#-how-does-it-compare) - vs. other frameworks
+- [Performance at a Glance](#-performance-at-a-glance) - Real benchmarks
+- [What's in the Box?](#-whats-in-the-box) - Feature matrix
+- [Your First 5 Minutes](#your-first-5-minutes) - **Start here!**
 - [Quick Start](#quick-start) - Full Express example
-- [Learning Guide](#learning-guide-common-patterns) - 💡 Common patterns
-- [🎯 Quick Wins](#-quick-wins-copy-paste-solutions) - 5 copy-paste solutions
+- [Learning Guide](#learning-guide-common-patterns) - Common patterns
+- [Quick Wins](#-quick-wins-copy-paste-solutions) - Copy-paste solutions
 - [The Big Five](#the-big-five) - Core concepts
 
 **Core Concepts**
