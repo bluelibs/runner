@@ -467,7 +467,42 @@ const emergencyHandler = r
   .build();
 ```
 
-> **runtime:** "'A really good office messenger.' That’s me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
+> **runtime:** "'A really good office messenger.' That's me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high-fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid-stride. Rude. Effective. Slightly thrilling."
+
+#### Parallel Event Execution
+
+When an event fan-out needs more throughput, mark it as parallel to run same-priority listeners concurrently while preserving priority boundaries:
+
+```typescript
+const parallelEvent = r.event("app.events.parallel").parallel(true).build();
+
+r.hook("app.hooks.first")
+  .on(parallelEvent)
+  .order(0)
+  .run(async (event) => {
+    await doWork(event.data);
+  })
+  .build();
+
+r.hook("app.hooks.second")
+  .on(parallelEvent)
+  .order(0)
+  .run(async () => log.info("Runs alongside first"))
+  .build();
+
+r.hook("app.hooks.after")
+  .on(parallelEvent)
+  .order(1) // Waits for order 0 batch to complete
+  .run(async () => followUp())
+  .build();
+```
+
+**Execution semantics:**
+
+- Listeners sharing the same `order` run concurrently within a batch; batches execute sequentially in ascending order.
+- All listeners in a batch run to completion even if some fail. If multiple listeners throw, an `AggregateError` containing all errors is thrown (or a single error if only one fails).
+- If any listener in a batch throws, later batches are skipped.
+- `stopPropagation()` is evaluated **between batches only**. Setting it inside a batch does not cancel peers already executing in that batch since parallel listeners cannot be stopped mid-flight.
 
 ### Middleware
 

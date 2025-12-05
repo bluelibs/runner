@@ -2,60 +2,24 @@ import {
   DependencyValuesType,
   EventHandlerType,
   IEvent,
-  IEventDefinition,
   IEventEmission,
 } from "../defs";
-import { lockedError, eventCycleError, validationError } from "../errors";
-import { globalTags } from "../globals/globalTags";
+import { lockedError, validationError } from "../errors";
 import { IHook } from "../types/hook";
-import { getPlatform, IAsyncLocalStorage } from "../platform";
-
-/**
- * Default options for event handlers
- */
-const HandlerOptionsDefaults = { order: 0 };
-
-/**
- * Internal storage structure for event listeners
- */
-interface IListenerStorage {
-  order: number;
-  filter?: (event: IEventEmission<any>) => boolean;
-  handler: EventHandlerType;
-  /** Optional listener id (from IEventHandlerOptions.id) */
-  id?: string;
-  /** True when this listener originates from addGlobalListener(). */
-  isGlobal: boolean;
-}
-
-/**
- * Options for configuring event listeners
- */
-export interface IEventHandlerOptions<T = any> {
-  order?: number;
-  filter?: (event: IEventEmission<T>) => boolean;
-  /**
-   * Represents the listener ID. Use this to avoid a listener calling himself.
-   */
-  id?: string;
-}
-
-/**
- * Interceptor for event emissions
- */
-export type EventEmissionInterceptor = (
-  next: (event: IEventEmission<any>) => Promise<void>,
-  event: IEventEmission<any>,
-) => Promise<void>;
-
-/**
- * Interceptor for hook execution
- */
-export type HookExecutionInterceptor = (
-  next: (hook: IHook<any, any>, event: IEventEmission<any>) => Promise<any>,
-  hook: IHook<any, any>,
-  event: IEventEmission<any>,
-) => Promise<any>;
+import {
+  EventEmissionInterceptor,
+  HandlerOptionsDefaults,
+  HookExecutionInterceptor,
+  IEventHandlerOptions,
+  IListenerStorage,
+} from "./event/types";
+import { ListenerRegistry, createListener } from "./event/ListenerRegistry";
+import { composeInterceptors } from "./event/InterceptorPipeline";
+import {
+  executeInParallel,
+  executeSequentially,
+} from "./event/EmissionExecutor";
+import { CycleContext } from "./event/CycleContext";
 
 /**
  * EventManager handles event emission, listener registration, and event processing.
@@ -63,22 +27,17 @@ export type HookExecutionInterceptor = (
  * Listeners are processed in order based on their priority.
  */
 export class EventManager {
-  // Core storage for event listeners
-  private listeners: Map<string, IListenerStorage[]> = new Map();
-  private globalListeners: IListenerStorage[] = [];
+  // Core storage for event listeners (kept for backward-compatibility with tests)
+  private listeners: Map<string, IListenerStorage[]>;
+  private globalListeners: IListenerStorage[];
+  private cachedMergedListeners: Map<string, IListenerStorage[]>;
 
-  // Caching system for merged listeners to improve performance
-  private cachedMergedListeners: Map<string, IListenerStorage[]> = new Map();
-  private globalListenersCacheValid = true;
-
-  // Interceptors storage
+  // Interceptors storage (tests access these directly)
   private emissionInterceptors: EventEmissionInterceptor[] = [];
   private hookInterceptors: HookExecutionInterceptor[] = [];
 
-  // Tracks the current emission chain to detect cycles
-  private readonly emissionStack!: IAsyncLocalStorage<any> | null;
-  // Tracks currently executing hook id (if any)
-  private readonly currentHookIdContext!: IAsyncLocalStorage<string> | null;
+  private readonly registry: ListenerRegistry;
+  private readonly cycleContext: CycleContext;
 
   // Locking mechanism to prevent modifications after initialization
   #isLocked = false;
@@ -88,20 +47,13 @@ export class EventManager {
 
   constructor(options?: { runtimeCycleDetection?: boolean }) {
     this.runtimeCycleDetection = options?.runtimeCycleDetection ?? true;
+    this.registry = new ListenerRegistry();
+    this.cycleContext = new CycleContext(this.runtimeCycleDetection);
 
-    // Store based on the platform.
-    if (getPlatform().hasAsyncLocalStorage() && this.runtimeCycleDetection) {
-      this.emissionStack =
-        getPlatform().createAsyncLocalStorage<
-          { id: string; source: string }[]
-        >();
-      this.currentHookIdContext =
-        getPlatform().createAsyncLocalStorage<string>();
-    } else {
-      this.runtimeCycleDetection = false;
-      this.emissionStack = null;
-      this.currentHookIdContext = null;
-    }
+    // expose registry collections for backward-compatibility (tests reach into these)
+    this.listeners = this.registry.listeners;
+    this.globalListeners = this.registry.globalListeners;
+    this.cachedMergedListeners = this.registry.cachedMergedListeners;
   }
 
   // ==================== PUBLIC API ====================
@@ -149,13 +101,7 @@ export class EventManager {
 
     const frame = { id: eventDefinition.id, source };
     const processEmission = async () => {
-      const excludeFromGlobal =
-        globalTags.excludeFromGlobalHooks.exists(eventDefinition);
-
-      // Choose listeners: if globals are excluded, only use event-specific listeners
-      const allListeners = excludeFromGlobal
-        ? this.listeners.get(eventDefinition.id) || []
-        : this.getCachedMergedListeners(eventDefinition.id);
+      const allListeners = this.registry.getListenersForEmit(eventDefinition);
 
       let propagationStopped = false;
 
@@ -180,73 +126,27 @@ export class EventManager {
           return;
         }
 
-        const excludeFromGlobal = this.isExcludedFromGlobal(eventToEmit);
-
-        for (const listener of allListeners) {
-          if (propagationStopped) {
-            break;
-          }
-
-          // Skip handlers that identify themselves as the source of this event
-          // (prevents a listener from re-invoking itself).
-          if (listener.id && listener.id === eventToEmit.source) {
-            continue;
-          }
-
-          if (!listener.filter || listener.filter(eventToEmit)) {
-            await listener.handler(eventToEmit);
-          }
+        if (eventDefinition.parallel) {
+          await executeInParallel({ listeners: allListeners, event: eventToEmit });
+        } else {
+          await executeSequentially({
+            listeners: allListeners,
+            event: eventToEmit,
+            isPropagationStopped: () => propagationStopped,
+          });
         }
       };
 
-      // Apply emission interceptors (last added runs first)
-      let emitWithInterceptors: (event: IEventEmission<any>) => Promise<void> =
-        baseEmit;
-
-      // Reverse the interceptors so the last added runs first
-      const reversedInterceptors = [...this.emissionInterceptors].reverse();
-
-      for (const interceptor of reversedInterceptors) {
-        const nextFunction = emitWithInterceptors;
-        emitWithInterceptors = async (eventToEmit: IEventEmission<any>) =>
-          interceptor(nextFunction, eventToEmit);
-      }
+      const emitWithInterceptors = composeInterceptors(
+        this.emissionInterceptors,
+        baseEmit,
+      );
 
       // Execute the emission with interceptors
       await emitWithInterceptors(event);
     };
 
-    if (
-      this.runtimeCycleDetection &&
-      this.emissionStack &&
-      this.currentHookIdContext
-    ) {
-      // Detect re-entrant event cycles: same event id appearing in the current chain
-      const currentStack = this.emissionStack.getStore();
-      if (currentStack) {
-        const cycleStart = currentStack.findIndex(
-          (f: { id: string; source: string }) => f.id === frame.id,
-        );
-        if (cycleStart !== -1) {
-          const top = currentStack[currentStack.length - 1];
-          const currentHookId = this.currentHookIdContext.getStore();
-          const safeReEmitBySameHook =
-            top.id === frame.id && currentHookId && currentHookId === source;
-
-          if (!safeReEmitBySameHook) {
-            eventCycleError.throw({
-              path: [...currentStack.slice(cycleStart), frame],
-            });
-          }
-        }
-      }
-
-      const nextStack = currentStack ? [...currentStack, frame] : [frame];
-      await this.emissionStack.run(nextStack, processEmission);
-    } else {
-      // Fast path without AsyncLocalStorage context tracking
-      await processEmission();
-    }
+    await this.cycleContext.runEmission(frame, source, processEmission);
   }
 
   /**
@@ -263,25 +163,19 @@ export class EventManager {
     options: IEventHandlerOptions<T> = HandlerOptionsDefaults,
   ): void {
     this.checkLock();
-    const newListener: IListenerStorage = {
+    const newListener = createListener({
       handler,
-      order: options.order || 0,
+      order: options.order,
       filter: options.filter,
       id: options.id,
       isGlobal: false,
-    };
+    });
 
     if (Array.isArray(event)) {
       event.forEach((id) => this.addListener(id, handler, options));
     } else {
       const eventId = event.id;
-      const listeners = this.listeners.get(eventId);
-      if (listeners) {
-        this.insertListener(listeners, newListener);
-      } else {
-        this.listeners.set(eventId, [newListener]);
-      }
-      this.invalidateCache(eventId);
+      this.registry.addListener(eventId, newListener);
     }
   }
 
@@ -297,15 +191,14 @@ export class EventManager {
     options: IEventHandlerOptions = HandlerOptionsDefaults,
   ): void {
     this.checkLock();
-    const newListener: IListenerStorage = {
+    const newListener = createListener({
       handler,
-      order: options.order || 0,
+      order: options.order,
       filter: options.filter,
       id: options.id,
       isGlobal: true,
-    };
-    this.insertListener(this.globalListeners, newListener);
-    this.invalidateCache();
+    });
+    this.registry.addGlobalListener(newListener);
   }
 
   /**
@@ -315,20 +208,7 @@ export class EventManager {
    * @returns true if listeners exist, false otherwise
    */
   hasListeners<T>(eventDefinition: IEvent<T>): boolean {
-    const eventListeners = this.listeners.get(eventDefinition.id) || [];
-
-    if (eventListeners.length > 0) {
-      return true;
-    }
-
-    if (this.globalListeners.length === 0) {
-      return false;
-    }
-
-    const isExcludedFromGlobal =
-      globalTags.excludeFromGlobalHooks.exists(eventDefinition);
-
-    return !isExcludedFromGlobal;
+    return this.registry.hasListeners(eventDefinition);
   }
 
   /**
@@ -386,32 +266,17 @@ export class EventManager {
       }
     };
 
-    // Apply hook interceptors (last added runs first)
-    let executeWithInterceptors: (
-      hook: IHook<any, any>,
-      event: IEventEmission<any>,
-    ) => Promise<any> = baseExecute;
-
-    // Reverse the interceptors so the last added runs first
-    const reversedInterceptors = [...this.hookInterceptors].reverse();
-
-    for (const interceptor of reversedInterceptors) {
-      const nextFunction = executeWithInterceptors;
-      executeWithInterceptors = async (
-        hookToExecute: IHook<any, any>,
-        eventForHook: IEventEmission<any>,
-      ) => interceptor(nextFunction, hookToExecute, eventForHook);
-    }
+    const executeWithInterceptors = composeInterceptors(
+      this.hookInterceptors,
+      baseExecute,
+    );
 
     // Execute the hook with interceptors within current hook context
-    if (this.runtimeCycleDetection) {
-      return await this.currentHookIdContext?.run(
-        hook.id,
-        async () => await executeWithInterceptors(hook, event),
-      );
-    } else {
-      return await executeWithInterceptors(hook, event);
-    }
+    return this.cycleContext.isEnabled
+      ? await this.cycleContext.runHook(hook.id, () =>
+          executeWithInterceptors(hook, event),
+        )
+      : await executeWithInterceptors(hook, event);
   }
 
   // ==================== PRIVATE METHODS ====================
@@ -426,112 +291,14 @@ export class EventManager {
   }
 
   /**
-   * Merges two sorted arrays of listeners while maintaining order.
-   * Used to combine event-specific listeners with global listeners.
-   *
-   * @param a - First array of listeners
-   * @param b - Second array of listeners
-   * @returns Merged and sorted array of listeners
-   */
-  private mergeSortedListeners(
-    a: IListenerStorage[],
-    b: IListenerStorage[],
-  ): IListenerStorage[] {
-    const result: IListenerStorage[] = [];
-    let i = 0,
-      j = 0;
-    while (i < a.length && j < b.length) {
-      if (a[i].order <= b[j].order) {
-        result.push(a[i++]);
-      } else {
-        result.push(b[j++]);
-      }
-    }
-    while (i < a.length) result.push(a[i++]);
-    while (j < b.length) result.push(b[j++]);
-    return result;
-  }
-
-  /**
-   * Inserts a new listener into a sorted array using binary search.
-   * Maintains order based on listener priority.
-   *
-   * @param listeners - Array to insert into
-   * @param newListener - Listener to insert
-   */
-  private insertListener(
-    listeners: IListenerStorage[],
-    newListener: IListenerStorage,
-  ): void {
-    let low = 0;
-    let high = listeners.length;
-    while (low < high) {
-      const mid = (low + high) >>> 1;
-      if (listeners[mid].order < newListener.order) {
-        low = mid + 1;
-      } else {
-        high = mid;
-      }
-    }
-    listeners.splice(low, 0, newListener);
-  }
-
-  /**
-   * Returns true if the given emission carries the tag that marks
-   * it as excluded from global ("*") listeners.
-   *
-   * @param event - The event emission to check
-   * @returns true if event should exclude global listeners
-   */
-  private isExcludedFromGlobal(event: IEventEmission<any>): boolean {
-    return globalTags.excludeFromGlobalHooks.exists(event);
-  }
-
-  /**
    * Retrieves cached merged listeners for an event, or creates them if not cached.
-   * Combines event-specific listeners with global listeners and sorts them by priority.
-   *
-   * @param eventId - The event ID to get listeners for
-   * @returns Array of merged listeners sorted by priority
+   * Kept for backward compatibility (tests spy on this).
    */
   private getCachedMergedListeners(eventId: string): IListenerStorage[] {
-    if (!this.globalListenersCacheValid) {
-      this.cachedMergedListeners.clear();
-      this.globalListenersCacheValid = true;
-    }
-
-    let cached = this.cachedMergedListeners.get(eventId);
-    if (!cached) {
-      const eventListeners = this.listeners.get(eventId) || [];
-      if (eventListeners.length === 0 && this.globalListeners.length === 0) {
-        cached = [];
-      } else if (eventListeners.length === 0) {
-        cached = this.globalListeners;
-      } else if (this.globalListeners.length === 0) {
-        cached = eventListeners;
-      } else {
-        cached = this.mergeSortedListeners(
-          eventListeners,
-          this.globalListeners,
-        );
-      }
-      this.cachedMergedListeners.set(eventId, cached);
-    }
-    return cached;
-  }
-
-  /**
-   * Invalidates the cached merged listeners.
-   * If eventId is provided, only invalidates cache for that specific event.
-   * Otherwise, invalidates the global cache.
-   *
-   * @param eventId - Optional specific event ID to invalidate
-   */
-  private invalidateCache(eventId?: string): void {
-    if (eventId) {
-      this.cachedMergedListeners.delete(eventId);
-    } else {
-      this.globalListenersCacheValid = false;
-    }
+    return this.registry.getCachedMergedListeners(eventId);
   }
 }
+
+// Re-export public types for compatibility
+export type { IEventHandlerOptions };
+export type { EventEmissionInterceptor, HookExecutionInterceptor };

@@ -42,10 +42,14 @@ while IFS= read -r -d '' file; do
   count=$(grep -cEv '^[[:space:]]*$' "$file" || true)
   # Count total characters (prefer multi-byte; fallback to bytes to avoid locale issues)
   chars=$( (wc -m < "$file" 2>/dev/null || wc -c < "$file") | tr -d ' ')
+  # Rough token estimate assuming ~4 characters per token (GPT-style tokenization)
+  tokens=$(((chars + 3) / 4))
 
   if [ "$count" -gt "$THRESHOLD" ]; then
-    # Store: <non-empty-lines> <chars> <path>
-    results+=("$count $chars $file")
+    # Store relative path for readability
+    rel_path=${file#"$ROOT_DIR/"}
+    # Store: <non-empty-lines> <chars> <tokens-est> <path>
+    results+=("$count $chars $tokens $rel_path")
   fi
 done < <(find "$SRC_DIR" -type f ! -name "*.test.ts" -print0)
 
@@ -54,13 +58,26 @@ if [[ ${#results[@]} -eq 0 ]]; then
   exit 0
 fi
 
+# Styling for header (bold) and reset; works in most POSIX terminals.
+# Pass as -v to awk for portability across implementations.
+BOLD="$(printf '\033[1m')"
+RESET="$(printf '\033[0m')"
+
 # Sort by non-empty line count desc and print
-# Columns: non-empty-lines\tchars\tpath
+# Aligned columns: non-empty-lines chars tokens-est path
 printf "%s\n" "${results[@]}" \
   | sort -nr -k1,1 \
-  | awk '{
-      printf "%s\t%s\t", $1, $2;
-      for (i=3; i<=NF; i++) {
-        printf "%s%s", $i, (i < NF ? OFS : ORS);
+  | awk -v BOLD="$BOLD" -v RESET="$RESET" '
+      BEGIN {
+        header = sprintf("%-16s %-12s %-12s %s", "non-empty-lines", "chars", "tokens-est", "path");
+        sep = "";
+        for (i = 1; i <= length(header); i++) sep = sep "-";
+        printf "%s%s%s\n%s\n", BOLD, header, RESET, sep;
       }
-    }'
+      {
+        path="";
+        for (i=4; i<=NF; i++) {
+          path = path (i==4 ? "" : OFS) $i;
+        }
+        printf "%-16s %-12s %-12s %s\n", $1, $2, $3, path;
+      }'

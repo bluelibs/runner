@@ -34,6 +34,11 @@ export interface IEventDefinition<TPayload = void> {
    */
   payloadSchema?: IValidationSchema<TPayload>;
   tags?: TagType[];
+  /**
+   * If true, listeners with the same priority run concurrently within a batch.
+   * Batches (grouped by order) still execute sequentially in priority order.
+   */
+  parallel?: boolean;
 }
 
 /**

@@ -114,7 +114,7 @@ const internal = event({
 });
 
 // Performance: runtime event emission cycle detection
-// run(app, { runtimeCycleDetection: true }) // To prevent deadlocks from happening.
+// run(app, { runtimeCycleDetection: true }) // To prevent event-driven deadlocks from happening.
 ```
 
 ### Multiple Events per Hook
@@ -332,7 +332,7 @@ import { createContext } from "@bluelibs/runner";
 
 const UserCtx = createContext<{ userId: string }>("app.userContext");
 
-// In middleware or entry-point
+// In middleware-entry-point
 UserCtx.provide({ userId: "u1" }, async () => {
   await someTask(); // has access to the context
 });
@@ -641,21 +641,21 @@ export const cResource = resource({
 }) as IResource<void, string>; // void config, returns string
 ```
 
-## Validation (optional and library‑agnostic)
+## Validation (optional and library-agnostic)
 
 ## Event Cycle Safety
 
-To prevent event‑driven deadlocks, the runner detects cycles during emission:
+To prevent event-driven deadlocks, the runner detects cycles during emission:
 
-- A cycle occurs when an event emits another event that eventually re‑emits the original event within the same emission chain (for example: `e1 -> e2 -> e1`).
+- A cycle occurs when an event emits another event that eventually re-emits the original event within the same emission chain (for example: `e1 -> e2 -> e1`).
 - When a cycle is detected, an `EventCycleError` is thrown with a readable chain to help debugging.
-- A hook re‑emitting the same event it currently handles is allowed only when the emission originates from the same hook instance (useful for idempotent/no‑op retries); other cases are blocked.
+- A hook re-emitting the same event it currently handles is allowed only when the emission originates from the same hook instance (useful for idempotent/no-op retries); other cases are blocked.
 
 Guidance:
 
-- Prefer one‑way flows; avoid mutual cross‑emits between hooks.
-- Use `event.stopPropagation()` to short‑circuit handlers when appropriate.
-- Use tags (for example, `globals.tags.excludeFromGlobalHooks`) to scope listeners and avoid unintended re‑entry via global hooks.
+- Prefer one-way flows; avoid mutual cross-emits between hooks.
+- Use `event.stopPropagation()` to short-circuit handlers when appropriate.
+- Use tags (for example, `globals.tags.excludeFromGlobalHooks`) to scope listeners and avoid unintended re-entry via global hooks.
 
 Interface any library can implement:
 
@@ -695,3 +695,7 @@ middleware({
   configSchema, // runs on .with()
 });
 ```
+
+
+
+

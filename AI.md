@@ -15,6 +15,8 @@
     - [Async Context](#async-context)
     - [Errors](#errors)
   - [HTTP \& Tunnels](#http--tunnels)
+    - [HTTP Client Factory (Recommended)](#http-client-factory-recommended)
+    - [Direct Client Creation (Legacy)](#direct-client-creation-legacy)
   - [Serialization](#serialization)
   - [Testing](#testing)
   - [Observability \& Debugging](#observability--debugging)
@@ -151,6 +153,12 @@ const sendWelcomeEmail = r
 - Use `.on(onAnyOf(...))` to listen to several events while keeping inference.
 - Hooks can set `.order(priority)`; lower numbers run first. Call `event.stopPropagation()` inside `run` to cancel downstream hooks.
 - Wildcard hooks use `.on("*")` and receive every emission except events tagged with `globals.tags.excludeFromGlobalHooks`.
+- Use `.parallel(true)` on event definitions to enable batched parallel execution:
+  - Listeners with the same `order` run concurrently within a batch
+  - Batches execute sequentially in ascending order priority
+  - All listeners in a failing batch run to completion; if multiple fail, an `AggregateError` with all errors is thrown
+  - Propagation is checked between batches only (not mid-batch since parallel listeners can't be stopped mid-flight)
+  - If any listener throws, subsequent batches will not run
 
 ### Middleware
 
