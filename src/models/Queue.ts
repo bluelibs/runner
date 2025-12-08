@@ -1,4 +1,26 @@
 import { getPlatform } from "../platform";
+import { EventManager } from "./EventManager";
+import { defineEvent } from "../definers/defineEvent";
+import { IEvent, IEventEmission } from "../defs";
+
+// Event definitions for Queue
+const QueueEvents = {
+  enqueue: defineEvent<QueueEvent>({ id: "queue.enqueue" }),
+  start: defineEvent<QueueEvent>({ id: "queue.start" }),
+  finish: defineEvent<QueueEvent>({ id: "queue.finish" }),
+  error: defineEvent<QueueEvent>({ id: "queue.error" }),
+  cancel: defineEvent<QueueEvent>({ id: "queue.cancel" }),
+  disposed: defineEvent<QueueEvent>({ id: "queue.disposed" }),
+} as const;
+
+type QueueEventType = keyof typeof QueueEvents;
+
+type QueueEvent = {
+  type: QueueEventType;
+  taskId: number;
+  disposed: boolean;
+  error?: Error;
+};
 
 /**
  * Cooperative task queue.
@@ -10,6 +32,10 @@ export class Queue {
   private tail: Promise<unknown> = Promise.resolve();
   private disposed = false;
   private abortController = new AbortController();
+  private readonly eventManager = new EventManager();
+  private nextTaskId = 1;
+  private listenerId = 0;
+  private activeListeners = new Set<number>();
 
   // true while inside a queued task → helps detect "queue in queue"
   private readonly executionContext =
@@ -37,16 +63,26 @@ export class Queue {
     }
 
     const { signal } = this.abortController;
+    const taskId = this.nextTaskId++;
+    this.emit("enqueue", taskId);
 
     // 3. chain task after the current tail
-    const result = this.tail.then(() =>
-      this.hasAsyncLocalStorage
+    const result = this.tail.then(() => {
+      this.emit("start", taskId);
+      return this.hasAsyncLocalStorage
         ? this.executionContext.run(true, () => task(signal))
-        : task(signal),
-    );
+        : task(signal);
+    });
 
     // 4. preserve the chain even if the task rejects (swallow internally)
-    this.tail = result.catch(() => {});
+    this.tail = result
+      .then((value) => {
+        this.emit("finish", taskId);
+        return value;
+      })
+      .catch((error) => {
+        this.emit("error", taskId, error as Error);
+      });
 
     return result;
   }
@@ -60,12 +96,76 @@ export class Queue {
     if (this.disposed) return;
 
     this.disposed = true;
+    this.emit("disposed", 0);
 
     if (options.cancel) {
       this.abortController.abort(); // notify cooperative tasks
+      this.emit("cancel", 0);
     }
 
     // wait for everything already chained to settle
     await this.tail.catch(() => {});
+  }
+
+  on(type: QueueEventType, handler: (event: QueueEvent) => any): () => void {
+    const id = ++this.listenerId;
+    this.activeListeners.add(id);
+    const eventDef = QueueEvents[type];
+
+    this.eventManager.addListener(
+      eventDef,
+      (emission: IEventEmission<QueueEvent>) => {
+        if (this.activeListeners.has(id)) {
+          handler(emission.data);
+        }
+      },
+      {
+        id: `queue-listener-${id}`,
+        filter: () => this.activeListeners.has(id),
+      },
+    );
+
+    return () => {
+      this.activeListeners.delete(id);
+    };
+  }
+
+  once(type: QueueEventType, handler: (event: QueueEvent) => any): () => void {
+    const id = ++this.listenerId;
+    this.activeListeners.add(id);
+    const eventDef = QueueEvents[type];
+
+    this.eventManager.addListener(
+      eventDef,
+      (emission: IEventEmission<QueueEvent>) => {
+        if (this.activeListeners.has(id)) {
+          this.activeListeners.delete(id);
+          handler(emission.data);
+        }
+      },
+      {
+        id: `queue-listener-once-${id}`,
+        filter: () => this.activeListeners.has(id),
+      },
+    );
+
+    return () => {
+      this.activeListeners.delete(id);
+    };
+  }
+
+  private emit(type: QueueEventType, taskId: number, error?: Error): void {
+    const eventDef = QueueEvents[type];
+    // Fire-and-forget to maintain synchronous behavior
+    void this.eventManager.emit(
+      eventDef,
+      {
+        type,
+        taskId,
+        disposed: this.disposed,
+        error,
+      },
+      "queue",
+    );
   }
 }

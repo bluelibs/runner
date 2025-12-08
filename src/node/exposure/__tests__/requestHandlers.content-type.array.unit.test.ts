@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { createRequestHandlers } from "../requestHandlers";
-import { EJSON } from "../../../globals/resources/tunnel/serializer";
+import { EJSON, getDefaultSerializer } from "../../../globals/resources/tunnel/serializer";
 
 function makeReq(): IncomingMessage {
   const listeners: Record<string, Function[]> = {};
@@ -61,7 +61,7 @@ describe("requestHandlers - content-type array path", () => {
     };
     const { handleTask } = createRequestHandlers({
       ...deps,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     const req = makeReq();
     const res = makeRes();

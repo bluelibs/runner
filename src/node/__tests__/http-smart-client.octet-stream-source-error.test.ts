@@ -1,7 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../http-smart-client.model";
-import { EJSON } from "../../globals/resources/tunnel/serializer";
+import { EJSON, getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
 
 describe("createHttpSmartClient - octet-stream source error", () => {
   const baseUrl = "http://127.0.0.1:7777/__runner";
@@ -28,7 +28,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
       return req;
     }) as any;
 
-    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
+    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
     const src = new Readable({ read() {} });
     const p = client.task("duplex", src as any);
     // Trigger the source error which should call req.destroy(err) and reject the promise
@@ -67,7 +67,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
     ];
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
       contexts: contexts as any,
     });
     const src = new Readable({ read() { this.push(null); } });

@@ -25,7 +25,7 @@ describe("http-client (universal)", () => {
 
   it("JSON fallback uses exposure fetch", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
-    const client = createHttpClient({ baseUrl, serializer: EJSON });
+    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
     const result = await client.task("t.json", { a: 1 } as any);
     expect(result).toBe("JSON-OK");
     expect((createExposureFetch as any).__lastCfg.baseUrl).toBe(
@@ -36,7 +36,7 @@ describe("http-client (universal)", () => {
 
   it("event delegates to exposure fetch event", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
-    const client = createHttpClient({ baseUrl, serializer: EJSON });
+    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
     await client.event("e.hello", { x: true } as any);
     const event = (createExposureFetch as any).__event as jest.Mock;
     expect(event).toHaveBeenCalledTimes(1);
@@ -72,7 +72,7 @@ describe("http-client (universal)", () => {
       fetchImpl: fetchMock as any,
       auth: { token: "tok" },
       onRequest,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
       contexts: [
         {
           id: "ctx.web",
@@ -108,7 +108,7 @@ describe("http-client (universal)", () => {
     const client = createHttpClient({
       baseUrl,
       fetchImpl: fetchMock as any,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     const r = await client.task("t.upload.def", { file } as any);
     expect(r).toBe("DEF");
@@ -142,7 +142,7 @@ describe("http-client (universal)", () => {
     const client = createHttpClient({
       baseUrl,
       fetchImpl: fetchMock as any,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
       errorRegistry: new Map([["tests.errors.web", helper]]),
     });
     await expect(client.task("t.upload.err", { file } as any)).rejects.toThrow(
@@ -169,7 +169,7 @@ describe("http-client (universal)", () => {
     } as any;
     const client = createHttpClient({
       baseUrl,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
       errorRegistry: new Map([["tests.errors.ev", helper]]),
     });
     await expect(client.event("e.1", { a: 1 } as any)).rejects.toThrow(
@@ -183,7 +183,7 @@ describe("http-client (universal)", () => {
     (createExposureFetch as any).__task.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "json-raw");
     });
-    const client = createHttpClient({ baseUrl, serializer: EJSON });
+    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
     await expect(client.task("t.json.raw", { a: 1 } as any)).rejects.toThrow(
       /json-raw/,
     );
@@ -195,14 +195,14 @@ describe("http-client (universal)", () => {
     (createExposureFetch as any).__event.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "ev-raw");
     });
-    const client = createHttpClient({ baseUrl, serializer: EJSON });
+    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
     await expect(client.event("e.raw", { a: 1 } as any)).rejects.toThrow(
       /ev-raw/,
     );
   });
 
   it("throws helpful error when Node File sentinel present", async () => {
-    const client = createHttpClient({ baseUrl, serializer: EJSON });
+    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
     const nodeFile = createNodeFile(
       { name: "nf.bin" },
       { buffer: Buffer.from([1]) },
@@ -215,7 +215,7 @@ describe("http-client (universal)", () => {
 
   it("throws helpful error when input is a Node Readable stream", async () => {
     const { Readable } = require("stream");
-    const client = createHttpClient({ baseUrl, serializer: EJSON });
+    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
     const stream = Readable.from([Buffer.from("data")]);
     await expect(client.task("t.duplex", stream)).rejects.toThrow(
       /cannot send a Node stream/i,
@@ -240,7 +240,7 @@ describe("http-client (universal)", () => {
       const client = createHttpClient({
         baseUrl,
         auth: { token: "tk" },
-        serializer: EJSON,
+        serializer: getDefaultSerializer(),
       });
       const r = await client.task("t.upload.web2", { file } as any);
       expect(r).toBe("GUP");
@@ -252,7 +252,7 @@ describe("http-client (universal)", () => {
 
   it("throws on empty baseUrl", () => {
     expect(() =>
-      createHttpClient({ baseUrl: "" as any, serializer: EJSON } as any),
+      createHttpClient({ baseUrl: "" as any, serializer: getDefaultSerializer() } as any),
     ).toThrow();
   });
 
@@ -276,7 +276,7 @@ describe("http-client (universal)", () => {
     } as any;
     const client = createHttpClient({
       baseUrl,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
       errorRegistry: new Map([["tests.errors.app", helper]]),
     });
     await expect(client.task("t.json", { a: 1 } as any)).rejects.toThrow(

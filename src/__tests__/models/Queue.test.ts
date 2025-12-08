@@ -201,4 +201,77 @@ describe("Queue", () => {
     const result = await q.run(async () => 3);
     expect(result).toBe(3);
   });
+
+  it("emits queue events", async () => {
+    const q = new Queue();
+    const seen: string[] = [];
+
+    q.on("enqueue", () => seen.push("enqueue"));
+    q.on("start", () => seen.push("start"));
+    q.on("finish", () => seen.push("finish"));
+    q.on("error", () => seen.push("error"));
+    q.on("cancel", () => seen.push("cancel"));
+    q.on("disposed", () => seen.push("disposed"));
+
+    await q.run(async () => "ok");
+    await expect(
+      q.run(async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+
+    await q.dispose({ cancel: true });
+
+    expect(seen).toEqual(
+      expect.arrayContaining([
+        "enqueue",
+        "start",
+        "finish",
+        "error",
+        "cancel",
+        "disposed",
+      ]),
+    );
+  });
+
+  it("supports once listeners", async () => {
+    const q = new Queue();
+    const seen: string[] = [];
+
+    q.once("finish", (event) => seen.push(event.type));
+
+    await q.run(async () => "first");
+    await q.run(async () => "second");
+
+    expect(seen).toEqual(["finish"]);
+  });
+
+  it("supports unsubscribing from on() listeners", async () => {
+    const q = new Queue();
+    const seen: string[] = [];
+
+    const unsubscribe = q.on("finish", () => seen.push("finish"));
+
+    await q.run(async () => "first");
+    expect(seen).toEqual(["finish"]);
+
+    // Unsubscribe and verify no more events are received
+    unsubscribe();
+
+    await q.run(async () => "second");
+    expect(seen).toEqual(["finish"]); // Still only one "finish"
+  });
+
+  it("supports unsubscribing from once() listeners before event fires", async () => {
+    const q = new Queue();
+    const seen: string[] = [];
+
+    const unsubscribe = q.once("finish", () => seen.push("finish"));
+
+    // Unsubscribe before any task runs
+    unsubscribe();
+
+    await q.run(async () => "first");
+    expect(seen).toEqual([]); // No events received because we unsubscribed
+  });
 });

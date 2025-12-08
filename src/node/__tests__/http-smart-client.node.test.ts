@@ -15,7 +15,7 @@ function asIncoming(
 
 describe("createHttpSmartClient (unit)", () => {
   const baseUrl = "http://127.0.0.1:1234/__runner";
-  const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
+  const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
 
   afterEach(() => {
     jest.restoreAllMocks();
@@ -74,7 +74,7 @@ describe("createHttpSmartClient (unit)", () => {
       sink.destroy = () => undefined;
       return sink;
     }) as any;
-    const c = createHttpSmartClient({ baseUrl, onRequest, serializer: EJSON });
+    const c = createHttpSmartClient({ baseUrl, onRequest, serializer: getDefaultSerializer() });
     const out = await c.task("x", { v: 1 } as any);
     expect(out).toBe(1);
     expect(onRequest).toHaveBeenCalledWith(
@@ -285,7 +285,7 @@ describe("createHttpSmartClient (unit)", () => {
     const c = createHttpSmartClient({
       baseUrl: "https://127.0.0.1/__runner",
       auth: { header: "x-token", token: "secret" },
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     const out = await c.task("sum", { a: 3, b: 4 } as any);
     expect(out).toBe(7);
@@ -326,7 +326,7 @@ describe("createHttpSmartClient (unit)", () => {
 
   it("createHttpSmartClient throws on empty baseUrl", () => {
     expect(() =>
-      createHttpSmartClient({ baseUrl: "" as any, serializer: EJSON } as any),
+      createHttpSmartClient({ baseUrl: "" as any, serializer: getDefaultSerializer() } as any),
     ).toThrow();
   });
   it("octet-stream: when input is Readable, returns response stream", async () => {
@@ -414,7 +414,7 @@ describe("createHttpSmartClient (unit)", () => {
       sink.destroy = () => undefined;
       return sink;
     }) as any;
-    const c = createHttpSmartClient({ baseUrl, onRequest, serializer: EJSON });
+    const c = createHttpSmartClient({ baseUrl, onRequest, serializer: getDefaultSerializer() });
     await c.task("upload", {
       file: createNodeFile({ name: "x" }, { stream: Readable.from("x") }, "Fz"),
     } as any);

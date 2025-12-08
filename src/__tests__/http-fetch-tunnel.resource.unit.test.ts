@@ -1,5 +1,5 @@
 import { createExposureFetch } from "../http-fetch-tunnel.resource";
-import { EJSON, type Serializer } from "../globals/resources/tunnel/serializer";
+import { EJSON, getDefaultSerializer, type Serializer } from "../globals/resources/tunnel/serializer";
 
 describe("http-fetch-tunnel.resource (unit)", () => {
   it("createExposureFetch: throws when baseUrl is empty or '/'", () => {
@@ -37,7 +37,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       timeoutMs: 5,
       fetchImpl: stubFetch,
       auth: { token: "T" },
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     const out = await client.task("t.id", { a: 1 });
     expect(out).toBe(42);
@@ -59,7 +59,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const c1 = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchErrMsg,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     await expect(c1.event("e.id", { x: 1 })).rejects.toThrow(/boom/);
 
@@ -70,7 +70,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const c2 = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchNoMsg,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     await expect(c2.event("e.id", { y: 1 })).rejects.toThrow(
       /Tunnel event error/,
@@ -84,7 +84,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const c = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchEmpty,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     await expect(c.event("e.id", { y: 2 })).rejects.toThrow(
       /Tunnel event error/,
@@ -98,7 +98,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const c = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchNoMsg,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     await expect(c.task("t.id", { z: 1 })).rejects.toThrow(/Tunnel task error/);
   });
@@ -115,29 +115,30 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const client = createExposureFetch({
       baseUrl: "http://api/",
       fetchImpl: stubFetch,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     await client.task("t.id");
     expect(calls[0].url).toBe("http://api/task/t.id");
   });
 
-  it("createExposureFetch: defaults to Runner EJSON serializer for requests and responses", async () => {
+  it("createExposureFetch: defaults to GraphSerializer for requests and responses", async () => {
     const seen: Array<{ url: string; init: any }> = [];
     const requestDate = new Date("2024-03-01T02:03:04.005Z");
     const responseDate = new Date("2024-03-02T03:04:05.006Z");
+    const serializer = getDefaultSerializer();
 
     const fetchImpl: typeof fetch = (async (url: any, init: any) => {
       seen.push({ url, init });
       const envelope = { ok: true, result: { seenAt: responseDate } };
       return {
-        text: async () => EJSON.stringify(envelope),
+        text: async () => serializer.stringify(envelope),
       } as any;
     }) as any;
 
     const client = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl,
-      serializer: EJSON,
+      serializer,
     });
     const result = await client.task<{ seenAt: Date }, { seenAt: Date }>(
       "task.id",
@@ -148,9 +149,11 @@ describe("http-fetch-tunnel.resource (unit)", () => {
 
     expect(seen).toHaveLength(1);
     expect(typeof seen[0].init.body).toBe("string");
-    expect(seen[0].init.body).toBe(
-      EJSON.stringify({ input: { seenAt: requestDate } }),
-    );
+    // Verify the request body can be deserialized correctly
+    const parsedRequest = serializer.parse(seen[0].init.body) as any;
+    expect(parsedRequest.input.seenAt).toBeInstanceOf(Date);
+    expect(parsedRequest.input.seenAt.getTime()).toBe(requestDate.getTime());
+    // Verify the response was deserialized correctly
     expect(result.seenAt).toBeInstanceOf(Date);
     expect(result.seenAt.getTime()).toBe(responseDate.getTime());
   });

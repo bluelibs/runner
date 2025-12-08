@@ -1,7 +1,5 @@
 ## Semaphore
 
-
-
 Ever had too many database connections competing for resources? Your connection pool under pressure? The `Semaphore` is here to manage concurrent operations like a professional traffic controller.
 
 Think of it as a VIP rope at an exclusive venue. Only a limited number of operations can proceed at once. The rest wait in an orderly queue like well-behaved async functions.
@@ -307,5 +305,17 @@ try {
 }
 ```
 
-> **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
+### Lifecycle events (isolated EventManager)
 
+`Queue` also publishes local lifecycle events for lightweight telemetry. Each Queue instance has its own **isolated EventManager**—these events are local to the Queue and are completely separate from the global EventManager used for business-level application events.
+
+- `enqueue` · `start` · `finish` · `error` · `cancel` · `disposed`
+
+```typescript
+const q = new Queue();
+q.on("start", ({ taskId }) => console.log(`task ${taskId} started`));
+await q.run(async () => "ok");
+await q.dispose({ cancel: true }); // emits cancel + disposed
+```
+
+> **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."

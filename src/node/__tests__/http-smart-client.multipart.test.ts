@@ -18,18 +18,18 @@ describe("http-smart-client multipart", () => {
   const baseUrl = "http://127.0.0.1:7070/__runner";
 
   it("multipart uploads returns asserted ok", async () => {
-    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
+    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
     // No real request performed in this unit test; exercise shape only
     expect(typeof client.task).toBe("function");
   });
 
   it("multipart path with web files also works when passed through smart client", async () => {
-    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
+    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
     expect(client).toBeDefined();
   });
 
   it("multipart path returns stream for duplex response", async () => {
-    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
+    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
     expect(client).toBeDefined();
   });
 });
@@ -58,7 +58,7 @@ describe("createHttpSmartClient - multipart", () => {
       .spyOn(http, "request")
       .mockImplementation((_opts: any, _cb: any) => req) as any;
 
-    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
+    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
 
     // File stream that errors shortly after
     const fileStream = new Readable({ read() {} });
@@ -108,7 +108,7 @@ describe("createHttpSmartClient - multipart", () => {
         return sink;
       }) as any;
 
-    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
+    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
     const file = createNodeFile(
       { name: "payload.txt", type: "text/plain" },
       { stream: Readable.from("hi") },
@@ -162,7 +162,7 @@ describe("createHttpSmartClient - multipart", () => {
       return sink;
     }) as any;
 
-    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
+    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
     const file = createNodeFile(
       { name: "x.bin", type: "application/octet-stream" },
       { stream: Readable.from([Buffer.from("A"), "B"]) },
@@ -203,7 +203,7 @@ describe("createHttpSmartClient - multipart", () => {
 
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
       contexts: [
         {
           id: "ctx.mp2",

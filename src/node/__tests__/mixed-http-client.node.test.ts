@@ -42,7 +42,7 @@ describe("createMixedHttpClient (unit)", () => {
     const client = createHttpMixedClient({
       baseUrl,
       fetchImpl: fetchMock as any,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     const out = await client.task<{ a: number }, number>("my.task", { a: 1 });
     expect(out).toBe(42);
@@ -74,7 +74,7 @@ describe("createMixedHttpClient (unit)", () => {
         return sink;
       }) as any;
 
-    const client = createHttpMixedClient({ baseUrl, serializer: EJSON });
+    const client = createHttpMixedClient({ baseUrl, serializer: getDefaultSerializer() });
     const input = Readable.from("hello");
     const out = (await client.task("duplex", input)) as Readable;
     const chunks: Buffer[] = [];
@@ -113,7 +113,7 @@ describe("createMixedHttpClient (unit)", () => {
         return sink;
       }) as any;
 
-    const client = createHttpMixedClient({ baseUrl, serializer: EJSON });
+    const client = createHttpMixedClient({ baseUrl, serializer: getDefaultSerializer() });
     const input = {
       file: createNodeFile(
         { name: "a.txt" },
@@ -149,7 +149,7 @@ describe("createMixedHttpClient (unit)", () => {
         return sink;
       }) as any;
 
-    const client = createHttpMixedClient({ baseUrl, serializer: EJSON });
+    const client = createHttpMixedClient({ baseUrl, serializer: getDefaultSerializer() });
     const input = {
       arr: [
         {
@@ -182,7 +182,7 @@ describe("createMixedHttpClient (unit)", () => {
     const client = createHttpMixedClient({
       baseUrl,
       fetchImpl: fetchMock as any,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     await client.event("log", { x: 1 });
     expect(calls).toHaveLength(1);
@@ -191,7 +191,7 @@ describe("createMixedHttpClient (unit)", () => {
 
   it("throws when baseUrl is empty", () => {
     expect(() =>
-      createHttpMixedClient({ baseUrl: "" as any, serializer: EJSON } as any),
+      createHttpMixedClient({ baseUrl: "" as any, serializer: getDefaultSerializer() } as any),
     ).toThrow();
   });
 });

@@ -1,9 +1,11 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
 import { createExposureFetch } from "../../http-fetch-tunnel.resource";
-import { EJSON } from "../../globals/resources/tunnel/serializer";
+import { EJSON, getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
 
 describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
+  const serializer = getDefaultSerializer();
+
   it("normalizes baseUrl and serializes bodies (postJson lines)", async () => {
     const calls: Array<{
       url: string;
@@ -12,14 +14,16 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
     }> = [];
     const fetchMock = async (url: any, init?: any) => {
       const bodyStr = String(init?.body ?? "");
-      const parsed = bodyStr ? JSON.parse(bodyStr) : undefined;
+      // Parse with the same serializer the client uses
+      const parsed = bodyStr ? serializer.parse(bodyStr) : undefined;
       calls.push({
         url: String(url),
         body: parsed,
         headers: init?.headers ?? {},
       });
+      // Respond with serializer format
       return {
-        text: async () => JSON.stringify({ ok: true, result: 7 }),
+        text: async () => serializer.stringify({ ok: true, result: 7 }),
       } as any;
     };
 
@@ -27,7 +31,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
       baseUrl: "http://example.test/__runner/",
       fetchImpl: fetchMock as any,
       timeoutMs: 1,
-      serializer: EJSON,
+      serializer,
     });
     // task with defined input
     const r = await client.task<{ a: number }, number>("t1", { a: 1 });
@@ -38,7 +42,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
     expect(calls.length).toBe(2);
     // Base URL trimmed, no double slash
     expect(calls[0].url).toBe("http://example.test/__runner/task/t1");
-    // postJson used JSON.stringify(body ?? {}): both have bodies
+    // Check the parsed body has the expected structure
     expect(calls[0].body).toEqual({ input: { a: 1 } });
     expect(calls[1].url).toBe("http://example.test/__runner/event/e1");
     expect(calls[1].body).toEqual({ payload: undefined });
@@ -60,7 +64,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
       baseUrl: "http://example.test/__runner",
       fetchImpl: fetchAbort as any,
       timeoutMs: 1,
-      serializer: EJSON,
+      serializer,
     });
     await expect(client.task("t1", {})).rejects.toThrow(/aborted/);
   });
@@ -70,7 +74,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
       createExposureFetch({
         baseUrl: "http://example.test/__runner",
         fetchImpl: 123 as any,
-        serializer: EJSON,
+        serializer,
       }),
     ).toThrow(/global fetch is not available/i);
   });
@@ -81,7 +85,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
     const client = createExposureFetch({
       baseUrl: "http://example.test/__runner",
       fetchImpl: emptyBodyFetch as any,
-      serializer: EJSON,
+      serializer,
     });
     await expect(client.task("tid" as any, {})).rejects.toThrow(
       /Tunnel task error/,
@@ -96,7 +100,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
       createExposureFetch({
         baseUrl: "" as any,
         fetchImpl: (async () => ({ text: async () => "{}" } as any)) as any,
-        serializer: EJSON,
+        serializer,
       }),
     ).toThrow(/requires baseUrl/i);
   });

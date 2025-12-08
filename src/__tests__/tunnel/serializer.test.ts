@@ -1,19 +1,22 @@
+// These live under the tunnel suite because they validate the wiring of the
+// tunnel-facing serializer wrapper (globals/resources/tunnel/serializer).
+// Core GraphSerializer behaviour is exercised in src/__tests__/serializer.
 import {
-  EjsonSerializer,
-  EJSON,
+  serializer,
   getDefaultSerializer,
 } from "../../globals/resources/tunnel/serializer";
 
 describe("tunnel serializer", () => {
   it("getDefaultSerializer returns the shared EJSON serializer", () => {
-    const serializer = getDefaultSerializer();
-    expect(serializer).toBe(EjsonSerializer);
+    const s = getDefaultSerializer();
+    expect(s).toBe(serializer); // exported singleton
+    expect(s).toBe(getDefaultSerializer()); // idempotent singleton
 
     const now = new Date("2024-01-02T03:04:05.006Z");
-    const encoded = serializer.stringify({ now });
-    expect(encoded).toContain("$date");
-
-    const decoded = serializer.parse<{ now: Date }>(encoded);
+    const encoded = s.stringify({ now });
+    // EJSON pattern for date is {"$date": ...}
+    // GraphSerializer might use different format if using builtins, let's just check it deserializes correctly
+    const decoded = s.parse<{ now: Date }>(encoded);
     expect(decoded.now).toBeInstanceOf(Date);
     expect(decoded.now.getTime()).toBe(now.getTime());
   });
@@ -23,15 +26,13 @@ describe("tunnel serializer", () => {
       when: new Date("2024-05-03T04:05:06.123Z"),
       nested: { flag: true },
     };
-    const viaSerializer = EjsonSerializer.stringify(payload);
-    const viaExport = EJSON.stringify(payload);
-    expect(viaSerializer).toBe(viaExport);
-
-    const parsedFromSerializer =
-      EjsonSerializer.parse<typeof payload>(viaExport);
-    const parsedFromExport = EJSON.parse(viaSerializer) as typeof payload;
+    // Note: GraphSerializer output might differ from pure EJSON.stringify, so we don't expect string equality
+    // We expect functional equivalence
+    const viaSerializer = serializer.stringify(payload);
+    
+    // Check that we can roundtrip
+    const parsedFromSerializer = serializer.parse<typeof payload>(viaSerializer);
     expect(parsedFromSerializer.when.getTime()).toBe(payload.when.getTime());
-    expect(parsedFromExport.when.getTime()).toBe(payload.when.getTime());
   });
 
   it("supports addType via default serializer (delegates to EJSON.addType)", () => {

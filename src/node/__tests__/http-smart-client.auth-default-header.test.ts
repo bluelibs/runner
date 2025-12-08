@@ -2,7 +2,6 @@ import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../http-smart-client.model";
 import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
-import { EJSON } from "../../globals/resources/tunnel/serializer";
 
 function asIncoming(
   res: Readable,
@@ -14,6 +13,7 @@ function asIncoming(
 
 describe("createHttpSmartClient - auth default header", () => {
   const baseUrl = "http://127.0.0.1:5555/__runner";
+  const serializer = getDefaultSerializer();
 
   afterEach(() => {
     jest.restoreAllMocks();
@@ -25,7 +25,7 @@ describe("createHttpSmartClient - auth default header", () => {
       .mockImplementation((opts: any, cb: any) => {
         const env = { ok: true, result: 1 };
         const res = Readable.from([
-          Buffer.from(getDefaultSerializer().stringify(env), "utf8"),
+          Buffer.from(serializer.stringify(env), "utf8"),
         ]);
         cb(asIncoming(res, { "content-type": "application/json" }));
         // Ensure header is set with default name, lower-cased
@@ -46,10 +46,11 @@ describe("createHttpSmartClient - auth default header", () => {
     const client = createHttpSmartClient({
       baseUrl,
       auth: { token: "secret" },
-      serializer: EJSON,
+      serializer,
     });
     const out = await client.task("json", { a: 1 } as any);
     expect(out).toBe(1);
     expect(reqSpy).toHaveBeenCalled();
   });
 });
+
