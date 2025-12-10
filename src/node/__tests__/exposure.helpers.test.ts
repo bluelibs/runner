@@ -1,38 +1,106 @@
 import { createAuthenticator } from "../exposure/authenticator";
 import { makeRequestListener, startHttpServer, stopHttpServer } from "../exposure/serverLifecycle";
 
+// Mock TaskRunner for tests
+const mockTaskRunner = { run: jest.fn() } as any;
+
 describe("node exposure helpers", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
   describe("createAuthenticator", () => {
-    it("returns passthrough when token is not configured", () => {
-      const auth = createAuthenticator();
-      const result = auth({ headers: {} } as any);
+    it("returns passthrough when token is not configured and no validators", async () => {
+      const auth = createAuthenticator(undefined, mockTaskRunner, []);
+      const result = await auth({ headers: {} } as any);
       expect(result).toEqual({ ok: true });
     });
 
-    it("accepts provided token using custom header and array values", () => {
-      const auth = createAuthenticator({ header: "X-Custom", token: "secret" });
-      const ok = auth({ headers: { "x-custom": ["secret"] } } as any);
+    it("accepts provided token using custom header and array values", async () => {
+      const auth = createAuthenticator({ header: "X-Custom", token: "secret" }, mockTaskRunner, []);
+      const ok = await auth({ headers: { "x-custom": ["secret"] } } as any);
       expect(ok).toEqual({ ok: true });
     });
 
-    it("accepts provided token from default header string", () => {
-      const auth = createAuthenticator({ token: "expected" });
-      const ok = auth({ headers: { "x-runner-token": "expected" } } as any);
+    it("accepts provided token from default header string", async () => {
+      const auth = createAuthenticator({ token: "expected" }, mockTaskRunner, []);
+      const ok = await auth({ headers: { "x-runner-token": "expected" } } as any);
       expect(ok).toEqual({ ok: true });
     });
 
-    it("rejects when token mismatches", () => {
-      const auth = createAuthenticator({ token: "expected" });
-      const result = auth({ headers: {} } as any);
+    it("rejects when token mismatches", async () => {
+      const auth = createAuthenticator({ token: "expected" }, mockTaskRunner, []);
+      const result = await auth({ headers: {} } as any);
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.response.status).toBe(401);
       }
     });
 
-    it("falls back to empty string when header array has no first value", () => {
-      const auth = createAuthenticator({ token: "expected" });
-      const result = auth({ headers: { "x-runner-token": [] } } as any);
+    it("falls back to empty string when header array has no first value", async () => {
+      const auth = createAuthenticator({ token: "expected" }, mockTaskRunner, []);
+      const result = await auth({ headers: { "x-runner-token": [] } } as any);
+      expect(result.ok).toBe(false);
+    });
+
+    it("supports array of tokens", async () => {
+      const auth = createAuthenticator({ token: ["token1", "token2"] }, mockTaskRunner, []);
+      const ok1 = await auth({ headers: { "x-runner-token": "token1" } } as any);
+      expect(ok1).toEqual({ ok: true });
+      const ok2 = await auth({ headers: { "x-runner-token": "token2" } } as any);
+      expect(ok2).toEqual({ ok: true });
+      const fail = await auth({ headers: { "x-runner-token": "wrong" } } as any);
+      expect(fail.ok).toBe(false);
+    });
+
+    it("runs validator tasks when token check fails", async () => {
+      const task = { id: "v1" } as any;
+      mockTaskRunner.run.mockResolvedValueOnce({ ok: true });
+      
+      const auth = createAuthenticator(undefined, mockTaskRunner, [task]);
+      const result = await auth({ headers: {} } as any);
+      
+      expect(mockTaskRunner.run).toHaveBeenCalledWith(task, expect.objectContaining({
+        url: "/",
+        method: "GET"
+      }));
+      expect(result).toEqual({ ok: true });
+    });
+
+    it("tries next validator if first fails", async () => {
+      const t1 = { id: "v1" } as any;
+      const t2 = { id: "v2" } as any;
+      
+      mockTaskRunner.run.mockResolvedValueOnce({ ok: false });
+      mockTaskRunner.run.mockResolvedValueOnce({ ok: true });
+      
+      const auth = createAuthenticator(undefined, mockTaskRunner, [t1, t2]);
+      const result = await auth({ headers: {} } as any);
+      
+      expect(result).toEqual({ ok: true });
+      expect(mockTaskRunner.run).toHaveBeenCalledTimes(2);
+    });
+
+    it("treats validator exceptions as failures and continues", async () => {
+      const t1 = { id: "v1" } as any;
+      const t2 = { id: "v2" } as any;
+      
+      mockTaskRunner.run.mockRejectedValueOnce(new Error("oops"));
+      mockTaskRunner.run.mockResolvedValueOnce({ ok: true });
+      
+      const auth = createAuthenticator(undefined, mockTaskRunner, [t1, t2]);
+      const result = await auth({ headers: {} } as any);
+      
+      expect(result).toEqual({ ok: true });
+    });
+
+    it("fails if all validators fail", async () => {
+      const t1 = { id: "v1" } as any;
+      mockTaskRunner.run.mockResolvedValueOnce({ ok: false });
+      
+      const auth = createAuthenticator(undefined, mockTaskRunner, [t1]);
+      const result = await auth({ headers: {} } as any);
+      
       expect(result.ok).toBe(false);
     });
   });

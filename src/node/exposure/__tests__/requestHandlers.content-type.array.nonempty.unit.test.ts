@@ -52,7 +52,7 @@ describe("requestHandlers - content-type array non-empty branch (line 114)", () 
       taskRunner: { run: async () => 1 },
       eventManager: {} as any,
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",

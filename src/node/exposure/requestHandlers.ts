@@ -69,7 +69,7 @@ export function createRequestHandlers(
       return;
     }
 
-    const auth = authenticator(req);
+    const auth = await authenticator(req);
     if (!auth.ok) {
       applyCorsActual(req, res, cors);
       respondJson(res, auth.response, serializer);
@@ -342,7 +342,7 @@ export function createRequestHandlers(
       return;
     }
 
-    const auth = authenticator(req);
+    const auth = await authenticator(req);
     if (!auth.ok) {
       applyCorsActual(req, res, cors);
       respondJson(res, auth.response, serializer);
@@ -487,7 +487,7 @@ export function createRequestHandlers(
       respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
       return;
     }
-    const auth = authenticator(req);
+    const auth = await authenticator(req);
     if (!auth.ok) {
       applyCorsActual(req, res, cors);
       respondJson(res, auth.response, serializer);

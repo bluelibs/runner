@@ -39,7 +39,7 @@ As your app grows, other processes need to call your tasks: workers, CLIs, brows
 - Exposure: `nodeExposure` hosts `POST /task/{id}` and `POST /event/{id}`.
 - Client: one of the HTTP clients calls those endpoints (fetch, unified, or Node smart/mixed for streaming).
 - Optional server allow‑lists: restrict which ids are reachable.
- - Exclusivity: each task can be owned by at most one tunnel client. If two tunnel resources select the same task, Runner throws during init to prevent ambiguous routing.
+- Exclusivity: each task can be owned by at most one tunnel client. If two tunnel resources select the same task, Runner throws during init to prevent ambiguous routing.
 
 ## 3) Quick start (3 minutes)
 
@@ -298,65 +298,70 @@ Notes:
 
 ## 5) Auth (static & dynamic)
 
-All clients support an auth header. Static config is easiest; for dynamic tokens (per request), use `onRequest` to set headers.
+Authentication is handled via the `auth` config on `nodeExposure`. Default header is `x-runner-token`.
 
-- Default header is `x-runner-token` (you can change it).
-- Common patterns: custom header, or `Authorization: Bearer <token>`.
+### 5.1 Server-Side Configuration
 
-Static (unified):
+**Static Tokens (Single or Multiple):**
 
 ```ts
+const exposure = nodeExposure.with({
+  http: {
+    auth: {
+      token: ["secret1", "secret2"], // Array supported
+      header: "x-api-key", // Optional custom header
+    },
+  },
+});
+```
+
+**Custom Validators (Database/Logic):**
+
+For dynamic checks (e.g., database lookup, JWT), mark a task with `globals.tags.authValidator`. Validators run if the static token check fails (OR logic).
+
+```ts
+import { r, globals } from "@bluelibs/runner";
+import { AuthValidatorInput, AuthValidatorResult } from "@bluelibs/runner/node";
+
+const dbAuthValidator = r
+  .task("app.auth.validator")
+  .tags([globals.tags.authValidator])
+  .dependencies({ db: dbService })
+  .run(async (input, { db }) => {
+    // Input contains headers, method, url, path
+    const token = input.headers["x-api-key"];
+    const user = await db.users.findByToken(token);
+
+    if (user) return { ok: true };
+    return { ok: false, message: "Invalid token" };
+  })
+  .build();
+
+// Register validator alongside exposure
+r.resource("app").register([dbAuthValidator, exposure]).build();
+```
+
+### 5.2 Client-Side Configuration
+
+All clients support an auth header. Static config is easiest; for dynamic tokens (per request), use `onRequest`.
+
+```ts
+// Static
 const client = createHttpClient({
   baseUrl: "/__runner",
-  auth: { token: getEnv("RUNNER_TOKEN")!, header: "x-runner-token" },
+  auth: { token: "secret", header: "x-api-key" },
 });
-```
 
-Dynamic (unified):
-
-```ts
+// Dynamic (e.g. from localStorage)
 const client = createHttpClient({
   baseUrl: "/__runner",
   onRequest: ({ headers }) => {
-    const token = localStorage.getItem("RUNNER_TOKEN") ?? "";
-    headers["authorization"] = `Bearer ${token}`;
+    headers["authorization"] = `Bearer ${localStorage.getItem("token")}`;
   },
 });
 ```
 
-Node Smart / Mixed:
-
-```ts
-const smart = createHttpSmartClient({
-  baseUrl: "/__runner",
-  onRequest: ({ headers }) => {
-    headers["x-runner-token"] = process.env.RUNNER_TOKEN ?? "";
-  },
-});
-
-const mixed = createMixedHttpClient({
-  baseUrl: "/__runner",
-  onRequest: ({ headers }) => {
-    headers["authorization"] = `Bearer ${readToken()}`;
-  },
-});
-```
-
-Pure fetch client:
-
-```ts
-const client = globals.tunnels.http.createClient({
-  url: "/__runner",
-  onRequest: ({ headers }) => {
-    headers["x-runner-token"] = getCookie("runner_token");
-  },
-});
-```
-
-Notes:
-
-- If both `auth` and `onRequest` are provided, `onRequest` runs last and can override headers.
-- Match the exposure’s auth settings (header name and expected token).
+Match the exposure’s auth settings (header name and expected format).
 
 ## 6) Uploads & files
 
@@ -824,7 +829,7 @@ Notes:
 - Phantom builders expose `.dependencies()`, `.middleware()`, `.tags()`, `.meta()`, `.inputSchema()`, and `.resultSchema()`. They intentionally do not expose `.run()`.
 - Without a matching tunnel, calling the task resolves to `undefined`. This helps catch misconfiguration early (for example, missing client or wrong allow‑list).
 - You can combine phantom tasks with server allow‑lists (see section 9) to control what’s reachable when you host an exposure.
- - Single-owner rule: phantom or regular tasks routed through tunnels still follow exclusivity. The first tunnel that selects a task becomes its owner; subsequent tunnels attempting to select the same task cause init to fail with a clear error message.
+- Single-owner rule: phantom or regular tasks routed through tunnels still follow exclusivity. The first tunnel that selects a task becomes its owner; subsequent tunnels attempting to select the same task cause init to fail with a clear error message.
 
 ## 15) Typed Errors Over Tunnels
 
@@ -839,22 +844,31 @@ Define an app error:
 
 ```ts
 import { r } from "@bluelibs/runner";
-export const AppError = r.error<{ code: number; message: string }>("app.errors.generic").build();
+export const AppError = r
+  .error<{ code: number; message: string }>("app.errors.generic")
+  .build();
 ```
 
 Throw it server‑side:
 
 ```ts
-const dangerous = r.task("app.tasks.dangerous").run(async () => {
-  AppError.throw({ code: 123, message: "Boom" });
-}).build();
+const dangerous = r
+  .task("app.tasks.dangerous")
+  .run(async () => {
+    AppError.throw({ code: 123, message: "Boom" });
+  })
+  .build();
 ```
 
 Rethrow typed on the client (opt‑in):
 
 ```ts
 import { createHttpClient } from "@bluelibs/runner";
-const client = createHttpClient({ baseUrl: "/__runner", serializer, errorRegistry: new Map([[AppError.id, AppError]]) });
+const client = createHttpClient({
+  baseUrl: "/__runner",
+  serializer,
+  errorRegistry: new Map([[AppError.id, AppError]]),
+});
 await client.task("app.tasks.dangerous");
 ```
 
@@ -872,13 +886,19 @@ Define an async context:
 
 ```ts
 import { asyncContext } from "@bluelibs/runner";
-export const requestInfo = asyncContext<{ requestId: string }>("app.contexts.requestInfo").build();
+export const requestInfo = asyncContext<{ requestId: string }>(
+  "app.contexts.requestInfo",
+).build();
 ```
 
 Provide and send from the client:
 
 ```ts
-const client = createHttpClient({ baseUrl: "/__runner", serializer, contexts: [requestInfo] });
+const client = createHttpClient({
+  baseUrl: "/__runner",
+  serializer,
+  contexts: [requestInfo],
+});
 await requestInfo.provide({ requestId: "abc-123" }, async () => {
   await client.task("app.tasks.work");
 });
@@ -887,10 +907,13 @@ await requestInfo.provide({ requestId: "abc-123" }, async () => {
 Use on the server:
 
 ```ts
-const work = r.task("app.tasks.work").run(async () => {
-  const { requestId } = requestInfo.use();
-  // requestId === "abc-123"
-}).build();
+const work = r
+  .task("app.tasks.work")
+  .run(async () => {
+    const { requestId } = requestInfo.use();
+    // requestId === "abc-123"
+  })
+  .build();
 ```
 
 Transport and serialization (works cross‑tunnel as long as values are serializable):

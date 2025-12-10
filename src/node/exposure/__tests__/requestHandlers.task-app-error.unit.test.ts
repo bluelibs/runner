@@ -57,7 +57,7 @@ describe("requestHandlers - task app error extras", () => {
       taskRunner: { run: async () => AppError.throw({ code: 7, message: "Nope" }) },
       eventManager: {} as any,
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",

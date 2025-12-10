@@ -88,8 +88,8 @@ describe("requestHandlers - auth fail and missing task", () => {
       taskRunner,
       eventManager,
       logger,
-      authenticator: () => ({
-        ok: false,
+      authenticator: async () => ({
+        ok: false as const,
         response: {
           status: 401,
           body: { ok: false, error: { code: "UNAUTHORIZED" } },
@@ -137,7 +137,7 @@ describe("requestHandlers - auth fail and missing task", () => {
       taskRunner,
       eventManager,
       logger,
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: makeRouter((_p: string) => ({ kind: "task", id: "missing" })),
       cors: undefined,
@@ -199,7 +199,7 @@ describe("requestHandlers - auth fail and missing task", () => {
       taskRunner,
       eventManager,
       logger,
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: createAllowListGuard(store),
       router,
       cors: undefined,

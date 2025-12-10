@@ -57,7 +57,7 @@ describe("requestHandlers - event json cancel (mocked)", () => {
       taskRunner: {} as any,
       eventManager: { emit: async () => {} },
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",

@@ -62,7 +62,7 @@ describe("requestHandlers - event context via x-runner-context", () => {
         },
       },
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",
@@ -115,7 +115,7 @@ describe("requestHandlers - event context via x-runner-context", () => {
         },
       },
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",

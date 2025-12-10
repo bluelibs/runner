@@ -1565,7 +1565,8 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
 
     server.emit("request", req, res);
-    await new Promise((resolve) => setImmediate(resolve));
+    // Wait for async handler to complete (authenticator is now async)
+    await new Promise((resolve) => setTimeout(resolve, 50));
     expect(res.statusCode).toBe(200);
 
     server.close();

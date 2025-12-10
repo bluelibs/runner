@@ -9,6 +9,9 @@ import type {
   NodeExposureDeps,
   NodeExposureHandlers,
 } from "./resourceTypes";
+import type { AuthValidatorInput, AuthValidatorResult } from "./types";
+import { globalTags } from "../../globals/globalTags";
+import type { ITask } from "../../defs";
 
 export async function createNodeExposure(
   cfg: NodeExposureConfig | undefined,
@@ -17,9 +20,19 @@ export async function createNodeExposure(
   const { store, taskRunner, eventManager, logger } = deps;
   const httpConfig = cfg?.http;
   const basePath = resolveBasePath(httpConfig?.basePath);
-  const authenticator = createAuthenticator(httpConfig?.auth);
   const router = createRouter(basePath);
   const allowList = createAllowListGuard(store);
+
+  // Discover auth validator tasks
+  const validatorTasks = store.getTasksWithTag(
+    globalTags.authValidator,
+  ) as ITask<AuthValidatorInput, Promise<AuthValidatorResult>, any>[];
+
+  const authenticator = createAuthenticator(
+    httpConfig?.auth,
+    taskRunner,
+    validatorTasks,
+  );
 
   const { handleTask, handleEvent, handleDiscovery, handleRequest } =
     createRequestHandlers({

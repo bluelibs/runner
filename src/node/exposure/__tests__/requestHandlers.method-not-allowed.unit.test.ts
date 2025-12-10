@@ -36,7 +36,7 @@ describe("requestHandlers - method not allowed", () => {
       taskRunner: { run: async () => 1 },
       eventManager: {} as any,
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",
@@ -62,7 +62,7 @@ describe("requestHandlers - method not allowed", () => {
       taskRunner: {} as any,
       eventManager: { emit: async () => {} },
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",
