@@ -10,6 +10,7 @@ import { symbolFilePath } from "../../defs";
 import { defineTask } from "../defineTask";
 import { cloneState, mergeArray, mergeDepsNoConfig } from "./utils";
 import { getCallerFile } from "../../tools/getCallerFile";
+import type { ThrowsList } from "../../types/error";
 
 type PhantomBuilderState<
   TInput,
@@ -26,6 +27,7 @@ type PhantomBuilderState<
   meta?: TMeta;
   inputSchema?: IValidationSchema<any>;
   resultSchema?: IValidationSchema<any>;
+  throws?: ThrowsList;
   tags?: TTags;
 }>;
 
@@ -144,6 +146,14 @@ export interface PhantomTaskFluentBuilder<
   ): PhantomTaskFluentBuilder<
     TInput,
     TNewResolved,
+    TDeps,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  throws(list: ThrowsList): PhantomTaskFluentBuilder<
+    TInput,
+    TResolved,
     TDeps,
     TMeta,
     TTags,
@@ -307,6 +317,10 @@ function makePhantomTaskBuilder<
         TMiddleware
       >(next);
     },
+    throws(list: ThrowsList) {
+      const next = clone(state as any, { throws: list }) as any;
+      return makePhantomTaskBuilder(next);
+    },
     meta<TNewMeta extends ITaskMeta>(m: TNewMeta) {
       const next = clone<
         TInput,
@@ -338,6 +352,7 @@ function makePhantomTaskBuilder<
         middleware: state.middleware as any,
         inputSchema: state.inputSchema as any,
         resultSchema: state.resultSchema as any,
+        throws: state.throws,
         meta: state.meta as any,
         tags: state.tags as any,
       });
@@ -377,6 +392,7 @@ export function phantomTaskBuilder<
     meta: {} as any,
     inputSchema: undefined as any,
     resultSchema: undefined as any,
+    throws: undefined as any,
     tags: [] as any,
   });
   return makePhantomTaskBuilder(initial);

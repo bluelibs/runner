@@ -1486,6 +1486,18 @@ const getUser = r
 const root = r.resource("app").register([userNotFoundError, getUser]).build();
 ```
 
+You can also declare error contracts without DI by using `throws`. This is purely declarative and does not inject dependencies:
+
+```ts
+const getUser = r
+  .task("app.tasks.getUser")
+  .throws([userNotFoundError]) // or ["app.errors.userNotFound"]
+  .run(async (input) => {
+    userNotFoundError.throw({ code: 404, message: `User ${input} not found` });
+  })
+  .build();
+```
+
 Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.
 
 ```ts

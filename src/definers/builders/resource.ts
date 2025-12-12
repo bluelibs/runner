@@ -13,6 +13,7 @@ import type {
 import { symbolFilePath } from "../../defs";
 import { defineResource } from "../defineResource";
 import { getCallerFile } from "../../tools/getCallerFile";
+import type { ThrowsList } from "../../types/error";
 
 type BuilderState<
   TConfig,
@@ -57,6 +58,7 @@ type BuilderState<
   configSchema?: IValidationSchema<any>;
   resultSchema?: IValidationSchema<any>;
   meta?: TMeta;
+  throws?: ThrowsList;
   overrides?: Array<OverridableElements>;
 }>;
 
@@ -368,6 +370,15 @@ export interface ResourceFluentBuilder<
   ): ResourceFluentBuilder<
     TConfig,
     Promise<TResolved>,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  throws(list: ThrowsList): ResourceFluentBuilder<
+    TConfig,
+    TValue,
     TDeps,
     TContext,
     TMeta,
@@ -688,6 +699,10 @@ function makeResourceBuilder<
         TMiddleware
       >(next);
     },
+    throws(list: ThrowsList) {
+      const next = clone(state, { throws: list });
+      return makeResourceBuilder(next);
+    },
     init<TNewConfig = TConfig, TNewValue extends Promise<any> = TValue>(
       fn: ResourceInitFn<
         ResolveConfig<TConfig, TNewConfig>,
@@ -816,6 +831,7 @@ function makeResourceBuilder<
         configSchema: state.configSchema,
         resultSchema: state.resultSchema,
         meta: state.meta,
+        throws: state.throws,
         overrides: state.overrides,
       };
       const resource = defineResource(definition);
@@ -872,6 +888,7 @@ export function resourceBuilder(
     configSchema: undefined,
     resultSchema: undefined,
     meta: undefined,
+    throws: undefined,
     overrides: undefined,
   });
   return makeResourceBuilder(initial);

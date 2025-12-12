@@ -13,6 +13,7 @@ import {
   IPhantomTask,
 } from "../defs";
 import { getCallerFile } from "../tools/getCallerFile";
+import { normalizeThrows } from "../tools/throws";
 
 /**
  * Define a task.
@@ -50,6 +51,7 @@ export function defineTask<
     resultSchema: taskConfig.resultSchema,
     meta: taskConfig.meta || ({} as TMeta),
     tags: taskConfig.tags || ([] as unknown as TTags),
+    throws: normalizeThrows({ kind: "task", id }, taskConfig.throws),
     // autorun,
     optional() {
       return {

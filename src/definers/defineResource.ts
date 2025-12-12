@@ -14,6 +14,7 @@ import {
 } from "../defs";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { normalizeThrows } from "../tools/throws";
 
 export function defineResource<
   TConfig = void,
@@ -68,6 +69,7 @@ export function defineResource<
     configSchema: constConfig.configSchema,
     resultSchema: constConfig.resultSchema,
     tags: constConfig.tags || ([] as unknown as TTags),
+    throws: normalizeThrows({ kind: "resource", id }, constConfig.throws),
     with: function (config: TConfig) {
       // Validate config with schema if provided (fail fast)
       if (constConfig.configSchema) {

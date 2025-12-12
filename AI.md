@@ -280,6 +280,7 @@ try {
 ```
 
 - Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.
+- Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
 
 ## HTTP & Tunnels
 

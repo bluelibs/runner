@@ -6,6 +6,9 @@ import type { IErrorMeta } from "./meta";
 // Tiny runtime marker to help coverage include this file
 export const ERROR_TYPES_LOADED = true as const;
 
+export type ErrorReference = string | IErrorHelper<any>;
+export type ThrowsList = ReadonlyArray<ErrorReference>;
+
 export interface IErrorDefinition<
   TData extends DefaultErrorType = DefaultErrorType,
 > {

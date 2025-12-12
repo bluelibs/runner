@@ -12,6 +12,7 @@ import { defineTask } from "../defineTask";
 import { cloneState, mergeArray, mergeDepsNoConfig } from "./utils";
 import { phantomTaskBuilder, type PhantomTaskFluentBuilder } from "./task.phantom";
 import { getCallerFile } from "../../tools/getCallerFile";
+import type { ThrowsList } from "../../types/error";
 
 type ShouldReplaceInput<T> = [T] extends [undefined] ? true : [T] extends [void] ? true : (0 extends 1 & T ? true : false);
 type ResolveInput<TExisting, TProposed> = ShouldReplaceInput<TExisting> extends true
@@ -33,6 +34,7 @@ type BuilderState<
   meta?: TMeta;
   inputSchema?: IValidationSchema<any>;
   resultSchema?: IValidationSchema<any>;
+  throws?: ThrowsList;
   run?: (input: unknown, dependencies: unknown) => unknown;
   tags?: TTags;
 }>;
@@ -145,6 +147,14 @@ export interface TaskFluentBuilder<
   ): TaskFluentBuilder<
     TInput,
     Promise<TResolved>,
+    TDeps,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+  throws(list: ThrowsList): TaskFluentBuilder<
+    TInput,
+    TOutput,
     TDeps,
     TMeta,
     TTags,
@@ -332,6 +342,10 @@ function makeTaskBuilder<
         TMiddleware
       >(next);
     },
+    throws(list: ThrowsList) {
+      const next = clone(state, { throws: list });
+      return makeTaskBuilder(next);
+    },
     run<TNewInput = TInput, TNewOutput extends Promise<any> = TOutput>(
       fn: NonNullable<
         ITaskDefinition<
@@ -451,6 +465,7 @@ export function taskBuilder(
     meta: {} as any,
     inputSchema: undefined as any,
     resultSchema: undefined as any,
+    throws: undefined as any,
     run: undefined as any,
     tags: [] as any,
   });

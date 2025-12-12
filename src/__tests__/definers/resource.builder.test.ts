@@ -212,6 +212,26 @@ describe("resource builder", () => {
     expect(res.meta).toEqual({ title: "Configured" });
   });
 
+  it("supports throws contracts without DI", () => {
+    const err = r.error("tests.builder.resource.throws.err").build();
+    const res = r
+      .resource("tests.builder.resource.throws")
+      .throws([err, "tests.builder.resource.throws.other", err])
+      .init(async () => Promise.resolve("OK"))
+      .build();
+    expect(res.throws).toEqual([err.id, "tests.builder.resource.throws.other"]);
+  });
+
+  it("throws on invalid throws entries", () => {
+    expect(() =>
+      r
+        .resource("tests.builder.resource.throws.invalid")
+        .throws([{} as any])
+        .init(async () => Promise.resolve("OK"))
+        .build(),
+    ).toThrow(/Invalid throws entry/);
+  });
+
   it("resource middleware built via builder wraps init result", async () => {
     const rmw = r.middleware
       .resource("tests.builder.rm.wrap")

@@ -1,5 +1,6 @@
 import {
   task,
+  r,
   resource,
   override,
   run,
@@ -9,6 +10,42 @@ import {
 } from "..";
 
 describe("createTestResource", () => {
+  it("classic task/resource support throws contracts without DI", () => {
+    const err = r.error("spec.errors.classic.throws").build();
+
+    const t = task({
+      id: "spec.tasks.classic.throws",
+      throws: [err, "spec.errors.classic.throws.other", err],
+      run: async () => "ok",
+    });
+    expect(t.throws).toEqual([err.id, "spec.errors.classic.throws.other"]);
+
+    const res = resource({
+      id: "spec.resources.classic.throws",
+      throws: [err.id],
+      init: async () => "ok",
+    });
+    expect(res.throws).toEqual([err.id]);
+  });
+
+  it("classic task/resource throws fail-fast on invalid throws entries", () => {
+    expect(() =>
+      task({
+        id: "spec.tasks.classic.throws.invalid",
+        throws: [{} as any],
+        run: async () => "ok",
+      }),
+    ).toThrow(/Invalid throws entry/);
+
+    expect(() =>
+      resource({
+        id: "spec.resources.classic.throws.invalid",
+        throws: [{} as any],
+        init: async () => "ok",
+      }),
+    ).toThrow(/Invalid throws entry/);
+  });
+
   it("runs tasks within the full ecosystem and returns results", async () => {
     const double = task({ id: "t.double", run: async (x: number) => x * 2 });
 
