@@ -229,6 +229,12 @@ await client.task("app.tasks.uploadAvatar", { file });
 
 // Events are always JSON/EJSON
 await client.event("app.events.audit", { action: "ping" });
+
+// If you need the final (potentially mutated) payload back (requires server support):
+// Note: for events marked `parallel: true`, the server rejects returnPayload.
+const finalPayload = await client.eventWithResult?.("app.events.audit", {
+  action: "ping",
+});
 ```
 
 ### 4.4 Pure fetch (globals.tunnels.http)

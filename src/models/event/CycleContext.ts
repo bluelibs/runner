@@ -20,7 +20,11 @@ export class CycleContext {
     }
   }
 
-  runEmission(frame: IEmissionFrame, source: string, processEmission: () => Promise<void>): Promise<void> {
+  runEmission<TResult>(
+    frame: IEmissionFrame,
+    source: string,
+    processEmission: () => Promise<TResult>,
+  ): Promise<TResult> {
     if (!this.isEnabled || !this.emissionStack || !this.currentHookIdContext) {
       return processEmission();
     }

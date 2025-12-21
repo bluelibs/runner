@@ -1,7 +1,7 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
 import { globalTags } from "../../globals/globalTags";
-import { event, hook } from "../../index";
+import { event, hook, task, globals } from "../../index";
 import type { TunnelRunner } from "../../globals/resources/tunnel/types";
 
 describe("Tunnel delivery modes", () => {
@@ -11,6 +11,13 @@ describe("Tunnel delivery modes", () => {
     id: "unit.tunnel.h",
     on: ev,
     run: async (e: any) => captured.push(e.data.v),
+  });
+  const emitWithResult = task<{ v: number }, Promise<{ v: number }>>({
+    id: "unit.tunnel.emitWithResult",
+    dependencies: { eventManager: globals.resources.eventManager },
+    run: async (input, { eventManager }) => {
+      return await eventManager.emitWithResult(ev, input, "unit.tunnel.emitWithResult");
+    },
   });
 
   function mkRunner(overrides: {
@@ -84,6 +91,96 @@ describe("Tunnel delivery modes", () => {
     const rr = await run(app);
     await rr.emitEvent(ev, { v: 4 });
     expect(captured).toEqual([4]);
+    await rr.dispose();
+  });
+
+  it("mirror: remote payload overrides final emission payload", async () => {
+    const mutateLocal = hook({
+      id: "unit.tunnel.h.mutate",
+      on: ev,
+      order: 0,
+      run: async (e: any) => {
+        e.data.v = e.data.v + 1;
+      },
+    });
+    const captureAfter = hook({
+      id: "unit.tunnel.h.captureAfter",
+      on: ev,
+      order: 1,
+      run: async (e: any) => captured.push(e.data.v),
+    });
+
+    const t = defineResource({
+      id: "unit.tunnel.delivery.mirror.returnPayload",
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        events: [ev.id],
+        eventDeliveryMode: "mirror",
+        emit: async (emission) => ({ v: emission.data.v + 10 }),
+      }),
+    });
+
+    const app = defineResource({
+      id: "app.mirror.returnPayload",
+      register: [ev, mutateLocal, captureAfter, t, emitWithResult],
+      init: async () => {},
+    });
+
+    const rr = await run(app);
+    const out = await rr.runTask(emitWithResult, { v: 1 });
+    expect(captured).toEqual([2]);
+    expect(out).toEqual({ v: 12 });
+    await rr.dispose();
+  });
+
+  it("remote-only: remote payload becomes final emission payload", async () => {
+    const t = defineResource({
+      id: "unit.tunnel.delivery.remote-only.returnPayload",
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        events: [ev.id],
+        eventDeliveryMode: "remote-only",
+        emit: async () => ({ v: 100 }),
+      }),
+    });
+
+    const app = defineResource({
+      id: "app.remoteOnly.returnPayload",
+      register: [ev, h, t, emitWithResult],
+      init: async () => {},
+    });
+
+    const rr = await run(app);
+    const out = await rr.runTask(emitWithResult, { v: 1 });
+    expect(captured).toEqual([]);
+    expect(out).toEqual({ v: 100 });
+    await rr.dispose();
+  });
+
+  it("remote-first: remote payload becomes final emission payload on success", async () => {
+    const t = defineResource({
+      id: "unit.tunnel.delivery.remote-first.returnPayload",
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        events: [ev.id],
+        eventDeliveryMode: "remote-first",
+        emit: async () => ({ v: 200 }),
+      }),
+    });
+
+    const app = defineResource({
+      id: "app.remoteFirst.returnPayload",
+      register: [ev, h, t, emitWithResult],
+      init: async () => {},
+    });
+
+    const rr = await run(app);
+    const out = await rr.runTask(emitWithResult, { v: 1 });
+    expect(captured).toEqual([]);
+    expect(out).toEqual({ v: 200 });
     await rr.dispose();
   });
 });

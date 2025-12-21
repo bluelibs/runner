@@ -2,11 +2,15 @@
 jest.mock("../http-fetch-tunnel.resource", () => {
   const task = jest.fn(async (_id: string, _input: any) => "JSON-OK");
   const event = jest.fn(async (_id: string, _payload?: any) => {});
+  const eventWithResult = jest.fn(async (_id: string, _payload?: any) => ({
+    ok: true,
+  }));
   const createExposureFetch = jest.fn((cfg: any) => {
     (createExposureFetch as any).__lastCfg = cfg;
     (createExposureFetch as any).__task = task;
     (createExposureFetch as any).__event = event;
-    return { task, event };
+    (createExposureFetch as any).__eventWithResult = eventWithResult;
+    return { task, event, eventWithResult };
   });
   return { createExposureFetch };
 });
@@ -41,6 +45,56 @@ describe("http-client (universal)", () => {
     const event = (createExposureFetch as any).__event as jest.Mock;
     expect(event).toHaveBeenCalledTimes(1);
     expect(event.mock.calls[0][0]).toBe("e.hello");
+  });
+
+  it("eventWithResult delegates to exposure fetch eventWithResult", async () => {
+    const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
+    expect(typeof client.eventWithResult).toBe("function");
+    const out = await client.eventWithResult!("e.ret", { x: true } as any);
+    const eventWithResult = (createExposureFetch as any)
+      .__eventWithResult as jest.Mock;
+    expect(eventWithResult).toHaveBeenCalledTimes(1);
+    expect(eventWithResult.mock.calls[0][0]).toBe("e.ret");
+    expect(out).toEqual({ ok: true });
+  });
+
+  it("eventWithResult throws when underlying exposure fetch lacks support", async () => {
+    const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    (createExposureFetch as jest.Mock).mockImplementationOnce((_cfg: any) => {
+      return { task: jest.fn(), event: jest.fn() };
+    });
+    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
+    await expect(
+      client.eventWithResult!("e.nope", { a: 1 } as any),
+    ).rejects.toThrow(/eventWithResult not available/i);
+  });
+
+  it("eventWithResult: rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
+    const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const { TunnelError } = require("../globals/resources/tunnel/protocol");
+    (createExposureFetch as any).__eventWithResult.mockImplementationOnce(async () => {
+      throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
+        id: "tests.errors.evret",
+        data: { code: 9, message: "evret" },
+      });
+    });
+    const helper = {
+      id: "tests.errors.evret",
+      throw: (data: any) => {
+        throw new Error("typed-evret:" + String(data?.code));
+      },
+      is: () => false,
+      toString: () => "",
+    } as any;
+    const client = createHttpClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+      errorRegistry: new Map([["tests.errors.evret", helper]]),
+    });
+    await expect(client.eventWithResult!("e.ret", { a: 1 } as any)).rejects.toThrow(
+      /typed-evret:9/,
+    );
   });
 
   it("browser multipart uses FormData and onRequest sees auth header", async () => {
@@ -284,4 +338,3 @@ describe("http-client (universal)", () => {
     );
   });
 });
-

@@ -339,6 +339,12 @@ const myTask = r
   })
   .build();
 
+// Events: default is ack-only
+// await client.event("remote.event", { message: "hi" });
+//
+// If you need the final (potentially mutated) payload back (requires server support):
+// const finalPayload = await client.eventWithResult?.("remote.event", { message: "hi" });
+
 // Node streaming clients via Node DI factories
 import { globals as nodeGlobals } from "@bluelibs/runner/node";
 

@@ -91,6 +91,98 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     );
   });
 
+  it("createExposureFetch: eventWithResult() posts returnPayload and returns result", async () => {
+    const serializer = getDefaultSerializer();
+    const calls: Array<{ url: string; init: any; body: any }> = [];
+    const fetchImpl: typeof fetch = (async (url: any, init: any) => {
+      const parsed = serializer.parse<any>(String(init?.body ?? ""));
+      calls.push({ url: String(url), init, body: parsed });
+      return {
+        text: async () => serializer.stringify({ ok: true, result: { x: 2 } }),
+      } as any;
+    }) as any;
+
+    const c = createExposureFetch({
+      baseUrl: "http://api",
+      fetchImpl,
+      serializer,
+    });
+
+    expect(typeof c.eventWithResult).toBe("function");
+    const out = await c.eventWithResult!("e.id", { x: 1 });
+    expect(out).toEqual({ x: 2 });
+    expect(calls[0].url).toBe("http://api/event/e.id");
+    expect(calls[0].body).toEqual({ payload: { x: 1 }, returnPayload: true });
+  });
+
+  it("createExposureFetch: eventWithResult() throws when server is ok but omits result", async () => {
+    const serializer = getDefaultSerializer();
+    const fetchImpl: typeof fetch = (async () => ({
+      text: async () => serializer.stringify({ ok: true }),
+    })) as any;
+    const c = createExposureFetch({
+      baseUrl: "http://api",
+      fetchImpl,
+      serializer,
+    });
+
+    await expect(c.eventWithResult!("e.id", { x: 1 })).rejects.toThrow(
+      /did not include result/i,
+    );
+  });
+
+  it("createExposureFetch: eventWithResult() rethrows typed app errors via errorRegistry", async () => {
+    const serializer = getDefaultSerializer();
+    const fetchImpl: typeof fetch = (async () => ({
+      text: async () =>
+        serializer.stringify({
+          ok: false,
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "boom",
+            id: "tests.errors.evr",
+            data: { code: 12 },
+          },
+        }),
+    })) as any;
+
+    const helper = {
+      id: "tests.errors.evr",
+      throw: (data: any) => {
+        throw new Error("typed-evr:" + String(data?.code));
+      },
+      is: () => false,
+      toString: () => "",
+    } as any;
+
+    const c = createExposureFetch({
+      baseUrl: "http://api",
+      fetchImpl,
+      serializer,
+      errorRegistry: new Map([["tests.errors.evr", helper]]),
+    });
+
+    await expect(c.eventWithResult!("e.id", { x: 1 })).rejects.toThrow(
+      /typed-evr:12/,
+    );
+  });
+
+  it("createExposureFetch: eventWithResult() rethrows TunnelError when no typed mapping is present", async () => {
+    const serializer = getDefaultSerializer();
+    const fetchImpl: typeof fetch = (async () => ({
+      text: async () => serializer.stringify({ ok: false }),
+    })) as any;
+    const c = createExposureFetch({
+      baseUrl: "http://api",
+      fetchImpl,
+      serializer,
+    });
+
+    await expect(c.eventWithResult!("e.id", { x: 1 })).rejects.toThrow(
+      /Tunnel event error/,
+    );
+  });
+
   it("createExposureFetch: task() error branch uses default message when missing", async () => {
     const fetchNoMsg: typeof fetch = (async () => ({
       text: async () => JSON.stringify({ ok: false }),

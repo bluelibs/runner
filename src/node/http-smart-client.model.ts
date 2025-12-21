@@ -3,7 +3,7 @@ import * as https from "https";
 import { Readable, pipeline } from "stream";
 import type { Serializer } from "../globals/resources/tunnel/serializer";
 import type { ProtocolEnvelope } from "../globals/resources/tunnel/protocol";
-import { assertOkEnvelope } from "../globals/resources/tunnel/protocol";
+import { assertOkEnvelope, TunnelError } from "../globals/resources/tunnel/protocol";
 import type { InputFileMeta } from "../types/inputFile";
 import type { IAsyncContext } from "../types/asyncContext";
 import type { IErrorHelper } from "../types/error";
@@ -31,6 +31,7 @@ export interface HttpSmartClientConfig {
 export interface HttpSmartClient {
   task<I = unknown, O = unknown>(id: string, input?: I): Promise<O | Readable>;
   event<P = unknown>(id: string, payload?: P): Promise<void>;
+  eventWithResult?<P = unknown>(id: string, payload?: P): Promise<P>;
 }
 
 function isReadable(value: unknown): value is Readable {
@@ -415,6 +416,25 @@ export function createHttpSmartClient(
       try {
         const r = await postJson<ProtocolEnvelope<void>>(cfg, url, { payload });
         assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });
+      } catch (error) {
+        rethrowTyped(cfg.errorRegistry, error);
+      }
+    },
+
+    async eventWithResult<P>(id: string, payload?: P): Promise<P> {
+      const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
+      try {
+        const r = await postJson<ProtocolEnvelope<P>>(cfg, url, {
+          payload,
+          returnPayload: true,
+        });
+        if (r && typeof r === "object" && r.ok && !("result" in r)) {
+          throw new TunnelError(
+            "INVALID_RESPONSE",
+            "Tunnel event returnPayload requested but server did not include result. Upgrade the exposure server.",
+          );
+        }
+        return assertOkEnvelope<P>(r, { fallbackMessage: "Tunnel event error" });
       } catch (error) {
         rethrowTyped(cfg.errorRegistry, error);
       }

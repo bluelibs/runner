@@ -62,4 +62,10 @@ export interface ExposureFetchConfig {
 export interface ExposureFetchClient {
   task<I = unknown, O = unknown>(id: string, input?: I): Promise<O>;
   event<P = unknown>(id: string, payload?: P): Promise<void>;
+  /**
+   * Emits an event and returns the final payload as seen by the remote Runner.
+   * Requires server support; older servers will respond with `{ ok: true }`
+   * without `result`, in which case clients should throw.
+   */
+  eventWithResult?<P = unknown>(id: string, payload?: P): Promise<P>;
 }

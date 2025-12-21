@@ -177,7 +177,8 @@ describe("Semaphore", () => {
       );
 
       const elapsed = Date.now() - startTime;
-      expect(elapsed).toBeGreaterThanOrEqual(100);
+      // Date.now() is millisecond-granular and can under-report by 1ms depending on rounding.
+      expect(elapsed).toBeGreaterThanOrEqual(99);
       expect(elapsed).toBeLessThan(300); // Should not wait much longer
     });
 

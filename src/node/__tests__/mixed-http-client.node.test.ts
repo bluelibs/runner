@@ -189,6 +189,33 @@ describe("createMixedHttpClient (unit)", () => {
     expect(calls[0].url).toBe(`${baseUrl}/event/log`);
   });
 
+  it("eventWithResult(): uses JSON path and returns result", async () => {
+    const calls: Array<{ url: string; body: any }> = [];
+    const fetchMock = async (url: any, init?: any) => {
+      calls.push({
+        url: String(url),
+        body: getDefaultSerializer().parse(String(init?.body ?? "")),
+      });
+      return {
+        text: async () =>
+          getDefaultSerializer().stringify({ ok: true, result: { x: 2 } }),
+      } as any;
+    };
+
+    const client = createHttpMixedClient({
+      baseUrl,
+      fetchImpl: fetchMock as any,
+      serializer: getDefaultSerializer(),
+    });
+
+    expect(typeof client.eventWithResult).toBe("function");
+    const out = await client.eventWithResult!("log", { x: 1 });
+    expect(out).toEqual({ x: 2 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe(`${baseUrl}/event/log`);
+    expect(calls[0].body).toEqual({ payload: { x: 1 }, returnPayload: true });
+  });
+
   it("throws when baseUrl is empty", () => {
     expect(() =>
       createHttpMixedClient({ baseUrl: "" as any, serializer: getDefaultSerializer() } as any),

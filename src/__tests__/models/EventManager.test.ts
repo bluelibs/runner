@@ -859,6 +859,38 @@ describe("EventManager", () => {
     });
   });
 
+  describe("emitWithResult", () => {
+    it("returns final payload after interceptor and listener mutations", async () => {
+      eventManager.intercept(async (next, event) => {
+        return next({ ...event, data: `${event.data}-i` });
+      });
+
+      eventManager.addListener(eventDefinition, async (e) => {
+        e.data = `${e.data}-l`;
+      });
+
+      const out = await eventManager.emitWithResult(eventDefinition, "orig", "src");
+      expect(out).toBe("orig-i-l");
+    });
+
+    it("returns payload even when interceptors short-circuit emission", async () => {
+      eventManager.intercept(async (next, event) => {
+        return next({ ...event, data: "deep" });
+      });
+      eventManager.intercept(async () => {
+        // Prevent base emission
+        return;
+      });
+
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+
+      const out = await eventManager.emitWithResult(eventDefinition, "orig", "src");
+      expect(handler).not.toHaveBeenCalled();
+      expect(out).toBe("deep");
+    });
+  });
+
   describe("interceptHook", () => {
     it("should add hook interceptors", () => {
       const interceptor1 = jest.fn(async (next, hook, event) =>

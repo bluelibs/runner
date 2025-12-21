@@ -27,6 +27,7 @@ export interface TaskRequest {
 export interface EventRequest {
   id: string;
   payload?: unknown;
+  returnPayload?: boolean;
   context?: Record<string, unknown>;
   traceId?: string;
 }
