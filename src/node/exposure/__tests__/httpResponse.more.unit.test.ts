@@ -9,7 +9,9 @@ describe("httpResponse additional branch coverage", () => {
       setHeader() {},
       write(payload?: unknown) {
         if (payload == null) return;
-        writes.push(Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)));
+        writes.push(
+          Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)),
+        );
       },
       end() {
         this.writableEnded = true;
@@ -40,7 +42,9 @@ describe("httpResponse additional branch coverage", () => {
       setHeader() {},
       write(payload?: unknown) {
         if (payload == null) return;
-        writes.push(Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)));
+        writes.push(
+          Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)),
+        );
       },
       end() {
         this.writableEnded = true;
@@ -82,7 +86,9 @@ describe("httpResponse additional branch coverage", () => {
       setHeader() {},
       write(payload?: unknown) {
         if (payload == null) return;
-        writes.push(Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)));
+        writes.push(
+          Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)),
+        );
       },
       end() {
         this.writableEnded = true;
@@ -108,13 +114,21 @@ describe("httpResponse additional branch coverage", () => {
       writableEnded: false,
       statusCode: 0,
       setHeader() {},
-      end() { this.writableEnded = true; },
+      end() {
+        this.writableEnded = true;
+      },
     };
 
     const listeners: Record<string, Function[]> = {};
     const inner: any = {
-      on(ev: string, cb: Function) { (listeners[ev] ||= []).push(cb); return inner; },
-      once(ev: string, cb: Function) { (listeners[ev] ||= []).push(cb); return inner; },
+      on(ev: string, cb: Function) {
+        (listeners[ev] ||= []).push(cb);
+        return inner;
+      },
+      once(ev: string, cb: Function) {
+        (listeners[ev] ||= []).push(cb);
+        return inner;
+      },
     };
 
     respondStream(res as any, { stream: inner } as any);

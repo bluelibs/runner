@@ -62,11 +62,13 @@ describe("Phantom tasks - fluent builders", () => {
     const tunnelRes = r
       .resource("app.resources.phantom.builder.tunnel")
       .tags([globalTags.tunnel])
-      .init(async (): Promise<TunnelRunner> => ({
-        mode: "client",
-        tasks: [ph.id],
-        run: async (task: any, input: any) => `TUN:${task.id}:${input?.v}`,
-      }))
+      .init(
+        async (): Promise<TunnelRunner> => ({
+          mode: "client",
+          tasks: [ph.id],
+          run: async (task: any, input: any) => `TUN:${task.id}:${input?.v}`,
+        }),
+      )
       .build();
 
     const app = r
@@ -82,8 +84,14 @@ describe("Phantom tasks - fluent builders", () => {
   });
 
   it("phantom builder supports deps append/override, middleware, tags, schemas, meta", () => {
-    const t1 = r.task("tests.phantom.builder.dummy1").run(async () => 1).build();
-    const t2 = r.task("tests.phantom.builder.dummy2").run(async () => 2).build();
+    const t1 = r
+      .task("tests.phantom.builder.dummy1")
+      .run(async () => 1)
+      .build();
+    const t2 = r
+      .task("tests.phantom.builder.dummy2")
+      .run(async () => 2)
+      .build();
 
     const tmw1 = r.middleware
       .task("tests.phantom.builder.tm1")

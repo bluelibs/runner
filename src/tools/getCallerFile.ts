@@ -7,7 +7,9 @@ export function getCallerFile(): string {
     if (isNode()) {
       const err = new Error();
       Error.prepareStackTrace = (_err, stack) => stack as unknown as any;
-      const stack = err.stack as unknown as Array<{ getFileName?: () => string | null }>;
+      const stack = err.stack as unknown as Array<{
+        getFileName?: () => string | null;
+      }>;
 
       // Best-effort: skip current (this fn) and its caller, then read next frame
       stack.shift();

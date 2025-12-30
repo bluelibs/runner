@@ -11,10 +11,7 @@ export function createErrorHandler() {
         .send({ error: err.message, details: err.details });
     }
     // Runner validation errors
-    if (
-      Errors.validationError.is(err) ||
-      err?.name === "ValidationError"
-    ) {
+    if (Errors.validationError.is(err) || err?.name === "ValidationError") {
       return reply.status(400).send({ error: err.message });
     }
     // Errors with statusCode

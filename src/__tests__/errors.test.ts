@@ -13,7 +13,6 @@ import {
   dependencyNotFoundError,
   unknownItemTypeError,
   eventNotFoundError,
-  middlewareNotRegisteredError,
   circularDependenciesError,
   lockedError,
   storeAlreadyInitializedError,
@@ -31,7 +30,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Task \"test.task\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
+      "Task \"test.task\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -51,9 +50,7 @@ describe("Errors", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrow(
-      /Unknown item type:/,
-    );
+    await expect(run(app)).rejects.toThrow(/Unknown item type:/);
   });
 
   it("should throw unknown item type error at resource level", async () => {
@@ -106,7 +103,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Event "non.existent.event" not found. Did you forget to register it?'
+      'Event "non.existent.event" not found. Did you forget to register it?',
     );
   });
 
@@ -187,7 +184,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Resource \"res1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
+      "Resource \"res1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -205,7 +202,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Tag \"tag1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
+      "Tag \"tag1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -230,7 +227,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Hook \"hook1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
+      "Hook \"hook1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -250,7 +247,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Middleware \"middlewarex\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
+      "Middleware \"middlewarex\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -268,7 +265,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      "Event \"ev1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
+      "Event \"ev1\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -297,7 +294,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Dependency Task test.off.the.grid not found. Did you forget to register it through a resource?'
+      "Dependency Task test.off.the.grid not found. Did you forget to register it through a resource?",
     );
   });
 
@@ -325,7 +322,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Dependency Resource test.off.the.grid not found. Did you forget to register it through a resource?'
+      "Dependency Resource test.off.the.grid not found. Did you forget to register it through a resource?",
     );
   });
 
@@ -347,7 +344,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Middleware inside task "test.task" depends on "mw" but it\'s not registered. Did you forget to register it?'
+      'Middleware inside task "test.task" depends on "mw" but it\'s not registered. Did you forget to register it?',
     );
   });
 
@@ -360,7 +357,7 @@ describe("Errors", () => {
     });
 
     await expect(run(app)).rejects.toThrow(
-      'Middleware inside resource "app" depends on "mw" but it\'s not registered. Did you forget to register it?'
+      'Middleware inside resource "app" depends on "mw" but it\'s not registered. Did you forget to register it?',
     );
   });
 
@@ -381,9 +378,7 @@ describe("Errors", () => {
       expect(dup.message).toContain('Task "test" already registered');
       expect(duplicateRegistrationError.is(dup)).toBe(true);
 
-      const dep = capture(() =>
-        dependencyNotFoundError.throw({ key: "X" }),
-      );
+      const dep = capture(() => dependencyNotFoundError.throw({ key: "X" }));
       expect(dep.message).toContain("Dependency X not found");
       expect(dependencyNotFoundError.is(dep)).toBe(true);
 

@@ -1,12 +1,4 @@
-import {
-  task,
-  resource,
-  override,
-  run,
-  createTestResource,
-  globals,
-  event,
-} from "..";
+import { task, resource, override, run, createTestResource } from "..";
 
 describe("createTestResource", () => {
   it("runs tasks within the full ecosystem and returns results", async () => {

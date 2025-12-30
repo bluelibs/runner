@@ -4,7 +4,7 @@ import { fastify } from "./fastify.resource";
 import { fastifyRouter } from "./fastify-router.resource";
 import { db } from "#/db/resources/db.resource";
 import { auth as authResource } from "#/users/resources/auth.resource";
-import { task, Errors } from "@bluelibs/runner";
+import { task } from "@bluelibs/runner";
 import { z } from "zod";
 
 describe("fastify error handler branches", () => {

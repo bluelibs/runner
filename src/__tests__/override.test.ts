@@ -40,9 +40,9 @@ describe("override() helper", () => {
     expect(changed.id).toBe(base.id);
     // Call the init functions directly (without runner) to validate override
     // Signatures: init(config, deps, ctx)
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+
     const v1 = await base.init!(undefined as any, {} as any, undefined as any);
-    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+
     const v2 = await changed.init!(
       undefined as any,
       {} as any,

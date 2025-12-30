@@ -19,7 +19,11 @@ function makeReq(eventId: string, body: any): IncomingMessage {
   return r as unknown as IncomingMessage;
 }
 
-function makeRes(): ServerResponse & { _status?: number; _buf?: Buffer; _headers: Record<string, string> } {
+function makeRes(): ServerResponse & {
+  _status?: number;
+  _buf?: Buffer;
+  _headers: Record<string, string>;
+} {
   const res: any = {
     statusCode: 0,
     headersSent: false,
@@ -31,7 +35,9 @@ function makeRes(): ServerResponse & { _status?: number; _buf?: Buffer; _headers
     },
     write(payload?: any) {
       if (payload != null)
-        this._buf = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload));
+        this._buf = Buffer.isBuffer(payload)
+          ? payload
+          : Buffer.from(String(payload));
       this.headersSent = true;
     },
     end(payload?: any) {
@@ -39,15 +45,21 @@ function makeRes(): ServerResponse & { _status?: number; _buf?: Buffer; _headers
       if (payload != null) this.write(payload);
       this.writableEnded = true;
     },
-    once(_e: string, _cb: Function) { return this; },
-    on() { return this; },
+    once(_e: string, _cb: Function) {
+      return this;
+    },
+    on() {
+      return this;
+    },
   };
   return res as any;
 }
 
 describe("requestHandlers - event app error extras", () => {
   it("includes id and data for known application errors", async () => {
-    const AppError = defineError<{ code: number; message: string }>({ id: "tests.errors.app.ev" });
+    const AppError = defineError<{ code: number; message: string }>({
+      id: "tests.errors.app.ev",
+    });
     const store: any = {
       events: new Map([["e.app", { event: { id: "e.app" } }]]),
       errors: new Map([[AppError.id, AppError]]),
@@ -55,7 +67,11 @@ describe("requestHandlers - event app error extras", () => {
     const deps: any = {
       store,
       taskRunner: {} as any,
-      eventManager: { emit: async () => { AppError.throw({ code: 9, message: "Ev" }); } },
+      eventManager: {
+        emit: async () => {
+          AppError.throw({ code: 9, message: "Ev" });
+        },
+      },
       logger: { info: () => {}, warn: () => {}, error: () => {} },
       authenticator: () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },

@@ -4,10 +4,12 @@ export * from "../index";
 import { globals as coreGlobals } from "../index";
 import { run as coreRun } from "../run";
 import type { RunResult } from "../models/RunResult";
-import type { IResource } from "../defs";
 
 export { nodeExposure } from "./exposure.resource";
-export { hasExposureContext, useExposureContext } from "./exposure/requestContext";
+export {
+  hasExposureContext,
+  useExposureContext,
+} from "./exposure/requestContext";
 export { createNodeFile } from "./files";
 export type * from "./exposure/resourceTypes";
 // Important: avoid importing a path that ends with `.node`
@@ -18,6 +20,7 @@ export type * from "./http-smart-client.model";
 export { createHttpMixedClient } from "./http-mixed-client";
 export type * from "./http-mixed-client";
 export { readInputFileToBuffer, writeInputFileToPath } from "./inputFile.utils";
+export * from "./durable";
 
 import { httpSmartClientFactory } from "./resources/http-smart-client.factory.resource";
 import { httpMixedClientFactory } from "./resources/http-mixed-client.factory.resource";
@@ -33,17 +36,16 @@ export const globals = {
 };
 
 // Node run wrapper: auto-register Node-only factories for better DX
-export async function run(
-  root: any,
-  config?: any,
-): Promise<RunResult<any>> {
+export async function run(root: any, config?: any): Promise<RunResult<any>> {
   const rt = await coreRun(root, config);
   const store = await rt.getResourceValue(coreGlobals.resources.store);
   // Make Node factories discoverable via DI without explicit registration
   store.storeGenericItem(httpSmartClientFactory);
   store.storeGenericItem(httpMixedClientFactory);
   // Eagerly initialize values so getResourceValue works immediately
-  const serializer = (await rt.getResourceValue(coreGlobals.resources.serializer)) as any;
+  const serializer = (await rt.getResourceValue(
+    coreGlobals.resources.serializer,
+  )) as any;
   const errorRegistry = new Map<string, any>();
   for (const [id, helper] of store.errors) errorRegistry.set(id, helper);
   const contexts = Array.from(store.asyncContexts.values()) as any[];

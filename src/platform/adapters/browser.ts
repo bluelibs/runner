@@ -1,4 +1,8 @@
-import type { IAsyncLocalStorage, IPlatformAdapter, PlatformId } from "../types";
+import type {
+  IAsyncLocalStorage,
+  IPlatformAdapter,
+  PlatformId,
+} from "../types";
 import { platformUnsupportedFunctionError } from "../../errors";
 
 export class BrowserPlatformAdapter implements IPlatformAdapter {
@@ -36,7 +40,8 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
 
     return () => {
       win.removeEventListener?.("beforeunload", handlers.before);
-      if (handlers.visibility) win.removeEventListener?.("visibilitychange", handlers.visibility);
+      if (handlers.visibility)
+        win.removeEventListener?.("visibilitychange", handlers.visibility);
     };
   }
 

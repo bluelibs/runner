@@ -1,4 +1,4 @@
-import type { IAsyncContext, IAsyncContextDefinition, IAsyncContextMeta } from "../../../defs";
+import type { IAsyncContextDefinition, IAsyncContextMeta } from "../../../defs";
 import { defineAsyncContext } from "../../defineAsyncContext";
 import type { AsyncContextFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";

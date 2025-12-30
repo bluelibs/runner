@@ -21,6 +21,7 @@ export const httpRoute = r
   .configSchema<HttpRouteConfig>({ parse: (x: any) => x })
   .meta({
     title: "HTTP Route Tag",
-    description: "Tag for marking tasks as HTTP endpoints with method and path configuration",
+    description:
+      "Tag for marking tasks as HTTP endpoints with method and path configuration",
   })
   .build();

@@ -980,8 +980,8 @@ describe("Dynamic Register and Dependencies", () => {
             config.redis
               ? `redis-${key}`
               : config.memory
-              ? `memory-${key}`
-              : null,
+                ? `memory-${key}`
+                : null,
           set: (key: string, value: any) => `cache-set-${key}`,
         }),
       });

@@ -5,16 +5,20 @@ export interface HttpSmartClientFactoryConfig {
   baseUrl: string;
   auth?: { header?: string; token: string };
   timeoutMs?: number;
-  onRequest?: (ctx: { url: string; headers: Record<string, string> }) =>
-    | void
-    | Promise<void>;
+  onRequest?: (ctx: {
+    url: string;
+    headers: Record<string, string>;
+  }) => void | Promise<void>;
 }
 
 export type HttpSmartClientFactory = (
   config: HttpSmartClientFactoryConfig,
 ) => HttpSmartClient;
 
-export const httpSmartClientFactory = defineResource<void, Promise<HttpSmartClientFactory>>({
+export const httpSmartClientFactory = defineResource<
+  void,
+  Promise<HttpSmartClientFactory>
+>({
   id: "globals.resources.httpSmartClientFactory",
   meta: {
     title: "HTTP Smart Client Factory (Node)",

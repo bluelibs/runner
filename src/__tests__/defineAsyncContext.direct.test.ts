@@ -6,4 +6,3 @@ describe("defineAsyncContext direct createContext", () => {
     expect(C.id).toBeDefined();
   });
 });
-

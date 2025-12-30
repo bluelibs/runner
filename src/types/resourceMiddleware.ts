@@ -2,8 +2,8 @@ import {
   DependencyMapType,
   DependencyValuesType,
   IValidationSchema,
-  IResource,
-} from "../defs";
+} from "./utilities";
+import type { IResource } from "./resource";
 import { TagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
 import {
@@ -50,7 +50,9 @@ export interface IResourceMiddleware<
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
-> extends IResourceMiddlewareDefinition<
+>
+  extends
+    IResourceMiddlewareDefinition<
       TConfig,
       TEnforceInputContract,
       TEnforceOutputContract,
@@ -82,11 +84,11 @@ export interface IResourceMiddlewareConfigured<
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
 > extends IResourceMiddleware<
-    TConfig,
-    TEnforceInputContract,
-    TEnforceOutputContract,
-    TDependencies
-  > {
+  TConfig,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TDependencies
+> {
   [symbolMiddlewareConfigured]: true;
 }
 

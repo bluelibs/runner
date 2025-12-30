@@ -2,10 +2,7 @@ import { defineResource } from "../define";
 import { globalResources } from "../globals/globalResources";
 
 import { createNodeExposure } from "./exposure/createNodeExposure";
-import type {
-  NodeExposureConfig,
-  NodeExposureHandlers,
-} from "./exposure/resourceTypes";
+import type { NodeExposureConfig } from "./exposure/resourceTypes";
 
 export type { NodeExposureHttpAuthConfig } from "./exposure/authenticator";
 

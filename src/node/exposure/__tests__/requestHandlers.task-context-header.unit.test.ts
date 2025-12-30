@@ -3,7 +3,11 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { createRequestHandlers } from "../requestHandlers";
 import { getDefaultSerializer } from "../../../globals/resources/tunnel/serializer";
 
-function makeReq(taskId: string, body: any, headers: Record<string, string>): IncomingMessage {
+function makeReq(
+  taskId: string,
+  body: any,
+  headers: Record<string, string>,
+): IncomingMessage {
   const payload = Buffer.from(JSON.stringify({ input: body }), "utf8");
   const r: any = new Readable({
     read() {
@@ -21,8 +25,12 @@ function makeRes(): ServerResponse & { _status?: number; _buf?: Buffer } {
   const res: any = {
     statusCode: 0,
     setHeader() {},
-    once() { return this; },
-    on() { return this; },
+    once() {
+      return this;
+    },
+    on() {
+      return this;
+    },
     end(buf?: any) {
       this._status = this.statusCode;
       if (buf)
@@ -46,7 +54,7 @@ describe("requestHandlers - task context via x-runner-context", () => {
         current = v;
         return fn();
       },
-      require: () => ({} as any),
+      require: () => ({}) as any,
     } as any;
 
     const store: any = {
@@ -76,8 +84,13 @@ describe("requestHandlers - task context via x-runner-context", () => {
     };
 
     const { handleTask } = createRequestHandlers(deps);
-    const headerMap = { "content-type": "application/json" } as Record<string, string>;
-    headerMap["x-runner-context"] = serializer.stringify({ [ctx.id]: ctx.serialize({ v: 1 }) });
+    const headerMap = { "content-type": "application/json" } as Record<
+      string,
+      string
+    >;
+    headerMap["x-runner-context"] = serializer.stringify({
+      [ctx.id]: ctx.serialize({ v: 1 }),
+    });
     const req = makeReq("t.ctx", { a: 1 }, headerMap);
     const res = makeRes();
     await handleTask(req, res);
@@ -101,7 +114,7 @@ describe("requestHandlers - task context via x-runner-context", () => {
         current = v;
         return fn();
       },
-      require: () => ({} as any),
+      require: () => ({}) as any,
     } as any;
 
     const store: any = {
@@ -130,11 +143,17 @@ describe("requestHandlers - task context via x-runner-context", () => {
       serializer,
     };
     const { handleTask } = createRequestHandlers(deps);
-    const headerText = serializer.stringify({ [ctx.id]: ctx.serialize({ v: 2 }) });
-    const req = makeReq("t.ctx.arr", { a: 1 }, {
-      "content-type": "application/json",
-      "x-runner-context": [headerText] as any,
+    const headerText = serializer.stringify({
+      [ctx.id]: ctx.serialize({ v: 2 }),
     });
+    const req = makeReq(
+      "t.ctx.arr",
+      { a: 1 },
+      {
+        "content-type": "application/json",
+        "x-runner-context": [headerText] as any,
+      },
+    );
     const res = makeRes();
     await handleTask(req, res);
     const json = (res as any)._buf

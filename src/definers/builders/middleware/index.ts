@@ -1,4 +1,8 @@
-import type { DependencyMapType, IMiddlewareMeta, TagType } from "../../../defs";
+import type {
+  DependencyMapType,
+  IMiddlewareMeta,
+  TagType,
+} from "../../../defs";
 import { getCallerFile } from "../../../tools/getCallerFile";
 import { makeTaskMiddlewareBuilder } from "./task";
 import type { TaskMiddlewareFluentBuilder } from "./task.interface";

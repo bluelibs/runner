@@ -23,7 +23,8 @@ export interface ResourceFluentBuilder<
   TContext = any,
   TMeta extends IResourceMeta = IResourceMeta,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
 > {
   id: string;
 

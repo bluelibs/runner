@@ -4,7 +4,10 @@ import { buildRouteSchema } from "./buildRouteSchema";
 describe("buildRouteSchema", () => {
   it("maps meta to summary/description and builds params from path & inputSchema", () => {
     const task: any = {
-      meta: { title: "Get User By ID", description: "Retrieve a single user by its unique identifier" },
+      meta: {
+        title: "Get User By ID",
+        description: "Retrieve a single user by its unique identifier",
+      },
       inputSchema: z.object({ id: z.string() }).strict(),
       resultSchema: z.object({ ok: z.boolean() }).strict(),
     };
@@ -35,4 +38,3 @@ describe("buildRouteSchema", () => {
     expect(schema.params.properties.id).toMatchObject({ type: "string" });
   });
 });
-

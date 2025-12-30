@@ -1,4 +1,8 @@
-import type { DefaultErrorType, IErrorMeta, IValidationSchema } from "../../../defs";
+import type {
+  DefaultErrorType,
+  IErrorMeta,
+  IValidationSchema,
+} from "../../../defs";
 
 /**
  * Internal state for the ErrorFluentBuilder.

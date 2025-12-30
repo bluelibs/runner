@@ -29,6 +29,14 @@
 npm install @bluelibs/runner
 ```
 
+## Durable Workflows
+
+Durable workflows are a **Node-only** module exported from `@bluelibs/runner/node` (implemented under `src/node/durable/`).
+
+- Spec & guide: `readmes/DURABLE_WORKFLOWS.md`
+- Token-friendly durable guide: `readmes/DURABLE_WORKFLOWS_AI.md`
+- Core primitives: `ctx.step(id, fn)`, `ctx.sleep(ms)`, `ctx.waitForSignal(signal)` and `durable.signal(executionId, signal, payload)`
+
 ## Resources
 
 ```ts
@@ -414,7 +422,9 @@ Note on files: The “File” you see in tunnels is not an EJSON custom type. Ru
 
 ## Testing
 
-- Use `npm run coverage:ai` to execute the full Jest suite in a token-friendly format. Focused tests can run via `npm run test -- task-name`.
+- Use `npm run coverage:ai` to execute the full Jest suite in a token-friendly format. Focused tests can run via `npm run test -- some.test.ts`.
+- Durable workflows are included in the normal test suite (`npm test`). For focused runs use `npm run test -- durable` or `npm run coverage:durable:ai`.
+- The Jest runner has a watchdog (`JEST_WATCHDOG_MS`, default 10 minutes) to avoid “hung test run” situations.
 - In unit tests, prefer running a minimal root resource and call `await run(root)` to get `runTask`, `emitEvent`, or `getResourceValue`.
 - `createTestResource` is available for legacy suites but new code should compose fluent resources directly.
 

@@ -10,12 +10,21 @@ describe("runTaskWithHttpContext", () => {
       task: {},
       input: 1,
       fastifyContext: { provide: (_v: any, cb: any) => cb() },
-      contextValues: { request: {}, reply, requestId: "r1", user: null, userId: null, logger: {} },
+      contextValues: {
+        request: {},
+        reply,
+        requestId: "r1",
+        user: null,
+        userId: null,
+        logger: {},
+      },
       onSuccess,
       onError,
     });
     expect(result).toBe(2);
-    expect(onSuccess).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 201 }));
+    expect(onSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 201 }),
+    );
     expect(onError).not.toHaveBeenCalled();
   });
 
@@ -25,11 +34,22 @@ describe("runTaskWithHttpContext", () => {
     const err = new Error("fail");
     await expect(
       runTaskWithHttpContext({
-        taskRunner: { run: async () => { throw err; } },
+        taskRunner: {
+          run: async () => {
+            throw err;
+          },
+        },
         task: {},
         input: {},
         fastifyContext: { provide: (_v: any, cb: any) => cb() },
-        contextValues: { request: {}, reply: { statusCode: 200 } as any, requestId: "r2", user: null, userId: null, logger: {} },
+        contextValues: {
+          request: {},
+          reply: { statusCode: 200 } as any,
+          requestId: "r2",
+          user: null,
+          userId: null,
+          logger: {},
+        },
         onSuccess,
         onError,
       }),
@@ -47,10 +67,19 @@ describe("runTaskWithHttpContext", () => {
       task: {},
       input: {},
       fastifyContext: { provide: (_v: any, cb: any) => cb() },
-      contextValues: { request: {}, reply, requestId: "r3", user: null, userId: null, logger: {} },
+      contextValues: {
+        request: {},
+        reply,
+        requestId: "r3",
+        user: null,
+        userId: null,
+        logger: {},
+      },
       onSuccess,
       onError,
     });
-    expect(onSuccess).toHaveBeenCalledWith(expect.objectContaining({ statusCode: 200 }));
+    expect(onSuccess).toHaveBeenCalledWith(
+      expect.objectContaining({ statusCode: 200 }),
+    );
   });
 });

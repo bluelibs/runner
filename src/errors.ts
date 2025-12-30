@@ -1,5 +1,5 @@
 import { error } from "./definers/builders/error";
-import type { DefaultErrorType, IErrorHelper } from "./types/error";
+import type { DefaultErrorType } from "./types/error";
 import { detectEnvironment } from "./platform";
 
 // Duplicate registration
@@ -187,8 +187,9 @@ export const tunnelOwnershipConflictError = error<
     attemptedOwnerId: string;
   } & DefaultErrorType
 >("runner.errors.tunnelOwnershipConflict")
-  .format(({ taskId, currentOwnerId, attemptedOwnerId }) =>
-    `Task "${taskId}" is already tunneled by resource "${currentOwnerId}". Resource "${attemptedOwnerId}" cannot tunnel it again. Ensure each task is owned by a single tunnel client.`,
+  .format(
+    ({ taskId, currentOwnerId, attemptedOwnerId }) =>
+      `Task "${taskId}" is already tunneled by resource "${currentOwnerId}". Resource "${attemptedOwnerId}" cannot tunnel it again. Ensure each task is owned by a single tunnel client.`,
   )
   .build();
 

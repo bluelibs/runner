@@ -11,16 +11,20 @@ class RunnerError<
   TData extends DefaultErrorType = DefaultErrorType,
 > extends Error {
   public readonly data!: TData;
-  constructor(public readonly id: string, message: string, data: TData) {
+  constructor(
+    public readonly id: string,
+    message: string,
+    data: TData,
+  ) {
     super(message);
     this.data = data;
     this.name = id;
   }
 }
 
-export class ErrorHelper<TData extends DefaultErrorType = DefaultErrorType>
-  implements IErrorHelper<TData>
-{
+export class ErrorHelper<
+  TData extends DefaultErrorType = DefaultErrorType,
+> implements IErrorHelper<TData> {
   [symbolError] = true as const;
   constructor(private readonly definition: IErrorDefinitionFinal<TData>) {}
   get id(): string {

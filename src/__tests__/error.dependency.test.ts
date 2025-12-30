@@ -23,9 +23,7 @@ describe("errors as registrable items and dependencies", () => {
 
     const runtime = await run(app);
 
-    await expect(
-      runtime.runTask(checkUser, { id: "123" }),
-    ).rejects.toThrowError();
+    await expect(runtime.runTask(checkUser, { id: "123" })).rejects.toThrow();
 
     await runtime.runTask(checkUser, { id: "123" }).catch((e) => {
       expect(userNotFoundError.is(e)).toBe(true);
@@ -61,7 +59,10 @@ describe("errors as registrable items and dependencies", () => {
     const r1 = await run(app1);
     expect(await r1.runTask(withOpt, undefined as any)).toBe(err.id);
 
-    const app2 = defineResource({ id: "spec.app.opt.absent", register: [withoutOpt] });
+    const app2 = defineResource({
+      id: "spec.app.opt.absent",
+      register: [withoutOpt],
+    });
     const r2 = await run(app2);
     expect(await r2.runTask(withoutOpt, undefined as any)).toBeUndefined();
 
@@ -80,13 +81,19 @@ describe("errors as registrable items and dependencies", () => {
       },
     });
 
-    const app = defineResource({ id: "spec.app.error.dep.missing", register: [t] });
-    await expect(run(app)).rejects.toThrowError();
+    const app = defineResource({
+      id: "spec.app.error.dep.missing",
+      register: [t],
+    });
+    await expect(run(app)).rejects.toThrow();
   });
 
   it("exposes registered errors via store.errors getter", async () => {
     const myErr = errorBuilder("spec.errors.visible").build();
-    const app = defineResource({ id: "spec.app.errors.visible", register: [myErr] });
+    const app = defineResource({
+      id: "spec.app.errors.visible",
+      register: [myErr],
+    });
     const runtime = await run(app);
     const store = await runtime.getResourceValue(globals.resources.store);
     expect(store.errors.get(myErr.id)).toBe(myErr);
@@ -100,6 +107,6 @@ describe("errors as registrable items and dependencies", () => {
       register: [myError, myError],
     });
 
-    await expect(run(app)).rejects.toThrowError();
+    await expect(run(app)).rejects.toThrow();
   });
 });

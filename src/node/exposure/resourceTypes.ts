@@ -4,8 +4,6 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { globalResources } from "../../globals/globalResources";
 import type { ResourceDependencyValuesType } from "../../defs";
 import type { NodeExposureHttpAuthConfig } from "./authenticator";
-import type { RequestHandler } from "./types";
-import type { Serializer } from "../../globals/resources/tunnel/serializer";
 
 export type NodeExposureDependencyMap = {
   store: typeof globalResources.store;

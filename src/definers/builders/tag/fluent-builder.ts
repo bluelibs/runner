@@ -1,4 +1,4 @@
-import type { ITag, ITagMeta, IValidationSchema } from "../../../defs";
+import type { ITagMeta, IValidationSchema } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import { defineTag } from "../../defineTag";
 import type { TagFluentBuilder } from "./fluent-builder.interface";

@@ -1,13 +1,7 @@
-import {
-  IEvent,
-  IEventEmission,
-  symbolEvent,
-  symbolFilePath,
-} from "../../defs";
+import { IEvent, IEventEmission } from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
-import { eventCycleError } from "../../errors";
 
 describe("EventManager", () => {
   let eventManager: EventManager;
@@ -145,11 +139,11 @@ describe("EventManager", () => {
 
     expect(() => {
       eventManager.addListener(eventDefinition, handler);
-    }).toThrowError("Cannot modify the EventManager when it is locked.");
+    }).toThrow("Cannot modify the EventManager when it is locked.");
 
     expect(() => {
       eventManager.addGlobalListener(handler);
-    }).toThrowError("Cannot modify the EventManager when it is locked.");
+    }).toThrow("Cannot modify the EventManager when it is locked.");
   });
 
   it("should handle multiple events", async () => {
@@ -408,7 +402,7 @@ describe("EventManager", () => {
 
     expect(() => {
       eventManager.addListener(eventDefinition, handler);
-    }).toThrowError("Cannot modify the EventManager when it is locked.");
+    }).toThrow("Cannot modify the EventManager when it is locked.");
   });
 
   it("should not throw when emitting after lock", async () => {
@@ -1254,7 +1248,6 @@ describe("EventManager", () => {
     const registry = (manager as any).registry;
     const spy = jest.spyOn(registry, "getCachedMergedListeners");
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (manager as any).getCachedMergedListeners("evt-bc");
 
     expect(spy).toHaveBeenCalledWith("evt-bc");

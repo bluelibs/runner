@@ -5,7 +5,12 @@
 // Then use it like this:
 
 import { z } from "zod";
-import { defineTask, defineResource, defineEvent, defineMiddleware } from "../define";
+import {
+  defineTask,
+  defineResource,
+  defineEvent,
+  defineMiddleware,
+} from "../define";
 import { IValidationSchema } from "../defs";
 
 // Zod schemas already implement IValidationSchema<T>!
@@ -38,7 +43,8 @@ const databaseResource = defineResource({
   init: async (config) => {
     // config is properly typed with defaults applied
     return {
-      connect: () => `Connected to ${config.host}:${config.port} (SSL: ${config.ssl})`,
+      connect: () =>
+        `Connected to ${config.host}:${config.port} (SSL: ${config.ssl})`,
     };
   },
 });
@@ -49,7 +55,7 @@ const EventPayloadSchema = z.object({
 });
 
 const userActionEvent = defineEvent({
-  id: "event.userActionWithZod", 
+  id: "event.userActionWithZod",
   payloadSchema: EventPayloadSchema, // Works directly!
 });
 
@@ -95,18 +101,20 @@ const mathTask = defineTask({
 // And with custom validation libraries that implement IValidationSchema
 class CustomValidator<T> implements IValidationSchema<T> {
   constructor(private validator: (input: unknown) => T) {}
-  
+
   parse(input: unknown): T {
     return this.validator(input);
   }
 }
 
-const customSchema = new CustomValidator<{ value: string }>((input: unknown) => {
-  if (typeof input === "object" && input !== null && "value" in input) {
-    return input as { value: string };
-  }
-  throw new Error("Invalid input");
-});
+const customSchema = new CustomValidator<{ value: string }>(
+  (input: unknown) => {
+    if (typeof input === "object" && input !== null && "value" in input) {
+      return input as { value: string };
+    }
+    throw new Error("Invalid input");
+  },
+);
 
 const customTask = defineTask({
   id: "task.customValidation",

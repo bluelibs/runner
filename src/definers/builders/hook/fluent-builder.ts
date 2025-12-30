@@ -1,7 +1,6 @@
 import type {
   DependencyMapType,
   IEventDefinition,
-  IHook,
   IHookDefinition,
   ITaskMeta,
   TagType,

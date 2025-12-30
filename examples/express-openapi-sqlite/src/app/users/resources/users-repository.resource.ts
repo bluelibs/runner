@@ -1,6 +1,5 @@
 import { r } from "@bluelibs/runner";
-import bcrypt from "bcryptjs";
-import { User, RegisterRequest } from "../types";
+import { User } from "../types";
 import { db } from "../../db/resources/database";
 
 export const usersRepository = r

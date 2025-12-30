@@ -12,5 +12,3 @@ describe("platform.createWebFile", () => {
     expect(s._web?.blob).toBeInstanceOf(Blob);
   });
 });
-
-

@@ -6,16 +6,20 @@ export interface HttpMixedClientFactoryConfig {
   auth?: { header?: string; token: string };
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
-  onRequest?: (ctx: { url: string; headers: Record<string, string> }) =>
-    | void
-    | Promise<void>;
+  onRequest?: (ctx: {
+    url: string;
+    headers: Record<string, string>;
+  }) => void | Promise<void>;
 }
 
 export type HttpMixedClientFactory = (
   config: HttpMixedClientFactoryConfig,
 ) => MixedHttpClient;
 
-export const httpMixedClientFactory = defineResource<void, Promise<HttpMixedClientFactory>>({
+export const httpMixedClientFactory = defineResource<
+  void,
+  Promise<HttpMixedClientFactory>
+>({
   id: "globals.resources.httpMixedClientFactory",
   meta: {
     title: "HTTP Mixed Client Factory (Node)",

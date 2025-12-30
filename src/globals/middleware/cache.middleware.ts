@@ -1,6 +1,7 @@
-import { defineTaskMiddleware, defineResource, defineTask } from "../../define";
+import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
+import { defineResource } from "../../definers/defineResource";
+import { defineTask } from "../../definers/defineTask";
 import { LRUCache } from "lru-cache";
-import { IResource, ITask } from "../../defs";
 
 export interface ICacheInstance {
   set(key: string, value: any): void;

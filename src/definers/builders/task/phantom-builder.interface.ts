@@ -16,7 +16,8 @@ export interface PhantomTaskFluentBuilder<
   TDeps extends DependencyMapType = {},
   TMeta extends ITaskMeta = ITaskMeta,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] =
+    TaskMiddlewareAttachmentType[],
 > {
   id: string;
 

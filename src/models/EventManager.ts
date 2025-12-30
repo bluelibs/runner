@@ -127,7 +127,10 @@ export class EventManager {
         }
 
         if (eventDefinition.parallel) {
-          await executeInParallel({ listeners: allListeners, event: eventToEmit });
+          await executeInParallel({
+            listeners: allListeners,
+            event: eventToEmit,
+          });
         } else {
           await executeSequentially({
             listeners: allListeners,

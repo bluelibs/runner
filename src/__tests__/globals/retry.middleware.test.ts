@@ -214,7 +214,7 @@ describe("Retry Middleware", () => {
         async init(_, { resource }) {},
       });
 
-      expect(run(app)).rejects.toThrow("FATAL");
+      await expect(run(app)).rejects.toThrow("FATAL");
     });
 
     /**

@@ -24,8 +24,22 @@ export function makePhantomTaskBuilder<
   TTags extends TagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
 >(
-  state: PhantomBuilderState<TInput, TResolved, TDeps, TMeta, TTags, TMiddleware>,
-): PhantomTaskFluentBuilder<TInput, TResolved, TDeps, TMeta, TTags, TMiddleware> {
+  state: PhantomBuilderState<
+    TInput,
+    TResolved,
+    TDeps,
+    TMeta,
+    TTags,
+    TMiddleware
+  >,
+): PhantomTaskFluentBuilder<
+  TInput,
+  TResolved,
+  TDeps,
+  TMeta,
+  TTags,
+  TMiddleware
+> {
   const builder: PhantomTaskFluentBuilder<
     TInput,
     TResolved,
@@ -71,7 +85,16 @@ export function makePhantomTaskBuilder<
           TMeta,
           TTags,
           TMiddleware
-        >(next as unknown as PhantomBuilderState<TInput, TResolved, TNewDeps, TMeta, TTags, TMiddleware>);
+        >(
+          next as unknown as PhantomBuilderState<
+            TInput,
+            TResolved,
+            TNewDeps,
+            TMeta,
+            TTags,
+            TMiddleware
+          >,
+        );
       }
       return makePhantomTaskBuilder<
         TInput,
@@ -135,7 +158,9 @@ export function makePhantomTaskBuilder<
       >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, {
         tags: mergeArray(state.tags, t, override) as [...TTags, ...TNewTags],
       });
-      return makePhantomTaskBuilder(next) as unknown as PhantomTaskFluentBuilder<
+      return makePhantomTaskBuilder(
+        next,
+      ) as unknown as PhantomTaskFluentBuilder<
         TInput,
         TResolved,
         TDeps,
@@ -159,8 +184,8 @@ export function makePhantomTaskBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, { 
-        inputSchema: schema 
+      >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, {
+        inputSchema: schema,
       });
       return makePhantomTaskBuilder<
         TNewInput,
@@ -186,8 +211,8 @@ export function makePhantomTaskBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, { 
-        resultSchema: schema 
+      >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, {
+        resultSchema: schema,
       });
       return makePhantomTaskBuilder<
         TInput,
@@ -213,8 +238,8 @@ export function makePhantomTaskBuilder<
         TNewMeta,
         TTags,
         TMiddleware
-      >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, { 
-        meta: m 
+      >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, {
+        meta: m,
       });
       return makePhantomTaskBuilder<
         TInput,

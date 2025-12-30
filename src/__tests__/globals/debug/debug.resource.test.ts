@@ -5,7 +5,6 @@ import {
   defineTaskMiddleware,
 } from "../../../define";
 import { run } from "../../../run";
-import { globalEvents } from "../../../globals/globalEvents";
 import { debugResource } from "../../../globals/resources/debug/debug.resource";
 
 import { globalResources } from "../../../globals/globalResources";

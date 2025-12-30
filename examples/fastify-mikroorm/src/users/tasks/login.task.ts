@@ -13,19 +13,25 @@ export const loginUser = r
     description:
       "Authenticate user with email and password, returning JWT token and user details",
   })
-  .inputSchema(z.object({
-    email: z.string().email(),
-    password: z.string().min(1),
-  }))
-  .resultSchema(z
-    .object({
-      token: z.string(),
-      user: z
-        .object({ id: z.string(), name: z.string(), email: z.string() })
-        .strict(),
-    })
-    .strict())
-  .tags([httpRoute.with({ method: "post", path: "/auth/login", auth: "public" })])
+  .inputSchema(
+    z.object({
+      email: z.string().email(),
+      password: z.string().min(1),
+    }),
+  )
+  .resultSchema(
+    z
+      .object({
+        token: z.string(),
+        user: z
+          .object({ id: z.string(), name: z.string(), email: z.string() })
+          .strict(),
+      })
+      .strict(),
+  )
+  .tags([
+    httpRoute.with({ method: "post", path: "/auth/login", auth: "public" }),
+  ])
   .dependencies({ db, auth: authResource })
   .run(async (input, { db, auth }) => {
     const email = String(input.email || "")
@@ -33,12 +39,14 @@ export const loginUser = r
       .trim();
     const password = String(input.password || "");
 
-    if (!email || !password) throw new HTTPError(400, "email and password are required");
+    if (!email || !password)
+      throw new HTTPError(400, "email and password are required");
 
     const em = db.em();
     const User = db.entities.User;
     const user = await em.findOne(User, { email });
-    if (!user || !user.passwordHash || !user.passwordSalt) throw new HTTPError(401, "Invalid email or password");
+    if (!user || !user.passwordHash || !user.passwordSalt)
+      throw new HTTPError(401, "Invalid email or password");
 
     const valid = await auth.verifyPassword(
       password,

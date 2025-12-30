@@ -9,7 +9,7 @@ import { run } from "../../run";
 import { globals } from "../../index";
 
 describe("Comprehensive Performance Benchmarks", () => {
-  let results: Record<string, any> = {};
+  const results: Record<string, any> = {};
 
   // Configuration for benchmark runs
   const BENCHMARK_CONFIG = {
@@ -26,7 +26,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     for (let i = 0; i < runs; i++) {
       // run sequentially to avoid shared-state/resource conflicts between runs
       // and to produce stable timing measurements
-      // eslint-disable-next-line no-await-in-loop
+
       results.push(await fn());
     }
     return results;
@@ -77,10 +77,9 @@ describe("Comprehensive Performance Benchmarks", () => {
           JSON.stringify({ meta, results }, null, 2),
           "utf8",
         );
-        // eslint-disable-next-line no-console
+
         console.log(`Benchmark results written to ${outputPath}`);
       } catch (e) {
-        // eslint-disable-next-line no-console
         console.warn("Failed to write benchmark results:", e);
       }
     }

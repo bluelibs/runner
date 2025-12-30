@@ -6,7 +6,6 @@ import {
   defineTaskMiddleware,
 } from "../../define";
 import { run } from "../../run";
-import { validationError } from "../../errors";
 import { IValidationSchema } from "../../defs";
 
 // Mock validation schema similar to the existing pattern

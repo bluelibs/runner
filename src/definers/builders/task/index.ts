@@ -1,5 +1,4 @@
 import type {
-  DependencyMapType,
   ITaskMeta,
   TagType,
   TaskMiddlewareAttachmentType,
@@ -20,7 +19,9 @@ export * from "./types";
 /**
  * Entry point for creating a task builder.
  */
-export function taskBuilder(id: string): TaskFluentBuilder<
+export function taskBuilder(
+  id: string,
+): TaskFluentBuilder<
   undefined,
   Promise<any>,
   {},
@@ -82,7 +83,9 @@ export function phantomTaskBuilder<TInput = undefined, TResolved = any>(
 }
 
 export interface TaskBuilderWithPhantom {
-  (id: string): TaskFluentBuilder<
+  (
+    id: string,
+  ): TaskFluentBuilder<
     undefined,
     Promise<any>,
     {},

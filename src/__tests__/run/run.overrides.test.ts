@@ -1,7 +1,6 @@
 import {
   defineTask,
   defineResource,
-  defineEvent,
   defineOverride,
   defineTaskMiddleware,
   defineResourceMiddleware,
@@ -254,8 +253,8 @@ describe("run.overrides", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrowError(
-      'Dependency task2 not found. Did you forget to register it through a resource?'
+    await expect(run(app)).rejects.toThrow(
+      "Dependency task2 not found. Did you forget to register it through a resource?",
     );
   });
 
@@ -280,8 +279,8 @@ describe("run.overrides", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrowError(
-      'Dependency override2 not found. Did you forget to register it through a resource?'
+    await expect(run(app)).rejects.toThrow(
+      "Dependency override2 not found. Did you forget to register it through a resource?",
     );
   });
 

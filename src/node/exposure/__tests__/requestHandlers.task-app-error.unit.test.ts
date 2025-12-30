@@ -19,7 +19,11 @@ function makeReq(taskId: string, body: any): IncomingMessage {
   return r as unknown as IncomingMessage;
 }
 
-function makeRes(): ServerResponse & { _status?: number; _buf?: Buffer; _headers: Record<string, string> } {
+function makeRes(): ServerResponse & {
+  _status?: number;
+  _buf?: Buffer;
+  _headers: Record<string, string>;
+} {
   const res: any = {
     statusCode: 0,
     headersSent: false,
@@ -31,7 +35,9 @@ function makeRes(): ServerResponse & { _status?: number; _buf?: Buffer; _headers
     },
     write(payload?: any) {
       if (payload != null)
-        this._buf = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload));
+        this._buf = Buffer.isBuffer(payload)
+          ? payload
+          : Buffer.from(String(payload));
       this.headersSent = true;
     },
     end(payload?: any) {
@@ -39,22 +45,30 @@ function makeRes(): ServerResponse & { _status?: number; _buf?: Buffer; _headers
       if (payload != null) this.write(payload);
       this.writableEnded = true;
     },
-    once(_e: string, _cb: Function) { return this; },
-    on() { return this; },
+    once(_e: string, _cb: Function) {
+      return this;
+    },
+    on() {
+      return this;
+    },
   };
   return res as any;
 }
 
 describe("requestHandlers - task app error extras", () => {
   it("includes id and data for known application errors", async () => {
-    const AppError = defineError<{ code: number; message: string }>({ id: "tests.errors.app" });
+    const AppError = defineError<{ code: number; message: string }>({
+      id: "tests.errors.app",
+    });
     const store: any = {
       tasks: new Map([["t.app", { task: { id: "t.app" } }]]),
       errors: new Map([[AppError.id, AppError]]),
     };
     const deps: any = {
       store,
-      taskRunner: { run: async () => AppError.throw({ code: 7, message: "Nope" }) },
+      taskRunner: {
+        run: async () => AppError.throw({ code: 7, message: "Nope" }),
+      },
       eventManager: {} as any,
       logger: { info: () => {}, warn: () => {}, error: () => {} },
       authenticator: () => ({ ok: true }),

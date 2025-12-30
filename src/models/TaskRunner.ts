@@ -1,9 +1,7 @@
-import { DependencyMapType, ITask, IHook, IEventEmission } from "../defs";
+import { DependencyMapType, ITask } from "../defs";
 import { EventManager } from "./EventManager";
 import { Store } from "./Store";
 import { Logger } from "./Logger";
-import { globalEvents } from "../globals/globalEvents";
-import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
 
 export class TaskRunner {

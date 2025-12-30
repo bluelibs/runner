@@ -19,7 +19,9 @@ function createWritableRes() {
     },
     write(payload?: any) {
       if (payload != null)
-        chunks.push(Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)));
+        chunks.push(
+          Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)),
+        );
       this.headersSent = true;
     },
     end(payload?: any) {
@@ -47,8 +49,13 @@ describe("Node exposure cancellation", () => {
       },
     });
 
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), basePath: "/__runner" } });
-    const app = defineResource({ id: "tests.app.cancel.json", register: [t, exposure] });
+    const exposure = nodeExposure.with({
+      http: { server: http.createServer(), basePath: "/__runner" },
+    });
+    const app = defineResource({
+      id: "tests.app.cancel.json",
+      register: [t, exposure],
+    });
     const rr = await run(app);
     try {
       const handlers = await rr.getResourceValue(exposure.resource as any);
@@ -82,15 +89,22 @@ describe("Node exposure cancellation", () => {
       },
     });
 
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), basePath: "/__runner" } });
-    const app = defineResource({ id: "tests.app.cancel.multipart", register: [t, exposure] });
+    const exposure = nodeExposure.with({
+      http: { server: http.createServer(), basePath: "/__runner" },
+    });
+    const app = defineResource({
+      id: "tests.app.cancel.multipart",
+      register: [t, exposure],
+    });
     const rr = await run(app);
     try {
       const handlers = await rr.getResourceValue(exposure.resource as any);
       const req: any = new Readable({ read() {} });
       req.method = "POST";
       req.url = `/__runner/task/${encodeURIComponent(t.id)}`;
-      req.headers = { "content-type": `multipart/form-data; boundary=----jest` };
+      req.headers = {
+        "content-type": `multipart/form-data; boundary=----jest`,
+      };
       const out = createWritableRes();
       const { res } = out;
       // Emit error which should be treated as client abort for multipart
@@ -111,27 +125,36 @@ describe("Node exposure cancellation", () => {
       id: "tests.cancel.octet",
       async run() {
         const { signal } = useExposureContext();
-        if (signal.aborted) cancellationError.throw({ reason: "Client Closed Request" });
+        if (signal.aborted)
+          cancellationError.throw({ reason: "Client Closed Request" });
         await new Promise((_res, rej) => {
           signal.addEventListener(
             "abort",
-            () => rej(
-              (() => {
-                try {
-                  cancellationError.throw({ reason: "Client Closed Request" });
-                } catch (e) {
-                  return e as any;
-                }
-              })(),
-            ),
+            () =>
+              rej(
+                (() => {
+                  try {
+                    cancellationError.throw({
+                      reason: "Client Closed Request",
+                    });
+                  } catch (e) {
+                    return e as any;
+                  }
+                })(),
+              ),
             { once: true },
           );
         });
       },
     });
 
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), basePath: "/__runner" } });
-    const app = defineResource({ id: "tests.app.cancel.octet", register: [t, exposure] });
+    const exposure = nodeExposure.with({
+      http: { server: http.createServer(), basePath: "/__runner" },
+    });
+    const app = defineResource({
+      id: "tests.app.cancel.octet",
+      register: [t, exposure],
+    });
     const rr = await run(app);
     try {
       const handlers = await rr.getResourceValue(exposure.resource as any);

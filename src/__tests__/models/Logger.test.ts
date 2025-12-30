@@ -148,7 +148,7 @@ describe("Logger", () => {
     const logger = createLogger({ threshold: "trace" });
     logger.onLog(() => {
       // throw a primitive to exercise the fallback branch
-      // eslint-disable-next-line no-throw-literal
+
       throw "primitive" as any;
     });
     await logger.info("hi");

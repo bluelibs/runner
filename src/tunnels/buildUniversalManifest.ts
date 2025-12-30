@@ -82,5 +82,3 @@ export function buildUniversalManifest<T = any>(
     webFiles,
   } as BuiltUniversalManifest<T>;
 }
-
-

@@ -8,8 +8,6 @@
  *   jest --coverage --reporters=default --reporters=./scripts/jest-ai-reporter.js
  */
 
-/* eslint-disable no-console */
-
 const path = require("path");
 const fs = require("fs");
 

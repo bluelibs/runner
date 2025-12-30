@@ -312,13 +312,15 @@ describe("Configurable Tags", () => {
       expect(tags).toContain(tag2);
     });
   });
-  it("should throw an exception if you are using an unregistered tag", () => {
+  it("should throw an exception if you are using an unregistered tag", async () => {
     const tag = defineTag({ id: "test.tag" });
     const resource = defineResource({
       id: "test.resource",
       tags: [tag],
     });
-    expect(run(resource)).rejects.toThrow('Tag "test.tag" not registered');
+    await expect(run(resource)).rejects.toThrow(
+      'Tag "test.tag" not registered',
+    );
   });
   describe("Edge Cases", () => {
     it("should handle null/undefined config", () => {

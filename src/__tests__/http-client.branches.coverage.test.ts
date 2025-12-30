@@ -13,7 +13,7 @@ describe("http-client branches coverage", () => {
       blob,
       "FE1",
     );
-    const fetchMock = async () => ({ text: async () => "" } as any);
+    const fetchMock = async () => ({ text: async () => "" }) as any;
     const client = createHttpClient({
       baseUrl,
       fetchImpl: fetchMock as any,
@@ -32,7 +32,7 @@ describe("http-client branches coverage", () => {
         text: async () =>
           getDefaultSerializer().stringify({ ok: true, result: 5 }),
         headers: { get: () => "text/plain" },
-      } as any);
+      }) as any;
     const client = createHttpClient({
       baseUrl,
       fetchImpl: fetchMock as any,

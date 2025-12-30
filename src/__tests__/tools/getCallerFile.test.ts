@@ -52,9 +52,8 @@ describe("getCallerFile", () => {
   it("returns 'unknown' in non-node environments (mocked)", async () => {
     jest.resetModules();
     jest.doMock("../../platform", () => ({ isNode: () => false }));
-    const { getCallerFile: getCallerFileMocked } = await import(
-      "../../tools/getCallerFile"
-    );
+    const { getCallerFile: getCallerFileMocked } =
+      await import("../../tools/getCallerFile");
     const out = getCallerFileMocked();
     expect(out).toBe("unknown");
   });

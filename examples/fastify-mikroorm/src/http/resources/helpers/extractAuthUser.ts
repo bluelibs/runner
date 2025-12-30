@@ -1,5 +1,4 @@
 import { AuthenticatedUserLike } from "./types";
-import { db } from "#/db/resources";
 interface ExtractDeps {
   request: any; // FastifyRequest (kept as any to avoid hard dependency here)
   auth: { cookieName: string; verifyToken(token: string): any };

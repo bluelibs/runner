@@ -1,5 +1,3 @@
-import { defineResource } from "../../define";
-import { run } from "../../run";
 import { createExposureFetch } from "../../http-fetch-tunnel.resource";
 import { EJSON } from "../../globals/resources/tunnel/serializer";
 
@@ -77,7 +75,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
 
   it("treats empty response body as error with default messages (task/event)", async () => {
     const emptyBodyFetch = async (_url: any, _init?: any) =>
-      ({ text: async () => "" } as any);
+      ({ text: async () => "" }) as any;
     const client = createExposureFetch({
       baseUrl: "http://example.test/__runner",
       fetchImpl: emptyBodyFetch as any,
@@ -95,7 +93,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
     expect(() =>
       createExposureFetch({
         baseUrl: "" as any,
-        fetchImpl: (async () => ({ text: async () => "{}" } as any)) as any,
+        fetchImpl: (async () => ({ text: async () => "{}" }) as any) as any,
         serializer: EJSON,
       }),
     ).toThrow(/requires baseUrl/i);

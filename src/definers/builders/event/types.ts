@@ -1,4 +1,4 @@
-import type { IEventDefinition, TagType } from "../../../defs";
+import type { IEventDefinition } from "../../../defs";
 
 /**
  * Internal state for the EventFluentBuilder.

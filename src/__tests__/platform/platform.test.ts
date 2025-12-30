@@ -1,4 +1,3 @@
-import { platformUnsupportedFunctionError } from "../../errors";
 import { isWebWorker } from "../../platform/types";
 /**
  * Simple test to verify platform abstraction works in different environments

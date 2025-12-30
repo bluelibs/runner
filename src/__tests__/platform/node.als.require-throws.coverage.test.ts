@@ -16,4 +16,3 @@ describe("NodePlatformAdapter require('async_hooks') throws coverage", () => {
     expect(() => als.run(new Map(), () => undefined)).not.toThrow();
   });
 });
-

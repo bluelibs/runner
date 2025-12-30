@@ -5,4 +5,3 @@ describe("getCurrentStore coverage", () => {
     expect(getCurrentStore()).toBeUndefined();
   });
 });
-

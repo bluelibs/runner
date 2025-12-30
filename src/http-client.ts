@@ -98,8 +98,14 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       // Multipart path: browser files only (FormData). Node files are not supported here.
       const manifest = buildUniversalManifest(input);
       if (manifest.webFiles.length > 0) {
-        const manifestText = cfg.serializer.stringify({ input: manifest.input });
-        const r = await postMultipartBrowser(url, manifestText, manifest.webFiles);
+        const manifestText = cfg.serializer.stringify({
+          input: manifest.input,
+        });
+        const r = await postMultipartBrowser(
+          url,
+          manifestText,
+          manifest.webFiles,
+        );
         try {
           return assertOkEnvelope<O>(r as ProtocolEnvelope<O>, {
             fallbackMessage: "Tunnel task error",

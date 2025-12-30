@@ -24,7 +24,9 @@ export class TaskMiddlewareComposer {
     TInput,
     TOutput extends Promise<any>,
     TDeps extends DependencyMapType,
-  >(task: ITask<TInput, TOutput, TDeps>): (input: TInput) => Promise<Awaited<TOutput>> {
+  >(
+    task: ITask<TInput, TOutput, TDeps>,
+  ): (input: TInput) => Promise<Awaited<TOutput>> {
     const storeTask = this.store.tasks.get(task.id)!;
 
     // 1. Base runner with validation
@@ -139,7 +141,9 @@ export class TaskMiddlewareComposer {
 
       currentNext = async (input) => {
         const executionInput = createExecutionInput(input, nextFunction);
-        const wrappedNext = (i: ITaskMiddlewareExecutionInput<any>): Promise<any> => {
+        const wrappedNext = (
+          i: ITaskMiddlewareExecutionInput<any>,
+        ): Promise<any> => {
           return nextFunction(i.task.input);
         };
         return interceptor(wrappedNext, executionInput);
@@ -158,10 +162,14 @@ export class TaskMiddlewareComposer {
     storeTask: TaskStoreElementType,
   ): (input: any) => Promise<any> {
     const tDef = storeTask.task;
-    let middlewares = this.middlewareResolver.getApplicableTaskMiddlewares(task);
+    let middlewares =
+      this.middlewareResolver.getApplicableTaskMiddlewares(task);
 
     // Apply tunnel policy filter if needed
-    middlewares = this.middlewareResolver.applyTunnelPolicyFilter(task, middlewares);
+    middlewares = this.middlewareResolver.applyTunnelPolicyFilter(
+      task,
+      middlewares,
+    );
 
     if (middlewares.length === 0) {
       return runner;
@@ -230,7 +238,9 @@ export class TaskMiddlewareComposer {
           next: nextFunction as any,
         };
 
-        const wrappedNext = (i: ITaskMiddlewareExecutionInput<any>): Promise<any> => {
+        const wrappedNext = (
+          i: ITaskMiddlewareExecutionInput<any>,
+        ): Promise<any> => {
           return nextFunction(i.task.input);
         };
 

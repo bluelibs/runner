@@ -14,7 +14,10 @@ jest.mock("../http-fetch-tunnel.resource", () => {
 import { createHttpClient } from "../http-client";
 import { createWebFile } from "../platform/createWebFile";
 import { createFile as createNodeFile } from "../node/platform/createFile";
-import { getDefaultSerializer, EJSON } from "../globals/resources/tunnel/serializer";
+import {
+  getDefaultSerializer,
+  EJSON,
+} from "../globals/resources/tunnel/serializer";
 
 describe("http-client (universal)", () => {
   const baseUrl = "http://127.0.0.1:7070/__runner";
@@ -80,7 +83,7 @@ describe("http-client (universal)", () => {
           serialize: (v: any) => JSON.stringify(v),
           parse: (s: string) => JSON.parse(s),
           provide: (v: any, fn: any) => fn(),
-          require: () => ({} as any),
+          require: () => ({}) as any,
         } as any,
       ],
     });
@@ -103,7 +106,7 @@ describe("http-client (universal)", () => {
         ({
           text: async () =>
             getDefaultSerializer().stringify({ ok: true, result: "DEF" }),
-        } as any),
+        }) as any,
     );
     const client = createHttpClient({
       baseUrl,
@@ -117,7 +120,11 @@ describe("http-client (universal)", () => {
 
   it("browser multipart rethrows typed app error via errorRegistry", async () => {
     const blob = new Blob([Buffer.from("abc") as any], { type: "text/plain" });
-    const file = createWebFile({ name: "a.txt", type: "text/plain" }, blob, "FERR");
+    const file = createWebFile(
+      { name: "a.txt", type: "text/plain" },
+      blob,
+      "FERR",
+    );
     const serializer = getDefaultSerializer();
     const fetchMock = jest.fn(async (url: any, init?: any) => {
       const env = {
@@ -210,7 +217,9 @@ describe("http-client (universal)", () => {
     );
     await expect(
       client.task("t.node.file", { f: nodeFile } as any),
-    ).rejects.toThrow(/createHttpClient \(universal\) detected Node file input/i);
+    ).rejects.toThrow(
+      /createHttpClient \(universal\) detected Node file input/i,
+    );
   });
 
   it("throws helpful error when input is a Node Readable stream", async () => {
@@ -284,4 +293,3 @@ describe("http-client (universal)", () => {
     );
   });
 });
-

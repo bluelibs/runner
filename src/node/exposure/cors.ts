@@ -113,8 +113,8 @@ export function handleCorsPreflight(
   const requested = Array.isArray(rawReqHeaders)
     ? rawReqHeaders.join(", ")
     : rawReqHeaders
-    ? String(rawReqHeaders)
-    : "";
+      ? String(rawReqHeaders)
+      : "";
   const allowHeaders =
     cfg && Array.isArray(cfg.allowedHeaders) && cfg.allowedHeaders.length > 0
       ? cfg.allowedHeaders.join(", ")

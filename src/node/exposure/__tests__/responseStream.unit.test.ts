@@ -36,10 +36,14 @@ function createReqRes(init: {
   const res: any = {
     statusCode: 0,
     headers: {} as Record<string, string>,
-    setHeader(k: string, v: string) { this.headers[k.toLowerCase()] = v; },
+    setHeader(k: string, v: string) {
+      this.headers[k.toLowerCase()] = v;
+    },
     write(payload?: any) {
       if (payload != null)
-        chunks.push(Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)));
+        chunks.push(
+          Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)),
+        );
     },
     end(payload?: any) {
       if (payload != null) this.write(payload);
@@ -74,8 +78,13 @@ describe("nodeExposure - task returned stream", () => {
       },
     });
 
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), basePath: "/__runner" } });
-    const app = defineResource({ id: "tests.app.stream.json", register: [streamTask, exposure] });
+    const exposure = nodeExposure.with({
+      http: { server: http.createServer(), basePath: "/__runner" },
+    });
+    const app = defineResource({
+      id: "tests.app.stream.json",
+      register: [streamTask, exposure],
+    });
     const rr = await run(app);
     try {
       const handlers = await rr.getResourceValue(exposure.resource as any);
@@ -87,7 +96,9 @@ describe("nodeExposure - task returned stream", () => {
       });
       await handlers.handleTask(transport.req, transport.res);
       await new Promise((r) => setImmediate(r));
-      expect(transport.headers["content-type"]).toMatch(/application\/octet-stream/i);
+      expect(transport.headers["content-type"]).toMatch(
+        /application\/octet-stream/i,
+      );
       expect(transport.text).toBe("c1c2c3");
     } finally {
       await rr.dispose();
@@ -95,7 +106,10 @@ describe("nodeExposure - task returned stream", () => {
   });
 
   it("pipes StreamingResponse wrapper (octet-stream path)", async () => {
-    const streamTask = defineTask<void, Promise<{ stream: NodeJS.ReadableStream; contentType: string }>>({
+    const streamTask = defineTask<
+      void,
+      Promise<{ stream: NodeJS.ReadableStream; contentType: string }>
+    >({
       id: "tests.stream.wrapper",
       async run() {
         const { Readable } = require("stream") as typeof import("stream");
@@ -110,8 +124,13 @@ describe("nodeExposure - task returned stream", () => {
       },
     });
 
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), basePath: "/__runner" } });
-    const app = defineResource({ id: "tests.app.stream.octet", register: [streamTask, exposure] });
+    const exposure = nodeExposure.with({
+      http: { server: http.createServer(), basePath: "/__runner" },
+    });
+    const app = defineResource({
+      id: "tests.app.stream.octet",
+      register: [streamTask, exposure],
+    });
     const rr = await run(app);
     try {
       const handlers = await rr.getResourceValue(exposure.resource as any);

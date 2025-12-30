@@ -47,7 +47,9 @@ describe("requestBody branches", () => {
     const ac = new AbortController();
     const p = readRequestBody(req, ac.signal);
     ac.abort();
-    await expect(p).rejects.toMatchObject({ name: "runner.errors.cancellation" });
+    await expect(p).rejects.toMatchObject({
+      name: "runner.errors.cancellation",
+    });
     // emit end afterwards; if onEnd runs, it should early-return and not throw
     req.emit("end");
   });

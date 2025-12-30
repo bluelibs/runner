@@ -12,4 +12,3 @@ describe("processHooks coverage", () => {
     if (originalExit) (globalThis as any).process.exit = originalExit;
   });
 });
-

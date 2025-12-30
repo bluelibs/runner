@@ -5,7 +5,12 @@
 // - Spoofing event source can only self-suppress a matching listener id.
 // - Safe self re-emit (same hook id) should not create a cycle and should
 //   still deliver to other listeners.
-import { defineEvent, defineHook, defineResource, defineTask } from "../../define";
+import {
+  defineEvent,
+  defineHook,
+  defineResource,
+  defineTask,
+} from "../../define";
 import { run } from "../../run";
 import { globals } from "../../index";
 

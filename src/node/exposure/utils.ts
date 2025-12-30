@@ -30,8 +30,8 @@ export function attachRequestListener(
     typeof anyTarget?.once === "function"
       ? anyTarget.once.bind(anyTarget)
       : typeof anyTarget?.on === "function"
-      ? anyTarget.on.bind(anyTarget)
-      : undefined;
+        ? anyTarget.on.bind(anyTarget)
+        : undefined;
   if (!add) return false;
   add(event, handler);
   return true;

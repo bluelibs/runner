@@ -8,7 +8,7 @@ import {
   defineTaskMiddleware,
   defineResourceMiddleware,
 } from "../define";
-import { IMeta, TagType } from "../defs";
+import { TagType } from "../defs";
 import { run } from "..";
 import z from "zod";
 import { isOneOf, onAnyOf } from "../types/event";

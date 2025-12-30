@@ -12,11 +12,11 @@ describe("fluent builders: dependency chaining", () => {
 
     const depA = r
       .resource("depA")
-      .init(async () => ({ getA: () => 42 } as DepA))
+      .init(async () => ({ getA: () => 42 }) as DepA)
       .build();
     const depB = r
       .resource("depB")
-      .init(async () => ({ getB: () => "hello" } as DepB))
+      .init(async () => ({ getB: () => "hello" }) as DepB)
       .build();
 
     // Chaining appends types
@@ -62,11 +62,11 @@ describe("fluent builders: dependency chaining", () => {
 
     const depA = r
       .resource("depA")
-      .init(async () => ({ getA: () => 42 } as DepA))
+      .init(async () => ({ getA: () => 42 }) as DepA)
       .build();
     const depB = r
       .resource("depB")
-      .init(async () => ({ getB: () => "hello" } as DepB))
+      .init(async () => ({ getB: () => "hello" }) as DepB)
       .build();
 
     // Chaining appends types
@@ -119,11 +119,11 @@ describe("fluent builders: dependency chaining", () => {
 
     const depA = r
       .resource("depA")
-      .init(async () => ({ handleA: () => {} } as DepA))
+      .init(async () => ({ handleA: () => {} }) as DepA)
       .build();
     const depB = r
       .resource("depB")
-      .init(async () => ({ handleB: () => {} } as DepB))
+      .init(async () => ({ handleB: () => {} }) as DepB)
       .build();
 
     // Chaining appends
@@ -165,11 +165,11 @@ describe("fluent builders: dependency chaining", () => {
 
     const depA = r
       .resource("depA")
-      .init(async () => ({ logA: () => {} } as DepA))
+      .init(async () => ({ logA: () => {} }) as DepA)
       .build();
     const depB = r
       .resource("depB")
-      .init(async () => ({ logB: () => {} } as DepB))
+      .init(async () => ({ logB: () => {} }) as DepB)
       .build();
 
     // Task middleware chaining

@@ -28,7 +28,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
         provide: (v: any, fn: any) => fn(),
-        require: () => ({} as any),
+        require: () => ({}) as any,
       },
     ];
     const helper = {
@@ -80,7 +80,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
         provide: (v: any, fn: any) => fn(),
-        require: () => ({} as any),
+        require: () => ({}) as any,
       },
     ];
     const client = createExposureFetch({

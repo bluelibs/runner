@@ -1,7 +1,9 @@
-import { HookStoreElementType, ITag } from "../defs";
-import { duplicateRegistrationError, middlewareNotRegisteredError, tagNotFoundError } from "../errors";
+import {
+  duplicateRegistrationError,
+  middlewareNotRegisteredError,
+  tagNotFoundError,
+} from "../errors";
 import { ITaggable } from "../defs";
-import { Store } from "./Store";
 import { StoreRegistry } from "./StoreRegistry";
 
 export class StoreValidator {

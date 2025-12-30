@@ -4,7 +4,10 @@ import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer"
 describe("EJSON extensions", () => {
   it("supports custom type via direct EJSON.addType before serializer use", () => {
     class Distance {
-      constructor(public value: number, public unit: string) {}
+      constructor(
+        public value: number,
+        public unit: string,
+      ) {}
       toJSONValue() {
         return { value: this.value, unit: this.unit } as const;
       }

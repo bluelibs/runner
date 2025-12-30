@@ -1,13 +1,15 @@
 import {
   DependencyMapType,
   IOptionalDependency,
-  IResourceMiddleware,
   IValidationSchema,
   OverridableElements,
   RegisterableItems,
   ResourceDependencyValuesType,
+} from "./utilities";
+import {
+  IResourceMiddleware,
   ResourceMiddlewareAttachmentType,
-} from "../defs";
+} from "./resourceMiddleware";
 import { TagType } from "./tag";
 import { IResourceMeta } from "./meta";
 import {
@@ -23,15 +25,27 @@ import {
   InferInputOrViolationFromContracts,
 } from "./contracts";
 
+export type {
+  DependencyMapType,
+  IOptionalDependency,
+  IValidationSchema,
+  OverridableElements,
+  RegisterableItems,
+  ResourceDependencyValuesType,
+} from "./utilities";
+export type { ResourceMiddlewareAttachmentType } from "./resourceMiddleware";
+export type { TagType } from "./tag";
+export type { IResourceMeta } from "./meta";
+
 // Helper to detect `any` so we can treat it as "unspecified"
 type IsAny<T> = 0 extends 1 & T ? true : false;
 type IsUnspecified<T> = [T] extends [undefined]
   ? true
   : [T] extends [void]
-  ? true
-  : IsAny<T> extends true
-  ? true
-  : false;
+    ? true
+    : IsAny<T> extends true
+      ? true
+      : false;
 
 export interface IResourceDefinition<
   TConfig = any,
@@ -42,7 +56,8 @@ export interface IResourceDefinition<
   TRegisterableItems = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
 > {
   /** Stable identifier. */
   id: string;
@@ -118,7 +133,6 @@ export interface IResourceDefinition<
   tags?: TTags;
 }
 
-
 /**
  * Helper alias describing the canonical resource init call signature.
  * Shared with fluent builders to keep init typing consistent.
@@ -152,18 +166,19 @@ export interface IResource<
   TContext = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
 > extends IResourceDefinition<
-    TConfig,
-    TValue,
-    TDependencies,
-    TContext,
-    any,
-    any,
-    TMeta,
-    TTags,
-    TMiddleware
-  > {
+  TConfig,
+  TValue,
+  TDependencies,
+  TContext,
+  any,
+  any,
+  TMeta,
+  TTags,
+  TMiddleware
+> {
   id: string;
   with(
     config: HasInputContracts<[...TTags, ...TMiddleware]> extends true
@@ -209,12 +224,8 @@ export interface IResourceWithConfig<
   TContext = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends IResourceMiddleware<
-    any,
-    any,
-    any,
-    any
-  >[] = IResourceMiddleware[],
+  TMiddleware extends IResourceMiddleware<any, any, any, any>[] =
+    IResourceMiddleware[],
 > {
   [symbolResourceWithConfig]: true;
   /** The id of the underlying resource. */

@@ -1,13 +1,14 @@
-import {
+import type {
   ITaskMiddleware,
   ITaskMiddlewareDefinition,
   DependencyMapType,
-  ITask,
-  symbolFilePath,
-  symbolTaskMiddleware,
-  symbolMiddlewareConfigured,
   ITaskMiddlewareConfigured,
-} from "../defs";
+} from "../types/taskMiddleware";
+import {
+  symbolTaskMiddleware,
+  symbolFilePath,
+  symbolMiddlewareConfigured,
+} from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 
@@ -82,7 +83,12 @@ export function defineTaskMiddleware<
             ...(obj.config as TConfig),
             ...config,
           },
-        } satisfies ITaskMiddlewareConfigured<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
+        } satisfies ITaskMiddlewareConfigured<
+          TConfig,
+          TEnforceInputContract,
+          TEnforceOutputContract,
+          TDependencies
+        >);
       },
     } as ITaskMiddleware<
       TConfig,

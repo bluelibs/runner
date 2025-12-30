@@ -212,7 +212,7 @@ describe("Optional dependencies", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrowError();
+    await expect(run(app)).rejects.toThrow();
   });
 
   test("getDependentNodes accounts for optional deps in tasks and resources", async () => {

@@ -30,11 +30,9 @@ export interface ITag<
   TConfig = void,
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
-> extends ITagDefinition<
-      TConfig,
-      TEnforceInputContract,
-      TEnforceOutputContract
-    >,
+>
+  extends
+    ITagDefinition<TConfig, TEnforceInputContract, TEnforceOutputContract>,
     IContractable<TConfig, TEnforceInputContract, TEnforceOutputContract> {
   /**
    * A special validation property.

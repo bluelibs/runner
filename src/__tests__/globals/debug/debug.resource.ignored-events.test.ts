@@ -1,7 +1,6 @@
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { debugResource } from "../../../globals/resources/debug";
-import { globalEvents } from "../../../globals/globalEvents";
 import { globalResources } from "../../../globals/globalResources";
 import { globalTags } from "../../../globals/globalTags";
 import { defineEvent, defineHook } from "../../../define";

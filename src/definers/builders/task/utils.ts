@@ -1,4 +1,9 @@
-import type { DependencyMapType, ITaskMeta, TagType, TaskMiddlewareAttachmentType } from "../../../defs";
+import type {
+  DependencyMapType,
+  ITaskMeta,
+  TagType,
+  TaskMiddlewareAttachmentType,
+} from "../../../defs";
 import type { BuilderState } from "./types";
 
 /**

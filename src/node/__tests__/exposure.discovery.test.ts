@@ -59,7 +59,9 @@ describe("nodeExposure discovery endpoint", () => {
         end(payload?: any) {
           status = this.statusCode;
           if (payload != null)
-            body = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload));
+            body = Buffer.isBuffer(payload)
+              ? payload
+              : Buffer.from(String(payload));
         },
       };
       const handled = await handlers.handleRequest(req, res);

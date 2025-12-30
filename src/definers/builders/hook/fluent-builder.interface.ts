@@ -9,10 +9,8 @@ import type {
 
 export interface HookFluentBuilder<
   TDeps extends DependencyMapType = {},
-  TOn extends
-    | "*"
-    | IEventDefinition<any>
-    | readonly IEventDefinition<any>[] = any,
+  TOn extends "*" | IEventDefinition<any> | readonly IEventDefinition<any>[] =
+    any,
   TMeta extends ITaskMeta = ITaskMeta,
 > {
   id: string;

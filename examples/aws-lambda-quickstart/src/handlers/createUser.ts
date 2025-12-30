@@ -22,7 +22,10 @@ function json(statusCode: number, body: unknown): APIGatewayProxyResult {
 
 const CreateUserSchema = z.object({ name: z.string().min(1) });
 
-export const handler = async (event: any, context: any): Promise<APIGatewayProxyResult> => {
+export const handler = async (
+  event: any,
+  context: any,
+): Promise<APIGatewayProxyResult> => {
   const rr: any = await getRunner();
   const rawBody = event?.body
     ? event?.isBase64Encoded
@@ -34,7 +37,8 @@ export const handler = async (event: any, context: any): Promise<APIGatewayProxy
   return RequestCtx.provide(
     {
       requestId: context?.awsRequestId ?? "local",
-      method: event?.requestContext?.http?.method ?? event?.httpMethod ?? "POST",
+      method:
+        event?.requestContext?.http?.method ?? event?.httpMethod ?? "POST",
       path: event?.rawPath || event?.path || "/",
       headers: event?.headers || {},
     },
@@ -42,7 +46,10 @@ export const handler = async (event: any, context: any): Promise<APIGatewayProxy
       try {
         const parsed = CreateUserSchema.safeParse({ name: body?.name });
         if (!parsed.success) {
-          return json(400, { message: "Invalid body", issues: parsed.error.issues });
+          return json(400, {
+            message: "Invalid body",
+            issues: parsed.error.issues,
+          });
         }
         const created = await rr.runTask(createUser, parsed.data);
         return json(201, created);

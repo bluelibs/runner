@@ -1,4 +1,8 @@
-import { contextError, resourceNotFoundError, platformUnsupportedFunctionError } from "../errors";
+import {
+  contextError,
+  resourceNotFoundError,
+  platformUnsupportedFunctionError,
+} from "../errors";
 
 describe("error helpers extra branches", () => {
   it("contextError default message branch", () => {
@@ -26,4 +30,3 @@ describe("error helpers extra branches", () => {
     }
   });
 });
-

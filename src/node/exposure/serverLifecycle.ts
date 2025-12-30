@@ -1,6 +1,10 @@
 import * as http from "http";
 
-import { jsonErrorResponse, NOT_FOUND_RESPONSE, respondJson } from "./httpResponse";
+import {
+  jsonErrorResponse,
+  NOT_FOUND_RESPONSE,
+  respondJson,
+} from "./httpResponse";
 import { errorMessage, safeLogError } from "./logging";
 import type { RequestHandler } from "./types";
 import type { Logger } from "../../models/Logger";

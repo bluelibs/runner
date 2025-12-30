@@ -20,7 +20,6 @@ run(app, {
 })
   .then(({ logger }) => {})
   .catch((err) => {
-    // eslint-disable-next-line no-console
     console.error("From main run: " + err);
     process.exit(1);
   });

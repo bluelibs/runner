@@ -1,17 +1,19 @@
-import {
+import type {
   ITask,
   ITaskDefinition,
   DependencyMapType,
   ITaskMeta,
   TagType,
+  IOptionalDependency,
+  TaskMiddlewareAttachmentType,
+  IPhantomTask,
+} from "../types/task";
+import {
   symbolTask,
   symbolFilePath,
   symbolOptionalDependency,
-  IOptionalDependency,
-  TaskMiddlewareAttachmentType,
   symbolPhantomTask,
-  IPhantomTask,
-} from "../defs";
+} from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
 
 /**
@@ -33,7 +35,8 @@ export function defineTask<
   Deps extends DependencyMapType = any,
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] =
+    TaskMiddlewareAttachmentType[],
 >(
   taskConfig: ITaskDefinition<Input, Output, Deps, TMeta, TTags, TMiddleware>,
 ): ITask<Input, Output, Deps, TMeta, TTags, TMiddleware> {

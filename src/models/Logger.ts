@@ -1,7 +1,4 @@
-import { globalEvents } from "../globals/globalEvents";
-import { EventManager } from "./EventManager";
 import { LogPrinter, PrintStrategy as PrinterStrategy } from "./LogPrinter";
-import { safeStringify } from "./utils/safeStringify";
 
 export type LogLevels =
   | "trace"
@@ -90,10 +87,10 @@ export class Logger {
 
   private detectColorSupport(): boolean {
     // Respect NO_COLOR convention
-    // eslint-disable-next-line no-undef
+
     const noColor = typeof process !== "undefined" && !!process.env.NO_COLOR;
     if (noColor) return false;
-    // eslint-disable-next-line no-undef
+
     const isTty =
       typeof process !== "undefined" &&
       !!process.stdout &&

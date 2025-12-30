@@ -7,7 +7,6 @@ import {
   defineResourceMiddleware,
 } from "../../define";
 import { run } from "../../run";
-import { globalResources } from "../../globals/globalResources";
 
 describe("run", () => {
   // Initial run
@@ -159,7 +158,7 @@ describe("run", () => {
         },
       });
 
-      let value = false;
+      const value = false;
       const errorHook = jest.fn();
 
       const app = defineResource({

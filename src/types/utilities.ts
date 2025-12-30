@@ -88,26 +88,25 @@ export interface IOptionalDependency<T> {
 }
 
 // Helper Types for Extracting Generics
-export type ExtractTaskInput<T> = T extends ITask<infer I, any, infer D>
-  ? I
-  : never;
-export type ExtractTaskOutput<T> = T extends ITask<any, infer O, infer D>
-  ? O
-  : never;
-export type ExtractResourceConfig<T> = T extends IResource<infer C, any, any>
-  ? C
-  : never;
-export type ExtractResourceValue<T> = T extends IResource<any, infer V, infer D>
-  ? V extends Promise<infer U>
-    ? U
-    : V
-  : never;
+export type ExtractTaskInput<T> =
+  T extends ITask<infer I, any, infer D> ? I : never;
+export type ExtractTaskOutput<T> =
+  T extends ITask<any, infer O, infer D> ? O : never;
+export type ExtractResourceConfig<T> =
+  T extends IResource<infer C, any, any> ? C : never;
+export type ExtractResourceValue<T> =
+  T extends IResource<any, infer V, infer D>
+    ? V extends Promise<infer U>
+      ? U
+      : V
+    : never;
 
-export type ExtractEventPayload<T> = T extends IEventDefinition<infer P>
-  ? P
-  : T extends IEvent<infer P>
-  ? P
-  : never;
+export type ExtractEventPayload<T> =
+  T extends IEventDefinition<infer P>
+    ? P
+    : T extends IEvent<infer P>
+      ? P
+      : never;
 
 // Type helpers for unions/intersections and common payload across event arrays
 export type UnionToIntersection<U> = (
@@ -151,19 +150,20 @@ type EventDependency<P> = P extends void
  * - Resource -> resolved value
  * - Event -> emit function
  */
-export type DependencyValueType<T> = T extends ITask<any, any, any>
-  ? TaskDependency<ExtractTaskInput<T>, ExtractTaskOutput<T>>
-  : T extends IResource<any, any>
-  ? ResourceDependency<ExtractResourceValue<T>>
-  : T extends IErrorHelper<any>
-  ? T
-  : T extends IAsyncContext<any>
-  ? T
-  : T extends IEventDefinition<any>
-  ? EventDependency<ExtractEventPayload<T>>
-  : T extends IOptionalDependency<infer U>
-  ? DependencyValueType<U> | undefined
-  : never;
+export type DependencyValueType<T> =
+  T extends ITask<any, any, any>
+    ? TaskDependency<ExtractTaskInput<T>, ExtractTaskOutput<T>>
+    : T extends IResource<any, any>
+      ? ResourceDependency<ExtractResourceValue<T>>
+      : T extends IErrorHelper<any>
+        ? T
+        : T extends IAsyncContext<any>
+          ? T
+          : T extends IEventDefinition<any>
+            ? EventDependency<ExtractEventPayload<T>>
+            : T extends IOptionalDependency<infer U>
+              ? DependencyValueType<U> | undefined
+              : never;
 
 export type DependencyValuesType<T extends DependencyMapType> = {
   [K in keyof T]: DependencyValueType<T[K]>;
@@ -184,19 +184,20 @@ export type TaskDependencyWithIntercept<TInput, TOutput> = TaskDependency<
 };
 
 /** Resource-context dependency typing where tasks expose intercept() */
-export type ResourceDependencyValueType<T> = T extends ITask<any, any, any>
-  ? TaskDependencyWithIntercept<ExtractTaskInput<T>, ExtractTaskOutput<T>>
-  : T extends IResource<any, any>
-  ? ResourceDependency<ExtractResourceValue<T>>
-  : T extends IErrorHelper<any>
-  ? T
-  : T extends IAsyncContext<any>
-  ? T
-  : T extends IEventDefinition<any>
-  ? EventDependency<ExtractEventPayload<T>>
-  : T extends IOptionalDependency<infer U>
-  ? ResourceDependencyValueType<U> | undefined
-  : never;
+export type ResourceDependencyValueType<T> =
+  T extends ITask<any, any, any>
+    ? TaskDependencyWithIntercept<ExtractTaskInput<T>, ExtractTaskOutput<T>>
+    : T extends IResource<any, any>
+      ? ResourceDependency<ExtractResourceValue<T>>
+      : T extends IErrorHelper<any>
+        ? T
+        : T extends IAsyncContext<any>
+          ? T
+          : T extends IEventDefinition<any>
+            ? EventDependency<ExtractEventPayload<T>>
+            : T extends IOptionalDependency<infer U>
+              ? ResourceDependencyValueType<U> | undefined
+              : never;
 
 export type ResourceDependencyValuesType<T extends DependencyMapType> = {
   [K in keyof T]: ResourceDependencyValueType<T[K]>;

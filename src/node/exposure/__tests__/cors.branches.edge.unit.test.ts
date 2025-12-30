@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "http";
-import { applyCorsActual, handleCorsPreflight } from "../cors";
+import { handleCorsPreflight } from "../cors";
 
 function makeReq(headers: Record<string, any>, method: string = "OPTIONS") {
   return { headers, method } as unknown as IncomingMessage;

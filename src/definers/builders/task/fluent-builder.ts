@@ -71,7 +71,16 @@ export function makeTaskBuilder<
           TMeta,
           TTags,
           TMiddleware
-        >(next as unknown as BuilderState<TInput, TOutput, TNewDeps, TMeta, TTags, TMiddleware>);
+        >(
+          next as unknown as BuilderState<
+            TInput,
+            TOutput,
+            TNewDeps,
+            TMeta,
+            TTags,
+            TMiddleware
+          >,
+        );
       }
       return makeTaskBuilder<
         TInput,
@@ -104,7 +113,9 @@ export function makeTaskBuilder<
       >(state, {
         middleware: mergeArray(state.middleware, mw, override) as TNewMw,
       });
-      return makeTaskBuilder<TInput, TOutput, TDeps, TMeta, TTags, TNewMw>(next);
+      return makeTaskBuilder<TInput, TOutput, TDeps, TMeta, TTags, TNewMw>(
+        next,
+      );
     },
 
     tags<TNewTags extends TagType[]>(
@@ -254,9 +265,14 @@ export function makeTaskBuilder<
         TTags,
         TMiddleware
       >(state, { meta: m });
-      return makeTaskBuilder<TInput, TOutput, TDeps, TNewMeta, TTags, TMiddleware>(
-        next,
-      );
+      return makeTaskBuilder<
+        TInput,
+        TOutput,
+        TDeps,
+        TNewMeta,
+        TTags,
+        TMiddleware
+      >(next);
     },
 
     build() {

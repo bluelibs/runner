@@ -4,7 +4,6 @@ import { Readable, pipeline } from "stream";
 import type { Serializer } from "../globals/resources/tunnel/serializer";
 import type { ProtocolEnvelope } from "../globals/resources/tunnel/protocol";
 import { assertOkEnvelope } from "../globals/resources/tunnel/protocol";
-import type { InputFileMeta } from "../types/inputFile";
 import type { IAsyncContext } from "../types/asyncContext";
 import type { IErrorHelper } from "../types/error";
 // Avoid `.node` bare import which triggers tsup native addon resolver
@@ -187,7 +186,6 @@ async function postMultipart(
   manifestText: string,
   files: ReturnType<typeof buildNodeManifest>["files"],
 ): Promise<{ stream: Readable; res: http.IncomingMessage }> {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const parsed = new URL(url);
   const lib = requestLib(parsed);
   const boundary = `runner-${Date.now().toString(36)}-${Math.random()
@@ -238,7 +236,6 @@ async function postOctetStream(
   url: string,
   stream: Readable,
 ): Promise<{ stream: Readable; res: http.IncomingMessage }> {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const parsed = new URL(url);
   const lib = requestLib(parsed);
   const headers: Record<string, string> = {

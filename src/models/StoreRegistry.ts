@@ -1,6 +1,4 @@
 import {
-  DependencyMapType,
-  IEventDefinition,
   IResource,
   ITask,
   IResourceWithConfig,
@@ -10,8 +8,6 @@ import {
   IEvent,
   ITag,
   IHook,
-  symbolTaskMiddleware,
-  symbolResourceMiddleware,
 } from "../defs";
 import * as utils from "../define";
 import { unknownItemTypeError } from "../errors";
@@ -25,7 +21,6 @@ import {
 } from "../defs";
 import { StoreValidator } from "./StoreValidator";
 import { Store } from "./Store";
-import { task } from "..";
 import { IDependentNode } from "./utils/findCircularDependencies";
 import { IErrorHelper } from "../types/error";
 import type { IAsyncContext } from "../types/asyncContext";

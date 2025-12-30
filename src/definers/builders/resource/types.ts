@@ -64,8 +64,8 @@ export type BuilderState<
 export type ShouldReplaceConfig<T> = [T] extends [void]
   ? true
   : [T] extends [undefined]
-  ? true
-  : false;
+    ? true
+    : false;
 
 /**
  * Resolves the config type - uses proposed if existing is void/undefined.

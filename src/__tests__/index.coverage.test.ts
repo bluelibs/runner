@@ -34,4 +34,3 @@ describe("package root exports coverage", () => {
     expect(typeof root.setPlatform).toBe("function");
   });
 });
-

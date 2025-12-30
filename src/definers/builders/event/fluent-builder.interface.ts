@@ -1,4 +1,9 @@
-import type { IEvent, IEventMeta, IValidationSchema, TagType } from "../../../defs";
+import type {
+  IEvent,
+  IEventMeta,
+  IValidationSchema,
+  TagType,
+} from "../../../defs";
 
 export interface EventFluentBuilder<TPayload = void> {
   id: string;

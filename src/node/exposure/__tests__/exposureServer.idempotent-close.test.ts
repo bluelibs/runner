@@ -17,7 +17,11 @@ jest.mock("../serverLifecycle", () => {
 });
 
 describe("createExposureServer - idempotent close", () => {
-  const logger = { error: () => undefined, info: () => undefined, print: () => undefined } as any;
+  const logger = {
+    error: () => undefined,
+    info: () => undefined,
+    print: () => undefined,
+  } as any;
   const handler = async () => false;
 
   it("awaits in-progress close (owned server via listen)", async () => {
@@ -65,4 +69,3 @@ describe("createExposureServer - idempotent close", () => {
     expect(offCount).toBe(1);
   });
 });
-

@@ -11,27 +11,36 @@ export const registerUser = r
   .task("app.users.tasks.register")
   .meta({
     title: "User Registration",
-    description: "Register new user with name, email and password, returning JWT token and user details",
+    description:
+      "Register new user with name, email and password, returning JWT token and user details",
   })
-  .inputSchema(z.object({
-    name: z.string().min(1),
-    email: z.string().email(),
-    password: z.string().min(6),
-  }))
-  .resultSchema(z
-    .object({
-      token: z.string(),
-      user: z
-        .object({ id: z.string(), name: z.string(), email: z.string() })
-        .strict(),
-    })
-    .strict())
-  .tags([httpRoute.with({ method: "post", path: "/auth/register", auth: "public" })])
+  .inputSchema(
+    z.object({
+      name: z.string().min(1),
+      email: z.string().email(),
+      password: z.string().min(6),
+    }),
+  )
+  .resultSchema(
+    z
+      .object({
+        token: z.string(),
+        user: z
+          .object({ id: z.string(), name: z.string(), email: z.string() })
+          .strict(),
+      })
+      .strict(),
+  )
+  .tags([
+    httpRoute.with({ method: "post", path: "/auth/register", auth: "public" }),
+  ])
   .dependencies({ db, auth: authResource })
   .run(async (input, { db, auth }) => {
     const { reply } = fastifyContext.use();
     const name = String(input.name || "").trim();
-    const email = String(input.email || "").toLowerCase().trim();
+    const email = String(input.email || "")
+      .toLowerCase()
+      .trim();
     const password = String(input.password || "");
 
     const em = db.em();

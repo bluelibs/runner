@@ -1,6 +1,5 @@
 import { safeStringify } from "./utils/safeStringify";
 
-// eslint-disable-next-line no-control-regex
 const ansiRegex =
   /[][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
 function stripAnsi(str: string): string {
@@ -269,9 +268,8 @@ export class LogPrinter {
     log: (msg: any) => void;
     error?: (msg: any) => void;
   } = {
-    // eslint-disable-next-line no-console
     log: (msg: any) => console.log(msg),
-    // eslint-disable-next-line no-console
+
     error: (msg: any) => console.error?.(msg),
   };
 
@@ -282,7 +280,6 @@ export class LogPrinter {
   }
 
   public static resetWriters() {
-    // eslint-disable-next-line no-console
     LogPrinter.writers = {
       log: (msg: any) => console.log(msg),
       error: (msg: any) => console.error?.(msg),

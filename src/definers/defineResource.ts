@@ -1,17 +1,19 @@
-import {
+import type {
   IResource,
   IResourceDefinition,
   DependencyMapType,
   IResourceMeta,
   TagType,
-  symbolResource,
-  symbolFilePath,
-  symbolResourceWithConfig,
-  symbolOptionalDependency,
   IOptionalDependency,
   ResourceMiddlewareAttachmentType,
   IResourceWithConfig,
-} from "../defs";
+} from "../types/resource";
+import {
+  symbolResource,
+  symbolFilePath,
+  symbolOptionalDependency,
+  symbolResourceWithConfig,
+} from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 
@@ -22,7 +24,8 @@ export function defineResource<
   TPrivate = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
 >(
   constConfig: IResourceDefinition<
     TConfig,

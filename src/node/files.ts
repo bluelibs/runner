@@ -18,4 +18,3 @@ export function createNodeFile(
     _node: source,
   } as any;
 }
-

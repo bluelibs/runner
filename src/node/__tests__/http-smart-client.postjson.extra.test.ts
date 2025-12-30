@@ -90,7 +90,10 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
       // Capture headers for assertion
       captured.push(opts.headers);
-      const payload = getDefaultSerializer().stringify({ ok: true, result: 42 });
+      const payload = getDefaultSerializer().stringify({
+        ok: true,
+        result: 42,
+      });
       const res = new Readable({
         read() {
           this.push(payload);
@@ -119,7 +122,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
         provide: (v: any, fn: any) => fn(),
-        require: () => ({} as any),
+        require: () => ({}) as any,
       },
     ];
     const client = createHttpSmartClient({

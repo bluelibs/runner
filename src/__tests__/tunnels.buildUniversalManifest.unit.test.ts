@@ -5,7 +5,11 @@ import { Readable } from "stream";
 
 describe("buildUniversalManifest", () => {
   it("collects node buffer files and strips sidecars", () => {
-    const nf = createNodeFile({ name: "a.bin" }, { buffer: Buffer.from([1]) }, "NB");
+    const nf = createNodeFile(
+      { name: "a.bin" },
+      { buffer: Buffer.from([1]) },
+      "NB",
+    );
     const input = { a: 1, f: nf } as const;
     const out = buildUniversalManifest(input);
     expect(out.nodeFiles).toHaveLength(1);
@@ -17,13 +21,17 @@ describe("buildUniversalManifest", () => {
   });
 
   it("collects node stream files and nested arrays/objects", () => {
-    const nf = createNodeFile({ name: "s.txt" }, { stream: Readable.from("x") }, "NS");
+    const nf = createNodeFile(
+      { name: "s.txt" },
+      { stream: Readable.from("x") },
+      "NS",
+    );
     const input = { arr: [{ nested: nf }] } as const;
     const out = buildUniversalManifest(input);
     expect(out.nodeFiles).toHaveLength(1);
     expect(out.nodeFiles[0].id).toBe("NS");
     expect(out.nodeFiles[0].source.type).toBe("stream");
-    expect(((out.input as any).arr[0].nested)._node).toBeUndefined();
+    expect((out.input as any).arr[0].nested._node).toBeUndefined();
   });
 
   it("collects web blob files and strips sidecars", () => {

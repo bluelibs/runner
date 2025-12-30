@@ -32,4 +32,3 @@ export interface EjsonFileSentinel {
   id: string;
   meta: InputFileMeta;
 }
-

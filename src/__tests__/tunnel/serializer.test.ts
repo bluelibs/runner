@@ -36,7 +36,10 @@ describe("tunnel serializer", () => {
 
   it("supports addType via default serializer (delegates to EJSON.addType)", () => {
     class Distance {
-      constructor(public value: number, public unit: string) {}
+      constructor(
+        public value: number,
+        public unit: string,
+      ) {}
       toJSONValue() {
         return { value: this.value, unit: this.unit } as const;
       }

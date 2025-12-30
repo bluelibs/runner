@@ -1,6 +1,5 @@
 import { defineEvent, defineHook, defineResource } from "../define";
 import { run } from "..";
-import { eventNotFoundError } from "../errors";
 
 describe("errors - multi-event hook with missing event", () => {
   it("should throw EventNotFoundError when one of the events is not registered", async () => {

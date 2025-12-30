@@ -18,7 +18,8 @@ export interface TaskFluentBuilder<
   TDeps extends DependencyMapType = {},
   TMeta extends ITaskMeta = ITaskMeta,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] =
+    TaskMiddlewareAttachmentType[],
 > {
   id: string;
 
@@ -39,14 +40,7 @@ export interface TaskFluentBuilder<
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | (() => TNewDeps),
     options: { override: true },
-  ): TaskFluentBuilder<
-    TInput,
-    TOutput,
-    TNewDeps,
-    TMeta,
-    TTags,
-    TMiddleware
-  >;
+  ): TaskFluentBuilder<TInput, TOutput, TNewDeps, TMeta, TTags, TMiddleware>;
 
   middleware<TNewMw extends TaskMiddlewareAttachmentType[]>(
     mw: TNewMw,

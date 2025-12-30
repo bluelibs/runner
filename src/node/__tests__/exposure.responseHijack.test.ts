@@ -20,7 +20,10 @@ describe("nodeExposure response hijack (duplex)", () => {
           req
             .on("data", (c: any) => {
               const buf = Buffer.isBuffer(c) ? c : Buffer.from(String(c));
-              const out = Buffer.from(buf.toString("utf8").toUpperCase() + "!", "utf8");
+              const out = Buffer.from(
+                buf.toString("utf8").toUpperCase() + "!",
+                "utf8",
+              );
               res.write(out);
             })
             .on("end", () => {
@@ -38,7 +41,10 @@ describe("nodeExposure response hijack (duplex)", () => {
     const exposure = nodeExposure.with({
       http: { server: http.createServer(), basePath: "/__runner" },
     });
-    const app = defineResource({ id: "ctx.raw.duplex.app", register: [duplexTask, exposure] });
+    const app = defineResource({
+      id: "ctx.raw.duplex.app",
+      register: [duplexTask, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
@@ -65,7 +71,9 @@ describe("nodeExposure response hijack (duplex)", () => {
       },
       writeHead(code: number, extra?: Record<string, string>) {
         this.statusCode = code;
-        if (extra) for (const [k, v] of Object.entries(extra)) this.setHeader(k, v as any);
+        if (extra)
+          for (const [k, v] of Object.entries(extra))
+            this.setHeader(k, v as any);
         this.headersSent = true;
       },
       write(buf?: any) {
@@ -91,4 +99,3 @@ describe("nodeExposure response hijack (duplex)", () => {
     await rr.dispose();
   });
 });
-

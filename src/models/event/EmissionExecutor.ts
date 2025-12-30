@@ -46,7 +46,9 @@ export async function executeInParallel({
     const errors = results
       .map((result, index) => ({ result, listener: batch[index] }))
       .filter(
-        (r): r is { result: PromiseRejectedResult; listener: IListenerStorage } =>
+        (
+          r,
+        ): r is { result: PromiseRejectedResult; listener: IListenerStorage } =>
           r.result.status === "rejected",
       )
       .map(({ result, listener }) => {
@@ -63,7 +65,10 @@ export async function executeInParallel({
           errObj.listenerOrder = listener.order;
         }
 
-        return errObj as Error & { listenerId?: string; listenerOrder?: number };
+        return errObj as Error & {
+          listenerId?: string;
+          listenerOrder?: number;
+        };
       });
 
     if (errors.length > 0) {

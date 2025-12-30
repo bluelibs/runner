@@ -1,5 +1,9 @@
 import { createAuthenticator } from "../exposure/authenticator";
-import { makeRequestListener, startHttpServer, stopHttpServer } from "../exposure/serverLifecycle";
+import {
+  makeRequestListener,
+  startHttpServer,
+  stopHttpServer,
+} from "../exposure/serverLifecycle";
 
 describe("node exposure helpers", () => {
   describe("createAuthenticator", () => {
@@ -38,7 +42,10 @@ describe("node exposure helpers", () => {
   });
 
   describe("makeRequestListener", () => {
-    const invokeListener = async (listener: ReturnType<typeof makeRequestListener>, res: any) => {
+    const invokeListener = async (
+      listener: ReturnType<typeof makeRequestListener>,
+      res: any,
+    ) => {
       await new Promise<void>((resolve) => {
         listener({} as any, res);
         setImmediate(resolve);
@@ -104,7 +111,9 @@ describe("node exposure helpers", () => {
 
     it("writes 500 when handler throws", async () => {
       const errors: Array<Record<string, unknown>> = [];
-      const logger = { error: (_: string, data: Record<string, unknown>) => errors.push(data) } as any;
+      const logger = {
+        error: (_: string, data: Record<string, unknown>) => errors.push(data),
+      } as any;
       const res = createResponse();
       const listener = makeRequestListener({
         handler: async () => {
@@ -116,7 +125,9 @@ describe("node exposure helpers", () => {
       await invokeListener(listener, res);
       expect(res.statusCode).toBe(500);
       expect(res.writableEnded).toBe(true);
-      expect(JSON.parse(res.payload.toString()).error.code).toBe("INTERNAL_ERROR");
+      expect(JSON.parse(res.payload.toString()).error.code).toBe(
+        "INTERNAL_ERROR",
+      );
       expect(errors[0]?.error).toBe("boom");
     });
 

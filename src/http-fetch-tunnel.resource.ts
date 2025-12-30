@@ -3,9 +3,7 @@ import {
   ProtocolEnvelope,
 } from "./globals/resources/tunnel/protocol";
 import { Serializer } from "./globals/resources/tunnel/serializer";
-import { normalizeError as _normalizeError } from "./globals/resources/tunnel/error-utils";
 import type {
-  ExposureFetchAuthConfig,
   ExposureFetchConfig,
   ExposureFetchClient,
 } from "./globals/resources/tunnel/types";

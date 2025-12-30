@@ -2,7 +2,6 @@ import {
   defineTaskMiddleware,
   defineResourceMiddleware,
 } from "../../../define";
-import { hasSystemTag } from "./utils";
 import { debugConfig } from "./debugConfig.resource";
 import { globalResources } from "../../globalResources";
 import { globalTags } from "../../globalTags";

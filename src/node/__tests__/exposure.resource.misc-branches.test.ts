@@ -13,22 +13,42 @@ describe("nodeExposure - misc branches", () => {
     run: async () => 123,
   });
 
-  const dummyEvent = defineEvent<{ x?: number }>({ id: "unit.exposure.misc.event" });
+  const dummyEvent = defineEvent<{ x?: number }>({
+    id: "unit.exposure.misc.event",
+  });
 
   it("normalizes basePath (ensure leading slash + trim trailing)", async () => {
     const externalServer = http.createServer();
 
     // basePath without leading slash -> should be prefixed with '/'
-    const exposure1 = nodeExposure.with({ http: { server: externalServer, basePath: "runner", auth: { token: TOKEN } } });
-    const app1 = defineResource({ id: "unit.exposure.misc.app1", register: [dummyEvent, exposure1] });
+    const exposure1 = nodeExposure.with({
+      http: {
+        server: externalServer,
+        basePath: "runner",
+        auth: { token: TOKEN },
+      },
+    });
+    const app1 = defineResource({
+      id: "unit.exposure.misc.app1",
+      register: [dummyEvent, exposure1],
+    });
     const rr1 = await run(app1);
     const handlers1 = await rr1.getResourceValue(exposure1.resource as any);
     expect(handlers1.basePath).toBe("/runner");
     await rr1.dispose();
 
     // basePath with trailing slash -> should be trimmed
-    const exposure2 = nodeExposure.with({ http: { server: externalServer, basePath: "/trimmed/", auth: { token: TOKEN } } });
-    const app2 = defineResource({ id: "unit.exposure.misc.app2", register: [dummyEvent, exposure2] });
+    const exposure2 = nodeExposure.with({
+      http: {
+        server: externalServer,
+        basePath: "/trimmed/",
+        auth: { token: TOKEN },
+      },
+    });
+    const app2 = defineResource({
+      id: "unit.exposure.misc.app2",
+      register: [dummyEvent, exposure2],
+    });
     const rr2 = await run(app2);
     const handlers2 = await rr2.getResourceValue(exposure2.resource as any);
     expect(handlers2.basePath).toBe("/trimmed");
@@ -38,8 +58,17 @@ describe("nodeExposure - misc branches", () => {
   });
 
   it("readJson branch: accepts non-Buffer chunks (string)", async () => {
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), basePath: "/__runner", auth: { token: TOKEN } } });
-    const app = defineResource({ id: "unit.exposure.misc.app3", register: [noInputTask, exposure] });
+    const exposure = nodeExposure.with({
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: TOKEN },
+      },
+    });
+    const app = defineResource({
+      id: "unit.exposure.misc.app3",
+      register: [noInputTask, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
@@ -72,11 +101,16 @@ describe("nodeExposure - misc branches", () => {
     const resBody: Buffer[] = [];
     const res: any = {
       setHeader() {},
-      getHeader() { return undefined; },
+      getHeader() {
+        return undefined;
+      },
       statusCode: 0,
       end(payload?: any) {
         statusCode = this.statusCode;
-        if (payload != null) resBody.push(Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)));
+        if (payload != null)
+          resBody.push(
+            Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)),
+          );
       },
     };
 
@@ -92,7 +126,10 @@ describe("nodeExposure - misc branches", () => {
 
   it("init handles undefined http config and defaults basePath", async () => {
     const exposure = nodeExposure.with({});
-    const app = defineResource({ id: "unit.exposure.misc.app4", register: [dummyEvent, exposure] });
+    const app = defineResource({
+      id: "unit.exposure.misc.app4",
+      register: [dummyEvent, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
     expect(handlers.basePath).toBe("/__runner");
@@ -101,8 +138,13 @@ describe("nodeExposure - misc branches", () => {
   });
 
   it("direct handlers: extractTarget returns null for non-base paths and url fallback with undefined", async () => {
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), auth: { token: TOKEN } } });
-    const app = defineResource({ id: "unit.exposure.misc.app5", register: [noInputTask, dummyEvent, exposure] });
+    const exposure = nodeExposure.with({
+      http: { server: http.createServer(), auth: { token: TOKEN } },
+    });
+    const app = defineResource({
+      id: "unit.exposure.misc.app5",
+      register: [noInputTask, dummyEvent, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
@@ -119,7 +161,13 @@ describe("nodeExposure - misc branches", () => {
       },
     };
     let status1 = 0;
-    const res1: any = { setHeader() {}, statusCode: 0, end() { status1 = this.statusCode; } };
+    const res1: any = {
+      setHeader() {},
+      statusCode: 0,
+      end() {
+        status1 = this.statusCode;
+      },
+    };
     await handlers.handleTask(req1, res1);
     expect(status1).toBe(404);
 
@@ -134,7 +182,13 @@ describe("nodeExposure - misc branches", () => {
       },
     };
     let status2 = 0;
-    const res2: any = { setHeader() {}, statusCode: 0, end() { status2 = this.statusCode; } };
+    const res2: any = {
+      setHeader() {},
+      statusCode: 0,
+      end() {
+        status2 = this.statusCode;
+      },
+    };
     await handlers.handleEvent(req2, res2);
     expect(status2).toBe(404);
 
@@ -150,8 +204,17 @@ describe("nodeExposure - misc branches", () => {
       run: async ({ v }) => v,
     });
 
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), basePath: "/__runner", auth: { token: TOKEN2 } } });
-    const app = defineResource({ id: "unit.exposure.misc.app6", register: [badTask, exposure] });
+    const exposure = nodeExposure.with({
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: TOKEN2 },
+      },
+    });
+    const app = defineResource({
+      id: "unit.exposure.misc.app6",
+      register: [badTask, exposure],
+    });
     const rr = await run(app);
     // Monkey-patch logger.error to throw to exercise inner try/catch
     (rr.logger as any).error = () => {
@@ -171,7 +234,13 @@ describe("nodeExposure - misc branches", () => {
     };
 
     let status = 0;
-    const res: any = { setHeader() {}, statusCode: 0, end() { status = this.statusCode; } };
+    const res: any = {
+      setHeader() {},
+      statusCode: 0,
+      end() {
+        status = this.statusCode;
+      },
+    };
     await handlers.handleTask(req, res);
     expect(status).toBe(500);
 
@@ -179,8 +248,13 @@ describe("nodeExposure - misc branches", () => {
   });
 
   it("handleTask with undefined url falls back to '/' and returns 404", async () => {
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), auth: { token: TOKEN } } });
-    const app = defineResource({ id: "unit.exposure.misc.app7", register: [noInputTask, exposure] });
+    const exposure = nodeExposure.with({
+      http: { server: http.createServer(), auth: { token: TOKEN } },
+    });
+    const app = defineResource({
+      id: "unit.exposure.misc.app7",
+      register: [noInputTask, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
@@ -195,7 +269,13 @@ describe("nodeExposure - misc branches", () => {
       },
     };
     let status = 0;
-    const res: any = { setHeader() {}, statusCode: 0, end() { status = this.statusCode; } };
+    const res: any = {
+      setHeader() {},
+      statusCode: 0,
+      end() {
+        status = this.statusCode;
+      },
+    };
     await handlers.handleTask(req, res);
     expect(status).toBe(404);
 
@@ -203,8 +283,17 @@ describe("nodeExposure - misc branches", () => {
   });
 
   it("handleEvent success branch returns 200 (direct)", async () => {
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), basePath: "/__runner", auth: { token: TOKEN } } });
-    const app = defineResource({ id: "unit.exposure.misc.app8", register: [dummyEvent, exposure] });
+    const exposure = nodeExposure.with({
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: TOKEN },
+      },
+    });
+    const app = defineResource({
+      id: "unit.exposure.misc.app8",
+      register: [dummyEvent, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
@@ -220,7 +309,8 @@ describe("nodeExposure - misc branches", () => {
         this._listeners.set(event, arr);
         if (event === "end") {
           setImmediate(() => {
-            for (const d of this._listeners.get("data") ?? []) d("{\"payload\":{}}" );
+            for (const d of this._listeners.get("data") ?? [])
+              d('{"payload":{}}');
             for (const e of this._listeners.get("end") ?? []) e();
           });
         }
@@ -229,7 +319,13 @@ describe("nodeExposure - misc branches", () => {
     };
 
     let status = 0;
-    const res: any = { setHeader() {}, statusCode: 0, end() { status = this.statusCode; } };
+    const res: any = {
+      setHeader() {},
+      statusCode: 0,
+      end() {
+        status = this.statusCode;
+      },
+    };
     await handlers.handleEvent(req, res);
     expect(status).toBe(200);
 
@@ -237,10 +333,21 @@ describe("nodeExposure - misc branches", () => {
   });
 
   it("swallows logger errors inside catch blocks (event)", async () => {
-    const exposure = nodeExposure.with({ http: { server: http.createServer(), basePath: "/__runner", auth: { token: TOKEN } } });
-    const app = defineResource({ id: "unit.exposure.misc.app9", register: [dummyEvent, exposure] });
+    const exposure = nodeExposure.with({
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: TOKEN },
+      },
+    });
+    const app = defineResource({
+      id: "unit.exposure.misc.app9",
+      register: [dummyEvent, exposure],
+    });
     const rr = await run(app);
-    (rr.logger as any).error = () => { throw new Error("logger-fail"); };
+    (rr.logger as any).error = () => {
+      throw new Error("logger-fail");
+    };
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
@@ -255,7 +362,13 @@ describe("nodeExposure - misc branches", () => {
       },
     };
     let status = 0;
-    const res: any = { setHeader() {}, statusCode: 0, end() { status = this.statusCode; } };
+    const res: any = {
+      setHeader() {},
+      statusCode: 0,
+      end() {
+        status = this.statusCode;
+      },
+    };
     await handlers.handleEvent(req, res);
     expect(status).toBe(400);
     await rr.dispose();

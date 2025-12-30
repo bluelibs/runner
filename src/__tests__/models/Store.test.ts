@@ -7,13 +7,7 @@ import {
   defineTag,
   defineTaskMiddleware,
 } from "../../define";
-import {
-  Logger,
-  MiddlewareManager,
-  OnUnhandledError,
-  TaskRunner,
-} from "../../models";
-import { StoreRegistry } from "../../models/StoreRegistry";
+import { Logger, MiddlewareManager, OnUnhandledError } from "../../models";
 import { RunnerMode } from "../../types/runner";
 
 describe("Store", () => {

@@ -12,12 +12,7 @@ import { symbolFilePath } from "../../../defs";
 import { defineResource } from "../../defineResource";
 import type { ResourceFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState, ResolveConfig } from "./types";
-import {
-  clone,
-  mergeArray,
-  mergeDependencies,
-  mergeRegister,
-} from "./utils";
+import { clone, mergeArray, mergeDependencies, mergeRegister } from "./utils";
 
 /**
  * Creates a ResourceFluentBuilder from the given state.
@@ -159,7 +154,10 @@ export function makeResourceBuilder<
         TNewMw
       >(next);
     },
-    tags<TNewTags extends TagType[]>(tags: TNewTags, options?: { override?: boolean }) {
+    tags<TNewTags extends TagType[]>(
+      tags: TNewTags,
+      options?: { override?: boolean },
+    ) {
       const override = options?.override ?? false;
       const next = clone<
         TConfig,

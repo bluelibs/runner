@@ -1,4 +1,4 @@
-import { IAsyncContext } from "../../definers/defineAsyncContext";
+import type { IAsyncContext } from "../../definers/defineAsyncContext";
 import { defineTaskMiddleware } from "../../define";
 
 type RequireContextMiddlewareConfig = {

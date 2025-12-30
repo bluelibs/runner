@@ -7,10 +7,7 @@ import {
   IResourceMiddleware,
   ITask,
   RegisterableItems,
-  IEvent,
-  IEventEmission,
   DependencyMapType,
-  DependencyValuesType,
 } from "./defs";
 import { EventManager, Logger, Store, TaskRunner } from "./models";
 

@@ -1,5 +1,5 @@
 import { r } from "@bluelibs/runner";
-import { RegisterRequest, User } from "../types";
+import { User } from "../types";
 import { db } from "../../db/resources/database";
 import bcrypt from "bcryptjs";
 import z from "zod";

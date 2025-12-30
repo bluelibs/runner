@@ -3,7 +3,6 @@ import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../http-smart-client.model";
 import { createNodeFile } from "../files";
 import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
-import type { ProtocolEnvelope } from "../../globals/resources/tunnel/protocol";
 import { EJSON } from "../../globals/resources/tunnel/serializer";
 
 function asIncoming(
@@ -211,7 +210,7 @@ describe("createHttpSmartClient - multipart", () => {
           serialize: (v: any) => String(v),
           parse: (s: string) => s,
           provide: (v: any, fn: any) => fn(),
-          require: () => ({} as any),
+          require: () => ({}) as any,
         } as any,
       ],
     });

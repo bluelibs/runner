@@ -1,16 +1,5 @@
-import {
-  DependencyMapType,
-  IResource,
-  ITask,
-  RegisterableItems,
-  ITaskMiddleware,
-  IResourceMiddleware,
-  ITag,
-} from "../defs";
-import {
-  findCircularDependencies,
-  IDependentNode,
-} from "./utils/findCircularDependencies";
+import { IResource, RegisterableItems, ITag } from "../defs";
+import { findCircularDependencies } from "./utils/findCircularDependencies";
 import { globalEventsArray } from "../globals/globalEvents";
 import {
   circularDependenciesError,
@@ -25,8 +14,6 @@ import { StoreValidator } from "./StoreValidator";
 import {
   ResourceStoreElementType,
   TaskStoreElementType,
-  TaskMiddlewareStoreElementType,
-  ResourceMiddlewareStoreElementType,
   EventStoreElementType,
 } from "../types/storeTypes";
 import { TaskRunner } from "./TaskRunner";
@@ -49,7 +36,7 @@ import { RunnerMode } from "../types/runner";
 import { detectRunnerMode } from "../utils/detectRunnerMode";
 
 // Re-export types for backward compatibility
-export {
+export type {
   ResourceStoreElementType,
   TaskStoreElementType,
   EventStoreElementType,

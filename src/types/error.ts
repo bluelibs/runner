@@ -1,4 +1,4 @@
-import { symbolError, symbolOptionalDependency } from "./symbols";
+import { symbolError } from "./symbols";
 import type { IOptionalDependency } from "./utilities";
 import type { IValidationSchema } from "./utilities";
 import type { IErrorMeta } from "./meta";
@@ -20,8 +20,9 @@ export interface IErrorDefinition<
   meta?: IErrorMeta;
 }
 
-export interface IErrorDefinitionFinal<TData extends DefaultErrorType>
-  extends IErrorDefinition<TData> {
+export interface IErrorDefinitionFinal<
+  TData extends DefaultErrorType,
+> extends IErrorDefinition<TData> {
   format: (data: TData) => string;
 }
 

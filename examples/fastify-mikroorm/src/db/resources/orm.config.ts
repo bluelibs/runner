@@ -13,14 +13,16 @@ export const ormConfig = r
       "MikroORM configuration with PostgreSQL driver and migration settings",
   })
   .dependencies({ entitiesHolder: entities, env })
-  .init(async (_, { entitiesHolder, env }): Promise<Options> => ({
-    clientUrl: env.DATABASE_URL,
-    driver: PostgreSqlDriver,
-    extensions: [Migrator],
-    entities: [...Object.values(entitiesHolder)],
-    migrations: {
-      path: "./dist/db/migrations",
-      pathTs: "./src/db/migrations",
-    },
-  }))
+  .init(
+    async (_, { entitiesHolder, env }): Promise<Options> => ({
+      clientUrl: env.DATABASE_URL,
+      driver: PostgreSqlDriver,
+      extensions: [Migrator],
+      entities: [...Object.values(entitiesHolder)],
+      migrations: {
+        path: "./dist/db/migrations",
+        pathTs: "./src/db/migrations",
+      },
+    }),
+  )
   .build();

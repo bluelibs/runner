@@ -3,10 +3,8 @@ import {
   defineResource,
   defineTaskMiddleware,
   defineResourceMiddleware,
-  defineOverride,
 } from "../define";
 import { run } from "../run";
-import { circularDependenciesError } from "../errors";
 
 describe("Middleware Dependency Limitations", () => {
   describe("Global Middleware with Dependencies", () => {

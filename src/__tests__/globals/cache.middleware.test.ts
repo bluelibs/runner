@@ -2,12 +2,9 @@ import { defineResource, defineTask } from "../../define";
 import { run } from "../../run";
 import {
   cacheResource,
-  cacheFactoryTask,
   cacheMiddleware,
   ICacheInstance,
 } from "../../globals/middleware/cache.middleware";
-import { globals } from "../..";
-import { LRUCache } from "lru-cache";
 
 describe("Caching System", () => {
   describe("Cache Resource", () => {

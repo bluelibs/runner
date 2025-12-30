@@ -50,7 +50,9 @@ describe("httpClientFactory", () => {
 
     const rt = await run(appWithError);
 
-    const factory = await rt.getResourceValue(globals.resources.httpClientFactory);
+    const factory = await rt.getResourceValue(
+      globals.resources.httpClientFactory,
+    );
     const store = await rt.getResourceValue(globals.resources.store);
 
     // Verify error is in store
@@ -74,7 +76,9 @@ describe("httpClientFactory", () => {
 
     const rt = await run(appWithContext);
 
-    const factory = await rt.getResourceValue(globals.resources.httpClientFactory);
+    const factory = await rt.getResourceValue(
+      globals.resources.httpClientFactory,
+    );
     const store = await rt.getResourceValue(globals.resources.store);
 
     // Verify context is in store

@@ -1,7 +1,5 @@
 import type {
   DependencyMapType,
-  ITask,
-  ITaskMiddleware,
   ITaskMiddlewareDefinition,
   IValidationSchema,
   IMiddlewareMeta,

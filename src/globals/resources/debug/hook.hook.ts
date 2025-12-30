@@ -1,11 +1,9 @@
-import { defineHook, defineResource } from "../../../define";
+import { defineResource } from "../../../define";
 import { globalResources } from "../../globalResources";
 import { globalTags } from "../../globalTags";
 import { hasSystemTag } from "./utils";
 import { debugConfig } from "./debugConfig.resource";
 import { getConfig } from "./types";
-import { globalEvents } from "../../globalEvents";
-import { safeStringify } from "../../../models/utils/safeStringify";
 
 export const hookInterceptorResource = defineResource({
   id: "globals.debug.resources.hookInterceptor",
@@ -32,7 +30,7 @@ export const hookInterceptorResource = defineResource({
       const resolved = getConfig(debugConfig, event!);
       if (resolved.logHookTriggered) {
         const hookId = hook.id;
-        let logString = `Hook triggered for ${String(hookId)}`;
+        const logString = `Hook triggered for ${String(hookId)}`;
         await logger.info(logString, {
           source: "globals.debug.resources.hookInterceptor",
         });
@@ -42,7 +40,7 @@ export const hookInterceptorResource = defineResource({
 
       if (resolved.logHookCompleted) {
         const hookId = hook.id;
-        let logString = `Hook completed for ${String(hookId)}`;
+        const logString = `Hook completed for ${String(hookId)}`;
         await logger.info(logString, {
           source: "globals.debug.resources.hookInterceptor",
         });

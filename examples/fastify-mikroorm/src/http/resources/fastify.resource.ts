@@ -3,7 +3,7 @@
  * - Namespace: http
  * - File: src/http/resources/fastify.resource.ts
  */
-import { r, globals } from "@bluelibs/runner";
+import { r } from "@bluelibs/runner";
 import Fastify from "fastify";
 import helmet from "@fastify/helmet";
 import cors from "@fastify/cors";

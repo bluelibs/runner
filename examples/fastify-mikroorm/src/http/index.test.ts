@@ -12,8 +12,14 @@ describe("http module resource", () => {
     // Minimal sanity: ensure it wires together our pieces
     const reg = http.register as any[];
     expect(reg).toEqual(
-      expect.arrayContaining([fastify, fastifyRouter, httpRoute, onReady, healthz, readyz]),
+      expect.arrayContaining([
+        fastify,
+        fastifyRouter,
+        httpRoute,
+        onReady,
+        healthz,
+        readyz,
+      ]),
     );
   });
 });
-

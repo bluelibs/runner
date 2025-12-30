@@ -2,8 +2,8 @@ import {
   DependencyMapType,
   DependencyValuesType,
   IValidationSchema,
-  ITask,
-} from "../defs";
+} from "./utilities";
+import type { ITask } from "./task";
 import { TagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
 import {
@@ -12,6 +12,10 @@ import {
   symbolTaskMiddleware,
 } from "./symbols";
 import { IContractable } from "./contracts";
+
+export type { DependencyMapType, DependencyValuesType } from "./utilities";
+export type { TagType } from "./tag";
+export type { IMiddlewareMeta } from "./meta";
 
 export interface ITaskMiddlewareDefinition<
   TConfig = any,
@@ -48,7 +52,9 @@ export interface ITaskMiddleware<
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
-> extends ITaskMiddlewareDefinition<
+>
+  extends
+    ITaskMiddlewareDefinition<
       TConfig,
       TEnforceInputContract,
       TEnforceOutputContract,
@@ -79,11 +85,11 @@ export interface ITaskMiddlewareConfigured<
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
 > extends ITaskMiddleware<
-    TConfig,
-    TEnforceInputContract,
-    TEnforceOutputContract,
-    TDependencies
-  > {
+  TConfig,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TDependencies
+> {
   [symbolMiddlewareConfigured]: true;
   config: TConfig;
 }

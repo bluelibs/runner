@@ -47,8 +47,7 @@ describe("node client factories (DI)", () => {
     const TestError = r
       .error<{ code: number; message: string }>("test.errors.NodeFactoryTest")
       .build();
-    const ctx = r.asyncContext<{ requestId: string }>("test.ctx")
-      .build();
+    const ctx = r.asyncContext<{ requestId: string }>("test.ctx").build();
 
     const appWithDeps = r
       .resource("test.appWithDeps")

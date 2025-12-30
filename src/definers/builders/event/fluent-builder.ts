@@ -1,5 +1,4 @@
 import type {
-  IEvent,
   IEventDefinition,
   IEventMeta,
   IValidationSchema,

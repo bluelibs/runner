@@ -58,7 +58,7 @@ export class NodePlatformAdapter implements IPlatformAdapter {
           try {
             // In Node test/runtime, require is available and faster;
             // this path is used only in node builds/tests.
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
+
             const mod: any = require("async_hooks");
             als = (mod as any)?.AsyncLocalStorage;
           } catch (_) {

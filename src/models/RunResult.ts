@@ -5,7 +5,6 @@ import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
 import { Store } from "./Store";
 import { TaskRunner } from "./TaskRunner";
-import { OnUnhandledError } from "./UnhandledError";
 
 export class RunResult<V> {
   constructor(

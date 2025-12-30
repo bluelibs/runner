@@ -62,7 +62,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
         provide: (v: any, fn: any) => fn(),
-        require: () => ({} as any),
+        require: () => ({}) as any,
       },
     ];
     const client = createHttpSmartClient({
@@ -70,7 +70,11 @@ describe("createHttpSmartClient - octet-stream source error", () => {
       serializer: EJSON,
       contexts: contexts as any,
     });
-    const src = new Readable({ read() { this.push(null); } });
+    const src = new Readable({
+      read() {
+        this.push(null);
+      },
+    });
     const out = await client.task("duplex.ctx", src as any);
     expect(out).toBeDefined();
     const hdrs = captured[0] as Record<string, string>;

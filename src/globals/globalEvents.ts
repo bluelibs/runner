@@ -1,11 +1,5 @@
 import { defineEvent } from "../define";
-import {
-  IEvent,
-  IResource,
-  IHook,
-  ITaskMiddleware,
-  IResourceMiddleware,
-} from "../defs";
+import { IEvent } from "../defs";
 import { globalTags } from "./globalTags";
 
 const systemTag = globalTags.system;

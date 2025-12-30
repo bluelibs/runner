@@ -24,7 +24,7 @@ describe("Platform Factory", () => {
   it("should return same type on multiple calls", () => {
     const adapter1 = createPlatformAdapter();
     const adapter2 = createPlatformAdapter();
-    
+
     // Should return same type (but different instances)
     expect(adapter1.constructor).toBe(adapter2.constructor);
   });

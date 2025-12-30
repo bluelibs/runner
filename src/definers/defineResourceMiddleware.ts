@@ -79,7 +79,12 @@ export function defineResourceMiddleware<
             ...(obj.config as TConfig),
             ...config,
           },
-        } satisfies IResourceMiddlewareConfigured<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
+        } satisfies IResourceMiddlewareConfigured<
+          TConfig,
+          TEnforceInputContract,
+          TEnforceOutputContract,
+          TDependencies
+        >);
       },
     } as IResourceMiddleware<
       TConfig,

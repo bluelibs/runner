@@ -4,9 +4,8 @@ import * as Busboy from "busboy";
 import type { FileInfo, FieldInfo } from "busboy";
 
 // Handle both ESM and CJS interop
-const busboyFactory: (cfg: {
-  headers: IncomingHttpHeaders;
-}) => any = (Busboy as any).default || Busboy;
+const busboyFactory: (cfg: { headers: IncomingHttpHeaders }) => any =
+  (Busboy as any).default || Busboy;
 
 import type { Serializer } from "../../globals/resources/tunnel/serializer";
 // Import with explicit .ts extension to prevent tsup from resolving it

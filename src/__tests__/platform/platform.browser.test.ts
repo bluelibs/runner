@@ -17,7 +17,6 @@ class FakePromiseRejectionEvent extends Event {
 
 import { detectEnvironment, PlatformAdapter } from "../../platform";
 import { defineAsyncContext, storage } from "../../definers/defineAsyncContext";
-import exp from "constants";
 describe("PlatformAdapter (Browser)", () => {
   it("should register and cleanup error listeners", () => {
     const adapter = new PlatformAdapter("browser");
@@ -147,7 +146,7 @@ describe("PlatformAdapter (Browser)", () => {
   it("should handle unhandled rejection with window defined", () => {
     const adapter = new PlatformAdapter("browser");
 
-    let flag = jest.fn();
+    const flag = jest.fn();
 
     adapter.onUnhandledRejection(() => {
       flag();

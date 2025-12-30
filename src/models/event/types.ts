@@ -1,7 +1,6 @@
 import {
   DependencyValuesType,
   EventHandlerType,
-  IEvent,
   IEventEmission,
 } from "../../defs";
 import { IHook } from "../../types/hook";

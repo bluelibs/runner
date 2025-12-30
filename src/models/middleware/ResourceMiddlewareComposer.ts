@@ -45,7 +45,12 @@ export class ResourceMiddlewareComposer {
   /**
    * Creates the base resource init runner with result validation
    */
-  private createBaseInitRunner<C, V extends Promise<any>, D extends DependencyMapType, TContext>(
+  private createBaseInitRunner<
+    C,
+    V extends Promise<any>,
+    D extends DependencyMapType,
+    TContext,
+  >(
     resource: IResource<C, V, D, TContext>,
     dependencies: any,
     context: TContext,
@@ -84,7 +89,9 @@ export class ResourceMiddlewareComposer {
 
     for (let i = middlewares.length - 1; i >= 0; i--) {
       const middleware = middlewares[i];
-      const storeMiddleware = this.store.resourceMiddlewares.get(middleware.id)!;
+      const storeMiddleware = this.store.resourceMiddlewares.get(
+        middleware.id,
+      )!;
       const nextFunction = next;
 
       // Create base middleware runner with error handling
@@ -117,7 +124,9 @@ export class ResourceMiddlewareComposer {
 
       // Get and apply per-middleware interceptors
       const middlewareInterceptors =
-        this.interceptorRegistry.getResourceMiddlewareInterceptors(middleware.id);
+        this.interceptorRegistry.getResourceMiddlewareInterceptors(
+          middleware.id,
+        );
 
       next = this.wrapWithInterceptors(
         baseMiddlewareRunner,

@@ -16,9 +16,7 @@ describe("Errors: CircularDependenciesError guidance without middleware", () => 
   });
 
   it("includes middleware-specific guidance when cycles mention middleware", () => {
-    const cycles = [
-      "middlewareA -> taskX -> middlewareA",
-    ];
+    const cycles = ["middlewareA -> taskX -> middlewareA"];
     try {
       circularDependenciesError.throw({ cycles });
     } catch (err: any) {

@@ -11,7 +11,6 @@ import {
   defineResourceMiddleware,
 } from "../../define";
 import { OnUnhandledError } from "../../index";
-import { globalEvents } from "../../globals/globalEvents";
 import { RunnerMode } from "../../types/runner";
 
 describe("MiddlewareManager", () => {

@@ -1,9 +1,6 @@
 import { IEvent } from "../../defs";
 import { globalTags } from "../../globals/globalTags";
-import {
-  HandlerOptionsDefaults,
-  IListenerStorage,
-} from "./types";
+import { HandlerOptionsDefaults, IListenerStorage } from "./types";
 
 type IsExcludedFromGlobal = (event: IEvent<any>) => boolean;
 
@@ -22,7 +19,8 @@ export class ListenerRegistry {
 
   constructor(isExcludedFromGlobal?: IsExcludedFromGlobal) {
     this.isExcludedFromGlobal =
-      isExcludedFromGlobal ?? ((event) => globalTags.excludeFromGlobalHooks.exists(event));
+      isExcludedFromGlobal ??
+      ((event) => globalTags.excludeFromGlobalHooks.exists(event));
   }
 
   get globalListenersCacheValid() {
@@ -86,7 +84,10 @@ export class ListenerRegistry {
       } else if (this.globalListeners.length === 0) {
         cached = eventListeners;
       } else {
-        cached = this.mergeSortedListeners(eventListeners, this.globalListeners);
+        cached = this.mergeSortedListeners(
+          eventListeners,
+          this.globalListeners,
+        );
       }
       this.cachedMergedListeners.set(eventId, cached);
     }
@@ -141,7 +142,9 @@ export class ListenerRegistry {
   }
 }
 
-export function createListener(newListener: Partial<IListenerStorage>): IListenerStorage {
+export function createListener(
+  newListener: Partial<IListenerStorage>,
+): IListenerStorage {
   return {
     handler: newListener.handler!,
     order: newListener.order ?? HandlerOptionsDefaults.order,

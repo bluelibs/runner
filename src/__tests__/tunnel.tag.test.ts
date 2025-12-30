@@ -285,13 +285,13 @@ describe("Tunnel Events", () => {
       id: "app.tunnel.missingEmit",
       tags: [globalTags.tunnel],
       init: async (): Promise<TunnelRunner> =>
-        ({ mode: "client", events: [ev.id] } as any),
+        ({ mode: "client", events: [ev.id] }) as any,
     });
     const missingRun = defineResource({
       id: "app.tunnel.missingRun",
       tags: [globalTags.tunnel],
       init: async (): Promise<TunnelRunner> =>
-        ({ mode: "client", tasks: [t.id] } as any),
+        ({ mode: "client", tasks: [t.id] }) as any,
     });
 
     await expect(

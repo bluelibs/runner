@@ -4,11 +4,9 @@
  * - File: src/db/resources/db.resource.ts
  */
 import { r, globals } from "@bluelibs/runner";
-import { Migrator } from "@mikro-orm/migrations";
 import { MikroORM } from "@mikro-orm/core";
-import { entitiesResourceMap, entities } from "./entities/index";
+import { entities } from "./entities/index";
 import { ormConfig } from "./orm.config";
-import { userEntity } from "./entities/user.entity";
 
 export interface DbConfig {
   // Add your config shape here
@@ -18,7 +16,8 @@ export const db = r
   .resource<DbConfig>("app.db.resources.db")
   .meta({
     title: "Database Connection",
-    description: "MikroORM database connection with entity management and migration support",
+    description:
+      "MikroORM database connection with entity management and migration support",
   })
   .register([ormConfig, entities])
   .dependencies({ entities, ormConfig, logger: globals.resources.logger })

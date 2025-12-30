@@ -1,12 +1,11 @@
 /**
  * Local copy of the JWT tunnel example so package-local devDependencies resolve.
  */
-import { r, run, globals } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 import { nodeExposure, useExposureContext } from "@bluelibs/runner/node";
 import type { IncomingHttpHeaders, ServerResponse } from "http";
 import jwt from "jsonwebtoken";
-import type { JwtPayload, SignOptions } from "jsonwebtoken";
-import type { AddressInfo } from "net";
+import type { JwtPayload } from "jsonwebtoken";
 
 const BASE_PATH = "/__runner";
 const ORIGIN = "http://127.0.0.1:7070";

@@ -2,13 +2,17 @@ import {
   DependencyMapType,
   DependencyValuesType,
   IOptionalDependency,
-  ITaskMiddleware,
   IValidationSchema,
-  TaskMiddlewareAttachmentType,
-} from "../defs";
+} from "./utilities";
+import { TaskMiddlewareAttachmentType } from "./taskMiddleware";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
-import { symbolFilePath, symbolTask, symbolPhantomTask, symbolTunneledBy } from "./symbols";
+import {
+  symbolFilePath,
+  symbolTask,
+  symbolPhantomTask,
+  symbolTunneledBy,
+} from "./symbols";
 import {
   EnsureInputSatisfiesContracts,
   EnsureOutputSatisfiesContracts,
@@ -17,13 +21,23 @@ import {
   InferInputOrViolationFromContracts,
 } from "./contracts";
 
+export type {
+  DependencyMapType,
+  DependencyValuesType,
+  IOptionalDependency,
+} from "./utilities";
+export type { TaskMiddlewareAttachmentType } from "./taskMiddleware";
+export type { TagType } from "./tag";
+export type { ITaskMeta } from "./meta";
+
 export interface ITaskDefinition<
   TInput = undefined,
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] =
+    TaskMiddlewareAttachmentType[],
 > {
   id: string;
   /**
@@ -70,15 +84,16 @@ export interface ITask<
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] =
+    TaskMiddlewareAttachmentType[],
 > extends ITaskDefinition<
-    TInput,
-    TOutput,
-    TDependencies,
-    TMeta,
-    TTags,
-    TMiddleware
-  > {
+  TInput,
+  TOutput,
+  TDependencies,
+  TMeta,
+  TTags,
+  TMiddleware
+> {
   [symbolFilePath]: string;
   [symbolTask]: true;
   /** Present only for phantom tasks. */
@@ -105,7 +120,8 @@ export type IPhantomTask<
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] =
+    TaskMiddlewareAttachmentType[],
 > = ITask<
   TInput,
   Promise<TResolved>,

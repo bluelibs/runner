@@ -1,6 +1,6 @@
 import { defineResource } from "../define";
 import { run } from "../run";
-import { r, globals } from "../index";
+import { r } from "../index";
 import { defineTask } from "../definers/defineTask";
 
 describe("asyncContext as dependency", () => {
@@ -34,8 +34,11 @@ describe("asyncContext as dependency", () => {
       dependencies: { ctx },
       run: async (_i, { ctx }) => ctx.use().id,
     });
-    const app = defineResource({ id: "spec.app.ctx.dep.missing", register: [t] });
-    await expect(run(app)).rejects.toThrowError();
+    const app = defineResource({
+      id: "spec.app.ctx.dep.missing",
+      register: [t],
+    });
+    await expect(run(app)).rejects.toThrow();
   });
 
   it("supports optional asyncContext dependencies (present/absent)", async () => {
@@ -74,4 +77,3 @@ describe("asyncContext as dependency", () => {
     await rr2.dispose();
   });
 });
-

@@ -14,8 +14,10 @@ describe("asyncContext registration", () => {
 
   it("prevents duplicate async context ids on registration", async () => {
     const ctx = r.asyncContext("spec.ctx.dup").build();
-    const app = defineResource({ id: "spec.app.ctx.dup", register: [ctx, ctx] });
-    await expect(run(app)).rejects.toThrowError();
+    const app = defineResource({
+      id: "spec.app.ctx.dup",
+      register: [ctx, ctx],
+    });
+    await expect(run(app)).rejects.toThrow();
   });
 });
-

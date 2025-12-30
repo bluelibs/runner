@@ -68,8 +68,14 @@ describe("resource builder", () => {
   });
 
   it("register merges array base with lazy callbacks", () => {
-    const alpha = resource({ id: "tests.builder.fnfn.alpha", init: async () => 1 });
-    const beta = resource({ id: "tests.builder.fnfn.beta", init: async () => 2 });
+    const alpha = resource({
+      id: "tests.builder.fnfn.alpha",
+      init: async () => 1,
+    });
+    const beta = resource({
+      id: "tests.builder.fnfn.beta",
+      init: async () => 2,
+    });
 
     const composed = r
       .resource("tests.builder.register.array-fn")
@@ -129,10 +135,7 @@ describe("resource builder", () => {
       .init(async () => Promise.resolve("OK"))
       .build();
 
-    expect(appended.middleware.map((m) => m.id)).toEqual([
-      rmw1.id,
-      rmw2.id,
-    ]);
+    expect(appended.middleware.map((m) => m.id)).toEqual([rmw1.id, rmw2.id]);
 
     const overridden = r
       .resource("tests.builder.app.mw.override")
@@ -326,8 +329,14 @@ describe("resource builder", () => {
   });
 
   it("resource dependencies covers function+function and object+function branches", async () => {
-    const a = resource({ id: "tests.builder.resdeps.ff.a", init: async () => 10 });
-    const b = resource({ id: "tests.builder.resdeps.ff.b", init: async () => 20 });
+    const a = resource({
+      id: "tests.builder.resdeps.ff.a",
+      init: async () => 10,
+    });
+    const b = resource({
+      id: "tests.builder.resdeps.ff.b",
+      init: async () => 20,
+    });
 
     // function + function
     const res1 = r

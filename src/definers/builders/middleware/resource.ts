@@ -1,7 +1,5 @@
 import type {
   DependencyMapType,
-  IResource,
-  IResourceMiddleware,
   IResourceMiddlewareDefinition,
   IValidationSchema,
   IMiddlewareMeta,

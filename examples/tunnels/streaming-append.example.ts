@@ -45,7 +45,7 @@ function tap(label: string): Transform {
         ? chunk.toString("utf8")
         : String(chunk);
       // Required demo log: "send" / "receive"
-      // eslint-disable-next-line no-console
+
       console.log(label, text);
       cb(null, chunk);
     },

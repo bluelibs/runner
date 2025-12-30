@@ -13,10 +13,8 @@ export class InterceptorRegistry {
   private resourceInterceptors: ResourceMiddlewareInterceptor[] = [];
   private perTaskMiddleware: Map<string, TaskMiddlewareInterceptor[]> =
     new Map();
-  private perResourceMiddleware: Map<
-    string,
-    ResourceMiddlewareInterceptor[]
-  > = new Map();
+  private perResourceMiddleware: Map<string, ResourceMiddlewareInterceptor[]> =
+    new Map();
 
   #isLocked = false;
 

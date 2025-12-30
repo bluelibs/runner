@@ -14,9 +14,8 @@ export type ShouldReplaceInput<T> = [T] extends [undefined]
       ? true
       : false;
 
-export type ResolveInput<TExisting, TProposed> = ShouldReplaceInput<TExisting> extends true
-  ? TProposed
-  : TExisting;
+export type ResolveInput<TExisting, TProposed> =
+  ShouldReplaceInput<TExisting> extends true ? TProposed : TExisting;
 
 /**
  * Internal state for the TaskFluentBuilder.

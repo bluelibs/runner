@@ -24,9 +24,9 @@ export const listAllUsers = r
     description: "Retrieve all users from the database for admin purposes",
   })
   .inputSchema(z.undefined())
-  .resultSchema(z.array(
-    z.object({ id: z.string(), name: z.string(), email: z.string() }),
-  ))
+  .resultSchema(
+    z.array(z.object({ id: z.string(), name: z.string(), email: z.string() })),
+  )
   .tags([
     httpRoute.with({
       method: "get",
