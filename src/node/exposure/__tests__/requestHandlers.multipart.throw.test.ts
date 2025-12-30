@@ -10,7 +10,7 @@ jest.mock("../multipart", () => {
 });
 
 import { createRequestHandlers } from "../requestHandlers";
-import { EJSON } from "../../../globals/resources/tunnel/serializer";
+import { EJSON, getDefaultSerializer } from "../../../globals/resources/tunnel/serializer";
 import { createRouter } from "../router";
 
 describe("requestHandlers multipart rethrow after finalize", () => {
@@ -44,7 +44,7 @@ describe("requestHandlers multipart rethrow after finalize", () => {
       authenticator: authenticator as any,
       allowList,
       router,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
 
     const req: any = {
@@ -70,10 +70,11 @@ describe("requestHandlers multipart rethrow after finalize", () => {
     };
 
     await handleTask(req, res);
+    const serializer = getDefaultSerializer();
     const body = chunks.length
-      ? JSON.parse(
+      ? serializer.parse(
           Buffer.concat(chunks as readonly Uint8Array[]).toString("utf8"),
-        )
+        ) as any
       : undefined;
     expect(status).toBe(500);
     expect(body?.error?.message).toBe("task-bad");

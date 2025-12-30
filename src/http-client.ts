@@ -28,6 +28,7 @@ export interface HttpClientConfig {
 export interface HttpClient {
   task<I = unknown, O = unknown>(id: string, input?: I): Promise<O>;
   event<P = unknown>(id: string, payload?: P): Promise<void>;
+  eventWithResult?<P = unknown>(id: string, payload?: P): Promise<P>;
 }
 
 function toHeaders(auth?: HttpClientAuth): Record<string, string> {
@@ -143,6 +144,24 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     async event<P>(id: string, payload?: P): Promise<void> {
       try {
         return await fetchClient.event<P>(id, payload);
+      } catch (e) {
+        const te = e as any;
+        if (te && cfg.errorRegistry && te.id && te.data) {
+          const helper = cfg.errorRegistry.get(String(te.id));
+          if (helper) helper.throw(te.data);
+        }
+        throw e;
+      }
+    },
+
+    async eventWithResult<P>(id: string, payload?: P): Promise<P> {
+      try {
+        if (!fetchClient.eventWithResult) {
+          throw new Error(
+            "createHttpClient: eventWithResult not available on underlying tunnel client.",
+          );
+        }
+        return await fetchClient.eventWithResult<P>(id, payload);
       } catch (e) {
         const te = e as any;
         if (te && cfg.errorRegistry && te.id && te.data) {

@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { createRequestHandlers } from "../requestHandlers";
-import { EJSON } from "../../../globals/resources/tunnel/serializer";
+import { EJSON, getDefaultSerializer } from "../../../globals/resources/tunnel/serializer";
 
 function makeReq(): IncomingMessage {
   const listeners: Record<string, Function[]> = {};
@@ -52,7 +52,7 @@ describe("requestHandlers - content-type array non-empty branch (line 114)", () 
       taskRunner: { run: async () => 1 },
       eventManager: {} as any,
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",
@@ -63,7 +63,7 @@ describe("requestHandlers - content-type array non-empty branch (line 114)", () 
     };
     const { handleTask } = createRequestHandlers({
       ...deps,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     const req = makeReq();
     const res = makeRes();

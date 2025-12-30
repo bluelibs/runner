@@ -42,7 +42,7 @@ describe("createMixedHttpClient (unit)", () => {
     const client = createHttpMixedClient({
       baseUrl,
       fetchImpl: fetchMock as any,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     const out = await client.task<{ a: number }, number>("my.task", { a: 1 });
     expect(out).toBe(42);
@@ -74,7 +74,7 @@ describe("createMixedHttpClient (unit)", () => {
         return sink;
       }) as any;
 
-    const client = createHttpMixedClient({ baseUrl, serializer: EJSON });
+    const client = createHttpMixedClient({ baseUrl, serializer: getDefaultSerializer() });
     const input = Readable.from("hello");
     const out = (await client.task("duplex", input)) as Readable;
     const chunks: Buffer[] = [];
@@ -113,7 +113,7 @@ describe("createMixedHttpClient (unit)", () => {
         return sink;
       }) as any;
 
-    const client = createHttpMixedClient({ baseUrl, serializer: EJSON });
+    const client = createHttpMixedClient({ baseUrl, serializer: getDefaultSerializer() });
     const input = {
       file: createNodeFile(
         { name: "a.txt" },
@@ -149,7 +149,7 @@ describe("createMixedHttpClient (unit)", () => {
         return sink;
       }) as any;
 
-    const client = createHttpMixedClient({ baseUrl, serializer: EJSON });
+    const client = createHttpMixedClient({ baseUrl, serializer: getDefaultSerializer() });
     const input = {
       arr: [
         {
@@ -182,16 +182,43 @@ describe("createMixedHttpClient (unit)", () => {
     const client = createHttpMixedClient({
       baseUrl,
       fetchImpl: fetchMock as any,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     await client.event("log", { x: 1 });
     expect(calls).toHaveLength(1);
     expect(calls[0].url).toBe(`${baseUrl}/event/log`);
   });
 
+  it("eventWithResult(): uses JSON path and returns result", async () => {
+    const calls: Array<{ url: string; body: any }> = [];
+    const fetchMock = async (url: any, init?: any) => {
+      calls.push({
+        url: String(url),
+        body: getDefaultSerializer().parse(String(init?.body ?? "")),
+      });
+      return {
+        text: async () =>
+          getDefaultSerializer().stringify({ ok: true, result: { x: 2 } }),
+      } as any;
+    };
+
+    const client = createHttpMixedClient({
+      baseUrl,
+      fetchImpl: fetchMock as any,
+      serializer: getDefaultSerializer(),
+    });
+
+    expect(typeof client.eventWithResult).toBe("function");
+    const out = await client.eventWithResult!("log", { x: 1 });
+    expect(out).toEqual({ x: 2 });
+    expect(calls).toHaveLength(1);
+    expect(calls[0].url).toBe(`${baseUrl}/event/log`);
+    expect(calls[0].body).toEqual({ payload: { x: 1 }, returnPayload: true });
+  });
+
   it("throws when baseUrl is empty", () => {
     expect(() =>
-      createHttpMixedClient({ baseUrl: "" as any, serializer: EJSON } as any),
+      createHttpMixedClient({ baseUrl: "" as any, serializer: getDefaultSerializer() } as any),
     ).toThrow();
   });
 });

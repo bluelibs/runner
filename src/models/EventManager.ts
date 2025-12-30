@@ -85,6 +85,38 @@ export class EventManager {
     data: TInput,
     source: string,
   ): Promise<void> {
+    await this.emitAndReturnEmission({ eventDefinition, data, source });
+  }
+
+  /**
+   * Emits an event and returns the final payload.
+   * The payload is taken from the deepest emission object that reached either:
+   * - the base listener executor, or
+   * - an interceptor that short-circuited the emission.
+   *
+   * This enables tunnel transports to return the final payload after local and/or remote delivery.
+   */
+  async emitWithResult<TInput>(
+    eventDefinition: IEvent<TInput>,
+    data: TInput,
+    source: string,
+  ): Promise<TInput> {
+    const emission = await this.emitAndReturnEmission({
+      eventDefinition,
+      data,
+      source,
+    });
+    return emission.data as TInput;
+  }
+
+  private async emitAndReturnEmission<TInput>(params: {
+    eventDefinition: IEvent<TInput>;
+    data: TInput;
+    source: string;
+  }): Promise<IEventEmission<TInput>> {
+    const { eventDefinition, source } = params;
+    let { data } = params;
+
     // Validate payload with schema if provided
     if (eventDefinition.payloadSchema) {
       try {
@@ -100,12 +132,12 @@ export class EventManager {
     }
 
     const frame = { id: eventDefinition.id, source };
-    const processEmission = async () => {
+    const processEmission = async (): Promise<IEventEmission<TInput>> => {
       const allListeners = this.registry.getListenersForEmit(eventDefinition);
 
       let propagationStopped = false;
 
-      const event: IEventEmission = {
+      const event: IEventEmission<TInput> = {
         id: eventDefinition.id,
         data,
         timestamp: new Date(),
@@ -119,9 +151,7 @@ export class EventManager {
       };
 
       // Create the base emission function
-      const baseEmit = async (
-        eventToEmit: IEventEmission<any>,
-      ): Promise<void> => {
+      const baseEmit = async (eventToEmit: IEventEmission<any>): Promise<void> => {
         if (allListeners.length === 0) {
           return;
         }
@@ -140,16 +170,30 @@ export class EventManager {
         }
       };
 
-      const emitWithInterceptors = composeInterceptors(
-        this.emissionInterceptors,
-        baseEmit,
-      );
+      // Interceptors can replace the event object and/or short-circuit emission.
+      // Track the deepest event object that was reached to extract the final payload.
+      let deepestEvent: IEventEmission<any> = event as IEventEmission<any>;
 
-      // Execute the emission with interceptors
-      await emitWithInterceptors(event);
+      const runInterceptor = async (
+        index: number,
+        eventToEmit: IEventEmission<any>,
+      ): Promise<void> => {
+        deepestEvent = eventToEmit;
+        const interceptor = this.emissionInterceptors[index];
+        if (!interceptor) {
+          return baseEmit(eventToEmit);
+        }
+        return interceptor(
+          (nextEvent) => runInterceptor(index + 1, nextEvent),
+          eventToEmit,
+        );
+      };
+
+      await runInterceptor(0, event as IEventEmission<any>);
+      return deepestEvent as IEventEmission<TInput>;
     };
 
-    await this.cycleContext.runEmission(frame, source, processEmission);
+    return await this.cycleContext.runEmission(frame, source, processEmission);
   }
 
   /**

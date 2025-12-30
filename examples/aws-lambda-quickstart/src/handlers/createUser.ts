@@ -1,46 +1,22 @@
 import { getRunner, RequestCtx, createUser } from "../bootstrap";
+import { json, parseEvent, errorToResponse, APIGatewayProxyResult } from "../http";
 import { z } from "zod";
-
-type APIGatewayProxyResult = {
-  statusCode: number;
-  headers?: Record<string, string>;
-  body: string;
-};
-
-function json(statusCode: number, body: unknown): APIGatewayProxyResult {
-  return {
-    statusCode,
-    headers: {
-      "content-type": "application/json",
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
-    },
-    body: JSON.stringify(body ?? null),
-  };
-}
 
 const CreateUserSchema = z.object({ name: z.string().min(1) });
 
 export const handler = async (
-  event: any,
-  context: any,
+  event: unknown,
+  context: { awsRequestId?: string },
 ): Promise<APIGatewayProxyResult> => {
-  const rr: any = await getRunner();
-  const rawBody = event?.body
-    ? event?.isBase64Encoded
-      ? Buffer.from(event.body, "base64").toString("utf8")
-      : event.body
-    : undefined;
-  const body = rawBody ? JSON.parse(rawBody) : undefined;
+  const rr = await getRunner();
+  const { method, path, headers, body } = parseEvent<{ name?: string }>(event);
 
   return RequestCtx.provide(
     {
       requestId: context?.awsRequestId ?? "local",
-      method:
-        event?.requestContext?.http?.method ?? event?.httpMethod ?? "POST",
-      path: event?.rawPath || event?.path || "/",
-      headers: event?.headers || {},
+      method,
+      path,
+      headers,
     },
     async () => {
       try {
@@ -53,8 +29,8 @@ export const handler = async (
         }
         const created = await rr.runTask(createUser, parsed.data);
         return json(201, created);
-      } catch (err: any) {
-        return json(500, { message: "Internal error", error: String(err) });
+      } catch (err: unknown) {
+        return errorToResponse(err);
       }
     },
   );

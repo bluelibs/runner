@@ -72,7 +72,7 @@ describe("requestHandlers - task context via x-runner-context", () => {
       },
       eventManager: {} as any,
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",
@@ -95,7 +95,7 @@ describe("requestHandlers - task context via x-runner-context", () => {
     const res = makeRes();
     await handleTask(req, res);
     const json = (res as any)._buf
-      ? JSON.parse(((res as any)._buf as Buffer).toString("utf8"))
+      ? serializer.parse(((res as any)._buf as Buffer).toString("utf8")) as any
       : undefined;
     expect((res as any)._status).toBe(200);
     expect(json?.ok).toBe(true);
@@ -132,7 +132,7 @@ describe("requestHandlers - task context via x-runner-context", () => {
       },
       eventManager: {} as any,
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",
@@ -157,7 +157,7 @@ describe("requestHandlers - task context via x-runner-context", () => {
     const res = makeRes();
     await handleTask(req, res);
     const json = (res as any)._buf
-      ? JSON.parse(((res as any)._buf as Buffer).toString("utf8"))
+      ? serializer.parse(((res as any)._buf as Buffer).toString("utf8")) as any
       : undefined;
     expect((res as any)._status).toBe(200);
     expect(json?.ok).toBe(true);

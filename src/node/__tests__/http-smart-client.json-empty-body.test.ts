@@ -1,7 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../http-smart-client.model";
-import { EJSON } from "../../globals/resources/tunnel/serializer";
+import { EJSON, getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
 
 function asIncoming(
   res: Readable,
@@ -41,7 +41,7 @@ describe("createHttpSmartClient - JSON empty body path", () => {
       return sink;
     }) as any;
 
-    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
+    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
     await expect(client.task("x", { a: 1 } as any)).rejects.toThrow(
       /Tunnel task error/,
     );

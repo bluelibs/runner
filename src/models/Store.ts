@@ -33,7 +33,7 @@ import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
 import { EJSON } from "@bluelibs/ejson";
 import { RunnerMode } from "../types/runner";
-import { detectRunnerMode } from "../utils/detectRunnerMode";
+import { detectRunnerMode } from "../tools/detectRunnerMode";
 
 // Re-export types for backward compatibility
 export type {

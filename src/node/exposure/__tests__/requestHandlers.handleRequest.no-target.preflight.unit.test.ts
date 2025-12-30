@@ -29,7 +29,7 @@ describe("requestHandlers - handleRequest preflight with no target under base (l
       taskRunner: {} as any,
       eventManager: {} as any,
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",

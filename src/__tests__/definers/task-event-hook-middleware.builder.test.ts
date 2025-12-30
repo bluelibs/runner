@@ -237,6 +237,29 @@ describe("task/event/hook/middleware builders", () => {
     await rr.dispose();
   });
 
+  it("task builder supports throws contracts without DI", () => {
+    const errA = r.error("tests.builder.task.throws.errA").build();
+    const errB = r.error("tests.builder.task.throws.errB").build();
+
+    const t = r
+      .task("tests.builder.task.throws")
+      .throws([errA, errB.id, errA])
+      .run(async () => Promise.resolve("ok"))
+      .build();
+
+    expect(t.throws).toEqual([errA.id, errB.id]);
+  });
+
+  it("task builder throws on invalid throws entries", () => {
+    expect(() =>
+      r
+        .task("tests.builder.task.throws.invalid")
+        .throws([{} as any])
+        .run(async () => Promise.resolve("ok"))
+        .build(),
+    ).toThrow(/Invalid throws entry/);
+  });
+
   it("task dependencies append by default and can override", async () => {
     const a = resource({
       id: "tests.builder.task.deps.a",

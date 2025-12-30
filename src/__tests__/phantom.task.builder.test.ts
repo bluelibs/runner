@@ -104,6 +104,7 @@ describe("Phantom tasks - fluent builders", () => {
 
     const tagA = r.tag("tests.phantom.builder.tagA").build();
     const tagB = r.tag("tests.phantom.builder.tagB").build();
+    const err = r.error("tests.phantom.builder.err").build();
 
     // Append deps (function + function), then override deps with object
     const ph1 = r.task
@@ -116,6 +117,7 @@ describe("Phantom tasks - fluent builders", () => {
       .tags([tagB])
       .inputSchema<{ z: number }>({ parse: (x: any) => x })
       .resultSchema<number>({ parse: (x: any) => x })
+      .throws([err, err.id])
       .meta({ title: "P" } as any)
       .build();
 
@@ -128,6 +130,7 @@ describe("Phantom tasks - fluent builders", () => {
     expect(ph1.tags.map((t) => t.id)).toEqual([tagA.id, tagB.id]);
     expect(ph1.inputSchema).toBeTruthy();
     expect(ph1.resultSchema).toBeTruthy();
+    expect(ph1.throws).toEqual([err.id]);
     expect(ph1.meta).toBeTruthy();
 
     const ph2 = r.task

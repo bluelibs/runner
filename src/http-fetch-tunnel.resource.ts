@@ -1,6 +1,7 @@
 import {
   assertOkEnvelope,
   ProtocolEnvelope,
+  TunnelError,
 } from "./globals/resources/tunnel/protocol";
 import { Serializer } from "./globals/resources/tunnel/serializer";
 import type {
@@ -17,18 +18,30 @@ export type {
 // normalizeError is re-exported from error-utils for public API
 
 async function postSerialized<T = any>(
-  fetchFn: typeof fetch,
-  url: string,
-  body: unknown,
-  headers: Record<string, string>,
-  timeoutMs?: number,
-  serializer?: Serializer,
-  onRequest?: (ctx: {
+  options: {
+    fetch: typeof fetch;
     url: string;
+    body: unknown;
     headers: Record<string, string>;
-  }) => void | Promise<void>,
-  contextHeaderText?: string,
+    timeoutMs?: number;
+    serializer: Serializer;
+    onRequest?: (ctx: {
+      url: string;
+      headers: Record<string, string>;
+    }) => void | Promise<void>;
+    contextHeaderText?: string;
+  },
 ): Promise<T> {
+  const {
+    fetch: fetchFn,
+    url,
+    body,
+    headers,
+    timeoutMs,
+    serializer,
+    onRequest,
+    contextHeaderText,
+  } = options;
   const controller =
     timeoutMs && timeoutMs > 0 ? new AbortController() : undefined;
   let timeout: any;
@@ -45,13 +58,13 @@ async function postSerialized<T = any>(
     const res = await fetchFn(url, {
       method: "POST",
       headers: reqHeaders,
-      body: (serializer as Serializer).stringify(body),
+      body: serializer.stringify(body),
       signal: controller?.signal,
     });
 
     const text = await res.text();
     const json = text
-      ? (serializer as Serializer).parse<T>(text)
+      ? serializer.parse<T>(text)
       : (undefined as unknown as T);
     return json;
   } finally {
@@ -105,16 +118,16 @@ export function createExposureFetch(
   return {
     async task<I, O>(id: string, input?: I): Promise<O> {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
-      const r: ProtocolEnvelope<O> = await postSerialized(
-        fetchImpl,
+      const r: ProtocolEnvelope<O> = await postSerialized({
+        fetch: fetchImpl,
         url,
-        { input },
-        buildHeaders(),
-        cfg?.timeoutMs,
-        cfg.serializer,
-        cfg?.onRequest,
-        buildContextHeader(),
-      );
+        body: { input },
+        headers: buildHeaders(),
+        timeoutMs: cfg?.timeoutMs,
+        serializer: cfg.serializer,
+        onRequest: cfg?.onRequest,
+        contextHeaderText: buildContextHeader(),
+      });
       try {
         return assertOkEnvelope<O>(r, { fallbackMessage: "Tunnel task error" });
       } catch (e) {
@@ -129,18 +142,47 @@ export function createExposureFetch(
     },
     async event<P>(id: string, payload?: P): Promise<void> {
       const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
-      const r: ProtocolEnvelope<void> = await postSerialized(
-        fetchImpl,
+      const r: ProtocolEnvelope<void> = await postSerialized({
+        fetch: fetchImpl,
         url,
-        { payload },
-        buildHeaders(),
-        cfg?.timeoutMs,
-        cfg.serializer,
-        cfg?.onRequest,
-        buildContextHeader(),
-      );
+        body: { payload },
+        headers: buildHeaders(),
+        timeoutMs: cfg?.timeoutMs,
+        serializer: cfg.serializer,
+        onRequest: cfg?.onRequest,
+        contextHeaderText: buildContextHeader(),
+      });
       try {
         assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });
+      } catch (e) {
+        const te = e as any;
+        if (te && cfg.errorRegistry && te.id && te.data) {
+          const helper = cfg.errorRegistry.get(String(te.id));
+          if (helper) helper.throw(te.data);
+        }
+        throw e;
+      }
+    },
+    async eventWithResult<P>(id: string, payload?: P): Promise<P> {
+      const url = `${baseUrl}/event/${encodeURIComponent(id)}`;
+      const r: ProtocolEnvelope<P> = await postSerialized({
+        fetch: fetchImpl,
+        url,
+        body: { payload, returnPayload: true },
+        headers: buildHeaders(),
+        timeoutMs: cfg?.timeoutMs,
+        serializer: cfg.serializer,
+        onRequest: cfg?.onRequest,
+        contextHeaderText: buildContextHeader(),
+      });
+      if (r && typeof r === "object" && r.ok && !("result" in r)) {
+        throw new TunnelError(
+          "INVALID_RESPONSE",
+          "Tunnel event returnPayload requested but server did not include result. Upgrade the exposure server.",
+        );
+      }
+      try {
+        return assertOkEnvelope<P>(r, { fallbackMessage: "Tunnel event error" });
       } catch (e) {
         const te = e as any;
         if (te && cfg.errorRegistry && te.id && te.data) {

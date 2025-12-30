@@ -24,7 +24,7 @@ describe("requestHandlers - preflight early returns", () => {
       taskRunner: { run: async () => 1 },
       eventManager: {} as any,
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",
@@ -45,7 +45,7 @@ describe("requestHandlers - preflight early returns", () => {
       taskRunner: {} as any,
       eventManager: { emit: async () => {} },
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",
@@ -69,7 +69,7 @@ describe("requestHandlers - preflight early returns", () => {
       taskRunner: { run: async () => 1 },
       eventManager: { emit: async () => {} },
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",
@@ -96,7 +96,7 @@ describe("requestHandlers - preflight early returns", () => {
       taskRunner: { run: async () => 1 },
       eventManager: { emit: async () => {} },
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",

@@ -98,12 +98,15 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
 
           if (delivery === "remote-only") {
             // Forward remotely only; skip local listeners
-            return value.emit!(emission);
+            const remotePayload = await value.emit!(emission);
+            if (remotePayload !== undefined) emission.data = remotePayload;
+            return;
           }
 
           if (delivery === "remote-first") {
             try {
-              await value.emit!(emission);
+              const remotePayload = await value.emit!(emission);
+              if (remotePayload !== undefined) emission.data = remotePayload;
             } catch (_) {
               // Remote failed; fall back to local
               return next(emission);
@@ -114,7 +117,9 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
 
           // mirror (default): local then remote; propagate remote failure
           await next(emission);
-          return value.emit!(emission);
+          const remotePayload = await value.emit!(emission);
+          if (remotePayload !== undefined) emission.data = remotePayload;
+          return;
         },
       );
     }

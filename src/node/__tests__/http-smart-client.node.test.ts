@@ -15,7 +15,7 @@ function asIncoming(
 
 describe("createHttpSmartClient (unit)", () => {
   const baseUrl = "http://127.0.0.1:1234/__runner";
-  const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
+  const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
 
   afterEach(() => {
     jest.restoreAllMocks();
@@ -74,7 +74,7 @@ describe("createHttpSmartClient (unit)", () => {
       sink.destroy = () => undefined;
       return sink;
     }) as any;
-    const c = createHttpSmartClient({ baseUrl, onRequest, serializer: EJSON });
+    const c = createHttpSmartClient({ baseUrl, onRequest, serializer: getDefaultSerializer() });
     const out = await c.task("x", { v: 1 } as any);
     expect(out).toBe(1);
     expect(onRequest).toHaveBeenCalledWith(
@@ -258,6 +258,64 @@ describe("createHttpSmartClient (unit)", () => {
     expect(spy).toHaveBeenCalled();
   });
 
+  it("eventWithResult(): posts JSON envelope and returns result", async () => {
+    const sent: Buffer[] = [];
+    const spy = jest
+      .spyOn(http, "request")
+      .mockImplementation((opts: any, cb: any) => {
+        const env = { ok: true, result: { x: 2 } };
+        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const res = Readable.from([body]);
+        const im = asIncoming(res, { "content-type": "application/json" });
+        cb(im);
+        const sink = new Writable({
+          write(chunk, _enc, next) {
+            sent.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk)));
+            next();
+          },
+          final(next) {
+            next();
+          },
+        }) as any;
+        sink.on = (_: any, __: any) => sink;
+        sink.destroy = () => undefined;
+        return sink;
+      }) as any;
+
+    expect(typeof client.eventWithResult).toBe("function");
+    const out = await client.eventWithResult!("evt", { x: 1 } as any);
+    expect(out).toEqual({ x: 2 });
+
+    const sentText = Buffer.concat(sent).toString("utf8");
+    const sentJson = getDefaultSerializer().parse<any>(sentText);
+    expect(sentJson).toEqual({ payload: { x: 1 }, returnPayload: true });
+    expect(spy).toHaveBeenCalled();
+  });
+
+  it("eventWithResult(): throws when server is ok but omits result", async () => {
+    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
+      const env = { ok: true };
+      const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+      const res = Readable.from([body]);
+      cb(asIncoming(res, { "content-type": "application/json" }));
+      const sink = new Writable({
+        write(_c, _e, n) {
+          n();
+        },
+        final(n) {
+          n();
+        },
+      }) as any;
+      sink.on = (_: any, __: any) => sink;
+      sink.destroy = () => undefined;
+      return sink;
+    }) as any;
+
+    await expect(client.eventWithResult!("evt", { x: 1 } as any)).rejects.toThrow(
+      /did not include result/i,
+    );
+  });
+
   it("uses https.request when baseUrl is https and includes auth header", async () => {
     const httpsReqSpy = jest
       .spyOn(require("https"), "request")
@@ -285,7 +343,7 @@ describe("createHttpSmartClient (unit)", () => {
     const c = createHttpSmartClient({
       baseUrl: "https://127.0.0.1/__runner",
       auth: { header: "x-token", token: "secret" },
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     const out = await c.task("sum", { a: 3, b: 4 } as any);
     expect(out).toBe(7);
@@ -326,7 +384,7 @@ describe("createHttpSmartClient (unit)", () => {
 
   it("createHttpSmartClient throws on empty baseUrl", () => {
     expect(() =>
-      createHttpSmartClient({ baseUrl: "" as any, serializer: EJSON } as any),
+      createHttpSmartClient({ baseUrl: "" as any, serializer: getDefaultSerializer() } as any),
     ).toThrow();
   });
   it("octet-stream: when input is Readable, returns response stream", async () => {
@@ -414,7 +472,7 @@ describe("createHttpSmartClient (unit)", () => {
       sink.destroy = () => undefined;
       return sink;
     }) as any;
-    const c = createHttpSmartClient({ baseUrl, onRequest, serializer: EJSON });
+    const c = createHttpSmartClient({ baseUrl, onRequest, serializer: getDefaultSerializer() });
     await c.task("upload", {
       file: createNodeFile({ name: "x" }, { stream: Readable.from("x") }, "Fz"),
     } as any);

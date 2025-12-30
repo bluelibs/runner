@@ -7,12 +7,8 @@ import {
 import { TaskMiddlewareAttachmentType } from "./taskMiddleware";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
-import {
-  symbolFilePath,
-  symbolTask,
-  symbolPhantomTask,
-  symbolTunneledBy,
-} from "./symbols";
+import type { ThrowsList } from "./error";
+import { symbolFilePath, symbolTask, symbolPhantomTask, symbolTunneledBy } from "./symbols";
 import {
   EnsureInputSatisfiesContracts,
   EnsureOutputSatisfiesContracts,
@@ -62,6 +58,16 @@ export interface ITaskDefinition<
   resultSchema?: IValidationSchema<
     TOutput extends Promise<infer U> ? U : never
   >;
+  /**
+   * Declares which typed errors are part of this task's contract.
+   *
+   * This is a declarative contract only:
+   * - It does not imply dependency injection
+   * - It does not enforce that only these errors can be thrown
+   *
+   * Use string ids or Error helpers.
+   */
+  throws?: ThrowsList;
   run: (
     input: HasInputContracts<[...TTags, ...TMiddleware]> extends true
       ? [TInput] extends [undefined]
@@ -106,6 +112,8 @@ export interface ITask<
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
   middleware: TMiddleware;
+  /** Normalized list of error ids declared via `throws`. */
+  throws?: readonly string[];
   /** Return an optional dependency wrapper for this task. */
   optional: () => IOptionalDependency<
     ITask<TInput, TOutput, TDependencies, TMeta, TTags, TMiddleware>

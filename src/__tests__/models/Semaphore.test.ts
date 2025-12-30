@@ -177,7 +177,8 @@ describe("Semaphore", () => {
       );
 
       const elapsed = Date.now() - startTime;
-      expect(elapsed).toBeGreaterThanOrEqual(100);
+      // Date.now() is millisecond-granular and can under-report by 1ms depending on rounding.
+      expect(elapsed).toBeGreaterThanOrEqual(99);
       expect(elapsed).toBeLessThan(300); // Should not wait much longer
     });
 
@@ -583,6 +584,11 @@ describe("Semaphore", () => {
       expect(semaphore.getAvailablePermits()).toBe(2);
       expect(semaphore.getWaitingCount()).toBe(0);
     });
+
+    it("ignores redundant queue removals defensively", () => {
+      expect(() => (semaphore as any).removeFromQueue({})).not.toThrow();
+      expect(semaphore.getWaitingCount()).toBe(0);
+    });
   });
 
   describe("real-world scenarios", () => {
@@ -708,6 +714,116 @@ describe("Semaphore", () => {
       expect(batchSemaphore.getWaitingCount()).toBe(0);
 
       batchSemaphore.dispose();
+    });
+  });
+
+  describe("performance", () => {
+    it("handles large queued workloads without starving", async () => {
+      const permits = 8;
+      const total = 2000;
+      const sem = new Semaphore(permits);
+
+      let maxWaiting = 0;
+
+      const operations = Array.from({ length: total }, (_, i) =>
+        sem.withPermit(async () => {
+          maxWaiting = Math.max(maxWaiting, sem.getWaitingCount());
+          if (i % 50 === 0) {
+            await Promise.resolve();
+          }
+          return i;
+        }),
+      );
+
+      const results = await Promise.all(operations);
+
+      expect(results).toHaveLength(total);
+      expect(sem.getAvailablePermits()).toBe(permits);
+      expect(sem.getWaitingCount()).toBe(0);
+      expect(maxWaiting).toBeGreaterThan(0);
+    });
+  });
+
+  describe("events", () => {
+    it("emits lifecycle events", async () => {
+      const events: string[] = [];
+      const sem = new Semaphore(1);
+
+      sem.on("acquired", () => events.push("acquired"));
+      sem.on("released", () => events.push("released"));
+      sem.on("queued", () => events.push("queued"));
+      sem.on("timeout", () => events.push("timeout"));
+      sem.on("aborted", () => events.push("aborted"));
+      sem.on("disposed", () => events.push("disposed"));
+
+      await sem.acquire();
+
+      const controller = new AbortController();
+      const waitPromise = sem.acquire({ signal: controller.signal });
+      controller.abort();
+      await expect(waitPromise).rejects.toThrow("aborted");
+
+      const timeoutPromise = sem.acquire({ timeout: 1 });
+      await expect(timeoutPromise).rejects.toThrow("timeout");
+
+      sem.release();
+      sem.dispose();
+
+      expect(events).toEqual(
+        expect.arrayContaining([
+          "acquired",
+          "queued",
+          "aborted",
+          "timeout",
+          "released",
+          "disposed",
+        ]),
+      );
+    });
+
+    it("supports once listeners", async () => {
+      const sem = new Semaphore(1);
+      const seen: string[] = [];
+
+      sem.once("released", (event) => seen.push(event.type));
+
+      await sem.acquire();
+      sem.release();
+      sem.release(); // second release should not trigger the once listener
+
+      expect(seen).toEqual(["released"]);
+    });
+
+    it("supports unsubscribing from on() listeners", async () => {
+      const sem = new Semaphore(1);
+      const seen: string[] = [];
+
+      const unsubscribe = sem.on("released", () => seen.push("released"));
+
+      await sem.acquire();
+      sem.release();
+      expect(seen).toEqual(["released"]);
+
+      // Unsubscribe and verify no more events are received
+      unsubscribe();
+
+      await sem.acquire();
+      sem.release();
+      expect(seen).toEqual(["released"]); // Still only one "released"
+    });
+
+    it("supports unsubscribing from once() listeners before event fires", async () => {
+      const sem = new Semaphore(1);
+      const seen: string[] = [];
+
+      const unsubscribe = sem.once("released", () => seen.push("released"));
+
+      // Unsubscribe before any release
+      unsubscribe();
+
+      await sem.acquire();
+      sem.release();
+      expect(seen).toEqual([]); // No events received because we unsubscribed
     });
   });
 });

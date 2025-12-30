@@ -51,7 +51,7 @@ describe("requestHandlers - content-type missing path (line 114)", () => {
       taskRunner: { run: async () => 7 },
       eventManager: {} as any,
       logger: { info: () => {}, warn: () => {}, error: () => {} },
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: {
         basePath: "/api",

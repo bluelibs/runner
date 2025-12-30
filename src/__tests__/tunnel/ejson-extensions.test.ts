@@ -2,7 +2,7 @@ import { EJSON } from "../../globals/resources/tunnel/ejson-extensions";
 import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
 
 describe("EJSON extensions", () => {
-  it("supports custom type via direct EJSON.addType before serializer use", () => {
+  it("supports custom type via serializer.addType", () => {
     class Distance {
       constructor(
         public value: number,
@@ -12,44 +12,45 @@ describe("EJSON extensions", () => {
         return { value: this.value, unit: this.unit } as const;
       }
       typeName() {
-        return "Distance" as const;
+        return "Distance2" as const;
       }
     }
-    EJSON.addType(
-      "Distance",
+
+    const s = getDefaultSerializer();
+    // Register via the serializer's addType method
+    s.addType?.(
+      "Distance2",
       (j: { value: number; unit: string }) => new Distance(j.value, j.unit),
     );
 
-    const s = getDefaultSerializer();
     const encoded = s.stringify({ d: new Distance(10, "m") });
-    expect(encoded).toContain("$type");
+    // GraphSerializer uses __type for inline types
+    expect(encoded).toContain("__type");
+    expect(encoded).toContain("Distance2");
+    
     const decoded = s.parse<{ d: Distance }>(encoded);
     expect(decoded.d).toBeInstanceOf(Distance);
     expect(decoded.d.value).toBe(10);
     expect(decoded.d.unit).toBe("m");
   });
 
-  it("supports late registration via EJSON.addType after serializer use", () => {
-    // Force serializer creation
-    getDefaultSerializer();
-
-    class X {
+  it("roundtrips custom types registered via serializer", () => {
+    class X2 {
       constructor(public v: number) {}
       toJSONValue() {
         return { v: this.v };
       }
       typeName() {
-        return "X" as const;
+        return "X2" as const;
       }
     }
 
-    // Direct registration also works after serializer is obtained
-    EJSON.addType("X", (j: { v: number }) => new X(j.v));
-
     const s = getDefaultSerializer();
-    const encoded = s.stringify({ x: new X(7) });
-    const decoded = s.parse<{ x: X }>(encoded);
-    expect(decoded.x).toBeInstanceOf(X);
+    s.addType?.("X2", (j: { v: number }) => new X2(j.v));
+
+    const encoded = s.stringify({ x: new X2(7) });
+    const decoded = s.parse<{ x: X2 }>(encoded);
+    expect(decoded.x).toBeInstanceOf(X2);
     expect(decoded.x.v).toBe(7);
   });
 

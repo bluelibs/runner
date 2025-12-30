@@ -69,7 +69,7 @@ export function createRequestHandlers(
       return;
     }
 
-    const auth = authenticator(req);
+    const auth = await authenticator(req);
     if (!auth.ok) {
       applyCorsActual(req, res, cors);
       respondJson(res, auth.response, serializer);
@@ -342,7 +342,7 @@ export function createRequestHandlers(
       return;
     }
 
-    const auth = authenticator(req);
+    const auth = await authenticator(req);
     if (!auth.ok) {
       applyCorsActual(req, res, cors);
       respondJson(res, auth.response, serializer);
@@ -370,7 +370,10 @@ export function createRequestHandlers(
     // Cancellation wiring for events as well
     const controller = createAbortControllerForRequest(req, res);
     try {
-      const body = await readJsonBody<{ payload?: unknown }>(
+      const body = await readJsonBody<{
+        payload?: unknown;
+        returnPayload?: boolean;
+      }>(
         req,
         controller.signal,
         serializer,
@@ -378,6 +381,20 @@ export function createRequestHandlers(
       if (!body.ok) {
         applyCorsActual(req, res, cors);
         respondJson(res, body.response, serializer);
+        return;
+      }
+      const returnPayload = Boolean(body.value?.returnPayload);
+      if (returnPayload && storeEvent.event.parallel) {
+        applyCorsActual(req, res, cors);
+        respondJson(
+          res,
+          jsonErrorResponse(
+            400,
+            `Event ${eventId} is marked parallel; returning a payload is not supported.`,
+            "PARALLEL_EVENT_RETURN_UNSUPPORTED",
+          ),
+          serializer,
+        );
         return;
       }
       // Build context providers for events as well
@@ -390,11 +407,19 @@ export function createRequestHandlers(
       else if (typeof rawHeader === "string") headerText = rawHeader;
       // Compose user contexts; events do not need exposure req context
       let runEmit = async () => {
+        if (returnPayload) {
+          return await eventManager.emitWithResult(
+            storeEvent.event,
+            body.value?.payload,
+            "exposure:http",
+          );
+        }
         await eventManager.emit(
           storeEvent.event,
           body.value?.payload,
           "exposure:http",
         );
+        return undefined;
       };
       if (headerText) {
         try {
@@ -411,9 +436,13 @@ export function createRequestHandlers(
           }
         } catch {}
       }
-      await runEmit();
+      const payload = await runEmit();
       applyCorsActual(req, res, cors);
-      respondJson(res, jsonOkResponse(), serializer);
+      respondJson(
+        res,
+        returnPayload ? jsonOkResponse({ result: payload }) : jsonOkResponse(),
+        serializer,
+      );
     } catch (error) {
       if (isCancellationError(error)) {
         if (!res.writableEnded && !(res as any).headersSent) {
@@ -487,7 +516,7 @@ export function createRequestHandlers(
       respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
       return;
     }
-    const auth = authenticator(req);
+    const auth = await authenticator(req);
     if (!auth.ok) {
       applyCorsActual(req, res, cors);
       respondJson(res, auth.response, serializer);

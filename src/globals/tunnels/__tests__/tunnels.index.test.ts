@@ -1,5 +1,5 @@
 import { tunnels } from "../index";
-import { EJSON } from "../../resources/tunnel/serializer";
+import { EJSON, getDefaultSerializer } from "../../resources/tunnel/serializer";
 
 describe("globals.tunnels index", () => {
   it("http.createClient forwards url to createExposureFetch and returns a client", async () => {
@@ -14,7 +14,7 @@ describe("globals.tunnels index", () => {
     const client = tunnels.http.createClient({
       url: "http://x/__runner",
       fetchImpl,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     expect(typeof client.task).toBe("function");
     expect(typeof client.event).toBe("function");

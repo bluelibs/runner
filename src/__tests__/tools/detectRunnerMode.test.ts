@@ -1,4 +1,4 @@
-import { detectRunnerMode } from "../../utils/detectRunnerMode";
+import { detectRunnerMode } from "../../tools/detectRunnerMode";
 import { RunnerMode } from "../../types/runner";
 import { setPlatform, resetPlatform } from "../../platform";
 import { PlatformAdapter } from "../../platform";

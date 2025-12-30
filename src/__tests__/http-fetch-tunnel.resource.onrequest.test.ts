@@ -1,5 +1,5 @@
 import { createExposureFetch } from "../http-fetch-tunnel.resource";
-import { EJSON } from "../globals/resources/tunnel/serializer";
+import { EJSON, getDefaultSerializer } from "../globals/resources/tunnel/serializer";
 
 describe("http-fetch-tunnel.resource onRequest hook", () => {
   it("invokes onRequest with url and headers", async () => {
@@ -21,7 +21,7 @@ describe("http-fetch-tunnel.resource onRequest hook", () => {
       baseUrl: "http://example.test/__runner",
       fetchImpl,
       onRequest,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     const r = await client.task("tid", { x: 1 });
     expect(r).toBe(11);

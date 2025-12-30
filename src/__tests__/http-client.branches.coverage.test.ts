@@ -17,7 +17,7 @@ describe("http-client branches coverage", () => {
     const client = createHttpClient({
       baseUrl,
       fetchImpl: fetchMock as any,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     await expect(client.task("t.empty", { file } as any)).rejects.toBeTruthy();
   });
@@ -36,7 +36,7 @@ describe("http-client branches coverage", () => {
     const client = createHttpClient({
       baseUrl,
       fetchImpl: fetchMock as any,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
     });
     const r = await client.task("t.nonjson", { file } as any);
     expect(r).toBe(5);

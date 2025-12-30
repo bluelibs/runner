@@ -12,6 +12,7 @@ import {
 } from "./resourceMiddleware";
 import { TagType } from "./tag";
 import { IResourceMeta } from "./meta";
+import type { ThrowsList } from "./error";
 import {
   symbolFilePath,
   symbolResource,
@@ -109,6 +110,16 @@ export interface IResourceDefinition<
   ) => Promise<void>;
   meta?: TMeta;
   /**
+   * Declares which typed errors are part of this resource's contract.
+   *
+   * This is a declarative contract only:
+   * - It does not imply dependency injection
+   * - It does not enforce that only these errors can be thrown
+   *
+   * Use string ids or Error helpers.
+   */
+  throws?: ThrowsList;
+  /**
    * Optional validation schema for runtime config validation.
    * When provided, resource config will be validated when .with() is called.
    */
@@ -202,6 +213,8 @@ export interface IResource<
   middleware: TMiddleware;
   [symbolFilePath]: string;
   [symbolResource]: true;
+  /** Normalized list of error ids declared via `throws`. */
+  throws?: readonly string[];
   /** Return an optional dependency wrapper for this resource. */
   optional: () => IOptionalDependency<
     IResource<

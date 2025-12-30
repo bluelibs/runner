@@ -34,6 +34,7 @@ export interface MixedHttpClient {
     input?: I,
   ): Promise<O | Readable | ReadableStream<Uint8Array>>;
   event<P = unknown>(id: string, payload?: P): Promise<void>;
+  eventWithResult?<P = unknown>(id: string, payload?: P): Promise<P>;
 }
 
 function isReadable(value: unknown): value is Readable {
@@ -102,6 +103,14 @@ export function createHttpMixedClient(
     async event<P>(id: string, payload?: P): Promise<void> {
       // Events are always plain JSON/EJSON
       return await fetchClient.event<P>(id, payload);
+    },
+    async eventWithResult<P>(id: string, payload?: P): Promise<P> {
+      if (!fetchClient.eventWithResult) {
+        throw new Error(
+          "createHttpMixedClient: eventWithResult not available on underlying tunnel client.",
+        );
+      }
+      return await fetchClient.eventWithResult<P>(id, payload);
     },
   };
 }

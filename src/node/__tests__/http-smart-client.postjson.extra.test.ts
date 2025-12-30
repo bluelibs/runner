@@ -48,7 +48,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
       sink.destroy = () => undefined;
       return sink;
     }) as any;
-    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
+    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
     await expect(client.event("evt", { a: 1 } as any)).resolves.toBeUndefined();
   });
 
@@ -78,7 +78,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
       sink.destroy = () => undefined;
       return sink;
     }) as any;
-    const client = createHttpSmartClient({ baseUrl, serializer: EJSON });
+    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
     const out = await client.task("upload", {
       file: createNodeFile({ name: "x" }, { buffer: Buffer.from([1]) }, "FX"),
     } as any);
@@ -127,7 +127,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     ];
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: EJSON,
+      serializer: getDefaultSerializer(),
       contexts: contexts as any,
     });
     const out = await client.task("t.json", { a: 1 } as any);

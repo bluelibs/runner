@@ -88,8 +88,8 @@ describe("requestHandlers - auth fail and missing task", () => {
       taskRunner,
       eventManager,
       logger,
-      authenticator: () => ({
-        ok: false,
+      authenticator: async () => ({
+        ok: false as const,
         response: {
           status: 401,
           body: { ok: false, error: { code: "UNAUTHORIZED" } },
@@ -106,7 +106,7 @@ describe("requestHandlers - auth fail and missing task", () => {
     await handleTask(req, res);
     expect(res._status).toBe(401);
     const json = res._buf
-      ? JSON.parse((res._buf as Buffer).toString("utf8"))
+      ? deps.serializer.parse((res._buf as Buffer).toString("utf8")) as any
       : undefined;
     expect(json?.error?.code).toBe("UNAUTHORIZED");
   });
@@ -137,7 +137,7 @@ describe("requestHandlers - auth fail and missing task", () => {
       taskRunner,
       eventManager,
       logger,
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: { ensureTask: () => null, ensureEvent: () => null },
       router: makeRouter((_p: string) => ({ kind: "task", id: "missing" })),
       cors: undefined,
@@ -149,7 +149,7 @@ describe("requestHandlers - auth fail and missing task", () => {
     await handleTask(req, res);
     expect(res._status).toBe(404);
     const json = res._buf
-      ? JSON.parse((res._buf as Buffer).toString("utf8"))
+      ? deps.serializer.parse((res._buf as Buffer).toString("utf8")) as any
       : undefined;
     expect(json?.error?.code).toBe("NOT_FOUND");
   });
@@ -199,7 +199,7 @@ describe("requestHandlers - auth fail and missing task", () => {
       taskRunner,
       eventManager,
       logger,
-      authenticator: () => ({ ok: true }),
+      authenticator: async () => ({ ok: true }),
       allowList: createAllowListGuard(store),
       router,
       cors: undefined,
@@ -214,7 +214,7 @@ describe("requestHandlers - auth fail and missing task", () => {
     await handleTask(taskReq, taskRes);
     expect(taskRes._status).toBe(403);
     const taskJson = taskRes._buf
-      ? JSON.parse((taskRes._buf as Buffer).toString("utf8"))
+      ? deps.serializer.parse((taskRes._buf as Buffer).toString("utf8")) as any
       : undefined;
     expect(taskJson?.error?.code).toBe("FORBIDDEN");
 
@@ -229,7 +229,7 @@ describe("requestHandlers - auth fail and missing task", () => {
     await handleEvent(eventReq, eventRes);
     expect(eventRes._status).toBe(403);
     const eventJson = eventRes._buf
-      ? JSON.parse((eventRes._buf as Buffer).toString("utf8"))
+      ? deps.serializer.parse((eventRes._buf as Buffer).toString("utf8")) as any
       : undefined;
     expect(eventJson?.error?.code).toBe("FORBIDDEN");
   });
