@@ -20,6 +20,10 @@ describe("Tunnel delivery modes", () => {
     },
   });
 
+  beforeEach(() => {
+    captured.length = 0;
+  });
+
   function mkRunner(overrides: {
     eventId: string;
     delivery?: TunnelRunner["eventDeliveryMode"];

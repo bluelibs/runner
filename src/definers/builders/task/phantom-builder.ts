@@ -7,6 +7,7 @@ import type {
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 import { defineTask } from "../../defineTask";
 import type { PhantomTaskFluentBuilder } from "./phantom-builder.interface";
 import type { PhantomBuilderState } from "./types";
@@ -251,6 +252,21 @@ export function makePhantomTaskBuilder<
       >(next);
     },
 
+    throws(list: ThrowsList) {
+      const next = clone(
+        state as unknown as PhantomBuilderState<any, any, any, any, any, any>,
+        { throws: list },
+      );
+      return makePhantomTaskBuilder<
+        TInput,
+        TResolved,
+        TDeps,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(next);
+    },
+
     build() {
       const built = defineTask.phantom({
         id: state.id,
@@ -258,6 +274,7 @@ export function makePhantomTaskBuilder<
         middleware: state.middleware,
         inputSchema: state.inputSchema,
         resultSchema: state.resultSchema,
+        throws: state.throws,
         meta: state.meta,
         tags: state.tags,
       });

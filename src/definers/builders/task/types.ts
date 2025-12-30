@@ -5,6 +5,7 @@ import type {
   TagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 
 export type ShouldReplaceInput<T> = [T] extends [undefined]
   ? true
@@ -36,6 +37,7 @@ export type BuilderState<
   meta?: TMeta;
   inputSchema?: IValidationSchema<any>;
   resultSchema?: IValidationSchema<any>;
+  throws?: ThrowsList;
   run?: (input: unknown, dependencies: unknown) => unknown;
   tags?: TTags;
 }>;
@@ -58,5 +60,6 @@ export type PhantomBuilderState<
   meta?: TMeta;
   inputSchema?: IValidationSchema<any>;
   resultSchema?: IValidationSchema<any>;
+  throws?: ThrowsList;
   tags?: TTags;
 }>;

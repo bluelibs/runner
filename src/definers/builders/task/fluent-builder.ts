@@ -7,6 +7,7 @@ import type {
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 import { defineTask } from "../../defineTask";
 import type { TaskFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState, ResolveInput } from "./types";
@@ -275,6 +276,18 @@ export function makeTaskBuilder<
       >(next);
     },
 
+    throws(list: ThrowsList) {
+      const next = clone(state, { throws: list });
+      return makeTaskBuilder<
+        TInput,
+        TOutput,
+        TDeps,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(next);
+    },
+
     build() {
       const definition: ITaskDefinition<
         TInput,
@@ -289,6 +302,7 @@ export function makeTaskBuilder<
         middleware: state.middleware,
         inputSchema: state.inputSchema,
         resultSchema: state.resultSchema,
+        throws: state.throws,
         run: state.run as any, // Cast for run signature compatibility
         tags: state.tags,
         meta: state.meta,

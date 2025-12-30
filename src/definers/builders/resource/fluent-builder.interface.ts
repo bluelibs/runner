@@ -10,6 +10,7 @@ import type {
   ResourceMiddlewareAttachmentType,
   TagType,
 } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 import type { ResolveConfig } from "./types";
 
 /**
@@ -201,6 +202,18 @@ export interface ResourceFluentBuilder<
     TDeps,
     TContext,
     TNewMeta,
+    TTags,
+    TMiddleware
+  >;
+
+  throws(
+    list: ThrowsList,
+  ): ResourceFluentBuilder<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
     TTags,
     TMiddleware
   >;

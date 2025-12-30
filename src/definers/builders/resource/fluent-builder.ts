@@ -9,6 +9,7 @@ import type {
   TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 import { defineResource } from "../../defineResource";
 import type { ResourceFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState, ResolveConfig } from "./types";
@@ -364,6 +365,18 @@ export function makeResourceBuilder<
         TMiddleware
       >(next);
     },
+    throws(list: ThrowsList) {
+      const next = clone(state, { throws: list });
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(next);
+    },
     build() {
       const definition: IResourceDefinition<
         TConfig,
@@ -388,6 +401,7 @@ export function makeResourceBuilder<
         resultSchema: state.resultSchema,
         meta: state.meta,
         overrides: state.overrides,
+        throws: state.throws,
       };
       const resource = defineResource(definition);
       (resource as any)[symbolFilePath] = state.filePath;

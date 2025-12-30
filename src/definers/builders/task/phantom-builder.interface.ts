@@ -6,6 +6,7 @@ import type {
   TagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 
 /**
  * Fluent builder interface for constructing phantom tasks.
@@ -105,6 +106,17 @@ export interface PhantomTaskFluentBuilder<
     TResolved,
     TDeps,
     TNewMeta,
+    TTags,
+    TMiddleware
+  >;
+
+  throws(
+    list: ThrowsList,
+  ): PhantomTaskFluentBuilder<
+    TInput,
+    TResolved,
+    TDeps,
+    TMeta,
     TTags,
     TMiddleware
   >;

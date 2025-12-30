@@ -8,6 +8,7 @@ import type {
   ResourceMiddlewareAttachmentType,
   TagType,
 } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 
 /**
  * Internal builder state - immutable snapshot of all builder configuration.
@@ -56,6 +57,7 @@ export type BuilderState<
   resultSchema?: IValidationSchema<any>;
   meta?: TMeta;
   overrides?: Array<any>;
+  throws?: ThrowsList;
 }>;
 
 /**

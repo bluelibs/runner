@@ -7,6 +7,7 @@ import type {
   TagType,
   TaskMiddlewareAttachmentType,
 } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 import type { ResolveInput } from "./types";
 
 /**
@@ -100,6 +101,10 @@ export interface TaskFluentBuilder<
     TTags,
     TMiddleware
   >;
+
+  throws(
+    list: ThrowsList,
+  ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
 
   meta<TNewMeta extends ITaskMeta>(
     m: TNewMeta,
