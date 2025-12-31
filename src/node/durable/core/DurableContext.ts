@@ -9,6 +9,12 @@ import type { IDurableStore } from "./interfaces/store";
 import { StepBuilder } from "./StepBuilder";
 import type { IEventDefinition } from "../../../types/event";
 import type { DurableSignalId, DurableStepId } from "./ids";
+import {
+  createDurableAuditEntryId,
+  isDurableInternalStepId,
+  type DurableAuditEmitter,
+  type DurableAuditEntry,
+} from "./audit";
 import { isRecord, sleepMs, withTimeout } from "./utils";
 
 type WaitForSignalOutcome<TPayload> =
@@ -54,6 +60,9 @@ export class DurableContext implements IDurableContext {
   private sleepIndex = 0;
   private readonly signalIndexes = new Map<string, number>();
   private readonly emitIndexes = new Map<string, number>();
+  private noteIndex = 0;
+  private readonly auditEnabled: boolean;
+  private readonly auditEmitter: DurableAuditEmitter | null;
   private readonly compensations: Array<{
     stepId: string;
     action: () => Promise<void>;
@@ -64,7 +73,43 @@ export class DurableContext implements IDurableContext {
     private readonly bus: IEventBus,
     public readonly executionId: string,
     public readonly attempt: number,
-  ) {}
+    options: { auditEnabled?: boolean; auditEmitter?: DurableAuditEmitter } = {},
+  ) {
+    this.auditEnabled = options.auditEnabled ?? false;
+    this.auditEmitter = options.auditEmitter ?? null;
+  }
+
+  private async appendAuditEntry(
+    entry: Omit<
+      Parameters<NonNullable<IDurableStore["appendAuditEntry"]>>[0],
+      "id" | "executionId" | "attempt" | "at"
+    >,
+  ): Promise<void> {
+    if (!this.auditEnabled) return;
+    if (!this.store.appendAuditEntry) return;
+    const at = new Date();
+    const fullEntry: DurableAuditEntry = {
+      ...entry,
+      id: createDurableAuditEntryId(at.getTime()),
+      executionId: this.executionId,
+      attempt: this.attempt,
+      at,
+    };
+    try {
+      await this.store.appendAuditEntry(fullEntry);
+
+      if (this.auditEmitter) {
+        try {
+          await this.auditEmitter.emit(fullEntry);
+        } catch {
+          // Audit emissions must not affect workflow correctness.
+        }
+      }
+    } catch {
+      // Audit trails must not affect workflow correctness.
+      // If audit persistence fails, we degrade gracefully.
+    }
+  }
 
   private nextIndex(counter: Map<string, number>, key: string): number {
     const current = counter.get(key) ?? 0;
@@ -139,6 +184,7 @@ export class DurableContext implements IDurableContext {
 
     let attempts = 0;
     const maxRetries = options.retries ?? 0;
+    const startedAt = Date.now();
 
     const executeWithRetry = async (): Promise<T> => {
       try {
@@ -162,12 +208,20 @@ export class DurableContext implements IDurableContext {
     };
 
     const result = await executeWithRetry();
+    const durationMs = Date.now() - startedAt;
 
     await this.store.saveStepResult({
       executionId: this.executionId,
       stepId,
       result,
       completedAt: new Date(),
+    });
+
+    await this.appendAuditEntry({
+      kind: "step_completed",
+      stepId,
+      durationMs,
+      isInternal: isDurableInternalStepId(stepId),
     });
 
     if (downFn) {
@@ -269,6 +323,14 @@ export class DurableContext implements IDurableContext {
       completedAt: new Date(),
     });
 
+    await this.appendAuditEntry({
+      kind: "sleep_scheduled",
+      stepId: sleepStepId,
+      timerId,
+      durationMs,
+      fireAt: new Date(fireAtMs),
+    });
+
     throw new SuspensionSignal("sleep");
   }
 
@@ -292,6 +354,11 @@ export class DurableContext implements IDurableContext {
     const existing = await this.store.getStepResult(this.executionId, stepId);
     if (existing) {
       const state = parseSignalStepState(existing.result);
+      if (!state) {
+        throw new Error(
+          `Invalid signal step state for '${signalId}' at '${stepId}'`,
+        );
+      }
       if (state?.state === "completed") {
         const payload = state.payload as TPayload;
         return options ? { kind: "signal", payload } : payload;
@@ -332,13 +399,20 @@ export class DurableContext implements IDurableContext {
               result: { state: "waiting", timeoutAtMs, timerId },
               completedAt: new Date(),
             });
+
+            await this.appendAuditEntry({
+              kind: "signal_waiting",
+              stepId,
+              signalId,
+              timeoutMs: options.timeoutMs,
+              timeoutAtMs,
+              timerId,
+              reason: "timeout_armed",
+            });
           }
         }
         throw new SuspensionSignal("yield");
       }
-
-      const legacy = existing.result as TPayload;
-      return options ? { kind: "signal", payload: legacy } : legacy;
     }
 
     if (options?.timeoutMs !== undefined) {
@@ -361,6 +435,16 @@ export class DurableContext implements IDurableContext {
         completedAt: new Date(),
       });
 
+      await this.appendAuditEntry({
+        kind: "signal_waiting",
+        stepId,
+        signalId,
+        timeoutMs: options.timeoutMs,
+        timeoutAtMs,
+        timerId,
+        reason: "initial",
+      });
+
       throw new SuspensionSignal("yield");
     }
 
@@ -369,6 +453,13 @@ export class DurableContext implements IDurableContext {
       stepId,
       result: { state: "waiting" },
       completedAt: new Date(),
+    });
+
+    await this.appendAuditEntry({
+      kind: "signal_waiting",
+      stepId,
+      signalId,
+      reason: "initial",
     });
 
     throw new SuspensionSignal("yield");
@@ -386,29 +477,29 @@ export class DurableContext implements IDurableContext {
     const emitIndex = this.nextIndex(this.emitIndexes, eventId);
     const stepId = `__emit:${eventId}:${emitIndex}`;
 
-    if (emitIndex === 0) {
-      const legacyStepId = `emit:${eventId}:${this.executionId}`;
-      const legacy = await this.store.getStepResult(
-        this.executionId,
-        legacyStepId,
-      );
-      if (legacy) {
-        await this.store.saveStepResult({
-          executionId: this.executionId,
-          stepId,
-          result: legacy.result,
-          completedAt: legacy.completedAt,
-        });
-        return;
-      }
-    }
-
     await this.internalStep<void>(stepId).up(async () => {
       await this.bus.publish("durable:events", {
         type: eventId,
         payload,
         timestamp: new Date(),
       });
+
+      await this.appendAuditEntry({
+        kind: "emit_published",
+        stepId,
+        eventId,
+      });
+    });
+  }
+
+  async note(message: string, meta?: Record<string, unknown>): Promise<void> {
+    if (!this.auditEnabled) return;
+    if (!this.store.appendAuditEntry) return;
+    const stepId = `__note:${this.noteIndex}`;
+    this.noteIndex += 1;
+
+    await this.internalStep<void>(stepId).up(async () => {
+      await this.appendAuditEntry({ kind: "note", message, meta });
     });
   }
 }

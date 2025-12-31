@@ -2,6 +2,7 @@ import { RedisStore } from "../store/RedisStore";
 import type { RedisClient } from "../store/RedisStore";
 import type { Execution, Schedule, StepResult, Timer } from "../core/types";
 import { getDefaultSerializer } from "../../../serializer";
+import type { DurableAuditEntry } from "../core/audit";
 
 const serializer = getDefaultSerializer();
 
@@ -167,6 +168,90 @@ describe("durable: RedisStore", () => {
     const results = await store.listStepResults("e1");
     expect(results.length).toBe(2);
     expect(results.map((s) => s.stepId)).toEqual(["s1", "s2"]);
+  });
+
+  it("appends and lists audit entries", async () => {
+    const at1 = new Date("2024-01-01T00:00:00.000Z");
+    const at2 = new Date("2024-01-02T00:00:00.000Z");
+
+    const entry1: DurableAuditEntry = {
+      id: "1704067200000:e1",
+      executionId: "e1",
+      at: at1,
+      attempt: 1,
+      kind: "note",
+      message: "first",
+    };
+
+    const entry2: DurableAuditEntry = {
+      id: "1704153600000:e2",
+      executionId: "e1",
+      at: at2,
+      attempt: 1,
+      kind: "note",
+      message: "second",
+    };
+
+    await store.appendAuditEntry(entry1);
+    expect(redisMock.set).toHaveBeenCalledWith(
+      `durable:audit:e1:${entry1.id}`,
+      expect.any(String),
+    );
+
+    const missingId: DurableAuditEntry = {
+      id: "",
+      executionId: "e1",
+      at: at1,
+      attempt: 1,
+      kind: "note",
+      message: "needs-id",
+    };
+    await store.appendAuditEntry(missingId);
+    expect(redisMock.set).toHaveBeenCalledWith(
+      expect.stringMatching(/^durable:audit:e1:1704067200000:.+/),
+      expect.any(String),
+    );
+
+    redisMock.scan.mockResolvedValue(["0", []]);
+    await expect(store.listAuditEntries("e1")).resolves.toEqual([]);
+
+    redisMock.scan.mockResolvedValue([
+      "0",
+      [`durable:audit:e1:${entry2.id}`, `durable:audit:e1:${entry1.id}`],
+    ]);
+
+    redisMock.pipeline.mockReturnValue({
+      get: jest.fn().mockReturnThis(),
+      hget: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([
+        [null, serializer.stringify(entry2)],
+        [null, serializer.stringify(entry1)],
+      ]),
+    });
+
+    const listed = await store.listAuditEntries("e1");
+    expect(
+      listed.map((e) => (e.kind === "note" ? e.message : "not-note")),
+    ).toEqual(["first", "second"]);
+
+    const paged = await store.listAuditEntries("e1", { offset: 1, limit: 1 });
+    expect(
+      paged.map((e) => (e.kind === "note" ? e.message : "not-note")),
+    ).toEqual(["second"]);
+
+    redisMock.pipeline.mockReturnValue({
+      get: jest.fn().mockReturnThis(),
+      hget: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([[null, 123]]),
+    });
+    await expect(store.listAuditEntries("e1")).resolves.toEqual([]);
+
+    redisMock.pipeline.mockReturnValue({
+      get: jest.fn().mockReturnThis(),
+      hget: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(null),
+    });
+    await expect(store.listAuditEntries("e1")).resolves.toEqual([]);
   });
 
   it("throws when Redis SCAN returns an unexpected shape", async () => {

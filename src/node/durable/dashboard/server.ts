@@ -15,8 +15,6 @@ export function createDashboardMiddleware(
   // API: List Executions with filtering
   api.get('/executions', async (req, res) => {
     try {
-      const store = (service as any).config.store;
-      
       // Parse query params
       const statusParam = req.query.status as string | undefined;
       const status = statusParam ? statusParam.split(',') as ExecutionStatus[] : undefined;
@@ -24,14 +22,7 @@ export function createDashboardMiddleware(
       const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
       const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
       
-      // Use new listExecutions if available, fallback to listIncompleteExecutions
-      let executions;
-      if (store.listExecutions) {
-        executions = await store.listExecutions({ status, taskId, limit, offset });
-      } else {
-        // Fallback for stores that haven't implemented the new method
-        executions = await store.listIncompleteExecutions();
-      }
+      const executions = await operator.listExecutions({ status, taskId, limit, offset });
       
       res.json(executions);
     } catch (err: any) {
@@ -42,19 +33,12 @@ export function createDashboardMiddleware(
   // API: Get Execution Detail with steps
   api.get('/executions/:id', async (req, res) => {
     try {
-      const store = (service as any).config.store;
-      const execution = await store.getExecution(req.params.id);
+      const { execution, steps, audit } = await operator.getExecutionDetail(req.params.id);
       if (!execution) {
         return res.status(404).json({ error: 'Execution not found' });
       }
-      
-      // Fetch step results if store supports it
-      let steps = [];
-      if (store.listStepResults) {
-        steps = await store.listStepResults(req.params.id);
-      }
-      
-      res.json({ ...execution, steps });
+
+      res.json({ ...execution, steps, audit });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }

@@ -55,6 +55,49 @@ describe("durable: DurableService (unit)", () => {
     await expect(service.execute(task)).rejects.toThrow("taskExecutor");
   });
 
+  it("skips audit persistence when audit is enabled but the store does not support it", async () => {
+    const base = new MemoryStore();
+    const queue = new SpyQueue();
+
+    const storeNoAudit: IDurableStore = {
+      saveExecution: base.saveExecution.bind(base),
+      getExecution: base.getExecution.bind(base),
+      updateExecution: base.updateExecution.bind(base),
+      listIncompleteExecutions: base.listIncompleteExecutions.bind(base),
+      getStepResult: base.getStepResult.bind(base),
+      saveStepResult: base.saveStepResult.bind(base),
+      createTimer: base.createTimer.bind(base),
+      getReadyTimers: base.getReadyTimers.bind(base),
+      markTimerFired: base.markTimerFired.bind(base),
+      deleteTimer: base.deleteTimer.bind(base),
+      createSchedule: base.createSchedule.bind(base),
+      getSchedule: base.getSchedule.bind(base),
+      updateSchedule: base.updateSchedule.bind(base),
+      deleteSchedule: base.deleteSchedule.bind(base),
+      listSchedules: base.listSchedules.bind(base),
+      listActiveSchedules: base.listActiveSchedules.bind(base),
+    };
+
+    const service = new DurableService({
+      store: storeNoAudit,
+      queue,
+      audit: { enabled: true },
+      tasks: [],
+    });
+
+    const task = r
+      .task("t.audit.no-store-support")
+      .run(async () => "ok")
+      .build();
+
+    const executionId = await service.startExecution(task);
+    expect(queue.enqueued).toEqual([
+      { type: "execute", payload: { executionId } },
+    ]);
+
+    await expect(base.listAuditEntries(executionId)).resolves.toEqual([]);
+  });
+
   it("executes typed tasks via executeStrict()", async () => {
     const store = new MemoryStore();
     const task = r
@@ -535,6 +578,28 @@ describe("durable: DurableService (unit)", () => {
     await service.stop();
   });
 
+  it("does not auto-start polling when polling.enabled is false", async () => {
+    const store = new MemoryStore();
+    const service = await initDurableService({
+      store,
+      polling: { enabled: false, interval: 1 },
+    });
+
+    await store.createTimer({
+      id: "t1",
+      type: "retry",
+      fireAt: new Date(Date.now() - 10),
+      status: "pending",
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 25));
+
+    const timers = await store.getReadyTimers(new Date(Date.now() + 60_000));
+    expect(timers.some((t) => t.id === "t1")).toBe(true);
+
+    await service.stop();
+  });
+
   it("enqueues resumes when a queue is configured", async () => {
     const store = new MemoryStore();
     const queue = new SpyQueue();
@@ -621,6 +686,13 @@ describe("durable: DurableService (unit)", () => {
       updatedAt: new Date(),
     });
 
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid",
+      result: { state: "waiting" },
+      completedAt: new Date(),
+    });
+
     await service.signal("e1", "paid", { paidAt: 1 });
     expect(queue.enqueued).toEqual([
       { type: "resume", payload: { executionId: "e1" } },
@@ -636,8 +708,18 @@ describe("durable: DurableService (unit)", () => {
     const queue = new SpyQueue();
     const service = new DurableService({ store, queue, tasks: [] });
 
+    await store.saveStepResult({
+      executionId: "missing",
+      stepId: "__signal:x",
+      result: { state: "waiting" },
+      completedAt: new Date(),
+    });
     await expect(service.signal("missing", "x", 1)).resolves.toBeUndefined();
     expect(queue.enqueued.length).toBe(0);
+    expect((await store.getStepResult("missing", "__signal:x"))?.result).toEqual({
+      state: "completed",
+      payload: 1,
+    });
 
     await store.saveExecution({
       id: "done",
@@ -649,6 +731,12 @@ describe("durable: DurableService (unit)", () => {
       maxAttempts: 1,
       createdAt: new Date(),
       updatedAt: new Date(),
+      completedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "done",
+      stepId: "__signal:x",
+      result: { state: "waiting" },
       completedAt: new Date(),
     });
     await service.signal("done", "x", 1);
@@ -664,12 +752,18 @@ describe("durable: DurableService (unit)", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     });
+    await store.saveStepResult({
+      executionId: "failed",
+      stepId: "__signal:x",
+      result: { state: "waiting" },
+      completedAt: new Date(),
+    });
     await service.signal("failed", "x", 1);
 
     expect(queue.enqueued.length).toBe(0);
   });
 
-  it("signal returns early when the signal is already completed or timed out", async () => {
+  it("signal buffers payload into the next slot when the base signal is already completed or timed out", async () => {
     const store = new MemoryStore();
     const queue = new SpyQueue();
     const service = new DurableService({ store, queue, tasks: [] });
@@ -693,6 +787,15 @@ describe("durable: DurableService (unit)", () => {
     });
     await service.signal("e1", "paid", { paidAt: 2 });
 
+    expect((await store.getStepResult("e1", "__signal:paid"))?.result).toEqual({
+      state: "completed",
+      payload: { paidAt: 1 },
+    });
+    expect((await store.getStepResult("e1", "__signal:paid:1"))?.result).toEqual({
+      state: "completed",
+      payload: { paidAt: 2 },
+    });
+
     await store.saveStepResult({
       executionId: "e1",
       stepId: "__signal:timed",
@@ -700,6 +803,13 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
     await service.signal("e1", "timed", { paidAt: 2 });
+    expect((await store.getStepResult("e1", "__signal:timed"))?.result).toEqual({
+      state: "timed_out",
+    });
+    expect((await store.getStepResult("e1", "__signal:timed:1"))?.result).toEqual({
+      state: "completed",
+      payload: { paidAt: 2 },
+    });
 
     expect(queue.enqueued.length).toBe(0);
   });
@@ -793,7 +903,7 @@ describe("durable: DurableService (unit)", () => {
     ]);
   });
 
-  it("signal overwrites unknown indexed signal step states", async () => {
+  it("signal throws on invalid signal step state payloads", async () => {
     const store = new MemoryStore();
     const queue = new SpyQueue();
     const service = new DurableService({ store, queue, tasks: [] });
@@ -823,14 +933,10 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 2 });
-
-    expect((await store.getStepResult("e1", "__signal:paid:1"))?.result).toEqual(
-      { state: "completed", payload: { paidAt: 2 } },
+    await expect(service.signal("e1", "paid", { paidAt: 2 })).rejects.toThrow(
+      "Invalid signal step state",
     );
-    expect(queue.enqueued).toEqual([
-      { type: "resume", payload: { executionId: "e1" } },
-    ]);
+    expect(queue.enqueued).toEqual([]);
   });
 
   it("signal throws if too many indexed signal slots exist", async () => {
@@ -873,7 +979,7 @@ describe("durable: DurableService (unit)", () => {
     );
   });
 
-  it("signal overwrites unknown signal step states", async () => {
+  it("signal throws on invalid base signal payloads", async () => {
     const store = new MemoryStore();
     const queue = new SpyQueue();
     const service = new DurableService({ store, queue, tasks: [] });
@@ -892,18 +998,57 @@ describe("durable: DurableService (unit)", () => {
     await store.saveStepResult({
       executionId: "e1",
       stepId: "__signal:paid",
-      result: { state: "unknown" },
+      result: { paidAt: 1 },
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 1 });
-    expect((await store.getStepResult("e1", "__signal:paid"))?.result).toEqual({
-      state: "completed",
-      payload: { paidAt: 1 },
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid:1",
+      result: { state: "waiting" },
+      completedAt: new Date(),
     });
-    expect(queue.enqueued).toEqual([
-      { type: "resume", payload: { executionId: "e1" } },
-    ]);
+
+    await expect(service.signal("e1", "paid", { paidAt: 2 })).rejects.toThrow(
+      "Invalid signal step state",
+    );
+    expect(queue.enqueued).toEqual([]);
+  });
+
+  it("signal throws on invalid base signal primitive payloads", async () => {
+    const store = new MemoryStore();
+    const queue = new SpyQueue();
+    const service = new DurableService({ store, queue, tasks: [] });
+
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: "sleeping",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid",
+      result: 123,
+      completedAt: new Date(),
+    });
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid:1",
+      result: { state: "waiting" },
+      completedAt: new Date(),
+    });
+
+    await expect(service.signal("e1", "paid", 456)).rejects.toThrow(
+      "Invalid signal step state",
+    );
+    expect(queue.enqueued).toEqual([]);
   });
 
   it("covers poll error handling and no-op timer branches", async () => {

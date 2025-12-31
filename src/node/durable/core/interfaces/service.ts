@@ -4,7 +4,9 @@ import type { DurableSignalId } from "../ids";
 import type { IDurableStore } from "./store";
 import type { IDurableQueue } from "./queue";
 import type { IEventBus } from "./bus";
+import type { IDurableContext } from "./context";
 import type { Schedule } from "../types";
+import type { DurableAuditEmitter } from "../audit";
 
 export type DurableTask<TInput = unknown, TResult = unknown> = ITask<
   TInput,
@@ -32,7 +34,27 @@ export interface DurableServiceConfig {
   queue?: IDurableQueue;
   eventBus?: IEventBus;
   taskExecutor?: ITaskExecutor;
+  /**
+   * Runs a callback with the given durable context available.
+   * In Runner environments this is typically implemented via AsyncLocalStorage
+   * so tasks can call `durable.use()`.
+   */
+  contextProvider?: <R>(
+    context: IDurableContext,
+    fn: () => Promise<R> | R,
+  ) => Promise<R> | R;
+  /**
+   * Resolves tasks by id for resuming/recovering executions.
+   * Useful in Runner environments where tasks are registered in the Store registry.
+   */
+  taskResolver?: (taskId: string) => DurableTask<any, any> | undefined;
+  audit?: {
+    enabled?: boolean;
+    emitter?: DurableAuditEmitter;
+    emitRunnerEvents?: boolean;
+  };
   polling?: {
+    enabled?: boolean;
     interval?: number;
   };
   execution?: {

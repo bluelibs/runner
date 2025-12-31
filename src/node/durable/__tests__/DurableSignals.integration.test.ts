@@ -1,6 +1,5 @@
 import { event, r, run } from "../../..";
-import { createDurableServiceResource } from "../core/resource";
-import { durableContext } from "../context";
+import { createDurableResource } from "../core/resource";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { MemoryStore } from "../store/MemoryStore";
 
@@ -24,30 +23,26 @@ describe("durable: signals integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
+    const durable = createDurableResource("durable.tests.signals.durable", {
+      store,
+      eventBus: bus,
+      polling: { interval: 5 },
+    });
+
     const task = r
       .task("durable.test.waitForSignal")
-      .dependencies({ durableContext })
-      .run(async (_input: undefined, { durableContext }) => {
-        const ctx = durableContext.use();
+      .dependencies({ durable })
+      .run(async (_input: undefined, { durable }) => {
+        const ctx = durable.use();
         const payment = await ctx.waitForSignal(Paid);
         return { ok: true, paidAt: payment.paidAt };
       })
       .build();
 
-    const durableService = createDurableServiceResource({
-      store,
-      eventBus: bus,
-      polling: { interval: 5 },
-      tasks: [task],
-    });
-
-    const app = r
-      .resource("app")
-      .register([durableService, durableContext, task])
-      .build();
+    const app = r.resource("app").register([durable, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
-    const service = runtime.getResourceValue(durableService);
+    const service = runtime.getResourceValue(durable);
 
     const executionId = await service.startExecution(task, undefined, {
       timeout: 5_000,
@@ -72,31 +67,30 @@ describe("durable: signals integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
+    const durable = createDurableResource(
+      "durable.tests.signals.durable.twice",
+      {
+        store,
+        eventBus: bus,
+        polling: { interval: 5 },
+      },
+    );
+
     const task = r
       .task("durable.test.waitForSignal.twice")
-      .dependencies({ durableContext })
-      .run(async (_input: undefined, { durableContext }) => {
-        const ctx = durableContext.use();
+      .dependencies({ durable })
+      .run(async (_input: undefined, { durable }) => {
+        const ctx = durable.use();
         const first = await ctx.waitForSignal(Paid);
         const second = await ctx.waitForSignal(Paid);
         return { first, second };
       })
       .build();
 
-    const durableService = createDurableServiceResource({
-      store,
-      eventBus: bus,
-      polling: { interval: 5 },
-      tasks: [task],
-    });
-
-    const app = r
-      .resource("app")
-      .register([durableService, durableContext, task])
-      .build();
+    const app = r.resource("app").register([durable, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
-    const service = runtime.getResourceValue(durableService);
+    const service = runtime.getResourceValue(durable);
 
     const executionId = await service.startExecution(task, undefined, {
       timeout: 5_000,

@@ -35,10 +35,64 @@ Durable workflows are a **Node-only** module exported from `@bluelibs/runner/nod
 
 - Spec & guide: `readmes/DURABLE_WORKFLOWS.md`
 - Token-friendly durable guide: `readmes/DURABLE_WORKFLOWS_AI.md`
-- Core primitives: `ctx.step(id, fn)`, `ctx.sleep(ms)`, `ctx.emit(event, payload)`, `ctx.waitForSignal(signal)` and `durableService.signal(executionId, signal, payload)`
+- Core primitives: `ctx.step(id, fn)`, `ctx.sleep(ms)`, `ctx.emit(event, payload)`, `ctx.waitForSignal(signal)` and `durable.signal(executionId, signal, payload)`
 - Semantics: repeated `emit` and repeated `waitForSignal` (same signal id) are supported and replay-safe (see the guides for details)
 - Determinism: internal emit/signal step ids use call-order indexes; changing workflow structure can shift ids and affect replay
-- Type-safety helpers: `createDurableStepId<T>()`, `createDurableSignalId<TPayload>()`, and `durableService.executeStrict(...)`
+- Type-safety helpers: `createDurableStepId<T>()`, `createDurableSignalId<TPayload>()`, and `durable.executeStrict(...)`
+- Polling: used for timers (`sleep`, signal timeouts, schedules); can be disabled per-process via `polling: { enabled: false }`
+- Observability: optional audit trail via `audit: { enabled: true }` + `ctx.note(...)` + `store.listAuditEntries(executionId)`; for mirroring/streaming, enable `audit: { enabled: true, emitRunnerEvents: true }` and listen to `durableEvents.*`
+
+### Runner Integration Patterns (Real-World)
+
+**Single-process (local dev / tests)**: run the durable resource + tasks in the same Runner runtime.
+
+```ts
+	import { r, run } from "@bluelibs/runner";
+	import {
+	  MemoryStore,
+	  MemoryQueue,
+	  MemoryEventBus,
+	  createDurableResource,
+	} from "@bluelibs/runner/node";
+
+	const store = new MemoryStore();
+	const queue = new MemoryQueue();
+	const eventBus = new MemoryEventBus();
+
+	const durable = createDurableResource("app.durable", {
+	  store,
+	  queue,
+	  eventBus,
+	  worker: true, // consumes the queue in this process
+	});
+
+	const processOrder = r
+	  .task("app.tasks.processOrder")
+	  .dependencies({ durable })
+	  .run(async (input: { orderId: string }, { durable }) => {
+	    const ctx = durable.use();
+	    await ctx.step("validate", async () => ({ ok: true }));
+	    return { ok: true };
+	  })
+	  .build();
+
+	const app = r
+	  .resource("app")
+	  .register([durable, processOrder])
+	  .build();
+
+	const runtime = await run(app);
+	const d = runtime.getResourceValue(durable);
+```
+
+**Multi-process (production)**: run N worker processes that consume the queue and process executions.
+
+- Worker processes register the same durable resource with `worker: true`.
+- API processes usually **should not** run the durable poller/worker; configure `worker: false` + `polling: { enabled: false }`.
+
+Concrete approach with Runner itself:
+- Add a small “durable API” task (eg `app.durable.startOrder`) that calls `durable.startExecution(...)` and persists the returned `executionId` into your DB.
+- Add webhook/callback handlers that look up `executionId` from your DB and call `durable.signal(executionId, ...)`.
 
 ## Resources
 
@@ -140,6 +194,9 @@ const userRegistered = r
   .event("app.events.userRegistered")
   .payloadSchema<{ userId: string; email: string }>({ parse: (v) => v })
   .build();
+
+// Type-only alternative (no runtime payload validation):
+// const userRegistered = r.event<{ userId: string; email: string }>("app.events.userRegistered").build();
 
 const registerUser = r
   .task("app.tasks.registerUser")

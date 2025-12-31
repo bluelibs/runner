@@ -1,6 +1,5 @@
 import { r, run } from "../../..";
-import { createDurableServiceResource } from "../core/resource";
-import { durableContext } from "../context";
+import { createDurableResource } from "../core/resource";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { MemoryStore } from "../store/MemoryStore";
 
@@ -9,12 +8,18 @@ describe("durable: DurableService integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
+    const durable = createDurableResource("durable.test.durable", {
+      store,
+      eventBus: bus,
+      polling: { interval: 5 },
+    });
+
     let stepExecutions = 0;
     const task = r
       .task("durable.test.sleep")
-      .dependencies({ durableContext })
-      .run(async (_input: { v: number }, { durableContext }) => {
-        const ctx = durableContext.use();
+      .dependencies({ durable })
+      .run(async (_input: { v: number }, { durable }) => {
+        const ctx = durable.use();
         const before = await ctx.step("before", async () => {
           stepExecutions += 1;
           return "before";
@@ -27,22 +32,15 @@ describe("durable: DurableService integration", () => {
       })
       .build();
 
-    const durableService = createDurableServiceResource({
-      store,
-      eventBus: bus,
-      polling: { interval: 5 },
-      tasks: [task],
-    });
-
-    const app = r
-      .resource("app")
-      .register([durableService, durableContext, task])
-      .build();
+    const app = r.resource("app").register([durable, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
-    const service = runtime.getResourceValue(durableService);
+    const service = runtime.getResourceValue(durable);
 
-    const res = await service.execute(task, { v: 1 }, { timeout: 5_000 });
+    const res = await service.execute(task, { v: 1 }, {
+      timeout: 5_000,
+      waitPollIntervalMs: 5,
+    });
     expect(res).toEqual({ before: "before", after: "after" });
     expect(stepExecutions).toBe(1);
 

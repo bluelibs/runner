@@ -1,8 +1,38 @@
 import { IDurableStore } from "./interfaces/store";
 import { Execution } from "./types";
+import type { DurableAuditEntry } from "./audit";
+import type { StepResult } from "./types";
+import type { ListExecutionsOptions } from "./interfaces/store";
 
 export class DurableOperator {
   constructor(private readonly store: IDurableStore) {}
+
+  async listExecutions(options?: ListExecutionsOptions): Promise<Execution[]> {
+    if (this.store.listExecutions) {
+      return await this.store.listExecutions(options);
+    }
+
+    // Fallback for stores that haven't implemented the new method
+    return await this.store.listIncompleteExecutions();
+  }
+
+  async getExecutionDetail(executionId: string): Promise<{
+    execution: Execution | null;
+    steps: StepResult[];
+    audit: DurableAuditEntry[];
+  }> {
+    const execution = await this.store.getExecution(executionId);
+
+    const steps = this.store.listStepResults
+      ? await this.store.listStepResults(executionId)
+      : [];
+
+    const audit = this.store.listAuditEntries
+      ? await this.store.listAuditEntries(executionId)
+      : [];
+
+    return { execution, steps, audit };
+  }
 
   /**
    * Resets an execution from `compensation_failed` (or other states) to `pending`.

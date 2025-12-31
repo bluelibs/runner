@@ -21,7 +21,7 @@
 | [BlueLibs Runner Dev](https://github.com/bluelibs/runner-dev)                                                       | GitHub  | Development tools and CLI for BlueLibs Runner                 |
 | [UX Friendly Docs](https://bluelibs.github.io/runner/)                                                              | Docs    | Clean, navigable documentation                                |
 | [AI Friendly Docs (<5000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)                               | Docs    | Short, token-friendly summary (<5000 tokens)                  |
-| [Durable Workflows (Node-only)](https://github.com/bluelibs/runner/blob/main/readmes/DURABLE_WORKFLOWS.md)          | Guide   | Durable workflows deep-dive (see also `readmes/DURABLE_WORKFLOWS_AI.md`) |
+| [Durable Workflows (Node-only)](https://github.com/bluelibs/runner/blob/main/readmes/DURABLE_WORKFLOWS.md)          | Guide   | Durable workflows deep-dive (see also `readmes/DURABLE_WORKFLOWS_AI.md`), plus dashboard + optional audit timeline |
 | [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade from v3 to v4                            |
 | [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)                                                 | Docs    | Design notes, deep dives, and context                         |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | Full Express + OpenAPI + SQLite demo                          |

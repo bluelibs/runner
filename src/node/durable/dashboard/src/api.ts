@@ -15,6 +15,16 @@ export interface StepResult {
   completedAt: string;
 }
 
+export interface AuditEntry {
+  id: string;
+  executionId: string;
+  at: string;
+  kind: string;
+  attempt: number;
+  taskId?: string;
+  [k: string]: any;
+}
+
 export interface Execution {
   id: string;
   taskId: string;
@@ -30,6 +40,7 @@ export interface Execution {
   updatedAt: string;
   completedAt?: string;
   steps?: StepResult[];
+  audit?: AuditEntry[];
 }
 
 export interface ListExecutionsOptions {

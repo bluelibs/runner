@@ -24,31 +24,48 @@
 
 ## Quickstart
 
+### 0) Create a durable resource (Runner-style)
+
+The recommended integration is a **single durable resource** that:
+
+- Executes Runner tasks via DI (`taskRunner.run(...)`).
+- Provides a **per-resource** durable context, accessed via `durable.use()`.
+- Optionally embeds a worker (`worker: true`) to consume the queue in that process.
+
 ### 1) Define a durable task (steps + sleep + signal)
 
 ```ts
-import { event, r, run } from "@bluelibs/runner";
-import {
-  MemoryStore,
-  MemoryQueue,
-  MemoryEventBus,
-  createDurableServiceResource,
-  createDurableWorkerResource,
-  durableContext,
-} from "@bluelibs/runner/node";
+	import { event, r, run } from "@bluelibs/runner";
+	import {
+	  MemoryStore,
+	  MemoryQueue,
+	  MemoryEventBus,
+	  createDurableResource,
+	} from "@bluelibs/runner/node";
 
-const Approved = event<{ approvedBy: string }>({ id: "app.signals.approved" });
+	const Approved = event<{ approvedBy: string }>({ id: "app.signals.approved" });
 
-const approveOrder = r
-  .task("app.tasks.approveOrder")
-  .dependencies({ durableContext })
-  .run(async (input: { orderId: string }, { durableContext }) => {
-    const ctx = durableContext.use();
+	const store = new MemoryStore();
+	const queue = new MemoryQueue();
+	const eventBus = new MemoryEventBus();
 
-    await ctx.step("validate", async () => {
-      // fetch order, validate invariants, etc.
-      return { ok: true };
-    });
+	const durable = createDurableResource("app.durable", {
+	  store,
+	  queue,
+	  eventBus,
+	  worker: true, // single-process dev/tests
+	});
+
+	const approveOrder = r
+	  .task("app.tasks.approveOrder")
+	  .dependencies({ durable })
+	  .run(async (input: { orderId: string }, { durable }) => {
+	    const ctx = durable.use();
+
+	    await ctx.step("validate", async () => {
+	      // fetch order, validate invariants, etc.
+	      return { ok: true };
+	    });
 
     const outcome = await ctx.waitForSignal(Approved, { timeoutMs: 86_400_000 });
     if (outcome.kind === "timeout") {
@@ -60,21 +77,14 @@ const approveOrder = r
       return { shipped: true };
     });
 
-    return { status: "approved" as const, approvedBy: outcome.payload.approvedBy };
-  })
-  .build();
+	    return { status: "approved" as const, approvedBy: outcome.payload.approvedBy };
+	  })
+	  .build();
 
-const store = new MemoryStore();
-const queue = new MemoryQueue();
-const eventBus = new MemoryEventBus();
+	const app = r.resource("app").register([durable, approveOrder]).build();
 
-const durableService = createDurableServiceResource({ store, queue, eventBus, tasks: [approveOrder] });
-const durableWorker = createDurableWorkerResource(durableService, { queue });
-
-const app = r.resource("app").register([durableService, durableWorker, durableContext, approveOrder]).build();
-
-const runtime = await run(app, { logs: { printThreshold: null } });
-const durable = runtime.getResourceValue(durableService);
+	const runtime = await run(app, { logs: { printThreshold: null } });
+	const d = runtime.getResourceValue(durable);
 ```
 
 ### Production wiring (Redis + RabbitMQ)
@@ -82,38 +92,53 @@ const durable = runtime.getResourceValue(durableService);
 For production, swap the in-memory backends:
 
 ```ts
-import {
-  RabbitMQQueue,
-  RedisEventBus,
-  RedisStore,
-  createDurableServiceResource,
-  createDurableWorkerResource,
-} from "@bluelibs/runner/node";
+	import {
+	  RabbitMQQueue,
+	  RedisEventBus,
+	  RedisStore,
+	  createDurableResource,
+	} from "@bluelibs/runner/node";
 
 const store = new RedisStore({ redis: process.env.REDIS_URL });
 const queue = new RabbitMQQueue({ url: process.env.RABBITMQ_URL });
 const eventBus = new RedisEventBus({ redis: process.env.REDIS_URL });
 
-const durableService = createDurableServiceResource({ store, queue, eventBus, tasks: [approveOrder] });
-const durableWorker = createDurableWorkerResource(durableService, { queue });
+	const durable = createDurableResource("app.durable", {
+	  store,
+	  queue,
+	  eventBus,
+	  worker: true,
+	});
+```
+
+API nodes typically **disable polling and the embedded worker**:
+
+```ts
+const durable = createDurableResource("app.durable", {
+  store,
+  queue,
+  eventBus,
+  worker: false,
+  polling: { enabled: false },
+});
 ```
 
 In a typical deployment:
 - API nodes call `startExecution()` / `signal()` / `wait()`.
-- Worker nodes run `DurableWorker` (consume queue + process executions).
+- Worker nodes run the durable resource with `worker: true`.
 
 ### 2) Start an execution (store the executionId)
 
 ```ts
-const executionId = await durable.startExecution(approveOrder, { orderId: "order-123" });
+const executionId = await d.startExecution(approveOrder, { orderId: "order-123" });
 // store executionId on the order record so your webhook can resume the workflow later
 ```
 
 ### 3) Resume from the outside (webhook / callback)
 
 ```ts
-await durable.signal(executionId, Approved, { approvedBy: "admin@company.com" });
-const result = await durable.wait(executionId, { timeout: 30_000 });
+await d.signal(executionId, Approved, { approvedBy: "admin@company.com" });
+const result = await d.wait(executionId, { timeout: 30_000 });
 ```
 
 ## Why You’d Want This (In One Minute)
@@ -325,27 +350,27 @@ graph TB
 
 ### Basic Usage
 
-Durable workflows are **normal Runner tasks** that inject a `durableContext` dependency and call `ctx.step(...)` / `ctx.sleep(...)` from inside their `run` function. There is no separate `durableTask` builder – this keeps the DX identical to the rest of the fluent API described in `AI.md`.
+Durable workflows are **normal Runner tasks** that inject a **durable resource** (created via `createDurableResource(...)`) and call `ctx.step(...)` / `ctx.sleep(...)` from inside their `run` function.
 
 ```typescript
 import { r, run } from '@bluelibs/runner';
-import { createDurableServiceResource, MemoryStore, durableContext } from '@bluelibs/runner/node';
+import { createDurableResource, MemoryStore } from '@bluelibs/runner/node';
 
 // 1. Create store
 const store = new MemoryStore();
 
-// 2. Create durable service resource
-const durableService = createDurableServiceResource({ 
+// 2. Create durable resource
+const durable = createDurableResource('app.durable', { 
   store,
-  polling: { interval: 1000 },  // Timer polling interval
+  polling: { enabled: true, interval: 1000 },  // Timer polling interval
 });
 
 // 3. Define a task that uses durable context
 const processOrder = r.task('app.tasks.processOrder')
   .inputSchema<{ orderId: string; customerId: string }>()
-  .dependencies({ durableContext })
-  .run(async (input, { durableContext }) => {
-    const ctx = durableContext.use();
+  .dependencies({ durable })
+  .run(async (input, { durable }) => {
+    const ctx = durable.use();
     
     // Step 1: Validate order (checkpointed)
     const order = await ctx.step('validate', async () => {
@@ -377,14 +402,14 @@ const processOrder = r.task('app.tasks.processOrder')
 
 // 4. Wire up and run
 const app = r.resource('app')
-  .register([durableService, durableContext, processOrder])
+  .register([durable, processOrder])
   .build();
 
 const runtime = await run(app);
 
 // 5. Execute durably
-const durable = runtime.getResourceValue(durableService);
-const result = await durable.execute(processOrder, { 
+const d = runtime.getResourceValue(durable);
+const result = await d.execute(processOrder, { 
   orderId: 'order-123',
   customerId: 'cust-456'
 });
@@ -471,12 +496,11 @@ This section summarizes the safety guarantees and expectations of the durable wo
   - Each call is assigned a deterministic internal id like `__emit:<eventId>:<index>` so you can emit the same event type multiple times in one workflow.  
   - On replay, memoization prevents duplicates for each individual emission.
   - **Determinism note:** those internal `:<index>` suffixes are derived from call order within the workflow. If you change the workflow structure (branching / adding/removing calls), the internal step ids may shift and past executions may no longer replay cleanly.
-  - **Legacy migration note:** the first emit call also checks for an old-style `emit:<eventId>:<executionId>` step result and migrates it forward. This assumes that legacy step result means the event was already emitted successfully.
 
 - **Signals (wait until external confirmation)**
   - `ctx.waitForSignal(signal)` suspends an execution until `durable.signal(executionId, signal, payload)` is called.
-  - Signals are memoized as steps under `__signal:<signal.id>` (or `__signal:<id>` for string ids).
-  - If you wait for the same signal multiple times, subsequent waits use `__signal:<id>:<index>`. `durable.signal(...)` delivers to the first currently-waiting step (legacy first, then the lowest index).
+  - Signals are memoized as steps under `__signal:<signal.id>[:index]` (or `__signal:<id>[:index]` for string ids).
+  - If you wait for the same signal multiple times, subsequent waits use `__signal:<id>:<index>`. `durable.signal(...)` delivers to the first waiting slot, otherwise it stores the payload in the next available slot so future waits can return immediately.
   - **Determinism note:** like `emit`, the `:<index>` suffixes are derived from call order within the workflow; code changes can shift indexes on replay.
 
 - **Retries and timeouts**  
@@ -489,8 +513,8 @@ This section summarizes the safety guarantees and expectations of the durable wo
   - Workers must treat queue messages as hints to load state from the store, apply `DurableContext` logic, and then `ack` or `nack` the message. Idempotency is achieved by reading/writing through `IDurableStore`, not by trusting the queue alone.
 
 - **Multi-node coordination**  
-  - `IEventBus` is used to reduce latency (notify workers of ready timers) but does not replace the store.  
-  - Implementations that support distributed locking (for example, Redis-based stores) should use it to ensure only one worker processes a given execution at a time.
+  - `IEventBus` is used to reduce `wait()` latency (publish `execution:<id>` completion events) but does not replace the store.  
+  - Timers (`sleep`, signal timeouts, schedules) are driven by the durable poller (`DurableService` polling loop). In multi-process setups, run a single poller (`polling: { enabled: true }`) or implement atomic timer claiming in your store.
 
 - **Reserved step ids**
   - Step ids starting with `__` and `rollback:` are reserved for durable internals. Avoid using them in `ctx.step(...)` to prevent collisions with system steps.
@@ -506,16 +530,17 @@ Durable workflows often need to pause until the outside world confirms something
 ### Example: `waitUntilPaid()`
 
 ```typescript
-import { defineEvent, r } from "@bluelibs/runner";
-import { durableContext } from "@bluelibs/runner/node";
+import { event, r } from "@bluelibs/runner";
+import { createDurableResource, MemoryStore } from "@bluelibs/runner/node";
 
-const Paid = defineEvent<{ paidAt: number }>({ id: "app.signals.paid" });
+const Paid = event<{ paidAt: number }>({ id: "app.signals.paid" });
+const durable = createDurableResource("app.durable", { store: new MemoryStore() });
 
 export const processOrder = r
   .task("app.tasks.processOrder")
-  .dependencies({ durableContext })
-  .run(async (input: { orderId: string }, { durableContext }) => {
-    const ctx = durableContext.use();
+  .dependencies({ durable })
+  .run(async (input: { orderId: string }, { durable }) => {
+    const ctx = durable.use();
 
     await ctx.step("reserve", async () => {
       // reserve inventory, create payment intent, etc.
@@ -536,8 +561,9 @@ From an API webhook / callback handler:
 
 ```typescript
 // Store the workflow `executionId` in your domain data when you start it.
-// You can get it immediately via `await durable.startExecution(task, input)`.
-await durable.signal(executionId, Paid, { paidAt: Date.now() });
+// You can get it immediately via `await d.startExecution(task, input)`.
+const d = runtime.getResourceValue(durable);
+await d.signal(executionId, Paid, { paidAt: Date.now() });
 ```
 
 ### Whichever comes first: signal or timeout
@@ -564,19 +590,19 @@ Instead of a complex saga orchestrator, users implement compensation explicitly:
 
 ```typescript
 const processOrderWithRollback = r.task('app.tasks.processOrder')
-  .dependencies({ durableContext })
-  .run(async (input, { durableContext }) => {
-    const ctx = durableContext.use();
+  .dependencies({ durable })
+  .run(async (input, { durable }) => {
+    const ctx = durable.use();
     
     // Reserve inventory
-    const reservation = await ctx.step('reserve-inventory', async () => {
-      return await inventory.reserve(input.items);
-    });
+    const reservation = await ctx.step('reserve-inventory')
+      .up(async () => inventory.reserve(input.items))
+      .down(async (res) => inventory.release(res.reservationId));
     
     // Charge payment
-    const payment = await ctx.step('charge-payment', async () => {
-      return await payments.charge(input.customerId, input.amount);
-    });
+    const payment = await ctx.step('charge-payment')
+      .up(async () => payments.charge(input.customerId, input.amount))
+      .down(async (p) => payments.refund(p.chargeId));
     
     try {
       // Ship order - might fail
@@ -585,17 +611,11 @@ const processOrderWithRollback = r.task('app.tasks.processOrder')
       });
       return { success: true, shipment };
     } catch (error) {
-      // Compensate - refund payment
-      await ctx.step('refund-payment', async () => {
-        await payments.refund(payment.chargeId);
-      });
-      
-      // Release inventory
-      await ctx.step('release-inventory', async () => {
-        await inventory.release(reservation.reservationId);
-      });
-      
-      return { success: false, error: error.message };
+      await ctx.rollback();
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   })
   .build();
@@ -634,9 +654,9 @@ Define tasks that run on a schedule using cron expressions:
 ```typescript
 // Define a scheduled task
 const dailyCleanup = r.task('app.tasks.dailyCleanup')
-  .dependencies({ durableContext, db })
-  .run(async (input, { durableContext, db }) => {
-    const ctx = durableContext.use();
+  .dependencies({ durable, db })
+  .run(async (input, { durable, db }) => {
+    const ctx = durable.use();
     
     await ctx.step('cleanup-old-sessions', async () => {
       await db.sessions.deleteOlderThan(7, 'days');
@@ -650,30 +670,16 @@ const dailyCleanup = r.task('app.tasks.dailyCleanup')
   })
   .build();
 
-// Register cron schedules with the durable service
-const durableService = createDurableServiceResource({
-  store,
-  schedules: [
-    {
-      id: 'daily-cleanup',
-      task: dailyCleanup,
-      cron: '0 3 * * *',  // Every day at 3:00 AM
-      input: {},
-    },
-    {
-      id: 'hourly-sync',
-      task: syncInventory,
-      cron: '0 * * * *',  // Every hour at minute 0
-      input: { full: false },
-    },
-    {
-      id: 'weekly-report',
-      task: generateWeeklyReport,
-      cron: '0 9 * * MON',  // Every Monday at 9:00 AM
-      input: { type: 'weekly' },
-    },
-  ],
-});
+// Create schedules once at startup (in a bootstrap resource/task)
+if (!(await durable.getSchedule('daily-cleanup'))) {
+  await durable.schedule(dailyCleanup, {}, { id: 'daily-cleanup', cron: '0 3 * * *' });
+}
+if (!(await durable.getSchedule('hourly-sync'))) {
+  await durable.schedule(syncInventory, { full: false }, { id: 'hourly-sync', cron: '0 * * * *' });
+}
+if (!(await durable.getSchedule('weekly-report'))) {
+  await durable.schedule(generateWeeklyReport, { type: 'weekly' }, { id: 'weekly-report', cron: '0 9 * * MON' });
+}
 ```
 
 ### Interval-Based Scheduling
@@ -681,32 +687,23 @@ const durableService = createDurableServiceResource({
 Run tasks at fixed intervals (e.g., every 30 seconds):
 
 ```typescript
-const durableService = createDurableServiceResource({
-  store,
-  schedules: [
-    // Run health check every 30 seconds
-    {
-      id: 'health-check',
-      task: healthCheckTask,
-      interval: 30000,  // Every 30 seconds
-      input: { endpoints: ['api', 'db'] },
-    },
-    // Poll external API every 5 minutes
-    {
-      id: 'poll-external-api',
-      task: pollExternalApi,
-      interval: 5 * 60 * 1000,  // Every 5 minutes
-      input: {},
-    },
-    // Sync metrics every minute
-    {
-      id: 'metrics-sync',
-      task: metricsSync,
-      interval: 60000,  // Every minute
-      input: { flush: true },
-    },
-  ],
-});
+if (!(await durable.getSchedule('health-check'))) {
+  await durable.schedule(
+    healthCheckTask,
+    { endpoints: ['api', 'db'] },
+    { id: 'health-check', interval: 30_000 },
+  );
+}
+if (!(await durable.getSchedule('poll-external-api'))) {
+  await durable.schedule(
+    pollExternalApi,
+    {},
+    { id: 'poll-external-api', interval: 5 * 60 * 1000 },
+  );
+}
+if (!(await durable.getSchedule('metrics-sync'))) {
+  await durable.schedule(metricsSync, { flush: true }, { id: 'metrics-sync', interval: 60_000 });
+}
 ```
 
 **Interval vs Cron:**
@@ -965,7 +962,11 @@ export interface DurableServiceConfig {
   store: IDurableStore;
   queue?: IDurableQueue;
   eventBus?: IEventBus;
+  audit?: {
+    enabled?: boolean;  // Default: false
+  };
   polling?: {
+    enabled?: boolean;  // Default: true
     interval?: number;  // Default: 1000ms
   };
   execution?: {
@@ -1057,7 +1058,6 @@ export interface IDurableService {
 ```
 src/node/durable/
 ├── index.ts                 # Public exports (from `@bluelibs/runner/node`)
-├── context.ts               # `durableContext` AsyncContext
 ├── core/                    # Engine (store is the source of truth)
 │   ├── index.ts
 │   ├── types.ts
@@ -1104,12 +1104,10 @@ npm install ioredis amqplib cron-parser
 
 ```typescript
 import {
-  DurableService,
-  DurableWorker,
+  createDurableResource,
   RedisStore,
   RedisEventBus,
   RabbitMQQueue,
-  durableContext
 } from '@bluelibs/runner/node';
 
 // State storage with Redis
@@ -1136,20 +1134,28 @@ const queue = new RabbitMQQueue({
 });
 
 // Create durable service
-const durableService = createDurableServiceResource({
+const durable = createDurableResource("app.durable", {
   store,
   eventBus,
   queue,
-  schedules: [
-    { id: 'cleanup', task: cleanupTask, cron: '0 3 * * *', input: {} },
-    { id: 'health', task: healthTask, interval: 30000, input: {} },
-  ],
+  worker: true, // starts a queue consumer in this process
+  // polling.enabled defaults to true; keep it on for timers/schedules
 });
-
-// Create worker (can run multiple instances!)
-// Concurrency is controlled primarily by the queue adapter (eg. RabbitMQ `prefetch`).
-const durableWorker = DurableWorker.create(durableService, { queue });
 ```
+
+If you want API-only nodes to call `startExecution()` / `signal()` / `wait()` **without running the timer poller**, disable polling:
+
+```ts
+const durable = createDurableResource("app.durable", {
+  store,
+  eventBus,
+  queue,
+  worker: false,
+  polling: { enabled: false },
+});
+```
+
+Make sure at least one worker process runs with polling enabled, otherwise sleeps/timeouts/schedules will never fire.
 
 ### RabbitMQ Quorum Queues
 
@@ -1293,37 +1299,32 @@ The durable module integrates seamlessly with Runner's resource pattern:
 ### As a Dependency
 
 ```typescript
-import { r, run, globals } from '@bluelibs/runner';
-import { createDurableServiceResource, MemoryStore, durableContext } from '@bluelibs/runner/node';
+import { r, run } from "@bluelibs/runner";
+import { createDurableResource, MemoryStore } from "@bluelibs/runner/node";
 
-// Create durable service resource
-const durableService = createDurableServiceResource({
+const durable = createDurableResource("app.durable", {
   store: new MemoryStore(),
+  worker: true, // single-process: also consumes the queue if configured
 });
 
-// Tasks inject durableContext to access step(), sleep(), etc.
-const processOrder = r.task('app.tasks.processOrder')
-  .dependencies({ durableContext })
-  .run(async (input, { durableContext }) => {
-    const ctx = durableContext.use();
+const processOrder = r
+  .task("app.tasks.processOrder")
+  .dependencies({ durable })
+  .run(async (input, { durable }) => {
+    const ctx = durable.use();
     // ... durable task logic
   })
   .build();
 
-// Resource that uses durable service
-const orderProcessing = r.resource('app.orderProcessing')
-  .dependencies({ durableService, processOrder })
-  .init(async (_cfg, { durableService }) => {
-    // Recover any incomplete executions from previous run
-    await durableService.recover();
+const recoverDurable = r
+  .resource("app.durable.recover")
+  .dependencies({ durable })
+  .init(async (_cfg, { durable }) => {
+    await durable.recover();
   })
   .build();
 
-// Wire everything up
-const app = r.resource('app')
-  .register([durableService, durableContext, processOrder, orderProcessing])
-  .build();
-
+const app = r.resource("app").register([durable, processOrder, recoverDurable]).build();
 await run(app);
 ```
 
@@ -1336,7 +1337,7 @@ const store = process.env.REDIS_URL
   ? new RedisStore({ redis: process.env.REDIS_URL })
   : new MemoryStore();
 
-const durableService = createDurableServiceResource({ store });
+const durable = createDurableResource("app.durable", { store });
 ```
 
 ### Integration with HTTP Exposure
@@ -1348,8 +1349,7 @@ import { nodeExposure } from '@bluelibs/runner/node';
 
 const app = r.resource('app')
   .register([
-    durableService,
-    durableContext,
+    durable,
     processOrder,
     // Expose tasks over HTTP
     nodeExposure.with({
@@ -1363,54 +1363,18 @@ const client = createHttpClient({ baseUrl: 'http://worker:7070/__runner' });
 await client.task('app.tasks.processOrder', { orderId: '123' });
 ```
 
----
-
-## Integration with Node exports
-
-```typescript
-// In src/node/node.ts - add these exports:
-
-export {
-  DurableService,
-  DurableWorker,
-  durableContext,
-  MemoryStore,
-  FileStore,
-  RedisStore,
-  MemoryQueue,
-  RabbitMQQueue,
-  MemoryEventBus,
-  RedisEventBus
-} from './durable';
-
-export type {
-  IDurableStore,
-  IDurableQueue,
-  IEventBus,
-  IDurableContext,
-  IDurableService,
-  Execution,
-  StepResult,
-  Timer,
-  Schedule,
-  ExecutionStatus,
-  ScheduleType,
-  RedisStoreConfig
-} from './durable';
-```
-
----
-
 ## Recovery on Startup
 
 ```typescript
-const app = r.resource('app')
-  .register([durableService, durableContext, processOrder])
-  .init(async (_cfg, { durableService }) => {
-    // Recover incomplete executions from previous run
-    await durableService.recover();
+const recoverDurable = r
+  .resource("app.durable.recover")
+  .dependencies({ durable })
+  .init(async (_cfg, { durable }) => {
+    await durable.recover();
   })
   .build();
+
+const app = r.resource("app").register([durable, processOrder, recoverDurable]).build();
 ```
 
 The recovery process:
@@ -1443,7 +1407,48 @@ import { createDashboardMiddleware, DurableOperator } from '@bluelibs/runner/nod
 const operator = new DurableOperator(store);
 
 // Expose dashboard on /durable-dashboard
-app.use('/durable-dashboard', createDashboardMiddleware(durableService, operator));
+const d = runtime.getResourceValue(durable);
+app.use('/durable-dashboard', createDashboardMiddleware(d.service, operator));
+```
+
+### Audit trail (timeline)
+
+In addition to `StepResult` records, durable can persist a structured audit trail as the workflow runs:
+
+- execution status transitions (pending/running/sleeping/retrying/completed/failed)
+- step completions (with durations)
+- sleep scheduled/completed
+- signal waiting/delivered/timed-out
+- user-added notes via `ctx.note(...)`
+
+This is implemented via optional `IDurableStore` capabilities:
+
+- Enable it via `createDurableResource("app.durable", { audit: { enabled: true }, ... })` (default: off).
+- `appendAuditEntry(entry)`
+- `listAuditEntries(executionId)`
+
+Notes are replay-safe: if the workflow replays after a suspend, the same `ctx.note(...)` call does not create duplicates.
+
+### Stream audit entries via Runner events (for mirroring)
+
+If you want to mirror audit entries to cold storage (S3/Glacier/Postgres), enable:
+
+- `audit: { enabled: true, emitRunnerEvents: true }`
+
+Then listen to Runner events (they are excluded from `on("*")` global hooks by default, so subscribe explicitly):
+
+```ts
+import { r } from "@bluelibs/runner";
+import { durableEvents } from "@bluelibs/runner/node";
+
+const mirrorAudit = r
+  .hook("app.hooks.durableAuditMirror")
+  .on(durableEvents.audit.appended)
+  .run(async (event) => {
+    const { entry } = event.data;
+    // write entry to your cold store (idempotent by entry.id)
+  })
+  .build();
 ```
 
 ---
@@ -1453,7 +1458,7 @@ app.use('/durable-dashboard', createDashboardMiddleware(durableService, operator
 - **Always put side effects inside `ctx.step(...)`**: anything outside a step can run multiple times on retries/replays.
 - **Keep step ids stable**: renaming a step id (or changing control-flow so a different call order happens) can break replay determinism for existing executions.
 - **Call-order indexing is real**: `emit()` and repeated `waitForSignal()` allocate `:<index>` internally based on call order; refactors that add/remove calls can shift indexes.
-- **Signals are “deliver to current wait”**: `durableService.signal(executionId, ...)` resumes the first currently-waiting signal slot. If the signal arrives before the workflow is waiting (or is sent too many times), it may be ignored.
+- **Signals are “deliver to current wait”**: `durableService.signal(executionId, ...)` delivers to the base signal slot if it’s not completed yet (this can buffer the first signal even if the workflow hasn’t reached the wait). Additional signals only deliver to subsequent indexed waits; otherwise they are ignored.
 - **Don’t hang forever**: prefer `durableService.wait(executionId, { timeout: ... })` unless you intentionally want an unbounded wait.
 - **Compensation failures are terminal**: if `ctx.rollback()` fails, execution becomes `compensation_failed` and `wait()` rejects. Use `DurableOperator.retryRollback(executionId)` after fixing the underlying issue.
 - **Debugging**: inspect step results + timers in the dashboard, or query your `IDurableStore` implementation directly (Redis keys are prefixed by `durable:` by default).

@@ -1,10 +1,8 @@
 import { r, run } from "../../..";
-import { DurableWorker } from "../core/DurableWorker";
-import { durableContext } from "../context";
 import { RabbitMQQueue } from "../queue/RabbitMQQueue";
 import { RedisEventBus } from "../bus/RedisEventBus";
 import { RedisStore } from "../store/RedisStore";
-import { createDurableServiceResource } from "../core/resource";
+import { createDurableResource } from "../core/resource";
 
 const redisUrl = process.env.DURABLE_TEST_REDIS_URL ?? "redis://localhost:6379";
 const rabbitUrl = process.env.DURABLE_TEST_RABBIT_URL ?? "amqp://localhost";
@@ -27,12 +25,19 @@ const shouldRun = process.env.DURABLE_INTEGRATION === "1";
       },
     });
 
+    const durable = createDurableResource("durable.integration.durable", {
+      store,
+      queue,
+      eventBus: bus,
+      worker: true,
+    });
+
     let ran = 0;
     const task = r
       .task("durable.integration.task")
-      .dependencies({ durableContext })
-      .run(async (_input: { v: number }, { durableContext }) => {
-        const ctx = durableContext.use();
+      .dependencies({ durable })
+      .run(async (_input: { v: number }, { durable }) => {
+        const ctx = durable.use();
         return await ctx.step("once", async () => {
           ran += 1;
           return { ok: true, ran };
@@ -40,30 +45,15 @@ const shouldRun = process.env.DURABLE_INTEGRATION === "1";
       })
       .build();
 
-    const durableService = createDurableServiceResource({
-      store,
-      queue,
-      eventBus: bus,
-      tasks: [task],
-    });
-
-    const durableWorker = DurableWorker.create(durableService, { queue });
-
-    const app = r
-      .resource("app")
-      .register([durableService, durableWorker, durableContext, task])
-      .build();
+    const app = r.resource("app").register([durable, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
-    const service = runtime.getResourceValue(durableService);
+    const service = runtime.getResourceValue(durable);
 
     const result = await service.execute(task, { v: 1 });
     expect(result.ok).toBe(true);
     expect(result.ran).toBe(1);
 
     await runtime.dispose();
-    await queue.dispose?.();
-    await bus.dispose?.();
-    await store.dispose?.();
   }, 30_000);
 });

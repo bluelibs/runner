@@ -1,0 +1,141 @@
+import { AsyncLocalStorage } from "node:async_hooks";
+import type { IEventDefinition } from "../../../types/event";
+import type { DurableSignalId } from "./ids";
+import type { IDurableContext } from "./interfaces/context";
+import type {
+  DurableTask,
+  ExecuteOptions,
+  IDurableService,
+  ScheduleOptions,
+} from "./interfaces/service";
+import type { Schedule } from "./types";
+
+export interface DurableResourceConfig {
+  worker?: boolean;
+}
+
+export interface IDurableResource
+  extends Pick<
+    IDurableService,
+    | "startExecution"
+    | "wait"
+    | "execute"
+    | "executeStrict"
+    | "schedule"
+    | "pauseSchedule"
+    | "resumeSchedule"
+    | "getSchedule"
+    | "listSchedules"
+    | "updateSchedule"
+    | "removeSchedule"
+    | "recover"
+    | "signal"
+  > {
+  /**
+   * Reads the durable context for the currently running workflow execution.
+   * Throws if called outside of a durable execution.
+   */
+  use(): IDurableContext;
+}
+
+/**
+ * A Runner-facing wrapper around `DurableService` that exposes a per-instance
+ * context store and the public durable API (`execute`, `signal`, `wait`, etc.).
+ *
+ * This enables tasks to depend on a specific durable instance and call
+ * `durable.use()` to access the per-execution durable context.
+ */
+export class DurableResource implements IDurableResource {
+  constructor(
+    public readonly service: IDurableService,
+    private readonly contextStorage: AsyncLocalStorage<IDurableContext>,
+  ) {}
+
+  use(): IDurableContext {
+    const ctx = this.contextStorage.getStore();
+    if (!ctx) {
+      throw new Error(
+        "Durable context is not available. Did you call durable.use() outside a durable task execution?",
+      );
+    }
+    return ctx;
+  }
+
+  startExecution<TInput>(
+    task: DurableTask<TInput, unknown>,
+    input?: TInput,
+    options?: ExecuteOptions,
+  ): Promise<string> {
+    return this.service.startExecution(task, input, options);
+  }
+
+  wait<TResult>(
+    executionId: string,
+    options?: { timeout?: number; waitPollIntervalMs?: number },
+  ): Promise<TResult> {
+    return this.service.wait<TResult>(executionId, options);
+  }
+
+  execute<TInput, TResult>(
+    task: DurableTask<TInput, TResult>,
+    input?: TInput,
+    options?: ExecuteOptions,
+  ): Promise<TResult> {
+    return this.service.execute(task, input, options);
+  }
+
+  executeStrict<TInput, TResult>(
+    task: undefined extends TResult ? never : DurableTask<TInput, TResult>,
+    input?: TInput,
+    options?: ExecuteOptions,
+  ): Promise<TResult> {
+    return this.service.executeStrict(task, input, options);
+  }
+
+  schedule<TInput>(
+    task: DurableTask<TInput, unknown>,
+    input: TInput | undefined,
+    options: ScheduleOptions,
+  ): Promise<string> {
+    return this.service.schedule(task, input, options);
+  }
+
+  pauseSchedule(scheduleId: string): Promise<void> {
+    return this.service.pauseSchedule(scheduleId);
+  }
+
+  resumeSchedule(scheduleId: string): Promise<void> {
+    return this.service.resumeSchedule(scheduleId);
+  }
+
+  getSchedule(scheduleId: string): Promise<Schedule | null> {
+    return this.service.getSchedule(scheduleId);
+  }
+
+  listSchedules(): Promise<Schedule[]> {
+    return this.service.listSchedules();
+  }
+
+  updateSchedule(
+    scheduleId: string,
+    updates: { cron?: string; interval?: number; input?: unknown },
+  ): Promise<void> {
+    return this.service.updateSchedule(scheduleId, updates);
+  }
+
+  removeSchedule(scheduleId: string): Promise<void> {
+    return this.service.removeSchedule(scheduleId);
+  }
+
+  recover(): Promise<void> {
+    return this.service.recover();
+  }
+
+  signal<TPayload>(
+    executionId: string,
+    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
+    payload: TPayload,
+  ): Promise<void> {
+    return this.service.signal(executionId, signal, payload);
+  }
+}

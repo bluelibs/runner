@@ -1,4 +1,3 @@
-import { durableContext } from "../context";
 import { NoopEventBus } from "../bus/NoopEventBus";
 import { DurableContext } from "./DurableContext";
 import { CronParser } from "./CronParser";
@@ -14,6 +13,7 @@ import type { Execution, Schedule, Timer } from "./types";
 import type { IEventDefinition } from "../../../types/event";
 import type { BusEvent } from "./interfaces/bus";
 import type { DurableSignalId } from "./ids";
+import { createDurableAuditEntryId, type DurableAuditEntry } from "./audit";
 import {
   sleepMs,
   withTimeout,
@@ -46,12 +46,42 @@ export class DurableService implements IDurableService {
     }
   }
 
+  private async appendAuditEntry(
+    params: Omit<
+      Parameters<NonNullable<DurableServiceConfig["store"]["appendAuditEntry"]>>[0],
+      "id" | "at"
+    > & { at?: Date },
+  ): Promise<void> {
+    if (!this.config.audit?.enabled) return;
+    if (!this.config.store.appendAuditEntry) return;
+    const at = params.at ?? new Date();
+    const fullEntry: DurableAuditEntry = {
+      ...params,
+      id: createDurableAuditEntryId(at.getTime()),
+      at,
+    };
+    try {
+      await this.config.store.appendAuditEntry(fullEntry);
+
+      if (this.config.audit?.emitter) {
+        try {
+          await this.config.audit.emitter.emit(fullEntry);
+        } catch {
+          // Audit emissions must not affect workflow correctness.
+        }
+      }
+    } catch {
+      // Audit trails must not affect workflow correctness.
+      // If audit persistence fails, we degrade gracefully.
+    }
+  }
+
   registerTask<TInput, TResult>(task: DurableTask<TInput, TResult>): void {
     this.tasks.set(task.id, task);
   }
 
   findTask(taskId: string): DurableTask<any, any> | undefined {
-    return this.tasks.get(taskId);
+    return this.tasks.get(taskId) ?? this.config.taskResolver?.(taskId);
   }
 
   async startExecution<TInput>(
@@ -63,7 +93,7 @@ export class DurableService implements IDurableService {
 
     if (!this.config.queue && !this.config.taskExecutor) {
       throw new Error(
-        "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use `createDurableServiceResource()` in a Runner runtime, or provide a custom executor in config.",
+        "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use `createDurableResource()` in a Runner runtime, or provide a custom executor in config.",
       );
     }
 
@@ -81,6 +111,15 @@ export class DurableService implements IDurableService {
     };
 
     await this.config.store.saveExecution(execution);
+    await this.appendAuditEntry({
+      kind: "execution_status_changed",
+      executionId,
+      taskId: task.id,
+      attempt: execution.attempt,
+      from: null,
+      to: "pending",
+      reason: "created",
+    });
     await this.kickoffExecution(executionId);
 
     return executionId;
@@ -278,8 +317,15 @@ export class DurableService implements IDurableService {
       );
     }
 
-    await this.config.store.updateExecution(execution.id, {
-      status: "running",
+    await this.config.store.updateExecution(execution.id, { status: "running" });
+    await this.appendAuditEntry({
+      kind: "execution_status_changed",
+      executionId: execution.id,
+      taskId: execution.taskId,
+      attempt: execution.attempt,
+      from: execution.status,
+      to: "running",
+      reason: "start_attempt",
     });
 
     const context = new DurableContext(
@@ -287,11 +333,17 @@ export class DurableService implements IDurableService {
       this.getEventBus(),
       execution.id,
       execution.attempt,
+      {
+        auditEnabled: this.config.audit?.enabled === true,
+        auditEmitter: this.config.audit?.emitter,
+      },
     );
 
     try {
+      const contextProvider =
+        this.config.contextProvider ?? ((_ctx, fn) => fn());
       const promise = Promise.resolve(
-        durableContext.provide(context, () =>
+        contextProvider(context, () =>
           this.config.taskExecutor!.run(task, execution.input),
         ),
       );
@@ -322,11 +374,29 @@ export class DurableService implements IDurableService {
         completedAt: new Date(),
       };
       await this.config.store.updateExecution(execution.id, finishedExecution);
+      await this.appendAuditEntry({
+        kind: "execution_status_changed",
+        executionId: execution.id,
+        taskId: execution.taskId,
+        attempt: execution.attempt,
+        from: "running",
+        to: "completed",
+        reason: "completed",
+      });
       await this.notifyExecutionFinished(finishedExecution);
     } catch (error) {
       if (error instanceof SuspensionSignal) {
         await this.config.store.updateExecution(execution.id, {
           status: "sleeping",
+        });
+        await this.appendAuditEntry({
+          kind: "execution_status_changed",
+          executionId: execution.id,
+          taskId: execution.taskId,
+          attempt: execution.attempt,
+          from: "running",
+          to: "sleeping",
+          reason: `suspend:${error.reason}`,
         });
         return;
       }
@@ -353,6 +423,15 @@ export class DurableService implements IDurableService {
           completedAt: new Date(),
         };
         await this.config.store.updateExecution(execution.id, failedExecution);
+        await this.appendAuditEntry({
+          kind: "execution_status_changed",
+          executionId: execution.id,
+          taskId: execution.taskId,
+          attempt: execution.attempt,
+          from: "running",
+          to: "failed",
+          reason: "failed",
+        });
         await this.notifyExecutionFinished(failedExecution);
         return;
       }
@@ -372,6 +451,15 @@ export class DurableService implements IDurableService {
         status: "retrying",
         attempt: execution.attempt + 1,
         error: errorInfo,
+      });
+      await this.appendAuditEntry({
+        kind: "execution_status_changed",
+        executionId: execution.id,
+        taskId: execution.taskId,
+        attempt: execution.attempt,
+        from: "running",
+        to: "retrying",
+        reason: "retry_scheduled",
       });
     }
   }
@@ -599,6 +687,15 @@ export class DurableService implements IDurableService {
           result: { state: "completed" },
           completedAt: new Date(),
         });
+        const execution = await this.config.store.getExecution(timer.executionId);
+        await this.appendAuditEntry({
+          kind: "sleep_completed",
+          executionId: timer.executionId,
+          taskId: execution?.taskId,
+          attempt: execution?.attempt ?? 0,
+          stepId: timer.stepId,
+          timerId: timer.id,
+        });
       }
 
       if (timer.type === "signal_timeout" && timer.executionId && timer.stepId) {
@@ -613,6 +710,20 @@ export class DurableService implements IDurableService {
             stepId: timer.stepId,
             result: { state: "timed_out" },
             completedAt: new Date(),
+          });
+          const execution = await this.config.store.getExecution(timer.executionId);
+          const stepSuffix = timer.stepId.startsWith("__signal:")
+            ? timer.stepId.slice("__signal:".length)
+            : timer.stepId;
+          const signalId = stepSuffix.split(":")[0];
+          await this.appendAuditEntry({
+            kind: "signal_timed_out",
+            executionId: timer.executionId,
+            taskId: execution?.taskId,
+            attempt: execution?.attempt ?? 0,
+            stepId: timer.stepId,
+            signalId,
+            timerId: timer.id,
           });
         }
       }
@@ -709,49 +820,34 @@ export class DurableService implements IDurableService {
 
     const maxSignalSlotsToScan = 1000;
     let completedStepId: string | null = null;
+    let shouldResume = false;
 
-    const baseExisting = await this.config.store.getStepResult(
-      executionId,
-      baseStepId,
-    );
-    const baseState = parseSignalState(baseExisting?.result);
+    for (let index = 0; index < maxSignalSlotsToScan; index += 1) {
+      const stepId = index === 0 ? baseStepId : `${baseStepId}:${index}`;
+      const existing = await this.config.store.getStepResult(executionId, stepId);
 
-    if (!baseExisting || baseState?.state === "waiting" || baseState === null) {
-      if (baseState?.state === "waiting" && baseState.timerId) {
-        await this.config.store.deleteTimer(baseState.timerId);
+      if (!existing) {
+        completedStepId = stepId;
+        break;
       }
-      completedStepId = baseStepId;
-    } else if (
-      baseState &&
-      (baseState.state === "completed" || baseState.state === "timed_out")
-    ) {
-      for (let index = 1; index < maxSignalSlotsToScan; index += 1) {
-        const stepId = `${baseStepId}:${index}`;
-        const existing = await this.config.store.getStepResult(
-          executionId,
-          stepId,
+
+      const state = parseSignalState(existing.result);
+      if (!state) {
+        throw new Error(
+          `Invalid signal step state for '${signalId}' at '${stepId}'`,
         );
-
-        if (!existing) {
-          return;
-        }
-
-        const state = parseSignalState(existing.result);
-        if (state?.state === "waiting") {
-          if (state.timerId) {
-            await this.config.store.deleteTimer(state.timerId);
-          }
-          completedStepId = stepId;
-          break;
-        }
-
-        if (state === null) {
-          completedStepId = stepId;
-          break;
-        }
-
-        // completed / timed_out -> keep scanning for the next active wait
       }
+
+      if (state.state === "waiting") {
+        if (state.timerId) {
+          await this.config.store.deleteTimer(state.timerId);
+        }
+        completedStepId = stepId;
+        shouldResume = true;
+        break;
+      }
+
+      // completed / timed_out -> keep scanning for the next available slot
     }
 
     if (!completedStepId) {
@@ -766,10 +862,24 @@ export class DurableService implements IDurableService {
       result: { state: "completed", payload },
       completedAt: new Date(),
     });
-
     const execution = await this.config.store.getExecution(executionId);
+    await this.appendAuditEntry({
+      kind: "signal_delivered",
+      executionId,
+      taskId: execution?.taskId,
+      attempt: execution?.attempt ?? 0,
+      stepId: completedStepId,
+      signalId,
+    });
+
+    if (!shouldResume) return;
+
     if (!execution) return;
-    if (execution.status === "completed" || execution.status === "failed")
+    if (
+      execution.status === "completed" ||
+      execution.status === "failed" ||
+      execution.status === "compensation_failed"
+    )
       return;
 
     if (this.config.queue) {
@@ -791,12 +901,14 @@ export async function initDurableService(
   if (config.store.init) await config.store.init();
   if (config.queue?.init) await config.queue.init();
   if (config.eventBus?.init) await config.eventBus.init();
-  service.start();
+  if (config.polling?.enabled !== false) {
+    service.start();
+  }
   return service;
 }
 
 export async function disposeDurableService(
-  service: DurableService,
+  service: IDurableService,
   config: DurableServiceConfig,
 ): Promise<void> {
   await service.stop();

@@ -5,6 +5,7 @@ import type {
   Timer,
   Schedule,
 } from "../types";
+import type { DurableAuditEntry } from "../audit";
 
 export interface ListExecutionsOptions {
   status?: ExecutionStatus[];
@@ -22,6 +23,11 @@ export interface IDurableStore {
   // Enhanced querying for dashboard
   listExecutions?(options?: ListExecutionsOptions): Promise<Execution[]>;
   listStepResults?(executionId: string): Promise<StepResult[]>;
+  appendAuditEntry?(entry: DurableAuditEntry): Promise<void>;
+  listAuditEntries?(
+    executionId: string,
+    options?: { limit?: number; offset?: number },
+  ): Promise<DurableAuditEntry[]>;
 
   // Operator API
   retryRollback?(executionId: string): Promise<void>;

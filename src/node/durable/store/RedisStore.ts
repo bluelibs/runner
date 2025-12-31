@@ -6,6 +6,10 @@ import type {
   ListExecutionsOptions,
 } from "../core/interfaces/store";
 import { getDefaultSerializer } from "../../../serializer";
+import {
+  createDurableAuditEntryId,
+  type DurableAuditEntry,
+} from "../core/audit";
 
 const serializer = getDefaultSerializer();
 
@@ -269,6 +273,38 @@ export class RedisStore implements IDurableStore {
         (a, b) =>
           new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime(),
       );
+  }
+
+  async appendAuditEntry(entry: DurableAuditEntry): Promise<void> {
+    const atMs = entry.at.getTime();
+    const id = entry.id || createDurableAuditEntryId(atMs);
+    await this.redis.set(
+      this.k(`audit:${entry.executionId}:${id}`),
+      serializer.stringify({ ...entry, id }),
+    );
+  }
+
+  async listAuditEntries(
+    executionId: string,
+    options: { limit?: number; offset?: number } = {},
+  ): Promise<DurableAuditEntry[]> {
+    const keys = await this.scanKeys(this.k(`audit:${executionId}:*`));
+    if (keys.length === 0) return [];
+
+    const pipeline = this.redis.pipeline();
+    keys.forEach((k: string) => pipeline.get(k));
+    const results = await pipeline.exec();
+    let entries = (results || [])
+      .map(([_, res]) =>
+        typeof res === "string" ? (serializer.parse(res) as DurableAuditEntry) : null,
+      )
+      .filter((e): e is DurableAuditEntry => e !== null)
+      .sort((a, b) => a.at.getTime() - b.at.getTime());
+
+    const offset = options.offset ?? 0;
+    const limit = options.limit ?? entries.length;
+    entries = entries.slice(offset, offset + limit);
+    return entries;
   }
 
   async getStepResult(

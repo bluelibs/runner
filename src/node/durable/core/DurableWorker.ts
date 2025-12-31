@@ -1,17 +1,7 @@
-import { r } from "../../../index";
-import type { IResource } from "../../../defs";
 import type { IDurableQueue, QueueMessage } from "./interfaces/queue";
 import type { IDurableExecutionProcessor } from "./interfaces/service";
-import { DurableService } from "./DurableService";
 
 export class DurableWorker {
-  static create(
-    durableServiceResource: IResource<void, Promise<DurableService>>,
-    config: { queue: IDurableQueue },
-  ) {
-    return createDurableWorkerResource(durableServiceResource, config);
-  }
-
   constructor(
     private readonly service: IDurableExecutionProcessor,
     private readonly queue: IDurableQueue,
@@ -56,19 +46,4 @@ export async function initDurableWorker(
   const worker = new DurableWorker(service, queue);
   await worker.start();
   return worker;
-}
-
-export function createDurableWorkerResource(
-  durableServiceResource: IResource<void, Promise<DurableService>>,
-  config: {
-    queue: IDurableQueue;
-  },
-) {
-  return r
-    .resource<void>("durableWorker")
-    .dependencies({ durableService: durableServiceResource })
-    .init(async (_cfg, { durableService }) =>
-      initDurableWorker(durableService, config.queue),
-    )
-    .build();
 }

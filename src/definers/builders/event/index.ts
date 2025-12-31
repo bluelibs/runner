@@ -12,13 +12,15 @@ export * from "./utils";
 /**
  * Entry point for creating an event builder.
  */
-export function eventBuilder(id: string): EventFluentBuilder<void> {
+export function eventBuilder<TPayload = void>(
+  id: string,
+): EventFluentBuilder<TPayload> {
   const filePath = getCallerFile();
-  const initial: BuilderState<void> = Object.freeze({
+  const initial: BuilderState<TPayload> = Object.freeze({
     id,
     filePath,
     meta: {} as any,
-    payloadSchema: undefined as any,
+    payloadSchema: undefined,
     tags: [] as TagType[],
     parallel: undefined,
   });

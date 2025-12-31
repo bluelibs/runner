@@ -17,7 +17,8 @@ describe("durable: index barrel", () => {
   it("loads via src/node/durable/index.ts", async () => {
     const durable = await import("../index");
     expect(typeof durable.DurableService).toBe("function");
-    expect(durable.durableContext).toBeTruthy();
+    expect(typeof durable.createDurableResource).toBe("function");
+    expect(durable.durableContext).toBeUndefined();
 
     for (const key of Object.keys(durable)) {
       void (durable as Record<string, unknown>)[key];

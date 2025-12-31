@@ -34,7 +34,7 @@ export interface IDurableContext {
 
   /**
    * Suspend until an external signal is delivered via DurableService.signal().
-   * The signal is memoized as a durable step under `__signal:<signalId>`.
+   * The signal is memoized as a durable step under `__signal:<signalId>[:index]`.
    */
   waitForSignal<TPayload>(
     signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
@@ -56,6 +56,12 @@ export interface IDurableContext {
     event: string | { id: string },
     payload: TPayload,
   ): Promise<void>;
+
+  /**
+   * Append a custom audit entry for observability and debugging.
+   * This is a no-op if audit is disabled or the store does not support it.
+   */
+  note(message: string, meta?: Record<string, unknown>): Promise<void>;
 
   rollback(): Promise<void>;
 }

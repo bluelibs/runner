@@ -244,31 +244,6 @@ describe("durable: DurableContext", () => {
     ]);
   });
 
-  it("migrates legacy emit step ids on first emit", async () => {
-    const store = new MemoryStore();
-    const bus = new MemoryEventBus();
-    const ctx = new DurableContext(store, bus, "e1", 1);
-
-    await store.saveStepResult({
-      executionId: "e1",
-      stepId: "emit:event.legacy:e1",
-      result: { migrated: true },
-      completedAt: new Date(),
-    });
-
-    const received: string[] = [];
-    await bus.subscribe("durable:events", async (evt) => {
-      received.push(evt.type);
-    });
-
-    await ctx.emit("event.legacy", { a: 1 });
-
-    expect(received).toEqual([]);
-    expect(
-      (await store.getStepResult("e1", "__emit:event.legacy:0"))?.result,
-    ).toEqual({ migrated: true });
-  });
-
   it("prevents user steps from using internal reserved step ids", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
@@ -312,7 +287,7 @@ describe("durable: DurableContext", () => {
     );
   });
 
-  it("returns signal payload when completed and returns raw values otherwise", async () => {
+  it("returns signal payload when completed and supports multiple waits", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
     const ctx = new DurableContext(store, bus, "e1", 1);
@@ -342,7 +317,9 @@ describe("durable: DurableContext", () => {
       completedAt: new Date(),
     });
 
-    await expect(ctx.waitForSignal<string>("raw")).resolves.toBe("hello");
+    await expect(ctx.waitForSignal<string>("raw")).rejects.toThrow(
+      "Invalid signal step state",
+    );
   });
 
   it("supports waitForSignal() using typed signal ids", async () => {
@@ -437,7 +414,7 @@ describe("durable: DurableContext", () => {
     expect(timers.some((t) => t.type === "signal_timeout")).toBe(true);
   });
 
-  it("treats non-object step results as legacy signal values", async () => {
+  it("throws when a signal step result is an invalid primitive", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
     const ctx = new DurableContext(store, bus, "e1", 1);
@@ -449,15 +426,12 @@ describe("durable: DurableContext", () => {
       completedAt: new Date(),
     });
 
-    await expect(
-      ctx.waitForSignal<number>("durable.tests.paid", { timeoutMs: 10 }),
-    ).resolves.toEqual({
-      kind: "signal",
-      payload: 123,
-    });
+    await expect(ctx.waitForSignal<number>("durable.tests.paid")).rejects.toThrow(
+      "Invalid signal step state",
+    );
   });
 
-  it("handles unexpected signal state shapes as legacy values", async () => {
+  it("throws when a signal step result has an unknown state", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
     const ctx = new DurableContext(store, bus, "e1", 1);
@@ -469,9 +443,8 @@ describe("durable: DurableContext", () => {
       completedAt: new Date(),
     });
 
-    await expect(ctx.waitForSignal(Paid, { timeoutMs: 10 })).resolves.toEqual({
-      kind: "signal",
-      payload: { state: "something-else", payload: { paidAt: 1 } },
-    });
+    await expect(ctx.waitForSignal(Paid)).rejects.toThrow(
+      "Invalid signal step state",
+    );
   });
 });

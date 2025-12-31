@@ -9,10 +9,12 @@ import type {
   IDurableStore,
   ListExecutionsOptions,
 } from "../core/interfaces/store";
+import type { DurableAuditEntry } from "../core/audit";
 
 export class MemoryStore implements IDurableStore {
   private executions = new Map<string, Execution>();
   private stepResults = new Map<string, Map<string, StepResult>>();
+  private auditEntries = new Map<string, DurableAuditEntry[]>();
   private timers = new Map<string, Timer>();
   private schedules = new Map<string, Schedule>();
   private locks = new Map<string, { id: string; expires: number }>();
@@ -93,6 +95,22 @@ export class MemoryStore implements IDurableStore {
           new Date(a.completedAt).getTime() - new Date(b.completedAt).getTime(),
       )
       .map((r) => ({ ...r }));
+  }
+
+  async appendAuditEntry(entry: DurableAuditEntry): Promise<void> {
+    const list = this.auditEntries.get(entry.executionId) ?? [];
+    list.push({ ...entry });
+    this.auditEntries.set(entry.executionId, list);
+  }
+
+  async listAuditEntries(
+    executionId: string,
+    options: { limit?: number; offset?: number } = {},
+  ): Promise<DurableAuditEntry[]> {
+    const list = this.auditEntries.get(executionId) ?? [];
+    const offset = options.offset ?? 0;
+    const limit = options.limit ?? list.length;
+    return list.slice(offset, offset + limit).map((e) => ({ ...e }));
   }
 
   // Operator API

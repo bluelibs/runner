@@ -33,11 +33,107 @@ export function ExecutionDetail() {
   if (error) return <div className="text-red-400 p-8">Error: {error}</div>;
   if (!execution) return <div className="text-slate-400 p-8">Execution not found</div>;
 
-  // Build timeline steps from the API response
-  // The API now returns a `steps` array with StepResult objects
+  // Build timeline steps from the API response.
+  // Prefer `audit` (richer timeline), fallback to `steps` (legacy).
   const timelineSteps: TimelineStep[] = [];
   
-  if (execution.steps && execution.steps.length > 0) {
+  if (execution.audit && execution.audit.length > 0) {
+    const byTime = [...execution.audit].sort(
+      (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+    );
+
+    byTime.forEach((entry) => {
+      const at = entry.at ? new Date(entry.at).toLocaleTimeString() : undefined;
+      switch (entry.kind) {
+        case 'execution_status_changed':
+          timelineSteps.push({
+            id: entry.id,
+            name: `status: ${entry.from ?? 'none'} → ${entry.to}`,
+            status:
+              entry.to === 'failed' || entry.to === 'compensation_failed'
+                ? entry.to
+                : entry.to === 'running'
+                  ? 'running'
+                  : entry.to === 'completed'
+                    ? 'completed'
+                    : 'pending',
+            duration: at,
+          });
+          break;
+        case 'signal_waiting':
+          timelineSteps.push({
+            id: entry.id,
+            name: `signal waiting: ${entry.signalId}`,
+            status: 'pending',
+            duration: at,
+          });
+          break;
+        case 'signal_delivered':
+          timelineSteps.push({
+            id: entry.id,
+            name: `signal delivered: ${entry.signalId}`,
+            status: 'completed',
+            duration: at,
+          });
+          break;
+        case 'signal_timed_out':
+          timelineSteps.push({
+            id: entry.id,
+            name: `signal timed out: ${entry.signalId}`,
+            status: 'failed',
+            duration: at,
+          });
+          break;
+        case 'sleep_scheduled':
+          timelineSteps.push({
+            id: entry.id,
+            name: `sleep scheduled (${entry.durationMs}ms)`,
+            status: 'pending',
+            duration: at,
+          });
+          break;
+        case 'sleep_completed':
+          timelineSteps.push({
+            id: entry.id,
+            name: 'sleep completed',
+            status: 'completed',
+            duration: at,
+          });
+          break;
+        case 'step_completed':
+          timelineSteps.push({
+            id: entry.id,
+            name: entry.stepId,
+            status: 'completed',
+            duration: entry.durationMs != null ? `${entry.durationMs}ms` : at,
+          });
+          break;
+        case 'emit_published':
+          timelineSteps.push({
+            id: entry.id,
+            name: `emit: ${entry.eventId}`,
+            status: 'completed',
+            duration: at,
+          });
+          break;
+        case 'note':
+          timelineSteps.push({
+            id: entry.id,
+            name: `note: ${entry.message}`,
+            status: 'completed',
+            duration: at,
+          });
+          break;
+        default:
+          timelineSteps.push({
+            id: entry.id,
+            name: entry.kind,
+            status: 'completed',
+            duration: at,
+          });
+      }
+    });
+  } else if (execution.steps && execution.steps.length > 0) {
     execution.steps.forEach((step) => {
       timelineSteps.push({
         id: step.stepId,
