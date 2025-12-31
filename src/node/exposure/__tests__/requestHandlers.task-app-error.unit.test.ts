@@ -2,7 +2,7 @@ import { Readable } from "stream";
 import type { IncomingMessage, ServerResponse } from "http";
 import { createRequestHandlers } from "../requestHandlers";
 import { defineError } from "../../../definers/defineError";
-import { getDefaultSerializer } from "../../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../../serializer";
 
 function makeReq(taskId: string, body: any): IncomingMessage {
   const payload = Buffer.from(JSON.stringify({ input: body }), "utf8");
@@ -94,5 +94,50 @@ describe("requestHandlers - task app error extras", () => {
     expect(json?.error?.code).toBe("INTERNAL_ERROR");
     expect(json?.error?.id).toBe("tests.errors.app");
     expect(json?.error?.data).toEqual({ code: 7, message: "Nope" });
+  });
+
+  it("omits id when the matched error has a non-string name", async () => {
+    const helper = {
+      id: "tests.errors.non-string-name",
+      is: (_e: unknown): _e is { name: number; data: unknown } => true,
+    };
+
+    const store: any = {
+      tasks: new Map([["t.app", { task: { id: "t.app" } }]]),
+      errors: new Map([[helper.id, helper]]),
+    };
+    const deps: any = {
+      store,
+      taskRunner: {
+        run: async () => {
+          throw { name: 123, data: { reason: "x" } };
+        },
+      },
+      eventManager: {} as any,
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      authenticator: async () => ({ ok: true }),
+      allowList: { ensureTask: () => null, ensureEvent: () => null },
+      router: {
+        basePath: "/api",
+        extract: (_p: string) => ({ kind: "task", id: "t.app" }),
+        isUnderBase: () => true,
+      },
+      cors: undefined,
+      serializer: getDefaultSerializer(),
+    };
+
+    const { handleTask } = createRequestHandlers(deps);
+    const req = makeReq("t.app", { a: 1 });
+    const res = makeRes();
+    await handleTask(req, res);
+
+    const json = (res as any)._buf
+      ? deps.serializer.parse(((res as any)._buf as Buffer).toString("utf8"))
+      : undefined;
+
+    expect((res as any)._status).toBe(500);
+    expect(json?.ok).toBe(false);
+    expect(json?.error?.id).toBeUndefined();
+    expect(json?.error?.data).toEqual({ reason: "x" });
   });
 });

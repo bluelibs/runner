@@ -1,7 +1,7 @@
 import { getPlatform } from "../platform";
 import { EventManager } from "./EventManager";
 import { defineEvent } from "../definers/defineEvent";
-import { IEvent, IEventEmission } from "../defs";
+import { IEventEmission } from "../defs";
 
 // Event definitions for Queue
 const QueueEvents = {

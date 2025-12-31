@@ -8,7 +8,12 @@ import { TaskMiddlewareAttachmentType } from "./taskMiddleware";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
 import type { ThrowsList } from "./error";
-import { symbolFilePath, symbolTask, symbolPhantomTask, symbolTunneledBy } from "./symbols";
+import {
+  symbolFilePath,
+  symbolTask,
+  symbolPhantomTask,
+  symbolTunneledBy,
+} from "./symbols";
 import {
   EnsureInputSatisfiesContracts,
   EnsureOutputSatisfiesContracts,

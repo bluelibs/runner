@@ -1,9 +1,12 @@
 import * as http from "http";
 import * as https from "https";
 import { Readable, pipeline } from "stream";
-import type { Serializer } from "../globals/resources/tunnel/serializer";
+import type { SerializerLike } from "../serializer";
 import type { ProtocolEnvelope } from "../globals/resources/tunnel/protocol";
-import { assertOkEnvelope, TunnelError } from "../globals/resources/tunnel/protocol";
+import {
+  assertOkEnvelope,
+  TunnelError,
+} from "../globals/resources/tunnel/protocol";
 import type { IAsyncContext } from "../types/asyncContext";
 import type { IErrorHelper } from "../types/error";
 // Avoid `.node` bare import which triggers tsup native addon resolver
@@ -18,12 +21,12 @@ export interface HttpSmartClientConfig {
   baseUrl: string; // ex: http://localhost:7070/__runner
   auth?: HttpSmartClientAuthConfig;
   timeoutMs?: number; // optional request timeout for JSON/multipart
-  serializer: Serializer;
+  serializer: SerializerLike;
   onRequest?: (ctx: {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;
-  contexts?: Array<IAsyncContext<any>>;
+  contexts?: Array<IAsyncContext<unknown>>;
   errorRegistry?: Map<string, IErrorHelper<any>>;
 }
 
@@ -34,16 +37,30 @@ export interface HttpSmartClient {
 }
 
 function isReadable(value: unknown): value is Readable {
-  return !!value && typeof (value as any).pipe === "function";
+  return !!value && typeof (value as { pipe?: unknown }).pipe === "function";
 }
 
 function hasNodeFile(value: unknown): boolean {
-  const visit = (v: unknown): boolean => {
+  const isNodeFileSentinel = (
+    v: unknown,
+  ): v is {
+    $ejson: "File";
+    id: string;
+    _node?: { stream?: unknown; buffer?: unknown };
+  } => {
     if (!v || typeof v !== "object") return false;
-    if ((v as any).$ejson === "File" && typeof (v as any).id === "string") {
-      const node = (v as any)._node;
-      if (node && (node.stream || node.buffer)) return true;
-    }
+    const rec = v as Record<string, unknown>;
+    if (rec.$ejson !== "File") return false;
+    if (typeof rec.id !== "string") return false;
+    const node = rec._node;
+    if (!node || typeof node !== "object") return false;
+    const n = node as Record<string, unknown>;
+    return Boolean(n.stream || n.buffer);
+  };
+
+  const visit = (v: unknown): boolean => {
+    if (isNodeFileSentinel(v)) return true;
+    if (!v || typeof v !== "object") return false;
     if (Array.isArray(v)) return v.some(visit);
     for (const k of Object.keys(v as Record<string, unknown>)) {
       if (visit((v as Record<string, unknown>)[k])) return true;
@@ -81,7 +98,7 @@ async function postJson<T = any>(
     for (const ctx of cfg.contexts) {
       try {
         const v = ctx.use();
-        map[ctx.id] = ctx.serialize(v as any);
+        map[ctx.id] = ctx.serialize(v);
       } catch {}
     }
     if (Object.keys(map).length > 0) {
@@ -102,7 +119,9 @@ async function postJson<T = any>(
       },
       (res) => {
         const chunks: Buffer[] = [];
-        res.on("data", (c) => chunks.push(Buffer.from(c as any)));
+        res.on("data", (c: unknown) => {
+          chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(String(c)));
+        });
         res.on("end", () => {
           const text = Buffer.concat(chunks as readonly Uint8Array[]).toString(
             "utf8",
@@ -202,7 +221,7 @@ async function postMultipart(
     for (const ctx of cfg.contexts) {
       try {
         const v = ctx.use();
-        map[ctx.id] = ctx.serialize(v as any);
+        map[ctx.id] = ctx.serialize(v);
       } catch {}
     }
     if (Object.keys(map).length > 0) {
@@ -248,7 +267,7 @@ async function postOctetStream(
     for (const ctx of cfg.contexts) {
       try {
         const v = ctx.use();
-        map[ctx.id] = ctx.serialize(v as any);
+        map[ctx.id] = ctx.serialize(v);
       } catch {}
     }
     if (Object.keys(map).length > 0) {
@@ -272,7 +291,7 @@ async function postOctetStream(
       const rejectOnce = (error: unknown) => {
         settled = true;
         cleanup.forEach((fn) => fn());
-        reject(error as Error);
+        reject(error instanceof Error ? error : new Error(String(error)));
       };
 
       const req = lib.request(
@@ -298,7 +317,7 @@ async function postOctetStream(
 
       const onReqError = (e: unknown) => rejectOnce(e);
       req.on("error", onReqError);
-      cleanup.push(() => req.off("error", onReqError as any));
+      cleanup.push(() => req.removeListener("error", onReqError));
 
       // Use pipeline to safely wire errors between source and request,
       // preventing unhandled 'error' on the source stream.
@@ -306,23 +325,21 @@ async function postOctetStream(
         if (err) rejectOnce(err);
       };
       pipeline(stream, req, onPipelineDone);
-      cleanup.push(() => {
-        // Remove the callback from the request's 'close' event in case pipeline added one
-        (req as any).off?.("error", onReqError as any);
-      });
     },
   );
 }
 
 function parseMaybeJsonResponse<T = any>(
   res: http.IncomingMessage,
-  serializer: Serializer,
+  serializer: SerializerLike,
 ): Promise<T | Readable> {
   const contentType = String(res.headers["content-type"]);
   if (/^application\/json/i.test(contentType)) {
     const chunks: Buffer[] = [];
     return new Promise<T>((resolve, reject) => {
-      res.on("data", (c) => chunks.push(Buffer.from(c as any)));
+      res.on("data", (c: unknown) => {
+        chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(String(c)));
+      });
       res.on("end", () => {
         try {
           const text = Buffer.concat(chunks as readonly Uint8Array[]).toString(
@@ -346,11 +363,14 @@ function rethrowTyped(
   registry: Map<string, IErrorHelper<any>> | undefined,
   error: unknown,
 ): never {
-  if (registry && error && (error as any).id && (error as any).data) {
-    const helper = registry.get(String((error as any).id));
-    if (helper) helper.throw((error as any).data);
+  if (registry && error && typeof error === "object") {
+    const err = error as { id?: unknown; data?: unknown };
+    if (err.id && err.data) {
+      const helper = registry.get(String(err.id));
+      if (helper) helper.throw(err.data);
+    }
   }
-  throw error as any;
+  throw error;
 }
 
 export function createHttpSmartClient(
@@ -371,7 +391,7 @@ export function createHttpSmartClient(
         return res as unknown as Readable;
       }
 
-      // B) Multipart: detect EJSON File sentinels with local Node sources
+      // B) Multipart: detect File sentinels with local Node sources
       if (hasNodeFile(input)) {
         const manifest = buildNodeManifest(input);
         const manifestText = serializer.stringify({
@@ -397,7 +417,7 @@ export function createHttpSmartClient(
         }
       }
 
-      // C) JSON/EJSON fallback
+      // C) JSON fallback
       try {
         const r = await postJson<ProtocolEnvelope<O>>(cfg, url, { input });
         return assertOkEnvelope<O>(r, {
@@ -431,7 +451,9 @@ export function createHttpSmartClient(
             "Tunnel event returnPayload requested but server did not include result. Upgrade the exposure server.",
           );
         }
-        return assertOkEnvelope<P>(r, { fallbackMessage: "Tunnel event error" });
+        return assertOkEnvelope<P>(r, {
+          fallbackMessage: "Tunnel event error",
+        });
       } catch (error) {
         rethrowTyped(cfg.errorRegistry, error);
       }

@@ -2,11 +2,119 @@
 
 > Durable workflows are Runner tasks with “save points”. If your process dies, deploys, or scales horizontally, the workflow comes back and continues like nothing happened (except now you can finally sleep at night).
 
+## Table of Contents
+
+- [Start Here](#start-here)
+- [Quickstart](#quickstart)
+- [Why You’d Want This (In One Minute)](#why-youd-want-this-in-one-minute)
+- [Core Insight](#core-insight)
+- [Abstract Interfaces](#abstract-interfaces)
+- [API Design](#api-design)
+- [Safety & Semantics](#safety--semantics)
+- [Signals (wait for external events)](#signals-wait-for-external-events)
+- [Compensation / Rollback Pattern](#compensation--rollback-pattern)
+- [Scheduling & Cron Jobs](#scheduling--cron-jobs)
+- [Gotchas & Troubleshooting](#gotchas--troubleshooting)
+
 ## Start Here
 
 - If you want the short version: `readmes/DURABLE_WORKFLOWS_AI.md`
 - If you’re new to Runner concepts (tasks/resources/events/middleware): `AI.md`
 - Platform note (why this is Node-only): `readmes/MULTI_PLATFORM.md`
+
+## Quickstart
+
+### 1) Define a durable task (steps + sleep + signal)
+
+```ts
+import { event, r, run } from "@bluelibs/runner";
+import {
+  MemoryStore,
+  MemoryQueue,
+  MemoryEventBus,
+  createDurableServiceResource,
+  createDurableWorkerResource,
+  durableContext,
+} from "@bluelibs/runner/node";
+
+const Approved = event<{ approvedBy: string }>({ id: "app.signals.approved" });
+
+const approveOrder = r
+  .task("app.tasks.approveOrder")
+  .dependencies({ durableContext })
+  .run(async (input: { orderId: string }, { durableContext }) => {
+    const ctx = durableContext.use();
+
+    await ctx.step("validate", async () => {
+      // fetch order, validate invariants, etc.
+      return { ok: true };
+    });
+
+    const outcome = await ctx.waitForSignal(Approved, { timeoutMs: 86_400_000 });
+    if (outcome.kind === "timeout") {
+      return { status: "timed_out" as const };
+    }
+
+    await ctx.step("ship", async () => {
+      // ship only after approval
+      return { shipped: true };
+    });
+
+    return { status: "approved" as const, approvedBy: outcome.payload.approvedBy };
+  })
+  .build();
+
+const store = new MemoryStore();
+const queue = new MemoryQueue();
+const eventBus = new MemoryEventBus();
+
+const durableService = createDurableServiceResource({ store, queue, eventBus, tasks: [approveOrder] });
+const durableWorker = createDurableWorkerResource(durableService, { queue });
+
+const app = r.resource("app").register([durableService, durableWorker, durableContext, approveOrder]).build();
+
+const runtime = await run(app, { logs: { printThreshold: null } });
+const durable = runtime.getResourceValue(durableService);
+```
+
+### Production wiring (Redis + RabbitMQ)
+
+For production, swap the in-memory backends:
+
+```ts
+import {
+  RabbitMQQueue,
+  RedisEventBus,
+  RedisStore,
+  createDurableServiceResource,
+  createDurableWorkerResource,
+} from "@bluelibs/runner/node";
+
+const store = new RedisStore({ redis: process.env.REDIS_URL });
+const queue = new RabbitMQQueue({ url: process.env.RABBITMQ_URL });
+const eventBus = new RedisEventBus({ redis: process.env.REDIS_URL });
+
+const durableService = createDurableServiceResource({ store, queue, eventBus, tasks: [approveOrder] });
+const durableWorker = createDurableWorkerResource(durableService, { queue });
+```
+
+In a typical deployment:
+- API nodes call `startExecution()` / `signal()` / `wait()`.
+- Worker nodes run `DurableWorker` (consume queue + process executions).
+
+### 2) Start an execution (store the executionId)
+
+```ts
+const executionId = await durable.startExecution(approveOrder, { orderId: "order-123" });
+// store executionId on the order record so your webhook can resume the workflow later
+```
+
+### 3) Resume from the outside (webhook / callback)
+
+```ts
+await durable.signal(executionId, Approved, { approvedBy: "admin@company.com" });
+const result = await durable.wait(executionId, { timeout: 30_000 });
+```
 
 ## Why You’d Want This (In One Minute)
 
@@ -110,6 +218,8 @@ export interface BusEvent {
 - `MemoryEventBus` - Dev/test, single-process only
 - `RedisEventBus` - Production default, uses Redis Pub/Sub
 
+**Serialization note:** `RedisEventBus` serializes events using Runner's serializer (tree mode) so `BusEvent.timestamp: Date` (and other supported built-in types) round-trip correctly across Redis Pub/Sub.
+
 ### 3. IDurableQueue - Work Distribution
 
 For distributing execution work across multiple workers with durability guarantees.
@@ -146,6 +256,8 @@ export interface IDurableQueue {
   dispose?(): Promise<void>;
 }
 ```
+
+**Message types note:** Runner currently enqueues `execute` and `resume`. `schedule` is accepted by `DurableWorker` as an alias of `resume` (an execution hint) so custom adapters can use it, but built-in cron/interval scheduling is driven by timers + `resume`.
 
 **Implementations:**
 - `MemoryQueue` - Dev/test, no persistence
@@ -281,6 +393,8 @@ const result = await durable.execute(processOrder, {
 ### How It Works
 
 1. **`durable.execute(task, input)`** creates an execution record and runs the task
+   - Prefer `execute()` when you want “start and wait for result” in one call.
+   - Prefer `startExecution()` + `signal()` + `wait()` when the outside world must resume the workflow later (webhooks, approvals).
 2. **`ctx.step(id, fn)`** checks if step was already executed:
    - If yes: returns cached result (replay)
    - If no: executes fn, caches result, returns result
@@ -353,12 +467,17 @@ This section summarizes the safety guarantees and expectations of the durable wo
   - When the timer fires, execution is resumed from the code *after* `sleep`, and all previous steps are replayed via cached results (no re‑issuing of side effects wrapped in `step`).
 
 - **Event emission without duplicates**  
-  - `ctx.emit(event, data)` is implemented as a `step` under the hood.  
-  - If an execution is replayed, the memoized emit step prevents duplicate event emissions for the same `executionId + stepId`.
+  - `ctx.emit(event, data)` is implemented as one or more internal `step`s under the hood.  
+  - Each call is assigned a deterministic internal id like `__emit:<eventId>:<index>` so you can emit the same event type multiple times in one workflow.  
+  - On replay, memoization prevents duplicates for each individual emission.
+  - **Determinism note:** those internal `:<index>` suffixes are derived from call order within the workflow. If you change the workflow structure (branching / adding/removing calls), the internal step ids may shift and past executions may no longer replay cleanly.
+  - **Legacy migration note:** the first emit call also checks for an old-style `emit:<eventId>:<executionId>` step result and migrates it forward. This assumes that legacy step result means the event was already emitted successfully.
 
 - **Signals (wait until external confirmation)**
   - `ctx.waitForSignal(signal)` suspends an execution until `durable.signal(executionId, signal, payload)` is called.
-  - Signals are memoized as steps under `__signal:<signal.id>` (or `__signal:<id>` for string ids), so delivery is idempotent and safe to retry.
+  - Signals are memoized as steps under `__signal:<signal.id>` (or `__signal:<id>` for string ids).
+  - If you wait for the same signal multiple times, subsequent waits use `__signal:<id>:<index>`. `durable.signal(...)` delivers to the first currently-waiting step (legacy first, then the lowest index).
+  - **Determinism note:** like `emit`, the `:<index>` suffixes are derived from call order within the workflow; code changes can shift indexes on replay.
 
 - **Retries and timeouts**  
   - `StepOptions.retries` and `DurableServiceConfig.execution.maxAttempts` control step‑level and execution‑level retries respectively.  
@@ -372,6 +491,9 @@ This section summarizes the safety guarantees and expectations of the durable wo
 - **Multi-node coordination**  
   - `IEventBus` is used to reduce latency (notify workers of ready timers) but does not replace the store.  
   - Implementations that support distributed locking (for example, Redis-based stores) should use it to ensure only one worker processes a given execution at a time.
+
+- **Reserved step ids**
+  - Step ids starting with `__` and `rollback:` are reserved for durable internals. Avoid using them in `ctx.step(...)` to prevent collisions with system steps.
 
 These semantics intentionally favor **safety and debuggability** over perfect “exactly-once” guarantees at the infrastructure level. Application code remains explicit and testable, while the system provides strong, well-defined durability guarantees around that code.
 
@@ -1065,7 +1187,7 @@ export class RabbitMQQueue implements IDurableQueue {
 
 ### Redis Store Implementation Details
 
-- **Extended JSON (EJSON)**: `RedisStore` uses `@bluelibs/ejson` for serialization. This preserves `Date` objects and other complex types, avoiding "time bombs" where dates become strings after being stored.
+- **Serialization**: `RedisStore` uses Runner's serializer for persistence. This preserves `Date` objects and other complex types, avoiding "time bombs" where dates become strings after being stored.
 - **Performance (SCAN vs KEYS)**: All multi-key searches use Redis `SCAN` for non-blocking iteration. This prevents Redis from freezing when thousands of executions are present.
 - **Atomic Updates**: State updates (like marking a step as complete) use Lua scripts to ensure atomicity. This prevents race conditions where concurrent workers might overwrite each other's updates.
 
@@ -1325,6 +1447,16 @@ app.use('/durable-dashboard', createDashboardMiddleware(durableService, operator
 ```
 
 ---
+
+## Gotchas & Troubleshooting
+
+- **Always put side effects inside `ctx.step(...)`**: anything outside a step can run multiple times on retries/replays.
+- **Keep step ids stable**: renaming a step id (or changing control-flow so a different call order happens) can break replay determinism for existing executions.
+- **Call-order indexing is real**: `emit()` and repeated `waitForSignal()` allocate `:<index>` internally based on call order; refactors that add/remove calls can shift indexes.
+- **Signals are “deliver to current wait”**: `durableService.signal(executionId, ...)` resumes the first currently-waiting signal slot. If the signal arrives before the workflow is waiting (or is sent too many times), it may be ignored.
+- **Don’t hang forever**: prefer `durableService.wait(executionId, { timeout: ... })` unless you intentionally want an unbounded wait.
+- **Compensation failures are terminal**: if `ctx.rollback()` fails, execution becomes `compensation_failed` and `wait()` rejects. Use `DurableOperator.retryRollback(executionId)` after fixing the underlying issue.
+- **Debugging**: inspect step results + timers in the dashboard, or query your `IDurableStore` implementation directly (Redis keys are prefixed by `durable:` by default).
 
 ## What This Design Deliberately Excludes
 

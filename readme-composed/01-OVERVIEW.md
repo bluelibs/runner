@@ -131,7 +131,7 @@ Runner comes with **everything you need** to build production apps:
 - ✅ Event System
 - ✅ Middleware Pipeline
 - ✅ Async Context
-- ✅ Serialization (EJSON)
+- ✅ Serialization
 
 </td>
 <td width="33%">
@@ -190,4 +190,3 @@ Runner comes with **everything you need** to build production apps:
 **No extra packages needed.** It's all included and works together seamlessly.
 
 ---
-

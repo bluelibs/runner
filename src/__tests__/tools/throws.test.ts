@@ -9,7 +9,10 @@ describe("normalizeThrows()", () => {
   });
 
   it("normalizes ids and deduplicates", () => {
-    const err = { id: "spec.errors.fake", [definitions.symbolError]: true } as any;
+    const err = {
+      id: "spec.errors.fake",
+      [definitions.symbolError]: true,
+    } as any;
     expect(normalizeThrows(owner, ["a", err, "a"] as any)).toEqual([
       "a",
       "spec.errors.fake",
@@ -35,4 +38,3 @@ describe("normalizeThrows()", () => {
     expect(() => normalizeThrows(owner, [123] as any)).toThrow(/got number/);
   });
 });
-

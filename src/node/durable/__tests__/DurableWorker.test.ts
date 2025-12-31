@@ -98,7 +98,7 @@ describe("durable: DurableWorker", () => {
     await worker.start();
 
     await queue.handler?.(message({ executionId: "e1" }, "schedule"));
-    expect(service.processExecution).not.toHaveBeenCalled();
+    expect(service.processExecution).toHaveBeenCalledWith("e1");
     expect(queue.ackCalls).toEqual(["m1"]);
   });
 });

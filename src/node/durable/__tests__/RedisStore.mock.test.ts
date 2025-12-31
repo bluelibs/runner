@@ -1,7 +1,9 @@
 import { RedisStore } from "../store/RedisStore";
 import type { RedisClient } from "../store/RedisStore";
 import type { Execution, Schedule, StepResult, Timer } from "../core/types";
-import { EJSON } from "@bluelibs/ejson";
+import { getDefaultSerializer } from "../../../serializer";
+
+const serializer = getDefaultSerializer();
 
 jest.mock("ioredis", () => {
   return {
@@ -75,7 +77,7 @@ describe("durable: RedisStore", () => {
     await store.saveExecution(exec);
     expect(redisMock.set).toHaveBeenCalled();
 
-    redisMock.get.mockResolvedValue(EJSON.stringify(exec));
+    redisMock.get.mockResolvedValue(serializer.stringify(exec));
     const fetched = await store.getExecution("1");
     expect(fetched?.id).toBe("1");
   });
@@ -91,7 +93,7 @@ describe("durable: RedisStore", () => {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
-    redisMock.get.mockResolvedValue(EJSON.stringify(exec));
+    redisMock.get.mockResolvedValue(serializer.stringify(exec));
     await store.updateExecution("1", { status: "failed" });
     expect(redisMock.eval).toHaveBeenCalled();
 
@@ -107,7 +109,7 @@ describe("durable: RedisStore", () => {
       exec: jest.fn().mockResolvedValue([
         [
           null,
-          EJSON.stringify({
+          serializer.stringify({
             id: "1",
             taskId: "t1",
             status: "completed",
@@ -116,7 +118,7 @@ describe("durable: RedisStore", () => {
         ],
         [
           null,
-          EJSON.stringify({
+          serializer.stringify({
             id: "2",
             taskId: "t1",
             status: "completed",
@@ -143,7 +145,7 @@ describe("durable: RedisStore", () => {
       exec: jest.fn().mockResolvedValue([
         [
           null,
-          EJSON.stringify({
+          serializer.stringify({
             executionId: "e1",
             stepId: "s2",
             result: "late",
@@ -152,7 +154,7 @@ describe("durable: RedisStore", () => {
         ],
         [
           null,
-          EJSON.stringify({
+          serializer.stringify({
             executionId: "e1",
             stepId: "s1",
             result: "early",
@@ -208,7 +210,7 @@ describe("durable: RedisStore", () => {
       expect.any(String),
     );
 
-    redisMock.get.mockResolvedValue(EJSON.stringify(step));
+    redisMock.get.mockResolvedValue(serializer.stringify(step));
     expect((await store.getStepResult("e1", "s1"))?.result).toBe("ok");
 
     redisMock.get.mockResolvedValue(null);
@@ -223,7 +225,7 @@ describe("durable: RedisStore", () => {
       exec: jest
         .fn()
         .mockResolvedValue([
-          [null, EJSON.stringify({ id: "1", status: "running" })],
+          [null, serializer.stringify({ id: "1", status: "running" })],
         ]),
     });
 
@@ -244,8 +246,11 @@ describe("durable: RedisStore", () => {
       get: jest.fn().mockReturnThis(),
       hget: jest.fn().mockReturnThis(),
       exec: jest.fn().mockResolvedValue([
-        [null, EJSON.stringify({ id: "1", status: "compensation_failed" })],
-        [null, EJSON.stringify({ id: "2", status: "running" })],
+        [
+          null,
+          serializer.stringify({ id: "1", status: "compensation_failed" }),
+        ],
+        [null, serializer.stringify({ id: "2", status: "running" })],
       ]),
     });
 
@@ -266,7 +271,10 @@ describe("durable: RedisStore", () => {
       hget: jest.fn().mockReturnThis(),
       exec: jest.fn().mockResolvedValue([
         [null, null],
-        [null, EJSON.stringify({ id: "1", status: "compensation_failed" })],
+        [
+          null,
+          serializer.stringify({ id: "1", status: "compensation_failed" }),
+        ],
       ]),
     });
 
@@ -289,8 +297,31 @@ describe("durable: RedisStore", () => {
   });
 
   it("covers retryRollback/forceFail/editStepResult success branches", async () => {
+    const exec: Execution = {
+      id: "1",
+      taskId: "t",
+      input: undefined,
+      status: "compensation_failed",
+      error: { message: "boom", stack: "s" },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    redisMock.get.mockResolvedValue(serializer.stringify(exec));
+
     await store.retryRollback("1");
-    expect(redisMock.eval).toHaveBeenCalled();
+    expect(redisMock.set).toHaveBeenCalledWith(
+      "durable:exec:1",
+      expect.any(String),
+    );
+    const savedPayload = redisMock.set.mock.calls.find(
+      (c) => c[0] === "durable:exec:1",
+    )?.[1];
+    expect(typeof savedPayload).toBe("string");
+    const savedExec = serializer.parse(savedPayload as string) as Execution;
+    expect(savedExec.status).toBe("pending");
+    expect(savedExec.error).toBeUndefined();
 
     await store.forceFail("1", { message: "manual", stack: "s" });
     expect(redisMock.eval).toHaveBeenCalled();
@@ -381,12 +412,12 @@ describe("durable: RedisStore", () => {
     redisMock.pipeline.mockReturnValue({
       get: jest.fn().mockReturnThis(),
       hget: jest.fn().mockReturnThis(),
-      exec: jest.fn().mockResolvedValue([[null, EJSON.stringify(timer)]]),
+      exec: jest.fn().mockResolvedValue([[null, serializer.stringify(timer)]]),
     });
 
     expect((await store.getReadyTimers()).length).toBe(1);
 
-    redisMock.hget.mockResolvedValue(EJSON.stringify(timer));
+    redisMock.hget.mockResolvedValue(serializer.stringify(timer));
     await store.markTimerFired("t1");
     expect(redisMock.zrem).toHaveBeenCalled();
 
@@ -438,10 +469,10 @@ describe("durable: RedisStore", () => {
       expect.any(String),
     );
 
-    redisMock.hget.mockResolvedValue(EJSON.stringify(sched));
+    redisMock.hget.mockResolvedValue(serializer.stringify(sched));
     await store.updateSchedule("s1", { status: "paused" });
 
-    redisMock.hgetall.mockResolvedValue({ s1: EJSON.stringify(sched) });
+    redisMock.hgetall.mockResolvedValue({ s1: serializer.stringify(sched) });
     expect((await store.listSchedules()).length).toBe(1);
     expect((await store.listActiveSchedules()).length).toBe(1);
 

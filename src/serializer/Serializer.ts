@@ -12,17 +12,23 @@ import type {
   SerializedGraph,
   DeserializationContext,
   SerializedNode,
-} from './types';
-import { builtInTypes } from './builtins';
+} from "./types";
+import { builtInTypes } from "./builtins";
 
 const GRAPH_VERSION = 1;
 
 export class Serializer {
   /** Map of registered custom types */
-  private readonly typeRegistry = new Map<string, TypeDefinition<unknown, unknown>>();
+  private readonly typeRegistry = new Map<
+    string,
+    TypeDefinition<unknown, unknown>
+  >();
 
   /** Map of type identifiers to their definitions */
-  private readonly typeMap = new Map<string, TypeDefinition<unknown, unknown>>();
+  private readonly typeMap = new Map<
+    string,
+    TypeDefinition<unknown, unknown>
+  >();
 
   /** Snapshot array of type definitions used for iteration */
   private typeList: TypeDefinition<unknown, unknown>[] = [];
@@ -37,11 +43,28 @@ export class Serializer {
   }
 
   /**
+   * Alias of `serialize()` to match the historical tunnel serializer surface.
+   */
+  public stringify<T>(value: T): string {
+    const root = this.serializeTreeValue(value, {
+      stack: new WeakSet(),
+    });
+    return this.jsonStringify(root);
+  }
+
+  /**
+   * Alias of `deserialize()` to match the historical tunnel serializer surface.
+   */
+  public parse<T = unknown>(payload: string): T {
+    return this.deserialize<T>(payload);
+  }
+
+  /**
    * Serialize an arbitrary value into a JSON string.
    */
   public serialize<T>(value: T, context?: SerializationContext): string {
-    if (typeof value === 'undefined') {
-      return 'null';
+    if (typeof value === "undefined") {
+      return "null";
     }
 
     const ctx: SerializationContext = context ?? {
@@ -53,7 +76,7 @@ export class Serializer {
 
     const root = this.serializeValue(value, ctx);
     if (ctx.nodeCount === 0 && !this.isObjectReference(root)) {
-      return this.stringify(root);
+      return this.jsonStringify(root);
     }
 
     const graph: SerializedGraph = {
@@ -63,7 +86,7 @@ export class Serializer {
       nodes: ctx.nodes,
     };
 
-    return this.stringify(graph);
+    return this.jsonStringify(graph);
   }
 
   /**
@@ -88,12 +111,62 @@ export class Serializer {
   /**
    * Register a custom type for serialization/deserialization.
    */
-  public addType<TInstance, TSerialized>(typeDef: TypeDefinition<TInstance, TSerialized>): void {
+  public addType<TInstance, TSerialized>(
+    typeDef: TypeDefinition<TInstance, TSerialized>,
+  ): void;
+  public addType<TJson = unknown, TInstance = unknown>(
+    name: string,
+    factory: (json: TJson) => TInstance,
+  ): void;
+  public addType<TInstance, TSerialized>(
+    arg1: string | TypeDefinition<TInstance, TSerialized>,
+    arg2?: (json: unknown) => unknown,
+  ): void {
+    if (typeof arg1 === "string") {
+      const name = arg1;
+      const factory = arg2;
+      if (!factory) {
+        throw new Error(`addType("${name}", factory) requires a factory`);
+      }
+
+      type ValueTypeInstance = { typeName(): string; toJSONValue(): unknown };
+      const isValueTypeInstance = (obj: unknown): obj is ValueTypeInstance => {
+        if (!obj || typeof obj !== "object") return false;
+        const rec = obj as Record<string, unknown>;
+        return (
+          typeof rec.typeName === "function" &&
+          typeof rec.toJSONValue === "function"
+        );
+      };
+
+      this.addType({
+        id: name,
+        is: (obj: unknown): obj is ValueTypeInstance =>
+          isValueTypeInstance(obj) && obj.typeName() === name,
+        serialize: (obj: ValueTypeInstance) => obj.toJSONValue(),
+        deserialize: (data: unknown) => factory(data),
+        strategy: "value",
+      });
+      return;
+    }
+
+    const typeDef = arg1;
+    if (!typeDef || !typeDef.id) {
+      throw new Error("Invalid type definition: id is required");
+    }
+    if (!typeDef.serialize || !typeDef.deserialize) {
+      throw new Error(
+        "Invalid type definition: serialize and deserialize are required",
+      );
+    }
     if (this.typeRegistry.has(typeDef.id)) {
       throw new Error(`Type with id "${typeDef.id}" already exists`);
     }
 
-    this.typeRegistry.set(typeDef.id, typeDef as TypeDefinition<unknown, unknown>);
+    this.typeRegistry.set(
+      typeDef.id,
+      typeDef as TypeDefinition<unknown, unknown>,
+    );
     this.refreshTypeCache();
   }
 
@@ -113,8 +186,97 @@ export class Serializer {
     this.typeList = list;
   }
 
-  private stringify(value: unknown): string {
-    return JSON.stringify(value, null, this.indent);
+  private jsonStringify(value: unknown): string {
+    const type = typeof value;
+    if (type === "bigint" || type === "symbol" || type === "function") {
+      throw new TypeError(`Cannot stringify value of type "${type}"`);
+    }
+    return JSON.stringify(value ?? null, null, this.indent);
+  }
+
+  private serializeTreeValue(
+    value: unknown,
+    context: { stack: WeakSet<object> },
+    skipTypes = false,
+  ): unknown {
+    if (value === null) {
+      return null;
+    }
+
+    if (typeof value === "undefined") {
+      return null;
+    }
+
+    const valueType = typeof value;
+
+    if (valueType !== "object") {
+      if (valueType === "number") {
+        const numericValue = value as number;
+        return Number.isFinite(numericValue) ? numericValue : null;
+      }
+
+      if (
+        valueType === "bigint" ||
+        valueType === "symbol" ||
+        valueType === "function"
+      ) {
+        throw new TypeError(`Cannot serialize value of type "${valueType}"`);
+      }
+
+      return value;
+    }
+
+    const objectValue = value as object;
+
+    if (context.stack.has(objectValue)) {
+      throw new TypeError("Cannot serialize circular structure in tree mode");
+    }
+
+    if (!skipTypes && !Array.isArray(objectValue)) {
+      const typeDef = this.findTypeDefinition(objectValue);
+      if (typeDef) {
+        const serializedPayload = typeDef.serialize(objectValue);
+        const payload = this.serializeTreeValue(
+          serializedPayload,
+          context,
+          true,
+        );
+        return {
+          __type: typeDef.id,
+          value: payload,
+        };
+      }
+    }
+
+    context.stack.add(objectValue);
+
+    try {
+      if (Array.isArray(objectValue)) {
+        const length = objectValue.length;
+        const items: unknown[] = new Array(length);
+        for (let index = 0; index < length; index += 1) {
+          items[index] = this.serializeTreeValue(objectValue[index], context);
+        }
+        return items;
+      }
+
+      const record: Record<string, unknown> = {};
+      const source = objectValue as Record<string, unknown>;
+      for (const key in source) {
+        if (!Object.prototype.hasOwnProperty.call(source, key)) {
+          continue;
+        }
+        const entryValue = source[key];
+        if (typeof entryValue === "undefined") {
+          continue;
+        }
+        record[key] = this.serializeTreeValue(entryValue, context);
+      }
+
+      return record;
+    } finally {
+      context.stack.delete(objectValue);
+    }
   }
 
   private createObjectId(context: SerializationContext): string {
@@ -122,7 +284,11 @@ export class Serializer {
     return `obj_${context.idCounter}`;
   }
 
-  private storeNode(context: SerializationContext, id: string, node: SerializedNode): void {
+  private storeNode(
+    context: SerializationContext,
+    id: string,
+    node: SerializedNode,
+  ): void {
     context.nodes[id] = node;
     context.nodeCount += 1;
   }
@@ -130,20 +296,20 @@ export class Serializer {
   private serializeValue(
     value: unknown,
     context: SerializationContext,
-    skipTypes = false
+    skipTypes = false,
   ): SerializedValue {
     if (value === null) {
       return null;
     }
 
-    if (typeof value === 'undefined') {
+    if (typeof value === "undefined") {
       return null;
     }
 
     const valueType = typeof value;
 
-    if (valueType !== 'object') {
-      if (valueType === 'number') {
+    if (valueType !== "object") {
+      if (valueType === "number") {
         const numericValue = value as number;
         if (!Number.isFinite(numericValue)) {
           return null;
@@ -151,7 +317,11 @@ export class Serializer {
         return numericValue;
       }
 
-      if (valueType === 'bigint' || valueType === 'symbol' || valueType === 'function') {
+      if (
+        valueType === "bigint" ||
+        valueType === "symbol" ||
+        valueType === "function"
+      ) {
         throw new TypeError(`Cannot serialize value of type "${valueType}"`);
       }
 
@@ -169,11 +339,11 @@ export class Serializer {
     if (!skipTypes && !Array.isArray(objectValue)) {
       const typeDef = this.findTypeDefinition(objectValue);
       if (typeDef) {
-        if (typeDef.strategy === 'value') {
+        if (typeDef.strategy === "value") {
           const serializedPayload = typeDef.serialize(objectValue);
           const payload = this.serializeValue(serializedPayload, context, true);
           // Value types are serialized inline and do not preserve identity
-          // This produces EJSON-compatible output for simple types like Date
+          // This produces stable JSON output for value-like types (ex: Date)
           return {
             __type: typeDef.id,
             value: payload,
@@ -187,7 +357,7 @@ export class Serializer {
         const payload = this.serializeValue(serializedPayload, context, true);
 
         this.storeNode(context, objectIdForType, {
-          kind: 'type',
+          kind: "type",
           type: typeDef.id,
           value: payload,
         });
@@ -204,7 +374,7 @@ export class Serializer {
       for (let index = 0; index < length; index += 1) {
         items[index] = this.serializeValue(objectValue[index], context);
       }
-      this.storeNode(context, objectId, { kind: 'array', value: items });
+      this.storeNode(context, objectId, { kind: "array", value: items });
       return { __ref: objectId };
     }
 
@@ -215,17 +385,19 @@ export class Serializer {
         continue;
       }
       const entryValue = source[key];
-      if (typeof entryValue === 'undefined') {
+      if (typeof entryValue === "undefined") {
         continue;
       }
       record[key] = this.serializeValue(entryValue, context);
     }
 
-    this.storeNode(context, objectId, { kind: 'object', value: record });
+    this.storeNode(context, objectId, { kind: "object", value: record });
     return { __ref: objectId };
   }
 
-  private findTypeDefinition(value: unknown): TypeDefinition<unknown, unknown> | undefined {
+  private findTypeDefinition(
+    value: unknown,
+  ): TypeDefinition<unknown, unknown> | undefined {
     for (const typeDef of this.typeList) {
       if (typeDef.is(value)) {
         return typeDef;
@@ -235,20 +407,18 @@ export class Serializer {
   }
   // ... (skipping unchanged methods)
 
-
-
   private isObjectReference(value: unknown): value is ObjectReference {
     return Boolean(
       value &&
-        typeof value === 'object' &&
-        value !== null &&
-        '__ref' in value &&
-        typeof (value as Record<'__ref', unknown>).__ref === 'string'
+      typeof value === "object" &&
+      value !== null &&
+      "__ref" in value &&
+      typeof (value as Record<"__ref", unknown>).__ref === "string",
     );
   }
 
   private isGraphPayload(value: unknown): value is SerializedGraph {
-    if (!value || typeof value !== 'object') {
+    if (!value || typeof value !== "object") {
       return false;
     }
 
@@ -258,27 +428,32 @@ export class Serializer {
       return false;
     }
 
-    if (typeof record.root === 'undefined') {
+    if (typeof record.root === "undefined") {
       return false;
     }
 
     const nodes = record.nodes;
-    if (typeof nodes !== 'object' || nodes === null) {
+    if (typeof nodes !== "object" || nodes === null) {
       return false;
     }
 
     return true;
   }
 
-  private toNodeRecord(nodes: Record<string, SerializedNode>): Record<string, SerializedNode> {
-    if (!nodes || typeof nodes !== 'object') {
+  private toNodeRecord(
+    nodes: Record<string, SerializedNode>,
+  ): Record<string, SerializedNode> {
+    if (!nodes || typeof nodes !== "object") {
       return Object.create(null);
     }
     return nodes;
   }
 
-  private deserializeValue(value: SerializedValue, context: DeserializationContext): unknown {
-    if (value === null || typeof value !== 'object') {
+  private deserializeValue(
+    value: SerializedValue,
+    context: DeserializationContext,
+  ): unknown {
+    if (value === null || typeof value !== "object") {
       return value;
     }
 
@@ -300,7 +475,10 @@ export class Serializer {
       if (!typeDef) {
         throw new Error(`Unknown type: ${value.__type}`);
       }
-      const data = this.deserializeValue(value.value as SerializedValue, context);
+      const data = this.deserializeValue(
+        value.value as SerializedValue,
+        context,
+      );
       return typeDef.deserialize(data);
     }
 
@@ -315,7 +493,10 @@ export class Serializer {
     return obj;
   }
 
-  private resolveReference(id: string, context: DeserializationContext): unknown {
+  private resolveReference(
+    id: string,
+    context: DeserializationContext,
+  ): unknown {
     if (context.resolved.has(id)) {
       return context.resolved.get(id);
     }
@@ -326,7 +507,7 @@ export class Serializer {
     }
 
     switch (node.kind) {
-      case 'array': {
+      case "array": {
         const values = node.value;
         const arr: unknown[] = new Array(values.length);
         context.resolved.set(id, arr);
@@ -336,7 +517,7 @@ export class Serializer {
         return arr;
       }
 
-      case 'object': {
+      case "object": {
         const target: Record<string, unknown> = {};
         context.resolved.set(id, target);
         const source = node.value;
@@ -349,22 +530,27 @@ export class Serializer {
         return target;
       }
 
-      case 'type': {
+      case "type": {
         const typeDef = this.typeMap.get(node.type);
         if (!typeDef) {
           throw new Error(`Unknown type: ${node.type}`);
         }
 
         const createdPlaceholder =
-          typeof typeDef.create === 'function' ? typeDef.create() : undefined;
-        const hasFactory = createdPlaceholder !== undefined && createdPlaceholder !== null;
-        const placeholder: unknown = hasFactory ? createdPlaceholder : Object.create(null);
+          typeof typeDef.create === "function" ? typeDef.create() : undefined;
+        const hasFactory =
+          createdPlaceholder !== undefined && createdPlaceholder !== null;
+        const placeholder: unknown = hasFactory
+          ? createdPlaceholder
+          : Object.create(null);
         context.resolved.set(id, placeholder);
         context.resolving.add(id);
 
         const deserializedPayload = this.deserializeValue(node.value, context);
         const result = typeDef.deserialize(deserializedPayload);
-        const finalResult = hasFactory ? this.mergePlaceholder(placeholder, result) : result;
+        const finalResult = hasFactory
+          ? this.mergePlaceholder(placeholder, result)
+          : result;
 
         context.resolved.set(id, finalResult);
         context.resolving.delete(id);
@@ -372,7 +558,7 @@ export class Serializer {
       }
 
       default: {
-        throw new Error('Unsupported node kind');
+        throw new Error("Unsupported node kind");
       }
     }
   }
@@ -403,11 +589,14 @@ export class Serializer {
 
     if (
       placeholder !== null &&
-      typeof placeholder === 'object' &&
+      typeof placeholder === "object" &&
       result !== null &&
-      typeof result === 'object'
+      typeof result === "object"
     ) {
-      Object.assign(placeholder as Record<string, unknown>, result as Record<string, unknown>);
+      Object.assign(
+        placeholder as Record<string, unknown>,
+        result as Record<string, unknown>,
+      );
       return placeholder;
     }
 
@@ -415,7 +604,7 @@ export class Serializer {
   }
 
   private deserializeLegacy(value: unknown): unknown {
-    if (value === null || typeof value !== 'object') {
+    if (value === null || typeof value !== "object") {
       return value;
     }
 
@@ -424,29 +613,34 @@ export class Serializer {
     }
 
     if (this.isSerializedTypeRecord(value)) {
-      const typeDef = this.typeMap.get((value as any).__type);
+      const typeDef = this.typeMap.get(value.__type);
       if (!typeDef) {
-        throw new Error(`Unknown type: ${(value as any).__type}`);
+        throw new Error(`Unknown type: ${value.__type}`);
       }
-      const data = this.deserializeLegacy((value as any).value);
+      const data = this.deserializeLegacy(value.value);
       return typeDef.deserialize(data);
     }
 
     const obj: Record<string, unknown> = {};
-    for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    for (const [key, entry] of Object.entries(
+      value as Record<string, unknown>,
+    )) {
       obj[key] = this.deserializeLegacy(entry);
     }
     return obj;
   }
 
-  private isSerializedTypeRecord(value: unknown): value is { __type: string; value: unknown } {
-    if (!value || typeof value !== 'object') {
+  private isSerializedTypeRecord(
+    value: unknown,
+  ): value is { __type: string; value: unknown } {
+    if (!value || typeof value !== "object") {
       return false;
     }
 
     const record = value as Record<string, unknown>;
     return (
-      typeof record.__type === 'string' && Object.prototype.hasOwnProperty.call(record, 'value')
+      typeof record.__type === "string" &&
+      Object.prototype.hasOwnProperty.call(record, "value")
     );
   }
 }

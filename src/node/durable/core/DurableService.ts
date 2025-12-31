@@ -12,77 +12,20 @@ import type {
 } from "./interfaces/service";
 import type { Execution, Schedule, Timer } from "./types";
 import type { IEventDefinition } from "../../../types/event";
-import { clearTimeout, setTimeout } from "node:timers";
-import * as crypto from "node:crypto";
 import type { BusEvent } from "./interfaces/bus";
+import type { DurableSignalId } from "./ids";
+import {
+  sleepMs,
+  withTimeout,
+  parseSignalState,
+  createExecutionId,
+  DurableExecutionError,
+} from "./utils";
+import { clearTimeout, setTimeout } from "node:timers";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+export { DurableExecutionError };
 
-function sleepMs(ms: number): Promise<void> {
-  return new Promise((resolve) => {
-    const timer = setTimeout(resolve, ms);
-    timer.unref();
-  });
-}
-
-async function withTimeout<T>(
-  promise: Promise<T>,
-  timeoutMs: number,
-  message: string,
-): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
-    timer.unref();
-
-    void promise.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (error) => {
-        clearTimeout(timer);
-        reject(error);
-      },
-    );
-  });
-}
-
-function parseSignalState(value: unknown): {
-  state: "waiting" | "completed" | "timed_out";
-  timerId?: string;
-} | null {
-  if (!isRecord(value)) return null;
-  const state = value.state;
-  if (state === "waiting") {
-    const timerId = value.timerId;
-    return {
-      state: "waiting",
-      timerId: typeof timerId === "string" ? timerId : undefined,
-    };
-  }
-  if (state === "completed") {
-    return { state: "completed" };
-  }
-  if (state === "timed_out") {
-    return { state: "timed_out" };
-  }
-  return null;
-}
-
-export class DurableExecutionError extends Error {
-  constructor(
-    message: string,
-    public readonly executionId: string,
-    public readonly taskId: string,
-    public readonly attempt: number,
-    public readonly causeInfo?: { message: string; stack?: string },
-  ) {
-    super(message);
-    this.name = "DurableExecutionError";
-  }
-}
+// Utilities moved to ./utils.ts
 
 export class DurableService implements IDurableService {
   private isRunning = false;
@@ -124,7 +67,7 @@ export class DurableService implements IDurableService {
       );
     }
 
-    const executionId = this.createExecutionId();
+    const executionId = createExecutionId();
     const execution: Execution<TInput, unknown> = {
       id: executionId,
       taskId: task.id,
@@ -155,6 +98,15 @@ export class DurableService implements IDurableService {
     });
   }
 
+  async executeStrict<TInput, TResult>(
+    task: undefined extends TResult ? never : DurableTask<TInput, TResult>,
+    input?: TInput,
+    options?: ExecuteOptions,
+  ): Promise<TResult> {
+    const actualTask: DurableTask<TInput, TResult> = task;
+    return await this.execute(actualTask, input, options);
+  }
+
   wait<TResult>(
     executionId: string,
     options?: { timeout?: number; waitPollIntervalMs?: number },
@@ -169,7 +121,7 @@ export class DurableService implements IDurableService {
   ): Promise<string> {
     this.registerTask(task);
 
-    const id = options.id ?? this.createExecutionId();
+    const id = options.id ?? createExecutionId();
 
     if (options.cron || options.interval !== undefined) {
       const schedule: Schedule<TInput> = {
@@ -505,6 +457,16 @@ export class DurableService implements IDurableService {
         );
       }
 
+      if (exec.status === "compensation_failed") {
+        throw new DurableExecutionError(
+          exec.error?.message || "Compensation failed",
+          exec.id,
+          exec.taskId,
+          exec.attempt,
+          exec.error,
+        );
+      }
+
       return undefined;
     };
 
@@ -576,14 +538,23 @@ export class DurableService implements IDurableService {
           }
         };
 
-        eventBus.subscribe(channel, handler).catch(() => {
-          // Fallback to polling if subscription fails
-          if (timer) {
-            clearTimeout(timer);
-            timer = null;
+        void (async () => {
+          try {
+            await eventBus.subscribe(channel, handler);
+            await handler({
+              type: "subscribed",
+              payload: null,
+              timestamp: new Date(),
+            });
+          } catch {
+            // Fallback to polling if subscription fails (or subscribe throws)
+            if (timer) {
+              clearTimeout(timer);
+              timer = null;
+            }
+            pollingFallback().then(resolve).catch(reject);
           }
-          pollingFallback().then(resolve).catch(reject);
-        });
+        })();
       });
     }
 
@@ -618,71 +589,79 @@ export class DurableService implements IDurableService {
   }
 
   private async handleTimer(timer: Timer): Promise<void> {
-    await this.config.store.markTimerFired(timer.id);
+    try {
+      await this.config.store.markTimerFired(timer.id);
 
-    if (timer.type === "sleep" && timer.executionId && timer.stepId) {
-      await this.config.store.saveStepResult({
-        executionId: timer.executionId,
-        stepId: timer.stepId,
-        result: { state: "completed" },
-        completedAt: new Date(),
-      });
-    }
-
-    if (timer.type === "signal_timeout" && timer.executionId && timer.stepId) {
-      const existing = await this.config.store.getStepResult(
-        timer.executionId,
-        timer.stepId,
-      );
-      const state = parseSignalState(existing?.result);
-      if (state?.state === "waiting") {
+      if (timer.type === "sleep" && timer.executionId && timer.stepId) {
         await this.config.store.saveStepResult({
           executionId: timer.executionId,
           stepId: timer.stepId,
-          result: { state: "timed_out" },
+          result: { state: "completed" },
           completedAt: new Date(),
         });
       }
-    }
 
-    if (timer.executionId) {
-      if (this.config.queue) {
-        await this.config.queue.enqueue({
-          type: "resume",
-          payload: { executionId: timer.executionId },
-          maxAttempts: this.config.execution?.maxAttempts ?? 3,
-        });
-      } else {
-        await this.processExecution(timer.executionId);
+      if (timer.type === "signal_timeout" && timer.executionId && timer.stepId) {
+        const existing = await this.config.store.getStepResult(
+          timer.executionId,
+          timer.stepId,
+        );
+        const state = parseSignalState(existing?.result);
+        if (state?.state === "waiting") {
+          await this.config.store.saveStepResult({
+            executionId: timer.executionId,
+            stepId: timer.stepId,
+            result: { state: "timed_out" },
+            completedAt: new Date(),
+          });
+        }
       }
-      return;
-    }
 
-    if (!timer.taskId) return;
+      if (timer.executionId) {
+        if (this.config.queue) {
+          await this.config.queue.enqueue({
+            type: "resume",
+            payload: { executionId: timer.executionId },
+            maxAttempts: this.config.execution?.maxAttempts ?? 3,
+          });
+        } else {
+          await this.processExecution(timer.executionId);
+        }
+        return;
+      }
 
-    const task = this.findTask(timer.taskId);
-    if (!task) return;
+      if (!timer.taskId) return;
 
-    const executionId = this.createExecutionId();
-    const execution: Execution<unknown, unknown> = {
-      id: executionId,
-      taskId: task.id,
-      input: timer.input,
-      status: "pending",
-      attempt: 1,
-      maxAttempts: this.config.execution?.maxAttempts ?? 3,
-      timeout: this.config.execution?.timeout,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+      const task = this.findTask(timer.taskId);
+      if (!task) return;
 
-    await this.config.store.saveExecution(execution);
-    await this.kickoffExecution(executionId);
+      const executionId = createExecutionId();
+      const execution: Execution<unknown, unknown> = {
+        id: executionId,
+        taskId: task.id,
+        input: timer.input,
+        status: "pending",
+        attempt: 1,
+        maxAttempts: this.config.execution?.maxAttempts ?? 3,
+        timeout: this.config.execution?.timeout,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
 
-    if (timer.scheduleId) {
-      const schedule = await this.config.store.getSchedule(timer.scheduleId);
-      if (schedule && schedule.status === "active") {
-        await this.reschedule(schedule, { lastRunAt: new Date() });
+      await this.config.store.saveExecution(execution);
+      await this.kickoffExecution(executionId);
+
+      if (timer.scheduleId) {
+        const schedule = await this.config.store.getSchedule(timer.scheduleId);
+        if (schedule && schedule.status === "active") {
+          await this.reschedule(schedule, { lastRunAt: new Date() });
+        }
+      }
+    } finally {
+      try {
+        await this.config.store.deleteTimer(timer.id);
+      } catch {
+        // best-effort cleanup; ignore
       }
     }
   }
@@ -718,33 +697,72 @@ export class DurableService implements IDurableService {
     });
   }
 
-  private createExecutionId(): string {
-    return crypto.randomUUID();
-  }
+  // Moved to utilities
 
   async signal<TPayload>(
     executionId: string,
-    signal: string | IEventDefinition<TPayload>,
+    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
     payload: TPayload,
   ): Promise<void> {
     const signalId = typeof signal === "string" ? signal : signal.id;
-    const stepId = `__signal:${signalId}`;
+    const baseStepId = `__signal:${signalId}`;
 
-    const existing = await this.config.store.getStepResult(executionId, stepId);
-    const state = parseSignalState(existing?.result);
-    if (state?.state === "completed") {
-      return;
+    const maxSignalSlotsToScan = 1000;
+    let completedStepId: string | null = null;
+
+    const baseExisting = await this.config.store.getStepResult(
+      executionId,
+      baseStepId,
+    );
+    const baseState = parseSignalState(baseExisting?.result);
+
+    if (!baseExisting || baseState?.state === "waiting" || baseState === null) {
+      if (baseState?.state === "waiting" && baseState.timerId) {
+        await this.config.store.deleteTimer(baseState.timerId);
+      }
+      completedStepId = baseStepId;
+    } else if (
+      baseState &&
+      (baseState.state === "completed" || baseState.state === "timed_out")
+    ) {
+      for (let index = 1; index < maxSignalSlotsToScan; index += 1) {
+        const stepId = `${baseStepId}:${index}`;
+        const existing = await this.config.store.getStepResult(
+          executionId,
+          stepId,
+        );
+
+        if (!existing) {
+          return;
+        }
+
+        const state = parseSignalState(existing.result);
+        if (state?.state === "waiting") {
+          if (state.timerId) {
+            await this.config.store.deleteTimer(state.timerId);
+          }
+          completedStepId = stepId;
+          break;
+        }
+
+        if (state === null) {
+          completedStepId = stepId;
+          break;
+        }
+
+        // completed / timed_out -> keep scanning for the next active wait
+      }
     }
-    if (state?.state === "timed_out") {
-      return;
-    }
-    if (state?.state === "waiting" && state.timerId) {
-      await this.config.store.deleteTimer(state.timerId);
+
+    if (!completedStepId) {
+      throw new Error(
+        `Too many signal slots for '${signalId}' (exceeded ${maxSignalSlotsToScan})`,
+      );
     }
 
     await this.config.store.saveStepResult({
       executionId,
-      stepId,
+      stepId: completedStepId,
       result: { state: "completed", payload },
       completedAt: new Date(),
     });

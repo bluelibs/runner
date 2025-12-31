@@ -1,7 +1,7 @@
 import { PassThrough } from "stream";
 import type { IncomingHttpHeaders } from "http";
 import { parseMultipartInput } from "../exposure/multipart";
-import { EJSON } from "../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../serializer";
 
 function makeReq(headers: IncomingHttpHeaders) {
   const req: any = new PassThrough();
@@ -17,7 +17,11 @@ describe("multipart - signal addEventListener branch (line 249)", () => {
       "content-type": `multipart/form-data; boundary=${boundary}`,
     });
     const ac = new AbortController();
-    const resultPromise = parseMultipartInput(req as any, ac.signal, EJSON);
+    const resultPromise = parseMultipartInput(
+      req as any,
+      ac.signal,
+      getDefaultSerializer(),
+    );
     const body = `--${boundary}\r\nContent-Disposition: form-data; name=\"__manifest\"\r\n\r\n{\"input\":{}}\r\n--${boundary}--\r\n`;
     req.write(body);
     req.end();

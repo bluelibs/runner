@@ -35,7 +35,10 @@ Durable workflows are a **Node-only** module exported from `@bluelibs/runner/nod
 
 - Spec & guide: `readmes/DURABLE_WORKFLOWS.md`
 - Token-friendly durable guide: `readmes/DURABLE_WORKFLOWS_AI.md`
-- Core primitives: `ctx.step(id, fn)`, `ctx.sleep(ms)`, `ctx.waitForSignal(signal)` and `durable.signal(executionId, signal, payload)`
+- Core primitives: `ctx.step(id, fn)`, `ctx.sleep(ms)`, `ctx.emit(event, payload)`, `ctx.waitForSignal(signal)` and `durableService.signal(executionId, signal, payload)`
+- Semantics: repeated `emit` and repeated `waitForSignal` (same signal id) are supported and replay-safe (see the guides for details)
+- Determinism: internal emit/signal step ids use call-order indexes; changing workflow structure can shift ids and affect replay
+- Type-safety helpers: `createDurableStepId<T>()`, `createDurableSignalId<TPayload>()`, and `durableService.executeStrict(...)`
 
 ## Resources
 
@@ -252,7 +255,7 @@ await requestContext.provide({ requestId: "abc" }, async () => {
 r.task('task').middleware([requestContext.require()]);
 ```
 
-- If you don't provide `serialize`/`parse`, Runner uses its default EJSON serializer to preserve Dates, RegExp, etc.
+- If you don't provide `serialize`/`parse`, Runner uses its default serializer to preserve Dates, RegExp, etc.
 - You can also inject async contexts as dependencies; the injected value is the helper itself. Contexts must be registered to be used.
 
 ```ts
@@ -396,7 +399,7 @@ await client.task("app.tasks.upload", { file });
 
 ## Serialization
 
-Runner ships with an EJSON serializer that round-trips Dates, RegExp, binary, and custom shapes across Node and web.
+Runner ships with a serializer that round-trips Dates, RegExp, binary, and custom shapes across Node and web.
 
 ```ts
 import { r, globals } from "@bluelibs/runner";
@@ -425,7 +428,7 @@ const serializerSetup = r
 
 Use `getDefaultSerializer()` when you need a standalone instance outside DI.
 
-Note on files: The “File” you see in tunnels is not an EJSON custom type. Runner uses a dedicated $ejson: "File" sentinel in inputs which the tunnel client/server convert to multipart streams via a manifest. We intentionally do not call `EJSON.addType("File", ...)` by default, because file handling is performed by the tunnel layer (manifest hydration and multipart), not by the serializer. Keep using `createWebFile`/`createNodeFile` for uploads; use `EJSON.addType` only for your own domain types.
+Note on files: The “File” you see in tunnels is not a custom serializer type. Runner uses a dedicated `$ejson: "File"` sentinel in inputs which the tunnel client/server convert to multipart streams via a manifest. File handling is performed by the tunnel layer (manifest hydration and multipart), not by the serializer. Keep using `createWebFile`/`createNodeFile` for uploads.
 
 ## Testing
 

@@ -1,7 +1,6 @@
 import { createHttpClient } from "../http-client";
-import { EJSON } from "../globals/resources/tunnel/serializer";
 import { createWebFile } from "../platform/createWebFile";
-import { getDefaultSerializer } from "../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../serializer";
 
 describe("http-client branches coverage", () => {
   const baseUrl = "http://127.0.0.1:7070/__runner";

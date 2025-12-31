@@ -7,7 +7,7 @@ import { cacheResource } from "./middleware/cache.middleware";
 import { queueResource } from "./resources/queue.resource";
 import { globalTags } from "./globalTags";
 import { MiddlewareManager } from "../models/MiddlewareManager";
-import type { Serializer } from "./resources/tunnel/serializer";
+import type { SerializerLike as Serializer } from "../serializer";
 import { httpClientFactory } from "./resources/httpClientFactory.resource";
 
 const systemTag = globalTags.system;
@@ -27,7 +27,7 @@ export const serializer = defineResource<void, Promise<Serializer>>({
   meta: {
     title: "Serializer",
     description:
-      "Serializes and deserializes data. Provides EJSON-compatible stringify/parse and custom type registration via addType.",
+      "Serializes and deserializes data. Supports stringify/parse and custom type registration via addType.",
   },
   tags: [systemTag],
 });

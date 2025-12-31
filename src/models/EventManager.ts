@@ -151,7 +151,9 @@ export class EventManager {
       };
 
       // Create the base emission function
-      const baseEmit = async (eventToEmit: IEventEmission<any>): Promise<void> => {
+      const baseEmit = async (
+        eventToEmit: IEventEmission<any>,
+      ): Promise<void> => {
         if (allListeners.length === 0) {
           return;
         }

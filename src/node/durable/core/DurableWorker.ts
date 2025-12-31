@@ -32,7 +32,7 @@ export class DurableWorker {
   private async handleMessage(message: QueueMessage): Promise<void> {
     const { type, payload } = message;
 
-    if (type === "execute" || type === "resume") {
+    if (type === "execute" || type === "resume" || type === "schedule") {
       const executionId = this.extractExecutionId(payload);
       if (executionId) {
         await this.service.processExecution(executionId);

@@ -4,6 +4,8 @@ export * from "../index";
 import { globals as coreGlobals } from "../index";
 import { run as coreRun } from "../run";
 import type { RunResult } from "../models/RunResult";
+import type { SerializerLike } from "../serializer";
+import type { IAsyncContext } from "../types/asyncContext";
 
 export { nodeExposure } from "./exposure.resource";
 export {
@@ -45,10 +47,12 @@ export async function run(root: any, config?: any): Promise<RunResult<any>> {
   // Eagerly initialize values so getResourceValue works immediately
   const serializer = (await rt.getResourceValue(
     coreGlobals.resources.serializer,
-  )) as any;
-  const errorRegistry = new Map<string, any>();
+  )) as SerializerLike;
+  const errorRegistry = new Map<string, unknown>();
   for (const [id, helper] of store.errors) errorRegistry.set(id, helper);
-  const contexts = Array.from(store.asyncContexts.values()) as any[];
+  const contexts = Array.from(store.asyncContexts.values()) as Array<
+    IAsyncContext<unknown>
+  >;
 
   const smartEntry = store.resources.get(httpSmartClientFactory.id);
   if (smartEntry && !smartEntry.isInitialized) {

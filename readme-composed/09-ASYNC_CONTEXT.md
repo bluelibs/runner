@@ -24,7 +24,7 @@ await requestContext.provide({ requestId: "abc" }, async () => {
 const requireRequestContext = requestContext.require();
 ```
 
-- If you don't provide `serialize`/`parse`, Runner uses its default EJSON serializer to preserve Dates, RegExp, etc.
+- If you don't provide `serialize`/`parse`, Runner uses its default serializer to preserve Dates, RegExp, etc.
 - A legacy `createContext(name?)` exists for backwards compatibility; prefer `r.asyncContext` or `asyncContext({ id })`.
 
 - You can also inject async contexts as dependencies; the injected value is the helper itself. Contexts must be registered to be used.
@@ -40,4 +40,3 @@ const app = r.resource("app").register([requestContext, whoAmI]).build();
 ```
 
 // Legacy section for Private Context - different from Async Context
-

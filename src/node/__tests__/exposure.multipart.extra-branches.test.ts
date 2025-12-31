@@ -38,8 +38,10 @@ import {
   parseMultipartInput,
   type MultipartRequest,
 } from "../exposure/multipart";
-import { EJSON } from "../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../serializer";
 import type { JsonResponse } from "../exposure/types";
+
+const serializer = getDefaultSerializer();
 
 function expectErrorCode(response: JsonResponse, expected: string): void {
   const body = response.body as any;
@@ -84,7 +86,7 @@ describe("parseMultipartInput - extra mocked branches", () => {
       busboy.emit("finish");
     });
 
-    const result = await parseMultipartInput(req, undefined, EJSON);
+    const result = await parseMultipartInput(req, undefined, serializer);
     expect(result.ok).toBe(false);
     if (!result.ok) expectErrorCode(result.response, "MISSING_MANIFEST");
   });
@@ -95,7 +97,7 @@ describe("parseMultipartInput - extra mocked branches", () => {
       busboy.emit("finish");
     });
 
-    const result = await parseMultipartInput(req, undefined, EJSON);
+    const result = await parseMultipartInput(req, undefined, serializer);
     expect(result.ok).toBe(false);
     if (!result.ok) expectErrorCode(result.response, "MISSING_MANIFEST");
   });
@@ -120,7 +122,7 @@ describe("parseMultipartInput - extra mocked branches", () => {
       });
     });
 
-    const result = await parseMultipartInput(req, undefined, EJSON);
+    const result = await parseMultipartInput(req, undefined, serializer);
     expect(result.ok).toBe(false);
     if (!result.ok) expectErrorCode(result.response, "STREAM_ERROR");
   });
@@ -131,7 +133,7 @@ describe("parseMultipartInput - extra mocked branches", () => {
       setImmediate(() => busboy.emit("error", new Error("bad")));
     });
 
-    const result = await parseMultipartInput(req, undefined, EJSON);
+    const result = await parseMultipartInput(req, undefined, serializer);
     expect(result.ok).toBe(false);
     if (!result.ok) expectErrorCode(result.response, "INVALID_MULTIPART");
   });
@@ -157,7 +159,7 @@ describe("parseMultipartInput - extra mocked branches", () => {
       busboy.emit("error", new Error("stop"));
     });
 
-    const result = await parseMultipartInput(req, undefined, EJSON);
+    const result = await parseMultipartInput(req, undefined, serializer);
     expect(result.ok).toBe(false);
     if (!result.ok) expectErrorCode(result.response, "INVALID_MULTIPART");
   });
@@ -175,7 +177,7 @@ describe("parseMultipartInput - extra mocked branches", () => {
       busboy.emit("finish");
     });
 
-    const result = await parseMultipartInput(req);
+    const result = await parseMultipartInput(req, undefined, serializer);
     expect(result.ok).toBe(false);
     if (!result.ok) expectErrorCode(result.response, "INVALID_MULTIPART");
   });

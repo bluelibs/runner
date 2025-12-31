@@ -1,13 +1,4 @@
-import {
-  task,
-  r,
-  resource,
-  override,
-  run,
-  createTestResource,
-  globals,
-  event,
-} from "..";
+import { task, r, resource, override, run, createTestResource } from "..";
 
 describe("createTestResource", () => {
   it("classic task/resource support throws contracts without DI", () => {

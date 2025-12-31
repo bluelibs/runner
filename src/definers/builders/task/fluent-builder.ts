@@ -278,14 +278,9 @@ export function makeTaskBuilder<
 
     throws(list: ThrowsList) {
       const next = clone(state, { throws: list });
-      return makeTaskBuilder<
-        TInput,
-        TOutput,
-        TDeps,
-        TMeta,
-        TTags,
-        TMiddleware
-      >(next);
+      return makeTaskBuilder<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>(
+        next,
+      );
     },
 
     build() {

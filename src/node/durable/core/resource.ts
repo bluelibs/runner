@@ -16,8 +16,13 @@ export function createDurableServiceResource(config: DurableServiceConfig) {
               task: DurableTask<TInput, TResult>,
               input?: TInput,
             ) => {
-              const out = await taskRunner.run(task, input);
-              return out === undefined ? undefined : await out;
+              const outputPromise = await taskRunner.run(task, input);
+              if (outputPromise === undefined) {
+                throw new Error(
+                  `Durable task '${task.id}' completed without a result promise.`,
+                );
+              }
+              return await outputPromise;
             },
           } satisfies DurableServiceConfig["taskExecutor"]),
       }),

@@ -18,10 +18,7 @@ jest.mock("../http-fetch-tunnel.resource", () => {
 import { createHttpClient } from "../http-client";
 import { createWebFile } from "../platform/createWebFile";
 import { createFile as createNodeFile } from "../node/platform/createFile";
-import {
-  getDefaultSerializer,
-  EJSON,
-} from "../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../serializer";
 
 describe("http-client (universal)", () => {
   const baseUrl = "http://127.0.0.1:7070/__runner";
@@ -32,7 +29,10 @@ describe("http-client (universal)", () => {
 
   it("JSON fallback uses exposure fetch", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
-    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     const result = await client.task("t.json", { a: 1 } as any);
     expect(result).toBe("JSON-OK");
     expect((createExposureFetch as any).__lastCfg.baseUrl).toBe(
@@ -43,7 +43,10 @@ describe("http-client (universal)", () => {
 
   it("event delegates to exposure fetch event", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
-    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     await client.event("e.hello", { x: true } as any);
     const event = (createExposureFetch as any).__event as jest.Mock;
     expect(event).toHaveBeenCalledTimes(1);
@@ -52,7 +55,10 @@ describe("http-client (universal)", () => {
 
   it("eventWithResult delegates to exposure fetch eventWithResult", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
-    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     expect(typeof client.eventWithResult).toBe("function");
     const out = await client.eventWithResult!("e.ret", { x: true } as any);
     const eventWithResult = (createExposureFetch as any)
@@ -67,7 +73,10 @@ describe("http-client (universal)", () => {
     (createExposureFetch as jest.Mock).mockImplementationOnce((_cfg: any) => {
       return { task: jest.fn(), event: jest.fn() };
     });
-    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     await expect(
       client.eventWithResult!("e.nope", { a: 1 } as any),
     ).rejects.toThrow(/eventWithResult not available/i);
@@ -76,12 +85,14 @@ describe("http-client (universal)", () => {
   it("eventWithResult: rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
     const { TunnelError } = require("../globals/resources/tunnel/protocol");
-    (createExposureFetch as any).__eventWithResult.mockImplementationOnce(async () => {
-      throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
-        id: "tests.errors.evret",
-        data: { code: 9, message: "evret" },
-      });
-    });
+    (createExposureFetch as any).__eventWithResult.mockImplementationOnce(
+      async () => {
+        throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
+          id: "tests.errors.evret",
+          data: { code: 9, message: "evret" },
+        });
+      },
+    );
     const helper = {
       id: "tests.errors.evret",
       throw: (data: any) => {
@@ -95,9 +106,9 @@ describe("http-client (universal)", () => {
       serializer: getDefaultSerializer(),
       errorRegistry: new Map([["tests.errors.evret", helper]]),
     });
-    await expect(client.eventWithResult!("e.ret", { a: 1 } as any)).rejects.toThrow(
-      /typed-evret:9/,
-    );
+    await expect(
+      client.eventWithResult!("e.ret", { a: 1 } as any),
+    ).rejects.toThrow(/typed-evret:9/);
   });
 
   it("browser multipart uses FormData and onRequest sees auth header", async () => {
@@ -244,7 +255,10 @@ describe("http-client (universal)", () => {
     (createExposureFetch as any).__task.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "json-raw");
     });
-    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     await expect(client.task("t.json.raw", { a: 1 } as any)).rejects.toThrow(
       /json-raw/,
     );
@@ -256,14 +270,20 @@ describe("http-client (universal)", () => {
     (createExposureFetch as any).__event.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "ev-raw");
     });
-    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     await expect(client.event("e.raw", { a: 1 } as any)).rejects.toThrow(
       /ev-raw/,
     );
   });
 
   it("throws helpful error when Node File sentinel present", async () => {
-    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     const nodeFile = createNodeFile(
       { name: "nf.bin" },
       { buffer: Buffer.from([1]) },
@@ -278,7 +298,10 @@ describe("http-client (universal)", () => {
 
   it("throws helpful error when input is a Node Readable stream", async () => {
     const { Readable } = require("stream");
-    const client = createHttpClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     const stream = Readable.from([Buffer.from("data")]);
     await expect(client.task("t.duplex", stream)).rejects.toThrow(
       /cannot send a Node stream/i,
@@ -315,7 +338,10 @@ describe("http-client (universal)", () => {
 
   it("throws on empty baseUrl", () => {
     expect(() =>
-      createHttpClient({ baseUrl: "" as any, serializer: getDefaultSerializer() } as any),
+      createHttpClient({
+        baseUrl: "" as any,
+        serializer: getDefaultSerializer(),
+      } as any),
     ).toThrow();
   });
 

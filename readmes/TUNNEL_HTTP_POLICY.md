@@ -11,7 +11,7 @@
     - [Base Path](#base-path)
     - [Protocol Envelope](#protocol-envelope)
   - [Common Elements](#common-elements)
-    - [EJSON Serialization](#ejson-serialization)
+    - [Serialization](#serialization)
     - [Authentication](#authentication)
     - [Error Handling](#error-handling)
     - [CORS](#cors)
@@ -20,7 +20,7 @@
     - [Event Emission (`POST /event/{eventId}`)](#event-emission-post-eventeventid)
     - [Discovery (`GET|POST /discovery`)](#discovery-getpost-discovery)
   - [Request Modes](#request-modes)
-    - [JSON/EJSON Mode](#jsonejson-mode)
+    - [JSON Mode](#json-mode)
     - [Multipart Mode](#multipart-mode)
     - [Octet-Stream Mode](#octet-stream-mode)
   - [Response Modes](#response-modes)
@@ -43,7 +43,8 @@ The Runner tunnel HTTP protocol enables remote invocation of tasks and emission 
 
 ### Goals
 
-- **Simplicity**: Minimal overhead; leverages HTTP/1.1+ with EJSON for structured data.
+- **Simplicity**: Minimal overhead; leverages HTTP/1.1+ with serialized JSON for structured data.
+- **Simplicity**: Minimal overhead; leverages HTTP/1.1+ with serialized JSON for structured data.
 - **Cross-Platform**: Works in Node (streams/files) and browsers (fetch/FormData).
 - **Security**: Mandatory auth, allow-lists, CORS, abort handling.
 - **Efficiency**: Supports streaming (duplex/raw) and files (manifest-based multipart) without buffering.
@@ -66,15 +67,15 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 ```
 
 - `ok`: Boolean.
-- `result`: Task output (EJSON-serialized; omitted for events).
+- `result`: Task output (serialized; omitted for events).
 - `error`: Details on failure (HTTP status maps to `code`).
 
 ## Common Elements
 
-### EJSON Serialization
+### Serialization
 
-- All JSON bodies/responses use EJSON (extended JSON) for types like `Date`, `RegExp`, `Binary`, and custom classes (via `addType`).
-- Files are **not** EJSON custom types: Use sentinels `{"$ejson": "File", "id": "<uuid>", "meta": {...}}` (see Multipart Mode).
+- All JSON bodies/responses are serialized with Runner's serializer to preserve types like `Date`, `RegExp`, and custom classes (via `addType`).
+- Files are **not** custom serializer types: use sentinels `{"$ejson": "File", "id": "<uuid>", "meta": {...}}` (see Multipart Mode).
 - Charset: UTF-8.
 - Custom Types: Client/server must sync `addType(name, factory)` via DI (`globals.resources.serializer`).
 
@@ -93,7 +94,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - **Common Codes**:
   | Code | HTTP | codeName | Description |
   |------|------|----------|-------------|
-  | 400 | 400 | INVALID_JSON | Malformed EJSON body. |
+  | 400 | 400 | INVALID_JSON | Malformed JSON body. |
   | 400 | 400 | INVALID_MULTIPART | Multipart missing/invalid manifest or parts. |
   | 401 | 401 | UNAUTHORIZED | Invalid/missing token. |
   | 403 | 403 | FORBIDDEN | ID not in allow-list. |
@@ -130,7 +131,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - **Purpose**: Emit a remote event with payload; fire-and-forget (no result).
 - **Auth**: Required.
 - **Allow-List**: Checked.
-- **Body**: Always JSON mode: `{ payload: <any> }` (EJSON).
+- **Body**: Always JSON mode: `{ payload: <any> }` (serialized).
 - **Response**: 200 + `{ ok: true }` or error envelope.
 - **No Context**: Events don't provide `useExposureContext()`.
 
@@ -158,12 +159,12 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 
 Server routes by `Content-Type`.
 
-### JSON/EJSON Mode
+### JSON Mode
 
 - **When**: No files/streams (default fallback).
 - **Content-Type**: `application/json; charset=utf-8`
-- **Body**: EJSON `{ input: <any> }` (or bare `<input>` if simple).
-- **Handling**: Server parses EJSON, runs task with input, serializes result.
+- **Body**: JSON `{ input: <any> }` (or bare `<input>` if simple).
+- **Handling**: Server parses JSON (via Runner serializer), runs task with input, serializes result.
 - **Limitations**: No files (use multipart); no raw streams (use octet).
 
 ### Multipart Mode
@@ -171,7 +172,7 @@ Server routes by `Content-Type`.
 - **When**: Input contains File sentinels (client-detected).
 - **Content-Type**: `multipart/form-data; boundary=<boundary>` (RFC 7578).
 - **Body Parts**:
-  - `__manifest` (text/plain): EJSON string of `{ input: <obj> }`.
+  - `__manifest` (text/plain): JSON string of `{ input: <obj> }`.
     - File placeholders: `{"$ejson": "File", "id": "<uuid>", "meta": { "name": string, "type"?: string, "size"?: number, "lastModified"?: number, "extra"?: object }}`
     - `<uuid>`: Client-generated (unique per request).
   - `file:<id>` (binary): File bytes for each sentinel.
@@ -195,7 +196,7 @@ Server routes by `Content-Type`.
 
 ## Response Modes
 
-- **Default**: JSON envelope (EJSON-serialized).
+- **Default**: JSON envelope (serialized).
 - **Streaming**: If task returns `Readable` or `{ stream: Readable }`:
   - Status: 200.
   - Content-Type: `application/octet-stream` (or custom via res).
@@ -224,7 +225,7 @@ Server routes by `Content-Type`.
 
 - **Mechanism**: Snapshots `AsyncLocalStorage` (created via `createContext(id: string)`).
 - **Transport**:
-  - JSON/Multipart: Embed in `__tunnelCtx` (EJSON) or headers (`x-runner-ctx-*`).
+  - JSON/Multipart: Embed in `__tunnelCtx` (serialized) or headers (`x-runner-ctx-*`).
   - Octet: Headers for small values; envelope prefix (length + serialized) for full.
 - **Rules**: Stable IDs; optional `serialize`/`parse` hooks. Filtered for size/serializability.
 - **Security**: Server validates before restore; caps size.
@@ -255,7 +256,7 @@ Response:
 
 ### Multipart Upload (Node-like, conceptual curl)
 
-Manifest EJSON: `{"input": {"file": {"$ejson": "File", "id": "f1", "meta": {"name": "doc.txt", "type": "text/plain"}}}}`
+Manifest JSON: `{"input": {"file": {"$ejson": "File", "id": "f1", "meta": {"name": "doc.txt", "type": "text/plain"}}}}`
 
 ```bash
 curl -X POST http://localhost:7070/__runner/task/app.tasks.upload \
@@ -283,7 +284,7 @@ Response: `{"ok": true}`
 
 ## Versioning
 
-- **v1.0**: Current (Runner 4.x). Base: `/__runner`, EJSON envelopes, modes as above.
+- **v1.0**: Current (Runner 4.x). Base: `/__runner`, serialized envelopes, modes as above.
 - **Future**:
   - v2: Binary protocol (e.g., Protocol Buffers over HTTP/2).
   - Headers: `X-Runner-Protocol-Version: 1.0`.
@@ -294,7 +295,7 @@ Response: `{"ok": true}`
 - [AI.md](../AI.md): High-level fluent API.
 - [TUNNELS.md](TUNNELS.md): Usage, examples, troubleshooting.
 - Code: `src/node/exposure/` (server), `src/node/http-smart-client.model.ts` (clients).
-- Standards: HTTP/1.1 (RFC 7230), Multipart (RFC 7578), EJSON (MongoDB spec).
+- Standards: HTTP/1.1 (RFC 7230), Multipart (RFC 7578), JSON.
 
 ---
 

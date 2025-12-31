@@ -1,5 +1,5 @@
 import { tunnels } from "../index";
-import { EJSON, getDefaultSerializer } from "../../resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../../serializer";
 
 describe("globals.tunnels index", () => {
   it("http.createClient forwards url to createExposureFetch and returns a client", async () => {

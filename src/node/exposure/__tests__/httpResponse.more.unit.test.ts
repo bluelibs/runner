@@ -57,6 +57,7 @@ describe("httpResponse additional branch coverage", () => {
       for (const fn of listeners[ev] ?? []) fn(arg);
     };
     const resume = jest.fn();
+    const off = jest.fn();
     const inner: any = {
       on(ev: string, cb: Function) {
         (listeners[ev] ||= []).push(cb);
@@ -66,6 +67,7 @@ describe("httpResponse additional branch coverage", () => {
         (listeners[ev] ||= []).push(cb);
         return inner;
       },
+      off,
       resume,
     };
 
@@ -76,6 +78,7 @@ describe("httpResponse additional branch coverage", () => {
     await new Promise((r) => setImmediate(r));
     expect(res.writableEnded).toBe(true);
     expect(Buffer.concat(writes).toString("utf8")).toBe("A");
+    expect(off).toHaveBeenCalledWith("data", expect.any(Function));
   });
 
   it("respondStream ends immediately when _readableState.ended is true after sync read()", () => {

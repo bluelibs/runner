@@ -1,4 +1,5 @@
 import type { IEventDefinition } from "../../../../types/event";
+import type { DurableSignalId, DurableStepId } from "../ids";
 
 export interface StepOptions {
   retries?: number;
@@ -15,9 +16,16 @@ export interface IDurableContext {
   readonly attempt: number;
 
   step<T>(stepId: string): IStepBuilder<T>;
+  step<T>(stepId: DurableStepId<T>): IStepBuilder<T>;
   step<T>(stepId: string, fn: () => Promise<T>): Promise<T>;
+  step<T>(stepId: DurableStepId<T>, fn: () => Promise<T>): Promise<T>;
   step<T>(
     stepId: string,
+    options: StepOptions,
+    fn: () => Promise<T>,
+  ): Promise<T>;
+  step<T>(
+    stepId: DurableStepId<T>,
     options: StepOptions,
     fn: () => Promise<T>,
   ): Promise<T>;
@@ -29,13 +37,21 @@ export interface IDurableContext {
    * The signal is memoized as a durable step under `__signal:<signalId>`.
    */
   waitForSignal<TPayload>(
-    signal: string | IEventDefinition<TPayload>,
+    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
   ): Promise<TPayload>;
   waitForSignal<TPayload>(
-    signal: string | IEventDefinition<TPayload>,
+    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
     options: { timeoutMs: number },
   ): Promise<{ kind: "signal"; payload: TPayload } | { kind: "timeout" }>;
 
+  emit<TPayload>(
+    event: IEventDefinition<TPayload>,
+    payload: TPayload,
+  ): Promise<void>;
+  emit<TPayload>(
+    event: DurableSignalId<TPayload>,
+    payload: TPayload,
+  ): Promise<void>;
   emit<TPayload>(
     event: string | { id: string },
     payload: TPayload,

@@ -14,7 +14,7 @@ import type { Execution, Schedule, Timer } from "../core/types";
 import { MemoryStore } from "../store/MemoryStore";
 
 function createTaskExecutor(
-  handlers: Record<string, (input: unknown) => Promise<unknown>>,
+  handlers: Record<string, (input: unknown) => Promise<any>>,
 ): ITaskExecutor {
   return {
     run: async (task, input) => {
@@ -53,6 +53,25 @@ describe("durable: DurableService (unit)", () => {
       .build();
 
     await expect(service.execute(task)).rejects.toThrow("taskExecutor");
+  });
+
+  it("executes typed tasks via executeStrict()", async () => {
+    const store = new MemoryStore();
+    const task = r
+      .task("t.strict")
+      .run(async () => "ok")
+      .build();
+
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({
+        [task.id]: async () => "ok",
+      }),
+      tasks: [task],
+      execution: { maxAttempts: 1 },
+    });
+
+    await expect(service.executeStrict(task)).resolves.toBe("ok");
   });
 
   it("marks execution failed when task is not registered", async () => {
@@ -540,6 +559,9 @@ describe("durable: DurableService (unit)", () => {
     expect(queue.enqueued).toEqual([
       { type: "resume", payload: { executionId: "e1" } },
     ]);
+    expect(((store as any).timers as Map<string, unknown>).has("t1")).toBe(
+      false,
+    );
     await service.stop();
   });
 
@@ -717,6 +739,137 @@ describe("durable: DurableService (unit)", () => {
     await service.signal("e1", "timed", { paidAt: 123 });
     expect((await store.getStepResult("e1", "__signal:timed"))?.result).toEqual(
       { state: "timed_out" },
+    );
+  });
+
+  it("signal completes indexed waits and deletes any timeout timer", async () => {
+    const store = new MemoryStore();
+    const queue = new SpyQueue();
+    const service = new DurableService({ store, queue, tasks: [] });
+
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: "sleeping",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid",
+      result: { state: "completed", payload: { paidAt: 1 } },
+      completedAt: new Date(),
+    });
+
+    await store.createTimer({
+      id: "t1",
+      executionId: "e1",
+      stepId: "__signal:paid:1",
+      type: "signal_timeout",
+      fireAt: new Date(Date.now() + 1000),
+      status: "pending",
+    });
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid:1",
+      result: { state: "waiting", timerId: "t1" },
+      completedAt: new Date(),
+    });
+
+    await service.signal("e1", "paid", { paidAt: 2 });
+
+    expect((await store.getStepResult("e1", "__signal:paid:1"))?.result).toEqual(
+      { state: "completed", payload: { paidAt: 2 } },
+    );
+    const timers = await store.getReadyTimers(new Date(Date.now() + 60_000));
+    expect(timers.some((t) => t.id === "t1")).toBe(false);
+    expect(queue.enqueued).toEqual([
+      { type: "resume", payload: { executionId: "e1" } },
+    ]);
+  });
+
+  it("signal overwrites unknown indexed signal step states", async () => {
+    const store = new MemoryStore();
+    const queue = new SpyQueue();
+    const service = new DurableService({ store, queue, tasks: [] });
+
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: "sleeping",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid",
+      result: { state: "completed", payload: { paidAt: 1 } },
+      completedAt: new Date(),
+    });
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid:1",
+      result: { state: "unknown" },
+      completedAt: new Date(),
+    });
+
+    await service.signal("e1", "paid", { paidAt: 2 });
+
+    expect((await store.getStepResult("e1", "__signal:paid:1"))?.result).toEqual(
+      { state: "completed", payload: { paidAt: 2 } },
+    );
+    expect(queue.enqueued).toEqual([
+      { type: "resume", payload: { executionId: "e1" } },
+    ]);
+  });
+
+  it("signal throws if too many indexed signal slots exist", async () => {
+    class InfiniteSignalStore extends MemoryStore {
+      override async getStepResult(executionId: string, stepId: string) {
+        if (stepId.startsWith("__signal:paid:")) {
+          return {
+            executionId,
+            stepId,
+            result: { state: "completed" },
+            completedAt: new Date(),
+          };
+        }
+        return await super.getStepResult(executionId, stepId);
+      }
+    }
+
+    const store = new InfiniteSignalStore();
+    const service = new DurableService({ store, tasks: [] });
+
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: "sleeping",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid",
+      result: { state: "completed" },
+      completedAt: new Date(),
+    });
+
+    await expect(service.signal("e1", "paid", { paidAt: 1 })).rejects.toThrow(
+      "Too many signal slots",
     );
   });
 
@@ -1011,6 +1164,22 @@ describe("durable: DurableService (unit)", () => {
     expect(queue.dispose).toHaveBeenCalled();
     expect(eventBus.init).toHaveBeenCalled();
     expect(eventBus.dispose).toHaveBeenCalled();
+  });
+
+  it("initDurableService/disposeDurableService tolerate missing lifecycle hooks", async () => {
+    const store = new MemoryStore();
+
+    const service = await initDurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+    });
+
+    await expect(
+      disposeDurableService(service, {
+        store,
+        taskExecutor: createTaskExecutor({}),
+      }),
+    ).resolves.toBeUndefined();
   });
 
   it("covers start idempotency and failed-without-error waitForResult", async () => {

@@ -17,7 +17,7 @@ export interface TypeDefinition<TInstance = unknown, TSerialized = unknown> {
   /** Optional factory used to create a placeholder during deserialization */
   create?: () => TInstance;
   /** Serialization strategy: 'value' (inline, no identity) or 'ref' (graph node, identity preserved). Default: 'ref' */
-  strategy?: 'value' | 'ref';
+  strategy?: "value" | "ref";
 }
 
 /** Reference to another object in the serialization */
@@ -31,9 +31,9 @@ export interface ObjectReference {
  * Each node captures either an array, plain object, or typed payload.
  */
 export type SerializedNode =
-  | { kind: 'array'; value: SerializedValue[] }
-  | { kind: 'object'; value: Record<string, SerializedValue> }
-  | { kind: 'type'; type: string; value: SerializedValue };
+  | { kind: "array"; value: SerializedValue[] }
+  | { kind: "object"; value: Record<string, SerializedValue> }
+  | { kind: "type"; type: string; value: SerializedValue };
 
 /**
  * Serialization context for tracking object references
@@ -62,7 +62,10 @@ export interface DeserializationContext {
  * Union type for serialized values
  */
 export type JsonPrimitive = string | number | boolean | null;
-export type JsonValue = JsonPrimitive | JsonValue[] | { [key: string]: JsonValue };
+export type JsonValue =
+  | JsonPrimitive
+  | JsonValue[]
+  | { [key: string]: JsonValue };
 export type SerializedValue = JsonValue | ObjectReference;
 
 /**
@@ -81,4 +84,18 @@ export interface SerializedGraph {
 export interface SerializerOptions {
   /** Whether to pretty-print JSON (for debugging) */
   pretty?: boolean;
+}
+
+/**
+ * Minimal serializer contract used across transports and persistence.
+ * Implementations must be able to round-trip JSON-compatible payloads and
+ * should support custom value types via `addType`.
+ */
+export interface SerializerLike {
+  stringify(value: unknown): string;
+  parse<T = unknown>(text: string): T;
+  addType?<TJson = unknown, TInstance = unknown>(
+    name: string,
+    factory: (json: TJson) => TInstance,
+  ): void;
 }

@@ -8,7 +8,7 @@ import {
   IAsyncContextDefinition,
   ASYNC_CONTEXT_TYPES_LOADED,
 } from "../types/asyncContext";
-import { getDefaultSerializer } from "../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../serializer";
 import { symbolAsyncContext, symbolOptionalDependency } from "../types/symbols";
 
 export { contextError as ContextError };

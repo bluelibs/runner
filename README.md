@@ -21,7 +21,7 @@
 | [BlueLibs Runner Dev](https://github.com/bluelibs/runner-dev)                                                       | GitHub  | Development tools and CLI for BlueLibs Runner                 |
 | [UX Friendly Docs](https://bluelibs.github.io/runner/)                                                              | Docs    | Clean, navigable documentation                                |
 | [AI Friendly Docs (<5000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)                               | Docs    | Short, token-friendly summary (<5000 tokens)                  |
-| [Durable Workflows (Node-only)](https://github.com/bluelibs/runner/blob/main/readmes/DURABLE_WORKFLOWS.md)          | Guide   | Durable workflows deep-dive (see also `DURABLE_WORKFLOWS_AI`) |
+| [Durable Workflows (Node-only)](https://github.com/bluelibs/runner/blob/main/readmes/DURABLE_WORKFLOWS.md)          | Guide   | Durable workflows deep-dive (see also `readmes/DURABLE_WORKFLOWS_AI.md`) |
 | [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade from v3 to v4                            |
 | [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)                                                 | Docs    | Design notes, deep dives, and context                         |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | Full Express + OpenAPI + SQLite demo                          |
@@ -149,7 +149,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 **Architecture Patterns**
 
 - [Optional Dependencies](#optional-dependencies) - Graceful degradation
-- [Serialization (EJSON)](#serialization-ejson) - Advanced data handling
+- [Serialization](#serialization) - Advanced data handling
 - [Tunnels](#tunnels-bridging-runners) - Distributed systems
 - [Async Context](#async-context) - Request-scoped state
 - [Overrides](#overrides) - Component replacement
@@ -310,7 +310,7 @@ Runner comes with **everything you need** to build production apps:
 - ✅ Event System
 - ✅ Middleware Pipeline
 - ✅ Async Context
-- ✅ Serialization (EJSON)
+- ✅ Serialization
 
 </td>
 <td width="33%">
@@ -1886,24 +1886,24 @@ const userRegistration = r
 
 > **runtime:** "Graceful degradation: your app quietly limps with a brave smile. I’ll juggle `undefined` like a street performer while your analytics vendor takes a nap. Please clap when I keep the lights on using the raw power of conditional chaining."
 
-### Serialization (EJSON)
+### Serialization
 
-Runner uses [EJSON](https://www.npmjs.com/package/@bluelibs/ejson) by default. Think of it as JSON with superpowers: it safely round‑trips values like Date, RegExp, and even your own custom types across HTTP and between Node and the browser.
+Runner ships with a built-in serializer that safely round-trips values like `Date`, `RegExp`, and your own custom types across HTTP and between Node and the browser.
 
-- By default, Runner’s HTTP clients and exposures use the EJSON serializer
+- By default, Runner’s HTTP clients and exposures use the Runner serializer
 - You can call `getDefaultSerializer()` for the shared serializer instance
 - A global serializer is also exposed as a resource: `globals.resources.serializer`
 
 ```ts
 import { r, globals } from "@bluelibs/runner";
 
-// 2) Register custom EJSON types centrally via the global serializer resource
-const ejsonSetup = r
+// Register custom types centrally via the global serializer resource
+const serializerSetup = r
   .resource("app.serialization.setup")
   .dependencies({ serializer: globals.resources.serializer })
   .init(async (_config, { serializer }) => {
-    const text = s.stringify({ when: new Date() });
-    const obj = s.parse<{ when: Date }>(text);
+    const text = serializer.stringify({ when: new Date() });
+    const obj = serializer.parse<{ when: Date }>(text);
     class Distance {
       constructor(public value: number, public unit: string) {}
       toJSONValue() {
@@ -1993,7 +1993,7 @@ await requestContext.provide({ requestId: "abc" }, async () => {
 const requireRequestContext = requestContext.require();
 ```
 
-- If you don't provide `serialize`/`parse`, Runner uses its default EJSON serializer to preserve Dates, RegExp, etc.
+- If you don't provide `serialize`/`parse`, Runner uses its default serializer to preserve Dates, RegExp, etc.
 - A legacy `createContext(name?)` exists for backwards compatibility; prefer `r.asyncContext` or `asyncContext({ id })`.
 
 - You can also inject async contexts as dependencies; the injected value is the helper itself. Contexts must be registered to be used.

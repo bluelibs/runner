@@ -1008,28 +1008,28 @@ const userRegistration = r
 
 > **runtime:** "Graceful degradation: your app quietly limps with a brave smile. I’ll juggle `undefined` like a street performer while your analytics vendor takes a nap. Please clap when I keep the lights on using the raw power of conditional chaining."
 
-### Serialization (EJSON)
+### Serialization
 
-Runner uses [EJSON](https://www.npmjs.com/package/@bluelibs/ejson) by default. Think of it as JSON with superpowers: it safely round‑trips values like Date, RegExp, and even your own custom types across HTTP and between Node and the browser.
+Runner uses its own high-performance serializer by default. It round-trips values like `Date`, `RegExp`, and your own custom types across HTTP and between Node and the browser.
 
-- By default, Runner’s HTTP clients and exposures use the EJSON serializer
+- By default, Runner’s HTTP clients and exposures use Runner’s serializer
 - You can call `getDefaultSerializer()` for the shared serializer instance
 - A global serializer is also exposed as a resource: `globals.resources.serializer`
 
-```ts
-import { r, globals } from "@bluelibs/runner";
+	```ts
+	import { r, globals } from "@bluelibs/runner";
 
-// 2) Register custom EJSON types centrally via the global serializer resource
-const ejsonSetup = r
-  .resource("app.serialization.setup")
-  .dependencies({ serializer: globals.resources.serializer })
-  .init(async (_config, { serializer }) => {
-    const text = s.stringify({ when: new Date() });
-    const obj = s.parse<{ when: Date }>(text);
-    class Distance {
-      constructor(public value: number, public unit: string) {}
-      toJSONValue() {
-        return { value: this.value, unit: this.unit } as const;
+	// Register custom types centrally via the global serializer resource
+	const serializationSetup = r
+	  .resource("app.serialization.setup")
+	  .dependencies({ serializer: globals.resources.serializer })
+	  .init(async (_config, { serializer }) => {
+	    const text = serializer.stringify({ when: new Date() });
+	    const obj = serializer.parse<{ when: Date }>(text);
+	    class Distance {
+	      constructor(public value: number, public unit: string) {}
+	      toJSONValue() {
+	        return { value: this.value, unit: this.unit } as const;
       }
       typeName() {
         return "Distance";
@@ -1041,8 +1041,8 @@ const ejsonSetup = r
       (j: { value: number; unit: string }) => new Distance(j.value, j.unit),
     );
   })
-  .build();
-```
+	  .build();
+	```
 
 ### Tunnels: Bridging Runners
 
@@ -1115,7 +1115,7 @@ await requestContext.provide({ requestId: "abc" }, async () => {
 const requireRequestContext = requestContext.require();
 ```
 
-- If you don't provide `serialize`/`parse`, Runner uses its default EJSON serializer to preserve Dates, RegExp, etc.
+- If you don't provide `serialize`/`parse`, Runner uses its default serializer to preserve `Date`, `RegExp`, etc.
 - A legacy `createContext(name?)` exists for backwards compatibility; prefer `r.asyncContext` or `asyncContext({ id })`.
 
 - You can also inject async contexts as dependencies; the injected value is the helper itself. Contexts must be registered to be used.

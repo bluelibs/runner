@@ -122,7 +122,6 @@ export * from "./models";
 export * from "./globals/types";
 export * as Errors from "./errors";
 export { PlatformAdapter, setPlatform } from "./platform";
-export { EJSON } from "@bluelibs/ejson";
 
 // HTTP and tunnel functionality
 export * from "./http-client";
@@ -131,5 +130,5 @@ export * from "./http-fetch-tunnel.resource";
 // Re-export types at the package root so consumer declaration emits can reference them directly
 export type * from "./defs";
 
-export { Serializer as GraphSerializer } from "./serializer";
+export { Serializer, getDefaultSerializer } from "./serializer";
 export type { TypeDefinition, SerializerOptions } from "./serializer";

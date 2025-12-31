@@ -173,7 +173,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 **Architecture Patterns**
 
 - [Optional Dependencies](#optional-dependencies) - Graceful degradation
-- [Serialization (EJSON)](#serialization-ejson) - Advanced data handling
+- [Serialization](#serialization) - Advanced data handling
 - [Tunnels](#tunnels-bridging-runners) - Distributed systems
 - [Async Context](#async-context) - Request-scoped state
 - [Overrides](#overrides) - Component replacement
@@ -200,4 +200,3 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [Community & Support](#community--support) - Getting help
 
 ---
-

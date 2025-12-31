@@ -2,5 +2,19 @@
  * Main export module for the Serializer
  */
 
-export { Serializer } from './Serializer';
-export type { SerializerOptions, TypeDefinition, SerializedGraph } from './types';
+import { Serializer } from "./Serializer";
+
+export type {
+  SerializerOptions,
+  TypeDefinition,
+  SerializedGraph,
+  SerializerLike,
+} from "./types";
+
+export { Serializer } from "./Serializer";
+
+const defaultSerializer = new Serializer();
+
+export function getDefaultSerializer(): Serializer {
+  return defaultSerializer;
+}

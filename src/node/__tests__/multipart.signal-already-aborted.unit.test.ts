@@ -1,12 +1,16 @@
 import { PassThrough } from "stream";
 import type { IncomingHttpHeaders } from "http";
-import { parseMultipartInput } from "../exposure/multipart";
+import {
+  parseMultipartInput,
+  type MultipartRequest,
+} from "../exposure/multipart";
+import { getDefaultSerializer } from "../../serializer";
 
 function makeReq(headers: IncomingHttpHeaders) {
-  const req: any = new PassThrough();
+  const req = new PassThrough() as unknown as MultipartRequest;
   req.headers = headers;
   req.method = "POST";
-  return req as any;
+  return req;
 }
 
 describe("multipart - signal already aborted triggers onAbort (line 249)", () => {
@@ -17,7 +21,11 @@ describe("multipart - signal already aborted triggers onAbort (line 249)", () =>
     });
     const ac = new AbortController();
     ac.abort();
-    const result = await parseMultipartInput(req as any, ac.signal);
+    const result = await parseMultipartInput(
+      req,
+      ac.signal,
+      getDefaultSerializer(),
+    );
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.response.status).toBe(499);

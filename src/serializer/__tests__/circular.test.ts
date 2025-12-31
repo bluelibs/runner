@@ -2,8 +2,8 @@
  * Test suite specifically for circular reference handling
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
-import { Serializer } from '../index';
+import { describe, it, expect, beforeEach } from "@jest/globals";
+import { Serializer } from "../index";
 
 interface SelfReferential {
   id: number;
@@ -48,15 +48,15 @@ interface MixedParent {
   nested: MixedChild;
 }
 
-describe('Circular Reference Tests', () => {
+describe("Circular Reference Tests", () => {
   let serializer: Serializer;
 
   beforeEach(() => {
     serializer = new Serializer();
   });
 
-  describe('Simple Circular References', () => {
-    it('should handle self-reference in object', () => {
+  describe("Simple Circular References", () => {
+    it("should handle self-reference in object", () => {
       const obj: SelfReferential = { id: 1 };
       obj.self = obj;
 
@@ -67,12 +67,13 @@ describe('Circular Reference Tests', () => {
       expect(deserialized.self).toBe(deserialized);
     });
 
-    it('should handle self-reference in array', () => {
+    it("should handle self-reference in array", () => {
       const arr: RecursiveNumberArray = [1, 2, 3];
       arr.push(arr);
 
       const serialized = serializer.serialize(arr);
-      const deserialized = serializer.deserialize<RecursiveNumberArray>(serialized);
+      const deserialized =
+        serializer.deserialize<RecursiveNumberArray>(serialized);
 
       expect(deserialized[0]).toBe(1);
       expect(deserialized[1]).toBe(2);
@@ -81,8 +82,8 @@ describe('Circular Reference Tests', () => {
     });
   });
 
-  describe('Mutual Circular References', () => {
-    it('should handle two objects referencing each other', () => {
+  describe("Mutual Circular References", () => {
+    it("should handle two objects referencing each other", () => {
       const obj1: MutualNode = { id: 1 };
       const obj2: MutualNode = { id: 2 };
 
@@ -96,13 +97,13 @@ describe('Circular Reference Tests', () => {
       const other = deserialized.other;
       expect(other).toBeDefined();
       if (!other) {
-        throw new Error('Expected other node to be defined');
+        throw new Error("Expected other node to be defined");
       }
       expect(other.id).toBe(2);
       expect(other.other).toBe(deserialized);
     });
 
-    it('should handle three objects in circular chain', () => {
+    it("should handle three objects in circular chain", () => {
       const obj1: ChainNode = { id: 1 };
       const obj2: ChainNode = { id: 2 };
       const obj3: ChainNode = { id: 3 };
@@ -118,21 +119,21 @@ describe('Circular Reference Tests', () => {
       const secondNode = deserialized.next;
       expect(secondNode).toBeDefined();
       if (!secondNode) {
-        throw new Error('Expected second node to be defined');
+        throw new Error("Expected second node to be defined");
       }
       expect(secondNode.id).toBe(2);
       const thirdNode = secondNode.next;
       expect(thirdNode).toBeDefined();
       if (!thirdNode) {
-        throw new Error('Expected third node to be defined');
+        throw new Error("Expected third node to be defined");
       }
       expect(thirdNode.id).toBe(3);
       expect(thirdNode.next).toBe(deserialized);
     });
   });
 
-  describe('Complex Circular Structures', () => {
-    it('should handle tree with parent references', () => {
+  describe("Complex Circular Structures", () => {
+    it("should handle tree with parent references", () => {
       interface TreeNode {
         id: number;
         children: TreeNode[];
@@ -158,7 +159,7 @@ describe('Circular Reference Tests', () => {
       expect(deserialized.children[1].parent).toBe(deserialized);
     });
 
-    it('should handle graph with multiple circular paths', () => {
+    it("should handle graph with multiple circular paths", () => {
       const node1: GraphNode = { id: 1, connections: [] };
       const node2: GraphNode = { id: 2, connections: [] };
       const node3: GraphNode = { id: 3, connections: [] };
@@ -181,8 +182,8 @@ describe('Circular Reference Tests', () => {
     });
   });
 
-  describe('Performance with Deep Circularity', () => {
-    it('should handle deeply nested circular references', () => {
+  describe("Performance with Deep Circularity", () => {
+    it("should handle deeply nested circular references", () => {
       // Create a deeply nested structure
       const head: DeepNode = { id: 0 };
       let current: DeepNode = head;
@@ -205,14 +206,14 @@ describe('Circular Reference Tests', () => {
       const previousNode = deserialized.prev;
       expect(previousNode).toBeDefined();
       if (!previousNode) {
-        throw new Error('Expected previous node to be defined');
+        throw new Error("Expected previous node to be defined");
       }
       expect(previousNode.id).toBe(98);
     });
   });
 
-  describe('Mixed Circular and Built-in Types', () => {
-    it('should handle circular references with built-in types', () => {
+  describe("Mixed Circular and Built-in Types", () => {
+    it("should handle circular references with built-in types", () => {
       const obj2: MixedChild = {
         id: 2,
         regex: /test/gi,
@@ -221,8 +222,8 @@ describe('Circular Reference Tests', () => {
 
       const obj1: MixedParent = {
         id: 1,
-        date: new Date('2024-01-01'),
-        map: new Map([['key', 'value']]),
+        date: new Date("2024-01-01"),
+        map: new Map([["key", "value"]]),
         nested: obj2,
       };
 

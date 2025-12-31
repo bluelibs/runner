@@ -31,9 +31,9 @@ import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middlewar
 import { OnUnhandledError } from "./UnhandledError";
 import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
-import { EJSON } from "@bluelibs/ejson";
 import { RunnerMode } from "../types/runner";
 import { detectRunnerMode } from "../tools/detectRunnerMode";
+import { getDefaultSerializer } from "../serializer";
 
 // Re-export types for backward compatibility
 export type {
@@ -135,7 +135,7 @@ export class Store {
     builtInResourcesMap.set(globalResources.eventManager, this.eventManager);
     builtInResourcesMap.set(globalResources.logger, this.logger);
     builtInResourcesMap.set(globalResources.taskRunner, this.taskRunner!);
-    builtInResourcesMap.set(globalResources.serializer, EJSON);
+    builtInResourcesMap.set(globalResources.serializer, getDefaultSerializer());
     builtInResourcesMap.set(
       globalResources.middlewareManager,
       this.middlewareManager,

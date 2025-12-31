@@ -2,7 +2,7 @@ import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../http-smart-client.model";
 import { createHttpMixedClient } from "../http-mixed-client";
-import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../serializer";
 import { createNodeFile } from "../files";
 
 function asIncoming(

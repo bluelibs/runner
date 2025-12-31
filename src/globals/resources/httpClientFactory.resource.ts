@@ -5,7 +5,7 @@ import { serializer, store } from "../globalResources";
 
 /**
  * Factory for creating HTTP clients with automatic injection of:
- * - serializer (EJSON-compatible)
+ * - serializer
  * - error registry (from Store)
  * - async contexts (from Store)
  *

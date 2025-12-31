@@ -1,8 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpMixedClient } from "../http-mixed-client";
-import { EJSON } from "../../globals/resources/tunnel/serializer";
-import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../serializer";
 import { createNodeFile } from "../files";
 
 function asIncoming(
@@ -74,7 +73,10 @@ describe("createMixedHttpClient (unit)", () => {
         return sink;
       }) as any;
 
-    const client = createHttpMixedClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpMixedClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     const input = Readable.from("hello");
     const out = (await client.task("duplex", input)) as Readable;
     const chunks: Buffer[] = [];
@@ -113,7 +115,10 @@ describe("createMixedHttpClient (unit)", () => {
         return sink;
       }) as any;
 
-    const client = createHttpMixedClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpMixedClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     const input = {
       file: createNodeFile(
         { name: "a.txt" },
@@ -149,7 +154,10 @@ describe("createMixedHttpClient (unit)", () => {
         return sink;
       }) as any;
 
-    const client = createHttpMixedClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpMixedClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     const input = {
       arr: [
         {
@@ -218,7 +226,95 @@ describe("createMixedHttpClient (unit)", () => {
 
   it("throws when baseUrl is empty", () => {
     expect(() =>
-      createHttpMixedClient({ baseUrl: "" as any, serializer: getDefaultSerializer() } as any),
+      createHttpMixedClient({
+        baseUrl: "" as any,
+        serializer: getDefaultSerializer(),
+      } as any),
     ).toThrow();
+  });
+
+  it("Invalid Node File sentinel (id not string): stays on JSON path", async () => {
+    const calls: Array<{ url: string; body: any }> = [];
+    const fetchMock = async (url: any, init?: any) => {
+      calls.push({
+        url: String(url),
+        body: JSON.parse(String(init?.body ?? "")),
+      });
+      return {
+        text: async () =>
+          getDefaultSerializer().stringify({ ok: true, result: 9 }),
+      } as any;
+    };
+
+    const client = createHttpMixedClient({
+      baseUrl,
+      fetchImpl: fetchMock as any,
+      serializer: getDefaultSerializer(),
+    });
+
+    const httpReqSpy = jest.spyOn(http, "request");
+    const out = await client.task("my.task", {
+      file: { $ejson: "File", id: 123, _node: { buffer: "x" } },
+    } as any);
+
+    expect(out).toBe(9);
+    expect(calls).toHaveLength(1);
+    expect(httpReqSpy).not.toHaveBeenCalled();
+  });
+
+  it("Invalid Node File sentinel (_node not object): stays on JSON path", async () => {
+    const calls: Array<{ url: string; body: any }> = [];
+    const fetchMock = async (url: any, init?: any) => {
+      calls.push({
+        url: String(url),
+        body: JSON.parse(String(init?.body ?? "")),
+      });
+      return {
+        text: async () =>
+          getDefaultSerializer().stringify({ ok: true, result: 10 }),
+      } as any;
+    };
+
+    const client = createHttpMixedClient({
+      baseUrl,
+      fetchImpl: fetchMock as any,
+      serializer: getDefaultSerializer(),
+    });
+
+    const httpReqSpy = jest.spyOn(http, "request");
+    const out = await client.task("my.task", {
+      file: { $ejson: "File", id: "F1", _node: null },
+    } as any);
+
+    expect(out).toBe(10);
+    expect(calls).toHaveLength(1);
+    expect(httpReqSpy).not.toHaveBeenCalled();
+  });
+
+  it("Primitive inputs stay on JSON path", async () => {
+    const calls: Array<{ url: string; body: any }> = [];
+    const fetchMock = async (url: any, init?: any) => {
+      calls.push({
+        url: String(url),
+        body: JSON.parse(String(init?.body ?? "")),
+      });
+      return {
+        text: async () =>
+          getDefaultSerializer().stringify({ ok: true, result: 11 }),
+      } as any;
+    };
+
+    const client = createHttpMixedClient({
+      baseUrl,
+      fetchImpl: fetchMock as any,
+      serializer: getDefaultSerializer(),
+    });
+
+    const httpReqSpy = jest.spyOn(http, "request");
+    const out = await client.task("my.task", 1 as any);
+
+    expect(out).toBe(11);
+    expect(calls).toHaveLength(1);
+    expect(httpReqSpy).not.toHaveBeenCalled();
   });
 });

@@ -1,13 +1,14 @@
 import * as http from "http";
 import {
-  defineResource,
   defineTask,
   defineEvent,
   defineHook,
+  defineResource,
 } from "../../define";
 import { z } from "zod";
 import { run } from "../../run";
 import { nodeExposure } from "../exposure.resource";
+import { getDefaultSerializer } from "../../serializer";
 
 // This test suite targets 100% line/branch/function coverage for exposure.resource.ts
 // without opening sockets (the sandbox forbids listen()). We mock http.createServer
@@ -18,32 +19,31 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     method?: string;
     url?: string;
     headers?: Record<string, string>;
-    body?: string | Buffer;
+    body?: string | Buffer | null;
+    manualPush?: boolean;
   }) {
-    const { method = "POST", url = "/", headers = {}, body } = init;
+    const {
+      method = "POST",
+      url = "/",
+      headers = {},
+      body = "",
+      manualPush = false,
+    } = init;
 
-    // Minimal IncomingMessage and ServerResponse stubs for unit-level testing
-    const req: any = {
-      method,
-      url,
-      headers,
-      _listeners: new Map<string, Function[]>(),
-      on(event: string, cb: Function) {
-        const arr = this._listeners.get(event) ?? [];
-        arr.push(cb);
-        this._listeners.set(event, arr);
-        if (event === "end") {
-          setImmediate(() => {
-            if (body != null) {
-              for (const d of this._listeners.get("data") ?? [])
-                d(Buffer.isBuffer(body) ? body : Buffer.from(String(body)));
-            }
-            for (const e of this._listeners.get("end") ?? []) e();
-          });
+    const { Readable } = require("stream");
+    const req: any = new Readable({
+      read() {
+        if (!manualPush) {
+          if (body != null) {
+            this.push(Buffer.isBuffer(body) ? body : Buffer.from(String(body)));
+          }
+          this.push(null);
         }
-        return this;
       },
-    };
+    });
+    req.method = method;
+    req.url = url;
+    req.headers = headers;
 
     let statusCode = 0;
     const chunks: Buffer[] = [];
@@ -74,7 +74,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
       get json() {
         if (chunks.length === 0) return undefined;
         try {
-          return JSON.parse(
+          return getDefaultSerializer().parse(
             Buffer.concat(chunks as readonly Uint8Array[]).toString("utf8"),
           );
         } catch {
@@ -120,393 +120,171 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
 
     // handleTask: non-base path -> 404 (mirror misc-branches style)
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req1: any = {
+      const rrMock = createReqRes({
         method: "POST",
         url: `/not-runner/task/${encodeURIComponent(okTask.id)}`,
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status1 = 0;
-      const res1: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status1 = this.statusCode;
-        },
-      };
-      await handlers.handleTask(req1, res1);
-      expect(status1).toBe(404);
+        headers: { "x-runner-token": "T" },
+      });
+      await handlers.handleTask(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(404);
     }
 
     // handleTask: method not allowed -> 405 (mirror misc-branches style)
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
+      const rrMock = createReqRes({
         method: "GET",
         url: `/__runner/task/${encodeURIComponent(okTask.id)}`,
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleTask(req, res);
-      expect(status).toBe(405);
+        headers: { "x-runner-token": "T" },
+      });
+      await handlers.handleTask(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(405);
     }
 
     // handleTask: unauthorized -> 401
     {
-      const headers = { "x-runner-token": "WRONG" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: `/__runner/task/${encodeURIComponent(okTask.id)}`,
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleTask(req, res);
-      expect(status).toBe(401);
+        headers: { "x-runner-token": "WRONG" },
+      });
+      await handlers.handleTask(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(401);
     }
 
     // handleTask: unknown kind inside basePath -> extractTarget returns null (fallback) -> 404
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: "/__runner/unknown/something",
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleTask(req, res);
-      expect(status).toBe(404);
+        headers: { "x-runner-token": "T" },
+      });
+      await handlers.handleTask(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(404);
     }
 
     // handleTask: task not found -> 404
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: "/__runner/task/missing.task",
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleTask(req, res);
-      expect(status).toBe(404);
+        headers: { "x-runner-token": "T" },
+      });
+      await handlers.handleTask(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(404);
     }
 
     // handleEvent: method not allowed -> 405
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
+      const rrMock = createReqRes({
         method: "GET",
         url: `/__runner/event/${encodeURIComponent(okEvent.id)}`,
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleEvent(req, res);
-      expect(status).toBe(405);
+        headers: { "x-runner-token": "T" },
+      });
+      await handlers.handleEvent(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(405);
     }
 
     // handleEvent: unauthorized -> 401
     {
-      const headers = { "x-runner-token": "WRONG" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: `/__runner/event/${encodeURIComponent(okEvent.id)}`,
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleEvent(req, res);
-      expect(status).toBe(401);
+        headers: { "x-runner-token": "WRONG" },
+      });
+      await handlers.handleEvent(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(401);
     }
 
     // handleEvent: event not found -> 404
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: "/__runner/event/missing.event",
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleEvent(req, res);
-      expect(status).toBe(404);
+        headers: { "x-runner-token": "T" },
+      });
+      await handlers.handleEvent(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(404);
     }
 
     // handleTask: catch branch (validation error) -> 500
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: "/__runner/task/bad.task",
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb(Buffer.from("{}")));
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleTask(req, res);
-      expect(status).toBe(500);
+        headers: { "x-runner-token": "T" },
+        body: "{}",
+      });
+      await handlers.handleTask(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(500);
     }
 
     // handleEvent: invalid JSON surfaces as 400 with INVALID_JSON code
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: "/__runner/event/ok.event",
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "data") setImmediate(() => cb("not-json"));
-          if (event === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      let body: any;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end(buf?: any) {
-          status = this.statusCode;
-          if (buf != null) {
-            const text = Buffer.isBuffer(buf)
-              ? buf.toString("utf8")
-              : String(buf);
-            body = JSON.parse(text);
-          }
-        },
-      };
-      await handlers.handleEvent(req, res);
-      expect(status).toBe(400);
-      expect(body?.error?.code).toBe("INVALID_JSON");
+        headers: { "x-runner-token": "T" },
+        manualPush: true,
+      });
+      // push data that is not valid JSON
+      setImmediate(() => {
+        rrMock.req.push("not-json");
+        rrMock.req.push(null);
+      });
+      await handlers.handleEvent(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(400);
+      expect(rrMock.json?.error?.code).toBe("INVALID_JSON");
     }
 
     // handleTask: catch branch with non-Error thrown -> response message fallback "Internal Error"
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: `/__runner/task/${encodeURIComponent(throwTask.id)}`,
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      const chunks: Buffer[] = [];
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end(payload?: any) {
-          status = this.statusCode;
-          if (payload != null)
-            chunks.push(
-              Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)),
-            );
-        },
-      };
-      await handlers.handleTask(req, res);
-      const body = chunks.length
-        ? JSON.parse(
-            Buffer.concat(chunks as readonly Uint8Array[]).toString("utf8"),
-          )
-        : undefined;
-      expect(status).toBe(500);
-      expect(body?.error?.message).toBe("Internal Error");
+        headers: { "x-runner-token": "T" },
+      });
+      await handlers.handleTask(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(500);
+      expect(rrMock.json?.error?.message).toBe("Internal Error");
     }
 
     // handleEvent: catch branch via req error with non-Error value -> response message fallback "Internal Error"
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: `/__runner/event/${encodeURIComponent(okEvent.id)}`,
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "error") setImmediate(() => cb("oops"));
-          return this;
-        },
-      };
-      const chunks: Buffer[] = [];
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end(payload?: any) {
-          status = this.statusCode;
-          if (payload != null)
-            chunks.push(
-              Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload)),
-            );
-        },
-      };
-      await handlers.handleEvent(req, res);
-      const body = chunks.length
-        ? JSON.parse(
-            Buffer.concat(chunks as readonly Uint8Array[]).toString("utf8"),
-          )
-        : undefined;
-      expect(status).toBe(500);
-      expect(body?.error?.message).toBe("Internal Error");
+        headers: { "x-runner-token": "T" },
+        manualPush: true,
+      });
+      // Simulate request error manually
+      setImmediate(() => rrMock.req.emit("error", "oops"));
+
+      await handlers.handleEvent(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(500);
+      // readRequestBody wraps non-Error values with new Error(String(err)), so "oops" becomes the message
+      expect(rrMock.json?.error?.message).toBe("oops");
     }
 
     // handleTask: success -> 200
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: `/__runner/task/${encodeURIComponent(okTask.id)}`,
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleTask(req, res);
-      expect(status).toBe(200);
+        headers: { "x-runner-token": "T" },
+      });
+      await handlers.handleTask(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(200);
     }
 
     // handleEvent: wrong kind under base -> 404
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: `/__runner/task/${encodeURIComponent(okTask.id)}`,
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleEvent(req, res);
-      expect(status).toBe(404);
+        headers: { "x-runner-token": "T" },
+      });
+      await handlers.handleEvent(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(404);
     }
 
     // handleEvent: success -> 200
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: `/__runner/event/${encodeURIComponent(okEvent.id)}`,
-        headers,
-        on(event: string, cb: Function) {
-          if (event === "end") setImmediate(() => cb(Buffer.from("{}")));
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleEvent(req, res);
-      expect(status).toBe(200);
+        headers: { "x-runner-token": "T" },
+        body: "{}",
+      });
+      await handlers.handleEvent(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(200);
     }
 
     await rr.dispose();
@@ -534,78 +312,45 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
 
     // Outside base
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = { method: "POST", url: "/not-runner", headers };
-      const res: any = { setHeader() {}, statusCode: 0, end() {} };
-      const handled = await handlers.handleRequest(req, res);
+      const rrMock = createReqRes({
+        url: "/not-runner",
+        headers: { "x-runner-token": "T" },
+      });
+      const handled = await handlers.handleRequest(rrMock.req, rrMock.res);
       expect(handled).toBe(false);
     }
 
     // Inside base but no target -> 404 + handled = true
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = { method: "POST", url: "/__runner/", headers };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      const handled = await handlers.handleRequest(req, res);
+      const rrMock = createReqRes({
+        url: "/__runner/",
+        headers: { "x-runner-token": "T" },
+      });
+      const handled = await handlers.handleRequest(rrMock.req, rrMock.res);
       expect(handled).toBe(true);
-      expect(status).toBe(404);
+      expect(rrMock.status).toBe(404);
     }
 
     // Dispatch to task
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: `/__runner/task/${encodeURIComponent(okTask.id)}`,
-        headers,
-        on(ev: string, cb: Function) {
-          if (ev === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      const handled = await handlers.handleRequest(req, res);
+        headers: { "x-runner-token": "T" },
+      });
+      const handled = await handlers.handleRequest(rrMock.req, rrMock.res);
       expect(handled).toBe(true);
-      expect(status).toBe(200);
+      expect(rrMock.status).toBe(200);
     }
 
     // Dispatch to event
     {
-      const headers = { "x-runner-token": "T" } as Record<string, string>;
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: `/__runner/event/${encodeURIComponent(okEvent.id)}`,
-        headers,
-        on(ev: string, cb: Function) {
-          if (ev === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      const handled = await handlers.handleRequest(req, res);
+        headers: { "x-runner-token": "T" },
+      });
+      const handled = await handlers.handleRequest(rrMock.req, rrMock.res);
       expect(handled).toBe(true);
-      expect(status).toBe(200);
+      expect(rrMock.status).toBe(200);
     }
 
     await rr.dispose();
@@ -657,39 +402,23 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
       `--${boundary}--\r\n`,
     ].join("");
 
-    // Create a Readable req that Busboy can consume via req.pipe(bb)
-    const req: any = new (require("stream").Readable)({
-      read() {},
-    });
-    req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(fileTask.id)}`;
-    req.headers = {
-      "x-runner-token": "T",
-      "content-type": `multipart/form-data; boundary=${boundary}`,
-      "content-length": String(Buffer.byteLength(body)),
-    };
-    setImmediate(() => {
-      req.push(Buffer.from(body, "utf8"));
-      req.push(null);
-    });
-
-    let status = 0;
-    let payload: any = Buffer.alloc(0);
-    const res: any = {
-      setHeader() {},
-      statusCode: 0,
-      end(buf?: any) {
-        status = this.statusCode;
-        if (buf)
-          payload = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
+    const rrMock = createReqRes({
+      method: "POST",
+      url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
+      headers: {
+        "x-runner-token": "T",
+        "content-type": `multipart/form-data; boundary=${boundary}`,
       },
-    };
+      body: Buffer.from(body, "utf8"),
+    });
 
-    await handlers.handleTask(req, res);
-    expect(status).toBe(200);
-    const out = JSON.parse(payload.toString("utf8"));
-    expect(out.ok).toBe(true);
-    expect(out.result).toEqual({ name: "override.txt", type: "text/plain" });
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.status).toBe(200);
+    expect(rrMock.json?.ok).toBe(true);
+    expect(rrMock.json?.result).toEqual({
+      name: "override.txt",
+      type: "text/plain",
+    });
 
     await rr.dispose();
   });
@@ -732,36 +461,20 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
       `--${boundary}--\r\n`,
     ].join("");
 
-    const req: any = new (require("stream").Readable)({ read() {} });
-    req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(fileTask.id)}`;
-    req.headers = {
-      "x-runner-token": "T",
-      "content-type": `multipart/form-data; boundary=${boundary}`,
-      "content-length": String(Buffer.byteLength(body)),
-    };
-    setImmediate(() => {
-      req.push(Buffer.from(body, "utf8"));
-      req.push(null);
+    const rrMock = createReqRes({
+      method: "POST",
+      url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
+      headers: {
+        "x-runner-token": "T",
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      body: Buffer.from(body, "utf8"),
     });
 
-    let status = 0;
-    let payload: any = Buffer.alloc(0);
-    const res: any = {
-      setHeader() {},
-      statusCode: 0,
-      end(buf?: any) {
-        status = this.statusCode;
-        if (buf)
-          payload = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
-      },
-    };
-
-    await handlers.handleTask(req, res);
-    expect(status).toBe(200);
-    const out = JSON.parse(payload.toString("utf8"));
-    expect(out.ok).toBe(true);
-    expect(out.result).toEqual({ extra: { foo: "bar" } });
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.status).toBe(200);
+    expect(rrMock.json?.ok).toBe(true);
+    expect(rrMock.json?.result).toEqual({ extra: { foo: "bar" } });
 
     await rr.dispose();
   });
@@ -803,36 +516,20 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
       `--${boundary}--\r\n`,
     ].join("");
 
-    const req: any = new (require("stream").Readable)({ read() {} });
-    req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(fileTask.id)}`;
-    req.headers = {
-      "x-runner-token": "T",
-      "content-type": `multipart/form-data; boundary=${boundary}`,
-      "content-length": String(Buffer.byteLength(body)),
-    };
-    setImmediate(() => {
-      req.push(Buffer.from(body, "utf8"));
-      req.push(null);
+    const rrMock = createReqRes({
+      method: "POST",
+      url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
+      headers: {
+        "x-runner-token": "T",
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      body: Buffer.from(body, "utf8"),
     });
 
-    let status = 0;
-    let payload: any = Buffer.alloc(0);
-    const res: any = {
-      setHeader() {},
-      statusCode: 0,
-      end(buf?: any) {
-        status = this.statusCode;
-        if (buf)
-          payload = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
-      },
-    };
-
-    await handlers.handleTask(req, res);
-    expect(status).toBe(500);
-    const out = JSON.parse(payload.toString("utf8"));
-    expect(out.ok).toBe(false);
-    expect(out.error.message).toBe("Missing file part for id F1");
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.status).toBe(500);
+    expect(rrMock.json?.ok).toBe(false);
+    expect(rrMock.json?.error?.message).toBe("Missing file part for id F1");
 
     await rr.dispose();
   });
@@ -854,40 +551,20 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
     // Build request that emits Buffer chunks to exercise Buffer.isBuffer true branch in readJson
-    const req: any = {
-      method: "POST",
+    const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(okTask.id)}`,
       headers: { "content-type": "application/json" },
-      _listeners: new Map<string, Function[]>(),
-      on(ev: string, cb: Function) {
-        const arr = this._listeners.get(ev) ?? [];
-        arr.push(cb);
-        this._listeners.set(ev, arr);
-        if (ev === "end") {
-          setImmediate(() => {
-            for (const d of this._listeners.get("data") ?? [])
-              d(Buffer.from('{"input":{"n":2}}', "utf8"));
-            for (const e of this._listeners.get("end") ?? []) e();
-          });
-        }
-        return this;
-      },
-    };
-    let status = 0;
-    let body = Buffer.alloc(0);
-    const res: any = {
-      setHeader() {},
-      statusCode: 0,
-      end(buf?: any) {
-        status = this.statusCode;
-        if (buf) body = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
-      },
-    };
+      manualPush: true,
+    });
+    // Build request that emits Buffer chunks to exercise Buffer.isBuffer true branch in readJson
+    setImmediate(() => {
+      rrMock.req.push(Buffer.from('{"input":{"n":2}}', "utf8"));
+      rrMock.req.push(null);
+    });
 
-    await handlers.handleTask(req, res);
-    expect(status).toBe(200);
-    const out = JSON.parse(body.toString("utf8"));
-    expect(out).toEqual({ ok: true, result: 2 });
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.status).toBe(200);
+    expect(rrMock.json).toEqual({ ok: true, result: 2 });
     await rr.dispose();
   });
 
@@ -986,37 +663,21 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
       `--${boundary}--\r\n`,
     ].join("");
 
-    const req: any = new (require("stream").Readable)({ read() {} });
-    req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(fileTask.id)}`;
-    req.headers = {
-      "x-runner-token": "T",
-      "content-type": `multipart/form-data; boundary=${boundary}`,
-      "content-length": String(Buffer.byteLength(body)),
-    };
-    setImmediate(() => {
-      req.push(Buffer.from(body, "utf8"));
-      req.push(null);
+    const rrMock = createReqRes({
+      method: "POST",
+      url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
+      headers: {
+        "x-runner-token": "T",
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      body: Buffer.from(body, "utf8"),
     });
 
-    let status = 0;
-    let payload: any = Buffer.alloc(0);
-    const res: any = {
-      setHeader() {},
-      statusCode: 0,
-      end(buf?: any) {
-        status = this.statusCode;
-        if (buf)
-          payload = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
-      },
-    };
-
-    await handlers.handleTask(req, res);
-    expect(status).toBe(200);
-    const out = JSON.parse(payload.toString("utf8"));
-    expect(out.ok).toBe(true);
-    expect(out.result.names).toEqual(["a.txt", "b.txt"]);
-    expect(out.result.types).toEqual(["text/a", "text/b"]);
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.status).toBe(200);
+    expect(rrMock.json?.ok).toBe(true);
+    expect(rrMock.json?.result?.names).toEqual(["a.txt", "b.txt"]);
+    expect(rrMock.json?.result?.types).toEqual(["text/a", "text/b"]);
 
     await rr.dispose();
   });
@@ -1039,48 +700,22 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
 
     // Success with custom header
     {
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: `/__runner/event/${encodeURIComponent(okEvent.id)}`,
         headers: { "x-custom-token": "ABC" },
-        on(ev: string, cb: Function) {
-          if (ev === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleEvent(req, res);
-      expect(status).toBe(200);
+      });
+      await handlers.handleEvent(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(200);
     }
 
     // Missing header should reject (exercise provided === "")
     {
-      const req: any = {
-        method: "POST",
+      const rrMock = createReqRes({
         url: `/__runner/event/${encodeURIComponent(okEvent.id)}`,
         headers: {},
-        on(ev: string, cb: Function) {
-          if (ev === "end") setImmediate(() => cb());
-          return this;
-        },
-      };
-      let status = 0;
-      const res: any = {
-        setHeader() {},
-        statusCode: 0,
-        end() {
-          status = this.statusCode;
-        },
-      };
-      await handlers.handleEvent(req, res);
-      expect(status).toBe(401);
+      });
+      await handlers.handleEvent(rrMock.req, rrMock.res);
+      expect(rrMock.status).toBe(401);
     }
 
     await rr.dispose();
@@ -1116,36 +751,20 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
       `--${boundary}--\r\n`,
     ].join("");
 
-    const req: any = new (require("stream").Readable)({ read() {} });
-    req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(passTask.id)}`;
-    req.headers = {
-      "x-runner-token": "T",
-      "content-type": `multipart/form-data; boundary=${boundary}`,
-      "content-length": String(Buffer.byteLength(body)),
-    };
-    setImmediate(() => {
-      req.push(Buffer.from(body, "utf8"));
-      req.push(null);
+    const rrMock = createReqRes({
+      method: "POST",
+      url: `/__runner/task/${encodeURIComponent(passTask.id)}`,
+      headers: {
+        "x-runner-token": "T",
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      body: Buffer.from(body, "utf8"),
     });
 
-    let status = 0;
-    let payload = Buffer.alloc(0);
-    const res: any = {
-      setHeader() {},
-      statusCode: 0,
-      end(buf?: any) {
-        status = this.statusCode;
-        if (buf)
-          payload = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
-      },
-    };
-
-    await handlers.handleTask(req, res);
-    expect(status).toBe(200);
-    const out = JSON.parse(payload.toString("utf8"));
-    expect(out.ok).toBe(true);
-    expect(out.result).toBe(3);
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.status).toBe(200);
+    expect(rrMock.json?.ok).toBe(true);
+    expect(rrMock.json?.result).toBe(3);
 
     await rr.dispose();
   });
@@ -1169,17 +788,10 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
-    const req: any = {
-      method: "POST",
+    const rrMock = createReqRes({
       url: undefined,
-      headers: {},
-      on(ev: string, cb: Function) {
-        if (ev === "end") setImmediate(() => cb());
-        return this;
-      },
-    };
-    const res: any = { setHeader() {}, statusCode: 0, end() {} };
-    const handled = await handlers.handleRequest(req, res);
+    });
+    const handled = await handlers.handleRequest(rrMock.req, rrMock.res);
     expect(handled).toBe(false);
 
     await rr.dispose();
@@ -1223,37 +835,21 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
       `--${boundary}--\r\n`,
     ].join("");
 
-    const req: any = new (require("stream").Readable)({ read() {} });
-    req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(fileTask.id)}`;
-    req.headers = {
-      "x-runner-token": "T",
-      "content-type": `multipart/form-data; boundary=${boundary}`,
-      "content-length": String(Buffer.byteLength(body)),
-    };
-    setImmediate(() => {
-      req.push(Buffer.from(body, "utf8"));
-      req.push(null);
+    const rrMock = createReqRes({
+      method: "POST",
+      url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
+      headers: {
+        "x-runner-token": "T",
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      body: Buffer.from(body, "utf8"),
     });
 
-    let status = 0;
-    let payload = Buffer.alloc(0);
-    const res: any = {
-      setHeader() {},
-      statusCode: 0,
-      end(buf?: any) {
-        status = this.statusCode;
-        if (buf)
-          payload = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
-      },
-    };
-
-    await handlers.handleTask(req, res);
-    expect(status).toBe(200);
-    const out = JSON.parse(payload.toString("utf8"));
-    expect(out.ok).toBe(true);
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.status).toBe(200);
+    expect(rrMock.json?.ok).toBe(true);
     // falls back to busboy-provided default application/octet-stream
-    expect(out.result).toBe("application/octet-stream");
+    expect(rrMock.json?.result).toBe("application/octet-stream");
 
     await rr.dispose();
   });
@@ -1281,38 +877,24 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
-    const { Readable } = require("stream");
-    const req: any = new Readable({ read() {} });
-    req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(echo.id)}`;
-    req.headers = {
-      "x-runner-token": "ARR",
-      "content-type": "application/json",
-    };
+    const rrMock = createReqRes({
+      method: "POST",
+      url: `/__runner/task/${encodeURIComponent(echo.id)}`,
+      headers: {
+        "x-runner-token": "ARR",
+        "content-type": "application/json",
+      },
+      manualPush: true,
+    });
+    // Manually push malformed JSON
     setImmediate(() => {
-      req.push("{");
-      req.push(null);
+      rrMock.req.push("{");
+      rrMock.req.push(null);
     });
 
-    let status = 0;
-    let payload: any;
-    const res: any = {
-      writableEnded: false,
-      statusCode: 0,
-      setHeader() {},
-      end(buf?: any) {
-        status = this.statusCode;
-        if (buf != null) {
-          payload = JSON.parse(
-            Buffer.isBuffer(buf) ? buf.toString("utf8") : String(buf),
-          );
-        }
-      },
-    };
-
-    await handlers.handleTask(req, res);
-    expect(status).toBe(400);
-    expect(payload?.error?.code).toBe("INVALID_JSON");
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.status).toBe(400);
+    expect(rrMock.json?.error?.code).toBe("INVALID_JSON");
 
     await rr.dispose();
   });
@@ -1381,37 +963,24 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
-    const { Readable } = require("stream");
-    const req: any = new Readable({ read() {} });
-    req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(echo.id)}`;
-    req.headers = {
-      "x-runner-token": "AB",
-      "content-type": "application/json",
-    };
-    setImmediate(() => {
-      req.emit("aborted");
-      req.push(null);
+    const rrMock = createReqRes({
+      method: "POST",
+      url: `/__runner/task/${encodeURIComponent(echo.id)}`,
+      headers: {
+        "x-runner-token": "AB",
+        "content-type": "application/json",
+      },
+      manualPush: true,
     });
 
-    let status = 0;
-    let payload: any;
-    const res: any = {
-      statusCode: 0,
-      setHeader() {},
-      end(buf?: any) {
-        status = this.statusCode;
-        if (buf != null) {
-          payload = JSON.parse(
-            Buffer.isBuffer(buf) ? buf.toString("utf8") : String(buf),
-          );
-        }
-      },
-    };
+    // Simulate abortion before reading anything
+    setImmediate(() => {
+      rrMock.req.emit("aborted");
+    });
 
-    await handlers.handleTask(req, res);
-    expect(status).toBe(499);
-    expect(payload?.error?.code).toBe("REQUEST_ABORTED");
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.status).toBe(499);
+    expect(rrMock.json?.error?.code).toBe("REQUEST_ABORTED");
 
     await rr.dispose();
   });
@@ -1436,32 +1005,17 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
     const listener = handlers.createRequestListener();
-    const { req } = createReqRes({
+    const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(echo.id)}`,
       headers: { "x-runner-token": "L" },
       body: "{}",
     });
-    (req as any).headers = null;
-    let status = 0;
-    let payload: any;
-    const res: any = {
-      writableEnded: false,
-      statusCode: 0,
-      setHeader() {},
-      end(buf?: any) {
-        status = this.statusCode;
-        if (buf != null) {
-          payload = JSON.parse(
-            Buffer.isBuffer(buf) ? buf.toString("utf8") : String(buf),
-          );
-        }
-      },
-    };
+    (rrMock.req as any).headers = null;
 
-    listener(req, res);
+    listener(rrMock.req, rrMock.res);
     await new Promise((resolve) => setImmediate(resolve));
-    expect(status).toBe(500);
-    expect(payload?.error?.message).toBe("Internal Error");
+    expect(rrMock.status).toBe(500);
+    expect(rrMock.json?.error?.message).toBe("Internal Error");
 
     await rr.dispose();
   });
@@ -1566,7 +1120,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
 
     server.emit("request", req, res);
     // Wait for async handler to complete (authenticator is now async)
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     expect(res.statusCode).toBe(200);
 
     server.close();
@@ -1592,26 +1146,22 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
-    const { Readable } = require("stream");
-    const req: any = new Readable({ read() {} });
-    req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(echo.id)}`;
-    req.headers = { "x-runner-token": "W" };
-    setImmediate(() => req.push(null));
-
-    const res: any = {
-      writableEnded: true,
-      statusCode: 123,
-      setHeader() {
-        throw new Error("should not be called");
-      },
-      end() {
-        throw new Error("should not be called");
-      },
+    const rrMock = createReqRes({
+      method: "POST",
+      url: `/__runner/task/${encodeURIComponent(echo.id)}`,
+      headers: { "x-runner-token": "W" },
+    });
+    (rrMock.res as any).writableEnded = true;
+    (rrMock.res as any).statusCode = 123;
+    (rrMock.res as any).setHeader = () => {
+      throw new Error("should not be called");
+    };
+    (rrMock.res as any).end = () => {
+      throw new Error("should not be called");
     };
 
-    await handlers.handleTask(req, res);
-    expect(res.statusCode).toBe(123);
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.resStatus).toBe(123);
 
     await rr.dispose();
   });

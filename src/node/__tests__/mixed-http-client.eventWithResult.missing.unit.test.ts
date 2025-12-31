@@ -9,7 +9,7 @@ jest.mock("../../http-fetch-tunnel.resource", () => {
 });
 
 import { createHttpMixedClient } from "../http-mixed-client";
-import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../serializer";
 
 describe("createMixedHttpClient (unit) - eventWithResult missing", () => {
   it("throws when underlying fetch client does not support eventWithResult", async () => {
@@ -18,9 +18,8 @@ describe("createMixedHttpClient (unit) - eventWithResult missing", () => {
       serializer: getDefaultSerializer(),
     });
 
-    await expect(client.eventWithResult!("e.id", { x: 1 } as any)).rejects.toThrow(
-      /eventWithResult not available/i,
-    );
+    await expect(
+      client.eventWithResult!("e.id", { x: 1 } as any),
+    ).rejects.toThrow(/eventWithResult not available/i);
   });
 });
-

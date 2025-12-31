@@ -8,6 +8,7 @@ import { SuspensionSignal } from "./interfaces/context";
 import type { IDurableStore } from "./interfaces/store";
 import { StepBuilder } from "./StepBuilder";
 import type { IEventDefinition } from "../../../types/event";
+import type { DurableSignalId, DurableStepId } from "./ids";
 import { isRecord, sleepMs, withTimeout } from "./utils";
 
 type WaitForSignalOutcome<TPayload> =
@@ -20,7 +21,12 @@ type SignalStepState =
   | { state: "completed"; payload: unknown }
   | { state: "timed_out" };
 
-function getSignalId(signal: string | IEventDefinition<unknown>): string {
+type SignalInput<TPayload> =
+  | string
+  | IEventDefinition<TPayload>
+  | DurableSignalId<TPayload>;
+
+function getSignalId(signal: SignalInput<unknown>): string {
   return typeof signal === "string" ? signal : signal.id;
 }
 
@@ -46,6 +52,8 @@ function parseSignalStepState(value: unknown): SignalStepState | null {
 
 export class DurableContext implements IDurableContext {
   private sleepIndex = 0;
+  private readonly signalIndexes = new Map<string, number>();
+  private readonly emitIndexes = new Map<string, number>();
   private readonly compensations: Array<{
     stepId: string;
     action: () => Promise<void>;
@@ -58,26 +66,60 @@ export class DurableContext implements IDurableContext {
     public readonly attempt: number,
   ) {}
 
-  step<T>(stepId: string): IStepBuilder<T>;
-  step<T>(stepId: string, fn: () => Promise<T>): Promise<T>;
-  step<T>(
+  private nextIndex(counter: Map<string, number>, key: string): number {
+    const current = counter.get(key) ?? 0;
+    counter.set(key, current + 1);
+    return current;
+  }
+
+  private getStepId(stepId: string | DurableStepId<unknown>): string {
+    return typeof stepId === "string" ? stepId : stepId.id;
+  }
+
+  private assertUserStepId(stepId: string): void {
+    if (stepId.startsWith("__")) {
+      throw new Error(
+        `Step IDs starting with '__' are reserved for durable internals: '${stepId}'`,
+      );
+    }
+
+    if (stepId.startsWith("rollback:")) {
+      throw new Error(
+        `Step IDs starting with 'rollback:' are reserved for durable internals: '${stepId}'`,
+      );
+    }
+  }
+
+  private internalStep<T>(
     stepId: string,
+    options: StepOptions = {},
+  ): StepBuilder<T> {
+    return new StepBuilder<T>(this, stepId, options);
+  }
+
+  step<T>(stepId: string): IStepBuilder<T>;
+  step<T>(stepId: DurableStepId<T>): IStepBuilder<T>;
+  step<T>(stepId: string | DurableStepId<T>, fn: () => Promise<T>): Promise<T>;
+  step<T>(
+    stepId: string | DurableStepId<T>,
     options: StepOptions,
     fn: () => Promise<T>,
   ): Promise<T>;
   step<T>(
-    stepId: string,
+    stepId: string | DurableStepId<T>,
     optionsOrFn?: StepOptions | (() => Promise<T>),
     fn?: () => Promise<T>,
   ): any {
+    const resolvedStepId = this.getStepId(stepId);
+    this.assertUserStepId(resolvedStepId);
     if (optionsOrFn === undefined) {
-      return new StepBuilder<T>(this, stepId);
+      return new StepBuilder<T>(this, resolvedStepId);
     }
 
     const fnToExecute = typeof optionsOrFn === "function" ? optionsOrFn : fn!;
     const options = typeof optionsOrFn === "function" ? {} : optionsOrFn;
 
-    return this._executeStep(stepId, options, fnToExecute);
+    return this._executeStep(resolvedStepId, options, fnToExecute);
   }
 
   async _executeStep<T>(
@@ -151,10 +193,12 @@ export class DurableContext implements IDurableContext {
     try {
       for (const comp of reversed) {
         const rollbackStepId = `rollback:${comp.stepId}`;
-        await this.step(rollbackStepId, async () => {
-          await comp.action();
-          return { rolledBack: true };
-        });
+        await this.internalStep<{ rolledBack: true }>(rollbackStepId).up(
+          async () => {
+            await comp.action();
+            return { rolledBack: true };
+          },
+        );
       }
     } catch (error) {
       if (error instanceof SuspensionSignal) throw error;
@@ -229,18 +273,22 @@ export class DurableContext implements IDurableContext {
   }
 
   async waitForSignal<TPayload>(
-    signal: string | IEventDefinition<TPayload>,
+    signal: SignalInput<TPayload>,
   ): Promise<TPayload>;
   async waitForSignal<TPayload>(
-    signal: string | IEventDefinition<TPayload>,
+    signal: SignalInput<TPayload>,
     options: { timeoutMs: number },
   ): Promise<WaitForSignalOutcome<TPayload>>;
   async waitForSignal<TPayload>(
-    signal: string | IEventDefinition<TPayload>,
+    signal: SignalInput<TPayload>,
     options?: { timeoutMs: number },
   ): Promise<TPayload | WaitForSignalOutcome<TPayload>> {
     const signalId = getSignalId(signal);
-    const stepId = `__signal:${signalId}`;
+    const signalStepIndex = this.nextIndex(this.signalIndexes, signalId);
+    const stepId =
+      signalStepIndex === 0
+        ? `__signal:${signalId}`
+        : `__signal:${signalId}:${signalStepIndex}`;
     const existing = await this.store.getStepResult(this.executionId, stepId);
     if (existing) {
       const state = parseSignalStepState(existing.result);
@@ -327,11 +375,35 @@ export class DurableContext implements IDurableContext {
   }
 
   async emit<TPayload>(
-    event: string | { id: string },
+    event:
+      | string
+      | { id: string }
+      | IEventDefinition<TPayload>
+      | DurableSignalId<TPayload>,
     payload: TPayload,
   ): Promise<void> {
     const eventId = typeof event === "string" ? event : event.id;
-    await this.step(`emit:${eventId}:${this.executionId}`).up(async () => {
+    const emitIndex = this.nextIndex(this.emitIndexes, eventId);
+    const stepId = `__emit:${eventId}:${emitIndex}`;
+
+    if (emitIndex === 0) {
+      const legacyStepId = `emit:${eventId}:${this.executionId}`;
+      const legacy = await this.store.getStepResult(
+        this.executionId,
+        legacyStepId,
+      );
+      if (legacy) {
+        await this.store.saveStepResult({
+          executionId: this.executionId,
+          stepId,
+          result: legacy.result,
+          completedAt: legacy.completedAt,
+        });
+        return;
+      }
+    }
+
+    await this.internalStep<void>(stepId).up(async () => {
       await this.bus.publish("durable:events", {
         type: eventId,
         payload,

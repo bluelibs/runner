@@ -29,7 +29,8 @@ describe("package root exports coverage", () => {
     // Additional explicit exports
     expect(root.definitions).toBeDefined();
     expect(root.Errors).toBeDefined();
-    expect(root.EJSON).toBeDefined();
+    expect(root.Serializer).toBeDefined();
+    expect(typeof root.getDefaultSerializer).toBe("function");
     expect(root.PlatformAdapter).toBeDefined();
     expect(typeof root.setPlatform).toBe("function");
   });

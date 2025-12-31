@@ -1,6 +1,6 @@
 import type { Readable } from "stream";
 import { createExposureFetch } from "../http-fetch-tunnel.resource";
-import type { Serializer } from "../globals/resources/tunnel/serializer";
+import type { SerializerLike } from "../serializer";
 import { createHttpSmartClient } from "./http-smart-client.model";
 import type { IAsyncContext } from "../types/asyncContext";
 import type { IErrorHelper } from "../types/error";
@@ -14,15 +14,15 @@ export interface MixedHttpClientConfig {
   baseUrl: string; // ex: http://localhost:7070/__runner
   auth?: MixedHttpClientAuthConfig;
   timeoutMs?: number;
-  // Only used by the JSON/EJSON path
+  // Only used by the JSON path
   fetchImpl?: typeof fetch;
-  serializer: Serializer;
+  serializer: SerializerLike;
   // Propagated to both JSON and Smart client paths
   onRequest?: (ctx: {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;
-  contexts?: Array<IAsyncContext<any>>;
+  contexts?: Array<IAsyncContext<unknown>>;
   errorRegistry?: Map<string, IErrorHelper<any>>;
 }
 
@@ -38,16 +38,30 @@ export interface MixedHttpClient {
 }
 
 function isReadable(value: unknown): value is Readable {
-  return !!value && typeof (value as any).pipe === "function";
+  return !!value && typeof (value as { pipe?: unknown }).pipe === "function";
 }
 
 function hasNodeFile(value: unknown): boolean {
-  const visit = (v: unknown): boolean => {
+  const isNodeFileSentinel = (
+    v: unknown,
+  ): v is {
+    $ejson: "File";
+    id: string;
+    _node?: { stream?: unknown; buffer?: unknown };
+  } => {
     if (!v || typeof v !== "object") return false;
-    if ((v as any).$ejson === "File" && typeof (v as any).id === "string") {
-      const node = (v as any)._node;
-      if (node && (node.stream || node.buffer)) return true;
-    }
+    const rec = v as Record<string, unknown>;
+    if (rec.$ejson !== "File") return false;
+    if (typeof rec.id !== "string") return false;
+    const node = rec._node;
+    if (!node || typeof node !== "object") return false;
+    const n = node as Record<string, unknown>;
+    return Boolean(n.stream || n.buffer);
+  };
+
+  const visit = (v: unknown): boolean => {
+    if (isNodeFileSentinel(v)) return true;
+    if (!v || typeof v !== "object") return false;
     if (Array.isArray(v)) return v.some(visit);
     for (const k of Object.keys(v as Record<string, unknown>)) {
       if (visit((v as Record<string, unknown>)[k])) return true;
@@ -58,7 +72,7 @@ function hasNodeFile(value: unknown): boolean {
 }
 
 /**
- * Unified Node client that mixes JSON/EJSON fetch for standard calls and
+ * Unified Node client that mixes JSON fetch for standard calls and
  * Smart client for streaming/multipart. Keeps transport details out of app code.
  */
 export function createHttpMixedClient(
@@ -97,11 +111,11 @@ export function createHttpMixedClient(
       if (isReadable(input) || hasNodeFile(input)) {
         return await smartClient.task<I, O>(id, input as I);
       }
-      // Otherwise, lean JSON/EJSON path
+      // Otherwise, lean JSON path
       return await fetchClient.task<I, O>(id, input as I);
     },
     async event<P>(id: string, payload?: P): Promise<void> {
-      // Events are always plain JSON/EJSON
+      // Events are always plain JSON
       return await fetchClient.event<P>(id, payload);
     },
     async eventWithResult<P>(id: string, payload?: P): Promise<P> {

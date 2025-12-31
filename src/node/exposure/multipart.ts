@@ -4,10 +4,18 @@ import * as Busboy from "busboy";
 import type { FileInfo, FieldInfo } from "busboy";
 
 // Handle both ESM and CJS interop
-const busboyFactory: (cfg: { headers: IncomingHttpHeaders }) => any =
-  (Busboy as any).default || Busboy;
+const busboyFactory: (cfg: { headers: IncomingHttpHeaders }) => unknown =
+  (() => {
+    const mod = Busboy as unknown as { default?: unknown };
+    if (typeof mod.default === "function") {
+      return mod.default as (cfg: { headers: IncomingHttpHeaders }) => unknown;
+    }
+    return Busboy as unknown as (cfg: {
+      headers: IncomingHttpHeaders;
+    }) => unknown;
+  })();
 
-import type { Serializer } from "../../globals/resources/tunnel/serializer";
+import type { SerializerLike } from "../../serializer";
 // Import with explicit .ts extension to prevent tsup from resolving it
 // via the native-node-modules plugin (which looks for paths ending in .node)
 import { NodeInputFile } from "../inputFile.model";
@@ -53,7 +61,7 @@ export interface MultipartRequest extends NodeJS.ReadableStream {
 export async function parseMultipartInput(
   req: MultipartRequest,
   signal?: AbortSignal,
-  serializer?: Serializer,
+  serializer: SerializerLike,
 ): Promise<MultipartResult> {
   const files = new Map<string, FileEntry>();
   let manifestRaw = "";
@@ -123,16 +131,14 @@ export async function parseMultipartInput(
 
   const fail = (response: JsonResponse) => {
     try {
-      if (busboyInst && typeof (req as any).unpipe === "function") {
-        (req as any).unpipe(busboyInst as any);
-      }
+      const unpipe = (req as { unpipe?: (dest: unknown) => unknown }).unpipe;
+      if (busboyInst && typeof unpipe === "function") unpipe(busboyInst);
     } catch {
       // ignore
     }
     try {
-      if (typeof (req as any).resume === "function") {
-        (req as any).resume();
-      }
+      const resume = (req as { resume?: () => unknown }).resume;
+      if (typeof resume === "function") resume();
     } catch {
       // ignore
     }
@@ -260,8 +266,8 @@ export async function parseMultipartInput(
   req.on("error", onAbort);
 
   if (signal) {
-    if ((signal as any).aborted) onAbort();
-    signal.addEventListener("abort", onAbort as any, { once: true });
+    if (signal.aborted) onAbort();
+    signal.addEventListener("abort", onAbort, { once: true });
   }
 
   req.pipe(busboyInst);

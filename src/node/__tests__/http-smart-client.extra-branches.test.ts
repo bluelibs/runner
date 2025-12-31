@@ -1,8 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../http-smart-client.model";
-import { EJSON } from "../../globals/resources/tunnel/serializer";
-import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../serializer";
 import { createNodeFile } from "../files";
 
 function asIncoming(
@@ -49,9 +48,61 @@ describe("createHttpSmartClient - extra branches", () => {
         expect(Object.keys(opts.headers || {})).not.toContain("x-runner-token");
         return sink;
       }) as any;
-    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     const out = await client.task("json", { a: 1 } as any);
     expect(out).toBe(9);
+    expect(reqSpy).toHaveBeenCalled();
+  });
+
+  it("JSON path: ignores malformed node file sentinels", async () => {
+    const reqSpy = jest
+      .spyOn(http, "request")
+      .mockImplementation((opts: any, cb: any) => {
+        const env = { ok: true, result: 101 };
+        const body = getDefaultSerializer().stringify(env);
+        const res = new Readable({
+          read() {
+            this.push(body);
+            this.push(null);
+          },
+        });
+        cb(asIncoming(res, { "content-type": "application/json" }));
+
+        expect(String(opts.headers?.["content-type"])).toContain(
+          "application/json",
+        );
+
+        const sink = new Writable({
+          write(_c, _e, n) {
+            n();
+          },
+          final(n) {
+            n();
+          },
+        }) as any;
+        sink.on = (_: any, __: any) => sink;
+        sink.setTimeout = () => sink;
+        sink.destroy = () => undefined;
+        return sink;
+      }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
+
+    const input = {
+      files: [
+        1,
+        { $ejson: "File", id: 123, _node: { buffer: Buffer.from([1]) } },
+        { $ejson: "File", id: "x", _node: 1 },
+      ],
+    };
+
+    await expect(client.task("json", input as any)).resolves.toBe(101);
     expect(reqSpy).toHaveBeenCalled();
   });
 
@@ -76,7 +127,10 @@ describe("createHttpSmartClient - extra branches", () => {
         sink.destroy = () => undefined;
         return sink;
       }) as any;
-    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     const input = {
       files: [
         {
@@ -93,6 +147,31 @@ describe("createHttpSmartClient - extra branches", () => {
     const out = await client.task("upload", input as any);
     expect(out).toBe("ARR");
     expect(reqSpy).toHaveBeenCalled();
+  });
+
+  it("octet stream: wraps non-Error request errors", async () => {
+    jest.spyOn(http, "request").mockImplementation((_opts: any, _cb: any) => {
+      const sink = new Writable({
+        write(_c, _e, n) {
+          n();
+        },
+        final(n) {
+          n();
+        },
+      }) as any;
+      sink.setTimeout = () => sink;
+      setImmediate(() => sink.emit("error", "boom"));
+      return sink;
+    }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
+
+    await expect(client.task("duplex", Readable.from("hi"))).rejects.toThrow(
+      "boom",
+    );
   });
 
   it("multipart JSON empty body: parseMaybeJsonResponse returns undefined → assertOkEnvelope throws", async () => {
@@ -117,7 +196,10 @@ describe("createHttpSmartClient - extra branches", () => {
       sink.destroy = () => undefined;
       return sink;
     }) as any;
-    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     const input = {
       f: createNodeFile({ name: "x" }, { stream: Readable.from("x") }, "FX"),
     } as const;
@@ -148,7 +230,10 @@ describe("createHttpSmartClient - extra branches", () => {
         sink.destroy = () => undefined;
         return sink;
       }) as any;
-    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     // meta as any to omit name/type and hit fallbacks in encoder
     const file = createNodeFile(
       {} as any,
@@ -188,7 +273,10 @@ describe("createHttpSmartClient - extra branches", () => {
         sink.destroy = () => undefined;
         return sink;
       }) as any;
-    const client = createHttpSmartClient({ baseUrl, serializer: getDefaultSerializer() });
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: getDefaultSerializer(),
+    });
     const out = await client.task("upload", {
       file: createNodeFile({ name: "x" }, { buffer: Buffer.from([1]) }, "FX"),
     } as any);

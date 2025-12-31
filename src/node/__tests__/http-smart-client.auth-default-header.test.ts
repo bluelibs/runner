@@ -1,7 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../http-smart-client.model";
-import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../serializer";
 
 function asIncoming(
   res: Readable,
@@ -53,4 +53,3 @@ describe("createHttpSmartClient - auth default header", () => {
     expect(reqSpy).toHaveBeenCalled();
   });
 });
-

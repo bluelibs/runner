@@ -13,7 +13,7 @@ Make tasks and events callable across processes – from a CLI, another service,
    - Node Mixed client (auto‑switch)
    - Pure fetch (globals.tunnels.http)
 5. Auth (static & dynamic)
-6. Uploads & files (EJSON sentinel, FormData, Node streams)
+6. Uploads & files (`$ejson: "File"` sentinel, FormData, Node streams)
 7. Abort & timeouts
 
 - 7.1) useExposureContext API
@@ -112,7 +112,7 @@ const sum = await client.task<{ a: number; b: number }, number>(
 
 ### 4.1 Unified client (browser + node)
 
-One API for JSON/EJSON and browser uploads (FormData). For Node streaming/multipart and duplex, use the Node clients (Smart/Mixed) below.
+One API for JSON and browser uploads (FormData). For Node streaming/multipart and duplex, use the Node clients (Smart/Mixed) below.
 
 **With factory (recommended):**
 
@@ -132,7 +132,7 @@ const client = createHttpClient({
   serializer, // required
 });
 
-// JSON/EJSON
+// JSON
 await client.task("app.tasks.add", { a: 1, b: 2 });
 
 // Browser upload (multipart/form-data)
@@ -170,7 +170,7 @@ const client = createHttpSmartClient({
   serializer, // required
 });
 
-// JSON/EJSON tasks
+// JSON tasks
 const sum = await client.task<{ a: number; b: number }, number>(
   "app.tasks.add",
   { a: 1, b: 2 },
@@ -213,7 +213,7 @@ const client = createHttpMixedClient({
   serializer, // required
 });
 
-// Plain JSON/EJSON → fetch path
+// Plain JSON → fetch path
 await client.task("app.tasks.add", { a: 1, b: 2 });
 
 // Streaming duplex → Smart path (octet-stream)
@@ -227,7 +227,7 @@ const file = createNodeFile(
 );
 await client.task("app.tasks.uploadAvatar", { file });
 
-// Events are always JSON/EJSON
+// Events are always JSON
 await client.event("app.events.audit", { action: "ping" });
 
 // If you need the final (potentially mutated) payload back (requires server support):
@@ -239,7 +239,7 @@ const finalPayload = await client.eventWithResult?.("app.events.audit", {
 
 ### 4.4 Pure fetch (globals.tunnels.http)
 
-Lowest‑level HTTP client: portable, tiny surface, JSON/EJSON only.
+Lowest‑level HTTP client: portable, tiny surface, JSON only.
 
 ```ts
 import { globals } from "@bluelibs/runner";
@@ -248,9 +248,9 @@ await client.task("app.tasks.add", { a: 1, b: 2 });
 await client.event("app.events.notify", { message: "hi" });
 ```
 
-### 4.5 Serializer (EJSON) and DI
+### 4.5 Serializer and DI
 
-Runner ships with an EJSON-based serializer that you should access via DI. The `Serializer` surface is intentionally small: `stringify(value)`, `parse(text)`, and `addType(name, factory)` (for custom domain types).
+Runner ships with a serializer that you should access via DI. The `Serializer` surface is intentionally small: `stringify(value)`, `parse(text)`, and `addType(name, factory)` (for custom domain types).
 
 - Prefer resolving the global serializer resource and passing it to clients.
 - Use `getDefaultSerializer()` only outside DI (for standalone helpers, tests, etc.).
@@ -265,8 +265,8 @@ import {
   createMixedHttpClient,
 } from "@bluelibs/runner/node";
 
-// 1) Register EJSON custom types using the global serializer resource
-const ejsonSetup = r
+// 1) Register custom types using the global serializer resource
+const serializerSetup = r
   .resource("app.serialization.setup")
   .dependencies({ serializer: globals.resources.serializer })
   .init(async (_config, { serializer }) => {
@@ -299,7 +299,7 @@ const clientFetch = globals.tunnels.http.createClient({
 
 Notes:
 
-- Files are not custom EJSON types. Continue using File sentinels (see Uploads & files below).
+- Files are not custom serializer types. Continue using File sentinels (see Uploads & files below).
 - If you must use the serializer outside DI, call `getDefaultSerializer()`.
 
 ## 5) Auth (static & dynamic)
@@ -371,7 +371,7 @@ Match the exposure’s auth settings (header name and expected format).
 
 ## 6) Uploads & files
 
-Use EJSON “File” sentinels in your input. In Node, build them with `createNodeFile` (stream/buffer). In browsers, use `createFile` (Blob/File). The unified client turns browser files into multipart `FormData` automatically; Node clients stream bytes and support duplex.
+Use “File” sentinels in your input (`$ejson: "File"`). In Node, build them with `createNodeFile` (stream/buffer). In browsers, use `createFile` (Blob/File). The unified client turns browser files into multipart `FormData` automatically; Node clients stream bytes and support duplex.
 
 Manifest shape (for reference):
 
@@ -387,13 +387,13 @@ Manifest shape (for reference):
 }
 ```
 
-Important: “File” is not an EJSON custom type. Runner uses a special `$ejson: "File"` sentinel to mark file fields, which the unified/Node clients translate into multipart uploads and the server hydrates into `InputFile` instances. We do not register `EJSON.addType("File")` by default (and you shouldn’t either) because files are handled by the tunnel/manifest logic, not by the serializer. Use `EJSON.addType` only for your own domain objects (for example, Distance, Money, etc.).
+Important: “File” is not a custom serializer type. Runner uses a special `$ejson: "File"` sentinel to mark file fields, which the unified/Node clients translate into multipart uploads and the server hydrates into `InputFile` instances. Files are handled by the tunnel/manifest logic, not by the serializer.
 
 ### Transport modes at a glance
 
-- JSON/EJSON: default path when your input has no files. Great for simple DTOs.
+- JSON: default path when your input has no files. Great for simple DTOs.
 - Multipart (recommended for JSON + files): any input that includes a File sentinel is sent as multipart/form-data with:
-  - `__manifest`: JSON/EJSON of your full input, where File fields are left as EJSON File stubs
+  - `__manifest`: JSON of your full input, where File fields are left as File stubs
   - `file:{id}` parts: the actual file bytes (stream or buffer in Node; Blob in browsers)
     This path lets you mix arbitrary JSON fields with one or more streamed files in a single request.
 - Octet-stream (duplex): when the input itself is a Node `Readable`, the client uses `application/octet-stream`. This is for raw streaming and does not carry an additional JSON body. If you need JSON alongside a stream, wrap the stream in a File sentinel in a DTO and use the multipart path instead.
@@ -675,11 +675,11 @@ Add this resource and nodeExposure will scan all resources with this tag which a
 
 ## InputFile (Quick Reference)
 
-When requests contain files (multipart or via EJSON translation), Runner passes an `InputFile` handle to the task. It gives you a single‑use stream plus utilities for persistence.
+When requests contain files (multipart or via File sentinel translation), Runner passes an `InputFile` handle to the task. It gives you a single‑use stream plus utilities for persistence.
 
 - Core shape: `{ name: string; type?: string; size?: number; lastModified?: number; extra?: Record<string, unknown>; resolve(): Promise<{ stream: Readable }>; toTempFile(dir?): Promise<{ path, bytesWritten }>; }`
 - Single use: `resolve()` and `stream()` produce a stream that can be consumed once; calling twice throws.
-- Metadata precedence: manifest/EJSON meta overrides stream‑detected values; stream meta is used as fallback.
+- Metadata precedence: manifest meta overrides stream‑detected values; stream meta is used as fallback.
 
 Example usage inside a task:
 
@@ -742,7 +742,7 @@ Note: In browsers, read with the File/Blob APIs at the edge of your app (e.g., `
 - [ ] Choose a client: `createHttpClient` (unified), Node: `createMixedHttpClient` / `createHttpSmartClient`, or pure fetch: `globals.tunnels.http.createClient` / `createExposureFetch`
 - [ ] File uploads: use `createNodeFile(...)` (Node) or `platform/createFile` (browser)
 - [ ] Streaming: duplex via `useExposureContext().req/res` or server-push via `respondStream()`
-- [ ] Serializer: register EJSON types via `globals.resources.serializer`; pass the serializer to all HTTP clients (unified, smart, mixed, pure fetch)
+- [ ] Serializer: register custom types via `globals.resources.serializer`; pass the serializer to all HTTP clients (unified, smart, mixed, pure fetch)
 - [ ] CORS: set `http.cors` when calling from browsers/cross‑origin clients
 - [ ] Abort: handle `useExposureContext()` (signal, req, res) in tasks; configure `timeoutMs` in clients
 
@@ -880,7 +880,7 @@ await client.task("app.tasks.dangerous");
 
 Notes:
 
-- Error `data` must be EJSON‑serializable. Register custom domain types on the global serializer resource if needed.
+- Error `data` must be serializable by Runner’s serializer. Register custom domain types on the global serializer resource if needed.
 - Without `errorRegistry`, clients keep throwing `TunnelError` with `code/message` — no breaking changes.
 - Server status codes remain the same (e.g., `500 INTERNAL_ERROR`); `id`/`data` in the envelope are for richer client handling.
 
@@ -924,7 +924,7 @@ const work = r
 
 Transport and serialization (works cross‑tunnel as long as values are serializable):
 
-- The client attaches `x-runner-context` header with an EJSON‑stringified map `{ [context.id]: serializedValue }` for JSON, multipart, and octet‑stream.
+- The client attaches `x-runner-context` header with a serializer‑stringified map `{ [context.id]: serializedValue }` for JSON, multipart, and octet‑stream.
 - The Node exposure parses `x-runner-context` and hydrates known contexts for the duration of the task/event execution.
-- By default, contexts serialize via Runner’s EJSON; you can override `serialize/parse` per context if needed.
+- By default, contexts serialize via Runner’s serializer; you can override `serialize/parse` per context if needed.
 - Only include non‑sensitive metadata; use HTTPS; allow `x-runner-context` in your CORS config when using custom rules.

@@ -10,10 +10,15 @@ import {
 } from "./httpResponse";
 import { isMultipart, parseMultipartInput } from "./multipart";
 import { readJsonBody } from "./requestBody";
-import type { Serializer } from "../../globals/resources/tunnel/serializer";
+import type { SerializerLike } from "../../serializer";
 import { requestUrl, resolveTargetFromRequest } from "./router";
 import { errorMessage, safeLogError } from "./logging";
-import type { Authenticator, AllowListGuard, RequestHandler } from "./types";
+import type {
+  Authenticator,
+  AllowListGuard,
+  RequestHandler,
+  StreamingResponse,
+} from "./types";
 import type { ExposureRouter } from "./router";
 import type {
   NodeExposureDeps,
@@ -34,7 +39,7 @@ interface RequestProcessingDeps {
   allowList: AllowListGuard;
   router: ExposureRouter;
   cors?: NodeExposureHttpCorsConfig;
-  serializer: Serializer;
+  serializer: SerializerLike;
 }
 
 export interface NodeExposureRequestHandlers {
@@ -58,6 +63,15 @@ export function createRequestHandlers(
   } = deps;
   const serializer = deps.serializer;
   const cors = deps.cors;
+
+  const isReadableStream = (value: unknown): value is NodeJS.ReadableStream =>
+    !!value && typeof (value as { pipe?: unknown }).pipe === "function";
+
+  const isStreamingResponse = (value: unknown): value is StreamingResponse =>
+    !!value &&
+    typeof value === "object" &&
+    "stream" in value &&
+    isReadableStream((value as { stream?: unknown }).stream);
 
   const processTaskRequest = async (
     req: IncomingMessage,
@@ -104,10 +118,7 @@ export function createRequestHandlers(
       // Build a composed provider: first user async contexts (if any), then exposure context
       const buildProvider = <T>(fn: () => Promise<T>) => {
         // Read context header if present
-        const rawHeader = (req.headers as any)["x-runner-context"] as
-          | string
-          | string[]
-          | undefined;
+        const rawHeader = req.headers["x-runner-context"];
         let headerText: string | undefined;
         if (Array.isArray(rawHeader)) headerText = rawHeader[0];
         else if (typeof rawHeader === "string") headerText = rawHeader;
@@ -118,7 +129,7 @@ export function createRequestHandlers(
             const map = serializer.parse<Record<string, string>>(headerText);
             // Compose provides for known contexts present in the map
             for (const [id, ctx] of store.asyncContexts.entries()) {
-              const raw = (map as any)[id];
+              const raw = map[id];
               if (typeof raw === "string") {
                 try {
                   const value = ctx.parse(raw);
@@ -150,7 +161,7 @@ export function createRequestHandlers(
 
       if (isMultipart(contentType)) {
         const multipart = await parseMultipartInput(
-          req as any,
+          req,
           controller.signal,
           serializer,
         );
@@ -171,7 +182,7 @@ export function createRequestHandlers(
         }
         const finalize = await finalizePromise;
         if (!finalize.ok) {
-          if (!res.writableEnded && !(res as any).headersSent) {
+          if (!res.writableEnded && !res.headersSent) {
             applyCorsActual(req, res, cors);
             respondJson(res, finalize.response, serializer);
           }
@@ -181,28 +192,19 @@ export function createRequestHandlers(
           throw taskError;
         }
         // Streamed responses: if task returned a readable or a streaming wrapper
-        if (
-          !res.writableEnded &&
-          taskResult &&
-          typeof (taskResult as any).pipe === "function"
-        ) {
+        if (!res.writableEnded && isReadableStream(taskResult)) {
           applyCorsActual(req, res, cors);
-          respondStream(res, taskResult as any);
+          respondStream(res, taskResult);
           return;
         }
-        if (
-          !res.writableEnded &&
-          taskResult &&
-          typeof taskResult === "object" &&
-          (taskResult as any).stream
-        ) {
+        if (!res.writableEnded && isStreamingResponse(taskResult)) {
           applyCorsActual(req, res, cors);
-          respondStream(res, taskResult as any);
+          respondStream(res, taskResult);
           return;
         }
         // If the task already handled the response (wrote headers/body),
         // skip the default JSON envelope.
-        if (res.writableEnded || (res as any).headersSent) return;
+        if (res.writableEnded || res.headersSent) return;
         applyCorsActual(req, res, cors);
         respondJson(res, jsonOkResponse({ result: taskResult }), serializer);
         return;
@@ -214,27 +216,18 @@ export function createRequestHandlers(
         const result = await buildProvider(() =>
           taskRunner.run(storeTask.task, undefined),
         );
-        if (
-          !res.writableEnded &&
-          result &&
-          typeof (result as any).pipe === "function"
-        ) {
+        if (!res.writableEnded && isReadableStream(result)) {
           applyCorsActual(req, res, cors);
-          respondStream(res, result as any);
+          respondStream(res, result);
           return;
         }
-        if (
-          !res.writableEnded &&
-          result &&
-          typeof result === "object" &&
-          (result as any).stream
-        ) {
+        if (!res.writableEnded && isStreamingResponse(result)) {
           applyCorsActual(req, res, cors);
-          respondStream(res, result as any);
+          respondStream(res, result);
           return;
         }
         // If the task streamed a custom response, do not append JSON.
-        if (res.writableEnded || (res as any).headersSent) return;
+        if (res.writableEnded || res.headersSent) return;
         applyCorsActual(req, res, cors);
         respondJson(res, jsonOkResponse({ result }), serializer);
         return;
@@ -267,32 +260,23 @@ export function createRequestHandlers(
       const result = await buildProvider(() =>
         taskRunner.run(storeTask.task, payload),
       );
-      if (
-        !res.writableEnded &&
-        result &&
-        typeof (result as any).pipe === "function"
-      ) {
+      if (!res.writableEnded && isReadableStream(result)) {
         applyCorsActual(req, res, cors);
-        respondStream(res, result as any);
+        respondStream(res, result);
         return;
       }
-      if (
-        !res.writableEnded &&
-        result &&
-        typeof result === "object" &&
-        (result as any).stream
-      ) {
+      if (!res.writableEnded && isStreamingResponse(result)) {
         applyCorsActual(req, res, cors);
-        respondStream(res, result as any);
+        respondStream(res, result);
         return;
       }
       // If the task already wrote a response, do nothing further.
-      if (res.writableEnded || (res as any).headersSent) return;
+      if (res.writableEnded || res.headersSent) return;
       applyCorsActual(req, res, cors);
       respondJson(res, jsonOkResponse({ result }), serializer);
     } catch (error) {
       if (isCancellationError(error)) {
-        if (!res.writableEnded && !(res as any).headersSent) {
+        if (!res.writableEnded && !res.headersSent) {
           applyCorsActual(req, res, cors);
           respondJson(
             res,
@@ -307,8 +291,9 @@ export function createRequestHandlers(
       try {
         for (const helper of store.errors.values()) {
           if (helper.is(error)) {
-            const errAny = error as any;
-            appErrorExtra = { id: errAny?.name, data: errAny?.data };
+            const err = error as { name?: unknown; data?: unknown };
+            const id = typeof err.name === "string" ? err.name : undefined;
+            appErrorExtra = { id, data: err.data };
             break;
           }
         }
@@ -373,11 +358,7 @@ export function createRequestHandlers(
       const body = await readJsonBody<{
         payload?: unknown;
         returnPayload?: boolean;
-      }>(
-        req,
-        controller.signal,
-        serializer,
-      );
+      }>(req, controller.signal, serializer);
       if (!body.ok) {
         applyCorsActual(req, res, cors);
         respondJson(res, body.response, serializer);
@@ -398,10 +379,7 @@ export function createRequestHandlers(
         return;
       }
       // Build context providers for events as well
-      const rawHeader = (req.headers as any)["x-runner-context"] as
-        | string
-        | string[]
-        | undefined;
+      const rawHeader = req.headers["x-runner-context"];
       let headerText: string | undefined;
       if (Array.isArray(rawHeader)) headerText = rawHeader[0];
       else if (typeof rawHeader === "string") headerText = rawHeader;
@@ -425,7 +403,7 @@ export function createRequestHandlers(
         try {
           const map = serializer.parse<Record<string, string>>(headerText);
           for (const [id, ctx] of store.asyncContexts.entries()) {
-            const raw = (map as any)[id];
+            const raw = map[id];
             if (typeof raw === "string") {
               try {
                 const value = ctx.parse(raw);
@@ -445,7 +423,7 @@ export function createRequestHandlers(
       );
     } catch (error) {
       if (isCancellationError(error)) {
-        if (!res.writableEnded && !(res as any).headersSent) {
+        if (!res.writableEnded && !res.headersSent) {
           applyCorsActual(req, res, cors);
           respondJson(
             res,
@@ -460,8 +438,9 @@ export function createRequestHandlers(
       try {
         for (const helper of store.errors.values()) {
           if (helper.is(error)) {
-            const errAny = error as any;
-            appErrorExtra = { id: errAny?.name, data: errAny?.data };
+            const err = error as { name?: unknown; data?: unknown };
+            const id = typeof err.name === "string" ? err.name : undefined;
+            appErrorExtra = { id, data: err.data };
             break;
           }
         }

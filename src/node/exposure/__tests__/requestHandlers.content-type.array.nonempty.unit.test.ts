@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { createRequestHandlers } from "../requestHandlers";
-import { EJSON, getDefaultSerializer } from "../../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../../serializer";
 
 function makeReq(): IncomingMessage {
   const listeners: Record<string, Function[]> = {};

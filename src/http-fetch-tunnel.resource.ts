@@ -3,7 +3,7 @@ import {
   ProtocolEnvelope,
   TunnelError,
 } from "./globals/resources/tunnel/protocol";
-import { Serializer } from "./globals/resources/tunnel/serializer";
+import type { SerializerLike } from "./serializer";
 import type {
   ExposureFetchConfig,
   ExposureFetchClient,
@@ -17,21 +17,19 @@ export type {
 
 // normalizeError is re-exported from error-utils for public API
 
-async function postSerialized<T = any>(
-  options: {
-    fetch: typeof fetch;
+async function postSerialized<T = any>(options: {
+  fetch: typeof fetch;
+  url: string;
+  body: unknown;
+  headers: Record<string, string>;
+  timeoutMs?: number;
+  serializer: SerializerLike;
+  onRequest?: (ctx: {
     url: string;
-    body: unknown;
     headers: Record<string, string>;
-    timeoutMs?: number;
-    serializer: Serializer;
-    onRequest?: (ctx: {
-      url: string;
-      headers: Record<string, string>;
-    }) => void | Promise<void>;
-    contextHeaderText?: string;
-  },
-): Promise<T> {
+  }) => void | Promise<void>;
+  contextHeaderText?: string;
+}): Promise<T> {
   const {
     fetch: fetchFn,
     url,
@@ -63,9 +61,7 @@ async function postSerialized<T = any>(
     });
 
     const text = await res.text();
-    const json = text
-      ? serializer.parse<T>(text)
-      : (undefined as unknown as T);
+    const json = text ? serializer.parse<T>(text) : (undefined as unknown as T);
     return json;
   } finally {
     if (timeout) clearTimeout(timeout);
@@ -105,7 +101,7 @@ export function createExposureFetch(
     for (const ctx of cfg.contexts) {
       try {
         const v = ctx.use();
-        map[ctx.id] = ctx.serialize(v as any);
+        map[ctx.id] = ctx.serialize(v);
       } catch {
         // context absent; ignore
       }
@@ -132,8 +128,8 @@ export function createExposureFetch(
         return assertOkEnvelope<O>(r, { fallbackMessage: "Tunnel task error" });
       } catch (e) {
         // Optionally rethrow typed errors if registry present
-        const te = e as any;
-        if (te && cfg.errorRegistry && te.id && te.data) {
+        const te = e as { id?: unknown; data?: unknown };
+        if (cfg.errorRegistry && te.id && te.data) {
           const helper = cfg.errorRegistry.get(String(te.id));
           if (helper) helper.throw(te.data);
         }
@@ -155,8 +151,8 @@ export function createExposureFetch(
       try {
         assertOkEnvelope<void>(r, { fallbackMessage: "Tunnel event error" });
       } catch (e) {
-        const te = e as any;
-        if (te && cfg.errorRegistry && te.id && te.data) {
+        const te = e as { id?: unknown; data?: unknown };
+        if (cfg.errorRegistry && te.id && te.data) {
           const helper = cfg.errorRegistry.get(String(te.id));
           if (helper) helper.throw(te.data);
         }
@@ -182,10 +178,12 @@ export function createExposureFetch(
         );
       }
       try {
-        return assertOkEnvelope<P>(r, { fallbackMessage: "Tunnel event error" });
+        return assertOkEnvelope<P>(r, {
+          fallbackMessage: "Tunnel event error",
+        });
       } catch (e) {
-        const te = e as any;
-        if (te && cfg.errorRegistry && te.id && te.data) {
+        const te = e as { id?: unknown; data?: unknown };
+        if (cfg.errorRegistry && te.id && te.data) {
           const helper = cfg.errorRegistry.get(String(te.id));
           if (helper) helper.throw(te.data);
         }

@@ -1,5 +1,6 @@
 import type { ITask } from "../../../../types/task";
 import type { IEventDefinition } from "../../../../types/event";
+import type { DurableSignalId } from "../ids";
 import type { IDurableStore } from "./store";
 import type { IDurableQueue } from "./queue";
 import type { IEventBus } from "./bus";
@@ -15,12 +16,12 @@ export interface ITaskExecutor {
   run<TInput, TResult>(
     task: DurableTask<TInput, TResult>,
     input?: TInput,
-  ): Promise<unknown>;
+  ): Promise<TResult>;
 }
 
 export interface ScheduleConfig<TInput = unknown> {
   id: string;
-  task: DurableTask<any, unknown>;
+  task: DurableTask<TInput, unknown>;
   cron?: string;
   interval?: number;
   input: TInput;
@@ -74,6 +75,19 @@ export interface IDurableService {
     options?: ExecuteOptions,
   ): Promise<TResult>;
 
+  /**
+   * A stricter alternative to `execute()` that rejects tasks whose result type
+   * includes `undefined` (including `void`, `unknown`, and `any`).
+   *
+   * This mirrors the runtime contract where `wait()`/`execute()` treat
+   * "completed without result" as an error.
+   */
+  executeStrict<TInput, TResult>(
+    task: undefined extends TResult ? never : DurableTask<TInput, TResult>,
+    input?: TInput,
+    options?: ExecuteOptions,
+  ): Promise<TResult>;
+
   schedule<TInput>(
     task: DurableTask<TInput, unknown>,
     input: TInput | undefined,
@@ -101,7 +115,7 @@ export interface IDurableService {
    */
   signal<TPayload>(
     executionId: string,
-    signal: string | IEventDefinition<TPayload>,
+    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
     payload: TPayload,
   ): Promise<void>;
 }

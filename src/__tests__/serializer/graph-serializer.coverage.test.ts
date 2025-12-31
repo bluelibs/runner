@@ -32,10 +32,9 @@ describe("GraphSerializer coverage", () => {
       nodes: {
         obj: {
           kind: "object",
-          value: Object.assign(
-            Object.create({ ghost: { __ref: "none" } }),
-            { real: { __ref: "arr" } },
-          ),
+          value: Object.assign(Object.create({ ghost: { __ref: "none" } }), {
+            real: { __ref: "arr" },
+          }),
         },
         arr: { kind: "array", value: [] },
       },
@@ -76,10 +75,9 @@ describe("GraphSerializer coverage", () => {
       nodes: {
         obj: {
           kind: "object",
-          value: Object.assign(
-            Object.create({ ghost: { __ref: "leaf" } }),
-            { own: { __ref: "leaf" } },
-          ),
+          value: Object.assign(Object.create({ ghost: { __ref: "leaf" } }), {
+            own: { __ref: "leaf" },
+          }),
         },
         leaf: { kind: "array", value: [] },
       },
@@ -112,7 +110,9 @@ describe("GraphSerializer coverage", () => {
       new Date("2024-01-01T00:00:00.000Z"),
     );
     expect(merged).toBeInstanceOf(Date);
-    expect((merged as Date).getTime()).toBe(new Date("2024-01-01T00:00:00.000Z").getTime());
+    expect((merged as Date).getTime()).toBe(
+      new Date("2024-01-01T00:00:00.000Z").getTime(),
+    );
   });
 
   it("covers built-in DateType create", () => {
@@ -123,7 +123,10 @@ describe("GraphSerializer coverage", () => {
   it("throws on unknown __type during deserializeValue", () => {
     const ctx = { nodes: {}, resolved: new Map(), resolving: new Set() };
     expect(() =>
-      (serializer as any).deserializeValue({ __type: "Missing", value: {} }, ctx),
+      (serializer as any).deserializeValue(
+        { __type: "Missing", value: {} },
+        ctx,
+      ),
     ).toThrow(/Unknown type/);
   });
 });

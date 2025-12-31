@@ -5,9 +5,11 @@ import {
   parseMultipartInput,
   type MultipartRequest,
 } from "../exposure/multipart";
-import { EJSON } from "../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../serializer";
 import type { JsonResponse } from "../exposure/types";
 import type { InputFile } from "../../types/inputFile";
+
+const serializer = getDefaultSerializer();
 
 const CRLF = "\r\n";
 
@@ -187,7 +189,7 @@ describe("parseMultipartInput", () => {
       ),
     ]);
 
-    const parsed = await parseMultipartInput(req, undefined, EJSON);
+    const parsed = await parseMultipartInput(req, undefined, serializer);
     if (!parsed.ok) {
       throw new Error("Expected multipart success");
     }
@@ -218,7 +220,7 @@ describe("parseMultipartInput", () => {
       ),
     ]);
 
-    const parsed = await parseMultipartInput(req, undefined, EJSON);
+    const parsed = await parseMultipartInput(req, undefined, serializer);
     if (parsed.ok) {
       throw new Error("Expected multipart failure for missing manifest");
     }
@@ -238,7 +240,7 @@ describe("parseMultipartInput", () => {
       ),
     ]);
 
-    const parsed = await parseMultipartInput(req, undefined, EJSON);
+    const parsed = await parseMultipartInput(req, undefined, serializer);
     if (parsed.ok) {
       throw new Error("Expected multipart failure for invalid manifest");
     }
@@ -249,7 +251,7 @@ describe("parseMultipartInput", () => {
   it("propagates request stream errors", async () => {
     const req = createErroringRequest(boundary, new Error("boom"));
 
-    const parsed = await parseMultipartInput(req, undefined, EJSON);
+    const parsed = await parseMultipartInput(req, undefined, serializer);
     if (parsed.ok) {
       const finalize = await parsed.finalize;
       if (finalize.ok) {
@@ -266,7 +268,7 @@ describe("parseMultipartInput", () => {
       "content-type": "multipart/form-data",
     });
 
-    const parsed = await parseMultipartInput(req, undefined, EJSON);
+    const parsed = await parseMultipartInput(req, undefined, serializer);
     if (parsed.ok) {
       const finalize = await parsed.finalize;
       if (finalize.ok) {
@@ -295,7 +297,7 @@ describe("parseMultipartInput", () => {
       ),
     ]);
 
-    const parsed = await parseMultipartInput(req, undefined, EJSON);
+    const parsed = await parseMultipartInput(req, undefined, serializer);
     if (!parsed.ok) {
       throw new Error("Expected success before finalize");
     }

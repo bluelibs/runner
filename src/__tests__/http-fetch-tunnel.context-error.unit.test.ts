@@ -1,5 +1,5 @@
 import { createExposureFetch } from "../http-fetch-tunnel.resource";
-import { getDefaultSerializer } from "../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../serializer";
 
 describe("createExposureFetch - context header and typed rethrow", () => {
   const baseUrl = "http://127.0.0.1:8080/__runner";

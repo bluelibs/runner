@@ -15,7 +15,11 @@ export interface NodeExposureHttpAuthConfig {
 export function createAuthenticator(
   authCfg: NodeExposureHttpAuthConfig | undefined,
   taskRunner: TaskRunner,
-  validatorTasks: ITask<AuthValidatorInput, Promise<AuthValidatorResult>, any>[],
+  validatorTasks: ITask<
+    AuthValidatorInput,
+    Promise<AuthValidatorResult>,
+    any
+  >[],
 ): Authenticator {
   const headerName = (authCfg?.header ?? "x-runner-token").toLowerCase();
 

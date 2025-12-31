@@ -5,7 +5,9 @@ import type {
   IDurableStore,
   ListExecutionsOptions,
 } from "../core/interfaces/store";
-import { EJSON } from "@bluelibs/ejson";
+import { getDefaultSerializer } from "../../../serializer";
+
+const serializer = getDefaultSerializer();
 
 export interface RedisPipeline {
   get(key: string): RedisPipeline;
@@ -93,7 +95,7 @@ export class RedisStore implements IDurableStore {
   async saveExecution(execution: Execution): Promise<void> {
     await this.redis.set(
       this.k(`exec:${execution.id}`),
-      EJSON.stringify(execution),
+      serializer.stringify(execution),
     );
   }
 
@@ -101,7 +103,7 @@ export class RedisStore implements IDurableStore {
     const data = this.parseRedisString(
       await this.redis.get(this.k(`exec:${id}`)),
     );
-    return data ? (EJSON.parse(data) as Execution) : null;
+    return data ? (serializer.parse(data) as Execution) : null;
   }
 
   async updateExecution(
@@ -110,7 +112,7 @@ export class RedisStore implements IDurableStore {
   ): Promise<void> {
     const key = this.k(`exec:${id}`);
     const updatesWithTime = { ...updates, updatedAt: new Date() };
-    const updatesStr = EJSON.stringify(updatesWithTime);
+    const updatesStr = serializer.stringify(updatesWithTime);
 
     const script = `
       local current = redis.call("get", KEYS[1])
@@ -139,7 +141,7 @@ export class RedisStore implements IDurableStore {
     const results = await pipeline.exec();
     return (results || [])
       .map(([_, res]) =>
-        typeof res === "string" ? (EJSON.parse(res) as Execution) : null,
+        typeof res === "string" ? (serializer.parse(res) as Execution) : null,
       )
       .filter(
         (e): e is Execution =>
@@ -160,7 +162,7 @@ export class RedisStore implements IDurableStore {
 
     return (results || [])
       .map(([_, res]) =>
-        typeof res === "string" ? (EJSON.parse(res) as Execution) : null,
+        typeof res === "string" ? (serializer.parse(res) as Execution) : null,
       )
       .filter(
         (e): e is Execution => e !== null && e.status === "compensation_failed",
@@ -169,9 +171,14 @@ export class RedisStore implements IDurableStore {
 
   // Operator API
   async retryRollback(executionId: string): Promise<void> {
-    await this.updateExecution(executionId, {
+    const execution = await this.getExecution(executionId);
+    if (!execution) return;
+
+    await this.saveExecution({
+      ...execution,
       status: "pending",
       error: undefined,
+      updatedAt: new Date(),
     });
   }
 
@@ -217,7 +224,7 @@ export class RedisStore implements IDurableStore {
 
     let executions = (results || [])
       .map(([_, res]) =>
-        typeof res === "string" ? (EJSON.parse(res) as Execution) : null,
+        typeof res === "string" ? (serializer.parse(res) as Execution) : null,
       )
       .filter((e): e is Execution => e !== null);
 
@@ -255,7 +262,7 @@ export class RedisStore implements IDurableStore {
 
     return (results || [])
       .map(([_, res]) =>
-        typeof res === "string" ? (EJSON.parse(res) as StepResult) : null,
+        typeof res === "string" ? (serializer.parse(res) as StepResult) : null,
       )
       .filter((s): s is StepResult => s !== null)
       .sort(
@@ -271,18 +278,22 @@ export class RedisStore implements IDurableStore {
     const data = this.parseRedisString(
       await this.redis.get(this.k(`step:${executionId}:${stepId}`)),
     );
-    return data ? (EJSON.parse(data) as StepResult) : null;
+    return data ? (serializer.parse(data) as StepResult) : null;
   }
 
   async saveStepResult(result: StepResult): Promise<void> {
     await this.redis.set(
       this.k(`step:${result.executionId}:${result.stepId}`),
-      EJSON.stringify(result),
+      serializer.stringify(result),
     );
   }
 
   async createTimer(timer: Timer): Promise<void> {
-    await this.redis.hset(this.k("timers"), timer.id, EJSON.stringify(timer));
+    await this.redis.hset(
+      this.k("timers"),
+      timer.id,
+      serializer.stringify(timer),
+    );
     await this.redis.zadd(
       this.k("timers_schedule"),
       timer.fireAt.getTime(),
@@ -307,7 +318,9 @@ export class RedisStore implements IDurableStore {
     timerIds.forEach((id: string) => pipeline.hget(this.k("timers"), id));
     const results = await pipeline.exec();
     return (results || [])
-      .map(([_, res]) => (res ? (EJSON.parse(res as string) as Timer) : null))
+      .map(([_, res]) =>
+        res ? (serializer.parse(res as string) as Timer) : null,
+      )
       .filter((t): t is Timer => t !== null && t.status === "pending");
   }
 
@@ -316,9 +329,13 @@ export class RedisStore implements IDurableStore {
       await this.redis.hget(this.k("timers"), timerId),
     );
     if (!data) return;
-    const timer = EJSON.parse(data) as Timer;
+    const timer = serializer.parse(data) as Timer;
     timer.status = "fired";
-    await this.redis.hset(this.k("timers"), timerId, EJSON.stringify(timer));
+    await this.redis.hset(
+      this.k("timers"),
+      timerId,
+      serializer.stringify(timer),
+    );
     await this.redis.zrem(this.k("timers_schedule"), timerId);
   }
 
@@ -331,7 +348,7 @@ export class RedisStore implements IDurableStore {
     await this.redis.hset(
       this.k("schedules"),
       schedule.id,
-      EJSON.stringify(schedule),
+      serializer.stringify(schedule),
     );
   }
 
@@ -339,7 +356,7 @@ export class RedisStore implements IDurableStore {
     const data = this.parseRedisString(
       await this.redis.hget(this.k("schedules"), id),
     );
-    return data ? (EJSON.parse(data) as Schedule) : null;
+    return data ? (serializer.parse(data) as Schedule) : null;
   }
 
   async updateSchedule(id: string, updates: Partial<Schedule>): Promise<void> {
@@ -358,7 +375,7 @@ export class RedisStore implements IDurableStore {
     const values = Object.values(data as Record<string, unknown>);
     return values
       .filter((v): v is string => typeof v === "string")
-      .map((v) => EJSON.parse(v) as Schedule);
+      .map((v) => serializer.parse(v) as Schedule);
   }
 
   async listActiveSchedules(): Promise<Schedule[]> {

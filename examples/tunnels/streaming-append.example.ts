@@ -1,5 +1,5 @@
 /**
- * Streaming append over HTTP using Runner exposure + EJSON.
+ * Streaming append over HTTP using Runner exposure + Runner serializer.
  *
  * - Server: nodeExposure HTTP
  * - Client: Node smart client that auto-detects File sentinels and streams via multipart

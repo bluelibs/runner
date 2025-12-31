@@ -16,7 +16,11 @@ describe("Tunnel delivery modes", () => {
     id: "unit.tunnel.emitWithResult",
     dependencies: { eventManager: globals.resources.eventManager },
     run: async (input, { eventManager }) => {
-      return await eventManager.emitWithResult(ev, input, "unit.tunnel.emitWithResult");
+      return await eventManager.emitWithResult(
+        ev,
+        input,
+        "unit.tunnel.emitWithResult",
+      );
     },
   });
 

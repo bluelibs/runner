@@ -7,7 +7,7 @@ describe("createNodeFile helper", () => {
     expect(file.id).toBe("F1");
     expect(file.meta.name).toBe("auto.bin");
   });
-  it("creates an EJSON File sentinel with _node sidecar", () => {
+  it("creates a File sentinel with _node sidecar", () => {
     const f = createNodeFile(
       { name: "x.txt", type: "text/plain" },
       { stream: Readable.from("abc") },

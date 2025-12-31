@@ -2,28 +2,28 @@
  * Test suite for high coverage scenarios of Serializer class
  */
 
-import { describe, it, expect, beforeEach } from '@jest/globals';
-import { Serializer } from '../index';
-import type { TypeDefinition } from '../index';
+import { describe, it, expect, beforeEach } from "@jest/globals";
+import { Serializer } from "../index";
+import type { TypeDefinition } from "../index";
 
-describe('Serializer Coverage Tests', () => {
+describe("Serializer Coverage Tests", () => {
   let serializer: Serializer;
 
   beforeEach(() => {
     serializer = new Serializer();
   });
 
-  describe('GraphPayload Detection', () => {
-    it('should fall back to legacy deserialization for non-graph objects', () => {
+  describe("GraphPayload Detection", () => {
+    it("should fall back to legacy deserialization for non-graph objects", () => {
       const legacyPayload = JSON.stringify({
-        key: 'value',
+        key: "value",
         nested: { inner: 42 },
       });
       const result = serializer.deserialize(legacyPayload);
-      expect(result).toEqual({ key: 'value', nested: { inner: 42 } });
+      expect(result).toEqual({ key: "value", nested: { inner: 42 } });
     });
 
-    it('should fall back to legacy deserialization if __graph is not true', () => {
+    it("should fall back to legacy deserialization if __graph is not true", () => {
       const invalidPayload = JSON.stringify({
         __graph: false,
         root: {},
@@ -37,7 +37,7 @@ describe('Serializer Coverage Tests', () => {
       });
     });
 
-    it('should fall back if root is missing', () => {
+    it("should fall back if root is missing", () => {
       const invalidPayload = JSON.stringify({
         __graph: true,
         nodes: {},
@@ -49,7 +49,7 @@ describe('Serializer Coverage Tests', () => {
       });
     });
 
-    it('should fall back if nodes are missing or not an object', () => {
+    it("should fall back if nodes are missing or not an object", () => {
       const invalidPayload = JSON.stringify({
         __graph: true,
         root: {},
@@ -64,12 +64,12 @@ describe('Serializer Coverage Tests', () => {
     });
   });
 
-  describe('Reference Resolution', () => {
-    it('should throw error for unresolved reference ID', () => {
+  describe("Reference Resolution", () => {
+    it("should throw error for unresolved reference ID", () => {
       const payload = JSON.stringify({
         __graph: true,
         version: 1,
-        root: { __ref: 'missing_id' },
+        root: { __ref: "missing_id" },
         nodes: {},
       });
 
@@ -78,99 +78,99 @@ describe('Serializer Coverage Tests', () => {
       }).toThrow('Unresolved reference id "missing_id"');
     });
 
-    it('should throw error for unsupported node kind', () => {
+    it("should throw error for unsupported node kind", () => {
       const payload = JSON.stringify({
         __graph: true,
         version: 1,
-        root: { __ref: 'obj_1' },
+        root: { __ref: "obj_1" },
         nodes: {
-          obj_1: { kind: 'unknown_kind', value: {} },
+          obj_1: { kind: "unknown_kind", value: {} },
         },
       });
 
       expect(() => {
         serializer.deserialize(payload);
-      }).toThrow('Unsupported node kind');
+      }).toThrow("Unsupported node kind");
     });
 
-    it('should throw error for unknown type during resolution', () => {
+    it("should throw error for unknown type during resolution", () => {
       const payload = JSON.stringify({
         __graph: true,
         version: 1,
-        root: { __ref: 'obj_1' },
+        root: { __ref: "obj_1" },
         nodes: {
-          obj_1: { kind: 'type', type: 'MissingType', value: {} },
+          obj_1: { kind: "type", type: "MissingType", value: {} },
         },
       });
 
       expect(() => {
         serializer.deserialize(payload);
-      }).toThrow('Unknown type: MissingType');
+      }).toThrow("Unknown type: MissingType");
     });
   });
 
-  describe('Primitive Serialization Edge Cases', () => {
-    it('should return null for undefined input', () => {
+  describe("Primitive Serialization Edge Cases", () => {
+    it("should return null for undefined input", () => {
       const result = serializer.serialize(undefined);
-      expect(result).toBe('null');
+      expect(result).toBe("null");
     });
 
-    it('should serialize mixed array with supported types', () => {
-      const result = serializer.serialize([1, 'string', true, null]);
+    it("should serialize mixed array with supported types", () => {
+      const result = serializer.serialize([1, "string", true, null]);
       const deserialized = serializer.deserialize(result);
-      expect(deserialized).toEqual([1, 'string', true, null]);
+      expect(deserialized).toEqual([1, "string", true, null]);
     });
 
-    it('should throw TypeError for BigInt', () => {
+    it("should throw TypeError for BigInt", () => {
       // Create BigInt (if environment supports it)
-      if (typeof BigInt !== 'undefined') {
+      if (typeof BigInt !== "undefined") {
         expect(() => {
           serializer.serialize(BigInt(123));
         }).toThrow('Cannot serialize value of type "bigint"');
       }
     });
 
-    it('should throw TypeError for Symbol', () => {
+    it("should throw TypeError for Symbol", () => {
       expect(() => {
-        serializer.serialize(Symbol('test'));
+        serializer.serialize(Symbol("test"));
       }).toThrow('Cannot serialize value of type "symbol"');
     });
 
-    it('should throw TypeError for Function', () => {
+    it("should throw TypeError for Function", () => {
       expect(() => {
         serializer.serialize(() => true);
       }).toThrow('Cannot serialize value of type "function"');
     });
   });
 
-  describe('Legacy Deserialization', () => {
-    it('should deserialize legacy arrays', () => {
-      const legacyPayload = JSON.stringify([1, 2, 3, 'test', true]);
+  describe("Legacy Deserialization", () => {
+    it("should deserialize legacy arrays", () => {
+      const legacyPayload = JSON.stringify([1, 2, 3, "test", true]);
       const result = serializer.deserialize(legacyPayload);
-      expect(result).toEqual([1, 2, 3, 'test', true]);
+      expect(result).toEqual([1, 2, 3, "test", true]);
     });
 
-    it('should deserialize legacy plain objects', () => {
+    it("should deserialize legacy plain objects", () => {
       const legacyPayload = JSON.stringify({
-        name: 'test',
+        name: "test",
         value: 42,
-        nested: { inner: 'data' },
+        nested: { inner: "data" },
       });
       const result = serializer.deserialize(legacyPayload);
       expect(result).toEqual({
-        name: 'test',
+        name: "test",
         value: 42,
-        nested: { inner: 'data' },
+        nested: { inner: "data" },
       });
     });
 
-    it('should deserialize legacy typed objects', () => {
+    it("should deserialize legacy typed objects", () => {
       class CustomClass {
         constructor(public value: string) {}
       }
 
       const customType: TypeDefinition<CustomClass, { value: string }> = {
-        id: 'CustomClass',
+        id: "CustomClass",
         is: (obj): obj is CustomClass => obj instanceof CustomClass,
         serialize: (obj) => ({ value: obj.value }),
         deserialize: (data) => new CustomClass(data.value),
@@ -179,30 +179,30 @@ describe('Serializer Coverage Tests', () => {
       serializer.addType(customType);
 
       const legacyPayload = JSON.stringify({
-        __type: 'CustomClass',
-        value: { value: 'test data' },
+        __type: "CustomClass",
+        value: { value: "test data" },
       });
 
       const result = serializer.deserialize<CustomClass>(legacyPayload);
       expect(result).toBeInstanceOf(CustomClass);
-      expect(result.value).toBe('test data');
+      expect(result.value).toBe("test data");
     });
 
-    it('should handle non-typed legacy records', () => {
+    it("should handle non-typed legacy records", () => {
       const legacyPayload = JSON.stringify({
-        notAType: 'test',
+        notAType: "test",
         value: 42,
       });
       const result = serializer.deserialize(legacyPayload);
       expect(result).toEqual({
-        notAType: 'test',
+        notAType: "test",
         value: 42,
       });
     });
   });
 
-  describe('DeserializeValue Edge Cases', () => {
-    it('should deserialize arrays in non-graph payloads', () => {
+  describe("DeserializeValue Edge Cases", () => {
+    it("should deserialize arrays in non-graph payloads", () => {
       const payload = JSON.stringify({
         __graph: true,
         version: 1,
@@ -214,24 +214,29 @@ describe('Serializer Coverage Tests', () => {
       expect(result).toEqual([1, 2, 3]);
     });
 
-    it('should deserialize plain objects in non-graph payloads', () => {
+    it("should deserialize plain objects in non-graph payloads", () => {
       const payload = JSON.stringify({
         __graph: true,
         version: 1,
-        root: { key: 'value', nested: { inner: 42 } },
+        root: { key: "value", nested: { inner: 42 } },
         nodes: {},
       });
 
       const result = serializer.deserialize(payload);
-      expect(result).toEqual({ key: 'value', nested: { inner: 42 } });
+      expect(result).toEqual({ key: "value", nested: { inner: 42 } });
     });
   });
 
-  describe('Value Strategy Types', () => {
-    it('should inline value types without creating dangling references', () => {
-      const reusedDate = new Date('2024-01-01T00:00:00.000Z');
-      const text = serializer.serialize({ first: reusedDate, second: reusedDate });
-      const parsed = serializer.deserialize<{ first: Date; second: Date }>(text);
+  describe("Value Strategy Types", () => {
+    it("should inline value types without creating dangling references", () => {
+      const reusedDate = new Date("2024-01-01T00:00:00.000Z");
+      const text = serializer.serialize({
+        first: reusedDate,
+        second: reusedDate,
+      });
+      const parsed = serializer.deserialize<{ first: Date; second: Date }>(
+        text,
+      );
 
       expect(parsed.first.getTime()).toBe(reusedDate.getTime());
       expect(parsed.second.getTime()).toBe(reusedDate.getTime());
@@ -240,14 +245,14 @@ describe('Serializer Coverage Tests', () => {
     });
   });
 
-  describe('MergePlaceholder Edge Cases', () => {
-    it('should handle placeholder === result case for Date', () => {
+  describe("MergePlaceholder Edge Cases", () => {
+    it("should handle placeholder === result case for Date", () => {
       class CustomDate {
         constructor(public date: Date) {}
       }
 
       const customType: TypeDefinition<CustomDate, string> = {
-        id: 'CustomDate',
+        id: "CustomDate",
         is: (obj): obj is CustomDate => obj instanceof CustomDate,
         serialize: (obj) => obj.date.toISOString(),
         deserialize: (data) => {
@@ -261,7 +266,7 @@ describe('Serializer Coverage Tests', () => {
       serializer.addType(customType);
 
       const obj: { self?: CustomDate; ref?: CustomDate } = {};
-      obj.self = new CustomDate(new Date('2024-01-01'));
+      obj.self = new CustomDate(new Date("2024-01-01"));
       obj.ref = obj.self;
 
       const serialized = serializer.serialize(obj);
@@ -270,13 +275,13 @@ describe('Serializer Coverage Tests', () => {
       expect(deserialized.self).toBe(deserialized.ref);
     });
 
-    it('should handle mergePlaceholder fallback for non-matching types', () => {
+    it("should handle mergePlaceholder fallback for non-matching types", () => {
       class CustomValue {
         constructor(public value: number) {}
       }
 
       const customType: TypeDefinition<CustomValue, number> = {
-        id: 'CustomValue',
+        id: "CustomValue",
         is: (obj): obj is CustomValue => obj instanceof CustomValue,
         serialize: (obj) => obj.value,
         deserialize: (data) => new CustomValue(data),
@@ -297,10 +302,10 @@ describe('Serializer Coverage Tests', () => {
     });
   });
 
-  describe('SerializeValue Edge Cases', () => {
-    it('should handle undefined values in object contexts', () => {
+  describe("SerializeValue Edge Cases", () => {
+    it("should handle undefined values in object contexts", () => {
       const obj = {
-        defined: 'value',
+        defined: "value",
         nested: {
           inner: undefined as string | undefined,
         },
@@ -309,17 +314,21 @@ describe('Serializer Coverage Tests', () => {
       const serialized = serializer.serialize(obj);
       const deserialized = serializer.deserialize<typeof obj>(serialized);
 
-      expect(deserialized.defined).toBe('value');
-      expect(Object.prototype.hasOwnProperty.call(deserialized.nested, 'inner')).toBe(false);
+      expect(deserialized.defined).toBe("value");
+      expect(
+        Object.prototype.hasOwnProperty.call(deserialized.nested, "inner"),
+      ).toBe(false);
     });
 
-    it('should handle undefined in nested array values', () => {
+    it("should handle undefined in nested array values", () => {
       const obj = {
         values: [1, undefined, 3] as (number | undefined)[],
       };
 
       const serialized = serializer.serialize(obj);
-      const deserialized = serializer.deserialize<{ values: (number | null)[] }>(serialized);
+      const deserialized = serializer.deserialize<{
+        values: (number | null)[];
+      }>(serialized);
 
       expect(deserialized.values).toEqual([1, null, 3]);
     });
@@ -331,8 +340,8 @@ describe('Serializer Coverage Tests', () => {
   // that create() returned, which doesn't happen in normal type definitions.
   // Coverage: 99.46% is excellent - this defensive code is acceptable as untested.
 
-  describe('MergePlaceholder Fallback', () => {
-    it('should use fallback return when deserialize returns null', () => {
+  describe("MergePlaceholder Fallback", () => {
+    it("should use fallback return when deserialize returns null", () => {
       // Test case: create() returns an object but deserialize returns null
       // This triggers the fallback at line 342
       class NullableWrapper {
@@ -340,7 +349,7 @@ describe('Serializer Coverage Tests', () => {
       }
 
       const customType: TypeDefinition<NullableWrapper, string | null> = {
-        id: 'NullableWrapper',
+        id: "NullableWrapper",
         is: (obj): obj is NullableWrapper => obj instanceof NullableWrapper,
         serialize: (obj) => obj.value,
         deserialize: (data) => {
@@ -366,14 +375,14 @@ describe('Serializer Coverage Tests', () => {
       expect(deserialized.wrapper.value).toBe(null);
     });
 
-    it('should use fallback when placeholder is array but result is not', () => {
+    it("should use fallback when placeholder is array but result is not", () => {
       // Create returns an array, but deserialize returns a different type
       class ArrayWrapper {
         items: string[] = [];
       }
 
       const customType: TypeDefinition<ArrayWrapper, string[]> = {
-        id: 'ArrayWrapper',
+        id: "ArrayWrapper",
         is: (obj): obj is ArrayWrapper => obj instanceof ArrayWrapper,
         serialize: (obj) => obj.items,
         deserialize: (data) => {
@@ -387,25 +396,95 @@ describe('Serializer Coverage Tests', () => {
       serializer.addType(customType);
 
       const wrapper = new ArrayWrapper();
-      wrapper.items = ['a', 'b'];
+      wrapper.items = ["a", "b"];
 
       const serialized = serializer.serialize(wrapper);
       const deserialized = serializer.deserialize<ArrayWrapper>(serialized);
 
-      expect(deserialized.items).toEqual(['a', 'b']);
+      expect(deserialized.items).toEqual(["a", "b"]);
     });
   });
 
-  describe('isSerializedTypeRecord Edge Cases', () => {
-    it('should handle falsy values in legacy deserialization', () => {
+  describe("isSerializedTypeRecord Edge Cases", () => {
+    it("should handle falsy values in legacy deserialization", () => {
       // Test with primitives that should not be treated as type records
-      const testCases = [0, '', false, null];
+      const testCases = [0, "", false, null];
 
       testCases.forEach((value) => {
         const payload = JSON.stringify(value);
         const result = serializer.deserialize(payload);
         expect(result).toBe(value);
       });
+    });
+  });
+
+  describe("Tree Mode & addType Validation Branches", () => {
+    it("throws when string overload is missing a factory", () => {
+      expect(() => (serializer as any).addType("MissingFactory")).toThrow(
+        'addType("MissingFactory", factory) requires a factory',
+      );
+    });
+
+    it("throws for invalid type definitions", () => {
+      expect(() => (serializer as any).addType({})).toThrow(
+        "Invalid type definition: id is required",
+      );
+
+      expect(() =>
+        serializer.addType({
+          id: "InvalidType",
+          is: (_obj: unknown): _obj is unknown => true,
+          serialize: undefined as any,
+          deserialize: undefined as any,
+        }),
+      ).toThrow("Invalid type definition: serialize and deserialize are required");
+    });
+
+    it("covers value-type instance guards created by addType(name, factory)", () => {
+      serializer.addType("ValueType", (json: unknown) => ({ json }));
+
+      const registry = (serializer as any).typeRegistry as Map<string, any>;
+      const typeDef = registry.get("ValueType");
+      expect(typeDef.is(123)).toBe(false);
+    });
+
+    it("stringify handles undefined, Infinity, and circular objects", () => {
+      expect(serializer.stringify(undefined)).toBe("null");
+      expect(serializer.stringify(Number.POSITIVE_INFINITY)).toBe("null");
+
+      const obj: any = {};
+      obj.self = obj;
+      expect(() => serializer.stringify(obj)).toThrow("circular");
+    });
+
+    it("stringify rejects unsupported JS primitives in tree mode", () => {
+      if (typeof BigInt !== "undefined") {
+        expect(() => serializer.stringify(BigInt(1))).toThrow(
+          'Cannot serialize value of type "bigint"',
+        );
+      }
+      expect(() => serializer.stringify(Symbol("x"))).toThrow(
+        'Cannot serialize value of type "symbol"',
+      );
+      expect(() => serializer.stringify(() => true)).toThrow(
+        'Cannot serialize value of type "function"',
+      );
+    });
+
+    it("jsonStringify rejects unsupported JS primitives", () => {
+      const jsonStringify = (serializer as any).jsonStringify as (
+        value: unknown,
+      ) => string;
+
+      expect(() => jsonStringify(BigInt(1))).toThrow(
+        'Cannot stringify value of type "bigint"',
+      );
+      expect(() => jsonStringify(Symbol("x"))).toThrow(
+        'Cannot stringify value of type "symbol"',
+      );
+      expect(() => jsonStringify(() => true)).toThrow(
+        'Cannot stringify value of type "function"',
+      );
     });
   });
 });

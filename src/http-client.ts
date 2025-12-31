@@ -1,4 +1,4 @@
-import type { Serializer } from "./globals/resources/tunnel/serializer";
+import type { SerializerLike } from "./serializer";
 import type { ProtocolEnvelope } from "./globals/resources/tunnel/protocol";
 import { assertOkEnvelope } from "./globals/resources/tunnel/protocol";
 import { createExposureFetch } from "./http-fetch-tunnel.resource";
@@ -16,12 +16,12 @@ export interface HttpClientConfig {
   auth?: HttpClientAuth;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
-  serializer: Serializer;
+  serializer: SerializerLike;
   onRequest?: (ctx: {
     url: string;
     headers: Record<string, string>;
   }) => void | Promise<void>;
-  contexts?: Array<IAsyncContext<any>>;
+  contexts?: Array<IAsyncContext<unknown>>;
   errorRegistry?: Map<string, IErrorHelper<any>>;
 }
 
@@ -41,6 +41,11 @@ function toHeaders(auth?: HttpClientAuth): Record<string, string> {
 export function createHttpClient(cfg: HttpClientConfig): HttpClient {
   const baseUrl = cfg.baseUrl.replace(/\/$/, "");
   if (!baseUrl) throw new Error("createHttpClient requires baseUrl");
+
+  const isNodeReadable = (
+    value: unknown,
+  ): value is { pipe: (...args: unknown[]) => unknown } =>
+    !!value && typeof (value as { pipe?: unknown }).pipe === "function";
 
   const fetchClient = createExposureFetch({
     baseUrl,
@@ -70,7 +75,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       for (const ctx of cfg.contexts) {
         try {
           const v = ctx.use();
-          map[ctx.id] = ctx.serialize(v as any);
+          map[ctx.id] = ctx.serialize(v);
         } catch {}
       }
       if (Object.keys(map).length > 0) {
@@ -90,7 +95,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       const url = `${baseUrl}/task/${encodeURIComponent(id)}`;
 
       // Guard: raw Node Readable-like inputs are not supported in universal client
-      if (input && typeof (input as any).pipe === "function") {
+      if (isNodeReadable(input)) {
         throw new Error(
           "createHttpClient (universal) cannot send a Node stream. Use @bluelibs/runner/node createHttpSmartClient or createHttpMixedClient for duplex/streaming.",
         );
@@ -112,8 +117,8 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
             fallbackMessage: "Tunnel task error",
           });
         } catch (e) {
-          const te = e as any;
-          if (te && cfg.errorRegistry && te.id && te.data) {
+          const te = e as { id?: unknown; data?: unknown };
+          if (cfg.errorRegistry && te.id && te.data) {
             const helper = cfg.errorRegistry.get(String(te.id));
             if (helper) helper.throw(te.data);
           }
@@ -128,12 +133,12 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
         );
       }
 
-      // JSON/EJSON fallback
+      // JSON fallback
       try {
         return await fetchClient.task<I, O>(id, input as I);
       } catch (e) {
-        const te = e as any;
-        if (te && cfg.errorRegistry && te.id && te.data) {
+        const te = e as { id?: unknown; data?: unknown };
+        if (cfg.errorRegistry && te.id && te.data) {
           const helper = cfg.errorRegistry.get(String(te.id));
           if (helper) helper.throw(te.data);
         }
@@ -145,8 +150,8 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       try {
         return await fetchClient.event<P>(id, payload);
       } catch (e) {
-        const te = e as any;
-        if (te && cfg.errorRegistry && te.id && te.data) {
+        const te = e as { id?: unknown; data?: unknown };
+        if (cfg.errorRegistry && te.id && te.data) {
           const helper = cfg.errorRegistry.get(String(te.id));
           if (helper) helper.throw(te.data);
         }
@@ -163,8 +168,8 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
         }
         return await fetchClient.eventWithResult<P>(id, payload);
       } catch (e) {
-        const te = e as any;
-        if (te && cfg.errorRegistry && te.id && te.data) {
+        const te = e as { id?: unknown; data?: unknown };
+        if (cfg.errorRegistry && te.id && te.data) {
           const helper = cfg.errorRegistry.get(String(te.id));
           if (helper) helper.throw(te.data);
         }

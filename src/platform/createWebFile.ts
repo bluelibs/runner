@@ -2,7 +2,7 @@ import type { InputFileMeta, EjsonFileSentinel } from "../types/inputFile";
 
 /**
  * Browser/edge-friendly File sentinel creator.
- * Produces the same public EJSON File shape with a browser sidecar `_web`.
+ * Produces the public File sentinel shape with a browser sidecar `_web`.
  * The sidecar will be stripped out by the universal manifest walker before upload.
  */
 export function createWebFile(

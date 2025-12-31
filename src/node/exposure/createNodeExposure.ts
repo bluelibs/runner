@@ -2,7 +2,6 @@ import { createAuthenticator } from "./authenticator";
 import { createAllowListGuard } from "./allowList";
 import { createExposureServer } from "./exposureServer";
 import { createRequestHandlers } from "./requestHandlers";
-import type { Serializer } from "../../globals/resources/tunnel/serializer";
 import { resolveBasePath, createRouter } from "./router";
 import type {
   NodeExposureConfig,
@@ -17,7 +16,7 @@ export async function createNodeExposure(
   cfg: NodeExposureConfig | undefined,
   deps: NodeExposureDeps,
 ): Promise<NodeExposureHandlers> {
-  const { store, taskRunner, eventManager, logger } = deps;
+  const { store, taskRunner, eventManager, logger, serializer } = deps;
   const httpConfig = cfg?.http;
   const basePath = resolveBasePath(httpConfig?.basePath);
   const router = createRouter(basePath);
@@ -44,7 +43,7 @@ export async function createNodeExposure(
       allowList,
       router,
       cors: httpConfig?.cors,
-      serializer: (deps as any).serializer as Serializer,
+      serializer,
     });
 
   const serverControls = await createExposureServer({

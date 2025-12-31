@@ -863,7 +863,11 @@ describe("EventManager", () => {
         e.data = `${e.data}-l`;
       });
 
-      const out = await eventManager.emitWithResult(eventDefinition, "orig", "src");
+      const out = await eventManager.emitWithResult(
+        eventDefinition,
+        "orig",
+        "src",
+      );
       expect(out).toBe("orig-i-l");
     });
 
@@ -879,7 +883,11 @@ describe("EventManager", () => {
       const handler = jest.fn();
       eventManager.addListener(eventDefinition, handler);
 
-      const out = await eventManager.emitWithResult(eventDefinition, "orig", "src");
+      const out = await eventManager.emitWithResult(
+        eventDefinition,
+        "orig",
+        "src",
+      );
       expect(handler).not.toHaveBeenCalled();
       expect(out).toBe("deep");
     });

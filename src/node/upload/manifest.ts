@@ -25,7 +25,7 @@ export function buildNodeManifest<T = any>(input: T): BuiltManifest<T> {
 
   function visit(value: any): any {
     if (!value || typeof value !== "object") return value;
-    // Detect EJSON File sentinel with optional _node sidecar
+    // Detect File sentinel with optional _node sidecar
     if (
       (value as EjsonFileSentinel).$ejson === "File" &&
       typeof (value as any).id === "string"

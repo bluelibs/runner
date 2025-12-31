@@ -1,5 +1,5 @@
 import { createExposureFetch } from "../http-fetch-tunnel.resource";
-import { EJSON, getDefaultSerializer, type Serializer } from "../globals/resources/tunnel/serializer";
+import { getDefaultSerializer, type Serializer } from "../serializer";
 
 describe("http-fetch-tunnel.resource (unit)", () => {
   it("createExposureFetch: throws when baseUrl is empty or '/'", () => {
@@ -213,7 +213,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     expect(calls[0].url).toBe("http://api/task/t.id");
   });
 
-  it("createExposureFetch: defaults to GraphSerializer for requests and responses", async () => {
+  it("createExposureFetch: defaults to Serializer for requests and responses", async () => {
     const seen: Array<{ url: string; init: any }> = [];
     const requestDate = new Date("2024-03-01T02:03:04.005Z");
     const responseDate = new Date("2024-03-02T03:04:05.006Z");

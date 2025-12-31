@@ -57,7 +57,7 @@ Cheat sheet with quick lookups for common patterns and API usage.
 run() function, RunOptions, Task Interceptors, and error handling.
 
 ### 08-ADVANCED_PATTERNS.md
-Optional dependencies, Serialization (EJSON), and Tunnels for distributed systems.
+Optional dependencies, Serialization, and Tunnels for distributed systems.
 
 ### 09-ASYNC_CONTEXT.md
 Request-scoped and thread-local state management.

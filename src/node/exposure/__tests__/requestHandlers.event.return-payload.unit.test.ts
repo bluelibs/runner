@@ -1,7 +1,7 @@
 import { Readable } from "stream";
 import type { IncomingMessage, ServerResponse } from "http";
 import { createRequestHandlers } from "../requestHandlers";
-import { getDefaultSerializer } from "../../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../../serializer";
 
 function makeReq(
   serializer: ReturnType<typeof getDefaultSerializer>,
@@ -81,7 +81,9 @@ describe("requestHandlers - event returnPayload", () => {
     await handleEvent(req, res);
 
     const json = (res as any)._buf
-      ? (serializer.parse(((res as any)._buf as Buffer).toString("utf8")) as any)
+      ? (serializer.parse(
+          ((res as any)._buf as Buffer).toString("utf8"),
+        ) as any)
       : undefined;
     expect((res as any)._status).toBe(200);
     expect(json?.ok).toBe(true);
@@ -128,7 +130,9 @@ describe("requestHandlers - event returnPayload", () => {
     await handleEvent(req, res);
 
     const json = (res as any)._buf
-      ? (serializer.parse(((res as any)._buf as Buffer).toString("utf8")) as any)
+      ? (serializer.parse(
+          ((res as any)._buf as Buffer).toString("utf8"),
+        ) as any)
       : undefined;
     expect((res as any)._status).toBe(400);
     expect(json?.ok).toBe(false);
@@ -136,4 +140,3 @@ describe("requestHandlers - event returnPayload", () => {
     expect(emitWithResult).not.toHaveBeenCalled();
   });
 });
-

@@ -2,7 +2,7 @@ import { Readable } from "stream";
 import type { IncomingMessage, ServerResponse } from "http";
 import { createRequestHandlers } from "../requestHandlers";
 import { defineError } from "../../../definers/defineError";
-import { getDefaultSerializer } from "../../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../../serializer";
 
 function makeReq(eventId: string, body: any): IncomingMessage {
   const payload = Buffer.from(JSON.stringify({ payload: body }), "utf8");
@@ -96,5 +96,50 @@ describe("requestHandlers - event app error extras", () => {
     expect(json?.error?.code).toBe("INTERNAL_ERROR");
     expect(json?.error?.id).toBe("tests.errors.app.ev");
     expect(json?.error?.data).toEqual({ code: 9, message: "Ev" });
+  });
+
+  it("omits id when the matched error has a non-string name", async () => {
+    const helper = {
+      id: "tests.errors.non-string-name.ev",
+      is: (_e: unknown): _e is { name: number; data: unknown } => true,
+    };
+
+    const store: any = {
+      events: new Map([["e.app", { event: { id: "e.app" } }]]),
+      errors: new Map([[helper.id, helper]]),
+    };
+    const deps: any = {
+      store,
+      taskRunner: {} as any,
+      eventManager: {
+        emit: async () => {
+          throw { name: 123, data: { reason: "ev" } };
+        },
+      },
+      logger: { info: () => {}, warn: () => {}, error: () => {} },
+      authenticator: async () => ({ ok: true }),
+      allowList: { ensureTask: () => null, ensureEvent: () => null },
+      router: {
+        basePath: "/api",
+        extract: (_p: string) => ({ kind: "event", id: "e.app" }),
+        isUnderBase: () => true,
+      },
+      cors: undefined,
+      serializer: getDefaultSerializer(),
+    };
+
+    const { handleEvent } = createRequestHandlers(deps);
+    const req = makeReq("e.app", { x: 1 });
+    const res = makeRes();
+    await handleEvent(req, res);
+
+    const json = (res as any)._buf
+      ? deps.serializer.parse(((res as any)._buf as Buffer).toString("utf8"))
+      : undefined;
+
+    expect((res as any)._status).toBe(500);
+    expect(json?.ok).toBe(false);
+    expect(json?.error?.id).toBeUndefined();
+    expect(json?.error?.data).toEqual({ reason: "ev" });
   });
 });

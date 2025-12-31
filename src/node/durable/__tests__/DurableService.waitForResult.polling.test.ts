@@ -2,6 +2,49 @@ import { DurableExecutionError, DurableService } from "../core/DurableService";
 import { MemoryStore } from "../store/MemoryStore";
 
 describe("durable: DurableService waitForResult (polling)", () => {
+  it("rejects when execution enters compensation_failed", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, polling: { interval: 1 } });
+
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: "compensation_failed",
+      error: { message: "rollback blew up" },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(service.wait("e1", { timeout: 5_000 })).rejects.toMatchObject({
+      message: "rollback blew up",
+      executionId: "e1",
+      taskId: "t",
+    });
+  });
+
+  it("uses a default message when compensation_failed has no error", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({ store, polling: { interval: 1 } });
+
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: "compensation_failed",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await expect(service.wait("e1", { timeout: 5_000 })).rejects.toMatchObject({
+      message: "Compensation failed",
+    });
+  });
+
   it("includes execution metadata when timing out", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, polling: { interval: 1 } });

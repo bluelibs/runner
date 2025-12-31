@@ -1,6 +1,7 @@
 import { event } from "../../..";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { DurableContext } from "../core/DurableContext";
+import { createDurableSignalId, createDurableStepId } from "../core/ids";
 import { SuspensionSignal } from "../core/interfaces/context";
 import { MemoryStore } from "../store/MemoryStore";
 
@@ -198,20 +199,87 @@ describe("durable: DurableContext", () => {
     expect(actions).toEqual(["down-cached"]);
   });
 
+  it("supports strongly-typed step ids", async () => {
+    const store = new MemoryStore();
+    const bus = new MemoryEventBus();
+    const ctx = new DurableContext(store, bus, "e1", 1);
+
+    const Create = createDurableStepId<string>("steps.create");
+
+    let runs = 0;
+    const v1 = await ctx.step(Create, async () => {
+      runs += 1;
+      return "ok";
+    });
+    const v2 = await ctx.step(Create, async () => {
+      runs += 1;
+      return "nope";
+    });
+
+    expect(v1).toBe("ok");
+    expect(v2).toBe("ok");
+    expect(runs).toBe(1);
+  });
+
   it("emits events using string and object ids", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
     const ctx = new DurableContext(store, bus, "e1", 1);
+
+    const received: Array<{ type: string; payload: unknown }> = [];
+    await bus.subscribe("durable:events", async (evt) => {
+      received.push({ type: evt.type, payload: evt.payload });
+    });
+
+    await ctx.emit("event.1", { a: 1 });
+    await ctx.emit("event.1", { a: 2 });
+    await ctx.emit({ id: "event.2" }, { b: 2 });
+    await ctx.emit(createDurableSignalId<{ c: number }>("event.3"), { c: 3 });
+
+    expect(received).toEqual([
+      { type: "event.1", payload: { a: 1 } },
+      { type: "event.1", payload: { a: 2 } },
+      { type: "event.2", payload: { b: 2 } },
+      { type: "event.3", payload: { c: 3 } },
+    ]);
+  });
+
+  it("migrates legacy emit step ids on first emit", async () => {
+    const store = new MemoryStore();
+    const bus = new MemoryEventBus();
+    const ctx = new DurableContext(store, bus, "e1", 1);
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: "emit:event.legacy:e1",
+      result: { migrated: true },
+      completedAt: new Date(),
+    });
 
     const received: string[] = [];
     await bus.subscribe("durable:events", async (evt) => {
       received.push(evt.type);
     });
 
-    await ctx.emit("event.1", { a: 1 });
-    await ctx.emit({ id: "event.2" }, { b: 2 });
+    await ctx.emit("event.legacy", { a: 1 });
 
-    expect(received).toEqual(["event.1", "event.2"]);
+    expect(received).toEqual([]);
+    expect(
+      (await store.getStepResult("e1", "__emit:event.legacy:0"))?.result,
+    ).toEqual({ migrated: true });
+  });
+
+  it("prevents user steps from using internal reserved step ids", async () => {
+    const store = new MemoryStore();
+    const bus = new MemoryEventBus();
+    const ctx = new DurableContext(store, bus, "e1", 1);
+
+    expect(() => ctx.step("__sleep:0", async () => "x")).toThrow(
+      "reserved for durable internals",
+    );
+    expect(() => ctx.step("rollback:s1", async () => "x")).toThrow(
+      "reserved for durable internals",
+    );
   });
 
   it("waits for a signal by persisting 'waiting' state and suspending", async () => {
@@ -259,6 +327,14 @@ describe("durable: DurableContext", () => {
     const paid = await ctx.waitForSignal(Paid);
     expect(paid.paidAt).toBe(1);
 
+    await expect(ctx.waitForSignal(Paid)).rejects.toBeInstanceOf(
+      SuspensionSignal,
+    );
+    expect(
+      (await store.getStepResult("e1", "__signal:durable.tests.paid:1"))
+        ?.result,
+    ).toEqual({ state: "waiting" });
+
     await store.saveStepResult({
       executionId: "e1",
       stepId: "__signal:raw",
@@ -267,6 +343,24 @@ describe("durable: DurableContext", () => {
     });
 
     await expect(ctx.waitForSignal<string>("raw")).resolves.toBe("hello");
+  });
+
+  it("supports waitForSignal() using typed signal ids", async () => {
+    const store = new MemoryStore();
+    const bus = new MemoryEventBus();
+    const ctx = new DurableContext(store, bus, "e1", 1);
+
+    const PaidSignal = createDurableSignalId<{ paidAt: number }>(Paid.id);
+
+    await store.saveStepResult({
+      executionId: "e1",
+      stepId: `__signal:${Paid.id}`,
+      result: { state: "completed", payload: { paidAt: 123 } },
+      completedAt: new Date(),
+    });
+
+    const paid = await ctx.waitForSignal(PaidSignal);
+    expect(paid.paidAt).toBe(123);
   });
 
   it("supports signal timeout waits (and handles replay + timed_out)", async () => {

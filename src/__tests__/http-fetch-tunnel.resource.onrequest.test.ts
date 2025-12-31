@@ -1,5 +1,5 @@
 import { createExposureFetch } from "../http-fetch-tunnel.resource";
-import { EJSON, getDefaultSerializer } from "../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../serializer";
 
 describe("http-fetch-tunnel.resource onRequest hook", () => {
   it("invokes onRequest with url and headers", async () => {

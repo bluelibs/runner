@@ -1,5 +1,5 @@
 import { createExposureFetch } from "../../http-fetch-tunnel.resource";
-import { getDefaultSerializer } from "../../globals/resources/tunnel/serializer";
+import { getDefaultSerializer } from "../../serializer";
 
 describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
   const serializer = getDefaultSerializer();
@@ -97,7 +97,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
     expect(() =>
       createExposureFetch({
         baseUrl: "" as any,
-        fetchImpl: (async () => ({ text: async () => "{}" } as any)) as any,
+        fetchImpl: (async () => ({ text: async () => "{}" }) as any) as any,
         serializer,
       }),
     ).toThrow(/requires baseUrl/i);
