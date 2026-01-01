@@ -1,41 +1,102 @@
-import express, { Router } from 'express';
-import path from 'path';
-import fs from 'fs';
-import { IDurableService } from '../core/interfaces/service';
-import { DurableOperator } from '../core/DurableOperator';
-import type { ExecutionStatus } from '../core/types';
+import type { Request, Response, Router } from "express";
+import express = require("express");
+import * as path from "node:path";
+import * as fs from "node:fs";
+import { IDurableService } from "../core/interfaces/service";
+import { DurableOperator } from "../core/DurableOperator";
+import type { ExecutionStatus } from "../core/types";
+
+function findUp(startDir: string, filename: string): string | null {
+  let current = startDir;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const candidate = path.join(current, filename);
+    if (fs.existsSync(candidate)) return current;
+    const parent = path.dirname(current);
+    if (parent === current) return null;
+    current = parent;
+  }
+}
+
+function injectBaseHrefIntoHtml(html: string, baseHref: string): string {
+  const normalizedBaseHref = baseHref.endsWith("/") ? baseHref : `${baseHref}/`;
+  const safeBaseTag = `<base href="${normalizedBaseHref}">`;
+
+  if (/<base\s/i.test(html)) {
+    return html.replace(/<base[^>]*>/i, safeBaseTag);
+  }
+
+  const headOpenTag = html.match(/<head[^>]*>/i)?.[0];
+  if (!headOpenTag) return `${safeBaseTag}\n${html}`;
+
+  return html.replace(headOpenTag, `${headOpenTag}\n    ${safeBaseTag}`);
+}
+
+function resolveDashboardUiDistPath(): string | null {
+  const packageRoot = findUp(__dirname, "package.json");
+  if (!packageRoot) return null;
+
+  const candidates = [
+    // Primary (published package / root build): dist/ui
+    path.join(packageRoot, "dist", "ui"),
+    // Fallback (building inside the dashboard folder): src/node/durable/dashboard/dist
+    path.join(packageRoot, "src", "node", "durable", "dashboard", "dist"),
+  ];
+
+  return candidates.find((candidate) => fs.existsSync(candidate)) ?? null;
+}
+
+export type DashboardMiddlewareOptions = {
+  /**
+   * Override where the dashboard UI is served from.
+   * Useful for tests or custom deployments.
+   */
+  uiDistPath?: string;
+};
 
 export function createDashboardMiddleware(
-  service: IDurableService,
-  operator: DurableOperator
+  _service: IDurableService,
+  operator: DurableOperator,
+  options: DashboardMiddlewareOptions = {},
 ): Router {
-  const router = Router();
-  const api = Router();
+  const router = express.Router();
+  const api = express.Router();
 
-  // API: List Executions with filtering
-  api.get('/executions', async (req, res) => {
+  api.get("/executions", async (req, res) => {
     try {
-      // Parse query params
       const statusParam = req.query.status as string | undefined;
-      const status = statusParam ? statusParam.split(',') as ExecutionStatus[] : undefined;
+      const status = statusParam
+        ? (statusParam.split(",") as ExecutionStatus[])
+        : undefined;
+
       const taskId = req.query.taskId as string | undefined;
-      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 50;
-      const offset = req.query.offset ? parseInt(req.query.offset as string, 10) : 0;
-      
-      const executions = await operator.listExecutions({ status, taskId, limit, offset });
-      
+      const limit = req.query.limit
+        ? parseInt(req.query.limit as string, 10)
+        : 50;
+      const offset = req.query.offset
+        ? parseInt(req.query.offset as string, 10)
+        : 0;
+
+      const executions = await operator.listExecutions({
+        status,
+        taskId,
+        limit,
+        offset,
+      });
+
       res.json(executions);
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  // API: Get Execution Detail with steps
-  api.get('/executions/:id', async (req, res) => {
+  api.get("/executions/:id", async (req, res) => {
     try {
-      const { execution, steps, audit } = await operator.getExecutionDetail(req.params.id);
+      const { execution, steps, audit } = await operator.getExecutionDetail(
+        req.params.id,
+      );
       if (!execution) {
-        return res.status(404).json({ error: 'Execution not found' });
+        return res.status(404).json({ error: "Execution not found" });
       }
 
       res.json({ ...execution, steps, audit });
@@ -44,62 +105,89 @@ export function createDashboardMiddleware(
     }
   });
 
-  // API: Operator Actions
-  api.post('/operator/:action', async (req, res) => {
+  api.post("/operator/:action", async (req, res) => {
     const { action } = req.params;
     const { executionId, stepId, reason, state } = req.body;
 
     try {
       switch (action) {
-        case 'retryRollback':
+        case "retryRollback":
           await operator.retryRollback(executionId);
           break;
-        case 'skipStep':
+        case "skipStep":
           await operator.skipStep(executionId, stepId);
           break;
-        case 'forceFail':
-          await operator.forceFail(executionId, reason || 'Operator forced fail');
+        case "forceFail":
+          await operator.forceFail(executionId, reason || "Operator forced fail");
           break;
-        case 'editState':
+        case "editState":
           await operator.editState(executionId, stepId, state);
           break;
         default:
-          return res.status(400).json({ error: 'Unknown action' });
+          return res.status(400).json({ error: "Unknown action" });
       }
-      
-      // If we performed an action that might unblock the workflow,
-      // we should nudge the service to pick it up.
-      // retryRollback sets status to pending -> Poller or Queue will pick it up.
-      
+
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
 
-  router.use('/api', express.json(), api);
+  router.use("/api", express.json(), api);
 
-  // Serve Static Assets directly from the package's dist/ui folder
-  // logic: find where this file is, go up to package root, find dist/ui
-  // When running in TS source (dev), we might not have dist/ui.
-  // We assume the user builds the dashboard before running this in prod.
-  
-  const uiDistPath = path.resolve(__dirname, '../../../../dist/ui');
-  
-  if (fs.existsSync(uiDistPath)) {
-      router.use(express.static(uiDistPath));
-      router.get('*', (req, res) => {
-          res.sendFile(path.join(uiDistPath, 'index.html'));
-      });
-  } else {
-      router.get('/', (req, res) => {
-          res.send(`
-            <h1>Durable Dashboard</h1>
-            <p>UI Artifacts not found at ${uiDistPath}</p>
-            <p>Please run <code>npm run build:dashboard</code> in the package.</p>
-          `);
-      });
+  const uiDistPath = options.uiDistPath ?? resolveDashboardUiDistPath();
+  if (!uiDistPath) {
+    const notFound = (_req: Request, res: Response) => {
+      res
+        .status(404)
+        .send(
+          [
+            "<h1>Durable Dashboard</h1>",
+            "<p>UI build artifacts were not found.</p>",
+            "<p>Run <code>npm run build:dashboard</code> in the package root.</p>",
+          ].join("\n"),
+        );
+    };
+    router.get("/", notFound);
+    router.get("/*splat", notFound);
+    return router;
   }
+
+  const indexHtmlPath = path.join(uiDistPath, "index.html");
+  if (!fs.existsSync(indexHtmlPath)) {
+    const notFound = (_req: Request, res: Response) => {
+      res
+        .status(404)
+        .send(
+          [
+            "<h1>Durable Dashboard</h1>",
+            `<p>index.html not found at <code>${indexHtmlPath}</code></p>`,
+            "<p>Run <code>npm run build:dashboard</code> in the package root.</p>",
+          ].join("\n"),
+        );
+    };
+    router.get("/", notFound);
+    router.get("/*splat", notFound);
+    return router;
+  }
+
+  const indexHtmlTemplate = fs.readFileSync(indexHtmlPath, "utf-8");
+
+  router.use(
+    express.static(uiDistPath, {
+      index: false,
+    }),
+  );
+
+  const serveIndex = (req: Request, res: Response) => {
+    const baseHref = `${req.baseUrl || ""}/`;
+    res
+      .status(200)
+      .type("html")
+      .send(injectBaseHrefIntoHtml(indexHtmlTemplate, baseHref));
+  };
+  router.get("/", serveIndex);
+  router.get("/*splat", serveIndex);
 
   return router;
 }

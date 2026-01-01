@@ -103,7 +103,7 @@ export function ExecutionDetail() {
         case 'step_completed':
           timelineSteps.push({
             id: entry.id,
-            name: entry.stepId,
+            name: entry.stepId as string,
             status: 'completed',
             duration: entry.durationMs != null ? `${entry.durationMs}ms` : at,
           });

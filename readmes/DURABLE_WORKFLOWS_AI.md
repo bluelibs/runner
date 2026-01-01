@@ -163,3 +163,19 @@ const mirrorAudit = r
   })
   .build();
 ```
+
+## Dashboard UI
+
+There is a small Express middleware to inspect executions and run operator actions (retry rollback, skip step, force fail, patch step result):
+
+```ts
+import express from "express";
+import { createDashboardMiddleware, DurableOperator } from "@bluelibs/runner/node";
+
+app.use(
+  "/durable-dashboard",
+  createDashboardMiddleware(service, new DurableOperator(store)),
+);
+```
+
+From this repo (source), build the UI once via `npm run build:dashboard` (generates `dist/ui/`).

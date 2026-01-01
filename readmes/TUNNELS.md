@@ -6,6 +6,7 @@ Make tasks and events callable across processes – from a CLI, another service,
 
 1. Why tunnels
 2. Architecture at a glance
+2.1 Architecture deep dive
 3. Quick start (3 minutes)
 4. Choose your client
    - Unified client (browser + node)
@@ -21,12 +22,13 @@ Make tasks and events callable across processes – from a CLI, another service,
 8. CORS
 9. Server allow‑lists
 10. Examples you can run
-11. Troubleshooting
-12. Reference checklist
-13. Compression (gzip/br)
-14. Phantom Tasks (fluent builder)
-15. Typed Errors Over Tunnels
-16. Async Context Propagation
+11. Testing strategy
+12. Troubleshooting
+13. Reference checklist
+14. Compression (gzip/br)
+15. Phantom Tasks (fluent builder)
+16. Typed Errors Over Tunnels
+17. Async Context Propagation
 
 ---
 
@@ -40,6 +42,28 @@ As your app grows, other processes need to call your tasks: workers, CLIs, brows
 - Client: one of the HTTP clients calls those endpoints (fetch, unified, or Node smart/mixed for streaming).
 - Optional server allow‑lists: restrict which ids are reachable.
 - Exclusivity: each task can be owned by at most one tunnel client. If two tunnel resources select the same task, Runner throws during init to prevent ambiguous routing.
+
+### 2.1 Architecture deep dive
+
+The tunnel pipeline is split into three layers with clear responsibilities. This keeps transport concerns isolated from your task/event code and makes the system testable end-to-end.
+
+1) Runner middleware and ownership
+- Tunnel resources are tagged with `globals.tags.tunnel`.
+- The resource middleware resolves the tunnel's task/event selectors (ids, defs, or predicates) and patches the matched definitions to delegate to the tunnel runner.
+- Tasks are marked with an internal "owned by tunnel" symbol; a second tunnel selecting the same task throws immediately during init (exclusivity).
+- Tunnel policy tags (`globals.tags.tunnelPolicy`) can whitelist which middlewares run on caller vs executor for a tunneled task.
+
+2) Protocol envelope and routing
+- HTTP clients send a `ProtocolEnvelope` `{ input }` or `{ payload, returnPayload }`.
+- The exposure server validates auth, checks allow-lists (if any), and routes to the registered task/event.
+- For events, optional `returnPayload` enables eventWithResult when supported by the server.
+- Typed errors can flow across the tunnel if the client provides an `errorRegistry`.
+
+3) Serialization and file/stream handling
+- Standard DTOs go through the serializer (global serializer resource is the source of truth).
+- File uploads use a `$ejson: "File"` sentinel that triggers multipart handling; files are not serializer types.
+- Raw duplex streaming uses `application/octet-stream` with `useExposureContext()` on the server.
+- Async contexts propagate via `x-runner-context` and are hydrated server-side for the duration of the call.
 
 ## 3) Quick start (3 minutes)
 
@@ -243,7 +267,12 @@ Lowest‑level HTTP client: portable, tiny surface, JSON only.
 
 ```ts
 import { globals } from "@bluelibs/runner";
-const client = globals.tunnels.http.createClient({ url: "/__runner" });
+import { getDefaultSerializer } from "@bluelibs/runner";
+
+const client = globals.tunnels.http.createClient({
+  url: "/__runner",
+  serializer: getDefaultSerializer(),
+});
 await client.task("app.tasks.add", { a: 1, b: 2 });
 await client.event("app.events.notify", { message: "hi" });
 ```
@@ -262,7 +291,7 @@ import { r, globals } from "@bluelibs/runner";
 import { createHttpClient } from "@bluelibs/runner";
 import {
   createHttpSmartClient,
-  createMixedHttpClient,
+  createHttpMixedClient,
 } from "@bluelibs/runner/node";
 
 // 1) Register custom types using the global serializer resource
@@ -290,7 +319,10 @@ const serializerSetup = r
 // 2) Pass the serializer into any HTTP clients you create
 const clientUnified = createHttpClient({ baseUrl: "/__runner", serializer });
 const clientSmart = createHttpSmartClient({ baseUrl: "/__runner", serializer });
-const clientMixed = createMixedHttpClient({ baseUrl: "/__runner", serializer });
+const clientMixed = createHttpMixedClient({
+  baseUrl: "/__runner",
+  serializer,
+});
 const clientFetch = globals.tunnels.http.createClient({
   url: "/__runner",
   serializer,
@@ -729,14 +761,37 @@ const { bytesWritten } = await writeInputFileToPath(file, "/tmp/upload.bin");
 
 Note: In browsers, read with the File/Blob APIs at the edge of your app (e.g., `await blob.arrayBuffer()` before sending). Server‑side `InputFile` utilities above are for Node runtimes.
 
-## 11) Troubleshooting
+## 11) Testing strategy
+
+Aim for layered coverage so failures are easy to localize:
+
+1) Unit tests for protocol and client behavior
+- Validate envelope shapes and error parsing (for example, `eventWithResult` return payload handling).
+- Mock fetch for the unified/pure clients to assert headers, payloads, and error paths.
+- For Node smart/mixed clients, test stream detection and the JSON vs multipart path selection.
+
+2) Integration tests for exposure + clients
+- Run a minimal root with a task, a tunnel resource, and `nodeExposure`.
+- Assert allow-list enforcement when server-mode tunnels exist.
+- Exercise typed errors over tunnels by registering an error and rethrowing on the client.
+- Include at least one streaming/duplex test when adding stream behaviors.
+
+3) Regression tests for ownership and policies
+- Confirm tunnel exclusivity at init time when two tunnels select the same task.
+- Validate `globals.tags.tunnelPolicy` whitelist behavior for caller/executor middleware paths.
+
+Local commands:
+- Full suite: `npm run coverage:ai`
+- Focused runs: `npm run test -- tunnel` or `npm run test -- exposure`
+
+## 12) Troubleshooting
 
 - 401: Verify the client supplies the same token/header as the exposure.
 - 404: Ensure the id is registered and (when server tunnels exist) appears in the allow list.
 - Multipart errors: Check `__manifest` and file parts (`file:{id}`) match.
 - Shared servers: Always dispose handlers when tearing down tests/staging.
 
-## 12) Reference Checklist
+## 13) Reference Checklist
 
 - [ ] Expose via `nodeExposure` (attach or listen)
 - [ ] Choose a client: `createHttpClient` (unified), Node: `createMixedHttpClient` / `createHttpSmartClient`, or pure fetch: `globals.tunnels.http.createClient` / `createExposureFetch`
@@ -746,7 +801,7 @@ Note: In browsers, read with the File/Blob APIs at the edge of your app (e.g., `
 - [ ] CORS: set `http.cors` when calling from browsers/cross‑origin clients
 - [ ] Abort: handle `useExposureContext()` (signal, req, res) in tasks; configure `timeoutMs` in clients
 
-## 13) Compression (gzip/br)
+## 14) Compression (gzip/br)
 
 It is possible to introduce compression for both responses and requests, but it requires coordination between the Node exposure (server) and the Node Smart client. Browsers and most fetch implementations already auto‑decompress responses; request compression needs explicit support.
 
@@ -781,7 +836,7 @@ It is possible to introduce compression for both responses and requests, but it 
   - Fastest win: reverse proxy response compression (no code changes, immediate benefit to browsers and fetch clients).
   - Full stack: exposure negotiates/compresses responses and decompresses requests; Smart client advertises `Accept-Encoding`, decompresses responses, and can optionally compress requests.
 
-## 14) Phantom Tasks (fluent builder)
+## 15) Phantom Tasks (fluent builder)
 
 Phantom tasks are typed placeholders that you intend to execute through a tunnel. They don’t implement `.run()`; instead, when a matching tunnel client is registered, the tunnel middleware routes calls to the remote Runner. If no tunnel matches, calling a phantom task returns `undefined` — a safe signal that routing is not configured.
 
@@ -837,7 +892,7 @@ Notes:
 - You can combine phantom tasks with server allow‑lists (see section 9) to control what’s reachable when you host an exposure.
 - Single-owner rule: phantom or regular tasks routed through tunnels still follow exclusivity. The first tunnel that selects a task becomes its owner; subsequent tunnels attempting to select the same task cause init to fail with a clear error message.
 
-## 15) Typed Errors Over Tunnels
+## 16) Typed Errors Over Tunnels
 
 You can surface your application errors end‑to‑end with type safety. Server tasks/events throw typed errors; clients can rethrow them as the exact same type — not just a generic `TunnelError`.
 
@@ -884,7 +939,7 @@ Notes:
 - Without `errorRegistry`, clients keep throwing `TunnelError` with `code/message` — no breaking changes.
 - Server status codes remain the same (e.g., `500 INTERNAL_ERROR`); `id`/`data` in the envelope are for richer client handling.
 
-## 16) Async Context Propagation
+## 17) Async Context Propagation
 
 Send request‑scoped context from client to server automatically — useful for tracing, request ids, and other non‑sensitive metadata.
 

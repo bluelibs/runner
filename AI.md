@@ -41,6 +41,7 @@ Durable workflows are a **Node-only** module exported from `@bluelibs/runner/nod
 - Type-safety helpers: `createDurableStepId<T>()`, `createDurableSignalId<TPayload>()`, and `durable.executeStrict(...)`
 - Polling: used for timers (`sleep`, signal timeouts, schedules); can be disabled per-process via `polling: { enabled: false }`
 - Observability: optional audit trail via `audit: { enabled: true }` + `ctx.note(...)` + `store.listAuditEntries(executionId)`; for mirroring/streaming, enable `audit: { enabled: true, emitRunnerEvents: true }` and listen to `durableEvents.*`
+- Dashboard UI: `createDashboardMiddleware(service, new DurableOperator(store))` exposes `/api/*` + a bundled UI for inspecting executions (from source: build via `npm run build:dashboard`)
 
 ### Runner Integration Patterns (Real-World)
 
@@ -369,13 +370,15 @@ const httpExposure = nodeExposure.with({
 const tunnelClient = r
   .resource("app.tunnels.http")
   .tags([globals.tags.tunnel])
-  .init(async () => ({
+  .dependencies({ serializer: globals.resources.serializer })
+  .init(async (_config, { serializer }) => ({
     mode: "client" as const,
     transport: "http" as const,
     tasks: (task) => task.id.startsWith("remote.tasks."),
     client: globals.tunnels.http.createClient({
       url: process.env.REMOTE_URL ?? "http://127.0.0.1:7070/__runner",
       auth: { token: process.env.RUNNER_TOKEN },
+      serializer,
     }),
   }))
   .build();
@@ -453,6 +456,7 @@ await client.task("app.tasks.upload", { file });
 - For Node-specific features such as `useExposureContext` for handling aborts and streaming in exposed tasks, see TUNNELS.md.
 - Register authentication middleware or rate limiting on the exposure via middleware tags and filters.
 - Single-owner policy: a task may be tunneled by exactly one tunnel resource. Runner enforces exclusivity at init time and throws if two tunnels select the same task. This is tracked via an internal symbol on the task linking it to the owning tunnel.
+- Architecture/testing deep dive: see `readmes/TUNNELS.md` sections 2.1 and 11.
 
 ## Serialization
 

@@ -33,7 +33,7 @@ npm install
 # Start dev server (proxies API to localhost:3000)
 npm run dev
 
-# Build for production
+# Build UI assets (outputs to the package root at dist/ui)
 npm run build
 ```
 
@@ -47,14 +47,14 @@ import {
   createDashboardMiddleware, 
   DurableOperator,
   initDurableService 
-} from '@bluelibs/runner/node/durable';
+} from '@bluelibs/runner/node';
 
 const app = express();
 const service = await initDurableService({ store, eventBus });
 const operator = new DurableOperator(store);
 
-// Mount at /durable
-app.use('/durable', createDashboardMiddleware(service, operator));
+// Mount at /durable-dashboard (or any other prefix)
+app.use('/durable-dashboard', createDashboardMiddleware(service, operator));
 
 app.listen(3000);
 ```
@@ -65,7 +65,7 @@ The dashboard communicates with these backend endpoints:
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/executions` | GET | List all incomplete executions |
+| `/api/executions` | GET | List executions (supports filters/pagination) |
 | `/api/executions/:id` | GET | Get execution details |
 | `/api/operator/retryRollback` | POST | Retry a failed rollback |
 | `/api/operator/skipStep` | POST | Skip a stuck step |
@@ -117,4 +117,4 @@ src/node/durable/dashboard/
 npm run build
 ```
 
-This creates static assets in `dist/` that can be served by the Express middleware.
+This creates static assets in `dist/ui/` (at the package root) that are served by the Express middleware.

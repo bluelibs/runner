@@ -78,6 +78,7 @@
   },
   "scripts": {
     "build": "tsup --config tsup.config.ts --sourcemap",
+    "build:dashboard": "node ./scripts/build-dashboard.mjs",
     "clean": "rm -rf dist",
     "watch": "tsup --config tsup.config.ts --watch",
     "test": "node ./scripts/run-jest-watchdog.mjs -- --maxWorkers=50% --verbose=false",
@@ -93,7 +94,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "prepublishOnly": "npm run clean && npm run build",
+    "prepublishOnly": "npm run clean && npm run build && npm run build:dashboard",
     "typedoc": "typedoc --options typedoc.json",
     "benchmark": "jest --config jest.bench.config.js --verbose --runInBand",
     "benchmark:json": "BENCHMARK_OUTPUT=./benchmark-results.json NODE_OPTIONS=--expose-gc npm run benchmark",

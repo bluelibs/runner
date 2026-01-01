@@ -1400,6 +1400,11 @@ The recovery process:
 
 A basic dashboard middleware is provided to inspect executions, view step results, and perform administrative actions (like retrying failed steps or skipping steps).
 
+The dashboard UI is **pre-built and included** in the published npm package — no build step required.
+
+> [!NOTE]
+> **Working from source?** If you've cloned this repo and are developing locally, run `npm run build:dashboard` once to build the UI assets into `dist/ui/`.
+
 ```typescript
 import { createDashboardMiddleware, DurableOperator } from '@bluelibs/runner/node';
 
@@ -1410,6 +1415,47 @@ const operator = new DurableOperator(store);
 const d = runtime.getResourceValue(durable);
 app.use('/durable-dashboard', createDashboardMiddleware(d.service, operator));
 ```
+
+### What is the store?
+
+The **durable store** (`IDurableStore`) is the persistence layer for durable workflows. It is responsible for saving and loading:
+
+- executions (id, task id, input, status, attempt/error, timestamps)
+- step results (memoized outputs for `ctx.step(...)`)
+- timers and schedules (for `sleep`, signal timeouts, cron/interval scheduling)
+- optional audit entries (timeline), and optional operator actions (manual interventions)
+
+You provide a store implementation when you create the durable resource/service:
+
+- `MemoryStore` — in-memory, great for local dev/tests (state is lost on restart)
+- `RedisStore` — Redis-backed, appropriate for production durability
+
+### What is `DurableOperator`?
+
+`DurableOperator` is an **operations/admin helper** around the store. It does not execute workflows; it reads/writes durable state to support dashboards and manual interventions:
+
+- query executions for listing (filters/pagination)
+- load execution details (execution + step results + audit)
+- operator actions: retry rollback, skip steps, force fail, patch a step result
+
+The dashboard middleware uses `DurableOperator` to power its `/api/*` endpoints.
+
+### End-to-End: run the dashboard locally (Express)
+
+1) Mount the dashboard middleware (you can mount under any prefix):
+
+```ts
+import express from "express";
+import { DurableOperator, createDashboardMiddleware } from "@bluelibs/runner/node";
+
+const app = express();
+app.use("/durable-dashboard", createDashboardMiddleware(d.service, new DurableOperator(store)));
+app.listen(3000);
+```
+
+2) Start a few executions (so you have something to look at), then open:
+
+- `http://localhost:3000/durable-dashboard`
 
 ### Audit trail (timeline)
 
