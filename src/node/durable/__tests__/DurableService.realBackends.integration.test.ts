@@ -2,7 +2,7 @@ import { r, run } from "../../..";
 import { RabbitMQQueue } from "../queue/RabbitMQQueue";
 import { RedisEventBus } from "../bus/RedisEventBus";
 import { RedisStore } from "../store/RedisStore";
-import { createDurableResource } from "../core/resource";
+import { durableResource } from "../core/resource";
 
 const redisUrl = process.env.DURABLE_TEST_REDIS_URL ?? "redis://localhost:6379";
 const rabbitUrl = process.env.DURABLE_TEST_RABBIT_URL ?? "amqp://localhost";
@@ -25,7 +25,8 @@ const shouldRun = process.env.DURABLE_INTEGRATION === "1";
       },
     });
 
-    const durable = createDurableResource("durable.integration.durable", {
+    const durable = durableResource.fork("durable.integration.durable");
+    const durableRegistration = durable.with({
       store,
       queue,
       eventBus: bus,
@@ -45,7 +46,7 @@ const shouldRun = process.env.DURABLE_INTEGRATION === "1";
       })
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);

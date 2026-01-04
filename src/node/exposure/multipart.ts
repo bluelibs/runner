@@ -4,16 +4,23 @@ import * as Busboy from "busboy";
 import type { FileInfo, FieldInfo } from "busboy";
 
 // Handle both ESM and CJS interop
-const busboyFactory: (cfg: { headers: IncomingHttpHeaders }) => unknown =
-  (() => {
-    const mod = Busboy as unknown as { default?: unknown };
-    if (typeof mod.default === "function") {
-      return mod.default as (cfg: { headers: IncomingHttpHeaders }) => unknown;
-    }
-    return Busboy as unknown as (cfg: {
+// Handle both ESM and CJS interop
+const busboyFactory: (cfg: {
+  headers: IncomingHttpHeaders;
+  limits?: MultipartLimits;
+}) => unknown = (() => {
+  const mod = Busboy as unknown as { default?: unknown };
+  if (typeof mod.default === "function") {
+    return mod.default as (cfg: {
       headers: IncomingHttpHeaders;
+      limits?: MultipartLimits;
     }) => unknown;
-  })();
+  }
+  return Busboy as unknown as (cfg: {
+    headers: IncomingHttpHeaders;
+    limits?: MultipartLimits;
+  }) => unknown;
+})();
 
 import type { SerializerLike } from "../../serializer";
 // Import with explicit .ts extension to prevent tsup from resolving it
@@ -58,10 +65,28 @@ export interface MultipartRequest extends NodeJS.ReadableStream {
   method?: string;
 }
 
+export interface MultipartLimits {
+  fieldNameSize?: number;
+  fieldSize?: number;
+  fields?: number;
+  fileSize?: number;
+  files?: number;
+  parts?: number;
+  headerPairs?: number;
+}
+
+const DEFAULT_LIMITS: MultipartLimits = {
+  fileSize: 20 * 1024 * 1024, // 20MB
+  files: 10,
+  fields: 100,
+  fieldSize: 1 * 1024 * 1024, // 1MB
+};
+
 export async function parseMultipartInput(
   req: MultipartRequest,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
   serializer: SerializerLike,
+  limits: MultipartLimits = DEFAULT_LIMITS,
 ): Promise<MultipartResult> {
   const files = new Map<string, FileEntry>();
   let manifestRaw = "";
@@ -151,8 +176,11 @@ export async function parseMultipartInput(
     }
   };
 
+  const payloadTooLarge = (msg: string) =>
+    jsonErrorResponse(413, msg, "PAYLOAD_TOO_LARGE");
+
   try {
-    busboyInst = busboyFactory({ headers: req.headers });
+    busboyInst = busboyFactory({ headers: req.headers, limits });
   } catch {
     fail(
       jsonErrorResponse(400, "Invalid multipart payload", "INVALID_MULTIPART"),
@@ -160,7 +188,11 @@ export async function parseMultipartInput(
     return await readyPromise;
   }
 
-  busboyInst.on("field", (name: string, value: unknown, _info: FieldInfo) => {
+  busboyInst.on("field", (name: string, value: unknown, info: FieldInfo) => {
+    if (info.nameTruncated || info.valueTruncated) {
+      fail(payloadTooLarge("Field limit exceeded"));
+      return;
+    }
     if (name !== "__manifest") return;
     manifestSeen = true;
     try {
@@ -168,7 +200,7 @@ export async function parseMultipartInput(
       const text = typeof value === "string" ? value : String(value);
       manifestRaw += text;
       const manifest = manifestRaw
-        ? (serializer as Serializer).parse<{ input?: unknown }>(manifestRaw)
+        ? serializer.parse<{ input?: unknown }>(manifestRaw)
         : undefined;
       if (!manifest || typeof manifest !== "object") {
         fail(jsonErrorResponse(400, "Missing manifest", "MISSING_MANIFEST"));
@@ -212,11 +244,26 @@ export async function parseMultipartInput(
         "file",
       );
       entry.connected = true;
+
+      // Busboy emits 'limit' event on the file stream if fileSize limit is reached
+      stream.on("limit", () => {
+        fail(payloadTooLarge("File size limit exceeded"));
+      });
       stream.on("error", () => {
         fail(jsonErrorResponse(500, "Multipart stream error", "STREAM_ERROR"));
       });
       stream.pipe(entry.stream);
     },
+  );
+
+  busboyInst.on("fieldsLimit", () =>
+    fail(payloadTooLarge("Fields limit exceeded")),
+  );
+  busboyInst.on("filesLimit", () =>
+    fail(payloadTooLarge("Files limit exceeded")),
+  );
+  busboyInst.on("partsLimit", () =>
+    fail(payloadTooLarge("Parts limit exceeded")),
   );
 
   const handleCompletion = () => {

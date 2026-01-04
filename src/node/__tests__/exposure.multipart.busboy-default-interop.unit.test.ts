@@ -43,6 +43,7 @@ import {
   type MultipartRequest,
 } from "../exposure/multipart";
 import { getDefaultSerializer } from "../../serializer";
+import { PassThrough } from "node:stream";
 
 const serializer = getDefaultSerializer();
 
@@ -96,5 +97,100 @@ describe("parseMultipartInput - busboy default export interop", () => {
     expect(parsed.value).toEqual({ a: 1 });
     expect(defaultFactoryCalls).toBe(1);
   });
-});
 
+  it("rejects truncated manifest fields with a 413 payload-too-large response", async () => {
+    const boundary = "----unit-busboy-default-boundary-truncated";
+    const req = createMockRequest(
+      {
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      (busboy) => {
+        busboy.emit("field", "__manifest", "{", {
+          nameTruncated: true,
+          valueTruncated: false,
+          encoding: "7bit",
+          mimeType: "text/plain",
+        });
+      },
+    );
+
+    const parsed = await parseMultipartInput(req, undefined, serializer);
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) {
+      throw new Error("Expected multipart parsing to fail");
+    }
+    expect(parsed.response.status).toBe(413);
+    expect(parsed.response.body.error.message).toBe("Field limit exceeded");
+  });
+
+  it("propagates file size limit via finalize() after manifest is accepted", async () => {
+    const boundary = "----unit-busboy-default-boundary-file-limit";
+    const req = createMockRequest(
+      {
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      (busboy) => {
+        busboy.emit("field", "__manifest", JSON.stringify({ input: { file: { $ejson: "File", id: "F1" } } }), {
+          nameTruncated: false,
+          valueTruncated: false,
+          encoding: "7bit",
+          mimeType: "text/plain",
+        });
+
+        const stream = new PassThrough();
+        busboy.emit("file", "file:F1", stream, {
+          filename: "a.txt",
+          mimeType: "text/plain",
+          encoding: "7bit",
+        });
+        stream.emit("limit");
+      },
+    );
+
+    const parsed = await parseMultipartInput(req, undefined, serializer);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      throw new Error("Expected multipart parsing to succeed");
+    }
+    const finalized = await parsed.finalize;
+    expect(finalized.ok).toBe(false);
+    if (finalized.ok) {
+      throw new Error("Expected finalize() to fail");
+    }
+    expect(finalized.response.status).toBe(413);
+    expect(finalized.response.body.error.message).toBe("File size limit exceeded");
+  });
+
+  it("propagates fields/files/parts limits via finalize() after manifest is accepted", async () => {
+    const boundary = "----unit-busboy-default-boundary-limits";
+    const req = createMockRequest(
+      {
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      (busboy) => {
+        busboy.emit("field", "__manifest", JSON.stringify({ input: { a: 1 } }), {
+          nameTruncated: false,
+          valueTruncated: false,
+          encoding: "7bit",
+          mimeType: "text/plain",
+        });
+        busboy.emit("fieldsLimit");
+        busboy.emit("filesLimit");
+        busboy.emit("partsLimit");
+      },
+    );
+
+    const parsed = await parseMultipartInput(req, undefined, serializer);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      throw new Error("Expected multipart parsing to succeed");
+    }
+    const finalized = await parsed.finalize;
+    expect(finalized.ok).toBe(false);
+    if (finalized.ok) {
+      throw new Error("Expected finalize() to fail");
+    }
+    expect(finalized.response.status).toBe(413);
+    expect(finalized.response.body.error.code).toBe("PAYLOAD_TOO_LARGE");
+  });
+});

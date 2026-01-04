@@ -253,7 +253,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
       await handlers.handleEvent(rrMock.req, rrMock.res);
       expect(rrMock.status).toBe(500);
       // readRequestBody wraps non-Error values with new Error(String(err)), so "oops" becomes the message
-      expect(rrMock.json?.error?.message).toBe("oops");
+      expect(rrMock.json?.error?.message).toBe("Internal Error");
     }
 
     // handleTask: success -> 200
@@ -529,7 +529,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     await handlers.handleTask(rrMock.req, rrMock.res);
     expect(rrMock.status).toBe(500);
     expect(rrMock.json?.ok).toBe(false);
-    expect(rrMock.json?.error?.message).toBe("Missing file part for id F1");
+    expect(rrMock.json?.error?.message).toBe("Internal Error");
 
     await rr.dispose();
   });
@@ -1087,7 +1087,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
 
     await handlers.handleEvent(container.req, container.res);
     expect(container.status).toBe(500);
-    expect(container.json?.error?.message).toBe("emit failure");
+    expect(container.json?.error?.message).toBe("Internal Error");
 
     await rr.dispose();
   });

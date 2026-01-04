@@ -1,5 +1,5 @@
 import { event, r, run } from "../../..";
-import { createDurableResource } from "../core/resource";
+import { durableResource } from "../core/resource";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { MemoryStore } from "../store/MemoryStore";
 
@@ -23,7 +23,8 @@ describe("durable: audit trail (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = createDurableResource("durable.tests.audit.basic.durable", {
+    const durable = durableResource.fork("durable.tests.audit.basic.durable");
+    const durableRegistration = durable.with({
       store,
       eventBus: bus,
       audit: { enabled: true },
@@ -47,7 +48,7 @@ describe("durable: audit trail (integration)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
@@ -89,15 +90,13 @@ describe("durable: audit trail (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = createDurableResource(
-      "durable.tests.audit.signal.delivered.durable",
-      {
-        store,
-        eventBus: bus,
-        audit: { enabled: true },
-        polling: { interval: 5 },
-      },
-    );
+    const durable = durableResource.fork("durable.tests.audit.signal.delivered.durable");
+    const durableRegistration = durable.with({
+      store,
+      eventBus: bus,
+      audit: { enabled: true },
+      polling: { interval: 5 },
+    });
 
     const task = r
       .task("durable.test.audit.signal.delivered")
@@ -110,7 +109,7 @@ describe("durable: audit trail (integration)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
@@ -144,15 +143,13 @@ describe("durable: audit trail (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = createDurableResource(
-      "durable.tests.audit.signal.timeout.durable",
-      {
-        store,
-        eventBus: bus,
-        audit: { enabled: true },
-        polling: { interval: 5 },
-      },
-    );
+    const durable = durableResource.fork("durable.tests.audit.signal.timeout.durable");
+    const durableRegistration = durable.with({
+      store,
+      eventBus: bus,
+      audit: { enabled: true },
+      polling: { interval: 5 },
+    });
 
     const task = r
       .task("durable.test.audit.signal.timeout")
@@ -164,7 +161,7 @@ describe("durable: audit trail (integration)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);

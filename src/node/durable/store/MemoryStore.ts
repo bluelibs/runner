@@ -199,6 +199,17 @@ export class MemoryStore implements IDurableStore {
     this.timers.delete(timerId);
   }
 
+  async claimTimer(timerId: string, workerId: string, ttlMs: number): Promise<boolean> {
+    const claimKey = `timer:claim:${timerId}`;
+    const now = Date.now();
+    const existing = this.locks.get(claimKey);
+    if (existing && existing.expires > now) {
+      return false; // Already claimed by another worker
+    }
+    this.locks.set(claimKey, { id: workerId, expires: now + ttlMs });
+    return true;
+  }
+
   async createSchedule(schedule: Schedule): Promise<void> {
     this.schedules.set(schedule.id, { ...schedule });
   }

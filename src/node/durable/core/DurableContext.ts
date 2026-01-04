@@ -1,7 +1,10 @@
 import type { IEventBus } from "./interfaces/bus";
 import type {
+  EmitOptions,
   IDurableContext,
   IStepBuilder,
+  SignalOptions,
+  SleepOptions,
   StepOptions,
 } from "./interfaces/context";
 import { SuspensionSignal } from "./interfaces/context";
@@ -14,6 +17,7 @@ import {
   isDurableInternalStepId,
   type DurableAuditEmitter,
   type DurableAuditEntry,
+  type DurableAuditEntryInput,
 } from "./audit";
 import { isRecord, sleepMs, withTimeout } from "./utils";
 
@@ -22,8 +26,8 @@ type WaitForSignalOutcome<TPayload> =
   | { kind: "timeout" };
 
 type SignalStepState =
-  | { state: "waiting" }
-  | { state: "waiting"; timeoutAtMs: number; timerId: string }
+  | { state: "waiting"; signalId?: string }
+  | { state: "waiting"; signalId?: string; timeoutAtMs: number; timerId: string }
   | { state: "completed"; payload: unknown }
   | { state: "timed_out" };
 
@@ -40,12 +44,14 @@ function parseSignalStepState(value: unknown): SignalStepState | null {
   if (!isRecord(value)) return null;
   const state = value.state;
   if (state === "waiting") {
+    const signalId = value.signalId;
     const timeoutAtMs = value.timeoutAtMs;
     const timerId = value.timerId;
+    if (signalId !== undefined && typeof signalId !== "string") return null;
     if (typeof timeoutAtMs === "number" && typeof timerId === "string") {
-      return { state: "waiting", timeoutAtMs, timerId };
+      return { state: "waiting", signalId, timeoutAtMs, timerId };
     }
-    return { state: "waiting" };
+    return { state: "waiting", signalId };
   }
   if (state === "completed") {
     return { state: "completed", payload: value.payload };
@@ -63,6 +69,10 @@ export class DurableContext implements IDurableContext {
   private noteIndex = 0;
   private readonly auditEnabled: boolean;
   private readonly auditEmitter: DurableAuditEmitter | null;
+  private readonly implicitInternalStepIdsPolicy: "allow" | "warn" | "error";
+  private readonly implicitInternalStepIdsWarned = new Set<
+    "sleep" | "emit" | "waitForSignal"
+  >();
   private readonly compensations: Array<{
     stepId: string;
     action: () => Promise<void>;
@@ -73,41 +83,66 @@ export class DurableContext implements IDurableContext {
     private readonly bus: IEventBus,
     public readonly executionId: string,
     public readonly attempt: number,
-    options: { auditEnabled?: boolean; auditEmitter?: DurableAuditEmitter } = {},
+    options: {
+      auditEnabled?: boolean;
+      auditEmitter?: DurableAuditEmitter;
+      implicitInternalStepIds?: "allow" | "warn" | "error";
+    } = {},
   ) {
     this.auditEnabled = options.auditEnabled ?? false;
     this.auditEmitter = options.auditEmitter ?? null;
+    this.implicitInternalStepIdsPolicy = options.implicitInternalStepIds ?? "allow";
+  }
+
+  private assertOrWarnImplicitInternalStepId(
+    kind: "sleep" | "emit" | "waitForSignal",
+  ): void {
+    const policy = this.implicitInternalStepIdsPolicy;
+    if (policy === "allow") return;
+
+    const message =
+      `DurableContext.${kind}() is using an implicit step id (call-order based). ` +
+      `This can break replay for in-flight executions after refactors. ` +
+      `Provide a stable id via { stepId: "..." } (or set determinism.implicitInternalStepIds to "allow").`;
+
+    if (policy === "error") {
+      throw new Error(message);
+    }
+
+    if (this.implicitInternalStepIdsWarned.has(kind)) return;
+    this.implicitInternalStepIdsWarned.add(kind);
+    // eslint-disable-next-line no-console
+    console.warn(message);
   }
 
   private async appendAuditEntry(
-    entry: Omit<
-      Parameters<NonNullable<IDurableStore["appendAuditEntry"]>>[0],
-      "id" | "executionId" | "attempt" | "at"
-    >,
+    entry: DurableAuditEntryInput,
   ): Promise<void> {
-    if (!this.auditEnabled) return;
-    if (!this.store.appendAuditEntry) return;
+    const shouldPersist = this.auditEnabled === true && !!this.store.appendAuditEntry;
+    const shouldEmit = this.auditEmitter !== null;
+    if (!shouldPersist && !shouldEmit) return;
     const at = new Date();
-    const fullEntry: DurableAuditEntry = {
+    const fullEntry = {
       ...entry,
       id: createDurableAuditEntryId(at.getTime()),
       executionId: this.executionId,
       attempt: this.attempt,
       at,
-    };
-    try {
-      await this.store.appendAuditEntry(fullEntry);
-
-      if (this.auditEmitter) {
-        try {
-          await this.auditEmitter.emit(fullEntry);
-        } catch {
-          // Audit emissions must not affect workflow correctness.
-        }
+    } as DurableAuditEntry;
+    if (shouldPersist) {
+      try {
+        await this.store.appendAuditEntry!(fullEntry);
+      } catch {
+        // Audit persistence must not affect workflow correctness.
       }
-    } catch {
-      // Audit trails must not affect workflow correctness.
-      // If audit persistence fails, we degrade gracefully.
+    }
+
+    if (this.auditEmitter) {
+      try {
+        await this.auditEmitter.emit(fullEntry);
+      } catch {
+        // Audit emissions must not affect workflow correctness.
+      }
     }
   }
 
@@ -115,6 +150,42 @@ export class DurableContext implements IDurableContext {
     const current = counter.get(key) ?? 0;
     counter.set(key, current + 1);
     return current;
+  }
+
+  private async withSignalLock<TPayload>(
+    signalId: string,
+    fn: () => Promise<TPayload>,
+  ): Promise<TPayload> {
+    if (!this.store.acquireLock || !this.store.releaseLock) {
+      return fn();
+    }
+
+    const lockResource = `signal:${this.executionId}:${signalId}`;
+    const lockTtlMs = 10_000;
+    const maxAttempts = 20;
+
+    let lockId: string | null = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      lockId = await this.store.acquireLock(lockResource, lockTtlMs);
+      if (lockId !== null) break;
+      await sleepMs(5);
+    }
+
+    if (lockId === null) {
+      throw new Error(
+        `Failed to acquire signal lock for '${signalId}' on execution '${this.executionId}'`,
+      );
+    }
+
+    try {
+      return await fn();
+    } finally {
+      try {
+        await this.store.releaseLock(lockResource, lockId);
+      } catch {
+        // best-effort cleanup; ignore
+      }
+    }
   }
 
   private getStepId(stepId: string | DurableStepId<unknown>): string {
@@ -272,11 +343,19 @@ export class DurableContext implements IDurableContext {
     }
   }
 
-  async sleep(durationMs: number): Promise<void> {
-    const sleepStepIndex = this.sleepIndex;
-    this.sleepIndex += 1;
-
-    const sleepStepId = `__sleep:${sleepStepIndex}`;
+  async sleep(durationMs: number, options?: SleepOptions): Promise<void> {
+    let sleepStepId: string;
+    
+    if (options?.stepId) {
+      // Use explicit step ID for replay stability
+      sleepStepId = `__sleep:${options.stepId}`;
+    } else {
+      this.assertOrWarnImplicitInternalStepId("sleep");
+      // Fall back to auto-indexed ID
+      const sleepStepIndex = this.sleepIndex;
+      this.sleepIndex += 1;
+      sleepStepId = `__sleep:${sleepStepIndex}`;
+    }
 
     const existing = await this.store.getStepResult(
       this.executionId,
@@ -339,99 +418,152 @@ export class DurableContext implements IDurableContext {
   ): Promise<TPayload>;
   async waitForSignal<TPayload>(
     signal: SignalInput<TPayload>,
-    options: { timeoutMs: number },
+    options: SignalOptions & { timeoutMs: number },
   ): Promise<WaitForSignalOutcome<TPayload>>;
   async waitForSignal<TPayload>(
     signal: SignalInput<TPayload>,
-    options?: { timeoutMs: number },
+    options: SignalOptions,
+  ): Promise<TPayload>;
+  async waitForSignal<TPayload>(
+    signal: SignalInput<TPayload>,
+    options?: SignalOptions,
   ): Promise<TPayload | WaitForSignalOutcome<TPayload>> {
     const signalId = getSignalId(signal);
-    const signalStepIndex = this.nextIndex(this.signalIndexes, signalId);
-    const stepId =
-      signalStepIndex === 0
-        ? `__signal:${signalId}`
-        : `__signal:${signalId}:${signalStepIndex}`;
-    const existing = await this.store.getStepResult(this.executionId, stepId);
-    if (existing) {
-      const state = parseSignalStepState(existing.result);
-      if (!state) {
-        throw new Error(
-          `Invalid signal step state for '${signalId}' at '${stepId}'`,
-        );
+    const hasTimeout = options?.timeoutMs !== undefined;
+    const resolveCompleted = (
+      payload: TPayload,
+    ): TPayload | WaitForSignalOutcome<TPayload> =>
+      hasTimeout ? { kind: "signal", payload } : payload;
+    const resolveTimedOut = (): WaitForSignalOutcome<TPayload> => {
+      if (!hasTimeout) {
+        throw new Error(`Signal '${signalId}' timed out`);
       }
-      if (state?.state === "completed") {
-        const payload = state.payload as TPayload;
-        return options ? { kind: "signal", payload } : payload;
-      }
-      if (state?.state === "timed_out") {
-        if (!options) {
-          throw new Error(`Signal '${signalId}' timed out`);
+      return { kind: "timeout" };
+    };
+
+    return await this.withSignalLock(signalId, async () => {
+      let stepId: string;
+      if (options?.stepId) {
+        if (!this.store.listStepResults) {
+          throw new Error(
+            "waitForSignal({ stepId }) requires a store that implements listStepResults()",
+          );
         }
-        return { kind: "timeout" };
+        // Use explicit step ID for replay stability
+        stepId = `__signal:${options.stepId}`;
+      } else {
+        this.assertOrWarnImplicitInternalStepId("waitForSignal");
+        // Fall back to auto-indexed ID
+        const signalStepIndex = this.nextIndex(this.signalIndexes, signalId);
+        stepId =
+          signalStepIndex === 0
+            ? `__signal:${signalId}`
+            : `__signal:${signalId}:${signalStepIndex}`;
       }
-      if (state?.state === "waiting") {
-        if (options?.timeoutMs !== undefined) {
-          if ("timeoutAtMs" in state && "timerId" in state) {
-            await this.store.createTimer({
-              id: state.timerId,
-              executionId: this.executionId,
-              stepId,
-              type: "signal_timeout",
-              fireAt: new Date(state.timeoutAtMs),
-              status: "pending",
-            });
-          } else {
-            const timerId = `signal_timeout:${this.executionId}:${stepId}`;
-            const timeoutAtMs = Date.now() + options.timeoutMs;
 
-            await this.store.createTimer({
-              id: timerId,
-              executionId: this.executionId,
-              stepId,
-              type: "signal_timeout",
-              fireAt: new Date(timeoutAtMs),
-              status: "pending",
-            });
-
-            await this.store.saveStepResult({
-              executionId: this.executionId,
-              stepId,
-              result: { state: "waiting", timeoutAtMs, timerId },
-              completedAt: new Date(),
-            });
-
-            await this.appendAuditEntry({
-              kind: "signal_waiting",
-              stepId,
-              signalId,
-              timeoutMs: options.timeoutMs,
-              timeoutAtMs,
-              timerId,
-              reason: "timeout_armed",
-            });
+      const existing = await this.store.getStepResult(this.executionId, stepId);
+      if (existing) {
+        const state = parseSignalStepState(existing.result);
+        if (!state) {
+          throw new Error(
+            `Invalid signal step state for '${signalId}' at '${stepId}'`,
+          );
+        }
+        if (state.state === "completed") {
+          const payload = state.payload as TPayload;
+          return resolveCompleted(payload);
+        }
+        if (state.state === "timed_out") {
+          return resolveTimedOut();
+        }
+        if (state.state === "waiting") {
+          if (state.signalId !== undefined && state.signalId !== signalId) {
+            throw new Error(
+              `Invalid signal step state for '${signalId}' at '${stepId}'`,
+            );
           }
+          if (options?.timeoutMs !== undefined) {
+            if ("timeoutAtMs" in state && "timerId" in state) {
+              await this.store.createTimer({
+                id: state.timerId,
+                executionId: this.executionId,
+                stepId,
+                type: "signal_timeout",
+                fireAt: new Date(state.timeoutAtMs),
+                status: "pending",
+              });
+            } else {
+              const timerId = `signal_timeout:${this.executionId}:${stepId}`;
+              const timeoutAtMs = Date.now() + options.timeoutMs;
+
+              await this.store.createTimer({
+                id: timerId,
+                executionId: this.executionId,
+                stepId,
+                type: "signal_timeout",
+                fireAt: new Date(timeoutAtMs),
+                status: "pending",
+              });
+
+              await this.store.saveStepResult({
+                executionId: this.executionId,
+                stepId,
+                result: { state: "waiting", signalId, timeoutAtMs, timerId },
+                completedAt: new Date(),
+              });
+
+              await this.appendAuditEntry({
+                kind: "signal_waiting",
+                stepId,
+                signalId,
+                timeoutMs: options.timeoutMs,
+                timeoutAtMs,
+                timerId,
+                reason: "timeout_armed",
+              });
+            }
+          }
+          throw new SuspensionSignal("yield");
         }
+      }
+
+      if (options?.timeoutMs !== undefined) {
+        const timerId = `signal_timeout:${this.executionId}:${stepId}`;
+        const timeoutAtMs = Date.now() + options.timeoutMs;
+
+        await this.store.createTimer({
+          id: timerId,
+          executionId: this.executionId,
+          stepId,
+          type: "signal_timeout",
+          fireAt: new Date(timeoutAtMs),
+          status: "pending",
+        });
+
+        await this.store.saveStepResult({
+          executionId: this.executionId,
+          stepId,
+          result: { state: "waiting", signalId, timeoutAtMs, timerId },
+          completedAt: new Date(),
+        });
+
+        await this.appendAuditEntry({
+          kind: "signal_waiting",
+          stepId,
+          signalId,
+          timeoutMs: options.timeoutMs,
+          timeoutAtMs,
+          timerId,
+          reason: "initial",
+        });
+
         throw new SuspensionSignal("yield");
       }
-    }
-
-    if (options?.timeoutMs !== undefined) {
-      const timerId = `signal_timeout:${this.executionId}:${stepId}`;
-      const timeoutAtMs = Date.now() + options.timeoutMs;
-
-      await this.store.createTimer({
-        id: timerId,
-        executionId: this.executionId,
-        stepId,
-        type: "signal_timeout",
-        fireAt: new Date(timeoutAtMs),
-        status: "pending",
-      });
 
       await this.store.saveStepResult({
         executionId: this.executionId,
         stepId,
-        result: { state: "waiting", timeoutAtMs, timerId },
+        result: { state: "waiting", signalId },
         completedAt: new Date(),
       });
 
@@ -439,30 +571,11 @@ export class DurableContext implements IDurableContext {
         kind: "signal_waiting",
         stepId,
         signalId,
-        timeoutMs: options.timeoutMs,
-        timeoutAtMs,
-        timerId,
         reason: "initial",
       });
 
       throw new SuspensionSignal("yield");
-    }
-
-    await this.store.saveStepResult({
-      executionId: this.executionId,
-      stepId,
-      result: { state: "waiting" },
-      completedAt: new Date(),
     });
-
-    await this.appendAuditEntry({
-      kind: "signal_waiting",
-      stepId,
-      signalId,
-      reason: "initial",
-    });
-
-    throw new SuspensionSignal("yield");
   }
 
   async emit<TPayload>(
@@ -472,10 +585,20 @@ export class DurableContext implements IDurableContext {
       | IEventDefinition<TPayload>
       | DurableSignalId<TPayload>,
     payload: TPayload,
+    options?: EmitOptions,
   ): Promise<void> {
     const eventId = typeof event === "string" ? event : event.id;
-    const emitIndex = this.nextIndex(this.emitIndexes, eventId);
-    const stepId = `__emit:${eventId}:${emitIndex}`;
+    
+    let stepId: string;
+    if (options?.stepId) {
+      // Use explicit step ID for replay stability
+      stepId = `__emit:${options.stepId}`;
+    } else {
+      this.assertOrWarnImplicitInternalStepId("emit");
+      // Fall back to auto-indexed ID
+      const emitIndex = this.nextIndex(this.emitIndexes, eventId);
+      stepId = `__emit:${eventId}:${emitIndex}`;
+    }
 
     await this.internalStep<void>(stepId).up(async () => {
       await this.bus.publish("durable:events", {
@@ -493,8 +616,10 @@ export class DurableContext implements IDurableContext {
   }
 
   async note(message: string, meta?: Record<string, unknown>): Promise<void> {
-    if (!this.auditEnabled) return;
-    if (!this.store.appendAuditEntry) return;
+    const shouldPersist =
+      this.auditEnabled === true && !!this.store.appendAuditEntry;
+    const shouldEmit = this.auditEmitter !== null;
+    if (!shouldPersist && !shouldEmit) return;
     const stepId = `__note:${this.noteIndex}`;
     this.noteIndex += 1;
 

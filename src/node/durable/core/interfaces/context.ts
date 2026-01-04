@@ -6,6 +6,33 @@ export interface StepOptions {
   timeout?: number;
 }
 
+/**
+ * Options for sleep operations.
+ * Use `stepId` to provide a stable identifier that survives code refactoring.
+ */
+export interface SleepOptions {
+  /** Explicit step ID for replay stability. If not provided, an auto-indexed ID is used. */
+  stepId?: string;
+}
+
+/**
+ * Options for waitForSignal operations.
+ */
+export interface SignalOptions {
+  /** Timeout in milliseconds. If provided, returns a discriminated union with kind. */
+  timeoutMs?: number;
+  /** Explicit step ID for replay stability. If not provided, an auto-indexed ID is used. */
+  stepId?: string;
+}
+
+/**
+ * Options for emit operations.
+ */
+export interface EmitOptions {
+  /** Explicit step ID for replay stability. If not provided, an auto-indexed ID is used. */
+  stepId?: string;
+}
+
 export interface IStepBuilder<T> extends PromiseLike<T> {
   up(fn: () => Promise<T>): this;
   down(fn: (result: T) => Promise<void>): this;
@@ -30,31 +57,39 @@ export interface IDurableContext {
     fn: () => Promise<T>,
   ): Promise<T>;
 
-  sleep(durationMs: number): Promise<void>;
+  sleep(durationMs: number, options?: SleepOptions): Promise<void>;
 
   /**
    * Suspend until an external signal is delivered via DurableService.signal().
    * The signal is memoized as a durable step under `__signal:<signalId>[:index]`.
+   * Use options.stepId to provide a stable identifier for replay safety.
    */
   waitForSignal<TPayload>(
     signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
   ): Promise<TPayload>;
   waitForSignal<TPayload>(
     signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
-    options: { timeoutMs: number },
+    options: SignalOptions & { timeoutMs: number },
   ): Promise<{ kind: "signal"; payload: TPayload } | { kind: "timeout" }>;
+  waitForSignal<TPayload>(
+    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
+    options: SignalOptions,
+  ): Promise<TPayload>;
 
   emit<TPayload>(
     event: IEventDefinition<TPayload>,
     payload: TPayload,
+    options?: EmitOptions,
   ): Promise<void>;
   emit<TPayload>(
     event: DurableSignalId<TPayload>,
     payload: TPayload,
+    options?: EmitOptions,
   ): Promise<void>;
   emit<TPayload>(
     event: string | { id: string },
     payload: TPayload,
+    options?: EmitOptions,
   ): Promise<void>;
 
   /**

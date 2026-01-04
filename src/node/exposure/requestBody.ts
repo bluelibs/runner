@@ -8,9 +8,11 @@ import { cancellationError } from "../../errors";
 export async function readRequestBody(
   req: IncomingMessage,
   signal?: AbortSignal,
+  maxSize = 2 * 1024 * 1024, // 2MB default
 ): Promise<Buffer> {
   return await new Promise<Buffer>((resolve, reject) => {
     const chunks: Buffer[] = [];
+    let received = 0;
     let aborted = false;
 
     const onAbort = () => {
@@ -36,7 +38,18 @@ export async function readRequestBody(
       resolve(Buffer.concat(chunks as readonly Uint8Array[]));
     };
     const onData = (chunk: unknown) => {
-      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      if (aborted) return;
+      const buffer = Buffer.isBuffer(chunk)
+        ? chunk
+        : Buffer.from(String(chunk));
+      received += buffer.length;
+      if (received > maxSize) {
+        aborted = true;
+        cleanup();
+        reject(new Error("PAYLOAD_TOO_LARGE"));
+        return;
+      }
+      chunks.push(buffer);
     };
 
     const cleanup = () => {
@@ -80,12 +93,29 @@ export async function readRequestBody(
 
 export async function readJsonBody<T>(
   req: IncomingMessage,
-  signal?: AbortSignal,
+  signal: AbortSignal | undefined,
   serializer: SerializerLike,
+  maxSize?: number,
 ): Promise<
   { ok: true; value: T | undefined } | { ok: false; response: JsonResponse }
 > {
-  const body = await readRequestBody(req, signal);
+  let body: Buffer;
+  try {
+    body = await readRequestBody(req, signal, maxSize);
+  } catch (err: any) {
+    if (err.message === "PAYLOAD_TOO_LARGE") {
+      return {
+        ok: false,
+        response: jsonErrorResponse(
+          413,
+          "Payload too large",
+          "PAYLOAD_TOO_LARGE",
+        ),
+      };
+    }
+    throw err;
+  }
+
   if (body.length === 0) {
     return { ok: true, value: undefined };
   }

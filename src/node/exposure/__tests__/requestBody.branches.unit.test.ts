@@ -117,6 +117,14 @@ describe("requestBody branches", () => {
     await expect(p).rejects.toMatchObject({ message: "boom" });
   });
 
+  it("ignores extra data chunks after aborting due to max size", async () => {
+    const req = createReqStub(true); // off is no-op so listeners remain after cleanup
+    const p = readRequestBody(req, undefined, 1);
+    req.emit("data", Buffer.from("aa")); // exceeds max size => aborted = true
+    req.emit("data", Buffer.from("bb")); // should hit `if (aborted) return;`
+    await expect(p).rejects.toMatchObject({ message: "PAYLOAD_TOO_LARGE" });
+  });
+
   it("uses req.off when removeListener is not available", async () => {
     const req = createOffOnlyReqStub();
     const ac = new AbortController();

@@ -21,6 +21,9 @@ jest.mock("ioredis", () => {
         get: jest.fn().mockResolvedValue(null),
         keys: jest.fn().mockResolvedValue([]),
         scan: jest.fn().mockResolvedValue(["0", []]),
+        sscan: jest.fn().mockResolvedValue(["0", []]),
+        sadd: jest.fn().mockResolvedValue(1),
+        srem: jest.fn().mockResolvedValue(1),
         pipeline: jest.fn().mockReturnValue(pipeline),
         hset: jest.fn().mockResolvedValue(1),
         hget: jest.fn().mockResolvedValue(null),
@@ -46,6 +49,9 @@ describe("durable: RedisStore", () => {
       get: jest.fn(),
       keys: jest.fn().mockResolvedValue([]),
       scan: jest.fn().mockResolvedValue(["0", []]),
+      sscan: jest.fn().mockResolvedValue(["0", []]),
+      sadd: jest.fn().mockResolvedValue(1),
+      srem: jest.fn().mockResolvedValue(1),
       pipeline: jest.fn().mockReturnValue({
         get: jest.fn().mockReturnThis(),
         hget: jest.fn().mockReturnThis(),
@@ -77,6 +83,10 @@ describe("durable: RedisStore", () => {
     };
     await store.saveExecution(exec);
     expect(redisMock.set).toHaveBeenCalled();
+    expect(redisMock.sadd).toHaveBeenCalledWith(
+      "durable:active_executions",
+      "1",
+    );
 
     redisMock.get.mockResolvedValue(serializer.stringify(exec));
     const fetched = await store.getExecution("1");
@@ -95,11 +105,21 @@ describe("durable: RedisStore", () => {
       updatedAt: new Date(),
     };
     redisMock.get.mockResolvedValue(serializer.stringify(exec));
+    redisMock.eval.mockResolvedValueOnce("OK");
     await store.updateExecution("1", { status: "failed" });
     expect(redisMock.eval).toHaveBeenCalled();
+    expect(redisMock.srem).toHaveBeenCalledWith(
+      "durable:active_executions",
+      "1",
+    );
 
     redisMock.get.mockResolvedValue(null);
+    redisMock.eval.mockResolvedValueOnce(null);
     await store.updateExecution("ghost", { status: "failed" });
+    expect(redisMock.srem).not.toHaveBeenCalledWith(
+      "durable:active_executions",
+      "ghost",
+    );
   });
 
   it("lists executions for dashboard", async () => {
@@ -255,17 +275,22 @@ describe("durable: RedisStore", () => {
   });
 
   it("throws when Redis SCAN returns an unexpected shape", async () => {
-    redisMock.scan.mockResolvedValueOnce("bad");
+    redisMock.sscan.mockResolvedValueOnce("bad");
     await expect(store.listIncompleteExecutions()).rejects.toThrow("SCAN");
   });
 
+  it("throws when Redis SCAN returns an unexpected shape (scanKeys)", async () => {
+    redisMock.scan.mockResolvedValueOnce("bad");
+    await expect(store.listExecutions()).rejects.toThrow("SCAN");
+  });
+
   it("throws when Redis SCAN returns a non-string cursor", async () => {
-    redisMock.scan.mockResolvedValueOnce([1, []]);
+    redisMock.sscan.mockResolvedValueOnce([1, []]);
     await expect(store.listIncompleteExecutions()).rejects.toThrow("SCAN");
   });
 
   it("throws when Redis SCAN returns non-string keys", async () => {
-    redisMock.scan.mockResolvedValueOnce(["0", [1]]);
+    redisMock.sscan.mockResolvedValueOnce(["0", [1]]);
     await expect(store.listIncompleteExecutions()).rejects.toThrow("SCAN");
   });
 
@@ -303,7 +328,7 @@ describe("durable: RedisStore", () => {
   });
 
   it("lists incomplete executions", async () => {
-    redisMock.scan.mockResolvedValue(["0", ["durable:exec:1"]]);
+    redisMock.sscan.mockResolvedValue(["0", ["1"]]);
     redisMock.pipeline.mockReturnValue({
       get: jest.fn().mockReturnThis(),
       hget: jest.fn().mockReturnThis(),
@@ -317,8 +342,55 @@ describe("durable: RedisStore", () => {
     expect((await store.listIncompleteExecutions()).length).toBe(1);
   });
 
+  it("returns [] from listIncompleteExecutions when pipeline.exec returns null", async () => {
+    redisMock.sscan.mockResolvedValue(["0", ["1"]]);
+    redisMock.pipeline.mockReturnValue({
+      get: jest.fn().mockReturnThis(),
+      hget: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue(null),
+    });
+
+    await expect(store.listIncompleteExecutions()).resolves.toEqual([]);
+  });
+
+  it("cleans up stale active execution ids during listIncompleteExecutions", async () => {
+    redisMock.sscan.mockResolvedValue(["0", ["1", "2", "3"]]);
+    redisMock.pipeline.mockReturnValue({
+      get: jest.fn().mockReturnThis(),
+      hget: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([
+        [null, serializer.stringify({ id: "1", status: "running" })],
+        [null, serializer.stringify({ id: "2", status: "completed" })],
+        [null, null],
+      ]),
+    });
+
+    const listed = await store.listIncompleteExecutions();
+    expect(listed.map((e) => e.id)).toEqual(["1"]);
+    expect(redisMock.srem).toHaveBeenCalledWith(
+      "durable:active_executions",
+      "2",
+      "3",
+    );
+  });
+
+  it("swallows errors while cleaning stale active execution ids", async () => {
+    redisMock.sscan.mockResolvedValue(["0", ["1", "2"]]);
+    redisMock.srem.mockRejectedValueOnce(new Error("srem-failed"));
+    redisMock.pipeline.mockReturnValue({
+      get: jest.fn().mockReturnThis(),
+      hget: jest.fn().mockReturnThis(),
+      exec: jest.fn().mockResolvedValue([
+        [null, serializer.stringify({ id: "1", status: "running" })],
+        [null, serializer.stringify({ id: "2", status: "completed" })],
+      ]),
+    });
+
+    await expect(store.listIncompleteExecutions()).resolves.toHaveLength(1);
+  });
+
   it("returns [] from listIncompleteExecutions when no execution keys exist", async () => {
-    redisMock.scan.mockResolvedValue(["0", []]);
+    redisMock.sscan.mockResolvedValue(["0", []]);
     await expect(store.listIncompleteExecutions()).resolves.toEqual([]);
   });
 
@@ -592,6 +664,14 @@ describe("durable: RedisStore", () => {
     redisMock.set.mockResolvedValue(null);
     const lockId = await store.acquireLock("res", 1000);
     expect(lockId).toBeNull();
+  });
+
+  it("claims timers via Redis NX", async () => {
+    redisMock.set.mockResolvedValueOnce("OK");
+    await expect(store.claimTimer("t1", "worker-1", 1000)).resolves.toBe(true);
+
+    redisMock.set.mockResolvedValueOnce(null);
+    await expect(store.claimTimer("t1", "worker-2", 1000)).resolves.toBe(false);
   });
 
   it("supports string redis url and default redis in constructor", async () => {

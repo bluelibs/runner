@@ -1,12 +1,13 @@
 import { r, run } from "../../..";
-import { createDurableResource } from "../core/resource";
+import { durableResource } from "../core/resource";
 import { MemoryStore } from "../store/MemoryStore";
 
 describe("durable: compensation failure", () => {
   it("marks execution as compensation_failed when rollback compensation throws", async () => {
     const store = new MemoryStore();
 
-    const durable = createDurableResource("durable.tests.compensation.durable", {
+    const durable = durableResource.fork("durable.tests.compensation.durable");
+    const durableRegistration = durable.with({
       store,
       execution: { maxAttempts: 1 },
     });
@@ -33,7 +34,7 @@ describe("durable: compensation failure", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
 

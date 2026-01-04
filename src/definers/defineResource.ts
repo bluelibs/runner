@@ -114,5 +114,12 @@ export function defineResource<
         IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>
       >;
     },
+    fork(newId: string) {
+      return defineResource({
+        ...constConfig,
+        id: newId,
+        [symbolFilePath]: filePath,
+      });
+    },
   };
 }

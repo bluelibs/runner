@@ -77,6 +77,6 @@ describe("requestHandlers multipart rethrow after finalize", () => {
         ) as any)
       : undefined;
     expect(status).toBe(500);
-    expect(body?.error?.message).toBe("task-bad");
+    expect(body?.error?.message).toBe("Internal Error");
   });
 });

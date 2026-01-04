@@ -14,6 +14,110 @@ async function waitUntil(
 }
 
 describe("durable: DurableService handleTimer audit branches", () => {
+  it("uses configured claimTtlMs and records sleep_completed with attempt from execution", async () => {
+    class ClaimStore extends MemoryStore {
+      public lastClaimTtlMs: number | null = null;
+
+      async claimTimer(
+        timerId: string,
+        workerId: string,
+        ttlMs: number,
+      ): Promise<boolean> {
+        this.lastClaimTtlMs = ttlMs;
+        return await super.claimTimer(timerId, workerId, ttlMs);
+      }
+    }
+
+    const store = new ClaimStore();
+    const service = new DurableService({
+      store,
+      audit: { enabled: true },
+      polling: { interval: 1, claimTtlMs: 1234 },
+    });
+
+    await store.saveExecution({
+      id: "exec-1",
+      taskId: "t",
+      input: undefined,
+      status: "sleeping",
+      attempt: 2,
+      maxAttempts: 3,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await store.createTimer({
+      id: "t-claim",
+      type: "sleep",
+      executionId: "exec-1",
+      stepId: "sleep:1",
+      fireAt: new Date(0),
+      status: "pending",
+    });
+
+    service.start();
+    try {
+      await waitUntil(
+        async () => {
+          const result = await store.getStepResult("exec-1", "sleep:1");
+          return (
+            result !== null &&
+            typeof result.result === "object" &&
+            result.result !== null &&
+            "state" in result.result &&
+            result.result.state === "completed"
+          );
+        },
+        { timeoutMs: 2_000, intervalMs: 5 },
+      );
+
+      const audit = await store.listAuditEntries?.("exec-1");
+      expect(audit).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: "sleep_completed",
+            executionId: "exec-1",
+            attempt: 2,
+            stepId: "sleep:1",
+            timerId: "t-claim",
+          }),
+        ]),
+      );
+      expect(store.lastClaimTtlMs).toBe(1234);
+    } finally {
+      await service.stop();
+    }
+  });
+
+  it("skips sleep completion when execution metadata is missing", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({
+      store,
+      audit: { enabled: true },
+      polling: { interval: 1 },
+    });
+
+    await store.createTimer({
+      id: "t-missing",
+      type: "sleep",
+      stepId: "sleep:missing",
+      fireAt: new Date(0),
+      status: "pending",
+    });
+
+    service.start();
+    try {
+      await waitUntil(
+        async () =>
+          (await store.getReadyTimers(new Date(0))).length === 0,
+        { timeoutMs: 2_000, intervalMs: 5 },
+      );
+
+      expect(await store.getStepResult("missing-exec", "sleep:missing")).toBeNull();
+    } finally {
+      await service.stop();
+    }
+  });
   it("records sleep_completed with attempt=0 when execution metadata is missing", async () => {
     const store = new MemoryStore();
     const service = new DurableService({

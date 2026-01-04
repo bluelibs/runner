@@ -244,12 +244,14 @@ describe("Custom Type Tests", () => {
       if (!secondNode) {
         throw new Error("Expected second node to be defined");
       }
+      expect(secondNode).toBeInstanceOf(LinkedListNode);
       expect(secondNode.value).toBe("B");
       const thirdNode = secondNode.next;
       expect(thirdNode).toBeDefined();
       if (!thirdNode) {
         throw new Error("Expected third node to be defined");
       }
+      expect(thirdNode).toBeInstanceOf(LinkedListNode);
       expect(thirdNode.value).toBe("C");
     });
 

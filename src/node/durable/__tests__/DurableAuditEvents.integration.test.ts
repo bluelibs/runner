@@ -1,5 +1,5 @@
 import { r, run } from "../../..";
-import { createDurableResource } from "../core/resource";
+import { durableResource } from "../core/resource";
 import { durableEvents } from "../events";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { MemoryStore } from "../store/MemoryStore";
@@ -18,14 +18,14 @@ async function waitUntil(
 }
 
 describe("durable: audit runner events (integration)", () => {
-  it("auto-wires an emitter when audit.emitRunnerEvents is enabled", async () => {
+  it("emits durable runner events by default (without audit persistence)", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = createDurableResource("durable.tests.events.durable", {
+    const durable = durableResource.fork("durable.tests.events.durable");
+    const durableRegistration = durable.with({
       store,
       eventBus: bus,
-      audit: { enabled: true, emitRunnerEvents: true },
       polling: { interval: 5 },
     });
 
@@ -63,7 +63,10 @@ describe("durable: audit runner events (integration)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durable, task, onAudit, onNote]).build();
+    const app = r
+      .resource("app")
+      .register([durableRegistration, task, onAudit, onNote])
+      .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
@@ -85,10 +88,10 @@ describe("durable: audit runner events (integration)", () => {
       { timeoutMs: 2_000, intervalMs: 5 },
     );
 
-    const audit = await store.listAuditEntries(executionId);
     const receivedForExecution = received.filter((e) => e.executionId === executionId);
-    expect(receivedForExecution).toHaveLength(audit.length);
+    expect(receivedForExecution.length).toBeGreaterThan(0);
     expect(notes).toEqual(expect.arrayContaining(["starting"]));
+    await expect(store.listAuditEntries(executionId)).resolves.toEqual([]);
 
     await runtime.dispose();
   });
@@ -97,22 +100,20 @@ describe("durable: audit runner events (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = createDurableResource(
-      "durable.tests.events.emitterFailure.durable",
-      {
-        store,
-        eventBus: bus,
-        audit: {
-          enabled: true,
-          emitter: {
-            emit: async () => {
-              throw new Error("boom");
-            },
+    const durable = durableResource.fork("durable.tests.events.emitterFailure.durable");
+    const durableRegistration = durable.with({
+      store,
+      eventBus: bus,
+      audit: {
+        enabled: true,
+        emitter: {
+          emit: async () => {
+            throw new Error("boom");
           },
         },
-        polling: { interval: 5 },
       },
-    );
+      polling: { interval: 5 },
+    });
 
     const task = r
       .task("durable.test.events.emitterFailure")
@@ -124,7 +125,7 @@ describe("durable: audit runner events (integration)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);

@@ -138,6 +138,43 @@ const app = r
   .build();
 ```
 
+#### Resource Forking
+
+Use `.fork(newId)` to create multiple instances of a "template" resource with different identities. This is perfect when you need several instances of the same resource type (e.g., multiple database connections, multiple mailers):
+
+```typescript
+// Define a reusable template
+const mailerBase = r.resource<{ smtp: string }>("base.mailer")
+  .init(async (cfg) => ({ send: (to: string) => console.log(`Sending via ${cfg.smtp}`) }))
+  .build();
+
+// Fork with distinct identities - export these for dependency use
+export const txMailer = mailerBase.fork("app.mailers.transactional");
+export const mktMailer = mailerBase.fork("app.mailers.marketing");
+
+// Use forked resources as dependencies
+const orderService = r.task("app.tasks.processOrder")
+  .dependencies({ mailer: txMailer })  // ← uses forked identity
+  .run(async (input, { mailer }) => { 
+    mailer.send(input.customerEmail);
+  })
+  .build();
+
+const app = r.resource("app")
+  .register([
+    txMailer.with({ smtp: "tx.smtp.com" }),
+    mktMailer.with({ smtp: "mkt.smtp.com" }),
+    orderService,
+  ])
+  .build();
+```
+
+Key points:
+- **`.fork()` returns a built `IResource`** — no need to call `.build()` again
+- **Tags, middleware, and type parameters are inherited**
+- **Each fork gets independent runtime** — no shared state
+- **Export forked resources** to use them as typed dependencies
+
 #### Private Context
 
 For cases where you need to share variables between `init()` and `dispose()` methods (because sometimes cleanup is complicated), use the enhanced context pattern:

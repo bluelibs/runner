@@ -17,6 +17,11 @@ import { builtInTypes } from "./builtins";
 
 const GRAPH_VERSION = 1;
 
+type SerializeState = {
+  serializingValueTypes: WeakSet<object>;
+  excludedTypeIds: string[];
+};
+
 export class Serializer {
   /** Map of registered custom types */
   private readonly typeRegistry = new Map<
@@ -48,6 +53,8 @@ export class Serializer {
   public stringify<T>(value: T): string {
     const root = this.serializeTreeValue(value, {
       stack: new WeakSet(),
+      serializingValueTypes: new WeakSet(),
+      excludedTypeIds: [],
     });
     return this.jsonStringify(root);
   }
@@ -74,7 +81,11 @@ export class Serializer {
       nodes: Object.create(null),
     };
 
-    const root = this.serializeValue(value, ctx);
+    const state: SerializeState = {
+      serializingValueTypes: new WeakSet(),
+      excludedTypeIds: [],
+    };
+    const root = this.serializeValue(value, ctx, state);
     if (ctx.nodeCount === 0 && !this.isObjectReference(root)) {
       return this.jsonStringify(root);
     }
@@ -196,8 +207,11 @@ export class Serializer {
 
   private serializeTreeValue(
     value: unknown,
-    context: { stack: WeakSet<object> },
-    skipTypes = false,
+    context: {
+      stack: WeakSet<object>;
+      serializingValueTypes: WeakSet<object>;
+      excludedTypeIds: string[];
+    },
   ): unknown {
     if (value === null) {
       return null;
@@ -232,19 +246,37 @@ export class Serializer {
       throw new TypeError("Cannot serialize circular structure in tree mode");
     }
 
-    if (!skipTypes && !Array.isArray(objectValue)) {
-      const typeDef = this.findTypeDefinition(objectValue);
+    const shouldCheckTypes =
+      !Array.isArray(objectValue) &&
+      !context.serializingValueTypes.has(objectValue);
+
+    if (shouldCheckTypes) {
+      const typeDef = this.findTypeDefinition(
+        objectValue,
+        context.excludedTypeIds,
+      );
       if (typeDef) {
+        context.serializingValueTypes.add(objectValue);
         const serializedPayload = typeDef.serialize(objectValue);
-        const payload = this.serializeTreeValue(
+        const shouldExcludeCurrentType = this.shouldExcludeTypeFromPayload(
+          typeDef,
           serializedPayload,
-          context,
-          true,
         );
-        return {
-          __type: typeDef.id,
-          value: payload,
-        };
+        try {
+          if (shouldExcludeCurrentType) {
+            context.excludedTypeIds.push(typeDef.id);
+          }
+          const payload = this.serializeTreeValue(serializedPayload, context);
+          return {
+            __type: typeDef.id,
+            value: payload,
+          };
+        } finally {
+          if (shouldExcludeCurrentType) {
+            context.excludedTypeIds.pop();
+          }
+          context.serializingValueTypes.delete(objectValue);
+        }
       }
     }
 
@@ -296,7 +328,7 @@ export class Serializer {
   private serializeValue(
     value: unknown,
     context: SerializationContext,
-    skipTypes = false,
+    state: SerializeState,
   ): SerializedValue {
     if (value === null) {
       return null;
@@ -336,32 +368,63 @@ export class Serializer {
     }
 
     // Allow value-strategy types to serialize inline without identity tracking.
-    if (!skipTypes && !Array.isArray(objectValue)) {
-      const typeDef = this.findTypeDefinition(objectValue);
+    const shouldCheckTypes =
+      !Array.isArray(objectValue) && !state.serializingValueTypes.has(objectValue);
+
+    if (shouldCheckTypes) {
+      const typeDef = this.findTypeDefinition(objectValue, state.excludedTypeIds);
       if (typeDef) {
         if (typeDef.strategy === "value") {
+          state.serializingValueTypes.add(objectValue);
           const serializedPayload = typeDef.serialize(objectValue);
-          const payload = this.serializeValue(serializedPayload, context, true);
-          // Value types are serialized inline and do not preserve identity
-          // This produces stable JSON output for value-like types (ex: Date)
-          return {
-            __type: typeDef.id,
-            value: payload,
-          } as SerializedValue;
+          const shouldExcludeCurrentType = this.shouldExcludeTypeFromPayload(
+            typeDef,
+            serializedPayload,
+          );
+          if (shouldExcludeCurrentType) {
+            state.excludedTypeIds.push(typeDef.id);
+          }
+          try {
+            const payload = this.serializeValue(serializedPayload, context, state);
+            // Value types are serialized inline and do not preserve identity
+            // This produces stable JSON output for value-like types (ex: Date)
+            return {
+              __type: typeDef.id,
+              value: payload,
+            } as SerializedValue;
+          } finally {
+            state.serializingValueTypes.delete(objectValue);
+            if (shouldExcludeCurrentType) {
+              state.excludedTypeIds.pop();
+            }
+          }
         }
 
         const objectIdForType = this.createObjectId(context);
         context.objectIds.set(objectValue, objectIdForType);
 
         const serializedPayload = typeDef.serialize(objectValue);
-        const payload = this.serializeValue(serializedPayload, context, true);
+        const shouldExcludeCurrentType = this.shouldExcludeTypeFromPayload(
+          typeDef,
+          serializedPayload,
+        );
+        if (shouldExcludeCurrentType) {
+          state.excludedTypeIds.push(typeDef.id);
+        }
+        try {
+          const payload = this.serializeValue(serializedPayload, context, state);
 
-        this.storeNode(context, objectIdForType, {
-          kind: "type",
-          type: typeDef.id,
-          value: payload,
-        });
-        return { __ref: objectIdForType };
+          this.storeNode(context, objectIdForType, {
+            kind: "type",
+            type: typeDef.id,
+            value: payload,
+          });
+          return { __ref: objectIdForType };
+        } finally {
+          if (shouldExcludeCurrentType) {
+            state.excludedTypeIds.pop();
+          }
+        }
       }
     }
 
@@ -372,7 +435,7 @@ export class Serializer {
       const length = objectValue.length;
       const items: SerializedValue[] = new Array(length);
       for (let index = 0; index < length; index += 1) {
-        items[index] = this.serializeValue(objectValue[index], context);
+        items[index] = this.serializeValue(objectValue[index], context, state);
       }
       this.storeNode(context, objectId, { kind: "array", value: items });
       return { __ref: objectId };
@@ -388,7 +451,7 @@ export class Serializer {
       if (typeof entryValue === "undefined") {
         continue;
       }
-      record[key] = this.serializeValue(entryValue, context);
+      record[key] = this.serializeValue(entryValue, context, state);
     }
 
     this.storeNode(context, objectId, { kind: "object", value: record });
@@ -397,13 +460,33 @@ export class Serializer {
 
   private findTypeDefinition(
     value: unknown,
+    excludedTypeIds: readonly string[],
   ): TypeDefinition<unknown, unknown> | undefined {
     for (const typeDef of this.typeList) {
-      if (typeDef.is(value)) {
-        return typeDef;
+      if (excludedTypeIds.includes(typeDef.id)) {
+        continue;
+      }
+      try {
+        if (typeDef.is(value)) {
+          return typeDef;
+        }
+      } catch {
+        // Type guard threw an error; skip this type definition
+        continue;
       }
     }
     return undefined;
+  }
+
+  private shouldExcludeTypeFromPayload(
+    typeDef: TypeDefinition<unknown, unknown>,
+    serializedPayload: unknown,
+  ): boolean {
+    try {
+      return typeDef.is(serializedPayload);
+    } catch {
+      return false;
+    }
   }
   // ... (skipping unchanged methods)
 

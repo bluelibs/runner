@@ -1,3 +1,4 @@
+import * as crypto from "node:crypto";
 import { jsonErrorResponse } from "./httpResponse";
 import type {
   Authenticator,
@@ -10,6 +11,18 @@ import type { TaskRunner } from "../../models/TaskRunner";
 export interface NodeExposureHttpAuthConfig {
   header?: string;
   token?: string | string[];
+}
+
+function safeCompare(a: string, b: string): boolean {
+  try {
+    const bufA = Buffer.from(a) as Uint8Array;
+    const bufB = Buffer.from(b) as Uint8Array;
+    return (
+      bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function createAuthenticator(
@@ -31,7 +44,8 @@ export function createAuthenticator(
       const tokens = Array.isArray(authCfg.token)
         ? authCfg.token
         : [authCfg.token];
-      if (tokens.includes(providedToken)) {
+      const match = tokens.some((token) => safeCompare(token, providedToken));
+      if (match) {
         return { ok: true };
       }
     }

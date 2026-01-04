@@ -1,6 +1,12 @@
 import Redis from "ioredis";
 import * as crypto from "node:crypto";
-import type { Execution, Schedule, StepResult, Timer } from "../core/types";
+import type {
+  Execution,
+  ExecutionStatus,
+  Schedule,
+  StepResult,
+  Timer,
+} from "../core/types";
 import type {
   IDurableStore,
   ListExecutionsOptions,
@@ -23,6 +29,9 @@ export interface RedisClient {
   set(...args: unknown[]): Promise<unknown>;
   get(...args: unknown[]): Promise<unknown>;
   scan(...args: unknown[]): Promise<unknown>;
+  sscan(...args: unknown[]): Promise<unknown>;
+  sadd(...args: unknown[]): Promise<unknown>;
+  srem(...args: unknown[]): Promise<unknown>;
   keys?(...args: unknown[]): Promise<unknown>;
   pipeline(): RedisPipeline;
 
@@ -96,11 +105,54 @@ export class RedisStore implements IDurableStore {
     return keys;
   }
 
+  private async scanSetMembers(setKey: string): Promise<string[]> {
+    const members: string[] = [];
+    let cursor = "0";
+    do {
+      const scanned = await this.redis.sscan(setKey, cursor, "COUNT", 100);
+      const parsed = this.parseScanResponse(scanned);
+      if (!parsed) {
+        throw new Error("Unexpected Redis SSCAN response shape");
+      }
+
+      const [newCursor, scannedMembers] = parsed;
+      cursor = newCursor;
+      members.push(...scannedMembers);
+    } while (cursor !== "0");
+    return members;
+  }
+
+  private activeExecutionsKey(): string {
+    return this.k("active_executions");
+  }
+
+  private isActiveExecutionStatus(status: ExecutionStatus): boolean {
+    return (
+      status !== "completed" &&
+      status !== "failed" &&
+      status !== "compensation_failed"
+    );
+  }
+
+  private async updateActiveExecutionMembership(
+    executionId: string,
+    status: ExecutionStatus,
+  ): Promise<void> {
+    const key = this.activeExecutionsKey();
+    if (this.isActiveExecutionStatus(status)) {
+      await this.redis.sadd(key, executionId);
+      return;
+    }
+
+    await this.redis.srem(key, executionId);
+  }
+
   async saveExecution(execution: Execution): Promise<void> {
     await this.redis.set(
       this.k(`exec:${execution.id}`),
       serializer.stringify(execution),
     );
+    await this.updateActiveExecutionMembership(execution.id, execution.status);
   }
 
   async getExecution(id: string): Promise<Execution | null> {
@@ -134,26 +186,53 @@ export class RedisStore implements IDurableStore {
       return "OK"
     `;
 
-    await this.redis.eval(script, 1, key, updatesStr);
+    const updated = await this.redis.eval(script, 1, key, updatesStr);
+
+    if (updated === "OK" && updates.status) {
+      await this.updateActiveExecutionMembership(id, updates.status);
+    }
   }
 
   async listIncompleteExecutions(): Promise<Execution[]> {
-    const keys = await this.scanKeys(this.k("exec:*"));
-    if (keys.length === 0) return [];
+    const activeIds = await this.scanSetMembers(this.activeExecutionsKey());
+    if (activeIds.length === 0) return [];
     const pipeline = this.redis.pipeline();
-    keys.forEach((k: string) => pipeline.get(k));
+    activeIds.forEach((id) => pipeline.get(this.k(`exec:${id}`)));
     const results = await pipeline.exec();
-    return (results || [])
+    if (!results) return [];
+
+    const staleIds: string[] = [];
+    const executions = results
       .map(([_, res]) =>
         typeof res === "string" ? (serializer.parse(res) as Execution) : null,
       )
       .filter(
         (e): e is Execution =>
           e !== null &&
-          e.status !== "completed" &&
-          e.status !== "failed" &&
-          e.status !== "compensation_failed",
-      );
+          this.isActiveExecutionStatus(e.status),
+    );
+
+    for (let i = 0; i < activeIds.length; i += 1) {
+      const raw = results[i]?.[1];
+      if (typeof raw !== "string") {
+        staleIds.push(activeIds[i]);
+        continue;
+      }
+      const execution = serializer.parse(raw) as Execution;
+      if (!this.isActiveExecutionStatus(execution.status)) {
+        staleIds.push(activeIds[i]);
+      }
+    }
+
+    if (staleIds.length > 0) {
+      try {
+        await this.redis.srem(this.activeExecutionsKey(), ...staleIds);
+      } catch {
+        // Best-effort cleanup; ignore.
+      }
+    }
+
+    return executions;
   }
 
   async listStuckExecutions(): Promise<Execution[]> {
@@ -378,6 +457,12 @@ export class RedisStore implements IDurableStore {
   async deleteTimer(timerId: string): Promise<void> {
     await this.redis.hdel(this.k("timers"), timerId);
     await this.redis.zrem(this.k("timers_schedule"), timerId);
+  }
+
+  async claimTimer(timerId: string, workerId: string, ttlMs: number): Promise<boolean> {
+    const key = this.k(`timer:claim:${timerId}`);
+    const result = await this.redis.set(key, workerId, "PX", ttlMs, "NX");
+    return result === "OK";
   }
 
   async createSchedule(schedule: Schedule): Promise<void> {

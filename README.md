@@ -14,19 +14,43 @@
 <a href="https://www.npmjs.com/package/@bluelibs/runner"><img src="https://img.shields.io/npm/dm/@bluelibs/runner.svg" alt="npm downloads" /></a>
 </p>
 
-| Resource                                                                                                            | Type    | Notes                                                         |
-| ------------------------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------- |
-| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website | Overview, features, and highlights                            |
-| [BlueLibs Runner GitHub](https://github.com/bluelibs/runner)                                                        | GitHub  | Source code, issues, and releases                             |
-| [BlueLibs Runner Dev](https://github.com/bluelibs/runner-dev)                                                       | GitHub  | Development tools and CLI for BlueLibs Runner                 |
-| [UX Friendly Docs](https://bluelibs.github.io/runner/)                                                              | Docs    | Clean, navigable documentation                                |
-| [AI Friendly Docs (<5000 tokens)](https://github.com/bluelibs/runner/blob/main/AI.md)                               | Docs    | Short, token-friendly summary (<5000 tokens)                  |
-| [Durable Workflows (Node-only)](https://github.com/bluelibs/runner/blob/main/readmes/DURABLE_WORKFLOWS.md)          | Guide   | Durable workflows deep-dive (see also `readmes/DURABLE_WORKFLOWS_AI.md`), plus dashboard + optional audit timeline |
-| [Migrate from 3.x.x to 4.x.x](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade from v3 to v4                            |
-| [Runner Lore](https://github.com/bluelibs/runner/blob/main/readmes)                                                 | Docs    | Design notes, deep dives, and context                         |
-| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | Full Express + OpenAPI + SQLite demo                          |
-| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full Fastify + MikroORM + PostgreSQL demo                     |
-| [OpenAI Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)       | Chatbot | Ask questions interactively, or feed README.md to your own AI |
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+// Define a task with dependencies and type-safe input/output
+const createUser = r
+  .task("users.create")
+  .dependencies({ db, mailer })
+  .run(async (input, { db, mailer }) => {
+    const user = await db.users.insert(input);
+    await mailer.sendWelcome(user.email);
+    return user;
+  })
+  .build();
+
+// Compose resources and run your application
+const app = r.resource("app").register([db, mailer, createUser]).build();
+const runtime = await run(app);
+```
+
+**[📚 Documentation](https://bluelibs.github.io/runner/)** · **[🎮 Examples](./examples)** · **[💬 Discord](#community--support)** · **[⭐ GitHub](https://github.com/bluelibs/runner)**
+
+</div>
+
+---
+
+| Resource                                                                                                            | Type    | Description                                    |
+| ------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------- |
+| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website | Overview and features                          |
+| [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases              |
+| [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling                    |
+| [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference                    |
+| [AI-Friendly Docs](https://github.com/bluelibs/runner/blob/main/AI.md)                                              | Docs    | Compact summary (<5000 tokens)                 |
+| [Migration Guide (3.x → 4.x)](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade instructions              |
+| [Design Documents](https://github.com/bluelibs/runner/blob/main/readmes)                                            | Docs    | Architecture notes and deep dives              |
+| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification            |
+| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM                |
+| [AI Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)                   | Chatbot | Interactive Q&A assistant                      |
 
 ### Community & Policies
 
@@ -61,8 +85,8 @@ export class UserService {
     private readonly db: Database,
     private readonly cache: Cache,
     private readonly logger: Logger,
-  ) // ... more dependencies
-  {}
+    // ... more dependencies
+  ) {}
 }
 ```
 
@@ -176,7 +200,6 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [Community & Support](#community--support) - Getting help
 
 ---
-
 ## What Is This Thing?
 
 BlueLibs Runner is a TypeScript-first framework that embraces functional programming principles while keeping dependency injection simple enough that you won't need a flowchart to understand your own code. Think of it as the anti-framework framework – it gets out of your way and lets you build stuff that actually works.
@@ -357,6 +380,7 @@ Runner comes with **everything you need** to build production apps:
 
 - ✅ Tunnels (Distributed)
 - ✅ Tags System
+- ✅ Durable Workflows (Node-only)
 - ✅ Factory Pattern
 - ✅ Namespacing
 - ✅ Overrides
@@ -369,7 +393,6 @@ Runner comes with **everything you need** to build production apps:
 **No extra packages needed.** It's all included and works together seamlessly.
 
 ---
-
 ## Quick Start
 
 Let's start with the simplest possible example. Just copy this, run it, and you'll see Runner in action:
@@ -770,6 +793,8 @@ const processPayment = r
 
 ---
 
+
+
 ## The Big Five
 
 The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using the runner effectively.
@@ -907,6 +932,43 @@ const app = r
   ])
   .build();
 ```
+
+#### Resource Forking
+
+Use `.fork(newId)` to create multiple instances of a "template" resource with different identities. This is perfect when you need several instances of the same resource type (e.g., multiple database connections, multiple mailers):
+
+```typescript
+// Define a reusable template
+const mailerBase = r.resource<{ smtp: string }>("base.mailer")
+  .init(async (cfg) => ({ send: (to: string) => console.log(`Sending via ${cfg.smtp}`) }))
+  .build();
+
+// Fork with distinct identities - export these for dependency use
+export const txMailer = mailerBase.fork("app.mailers.transactional");
+export const mktMailer = mailerBase.fork("app.mailers.marketing");
+
+// Use forked resources as dependencies
+const orderService = r.task("app.tasks.processOrder")
+  .dependencies({ mailer: txMailer })  // ← uses forked identity
+  .run(async (input, { mailer }) => { 
+    mailer.send(input.customerEmail);
+  })
+  .build();
+
+const app = r.resource("app")
+  .register([
+    txMailer.with({ smtp: "tx.smtp.com" }),
+    mktMailer.with({ smtp: "mkt.smtp.com" }),
+    orderService,
+  ])
+  .build();
+```
+
+Key points:
+- **`.fork()` returns a built `IResource`** — no need to call `.build()` again
+- **Tags, middleware, and type parameters are inherited**
+- **Each fork gets independent runtime** — no shared state
+- **Export forked resources** to use them as typed dependencies
 
 #### Private Context
 
@@ -1462,18 +1524,6 @@ const getUser = r
 const root = r.resource("app").register([userNotFoundError, getUser]).build();
 ```
 
-You can also declare error contracts without DI by using `throws`. This is purely declarative and does not inject dependencies:
-
-```ts
-const getUser = r
-  .task("app.tasks.getUser")
-  .throws([userNotFoundError]) // or ["app.errors.userNotFound"]
-  .run(async (input) => {
-    userNotFoundError.throw({ code: 404, message: `User ${input} not found` });
-  })
-  .build();
-```
-
 Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.
 
 ```ts
@@ -1684,6 +1734,8 @@ const task = r.task("id")
 
 ## run() and RunOptions
 
+
+
 The `run()` function boots a root `resource` and returns a `RunResult` handle to interact with your system.
 
 Basic usage:
@@ -1823,6 +1875,8 @@ await run(app);
 > **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You’re collapsing the waveform of a task at runtime and I’m Schrödinger’s runtime, praying the cat hasn’t overridden `run()` with `throw new Error('lol')`."
 
 ## Optional Dependencies
+
+
 
 _Making your app resilient when services aren't available_
 
@@ -1968,8 +2022,9 @@ const remoteTasksTunnel = r
 This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
 
 For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
-
 ## Async Context
+
+
 
 Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node). Use the fluent builder under `r.asyncContext` to create contexts that can be registered and injected as dependencies.
 
@@ -2009,10 +2064,9 @@ const app = r.resource("app").register([requestContext, whoAmI]).build();
 ```
 
 // Legacy section for Private Context - different from Async Context
-
 ## Fluent Builders (`r.*`)
 
-(`r.*`)
+ (`r.*`)
 
 For a more ergonomic and chainable way to define your components, Runner offers a fluent builder API under the `r` namespace. These builders are fully type-safe, improve readability for complex definitions, and compile to the standard Runner definitions with zero runtime overhead.
 
@@ -2072,6 +2126,8 @@ The builder API provides a clean, step-by-step way to construct everything from 
 For a complete guide and more examples, check out the [full Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).
 
 ## Type Helpers
+
+
 
 These utility types help you extract the generics from tasks, resources, and events without re-declaring them. Import them from `@bluelibs/runner`.
 
@@ -2159,7 +2215,7 @@ const handleRequest = r
 
 ## System Shutdown Hooks
 
-Hooks
+ Hooks
 
 _Graceful shutdown and cleanup when your app needs to stop_
 
@@ -2284,6 +2340,8 @@ await run(app, {
 > **runtime:** "An error boundary: a trampoline under your tightrope. I’m the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
 
 ## Caching
+
+
 
 Because nobody likes waiting for the same expensive operation twice:
 
@@ -2581,6 +2639,8 @@ Best practices:
 > **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It’s not me, it’s your molasses‑flavored endpoint. I just blow the whistle."
 
 ## Logging
+
+
 
 _The structured logging system that actually makes debugging enjoyable_
 
@@ -3032,6 +3092,8 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it’s off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
 
 ## Meta
+
+
 
 _The structured way to describe what your components do and control their behavior_
 
@@ -3789,7 +3851,6 @@ export const problematicResource = defineResource({
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
-
 ## Real-World Example: The Complete Package
 
 Here's a more realistic application structure that shows everything working together:
@@ -3949,6 +4010,8 @@ process.on("SIGTERM", async () => {
 > **runtime:** "Ah yes, the 'Real‑World Example'—a terrarium where nothing dies and every request is polite. Release it into production and watch nature document a very different ecosystem."
 
 ## Testing
+
+
 
 ### Unit Testing
 
@@ -4350,7 +4413,6 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
 
 > **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
-
 ## Why Choose BlueLibs Runner?
 
 ### What You Get

@@ -15,7 +15,7 @@ export {
   disposeDurableService,
   DurableExecutionError,
 } from "./core/DurableService";
-export { createDurableResource } from "./core/resource";
+export { durableResource } from "./core/resource";
 export type { DurableResourceRuntimeConfig } from "./core/resource";
 export { DurableContext } from "./core/DurableContext";
 export { StepBuilder } from "./core/StepBuilder";
@@ -35,3 +35,6 @@ export { RabbitMQQueue } from "./queue/RabbitMQQueue";
 export { MemoryEventBus } from "./bus/MemoryEventBus";
 export { NoopEventBus } from "./bus/NoopEventBus";
 export { RedisEventBus } from "./bus/RedisEventBus";
+
+export { createDurableTestSetup, waitUntil } from "./test-utils";
+export type { DurableTestSetup, DurableTestSetupOptions } from "./test-utils";

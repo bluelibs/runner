@@ -11,6 +11,10 @@
 const path = require("path");
 const fs = require("fs");
 
+function toPosixPath(filePath) {
+  return String(filePath).replaceAll("\\", "/");
+}
+
 function round(num) {
   return Math.round((num + Number.EPSILON) * 100) / 100;
 }
@@ -33,10 +37,9 @@ function parseFirstStackLocation(message) {
       const [, filePath, line, column] = match;
       if (!filePath) continue;
       const normalized = path.normalize(filePath);
-      // Prefer paths from current project
       if (normalized.includes(cwd)) {
         return {
-          file: path.relative(cwd, normalized),
+          file: toPosixPath(path.relative(cwd, normalized)),
           line: Number(line),
           column: Number(column),
         };
@@ -49,9 +52,7 @@ function parseFirstStackLocation(message) {
 function formatLineRanges(lines) {
   if (!Array.isArray(lines) || lines.length === 0) return "";
   const sorted = Array.from(
-    new Set(
-      lines.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0),
-    ),
+    new Set(lines.map((n) => Number(n)).filter((n) => Number.isFinite(n) && n > 0)),
   ).sort((a, b) => a - b);
   if (sorted.length === 0) return "";
   const ranges = [];
@@ -74,7 +75,7 @@ function getMissedLinesOnlyFromFileCoverage(fileCoverage) {
   const missed = new Set();
   try {
     if (!fileCoverage) return [];
-    // Lines with 0 hits (line coverage) – this is the authoritative source
+    // Lines with 0 hits (line coverage) - this is the authoritative source
     if (typeof fileCoverage.getLineCoverage === "function") {
       const lineMap = fileCoverage.getLineCoverage();
       for (const [lineStr, hits] of Object.entries(lineMap)) {
@@ -83,7 +84,7 @@ function getMissedLinesOnlyFromFileCoverage(fileCoverage) {
       }
     }
   } catch (_) {
-    // ignore and fallback to LCOV parsing when needed
+    // ignore
   }
   return Array.from(missed);
 }
@@ -108,8 +109,7 @@ function extractCodeFromLoc(lines, loc) {
     const eCol = Math.max(0, Number(loc.end.column || 0));
     const startIdx = sLine - 1;
     const endIdx = eLine - 1;
-    if (!Number.isFinite(startIdx) || !Number.isFinite(endIdx))
-      return undefined;
+    if (!Number.isFinite(startIdx) || !Number.isFinite(endIdx)) return undefined;
     if (!lines[startIdx]) return undefined;
     if (startIdx === endIdx) {
       const lineText = lines[startIdx] || "";
@@ -162,7 +162,6 @@ function getUncoveredBranchesFromFileCoverage(fileCoverage) {
   } catch (_) {
     // ignore
   }
-  // Merge duplicates by line, keep first code snippet
   const byLine = new Map();
   for (const item of result) {
     if (!byLine.has(item.line)) byLine.set(item.line, item);
@@ -170,92 +169,37 @@ function getUncoveredBranchesFromFileCoverage(fileCoverage) {
   return Array.from(byLine.values()).sort((a, b) => a.line - b.line);
 }
 
-function readMissedFromLcovDetailed(lcovPath) {
-  const result = new Map();
-  try {
-    if (!fs.existsSync(lcovPath)) return result;
-    const content = fs.readFileSync(lcovPath, "utf-8");
-    const cwd = process.cwd();
-    let currentFile;
-    for (const rawLine of content.split(/\r?\n/)) {
-      const line = rawLine.trim();
-      if (line.startsWith("SF:")) {
-        const filePath = path.normalize(line.slice(3));
-        // Prefer project-relative paths
-        const rel = filePath.includes(cwd)
-          ? path.relative(cwd, filePath)
-          : filePath;
-        currentFile = rel;
-        if (!result.has(currentFile))
-          result.set(currentFile, { lines: new Set(), branches: new Set() });
-      } else if (line.startsWith("DA:") && currentFile) {
-        const rest = line.slice(3);
-        const [lineNoStr, hitsStr] = rest.split(",");
-        const lineNo = Number(lineNoStr);
-        const hits = Number(hitsStr);
-        if (Number.isFinite(lineNo) && hits === 0) {
-          result.get(currentFile).lines.add(lineNo);
-        }
-      } else if (line.startsWith("BRDA:") && currentFile) {
-        // BRDA:<line>,<block>,<branch>,<taken>
-        const rest = line.slice(5);
-        const [lineNoStr, _block, _branch, takenStr] = rest.split(",");
-        const lineNo = Number(lineNoStr);
-        // Per LCOV spec, taken can be '-' or a number; 0 means not taken (missed)
-        if (Number.isFinite(lineNo) && takenStr === "0") {
-          result.get(currentFile).branches.add(lineNo);
-        }
-      } else if (line === "end_of_record") {
-        currentFile = undefined;
-      }
-    }
-  } catch (_) {
-    // ignore errors
-  }
-  // Convert Set to array
-  for (const [k, v] of result.entries()) {
-    result.set(k, {
-      lines: Array.from(v.lines),
-      branches: Array.from(v.branches),
-    });
-  }
-  return result;
-}
-
 function formatFailure(testResult) {
   const items = [];
-  const relative = path.relative(process.cwd(), testResult.testFilePath);
+  const relative = toPosixPath(path.relative(process.cwd(), testResult.testFilePath));
   for (const assertion of testResult.testResults) {
-    if (assertion.status === "failed") {
-      let locFile = relative;
-      let locLine;
-      let locColumn;
-      if (assertion.location && typeof assertion.location.line === "number") {
-        locLine = assertion.location.line;
-        locColumn = assertion.location.column;
-      } else if (
-        assertion.failureMessages &&
-        assertion.failureMessages.length
-      ) {
-        const loc = parseFirstStackLocation(
-          assertion.failureMessages.join("\n"),
-        );
-        if (loc) {
-          locFile = loc.file || locFile;
-          locLine = loc.line;
-          locColumn = loc.column;
-        }
+    if (assertion.status !== "failed") continue;
+
+    let locFile = relative;
+    let locLine;
+    let locColumn;
+    if (assertion.location && typeof assertion.location.line === "number") {
+      locLine = assertion.location.line;
+      locColumn = assertion.location.column;
+    } else if (assertion.failureMessages && assertion.failureMessages.length) {
+      const loc = parseFirstStackLocation(assertion.failureMessages.join("\n"));
+      if (loc) {
+        locFile = loc.file || locFile;
+        locLine = loc.line;
+        locColumn = loc.column;
       }
-      items.push({
-        file: locFile,
-        line: locLine,
-        column: locColumn,
-        title: assertion.title,
-        fullName: assertion.fullName,
-        failureMessages: assertion.failureMessages || [],
-      });
     }
+
+    items.push({
+      file: locFile,
+      line: locLine,
+      column: locColumn,
+      title: assertion.title,
+      fullName: assertion.fullName,
+      failureMessages: assertion.failureMessages || [],
+    });
   }
+
   if (testResult.failureMessage) {
     let locFile = relative;
     let locLine;
@@ -275,7 +219,19 @@ function formatFailure(testResult) {
       failureMessages: [testResult.failureMessage],
     });
   }
+
   return items;
+}
+
+function writeReporterSummary(summaryPath, summary) {
+  const target = String(summaryPath || "").trim();
+  if (!target) return;
+  try {
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    fs.writeFileSync(target, JSON.stringify(summary, null, 2));
+  } catch (_) {
+    // ignore
+  }
 }
 
 class JestAIReporter {
@@ -287,69 +243,47 @@ class JestAIReporter {
         failedTests: aggregatedResults.numFailedTests,
         totalSuites: aggregatedResults.numTotalTestSuites,
         failedSuites: aggregatedResults.numFailedTestSuites,
+        runtimeErrorSuites: aggregatedResults.numRuntimeErrorTestSuites,
       },
       failures: [],
       coverage: [],
     };
 
-    // Collect failures
     for (const tr of aggregatedResults.testResults) {
       if (tr.numFailingTests > 0 || tr.testExecError) {
         output.failures.push(...formatFailure(tr));
       }
     }
 
-    // Collect coverage for files that are not 100% across all four metrics
     const coverageMap = aggregatedResults.coverageMap;
     const addCoverageItem = (
       filePath,
-      s,
-      b,
-      f,
-      l,
+      statementsPct,
+      branchesPct,
+      functionsPct,
+      linesPct,
       missedLines,
       uncoveredBranches,
     ) => {
-      const allHundred = s === 100 && b === 100 && f === 100 && l === 100;
-      if (!allHundred) {
-        const fileRel = path.relative(process.cwd(), filePath);
-        const lines = Array.isArray(missedLines) ? missedLines : [];
-        const branches = Array.isArray(uncoveredBranches)
-          ? uncoveredBranches
-          : [];
-        output.coverage.push({
-          file: fileRel,
-          stmts: pctStr(s),
-          branch: pctStr(b),
-          funcs: pctStr(f),
-          lines: pctStr(l),
-          missedLines: lines,
-          uncoveredBranches: branches,
-        });
-      }
+      const allHundred =
+        statementsPct === 100 &&
+        branchesPct === 100 &&
+        functionsPct === 100 &&
+        linesPct === 100;
+      if (allHundred) return;
+
+      const fileRel = toPosixPath(path.relative(process.cwd(), filePath));
+      output.coverage.push({
+        file: fileRel,
+        stmts: pctStr(statementsPct),
+        branch: pctStr(branchesPct),
+        funcs: pctStr(functionsPct),
+        lines: pctStr(linesPct),
+        missedLines: Array.isArray(missedLines) ? missedLines : [],
+        uncoveredBranches: Array.isArray(uncoveredBranches) ? uncoveredBranches : [],
+      });
     };
 
-    // Build a map from relative file path -> fileCoverage for quick lookup (if needed later)
-    const fileCoverageByRel = new Map();
-    if (coverageMap && typeof coverageMap.files === "function") {
-      try {
-        const files = coverageMap.files();
-        for (const file of files) {
-          const rel = path.relative(process.cwd(), file);
-          try {
-            const fc = coverageMap.fileCoverageFor(file);
-            fileCoverageByRel.set(rel, fc);
-          } catch (_) {
-            // ignore individual file errors
-          }
-        }
-      } catch (_) {
-        // ignore errors building the map
-      }
-    }
-
-    // Prefer in-memory coverage map for current-run truth.
-    // Only fall back to coverage-summary.json if coverageMap is missing.
     if (coverageMap && typeof coverageMap.files === "function") {
       const files = coverageMap.files();
       for (const file of files) {
@@ -369,7 +303,6 @@ class JestAIReporter {
       }
     }
 
-    // Sort coverage ascending by lowest metric to bubble the worst offenders
     if (output.coverage.length > 0) {
       output.coverage.sort((a, b) => {
         const minA = Math.min(
@@ -388,8 +321,6 @@ class JestAIReporter {
       });
     }
 
-    // Print concise AI-friendly output
-    // Failures first
     if (output.failures.length > 0) {
       console.log("\nFAILURES:");
       for (const f of output.failures) {
@@ -398,7 +329,6 @@ class JestAIReporter {
             ? `:${f.line}:${f.column}`
             : "";
         console.log(`- ${f.file}${locSuffix} :: ${f.fullName || f.title}`);
-        // Print full message/stacktrace for verbosity
         for (const msg of f.failureMessages) {
           const lines = String(msg)
             .split("\n")
@@ -408,7 +338,6 @@ class JestAIReporter {
       }
     }
 
-    // Coverage shortfall (skippable via env when an external printer will handle it)
     const shouldPrintCoverage =
       String(process.env.AI_REPORTER_DISABLE_COVERAGE || "").trim() !== "1";
     if (shouldPrintCoverage && output.coverage.length > 0) {
@@ -427,26 +356,27 @@ class JestAIReporter {
           )
             .filter((n) => Number.isFinite(n) && n > 0)
             .sort((a, b) => a - b);
-          const linesText = branchLines.join(", ");
-          console.log(`  - Uncovered Branches on Lines: ${linesText}`);
+          console.log(`  - Uncovered Branches on Lines: ${branchLines.join(", ")}`);
           for (const b of c.uncoveredBranches) {
-            if (typeof b.line === "number" && b.code && String(b.code).trim()) {
-              const snippet = String(b.code).trim();
-              // Limit snippet length to keep output compact
-              const truncated =
-                snippet.length > 200 ? `${snippet.slice(0, 200)}…` : snippet;
-              console.log(`    ${b.line}: ${truncated}`);
-            }
+            if (typeof b.line !== "number") continue;
+            if (!b.code || !String(b.code).trim()) continue;
+            const snippet = String(b.code).trim();
+            const truncated = snippet.length > 200 ? `${snippet.slice(0, 200)}...` : snippet;
+            console.log(`    ${b.line}: ${truncated}`);
           }
         }
       }
     }
 
-    // Final result one-liner
     const status = isFailure(aggregatedResults) ? "FAILED" : "PASSED";
     console.log(
       `\nRESULT: ${status} | Tests: ${aggregatedResults.numTotalTests}, Failed: ${aggregatedResults.numFailedTests}`,
     );
+
+    writeReporterSummary(process.env.AI_REPORTER_SUMMARY_PATH, {
+      summary: output.summary,
+      coverageBelowHundredFiles: output.coverage.length,
+    });
   }
 }
 

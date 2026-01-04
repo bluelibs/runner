@@ -228,6 +228,14 @@ export interface IResource<
     >
   >;
   tags: TTags;
+  /**
+   * Create a new resource with a different id but the same definition.
+   * Useful for creating multiple instances of a "template" resource.
+   * The forked resource should be exported and used as a dependency.
+   */
+  fork(
+    newId: string,
+  ): IResource<TConfig, TValue, TDependencies, TContext, TMeta, TTags, TMiddleware>;
 }
 
 export interface IResourceWithConfig<

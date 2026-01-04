@@ -19,60 +19,78 @@ export type DurableResourceRuntimeConfig = Omit<
   worker?: boolean;
 };
 
-export function createDurableResource(
-  id: string,
-  config: DurableResourceRuntimeConfig,
-) {
-  return r
-    .resource<void>(id)
-    .register(durableEventsArray)
-    .dependencies({
-      taskRunner: globals.resources.taskRunner,
-      eventManager: globals.resources.eventManager,
-      runnerStore: globals.resources.store,
-    })
-    .init(async (_cfg, { taskRunner, eventManager, runnerStore }) => {
-      const auditEmitter =
-        config.audit?.emitter ??
-        (config.audit?.emitRunnerEvents
-          ? createDurableRunnerAuditEmitter({ eventManager })
-          : undefined);
+/**
+ * A reusable durable resource template.
+ *
+ * Usage:
+ * - `const durable = durableResource.fork("app.durable");`
+ * - Register it via `durable.with({ store, queue, eventBus, ... })`
+ */
+export const durableResource = r
+  .resource<DurableResourceRuntimeConfig>("base.durable")
+  .register(durableEventsArray)
+  .dependencies({
+    taskRunner: globals.resources.taskRunner,
+    eventManager: globals.resources.eventManager,
+    runnerStore: globals.resources.store,
+  })
+  .init(async (config, { taskRunner, eventManager, runnerStore }) => {
+    const runnerEmitter = createDurableRunnerAuditEmitter({ eventManager });
+    const userEmitter = config.audit?.emitter;
+    const auditEmitter =
+      userEmitter
+        ? {
+            emit: async (entry) => {
+              try {
+                await userEmitter.emit(entry);
+              } catch {
+                // Emissions must not affect workflow correctness.
+              }
+              try {
+                await runnerEmitter.emit(entry);
+              } catch {
+                // Emissions must not affect workflow correctness.
+              }
+            },
+          }
+        : runnerEmitter;
 
-      const contextStorage = new AsyncLocalStorage<IDurableContext>();
+    const contextStorage = new AsyncLocalStorage<IDurableContext>();
 
-      const service = await initDurableService({
-        ...config,
-        audit: {
-          ...config.audit,
-          emitter: auditEmitter,
+    const service = await initDurableService({
+      ...config,
+      audit: {
+        ...config.audit,
+        emitter: auditEmitter,
+      },
+      taskExecutor: {
+        run: async <TInput, TResult>(
+          task: DurableTask<TInput, TResult>,
+          input?: TInput,
+        ) => {
+          const outputPromise = await taskRunner.run(task, input);
+          if (outputPromise === undefined) {
+            throw new Error(
+              `Durable task '${task.id}' completed without a result promise.`,
+            );
+          }
+          return await outputPromise;
         },
-        taskExecutor: {
-          run: async <TInput, TResult>(
-            task: DurableTask<TInput, TResult>,
-            input?: TInput,
-          ) => {
-            const outputPromise = await taskRunner.run(task, input);
-            if (outputPromise === undefined) {
-              throw new Error(
-                `Durable task '${task.id}' completed without a result promise.`,
-              );
-            }
-            return await outputPromise;
-          },
-        },
-        taskResolver: (taskId) => {
-          const storeTask = runnerStore.tasks.get(taskId);
-          return storeTask?.task;
-        },
-        contextProvider: (ctx, fn) => contextStorage.run(ctx, fn),
-      });
+      },
+      taskResolver: (taskId) => {
+        const storeTask = runnerStore.tasks.get(taskId);
+        return storeTask?.task;
+      },
+      contextProvider: (ctx, fn) => contextStorage.run(ctx, fn),
+    });
 
-      if (config.worker === true && config.queue) {
-        await initDurableWorker(service, config.queue);
-      }
+    if (config.worker === true && config.queue) {
+      await initDurableWorker(service, config.queue);
+    }
 
-      return new DurableResource(service, contextStorage);
-    })
-    .dispose(async (durable) => disposeDurableService(durable.service, config))
-    .build();
-}
+    return new DurableResource(service, contextStorage);
+  })
+  .dispose(async (durable, config) =>
+    disposeDurableService(durable.service, config),
+  )
+  .build();

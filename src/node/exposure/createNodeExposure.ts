@@ -44,6 +44,7 @@ export async function createNodeExposure(
       router,
       cors: httpConfig?.cors,
       serializer,
+      limits: httpConfig?.limits,
     });
 
   const serverControls = await createExposureServer({

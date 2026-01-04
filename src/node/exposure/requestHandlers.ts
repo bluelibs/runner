@@ -16,6 +16,8 @@ import { errorMessage, safeLogError } from "./logging";
 import type {
   Authenticator,
   AllowListGuard,
+  JsonBody,
+  JsonResponse,
   RequestHandler,
   StreamingResponse,
 } from "./types";
@@ -30,6 +32,58 @@ import { applyCorsActual, handleCorsPreflight } from "./cors";
 import { createAbortControllerForRequest, getContentType } from "./utils";
 import { computeAllowList } from "../tunnel.allowlist";
 
+/** Sanitizes 500 errors if they are not application-defined */
+const sanitizeErrorResponse = (response: unknown): JsonResponse => {
+  const asRecord =
+    response && typeof response === "object"
+      ? (response as Record<string, unknown>)
+      : undefined;
+
+  const statusRaw = asRecord?.status ?? asRecord?.statusCode;
+  const status =
+    typeof statusRaw === "number" && Number.isFinite(statusRaw)
+      ? statusRaw
+      : 500;
+
+  const bodyRaw = asRecord?.body;
+  const hasBody = bodyRaw && typeof bodyRaw === "object";
+  const body = hasBody ? (bodyRaw as Record<string, unknown>) : undefined;
+
+  const errorRaw =
+    (body && typeof body.error === "object" ? body.error : undefined) ??
+    (asRecord && typeof asRecord.error === "object" ? asRecord.error : undefined);
+
+  const normalizedBody: JsonBody = ((): JsonBody => {
+    if (body && typeof body.ok === "boolean") {
+      return body as JsonBody;
+    }
+    if (errorRaw) {
+      return { ok: false, error: errorRaw as Record<string, unknown> };
+    }
+    return { ok: false, error: { message: "Internal Error", code: "INTERNAL_ERROR" } };
+  })();
+
+  const sanitizedBody: JsonBody = ((): JsonBody => {
+    const maybeError = (normalizedBody as { error?: unknown } | undefined)?.error;
+    const bodyError =
+      maybeError && typeof maybeError === "object"
+        ? (maybeError as Record<string, unknown>)
+        : undefined;
+
+    if (status !== 500 || !bodyError) return normalizedBody;
+
+    return {
+      ...normalizedBody,
+      error: {
+        ...bodyError,
+        message: "Internal Error",
+      },
+    };
+  })();
+
+  return { status, body: sanitizedBody };
+};
+
 interface RequestProcessingDeps {
   store: NodeExposureDeps["store"];
   taskRunner: NodeExposureDeps["taskRunner"];
@@ -40,6 +94,10 @@ interface RequestProcessingDeps {
   router: ExposureRouter;
   cors?: NodeExposureHttpCorsConfig;
   serializer: SerializerLike;
+  limits?: {
+    json?: { maxSize?: number };
+    multipart?: any; // avoid circular or strict import if possible, but we have it imported already
+  };
 }
 
 export interface NodeExposureRequestHandlers {
@@ -60,6 +118,7 @@ export function createRequestHandlers(
     authenticator,
     allowList,
     router,
+    limits,
   } = deps;
   const serializer = deps.serializer;
   const cors = deps.cors;
@@ -164,10 +223,11 @@ export function createRequestHandlers(
           req,
           controller.signal,
           serializer,
+          limits?.multipart,
         );
         if (!multipart.ok) {
           applyCorsActual(req, res, cors);
-          respondJson(res, multipart.response, serializer);
+          respondJson(res, sanitizeErrorResponse(multipart.response), serializer);
           return;
         }
         const finalizePromise = multipart.finalize;
@@ -184,7 +244,7 @@ export function createRequestHandlers(
         if (!finalize.ok) {
           if (!res.writableEnded && !res.headersSent) {
             applyCorsActual(req, res, cors);
-            respondJson(res, finalize.response, serializer);
+            respondJson(res, sanitizeErrorResponse(finalize.response), serializer);
           }
           return;
         }
@@ -237,6 +297,7 @@ export function createRequestHandlers(
         req,
         controller.signal,
         serializer,
+        limits?.json?.maxSize,
       );
       if (!body.ok) {
         applyCorsActual(req, res, cors);
@@ -302,7 +363,7 @@ export function createRequestHandlers(
       }
       const logMessage = errorMessage(error);
       const displayMessage =
-        error instanceof Error && error.message
+        appErrorExtra && error instanceof Error && error.message
           ? error.message
           : "Internal Error";
       safeLogError(logger, "exposure.task.error", {
@@ -358,7 +419,7 @@ export function createRequestHandlers(
       const body = await readJsonBody<{
         payload?: unknown;
         returnPayload?: boolean;
-      }>(req, controller.signal, serializer);
+      }>(req, controller.signal, serializer, limits?.json?.maxSize);
       if (!body.ok) {
         applyCorsActual(req, res, cors);
         respondJson(res, body.response, serializer);
@@ -449,7 +510,7 @@ export function createRequestHandlers(
       }
       const logMessage = errorMessage(error);
       const displayMessage =
-        error instanceof Error && error.message
+        appErrorExtra && error instanceof Error && error.message
           ? error.message
           : "Internal Error";
       safeLogError(logger, "exposure.event.error", {

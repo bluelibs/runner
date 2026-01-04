@@ -51,6 +51,14 @@ export interface IDurableStore {
   createTimer(timer: Timer): Promise<void>;
   getReadyTimers(now?: Date): Promise<Timer[]>;
   markTimerFired(timerId: string): Promise<void>;
+  /**
+   * Atomically claim a timer for processing. Returns true if claimed, false if already claimed.
+   * Used for distributed timer coordination to ensure only one worker processes each timer.
+   * @param timerId The ID of the timer to claim
+   * @param workerId A unique identifier for the worker claiming the timer
+   * @param ttlMs Time-to-live in milliseconds for the claim (in case worker dies)
+   */
+  claimTimer?(timerId: string, workerId: string, ttlMs: number): Promise<boolean>;
   deleteTimer(timerId: string): Promise<void>;
 
   createSchedule(schedule: Schedule): Promise<void>;

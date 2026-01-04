@@ -36,12 +36,21 @@ Durable workflows are a **Node-only** module exported from `@bluelibs/runner/nod
 - Spec & guide: `readmes/DURABLE_WORKFLOWS.md`
 - Token-friendly durable guide: `readmes/DURABLE_WORKFLOWS_AI.md`
 - Core primitives: `ctx.step(id, fn)`, `ctx.sleep(ms)`, `ctx.emit(event, payload)`, `ctx.waitForSignal(signal)` and `durable.signal(executionId, signal, payload)`
+- `waitForSignal` return shapes:
+  - `waitForSignal(signal)` or `waitForSignal(signal, { stepId })` => payload (throws on timeout)
+  - `waitForSignal(signal, { timeoutMs })` => `{ kind: "signal" | "timeout" }` (stepId does not change the return type)
+- Note: `waitForSignal(signal, { stepId })` requires a store that supports listing step results (`listStepResults`) so `durable.signal(...)` can resume the correct waiter.
 - Semantics: repeated `emit` and repeated `waitForSignal` (same signal id) are supported and replay-safe (see the guides for details)
-- Determinism: internal emit/signal step ids use call-order indexes; changing workflow structure can shift ids and affect replay
+- Determinism: internal `sleep()`/`emit()`/`waitForSignal()` step ids use call-order indexes by default; prefer explicit `{ stepId }` (or set `determinism.implicitInternalStepIds` to `"warn"`/`"error"`)
 - Type-safety helpers: `createDurableStepId<T>()`, `createDurableSignalId<TPayload>()`, and `durable.executeStrict(...)`
 - Polling: used for timers (`sleep`, signal timeouts, schedules); can be disabled per-process via `polling: { enabled: false }`
-- Observability: optional audit trail via `audit: { enabled: true }` + `ctx.note(...)` + `store.listAuditEntries(executionId)`; for mirroring/streaming, enable `audit: { enabled: true, emitRunnerEvents: true }` and listen to `durableEvents.*`
+- Scheduling: one-time (`{ at }` / `{ delay }`) and recurring (`{ cron }` / `{ interval }`) via `durable.schedule(...)` + `pauseSchedule/resumeSchedule/updateSchedule/removeSchedule`
+- Observability: optional audit trail via `audit: { enabled: true }` + `ctx.note(...)` + `store.listAuditEntries(executionId)`
+- Events/logging: in Runner integration (`durableResource`), workflow lifecycle events are emitted via `durableEvents.*` by default; hook `durableEvents.audit.appended` to log/mirror
 - Dashboard UI: `createDashboardMiddleware(service, new DurableOperator(store))` exposes `/api/*` + a bundled UI for inspecting executions (from source: build via `npm run build:dashboard`)
+- Advanced config: `workerId` (distributed timer claims), `polling.claimTtlMs`, `taskResolver` (resolve tasks by id), `contextProvider` (AsyncLocalStorage-style context)
+- Recovery scalability: `RedisStore` maintains `durable:active_executions` so `recover()`/`listIncompleteExecutions()` are O(active) (no full history scan)
+- Queue failsafe: when a queue is configured, `startExecution()` arms a short-lived store timer (default 10s) so a transient enqueue failure can't strand an execution in `pending` (`execution.kickoffFailsafeDelayMs`)
 
 ### Runner Integration Patterns (Real-World)
 
@@ -53,14 +62,15 @@ Durable workflows are a **Node-only** module exported from `@bluelibs/runner/nod
 	  MemoryStore,
 	  MemoryQueue,
 	  MemoryEventBus,
-	  createDurableResource,
+	  durableResource,
 	} from "@bluelibs/runner/node";
 
 	const store = new MemoryStore();
 	const queue = new MemoryQueue();
 	const eventBus = new MemoryEventBus();
 
-	const durable = createDurableResource("app.durable", {
+	const durable = durableResource.fork("app.durable");
+	const durableRegistration = durable.with({
 	  store,
 	  queue,
 	  eventBus,
@@ -79,7 +89,7 @@ Durable workflows are a **Node-only** module exported from `@bluelibs/runner/nod
 
 	const app = r
 	  .resource("app")
-	  .register([durable, processOrder])
+	  .register([durableRegistration, processOrder])
 	  .build();
 
 	const runtime = await run(app);
@@ -152,8 +162,41 @@ await runtime.runTask(createUser, { name: "Ada" });
 ```
 
 - `r.*.with(config)` produces a configured copy of the definition.
+- `r.*.fork(newId)` creates a new resource with a different id but the same definition—useful for multi-instance patterns. Export forked resources to use as dependencies.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns helpers such as `runTask`, `getResourceValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
+
+### Resource Forking
+
+Use `.fork(newId)` to create multiple instances of a "template" resource with different identities:
+
+```ts
+// Define a reusable template
+const mailerBase = r.resource<{ smtp: string }>("base.mailer")
+  .init(async (cfg) => new Mailer(cfg))
+  .build();
+
+// Fork with distinct identities - export these for dependency use
+export const txMailer = mailerBase.fork("app.mailers.transactional");
+export const mktMailer = mailerBase.fork("app.mailers.marketing");
+
+// Use forked resources as dependencies
+const orderService = r.task("app.tasks.processOrder")
+  .dependencies({ mailer: txMailer })
+  .run(async (input, { mailer }) => { /* ... */ })
+  .build();
+
+const app = r.resource("app")
+  .register([
+    txMailer.with({ smtp: "tx.smtp.com" }),
+    mktMailer.with({ smtp: "mkt.smtp.com" }),
+    orderService,
+  ])
+  .build();
+```
+
+- Forked resources inherit tags, middleware, and all type parameters.
+- Each fork gets its own runtime instance (no shared state).
 
 ### Tasks
 
@@ -364,8 +407,16 @@ const httpExposure = nodeExposure.with({
     basePath: "/__runner",
     listen: { host: "0.0.0.0", port: 7070 },
     auth: { token: process.env.RUNNER_TOKEN },
+    // Configurable security limits (optional)
+    limits: {
+      json: { maxSize: 1024 * 1024 * 5 }, // 5MB
+      multipart: { fileSize: 1024 * 1024 * 50 }, // 50MB
+    }
   },
 });
+
+> [!NOTE]
+> **Security & DoS Protection**: The HTTP tunnel provides built-in protections including timing-safe authentication, request body size limits (default 2MB for JSON, 20MB for multipart files), and internal error masking (500 errors are sanitized to prevent information leakage).
 
 const tunnelClient = r
   .resource("app.tunnels.http")
@@ -493,8 +544,9 @@ Note on files: The “File” you see in tunnels is not a custom serializer type
 
 ## Testing
 
-- Use `npm run coverage:ai` to execute the full Jest suite in a token-friendly format. Focused tests can run via `npm run test -- some.test.ts`.
+- Use `npm run coverage:ai` to execute the full Jest suite in a token-friendly format (includes per-file missed statement/branch/line locations when coverage < 100%). Focused tests can run via `npm run test -- some.test.ts`.
 - Durable workflows are included in the normal test suite (`npm test`). For focused runs use `npm run test -- durable` or `npm run coverage:durable:ai`.
+- Durable test helpers: `createDurableTestSetup` and `waitUntil` from `@bluelibs/runner/node` for fast, in-memory durable workflows in tests.
 - The Jest runner has a watchdog (`JEST_WATCHDOG_MS`, default 10 minutes) to avoid “hung test run” situations.
 - In unit tests, prefer running a minimal root resource and call `await run(root)` to get `runTask`, `emitEvent`, or `getResourceValue`.
 - `createTestResource` is available for legacy suites but new code should compose fluent resources directly.
@@ -513,6 +565,31 @@ test("sends welcome email", async () => {
   await runtime.runTask(registerUser, { email: "user@example.com" });
   await runtime.dispose();
 });
+```
+
+Durable test setup example:
+
+```ts
+import { r, run } from "@bluelibs/runner";
+import { createDurableTestSetup } from "@bluelibs/runner/node";
+
+const { durable } = createDurableTestSetup();
+
+const task = r
+  .task("spec.durable.hello")
+  .dependencies({ durable })
+  .run(async (_input: undefined, { durable }) => {
+    const ctx = durable.use();
+    await ctx.step("hello", async () => "ok");
+    return { ok: true };
+  })
+  .build();
+
+const app = r.resource("spec.app").register([durable, task]).build();
+const runtime = await run(app);
+const durableRuntime = runtime.getResourceValue(durable);
+await durableRuntime.execute(task);
+await runtime.dispose();
 ```
 
 ## Observability & Debugging

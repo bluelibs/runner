@@ -1,5 +1,5 @@
 import { r, run } from "../../..";
-import { createDurableResource } from "../core/resource";
+import { durableResource } from "../core/resource";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { MemoryStore } from "../store/MemoryStore";
 
@@ -14,7 +14,8 @@ describe("durable: audit trail failure tolerance (integration)", () => {
     const store = new ThrowingAuditStore();
     const bus = new MemoryEventBus();
 
-    const durable = createDurableResource("durable.tests.audit.failure.durable", {
+    const durable = durableResource.fork("durable.tests.audit.failure.durable");
+    const durableRegistration = durable.with({
       store,
       eventBus: bus,
       audit: { enabled: true },
@@ -31,7 +32,7 @@ describe("durable: audit trail failure tolerance (integration)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);

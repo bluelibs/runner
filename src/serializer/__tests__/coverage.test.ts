@@ -143,6 +143,57 @@ describe("Serializer Coverage Tests", () => {
     });
   });
 
+  describe("Type exclusion branches (coverage)", () => {
+    it("excludes the current type when the serialized payload matches the same type (tree + graph)", () => {
+      class SelfType {
+        constructor(public value: number) {}
+      }
+
+      const selfType: TypeDefinition<SelfType, unknown> = {
+        id: "SelfType",
+        is: (obj): obj is SelfType => obj instanceof SelfType,
+        serialize: (obj) => obj,
+        deserialize: (data) => new SelfType((data as any).value),
+        strategy: "value",
+      };
+
+      serializer.addType(selfType);
+
+      const tree = serializer.stringify(new SelfType(1));
+      const treeParsed = serializer.parse<SelfType>(tree);
+      expect(treeParsed).toBeInstanceOf(SelfType);
+      expect(treeParsed.value).toBe(1);
+
+      const graph = serializer.serialize(new SelfType(2));
+      const graphParsed = serializer.deserialize<SelfType>(graph);
+      expect(graphParsed).toBeInstanceOf(SelfType);
+      expect(graphParsed.value).toBe(2);
+    });
+
+    it("handles errors thrown by type guards when checking serialized payload", () => {
+      class ThrowingType {}
+
+      const throwing: TypeDefinition<ThrowingType, unknown> = {
+        id: "ThrowingType",
+        is: (obj: unknown): obj is ThrowingType => {
+          if (obj && typeof obj === "object" && (obj as any).trigger === true) {
+            throw new Error("boom");
+          }
+          return obj instanceof ThrowingType;
+        },
+        serialize: () => ({ trigger: true }),
+        deserialize: () => new ThrowingType(),
+        strategy: "value",
+      };
+
+      serializer.addType(throwing);
+
+      const text = serializer.stringify(new ThrowingType());
+      const parsed = serializer.parse<ThrowingType>(text);
+      expect(parsed).toBeInstanceOf(ThrowingType);
+    });
+  });
+
   describe("Legacy Deserialization", () => {
     it("should deserialize legacy arrays", () => {
       const legacyPayload = JSON.stringify([1, 2, 3, "test", true]);

@@ -237,6 +237,48 @@ describe("Serializer", () => {
       expect(deserialized.get(123)).toEqual({ nested: "object" });
     });
 
+    it("should handle nested built-in types inside Map entries", () => {
+      const originalDate = new Date("2024-01-01T12:00:00.000Z");
+      const originalRegex = /nested/gi;
+
+      const original = new Map<string, unknown>([
+        ["date", originalDate],
+        ["regex", originalRegex],
+        ["innerMap", new Map([["innerDate", new Date("2024-02-02T00:00:00.000Z")]])],
+      ]);
+
+      const serialized = serializer.serialize(original);
+      const deserialized = serializer.deserialize<Map<string, unknown>>(serialized);
+
+      const dateValue = deserialized.get("date");
+      expect(dateValue).toBeInstanceOf(Date);
+      if (!(dateValue instanceof Date)) {
+        throw new Error("Expected date entry to be a Date");
+      }
+      expect(dateValue.getTime()).toBe(originalDate.getTime());
+
+      const regexValue = deserialized.get("regex");
+      expect(regexValue).toBeInstanceOf(RegExp);
+      if (!(regexValue instanceof RegExp)) {
+        throw new Error("Expected regex entry to be a RegExp");
+      }
+      expect(regexValue.source).toBe(originalRegex.source);
+      expect(regexValue.flags).toBe(originalRegex.flags);
+
+      const innerMapValue = deserialized.get("innerMap");
+      expect(innerMapValue).toBeInstanceOf(Map);
+      if (!(innerMapValue instanceof Map)) {
+        throw new Error("Expected innerMap entry to be a Map");
+      }
+
+      const innerDateValue = innerMapValue.get("innerDate");
+      expect(innerDateValue).toBeInstanceOf(Date);
+      if (!(innerDateValue instanceof Date)) {
+        throw new Error("Expected innerDate entry to be a Date");
+      }
+      expect(innerDateValue.toISOString()).toBe("2024-02-02T00:00:00.000Z");
+    });
+
     it("should handle Set objects", () => {
       type SetValue = number | { nested: boolean };
       const original = new Set<SetValue>([1, 2, 3, { nested: true }]);

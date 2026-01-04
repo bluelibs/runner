@@ -4,6 +4,11 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { globalResources } from "../../globals/globalResources";
 import type { ResourceDependencyValuesType } from "../../defs";
 import type { NodeExposureHttpAuthConfig } from "./authenticator";
+import type { MultipartLimits } from "./multipart";
+
+export interface JsonLimits {
+  maxSize?: number;
+}
 
 export type NodeExposureDependencyMap = {
   store: typeof globalResources.store;
@@ -22,6 +27,10 @@ export interface NodeExposureHttpConfig {
   listen?: { port: number; host?: string };
   auth?: NodeExposureHttpAuthConfig;
   cors?: NodeExposureHttpCorsConfig;
+  limits?: {
+    json?: JsonLimits;
+    multipart?: MultipartLimits;
+  };
 }
 
 export interface NodeExposureConfig {

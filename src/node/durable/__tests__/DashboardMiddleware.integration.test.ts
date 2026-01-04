@@ -1,7 +1,8 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AddressInfo } from "node:net";
+import * as http from "node:http";
+import { Duplex } from "node:stream";
 
 import type { Express } from "express";
 import express = require("express");
@@ -74,24 +75,90 @@ async function createTempUiDist(): Promise<{ path: string; cleanup: () => Promis
   };
 }
 
-async function startServer(app: Express): Promise<{
-  baseUrl: string;
-  close: () => Promise<void>;
-}> {
-  return await new Promise((resolve) => {
-    const server = app.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        throw new Error("Expected server to be listening on a TCP port");
-      }
+async function request(app: Express, params: {
+  label?: string;
+  method: string;
+  url: string;
+  headers?: Record<string, string>;
+  body?: unknown;
+}): Promise<{ status: number; body: string }> {
+  const bodyText = params.body === undefined ? undefined : JSON.stringify(params.body);
+  const headers: Record<string, string> = { ...(params.headers ?? {}) };
+  if (bodyText !== undefined && headers["content-type"] === undefined) {
+    headers["content-type"] = "application/json";
+  }
+  if (bodyText !== undefined && headers["content-length"] === undefined) {
+    headers["content-length"] = String(Buffer.byteLength(bodyText));
+  }
 
-      const port = (address as AddressInfo).port;
-      resolve({
-        baseUrl: `http://127.0.0.1:${port}`,
-        close: async () =>
-          await new Promise<void>((done) => server.close(() => done())),
-      });
+  const bodyChunks: Buffer[] = [];
+
+  const socket = new Duplex({
+    read() {},
+    write(_chunk, _encoding, callback) {
+      callback();
+    },
+  });
+  (socket as any).encrypted = false;
+
+  const req = new http.IncomingMessage(socket as any);
+  req.method = params.method;
+  req.url = params.url;
+  (req as any).headers = headers;
+  (req as any).httpVersionMajor = 1;
+  (req as any).httpVersionMinor = 1;
+  (req as any).httpVersion = "1.1";
+
+  const res = new http.ServerResponse(req);
+  res.assignSocket(socket as any);
+
+  const originalWrite = res.write.bind(res);
+  res.write = ((chunk: any, encoding?: any, cb?: any) => {
+    if (chunk !== undefined) {
+      const buffer =
+        typeof chunk === "string"
+          ? Buffer.from(chunk, typeof encoding === "string" ? encoding : "utf8")
+          : Buffer.from(chunk);
+      bodyChunks.push(buffer);
+    }
+    return originalWrite(chunk, encoding, cb);
+  }) as any;
+
+  const originalEnd = res.end.bind(res);
+  res.end = ((chunk?: any, encoding?: any, cb?: any) => {
+    if (chunk !== undefined) {
+      const buffer =
+        typeof chunk === "string"
+          ? Buffer.from(chunk, typeof encoding === "string" ? encoding : "utf8")
+          : Buffer.from(chunk);
+      bodyChunks.push(buffer);
+    }
+    return originalEnd(chunk, encoding, cb);
+  }) as any;
+
+  return await new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      const label = params.label ? `${params.label} ` : "";
+      reject(new Error(`${label}Request timed out: ${params.method} ${params.url}`));
+    }, 2000);
+    res.once("finish", () => {
+      clearTimeout(timeout);
+      resolve({ status: res.statusCode, body: Buffer.concat(bodyChunks).toString("utf8") });
     });
+
+    try {
+      app.handle(req as any, res as any);
+      process.nextTick(() => {
+        if (bodyText !== undefined) {
+          req.emit("data", Buffer.from(bodyText, "utf8"));
+        }
+        (req as any).complete = true;
+        req.emit("end");
+      });
+    } catch (error) {
+      clearTimeout(timeout);
+      reject(error);
+    }
   });
 }
 
@@ -109,28 +176,31 @@ describe("durable: dashboard middleware (e2e)", () => {
       createDashboardMiddleware(service, operator, { uiDistPath: ui.path }),
     );
 
-    const server = await startServer(app);
     try {
-      const rootRes = await fetch(`${server.baseUrl}/ops/durable-dashboard/`);
+      const rootRes = await request(app, {
+        method: "GET",
+        url: "/ops/durable-dashboard/",
+      });
       expect(rootRes.status).toBe(200);
-      const rootHtml = await rootRes.text();
+      const rootHtml = rootRes.body;
       expect(rootHtml).toContain('<base href="/ops/durable-dashboard/">');
       expect(rootHtml).toContain("<title>Test Dashboard</title>");
 
-      const deepLinkRes = await fetch(
-        `${server.baseUrl}/ops/durable-dashboard/executions/e1`,
-      );
+      const deepLinkRes = await request(app, {
+        method: "GET",
+        url: "/ops/durable-dashboard/executions/e1",
+      });
       expect(deepLinkRes.status).toBe(200);
-      const deepLinkHtml = await deepLinkRes.text();
+      const deepLinkHtml = deepLinkRes.body;
       expect(deepLinkHtml).toContain('<base href="/ops/durable-dashboard/">');
 
-      const assetRes = await fetch(
-        `${server.baseUrl}/ops/durable-dashboard/assets/health.txt`,
-      );
+      const assetRes = await request(app, {
+        method: "GET",
+        url: "/ops/durable-dashboard/assets/health.txt",
+      });
       expect(assetRes.status).toBe(200);
-      expect(await assetRes.text()).toBe("ok");
+      expect(assetRes.body).toBe("ok");
     } finally {
-      await server.close();
       await ui.cleanup();
     }
   });
@@ -171,43 +241,39 @@ describe("durable: dashboard middleware (e2e)", () => {
       createDashboardMiddleware(service, operator, { uiDistPath: ui.path }),
     );
 
-    const server = await startServer(app);
     try {
-      const listRes = await fetch(`${server.baseUrl}/durable-dashboard/api/executions`);
+      const listRes = await request(app, {
+        method: "GET",
+        url: "/durable-dashboard/api/executions",
+      });
       expect(listRes.status).toBe(200);
-      const list = (await listRes.json()) as Array<{ id: string }>;
+      const list = JSON.parse(listRes.body) as Array<{ id: string }>;
       expect(list.map((e) => e.id)).toEqual(["e2", "e1"]);
 
-      const missingRes = await fetch(
-        `${server.baseUrl}/durable-dashboard/api/executions/missing`,
-      );
+      const missingRes = await request(app, {
+        method: "GET",
+        url: "/durable-dashboard/api/executions/missing",
+      });
       expect(missingRes.status).toBe(404);
 
-      const retryRes = await fetch(
-        `${server.baseUrl}/durable-dashboard/api/operator/retryRollback`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ executionId: "e2" }),
-        },
-      );
+      const retryRes = await request(app, {
+        method: "POST",
+        url: "/durable-dashboard/api/operator/retryRollback",
+        body: { executionId: "e2" },
+      });
       expect(retryRes.status).toBe(200);
       expect((await store.getExecution("e2"))?.status).toBe("pending");
       expect((await store.getExecution("e2"))?.error).toBeUndefined();
 
-      const forceFailRes = await fetch(
-        `${server.baseUrl}/durable-dashboard/api/operator/forceFail`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ executionId: "e1", reason: "manual" }),
-        },
-      );
+      const forceFailRes = await request(app, {
+        method: "POST",
+        url: "/durable-dashboard/api/operator/forceFail",
+        body: { executionId: "e1", reason: "manual" },
+      });
       expect(forceFailRes.status).toBe(200);
       expect((await store.getExecution("e1"))?.status).toBe("failed");
       expect((await store.getExecution("e1"))?.error?.message).toBe("manual");
     } finally {
-      await server.close();
       await ui.cleanup();
     }
   });

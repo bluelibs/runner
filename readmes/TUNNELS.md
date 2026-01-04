@@ -401,6 +401,40 @@ const client = createHttpClient({
 
 Match the exposure’s auth settings (header name and expected format).
 
+## Security
+
+The HTTP exposure includes several layers of security to ensure the safety of your Runner network.
+
+### Authentication
+- **Static Tokens**: Comparison is done using **timing-safe** algorithms to prevent side-channel attacks.
+- **Custom Validators**: Mark tasks with `globals.tags.authValidator` for dynamic logic.
+
+### Denial of Service (DoS) Protection
+The server enforces configurable limits on request sizes:
+- **JSON Body**: Default **2MB** limit.
+- **Multipart Uploads**:
+    - **fileSize**: Default **20MB** per file.
+    - **files**: Default **10** files per request.
+    - **fields**: Default **100** fields.
+    - **fieldSize**: Default **1MB** per field value.
+
+Example configuration:
+```ts
+nodeExposure.with({
+  http: {
+    limits: {
+      json: { maxSize: 5 * 1024 * 1024 }, // 5MB
+      multipart: { files: 2, fileSize: 100 * 1024 * 1024 }, // 2 files, 100MB each
+    }
+  }
+})
+```
+
+### Information Leakage
+To prevent leaking sensitive internal data:
+- **Error Masking**: Internal server errors (status 500) that are not recognized `TypedError` instances are masked as "Internal Error".
+- **Transparent Typed Errors**: Errors created via `error().build()` and explicitly thrown are transmitted transparently (payload + formatted message).
+
 ## 6) Uploads & files
 
 Use “File” sentinels in your input (`$ejson: "File"`). In Node, build them with `createNodeFile` (stream/buffer). In browsers, use `createFile` (Blob/File). The unified client turns browser files into multipart `FormData` automatically; Node clients stream bytes and support duplex.

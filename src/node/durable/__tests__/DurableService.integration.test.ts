@@ -1,5 +1,5 @@
 import { r, run } from "../../..";
-import { createDurableResource } from "../core/resource";
+import { durableResource } from "../core/resource";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { MemoryStore } from "../store/MemoryStore";
 
@@ -8,7 +8,8 @@ describe("durable: DurableService integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = createDurableResource("durable.test.durable", {
+    const durable = durableResource.fork("durable.test.durable");
+    const durableRegistration = durable.with({
       store,
       eventBus: bus,
       polling: { interval: 5 },
@@ -32,7 +33,7 @@ describe("durable: DurableService integration", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);

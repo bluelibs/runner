@@ -34,6 +34,23 @@ export interface DurableServiceConfig {
   queue?: IDurableQueue;
   eventBus?: IEventBus;
   taskExecutor?: ITaskExecutor;
+  determinism?: {
+    /**
+     * Internal step IDs for `sleep()`/`emit()`/`waitForSignal()` default to call-order based IDs.
+     * In production this can be a replay/versioning footgun when refactors change call order.
+     *
+     * - "allow" (default): do nothing
+     * - "warn": emit a warning on first implicit internal step per kind
+     * - "error": throw when an implicit internal step id would be used
+     */
+    implicitInternalStepIds?: "allow" | "warn" | "error";
+  };
+  /**
+   * Unique identifier for this worker instance.
+   * Used for distributed timer coordination to ensure only one worker processes each timer.
+   * If not provided, a random UUID is generated.
+   */
+  workerId?: string;
   /**
    * Runs a callback with the given durable context available.
    * In Runner environments this is typically implemented via AsyncLocalStorage
@@ -51,15 +68,24 @@ export interface DurableServiceConfig {
   audit?: {
     enabled?: boolean;
     emitter?: DurableAuditEmitter;
-    emitRunnerEvents?: boolean;
   };
   polling?: {
     enabled?: boolean;
     interval?: number;
+    /** Time-to-live for timer claims in milliseconds. Default: 30000. */
+    claimTtlMs?: number;
   };
   execution?: {
     maxAttempts?: number;
     timeout?: number;
+    /**
+     * When a queue is configured, `startExecution()` persists the execution and then enqueues it.
+     * If enqueue fails (eg. broker outage), the execution would otherwise remain "pending" forever.
+     *
+     * This delay arms a small store-backed timer as a failsafe so workers can retry resuming it
+     * via the poller. Default: 10000 (10s). Set to 0 to disable.
+     */
+    kickoffFailsafeDelayMs?: number;
   };
   schedules?: ScheduleConfig[];
   tasks?: Array<DurableTask<any, any>>;

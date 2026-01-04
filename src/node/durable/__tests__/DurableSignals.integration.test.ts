@@ -1,5 +1,5 @@
 import { event, r, run } from "../../..";
-import { createDurableResource } from "../core/resource";
+import { durableResource } from "../core/resource";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { MemoryStore } from "../store/MemoryStore";
 
@@ -23,7 +23,8 @@ describe("durable: signals integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = createDurableResource("durable.tests.signals.durable", {
+    const durable = durableResource.fork("durable.tests.signals.durable");
+    const durableRegistration = durable.with({
       store,
       eventBus: bus,
       polling: { interval: 5 },
@@ -39,7 +40,7 @@ describe("durable: signals integration", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
@@ -67,14 +68,12 @@ describe("durable: signals integration", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = createDurableResource(
-      "durable.tests.signals.durable.twice",
-      {
-        store,
-        eventBus: bus,
-        polling: { interval: 5 },
-      },
-    );
+    const durable = durableResource.fork("durable.tests.signals.durable.twice");
+    const durableRegistration = durable.with({
+      store,
+      eventBus: bus,
+      polling: { interval: 5 },
+    });
 
     const task = r
       .task("durable.test.waitForSignal.twice")
@@ -87,7 +86,7 @@ describe("durable: signals integration", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);

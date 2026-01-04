@@ -18,16 +18,17 @@ Inside a durable task you get a `DurableContext` (via `durable.use()`):
 
 ## Minimal Setup
 
-Use `createDurableResource()` so the service can execute Runner tasks via DI and provide a per-resource durable context.
+Use `durableResource.fork("app.durable").with(...)` so the service can execute Runner tasks via DI, while the application owns the final resource id and supplies configuration via `with()`.
 
 ```ts
 	import { r } from "@bluelibs/runner";
 	import {
-	  createDurableResource,
+	  durableResource,
 	  MemoryStore,
 	} from "@bluelibs/runner/node";
 
-	const durable = createDurableResource("app.durable", { store: new MemoryStore() });
+	const durable = durableResource.fork("app.durable");
+	const durableRegistration = durable.with({ store: new MemoryStore() });
 
 	const processOrder = r
 	  .task("app.tasks.processOrder")
@@ -52,7 +53,7 @@ Use `createDurableResource()` so the service can execute Runner tasks via DI and
 
 	const app = r
 	  .resource("app")
-	  .register([durable, processOrder])
+	  .register([durableRegistration, processOrder])
 	  .build();
 ```
 
@@ -75,6 +76,26 @@ If you want stricter type-safety (and to prevent tasks that can return `undefine
 
 ```ts
 const result = await service.executeStrict(processOrder, { orderId: "o1" });
+```
+
+## Scheduling (One-Time / Cron / Interval)
+
+Use scheduling for background jobs and delayed work. Schedules are driven by the durable polling loop (timers), so keep `polling.enabled` on in the process responsible for polling.
+
+```ts
+// One-time run
+await service.schedule(processOrder, { orderId: "o1" }, { at: new Date(Date.now() + 60_000) });
+await service.schedule(processOrder, { orderId: "o1" }, { delay: 60_000 });
+
+// Recurring
+await service.schedule(processOrder, { orderId: "o1" }, { id: "orders.hourly", cron: "0 * * * *" });
+await service.schedule(processOrder, { orderId: "o1" }, { id: "orders.poll", interval: 30_000 });
+
+// Manage recurring schedules
+await service.pauseSchedule("orders.hourly");
+await service.resumeSchedule("orders.hourly");
+await service.updateSchedule("orders.hourly", { cron: "0 */2 * * *" });
+await service.removeSchedule("orders.hourly");
 ```
 
 ## Signals (Type-Safe)
@@ -117,6 +138,39 @@ const charged = await ctx.step(Charge, async () => {
 
 - **Step IDs are part of the durable contract.** Changing a step id changes replay behavior.
 - Internal step ids starting with `__` and `rollback:` are reserved.
+
+## Configuration Knobs (Common)
+
+- `execution: { timeout, maxAttempts }` (can be overridden per call via `execute(..., { timeout })` / `wait(..., { timeout })`)
+- `polling: { enabled, interval, claimTtlMs }` (timers, signal timeouts, schedules)
+- `workerId` (unique per process; used for distributed timer claims when `store.claimTimer` is supported)
+- `taskResolver` (resolve tasks by id when resuming/recovering without registering every task up-front)
+- `contextProvider` (AsyncLocalStorage-style context propagation for `durable.use()` in Runner runtimes)
+
+## Logging via Runner events
+
+In Runner integration (`durableResource`), workflow lifecycle events are emitted via `durableEvents.*` by default. Listen to `durableEvents.audit.appended` and log based on `entry.kind`:
+
+```ts
+import { r, globals } from "@bluelibs/runner";
+import { durableEvents } from "@bluelibs/runner/node";
+
+const logDurable = r
+  .hook("app.hooks.durableLog")
+  .dependencies({ logger: globals.resources.logger })
+  .on(durableEvents.audit.appended)
+  .run(async (ev, { logger }) => {
+    const { entry } = ev.data;
+    await logger.info("durable.audit", {
+      kind: entry.kind,
+      executionId: entry.executionId,
+      taskId: entry.taskId,
+      attempt: entry.attempt,
+      at: entry.at,
+    });
+  })
+  .build();
+```
 - `emit()` is **best-effort** (notifications), not guaranteed delivery. For exactly-once integration, rely on idempotent external APIs + `step()`.
 
 ## Audit Trail (Timeline)
@@ -129,7 +183,7 @@ Durable can persist an audit trail as the workflow executes so you can later ins
 - signals waiting/delivered/timed-out
 - custom notes you add from within the workflow
 
-Enable it via `createDurableResource("app.durable", { audit: { enabled: true }, ... })` (default: off). It requires store support:
+Enable it via `durableResource.fork("app.durable").with({ audit: { enabled: true }, ... })` (default: off). It requires store support:
 
 - `IDurableStore.appendAuditEntry(entry)`
 - `IDurableStore.listAuditEntries(executionId)`
@@ -142,13 +196,27 @@ await ctx.note("created-payment-intent", { paymentIntentId: "pi_123" });
 
 Notes are replay-safe (the same note won't be duplicated across resumes).
 
+### Example entries
+
+```ts
+// execution_status_changed
+{ kind: "execution_status_changed", executionId: "exec_1", taskId: "app.tasks.processOrder", attempt: 1, from: "pending", to: "running" }
+
+// step_completed
+{ kind: "step_completed", executionId: "exec_1", taskId: "app.tasks.processOrder", attempt: 1, stepId: "charge", durationMs: 87, isInternal: false }
+
+// signal_waiting
+{ kind: "signal_waiting", executionId: "exec_1", taskId: "app.tasks.processOrder", attempt: 1, signalId: "orders.approved", stepId: "__signal:orders.approved" }
+
+// note
+{ kind: "note", executionId: "exec_1", taskId: "app.tasks.processOrder", attempt: 1, message: "created-payment-intent", meta: { paymentIntentId: "pi_123" } }
+```
+
 ### Stream audit entries via Runner events (for mirroring)
 
-If you want to mirror audit entries to cold storage (S3/Glacier/Postgres), enable:
+If you want to mirror workflow activity to cold storage (S3/Glacier/Postgres), listen to Runner events (they are excluded from `on("*")` global hooks by default, so subscribe explicitly).
 
-- `audit: { enabled: true, emitRunnerEvents: true }`
-
-Then listen to Runner events (they are excluded from `on("*")` global hooks by default, so subscribe explicitly):
+If you also want a persisted timeline in the durable store (for dashboards), enable `audit: { enabled: true }` and use a store that supports `appendAuditEntry`/`listAuditEntries`.
 
 ```ts
 import { r } from "@bluelibs/runner";

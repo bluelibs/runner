@@ -12,7 +12,7 @@ export const durableEvents = {
       .meta({
         title: "Durable Audit Appended",
         description:
-          "Emitted after a durable audit entry is persisted in the durable store.",
+          "Emitted when a durable audit entry is produced (for logging/mirroring). Persistence depends on store support and audit configuration.",
       })
       .tags([systemTag, excludeFromGlobalHooksTag])
       .build(),

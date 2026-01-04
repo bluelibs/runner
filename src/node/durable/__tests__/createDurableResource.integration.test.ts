@@ -1,6 +1,6 @@
 import { globals, r, run } from "../../..";
 import { DurableExecutionError } from "../core/DurableService";
-import { createDurableResource } from "../core/resource";
+import { durableResource } from "../core/resource";
 import { durableEvents } from "../events";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { MemoryQueue } from "../queue/MemoryQueue";
@@ -19,16 +19,17 @@ async function waitUntil(
   }
 }
 
-describe("durable: createDurableResource (integration)", () => {
+describe("durable: durableResource + fork + with (integration)", () => {
   it("awaits nested taskRunner promises (normal path)", async () => {
     const store = new MemoryStore();
-    const durable = createDurableResource("durable.tests.unified.ok", { store });
+    const durable = durableResource.fork("durable.tests.unified.ok");
+    const durableRegistration = durable.with({ store });
     const task = r
       .task("durable.tests.unified.task.ok")
       .run(async () => "ok")
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
     const runtime = await run(app, { logs: { printThreshold: null } });
 
     const taskRunner = runtime.getResourceValue(globals.resources.taskRunner);
@@ -45,15 +46,14 @@ describe("durable: createDurableResource (integration)", () => {
 
   it("handles undefined taskRunner results (edge branch)", async () => {
     const store = new MemoryStore();
-    const durable = createDurableResource("durable.tests.unified.undefined", {
-      store,
-    });
+    const durable = durableResource.fork("durable.tests.unified.undefined");
+    const durableRegistration = durable.with({ store });
     const task = r
       .task("durable.tests.unified.task.undefined")
       .run(async () => "ok")
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
     const runtime = await run(app, { logs: { printThreshold: null } });
 
     const taskRunner = runtime.getResourceValue(globals.resources.taskRunner);
@@ -71,7 +71,8 @@ describe("durable: createDurableResource (integration)", () => {
     const queue = new MemoryQueue();
     const bus = new MemoryEventBus();
 
-    const durable = createDurableResource("durable.tests.unified.queue", {
+    const durable = durableResource.fork("durable.tests.unified.queue");
+    const durableRegistration = durable.with({
       store,
       queue,
       eventBus: bus,
@@ -89,7 +90,7 @@ describe("durable: createDurableResource (integration)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durable, task]).build();
+    const app = r.resource("app").register([durableRegistration, task]).build();
     const runtime = await run(app, { logs: { printThreshold: null } });
     const d = runtime.getResourceValue(durable);
 
@@ -118,7 +119,7 @@ describe("durable: createDurableResource (integration)", () => {
     await runtime.dispose();
   });
 
-  it("auto-wires a runner audit emitter when audit.emitRunnerEvents is enabled", async () => {
+  it("emits durable runner events by default (without audit persistence)", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
@@ -144,10 +145,10 @@ describe("durable: createDurableResource (integration)", () => {
       })
       .build();
 
-    const durable = createDurableResource("durable.tests.unified.audit", {
+    const durable = durableResource.fork("durable.tests.unified.audit");
+    const durableRegistration = durable.with({
       store,
       eventBus: bus,
-      audit: { enabled: true, emitRunnerEvents: true },
       polling: { interval: 5 },
     });
 
@@ -163,7 +164,10 @@ describe("durable: createDurableResource (integration)", () => {
       })
       .build();
 
-    const app = r.resource("app").register([durable, task, onAudit, onNote]).build();
+    const app = r
+      .resource("app")
+      .register([durableRegistration, task, onAudit, onNote])
+      .build();
     const runtime = await run(app, { logs: { printThreshold: null } });
     const d = runtime.getResourceValue(durable);
 
@@ -181,12 +185,77 @@ describe("durable: createDurableResource (integration)", () => {
       { timeoutMs: 2_000, intervalMs: 5 },
     );
 
+    const receivedForExecution = received.filter((e) => e.executionId === executionId);
+    expect(receivedForExecution.length).toBeGreaterThan(0);
+    expect(notes).toEqual(expect.arrayContaining(["starting"]));
+    await expect(store.listAuditEntries(executionId)).resolves.toEqual([]);
+
+    await runtime.dispose();
+  });
+
+  it("persists audit entries when audit.enabled is true (and still emits events)", async () => {
+    const store = new MemoryStore();
+    const bus = new MemoryEventBus();
+
+    const received: Array<{ executionId: string; kind: string }> = [];
+
+    const onAudit = r
+      .hook("durable.tests.unified.hooks.audit.appended.persist")
+      .on(durableEvents.audit.appended)
+      .run(async (event) => {
+        received.push({
+          executionId: event.data.entry.executionId,
+          kind: event.data.entry.kind,
+        });
+      })
+      .build();
+
+    const durable = durableResource.fork("durable.tests.unified.audit.persist");
+    const durableRegistration = durable.with({
+      store,
+      eventBus: bus,
+      audit: { enabled: true },
+      polling: { interval: 5 },
+    });
+
+    const task = r
+      .task("durable.tests.unified.audit.persist.task")
+      .dependencies({ durable })
+      .run(async (_input: undefined, { durable }) => {
+        const ctx = durable.use();
+        await ctx.note("starting");
+        const a = await ctx.step("a", async () => "a");
+        await ctx.sleep(1);
+        return a;
+      })
+      .build();
+
+    const app = r
+      .resource("app")
+      .register([durableRegistration, task, onAudit])
+      .build();
+    const runtime = await run(app, { logs: { printThreshold: null } });
+    const d = runtime.getResourceValue(durable);
+
+    const executionId = await d.startExecution(task, undefined, {
+      timeout: 5_000,
+      waitPollIntervalMs: 5,
+    });
+
+    await expect(
+      d.wait(executionId, { timeout: 5_000, waitPollIntervalMs: 5 }),
+    ).resolves.toBe("a");
+
+    await waitUntil(
+      () =>
+        received.some((e) => e.executionId === executionId && e.kind === "note"),
+      { timeoutMs: 2_000, intervalMs: 5 },
+    );
+
     const audit = await store.listAuditEntries(executionId);
     const receivedForExecution = received.filter((e) => e.executionId === executionId);
     expect(receivedForExecution).toHaveLength(audit.length);
-    expect(notes).toEqual(expect.arrayContaining(["starting"]));
 
     await runtime.dispose();
   });
 });
-
