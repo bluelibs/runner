@@ -383,7 +383,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const manifest = JSON.stringify({
       input: {
         file: {
-          $ejson: "File",
+          $runnerFile: "File",
           id: "F1",
           meta: { name: "override.txt", type: "text/plain", extra: { a: 1 } },
         },
@@ -445,7 +445,11 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const boundary = "----covboundaryExtra";
     const manifest = JSON.stringify({
       input: {
-        file: { $ejson: "File", id: "F1", meta: { extra: { foo: "bar" } } },
+        file: {
+          $runnerFile: "File",
+          id: "F1",
+          meta: { extra: { foo: "bar" } },
+        },
       },
     });
     const body = [
@@ -504,7 +508,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const boundary = "----covboundaryMissing";
     const manifest = JSON.stringify({
       input: {
-        file: { $ejson: "File", id: "F1" },
+        file: { $runnerFile: "File", id: "F1" },
       },
     });
     const body = [
@@ -634,12 +638,12 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
       input: {
         files: [
           {
-            $ejson: "File",
+            $runnerFile: "File",
             id: "A",
             meta: { name: "a.txt", type: "text/a", size: 3 },
           },
           {
-            $ejson: "File",
+            $runnerFile: "File",
             id: "B",
             meta: { name: "b.txt", type: "text/b", size: 3 },
           },
@@ -819,7 +823,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const boundary = "----covboundaryMetaFallback";
     const manifest = JSON.stringify({
       input: {
-        file: { $ejson: "File", id: "F1", meta: { name: "onlyname.txt" } },
+        file: { $runnerFile: "File", id: "F1", meta: { name: "onlyname.txt" } },
       },
     });
     const body = [

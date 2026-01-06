@@ -145,7 +145,7 @@ describe("parseMultipartInput", () => {
     const manifest = JSON.stringify({
       input: {
         fileA: {
-          $ejson: "File",
+          $runnerFile: "File",
           id: "A",
           meta: {
             name: "override.txt",
@@ -154,7 +154,11 @@ describe("parseMultipartInput", () => {
             extra: { kind: "manifest" },
           },
         },
-        fileB: { $ejson: "File", id: "B", meta: { name: "placeholder.bin" } },
+        fileB: {
+          $runnerFile: "File",
+          id: "B",
+          meta: { name: "placeholder.bin" },
+        },
       },
     });
     const req = createMultipartRequest(boundary, [
@@ -283,7 +287,7 @@ describe("parseMultipartInput", () => {
   it("finalize surfaces missing file part errors", async () => {
     const manifest = JSON.stringify({
       input: {
-        file: { $ejson: "File", id: "F1", meta: { name: "late.txt" } },
+        file: { $runnerFile: "File", id: "F1", meta: { name: "late.txt" } },
       },
     });
     const req = createMultipartRequest(boundary, [

@@ -6,7 +6,7 @@ describe("buildNodeManifest (node)", () => {
     const input = {
       a: 1,
       file1: {
-        $ejson: "File",
+        $runnerFile: "File",
         id: "F1",
         meta: { name: "n1.txt", type: "text/plain" },
         _node: { buffer: Buffer.from("x") },
@@ -14,7 +14,7 @@ describe("buildNodeManifest (node)", () => {
       arr: [
         {
           nested: {
-            $ejson: "File",
+            $runnerFile: "File",
             id: "F2",
             meta: { name: "n2.bin" },
             _node: { stream: Readable.from(Buffer.from("y")) },
@@ -32,9 +32,9 @@ describe("buildNodeManifest (node)", () => {
 
     // Ensure the cloned input preserves File sentinel with no _node
     const clone = manifest.input as any;
-    expect(clone.file1.$ejson).toBe("File");
+    expect(clone.file1.$runnerFile).toBe("File");
     expect("_node" in clone.file1).toBe(false);
-    expect(clone.arr[0].nested.$ejson).toBe("File");
+    expect(clone.arr[0].nested.$runnerFile).toBe("File");
     expect("_node" in clone.arr[0].nested).toBe(false);
   });
 });

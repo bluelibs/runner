@@ -97,8 +97,8 @@ describe("createHttpSmartClient - extra branches", () => {
     const input = {
       files: [
         1,
-        { $ejson: "File", id: 123, _node: { buffer: Buffer.from([1]) } },
-        { $ejson: "File", id: "x", _node: 1 },
+        { $runnerFile: "File", id: 123, _node: { buffer: Buffer.from([1]) } },
+        { $runnerFile: "File", id: "x", _node: 1 },
       ],
     };
 

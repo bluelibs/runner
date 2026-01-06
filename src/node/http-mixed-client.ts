@@ -45,13 +45,13 @@ function hasNodeFile(value: unknown): boolean {
   const isNodeFileSentinel = (
     v: unknown,
   ): v is {
-    $ejson: "File";
+    $runnerFile: "File";
     id: string;
     _node?: { stream?: unknown; buffer?: unknown };
   } => {
     if (!v || typeof v !== "object") return false;
     const rec = v as Record<string, unknown>;
-    if (rec.$ejson !== "File") return false;
+    if (rec.$runnerFile !== "File") return false;
     if (typeof rec.id !== "string") return false;
     const node = rec._node;
     if (!node || typeof node !== "object") return false;

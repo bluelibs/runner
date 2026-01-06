@@ -9,7 +9,7 @@ describe("platform.createFile", () => {
       blob,
       "W1",
     ) as any;
-    expect(s.$ejson).toBe("File");
+    expect(s.$runnerFile).toBe("File");
     expect(s.id).toBe("W1");
     expect(s.meta?.name).toBe("a.txt");
     expect(s._web?.blob).toBeInstanceOf(Blob);
@@ -20,7 +20,7 @@ describe("platform.createFile", () => {
       type: "application/octet-stream",
     });
     const s = createPlatformFile({ name: "x.bin" }, blob) as any;
-    expect(s.$ejson).toBe("File");
+    expect(s.$runnerFile).toBe("File");
     expect(s.id).toBe("F1");
     expect(s.meta?.name).toBe("x.bin");
   });
@@ -31,7 +31,7 @@ describe("platform.createFile", () => {
       { buffer: Buffer.from([1, 2, 3]) },
       "N1",
     ) as any;
-    expect(s.$ejson).toBe("File");
+    expect(s.$runnerFile).toBe("File");
     expect(s.id).toBe("N1");
     expect(s._node?.buffer).toBeInstanceOf(Buffer);
   });
@@ -41,7 +41,7 @@ describe("platform.createFile", () => {
       { name: "c.bin" },
       { buffer: Buffer.from([9]) },
     ) as any;
-    expect(s.$ejson).toBe("File");
+    expect(s.$runnerFile).toBe("File");
     expect(s.id).toBe("F1");
   });
 });

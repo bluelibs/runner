@@ -61,43 +61,43 @@ Durable workflows are a **Node-only** module exported from `@bluelibs/runner/nod
 **Single-process (local dev / tests)**: run the durable resource + tasks in the same Runner runtime.
 
 ```ts
-	import { r, run } from "@bluelibs/runner";
-	import {
-	  MemoryStore,
-	  MemoryQueue,
-	  MemoryEventBus,
-	  durableResource,
-	} from "@bluelibs/runner/node";
+import { r, run } from "@bluelibs/runner";
+import {
+  MemoryStore,
+  MemoryQueue,
+  MemoryEventBus,
+  durableResource,
+} from "@bluelibs/runner/node";
 
-	const store = new MemoryStore();
-	const queue = new MemoryQueue();
-	const eventBus = new MemoryEventBus();
+const store = new MemoryStore();
+const queue = new MemoryQueue();
+const eventBus = new MemoryEventBus();
 
-	const durable = durableResource.fork("app.durable");
-	const durableRegistration = durable.with({
-	  store,
-	  queue,
-	  eventBus,
-	  worker: true, // consumes the queue in this process
-	});
+const durable = durableResource.fork("app.durable");
+const durableRegistration = durable.with({
+  store,
+  queue,
+  eventBus,
+  worker: true, // consumes the queue in this process
+});
 
-	const processOrder = r
-	  .task("app.tasks.processOrder")
-	  .dependencies({ durable })
-	  .run(async (input: { orderId: string }, { durable }) => {
-	    const ctx = durable.use();
-	    await ctx.step("validate", async () => ({ ok: true }));
-	    return { ok: true };
-	  })
-	  .build();
+const processOrder = r
+  .task("app.tasks.processOrder")
+  .dependencies({ durable })
+  .run(async (input: { orderId: string }, { durable }) => {
+    const ctx = durable.use();
+    await ctx.step("validate", async () => ({ ok: true }));
+    return { ok: true };
+  })
+  .build();
 
-	const app = r
-	  .resource("app")
-	  .register([durableRegistration, processOrder])
-	  .build();
+const app = r
+  .resource("app")
+  .register([durableRegistration, processOrder])
+  .build();
 
-	const runtime = await run(app);
-	const d = runtime.getResourceValue(durable);
+const runtime = await run(app);
+const d = runtime.getResourceValue(durable);
 ```
 
 **Multi-process (production)**: run N worker processes that consume the queue and process executions.
@@ -106,6 +106,7 @@ Durable workflows are a **Node-only** module exported from `@bluelibs/runner/nod
 - API processes usually **should not** run the durable poller/worker; configure `worker: false` + `polling: { enabled: false }`.
 
 Concrete approach with Runner itself:
+
 - Add a small “durable API” task (eg `app.durable.startOrder`) that calls `durable.startExecution(...)` and persists the returned `executionId` into your DB.
 - Add webhook/callback handlers that look up `executionId` from your DB and call `durable.signal(executionId, ...)`.
 
@@ -176,7 +177,8 @@ Use `.fork(newId)` to create multiple instances of a "template" resource with di
 
 ```ts
 // Define a reusable template
-const mailerBase = r.resource<{ smtp: string }>("base.mailer")
+const mailerBase = r
+  .resource<{ smtp: string }>("base.mailer")
   .init(async (cfg) => new Mailer(cfg))
   .build();
 
@@ -185,12 +187,16 @@ export const txMailer = mailerBase.fork("app.mailers.transactional");
 export const mktMailer = mailerBase.fork("app.mailers.marketing");
 
 // Use forked resources as dependencies
-const orderService = r.task("app.tasks.processOrder")
+const orderService = r
+  .task("app.tasks.processOrder")
   .dependencies({ mailer: txMailer })
-  .run(async (input, { mailer }) => { /* ... */ })
+  .run(async (input, { mailer }) => {
+    /* ... */
+  })
   .build();
 
-const app = r.resource("app")
+const app = r
+  .resource("app")
   .register([
     txMailer.with({ smtp: "tx.smtp.com" }),
     mktMailer.with({ smtp: "mkt.smtp.com" }),
@@ -548,7 +554,7 @@ const serializerSetup = r
 
 Use `getDefaultSerializer()` when you need a standalone instance outside DI.
 
-Note on files: The “File” you see in tunnels is not a custom serializer type. Runner uses a dedicated `$ejson: "File"` sentinel in inputs which the tunnel client/server convert to multipart streams via a manifest. File handling is performed by the tunnel layer (manifest hydration and multipart), not by the serializer. Keep using `createWebFile`/`createNodeFile` for uploads.
+Note on files: The “File” you see in tunnels is not a custom serializer type. Runner uses a dedicated `$runnerFile: "File"` sentinel in inputs which the tunnel client/server convert to multipart streams via a manifest. File handling is performed by the tunnel layer (manifest hydration and multipart), not by the serializer. Keep using `createWebFile`/`createNodeFile` for uploads.
 
 ## Testing
 

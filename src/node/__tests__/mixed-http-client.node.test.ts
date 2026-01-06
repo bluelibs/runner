@@ -254,7 +254,7 @@ describe("createMixedHttpClient (unit)", () => {
 
     const httpReqSpy = jest.spyOn(http, "request");
     const out = await client.task("my.task", {
-      file: { $ejson: "File", id: 123, _node: { buffer: "x" } },
+      file: { $runnerFile: "File", id: 123, _node: { buffer: "x" } },
     } as any);
 
     expect(out).toBe(9);
@@ -283,7 +283,7 @@ describe("createMixedHttpClient (unit)", () => {
 
     const httpReqSpy = jest.spyOn(http, "request");
     const out = await client.task("my.task", {
-      file: { $ejson: "File", id: "F1", _node: null },
+      file: { $runnerFile: "File", id: "F1", _node: null },
     } as any);
 
     expect(out).toBe(10);

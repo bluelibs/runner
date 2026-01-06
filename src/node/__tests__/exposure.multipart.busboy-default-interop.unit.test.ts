@@ -77,12 +77,17 @@ describe("parseMultipartInput - busboy default export interop", () => {
         "content-type": `multipart/form-data; boundary=${boundary}`,
       },
       (busboy) => {
-        busboy.emit("field", "__manifest", JSON.stringify({ input: { a: 1 } }), {
-          nameTruncated: false,
-          valueTruncated: false,
-          encoding: "7bit",
-          mimeType: "text/plain",
-        });
+        busboy.emit(
+          "field",
+          "__manifest",
+          JSON.stringify({ input: { a: 1 } }),
+          {
+            nameTruncated: false,
+            valueTruncated: false,
+            encoding: "7bit",
+            mimeType: "text/plain",
+          },
+        );
         busboy.emit("finish");
       },
     );
@@ -130,12 +135,19 @@ describe("parseMultipartInput - busboy default export interop", () => {
         "content-type": `multipart/form-data; boundary=${boundary}`,
       },
       (busboy) => {
-        busboy.emit("field", "__manifest", JSON.stringify({ input: { file: { $ejson: "File", id: "F1" } } }), {
-          nameTruncated: false,
-          valueTruncated: false,
-          encoding: "7bit",
-          mimeType: "text/plain",
-        });
+        busboy.emit(
+          "field",
+          "__manifest",
+          JSON.stringify({
+            input: { file: { $runnerFile: "File", id: "F1" } },
+          }),
+          {
+            nameTruncated: false,
+            valueTruncated: false,
+            encoding: "7bit",
+            mimeType: "text/plain",
+          },
+        );
 
         const stream = new PassThrough();
         busboy.emit("file", "file:F1", stream, {
@@ -158,7 +170,9 @@ describe("parseMultipartInput - busboy default export interop", () => {
       throw new Error("Expected finalize() to fail");
     }
     expect(finalized.response.status).toBe(413);
-    expect(finalized.response.body.error.message).toBe("File size limit exceeded");
+    expect(finalized.response.body.error.message).toBe(
+      "File size limit exceeded",
+    );
   });
 
   it("propagates fields/files/parts limits via finalize() after manifest is accepted", async () => {
@@ -168,12 +182,17 @@ describe("parseMultipartInput - busboy default export interop", () => {
         "content-type": `multipart/form-data; boundary=${boundary}`,
       },
       (busboy) => {
-        busboy.emit("field", "__manifest", JSON.stringify({ input: { a: 1 } }), {
-          nameTruncated: false,
-          valueTruncated: false,
-          encoding: "7bit",
-          mimeType: "text/plain",
-        });
+        busboy.emit(
+          "field",
+          "__manifest",
+          JSON.stringify({ input: { a: 1 } }),
+          {
+            nameTruncated: false,
+            valueTruncated: false,
+            encoding: "7bit",
+            mimeType: "text/plain",
+          },
+        );
         busboy.emit("fieldsLimit");
         busboy.emit("filesLimit");
         busboy.emit("partsLimit");

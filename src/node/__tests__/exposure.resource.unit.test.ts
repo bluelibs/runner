@@ -198,7 +198,9 @@ D("nodeExposure - unit edge cases", () => {
     // Call event handler with a task path -> triggers 157 branch
     const r1 = await request({
       method: "POST",
-      url: `http://127.0.0.1:${a1.port}/__runner/task/${encodeURIComponent(testTask.id)}`,
+      url: `http://127.0.0.1:${a1.port}/__runner/task/${encodeURIComponent(
+        testTask.id,
+      )}`,
       headers: h,
       body: "{}",
     });
@@ -207,7 +209,9 @@ D("nodeExposure - unit edge cases", () => {
     // Call task handler with an event path (or missing id) -> triggers 128 branch (+ 113 via extractTarget null)
     const r2 = await request({
       method: "POST",
-      url: `http://127.0.0.1:${a2.port}/__runner/event/${encodeURIComponent(testEvent.id)}`,
+      url: `http://127.0.0.1:${a2.port}/__runner/event/${encodeURIComponent(
+        testEvent.id,
+      )}`,
       headers: h,
       body: "{}",
     });
@@ -272,7 +276,9 @@ D("nodeExposure - unit edge cases", () => {
     );
     const addr = proxyToTask.address();
     if (!addr || typeof addr === "string") throw new Error("No address");
-    const url = `http://127.0.0.1:${addr.port}/__runner/task/${encodeURIComponent(testTask.id)}`;
+    const url = `http://127.0.0.1:${
+      addr.port
+    }/__runner/task/${encodeURIComponent(testTask.id)}`;
     const h = { "x-runner-token": TOKEN };
     // Missing required input v -> validation fails -> 500
     const r = await request({ method: "POST", url, headers: h, body: "{}" });
@@ -291,7 +297,9 @@ D("nodeExposure - unit edge cases", () => {
     );
     const addr = proxyToTask.address();
     if (!addr || typeof addr === "string") throw new Error("No address");
-    const url = `http://127.0.0.1:${addr.port}/__runner/task/${encodeURIComponent(noInputTask.id)}`;
+    const url = `http://127.0.0.1:${
+      addr.port
+    }/__runner/task/${encodeURIComponent(noInputTask.id)}`;
     const h = { "x-runner-token": TOKEN };
     // No body sent
     const result = await request({ method: "POST", url, headers: h });
@@ -305,7 +313,9 @@ D("nodeExposure - unit edge cases", () => {
     const h = { "x-runner-token": TOKEN };
     const r = await request({
       method: "POST",
-      url: `${baseUrl}/event/${encodeURIComponent("unit.exposure.missing-event")}`,
+      url: `${baseUrl}/event/${encodeURIComponent(
+        "unit.exposure.missing-event",
+      )}`,
       headers: h,
       body: "{}",
     });
@@ -459,7 +469,7 @@ D("nodeExposure - unit edge cases", () => {
         "Content-Type: application/json; charset=utf-8\r\n\r\n" +
         JSON.stringify({
           input: {
-            file: { $ejson: "File", id: badId, meta: { name: "x.txt" } },
+            file: { $runnerFile: "File", id: badId, meta: { name: "x.txt" } },
           },
         }) +
         "\r\n" +
@@ -532,7 +542,9 @@ D("nodeExposure - unit edge cases", () => {
     };
     const ok = await request({
       method: "POST",
-      url: `${origin}${handlers.basePath}/task/${encodeURIComponent(testTask.id)}`,
+      url: `${origin}${handlers.basePath}/task/${encodeURIComponent(
+        testTask.id,
+      )}`,
       headers,
       body: JSON.stringify({ input: { v: 3 } }),
     });
@@ -599,7 +611,9 @@ D("nodeExposure - unit edge cases", () => {
 
     const ok = await request({
       method: "POST",
-      url: `${origin}${handlers.basePath}/task/${encodeURIComponent(testTask.id)}`,
+      url: `${origin}${handlers.basePath}/task/${encodeURIComponent(
+        testTask.id,
+      )}`,
       headers,
       body: JSON.stringify({ input: { v: 9 } }),
     });

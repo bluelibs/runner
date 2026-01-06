@@ -6,7 +6,7 @@ describe("platform.createWebFile", () => {
       type: "application/octet-stream",
     });
     const s = createWebFile({ name: "x.bin" }, blob) as any;
-    expect(s.$ejson).toBe("File");
+    expect(s.$runnerFile).toBe("File");
     expect(s.id).toBe("F1");
     expect(s.meta?.name).toBe("x.bin");
     expect(s._web?.blob).toBeInstanceOf(Blob);

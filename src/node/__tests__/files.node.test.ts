@@ -13,7 +13,7 @@ describe("createNodeFile helper", () => {
       { stream: Readable.from("abc") },
       "ID1",
     );
-    expect(f.$ejson).toBe("File");
+    expect(f.$runnerFile).toBe("File");
     expect(f.id).toBe("ID1");
     expect(f.meta.name).toBe("x.txt");
     expect(typeof f._node).toBe("object");
