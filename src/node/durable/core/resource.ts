@@ -7,6 +7,7 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { IDurableContext } from "./interfaces/context";
 import { DurableResource } from "./DurableResource";
 import { initDurableWorker } from "./DurableWorker";
+import type { DurableAuditEntry } from "./audit";
 
 export type DurableResourceRuntimeConfig = Omit<
   DurableServiceConfig,
@@ -40,7 +41,7 @@ export const durableResource = r
     const auditEmitter =
       userEmitter
         ? {
-            emit: async (entry) => {
+            emit: async (entry: DurableAuditEntry) => {
               try {
                 await userEmitter.emit(entry);
               } catch {

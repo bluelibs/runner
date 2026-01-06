@@ -1,10 +1,12 @@
 import * as crypto from "node:crypto";
-import type {
-  Execution,
+import {
   ExecutionStatus,
-  Schedule,
-  StepResult,
-  Timer,
+  ScheduleStatus,
+  TimerStatus,
+  type Execution,
+  type Schedule,
+  type StepResult,
+  type Timer,
 } from "../core/types";
 import type {
   IDurableStore,
@@ -128,9 +130,9 @@ export class RedisStore implements IDurableStore {
 
   private isActiveExecutionStatus(status: ExecutionStatus): boolean {
     return (
-      status !== "completed" &&
-      status !== "failed" &&
-      status !== "compensation_failed"
+      status !== ExecutionStatus.Completed &&
+      status !== ExecutionStatus.Failed &&
+      status !== ExecutionStatus.CompensationFailed
     );
   }
 
@@ -248,7 +250,8 @@ export class RedisStore implements IDurableStore {
         typeof res === "string" ? (serializer.parse(res) as Execution) : null,
       )
       .filter(
-        (e): e is Execution => e !== null && e.status === "compensation_failed",
+        (e): e is Execution =>
+          e !== null && e.status === ExecutionStatus.CompensationFailed,
       );
   }
 
@@ -259,7 +262,7 @@ export class RedisStore implements IDurableStore {
 
     await this.saveExecution({
       ...execution,
-      status: "pending",
+      status: ExecutionStatus.Pending,
       error: undefined,
       updatedAt: new Date(),
     });
@@ -278,7 +281,10 @@ export class RedisStore implements IDurableStore {
     executionId: string,
     error: { message: string; stack?: string },
   ): Promise<void> {
-    await this.updateExecution(executionId, { status: "failed", error });
+    await this.updateExecution(executionId, {
+      status: ExecutionStatus.Failed,
+      error,
+    });
   }
 
   async editStepResult(
@@ -436,7 +442,7 @@ export class RedisStore implements IDurableStore {
       .map(([_, res]) =>
         res ? (serializer.parse(res as string) as Timer) : null,
       )
-      .filter((t): t is Timer => t !== null && t.status === "pending");
+      .filter((t): t is Timer => t !== null && t.status === TimerStatus.Pending);
   }
 
   async markTimerFired(timerId: string): Promise<void> {
@@ -445,7 +451,7 @@ export class RedisStore implements IDurableStore {
     );
     if (!data) return;
     const timer = serializer.parse(data) as Timer;
-    timer.status = "fired";
+    timer.status = TimerStatus.Fired;
     await this.redis.hset(
       this.k("timers"),
       timerId,
@@ -501,7 +507,7 @@ export class RedisStore implements IDurableStore {
 
   async listActiveSchedules(): Promise<Schedule[]> {
     const all = await this.listSchedules();
-    return all.filter((s) => s.status === "active");
+    return all.filter((s) => s.status === ScheduleStatus.Active);
   }
 
   async acquireLock(resource: string, ttlMs: number): Promise<string | null> {

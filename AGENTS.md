@@ -16,6 +16,7 @@
 - Work with agent-enabled TODO lists! TODO lists help you remain on-track.
 - All imports should be put on top, unless an optimization or something specific, default to top imports as preference instead of inline.
 - Do not ask the user if you should do something that is likely the user would want to do
+- Strings are forbidden, use enums instead.
 </general>
 
 <specifics>

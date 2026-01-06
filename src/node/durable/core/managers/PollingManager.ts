@@ -1,6 +1,14 @@
 import type { IDurableStore } from "../interfaces/store";
 import type { IDurableQueue } from "../interfaces/queue";
-import type { Timer, Schedule, Execution } from "../types";
+import { DurableAuditEntryKind } from "../audit";
+import {
+  ExecutionStatus,
+  ScheduleStatus,
+  TimerType,
+  type Execution,
+  type Schedule,
+  type Timer,
+} from "../types";
 import type { AuditLogger } from "./AuditLogger";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { ScheduleManager } from "./ScheduleManager";
@@ -104,7 +112,11 @@ export class PollingManager {
     try {
       await this.store.markTimerFired(timer.id);
 
-      if (timer.type === "sleep" && timer.executionId && timer.stepId) {
+      if (
+        timer.type === TimerType.Sleep &&
+        timer.executionId &&
+        timer.stepId
+      ) {
         await this.store.saveStepResult({
           executionId: timer.executionId,
           stepId: timer.stepId,
@@ -114,7 +126,7 @@ export class PollingManager {
         const execution = await this.store.getExecution(timer.executionId);
         const attempt = execution ? execution.attempt : 0;
         await this.auditLogger.log({
-          kind: "sleep_completed",
+          kind: DurableAuditEntryKind.SleepCompleted,
           executionId: timer.executionId,
           taskId: execution?.taskId,
           attempt,
@@ -123,7 +135,11 @@ export class PollingManager {
         });
       }
 
-      if (timer.type === "signal_timeout" && timer.executionId && timer.stepId) {
+      if (
+        timer.type === TimerType.SignalTimeout &&
+        timer.executionId &&
+        timer.stepId
+      ) {
         const existing = await this.store.getStepResult(
           timer.executionId,
           timer.stepId,
@@ -143,7 +159,7 @@ export class PollingManager {
             : timer.stepId;
           const signalId = stepSuffix.split(":")[0];
           await this.auditLogger.log({
-            kind: "signal_timed_out",
+            kind: DurableAuditEntryKind.SignalTimedOut,
             executionId: timer.executionId,
             taskId: execution?.taskId,
             attempt,
@@ -172,7 +188,7 @@ export class PollingManager {
       if (timer.scheduleId) {
         const schedule = await this.store.getSchedule(timer.scheduleId);
         // If the schedule no longer exists, or is paused, don't execute.
-        if (!schedule || schedule.status !== "active") return;
+        if (!schedule || schedule.status !== ScheduleStatus.Active) return;
         // If schedule.nextRun exists, treat mismatched timers as stale (race/updates).
         if (schedule.nextRun && timer.fireAt.getTime() !== schedule.nextRun.getTime()) {
           return;
@@ -187,7 +203,7 @@ export class PollingManager {
         id: executionId,
         taskId: task.id,
         input: timer.input,
-        status: "pending",
+        status: ExecutionStatus.Pending,
         attempt: 1,
         maxAttempts: this.maxAttempts,
         timeout: this.defaultTimeout,
@@ -200,7 +216,7 @@ export class PollingManager {
 
       if (timer.scheduleId) {
         const schedule = await this.store.getSchedule(timer.scheduleId);
-        if (schedule && schedule.status === "active") {
+        if (schedule && schedule.status === ScheduleStatus.Active) {
           await this.scheduleManager.reschedule(schedule, { lastRunAt: new Date() });
         }
       }

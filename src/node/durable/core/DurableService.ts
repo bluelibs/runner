@@ -6,7 +6,7 @@ import type {
   IDurableService,
   ScheduleOptions,
 } from "./interfaces/service";
-import type { Schedule } from "./types";
+import { ExecutionStatus, type Schedule } from "./types";
 import type { IEventDefinition } from "../../../types/event";
 import { createExecutionId } from "./utils";
 
@@ -181,10 +181,10 @@ export class DurableService implements IDurableService {
     const incomplete = await this.config.store.listIncompleteExecutions();
     for (const exec of incomplete) {
       if (
-        exec.status === "pending" ||
-        exec.status === "running" ||
-        exec.status === "sleeping" ||
-        exec.status === "retrying"
+        exec.status === ExecutionStatus.Pending ||
+        exec.status === ExecutionStatus.Running ||
+        exec.status === ExecutionStatus.Sleeping ||
+        exec.status === ExecutionStatus.Retrying
       ) {
         await this.executionManager.kickoffExecution(exec.id);
       }

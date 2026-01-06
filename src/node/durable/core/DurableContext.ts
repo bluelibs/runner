@@ -15,10 +15,12 @@ import type { DurableStepId } from "./ids";
 import {
   createDurableAuditEntryId,
   isDurableInternalStepId,
+  DurableAuditEntryKind,
   type DurableAuditEmitter,
   type DurableAuditEntry,
   type DurableAuditEntryInput,
 } from "./audit";
+import { ExecutionStatus, TimerStatus, TimerType } from "./types";
 import { isRecord, sleepMs, withTimeout } from "./utils";
 
 type WaitForSignalOutcome<TPayload> =
@@ -287,7 +289,7 @@ export class DurableContext implements IDurableContext {
     });
 
     await this.appendAuditEntry({
-      kind: "step_completed",
+      kind: DurableAuditEntryKind.StepCompleted,
       stepId,
       durationMs,
       isInternal: isDurableInternalStepId(stepId),
@@ -332,7 +334,7 @@ export class DurableContext implements IDurableContext {
       };
 
       await this.store.updateExecution(this.executionId, {
-        status: "compensation_failed",
+        status: ExecutionStatus.CompensationFailed,
         error: errorInfo,
         updatedAt: new Date(),
       });
@@ -374,9 +376,9 @@ export class DurableContext implements IDurableContext {
         id: existingState.timerId,
         executionId: this.executionId,
         stepId: sleepStepId,
-        type: "sleep",
+        type: TimerType.Sleep,
         fireAt: new Date(existingState.fireAtMs),
-        status: "pending",
+        status: TimerStatus.Pending,
       });
       throw new SuspensionSignal("sleep");
     }
@@ -388,9 +390,9 @@ export class DurableContext implements IDurableContext {
       id: timerId,
       executionId: this.executionId,
       stepId: sleepStepId,
-      type: "sleep",
+      type: TimerType.Sleep,
       fireAt: new Date(fireAtMs),
-      status: "pending",
+      status: TimerStatus.Pending,
     });
 
     await this.store.saveStepResult({
@@ -401,7 +403,7 @@ export class DurableContext implements IDurableContext {
     });
 
     await this.appendAuditEntry({
-      kind: "sleep_scheduled",
+      kind: DurableAuditEntryKind.SleepScheduled,
       stepId: sleepStepId,
       timerId,
       durationMs,
@@ -486,9 +488,9 @@ export class DurableContext implements IDurableContext {
                 id: state.timerId,
                 executionId: this.executionId,
                 stepId,
-                type: "signal_timeout",
+                type: TimerType.SignalTimeout,
                 fireAt: new Date(state.timeoutAtMs),
-                status: "pending",
+                status: TimerStatus.Pending,
               });
             } else {
               const timerId = `signal_timeout:${this.executionId}:${stepId}`;
@@ -498,9 +500,9 @@ export class DurableContext implements IDurableContext {
                 id: timerId,
                 executionId: this.executionId,
                 stepId,
-                type: "signal_timeout",
+                type: TimerType.SignalTimeout,
                 fireAt: new Date(timeoutAtMs),
-                status: "pending",
+                status: TimerStatus.Pending,
               });
 
               await this.store.saveStepResult({
@@ -511,7 +513,7 @@ export class DurableContext implements IDurableContext {
               });
 
               await this.appendAuditEntry({
-                kind: "signal_waiting",
+                kind: DurableAuditEntryKind.SignalWaiting,
                 stepId,
                 signalId,
                 timeoutMs: options.timeoutMs,
@@ -533,9 +535,9 @@ export class DurableContext implements IDurableContext {
           id: timerId,
           executionId: this.executionId,
           stepId,
-          type: "signal_timeout",
+          type: TimerType.SignalTimeout,
           fireAt: new Date(timeoutAtMs),
-          status: "pending",
+          status: TimerStatus.Pending,
         });
 
         await this.store.saveStepResult({
@@ -546,7 +548,7 @@ export class DurableContext implements IDurableContext {
         });
 
         await this.appendAuditEntry({
-          kind: "signal_waiting",
+          kind: DurableAuditEntryKind.SignalWaiting,
           stepId,
           signalId,
           timeoutMs: options.timeoutMs,
@@ -566,7 +568,7 @@ export class DurableContext implements IDurableContext {
       });
 
       await this.appendAuditEntry({
-        kind: "signal_waiting",
+        kind: DurableAuditEntryKind.SignalWaiting,
         stepId,
         signalId,
         reason: "initial",
@@ -602,7 +604,7 @@ export class DurableContext implements IDurableContext {
       });
 
       await this.appendAuditEntry({
-        kind: "emit_published",
+        kind: DurableAuditEntryKind.EmitPublished,
         stepId,
         eventId,
       });
@@ -618,7 +620,11 @@ export class DurableContext implements IDurableContext {
     this.noteIndex += 1;
 
     await this.internalStep<void>(stepId).up(async () => {
-      await this.appendAuditEntry({ kind: "note", message, meta });
+      await this.appendAuditEntry({
+        kind: DurableAuditEntryKind.Note,
+        message,
+        meta,
+      });
     });
   }
 }

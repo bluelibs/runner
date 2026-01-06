@@ -2,6 +2,7 @@ import type { IDurableStore } from "../interfaces/store";
 import type { IEventBus, BusEvent } from "../interfaces/bus";
 import { sleepMs, DurableExecutionError } from "../utils";
 import { clearTimeout, setTimeout } from "node:timers";
+import { ExecutionStatus } from "../types";
 
 export interface WaitConfig {
   defaultTimeout?: number;
@@ -37,7 +38,7 @@ export class WaitManager {
         );
       }
 
-      if (exec.status === "completed") {
+      if (exec.status === ExecutionStatus.Completed) {
         if (exec.result === undefined) {
           throw new DurableExecutionError(
             `Execution ${executionId} completed without result`,
@@ -49,7 +50,7 @@ export class WaitManager {
         return exec.result as TResult;
       }
 
-      if (exec.status === "failed") {
+      if (exec.status === ExecutionStatus.Failed) {
         throw new DurableExecutionError(
           exec.error?.message || "Execution failed",
           exec.id,
@@ -59,7 +60,7 @@ export class WaitManager {
         );
       }
 
-      if (exec.status === "compensation_failed") {
+      if (exec.status === ExecutionStatus.CompensationFailed) {
         throw new DurableExecutionError(
           exec.error?.message || "Compensation failed",
           exec.id,

@@ -1,6 +1,6 @@
 import { globals, r } from "../../index";
 import type { IEvent } from "../../defs";
-import type { DurableAuditEntry } from "./core/audit";
+import { DurableAuditEntryKind, type DurableAuditEntry } from "./core/audit";
 
 const systemTag = globals.tags.system;
 const excludeFromGlobalHooksTag = globals.tags.excludeFromGlobalHooks;
@@ -20,9 +20,12 @@ export const durableEvents = {
 
   execution: {
     statusChanged: r
-      .event<Extract<DurableAuditEntry, { kind: "execution_status_changed" }>>(
-        "durable.execution.statusChanged",
-      )
+      .event<
+        Extract<
+          DurableAuditEntry,
+          { kind: typeof DurableAuditEntryKind.ExecutionStatusChanged }
+        >
+      >("durable.execution.statusChanged")
       .meta({
         title: "Durable Execution Status Changed",
         description: "Emitted when a durable execution transitions status.",
@@ -33,9 +36,12 @@ export const durableEvents = {
 
   step: {
     completed: r
-      .event<Extract<DurableAuditEntry, { kind: "step_completed" }>>(
-        "durable.step.completed",
-      )
+      .event<
+        Extract<
+          DurableAuditEntry,
+          { kind: typeof DurableAuditEntryKind.StepCompleted }
+        >
+      >("durable.step.completed")
       .meta({
         title: "Durable Step Completed",
         description: "Emitted when a durable step is completed (including internals).",
@@ -46,9 +52,12 @@ export const durableEvents = {
 
   sleep: {
     scheduled: r
-      .event<Extract<DurableAuditEntry, { kind: "sleep_scheduled" }>>(
-        "durable.sleep.scheduled",
-      )
+      .event<
+        Extract<
+          DurableAuditEntry,
+          { kind: typeof DurableAuditEntryKind.SleepScheduled }
+        >
+      >("durable.sleep.scheduled")
       .meta({
         title: "Durable Sleep Scheduled",
         description: "Emitted when a durable sleep timer is scheduled.",
@@ -57,9 +66,12 @@ export const durableEvents = {
       .build(),
 
     completed: r
-      .event<Extract<DurableAuditEntry, { kind: "sleep_completed" }>>(
-        "durable.sleep.completed",
-      )
+      .event<
+        Extract<
+          DurableAuditEntry,
+          { kind: typeof DurableAuditEntryKind.SleepCompleted }
+        >
+      >("durable.sleep.completed")
       .meta({
         title: "Durable Sleep Completed",
         description: "Emitted when a durable sleep timer fires and the step completes.",
@@ -70,9 +82,12 @@ export const durableEvents = {
 
   signal: {
     waiting: r
-      .event<Extract<DurableAuditEntry, { kind: "signal_waiting" }>>(
-        "durable.signal.waiting",
-      )
+      .event<
+        Extract<
+          DurableAuditEntry,
+          { kind: typeof DurableAuditEntryKind.SignalWaiting }
+        >
+      >("durable.signal.waiting")
       .meta({
         title: "Durable Signal Waiting",
         description: "Emitted when a durable execution starts waiting for a signal.",
@@ -81,9 +96,12 @@ export const durableEvents = {
       .build(),
 
     delivered: r
-      .event<Extract<DurableAuditEntry, { kind: "signal_delivered" }>>(
-        "durable.signal.delivered",
-      )
+      .event<
+        Extract<
+          DurableAuditEntry,
+          { kind: typeof DurableAuditEntryKind.SignalDelivered }
+        >
+      >("durable.signal.delivered")
       .meta({
         title: "Durable Signal Delivered",
         description: "Emitted when a signal payload is delivered to a waiting execution.",
@@ -92,9 +110,12 @@ export const durableEvents = {
       .build(),
 
     timedOut: r
-      .event<Extract<DurableAuditEntry, { kind: "signal_timed_out" }>>(
-        "durable.signal.timedOut",
-      )
+      .event<
+        Extract<
+          DurableAuditEntry,
+          { kind: typeof DurableAuditEntryKind.SignalTimedOut }
+        >
+      >("durable.signal.timedOut")
       .meta({
         title: "Durable Signal Timed Out",
         description: "Emitted when a waiting signal times out.",
@@ -105,9 +126,12 @@ export const durableEvents = {
 
   emit: {
     published: r
-      .event<Extract<DurableAuditEntry, { kind: "emit_published" }>>(
-        "durable.emit.published",
-      )
+      .event<
+        Extract<
+          DurableAuditEntry,
+          { kind: typeof DurableAuditEntryKind.EmitPublished }
+        >
+      >("durable.emit.published")
       .meta({
         title: "Durable Emit Published",
         description:
@@ -119,9 +143,9 @@ export const durableEvents = {
 
   note: {
     created: r
-      .event<Extract<DurableAuditEntry, { kind: "note" }>>(
-        "durable.note.created",
-      )
+      .event<
+        Extract<DurableAuditEntry, { kind: typeof DurableAuditEntryKind.Note }>
+      >("durable.note.created")
       .meta({
         title: "Durable Note Created",
         description: "Emitted when ctx.note(...) records an audit note.",

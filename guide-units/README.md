@@ -7,7 +7,7 @@ The README.md is now componentized into individual chapter files for better main
 ## Directory Structure
 
 ```
-readme-composed/
+guide-units/
 ├── CORE.md                 # Master orchestration file (lists all chapters in order)
 ├── README.md              # This file
 ├── 00-HEADER.md           # Header, intro, resources table
@@ -39,15 +39,15 @@ The composition system uses a simple manifest-based approach:
 
 1. **CORE.md** contains a list of `!include:` directives that reference each chapter file
 2. **compose-readme.mjs** reads CORE.md, parses the manifest, and concatenates all chapters
-3. **npm run compose:readme** regenerates the final README.md
+3. **npm run guide:compose** regenerates the final README.md
 
 ## Workflow
 
 ### Making Changes
 
-1. Edit individual chapter files in the `readme-composed/` directory
+1. Edit individual chapter files in the `guide-units/` directory
 2. Keep CORE.md updated if adding/removing/reordering chapters
-3. Run `npm run compose:readme` to regenerate README.md
+3. Run `npm run guide:compose` to regenerate README.md
 4. Review the changes: `git diff README.md`
 5. Commit both the chapter file and the updated README.md
 
@@ -55,28 +55,30 @@ The composition system uses a simple manifest-based approach:
 
 ```bash
 # Edit a specific chapter
-nano readme-composed/05-CORE_CONCEPTS.md
+nano guide-units/05-CORE_CONCEPTS.md
 
 # Regenerate README
-npm run compose:readme
+npm run guide:compose
 
 # Review the output
 git diff README.md
 
 # Commit
-git add readme-composed/05-CORE_CONCEPTS.md README.md
+git add guide-units/05-CORE_CONCEPTS.md README.md
 git commit -m "docs: enhance core concepts documentation"
 ```
 
 ## Benefits
 
 ### For Development Teams
+
 - **Parallel Work**: Multiple contributors can edit different chapters without merge conflicts
 - **Clear Organization**: Each section has a dedicated file
 - **Version Control**: Easier to track which parts of documentation changed
 - **Maintenance**: Simpler to find and update specific sections
 
 ### For AI/LLM Integration
+
 - **Token Efficiency**: Individual chapters are smaller and fit within token budgets
 - **Focused Context**: LLMs can work on specific chapters without massive files
 - **Composition Awareness**: System explicitly designed for programmatic document assembly
@@ -97,7 +99,7 @@ git commit -m "docs: enhance core concepts documentation"
 1. Create a new file with naming pattern: `NN-CHAPTER_NAME.md` (e.g., `21-NEW_FEATURE.md`)
 2. Add an `!include:` line to CORE.md in the correct position
 3. Update the chapter descriptions in CORE.md
-4. Run `npm run compose:readme` to test
+4. Run `npm run guide:compose` to test
 5. Update the chapter list in this file
 
 ### When Removing Chapters
@@ -105,24 +107,26 @@ git commit -m "docs: enhance core concepts documentation"
 1. Delete or archive the chapter file
 2. Remove the `!include:` line from CORE.md
 3. Update descriptions
-4. Run `npm run compose:readme`
+4. Run `npm run guide:compose`
 
 ## Composition Script
 
 The `compose-readme.mjs` script is the engine that drives this system:
 
 ```bash
-npm run compose:readme
+npm run guide:compose
 ```
 
 ### What It Does
-- Parses `readme-composed/CORE.md`
+
+- Parses `guide-units/CORE.md`
 - Extracts all `!include:` directives
 - Loads each chapter file in order
 - Concatenates them into README.md
 - Reports success with line count
 
 ### Error Handling
+
 - Warns if a chapter file is missing
 - Fails if CORE.md can't be found
 - Exits with status 1 on error

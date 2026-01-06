@@ -380,7 +380,6 @@ Runner comes with **everything you need** to build production apps:
 
 - ✅ Tunnels (Distributed)
 - ✅ Tags System
-- ✅ Durable Workflows (Node-only)
 - ✅ Factory Pattern
 - ✅ Namespacing
 - ✅ Overrides
@@ -1876,8 +1875,6 @@ await run(app);
 
 ## Optional Dependencies
 
-
-
 _Making your app resilient when services aren't available_
 
 Sometimes you want your application to gracefully handle missing dependencies instead of crashing. Optional dependencies let you build resilient systems that degrade gracefully.
@@ -1942,39 +1939,69 @@ const userRegistration = r
 
 ### Serialization
 
-Runner ships with a built-in serializer that safely round-trips values like `Date`, `RegExp`, and your own custom types across HTTP and between Node and the browser.
+Runner ships with a graph-aware serializer that safely round-trips complex values across HTTP and between Node and the browser.
 
-- By default, Runner’s HTTP clients and exposures use the Runner serializer
-- You can call `getDefaultSerializer()` for the shared serializer instance
-- A global serializer is also exposed as a resource: `globals.resources.serializer`
+**Built-in type support:**
+
+- `Date`, `RegExp`, `Map`, `Set`, `Error`, `Uint8Array` work out of the box
+- Handles circular references and shared object identity
+
+**Two modes:**
+
+- `stringify()`/`parse()` — Tree mode (like JSON, throws on circular refs)
+- `serialize()`/`deserialize()` — Graph mode (preserves circular refs and identity)
+
+**Security hardened:**
+
+- ReDoS protection validates RegExp patterns against catastrophic backtracking
+- Prototype pollution blocked (`__proto__`, `constructor`, `prototype` keys filtered)
+- Configurable depth limits prevent stack overflow
 
 ```ts
-import { r, globals } from "@bluelibs/runner";
+import { r, globals, getDefaultSerializer } from "@bluelibs/runner";
 
-// Register custom types centrally via the global serializer resource
+// Access via DI
 const serializerSetup = r
   .resource("app.serialization.setup")
   .dependencies({ serializer: globals.resources.serializer })
   .init(async (_config, { serializer }) => {
+    // Tree mode (simple)
     const text = serializer.stringify({ when: new Date() });
     const obj = serializer.parse<{ when: Date }>(text);
+
+    // Graph mode (preserves refs)
+    const a = { name: "A" };
+    const b = { ref: a, self: null as any };
+    b.self = b; // circular
+    const json = serializer.serialize(b);
+    const restored = serializer.deserialize(json); // refs preserved!
+
+    // Custom types via factory
     class Distance {
       constructor(public value: number, public unit: string) {}
       toJSONValue() {
-        return { value: this.value, unit: this.unit } as const;
+        return { value: this.value, unit: this.unit };
       }
       typeName() {
         return "Distance";
       }
     }
-
-    serializer.addType(
-      "Distance",
-      (j: { value: number; unit: string }) => new Distance(j.value, j.unit),
-    );
+    serializer.addType("Distance", (j: any) => new Distance(j.value, j.unit));
   })
   .build();
+
+// Standalone (outside DI)
+const serializer = getDefaultSerializer();
 ```
+
+**Configuration options (via `new Serializer(options)`):**
+
+- `maxDepth` — Recursion limit (default: 1000)
+- `allowedTypes` — Whitelist of type IDs for deserialization
+- `maxRegExpPatternLength` — Limit pattern length (default: 1024)
+- `allowUnsafeRegExp` — Skip ReDoS validation (default: false)
+
+> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. Use `createWebFile`/`createNodeFile` for uploads.
 
 ### Tunnels: Bridging Runners
 

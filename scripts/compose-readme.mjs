@@ -4,7 +4,7 @@
  * Compose README.md from individual chapter files
  * Usage: node compose-readme.mjs
  *
- * This script reads readme-composed/CORE.md which lists all chapters
+ * This script reads guide-units/CORE.md which lists all chapters
  * in order, then concatenates them to create the final README.md
  */
 
@@ -15,9 +15,9 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const CORE_PATH = path.join(__dirname, "..", "readme-composed", "CORE.md");
+const CORE_PATH = path.join(__dirname, "..", "guide-units", "CORE.md");
 const README_PATH = path.join(__dirname, "..", "README.md");
-const CHAPTERS_DIR = path.join(__dirname, "..", "readme-composed");
+const CHAPTERS_DIR = path.join(__dirname, "..", "guide-units");
 
 /**
  * Parse CORE.md to extract chapter references

@@ -1,16 +1,20 @@
 import { createExecutionId } from "./utils";
 import type { ExecutionStatus } from "./types";
 
+export const DurableAuditEntryKind = {
+  ExecutionStatusChanged: "execution_status_changed",
+  StepCompleted: "step_completed",
+  SleepScheduled: "sleep_scheduled",
+  SleepCompleted: "sleep_completed",
+  SignalWaiting: "signal_waiting",
+  SignalDelivered: "signal_delivered",
+  SignalTimedOut: "signal_timed_out",
+  EmitPublished: "emit_published",
+  Note: "note",
+} as const;
+
 export type DurableAuditEntryKind =
-  | "execution_status_changed"
-  | "step_completed"
-  | "sleep_scheduled"
-  | "sleep_completed"
-  | "signal_waiting"
-  | "signal_delivered"
-  | "signal_timed_out"
-  | "emit_published"
-  | "note";
+  (typeof DurableAuditEntryKind)[keyof typeof DurableAuditEntryKind];
 
 export interface DurableAuditEntryBase {
   id: string;
@@ -23,31 +27,31 @@ export interface DurableAuditEntryBase {
 
 export type DurableAuditEntry =
   | (DurableAuditEntryBase & {
-      kind: "execution_status_changed";
+      kind: typeof DurableAuditEntryKind.ExecutionStatusChanged;
       from: ExecutionStatus | null;
       to: ExecutionStatus;
       reason?: string;
     })
   | (DurableAuditEntryBase & {
-      kind: "step_completed";
+      kind: typeof DurableAuditEntryKind.StepCompleted;
       stepId: string;
       durationMs: number;
       isInternal: boolean;
     })
   | (DurableAuditEntryBase & {
-      kind: "sleep_scheduled";
+      kind: typeof DurableAuditEntryKind.SleepScheduled;
       stepId: string;
       timerId: string;
       durationMs: number;
       fireAt: Date;
     })
   | (DurableAuditEntryBase & {
-      kind: "sleep_completed";
+      kind: typeof DurableAuditEntryKind.SleepCompleted;
       stepId: string;
       timerId: string;
     })
   | (DurableAuditEntryBase & {
-      kind: "signal_waiting";
+      kind: typeof DurableAuditEntryKind.SignalWaiting;
       stepId: string;
       signalId: string;
       timeoutMs?: number;
@@ -56,23 +60,23 @@ export type DurableAuditEntry =
       reason?: "initial" | "timeout_armed";
     })
   | (DurableAuditEntryBase & {
-      kind: "signal_delivered";
+      kind: typeof DurableAuditEntryKind.SignalDelivered;
       stepId: string;
       signalId: string;
     })
   | (DurableAuditEntryBase & {
-      kind: "signal_timed_out";
+      kind: typeof DurableAuditEntryKind.SignalTimedOut;
       stepId: string;
       signalId: string;
       timerId: string;
     })
   | (DurableAuditEntryBase & {
-      kind: "emit_published";
+      kind: typeof DurableAuditEntryKind.EmitPublished;
       stepId: string;
       eventId: string;
     })
   | (DurableAuditEntryBase & {
-      kind: "note";
+      kind: typeof DurableAuditEntryKind.Note;
       message: string;
       meta?: Record<string, unknown>;
     });
@@ -84,7 +88,7 @@ export type DurableAuditEntry =
  */
 export type DurableAuditEntryInput =
   | {
-      kind: "execution_status_changed";
+      kind: typeof DurableAuditEntryKind.ExecutionStatusChanged;
       executionId: string;
       attempt: number;
       from: ExecutionStatus | null;
@@ -93,14 +97,14 @@ export type DurableAuditEntryInput =
       taskId?: string;
     }
   | {
-      kind: "step_completed";
+      kind: typeof DurableAuditEntryKind.StepCompleted;
       stepId: string;
       durationMs: number;
       isInternal: boolean;
       taskId?: string;
     }
   | {
-      kind: "sleep_scheduled";
+      kind: typeof DurableAuditEntryKind.SleepScheduled;
       stepId: string;
       timerId: string;
       durationMs: number;
@@ -108,7 +112,7 @@ export type DurableAuditEntryInput =
       taskId?: string;
     }
   | {
-      kind: "sleep_completed";
+      kind: typeof DurableAuditEntryKind.SleepCompleted;
       executionId: string;
       attempt: number;
       stepId: string;
@@ -116,7 +120,7 @@ export type DurableAuditEntryInput =
       taskId?: string;
     }
   | {
-      kind: "signal_waiting";
+      kind: typeof DurableAuditEntryKind.SignalWaiting;
       stepId: string;
       signalId: string;
       timeoutMs?: number;
@@ -126,7 +130,7 @@ export type DurableAuditEntryInput =
       taskId?: string;
     }
   | {
-      kind: "signal_delivered";
+      kind: typeof DurableAuditEntryKind.SignalDelivered;
       executionId: string;
       attempt: number;
       stepId: string;
@@ -134,7 +138,7 @@ export type DurableAuditEntryInput =
       taskId?: string;
     }
   | {
-      kind: "signal_timed_out";
+      kind: typeof DurableAuditEntryKind.SignalTimedOut;
       executionId: string;
       attempt: number;
       stepId: string;
@@ -143,13 +147,13 @@ export type DurableAuditEntryInput =
       taskId?: string;
     }
   | {
-      kind: "emit_published";
+      kind: typeof DurableAuditEntryKind.EmitPublished;
       stepId: string;
       eventId: string;
       taskId?: string;
     }
   | {
-      kind: "note";
+      kind: typeof DurableAuditEntryKind.Note;
       message: string;
       meta?: Record<string, unknown>;
       taskId?: string;
@@ -167,4 +171,3 @@ export function createDurableAuditEntryId(atMs: number = Date.now()): string {
   // Keep IDs naturally sortable when stored by key prefix (time first).
   return `${atMs}:${createExecutionId()}`;
 }
-

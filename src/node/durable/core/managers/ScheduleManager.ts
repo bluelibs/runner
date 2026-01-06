@@ -1,6 +1,12 @@
 import type { IDurableStore } from "../interfaces/store";
 import type { DurableTask, ScheduleOptions } from "../interfaces/service";
-import type { Schedule } from "../types";
+import {
+  ScheduleStatus,
+  ScheduleType,
+  TimerStatus,
+  TimerType,
+  type Schedule,
+} from "../types";
 import { CronParser } from "../CronParser";
 import { createExecutionId, sleepMs } from "../utils";
 import type { TaskRegistry } from "./TaskRegistry";
@@ -49,7 +55,7 @@ export class ScheduleManager {
     try {
       const existing = await this.store.getSchedule(scheduleId);
 
-      const type = options.cron ? "cron" : "interval";
+      const type = options.cron ? ScheduleType.Cron : ScheduleType.Interval;
       const pattern = options.cron ?? String(options.interval);
 
       if (existing) {
@@ -63,7 +69,7 @@ export class ScheduleManager {
           type,
           pattern,
           input,
-          status: "active",
+          status: ScheduleStatus.Active,
           updatedAt: new Date(),
         });
 
@@ -81,7 +87,7 @@ export class ScheduleManager {
         input,
         pattern,
         type,
-        status: "active",
+        status: ScheduleStatus.Active,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -115,8 +121,8 @@ export class ScheduleManager {
         taskId: task.id,
         input,
         pattern: options.cron ?? String(options.interval),
-        type: options.cron ? "cron" : "interval",
-        status: "active",
+        type: options.cron ? ScheduleType.Cron : ScheduleType.Interval,
+        status: ScheduleStatus.Active,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -133,9 +139,9 @@ export class ScheduleManager {
       id: `once:${id}`,
       taskId: task.id,
       input,
-      type: "scheduled",
+      type: TimerType.Scheduled,
       fireAt,
-      status: "pending",
+      status: TimerStatus.Pending,
     });
 
     return id;
@@ -148,7 +154,7 @@ export class ScheduleManager {
     const now = new Date();
 
     let nextRun: Date;
-    if (schedule.type === "cron") {
+    if (schedule.type === ScheduleType.Cron) {
       nextRun = CronParser.getNextRun(schedule.pattern);
     } else {
       const intervalMs = Number(schedule.pattern);
@@ -160,9 +166,9 @@ export class ScheduleManager {
       scheduleId: schedule.id,
       taskId: schedule.taskId,
       input: schedule.input,
-      type: "scheduled",
+      type: TimerType.Scheduled,
       fireAt: nextRun,
-      status: "pending",
+      status: TimerStatus.Pending,
     });
 
     await this.store.updateSchedule(schedule.id, {
@@ -173,7 +179,7 @@ export class ScheduleManager {
   }
 
   async pause(id: string): Promise<void> {
-    await this.store.updateSchedule(id, { status: "paused" });
+    await this.store.updateSchedule(id, { status: ScheduleStatus.Paused });
   }
 
   async resume(id: string): Promise<void> {
@@ -181,7 +187,7 @@ export class ScheduleManager {
     if (!schedule) return;
 
     await this.store.updateSchedule(id, {
-      status: "active",
+      status: ScheduleStatus.Active,
       updatedAt: new Date(),
     });
 

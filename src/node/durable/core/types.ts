@@ -1,11 +1,15 @@
+export const ExecutionStatus = {
+  Pending: "pending",
+  Running: "running",
+  Retrying: "retrying",
+  Sleeping: "sleeping",
+  Completed: "completed",
+  CompensationFailed: "compensation_failed",
+  Failed: "failed",
+} as const;
+
 export type ExecutionStatus =
-  | "pending"
-  | "running"
-  | "retrying"
-  | "sleeping"
-  | "completed"
-  | "compensation_failed"
-  | "failed";
+  (typeof ExecutionStatus)[keyof typeof ExecutionStatus];
 
 export interface Execution<TInput = unknown, TResult = unknown> {
   id: string;
@@ -32,13 +36,23 @@ export interface StepResult<T = unknown> {
   completedAt: Date;
 }
 
-export type TimerType =
-  | "sleep"
-  | "timeout"
-  | "scheduled"
-  | "cron"
-  | "retry"
-  | "signal_timeout";
+export const TimerType = {
+  Sleep: "sleep",
+  Timeout: "timeout",
+  Scheduled: "scheduled",
+  Cron: "cron",
+  Retry: "retry",
+  SignalTimeout: "signal_timeout",
+} as const;
+
+export type TimerType = (typeof TimerType)[keyof typeof TimerType];
+
+export const TimerStatus = {
+  Pending: "pending",
+  Fired: "fired",
+} as const;
+
+export type TimerStatus = (typeof TimerStatus)[keyof typeof TimerStatus];
 
 export interface Timer {
   id: string;
@@ -49,10 +63,23 @@ export interface Timer {
   input?: unknown;
   type: TimerType;
   fireAt: Date;
-  status: "pending" | "fired";
+  status: TimerStatus;
 }
 
-export type ScheduleType = "cron" | "interval";
+export const ScheduleType = {
+  Cron: "cron",
+  Interval: "interval",
+} as const;
+
+export type ScheduleType = (typeof ScheduleType)[keyof typeof ScheduleType];
+
+export const ScheduleStatus = {
+  Active: "active",
+  Paused: "paused",
+} as const;
+
+export type ScheduleStatus =
+  (typeof ScheduleStatus)[keyof typeof ScheduleStatus];
 
 export interface Schedule<TInput = unknown> {
   id: string;
@@ -60,7 +87,7 @@ export interface Schedule<TInput = unknown> {
   type: ScheduleType;
   pattern: string;
   input: TInput | undefined;
-  status: "active" | "paused";
+  status: ScheduleStatus;
   lastRun?: Date;
   nextRun?: Date;
   createdAt: Date;

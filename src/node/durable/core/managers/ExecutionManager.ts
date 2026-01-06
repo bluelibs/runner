@@ -7,7 +7,8 @@ import type {
   ExecuteOptions,
   ITaskExecutor,
 } from "../interfaces/service";
-import type { Execution } from "../types";
+import { DurableAuditEntryKind } from "../audit";
+import { ExecutionStatus, TimerStatus, TimerType, type Execution } from "../types";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { AuditLogger } from "./AuditLogger";
 import type { WaitManager } from "./WaitManager";
@@ -59,7 +60,7 @@ export class ExecutionManager {
       id: executionId,
       taskId: task.id,
       input,
-      status: "pending",
+      status: ExecutionStatus.Pending,
       attempt: 1,
       maxAttempts: this.config.execution?.maxAttempts ?? 3,
       timeout: options?.timeout ?? this.config.execution?.timeout,
@@ -69,12 +70,12 @@ export class ExecutionManager {
 
     await this.config.store.saveExecution(execution);
     await this.auditLogger.log({
-      kind: "execution_status_changed",
+      kind: DurableAuditEntryKind.ExecutionStatusChanged,
       executionId,
       taskId: task.id,
       attempt: execution.attempt,
       from: null,
-      to: "pending",
+      to: ExecutionStatus.Pending,
       reason: "created",
     });
 
@@ -87,9 +88,9 @@ export class ExecutionManager {
       await this.config.store.createTimer({
         id: kickoffTimerId,
         executionId,
-        type: "retry",
+        type: TimerType.Retry,
         fireAt: new Date(Date.now() + kickoffFailsafeDelayMs),
-        status: "pending",
+        status: TimerStatus.Pending,
       });
     }
 
@@ -134,13 +135,16 @@ export class ExecutionManager {
   async processExecution(executionId: string): Promise<void> {
     const execution = await this.config.store.getExecution(executionId);
     if (!execution) return;
-    if (execution.status === "completed" || execution.status === "failed")
+    if (
+      execution.status === ExecutionStatus.Completed ||
+      execution.status === ExecutionStatus.Failed
+    )
       return;
 
     const task = this.taskRegistry.find(execution.taskId);
     if (!task) {
       await this.config.store.updateExecution(execution.id, {
-        status: "failed",
+        status: ExecutionStatus.Failed,
         error: { message: `Task not registered: ${execution.taskId}` },
       });
       return;
@@ -195,14 +199,16 @@ export class ExecutionManager {
       );
     }
 
-    await this.config.store.updateExecution(execution.id, { status: "running" });
+    await this.config.store.updateExecution(execution.id, {
+      status: ExecutionStatus.Running,
+    });
     await this.auditLogger.log({
-      kind: "execution_status_changed",
+      kind: DurableAuditEntryKind.ExecutionStatusChanged,
       executionId: execution.id,
       taskId: execution.taskId,
       attempt: execution.attempt,
       from: execution.status,
-      to: "running",
+      to: ExecutionStatus.Running,
       reason: "start_attempt",
     });
 
@@ -249,33 +255,33 @@ export class ExecutionManager {
 
       const finishedExecution: Execution = {
         ...execution,
-        status: "completed",
+        status: ExecutionStatus.Completed,
         result,
         completedAt: new Date(),
       };
       await this.config.store.updateExecution(execution.id, finishedExecution);
       await this.auditLogger.log({
-        kind: "execution_status_changed",
+        kind: DurableAuditEntryKind.ExecutionStatusChanged,
         executionId: execution.id,
         taskId: execution.taskId,
         attempt: execution.attempt,
-        from: "running",
-        to: "completed",
+        from: ExecutionStatus.Running,
+        to: ExecutionStatus.Completed,
         reason: "completed",
       });
       await this.notifyExecutionFinished(finishedExecution);
     } catch (error) {
       if (error instanceof SuspensionSignal) {
         await this.config.store.updateExecution(execution.id, {
-          status: "sleeping",
+          status: ExecutionStatus.Sleeping,
         });
         await this.auditLogger.log({
-          kind: "execution_status_changed",
+          kind: DurableAuditEntryKind.ExecutionStatusChanged,
           executionId: execution.id,
           taskId: execution.taskId,
           attempt: execution.attempt,
-          from: "running",
-          to: "sleeping",
+          from: ExecutionStatus.Running,
+          to: ExecutionStatus.Sleeping,
           reason: `suspend:${error.reason}`,
         });
         return;
@@ -296,18 +302,18 @@ export class ExecutionManager {
       if (execution.attempt >= execution.maxAttempts) {
         const failedExecution: Execution = {
           ...execution,
-          status: "failed",
+          status: ExecutionStatus.Failed,
           error: errorInfo,
           completedAt: new Date(),
         };
         await this.config.store.updateExecution(execution.id, failedExecution);
         await this.auditLogger.log({
-          kind: "execution_status_changed",
+          kind: DurableAuditEntryKind.ExecutionStatusChanged,
           executionId: execution.id,
           taskId: execution.taskId,
           attempt: execution.attempt,
-          from: "running",
-          to: "failed",
+          from: ExecutionStatus.Running,
+          to: ExecutionStatus.Failed,
           reason: "failed",
         });
         await this.notifyExecutionFinished(failedExecution);
@@ -320,23 +326,23 @@ export class ExecutionManager {
       await this.config.store.createTimer({
         id: `retry:${execution.id}:${execution.attempt}`,
         executionId: execution.id,
-        type: "retry",
+        type: TimerType.Retry,
         fireAt,
-        status: "pending",
+        status: TimerStatus.Pending,
       });
 
       await this.config.store.updateExecution(execution.id, {
-        status: "retrying",
+        status: ExecutionStatus.Retrying,
         attempt: execution.attempt + 1,
         error: errorInfo,
       });
       await this.auditLogger.log({
-        kind: "execution_status_changed",
+        kind: DurableAuditEntryKind.ExecutionStatusChanged,
         executionId: execution.id,
         taskId: execution.taskId,
         attempt: execution.attempt,
-        from: "running",
-        to: "retrying",
+        from: ExecutionStatus.Running,
+        to: ExecutionStatus.Retrying,
         reason: "retry_scheduled",
       });
     }

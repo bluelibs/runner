@@ -1,9 +1,11 @@
-import type {
-  Execution,
+import {
   ExecutionStatus,
-  Schedule,
-  StepResult,
-  Timer,
+  ScheduleStatus,
+  TimerStatus,
+  type Execution,
+  type Schedule,
+  type StepResult,
+  type Timer,
 } from "../core/types";
 import type {
   IDurableStore,
@@ -41,16 +43,16 @@ export class MemoryStore implements IDurableStore {
     return Array.from(this.executions.values())
       .filter(
         (e) =>
-          e.status !== "completed" &&
-          e.status !== "failed" &&
-          e.status !== "compensation_failed",
+          e.status !== ExecutionStatus.Completed &&
+          e.status !== ExecutionStatus.Failed &&
+          e.status !== ExecutionStatus.CompensationFailed,
       )
       .map((e) => ({ ...e }));
   }
 
   async listStuckExecutions(): Promise<Execution[]> {
     return Array.from(this.executions.values())
-      .filter((e) => e.status === "compensation_failed")
+      .filter((e) => e.status === ExecutionStatus.CompensationFailed)
       .map((e) => ({ ...e }));
   }
 
@@ -62,9 +64,7 @@ export class MemoryStore implements IDurableStore {
 
     // Filter by status
     if (options.status && options.status.length > 0) {
-      results = results.filter((e) =>
-        options.status!.includes(e.status as ExecutionStatus),
-      );
+      results = results.filter((e) => options.status!.includes(e.status));
     }
 
     // Filter by taskId
@@ -119,7 +119,7 @@ export class MemoryStore implements IDurableStore {
     if (!e) return;
     this.executions.set(executionId, {
       ...e,
-      status: "pending",
+      status: ExecutionStatus.Pending,
       error: undefined,
       updatedAt: new Date(),
     });
@@ -142,7 +142,7 @@ export class MemoryStore implements IDurableStore {
     if (!e) return;
     this.executions.set(executionId, {
       ...e,
-      status: "failed",
+      status: ExecutionStatus.Failed,
       error,
       updatedAt: new Date(),
     });
@@ -186,13 +186,13 @@ export class MemoryStore implements IDurableStore {
 
   async getReadyTimers(now: Date = new Date()): Promise<Timer[]> {
     return Array.from(this.timers.values())
-      .filter((t) => t.status === "pending" && t.fireAt <= now)
+      .filter((t) => t.status === TimerStatus.Pending && t.fireAt <= now)
       .map((t) => ({ ...t }));
   }
 
   async markTimerFired(timerId: string): Promise<void> {
     const t = this.timers.get(timerId);
-    if (t) t.status = "fired";
+    if (t) t.status = TimerStatus.Fired;
   }
 
   async deleteTimer(timerId: string): Promise<void> {
@@ -235,7 +235,7 @@ export class MemoryStore implements IDurableStore {
 
   async listActiveSchedules(): Promise<Schedule[]> {
     return Array.from(this.schedules.values())
-      .filter((s) => s.status === "active")
+      .filter((s) => s.status === ScheduleStatus.Active)
       .map((s) => ({ ...s }));
   }
 

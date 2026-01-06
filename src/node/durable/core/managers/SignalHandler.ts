@@ -2,6 +2,8 @@ import type { IDurableStore } from "../interfaces/store";
 import type { IDurableQueue } from "../interfaces/queue";
 import type { IEventDefinition } from "../../../../types/event";
 import type { AuditLogger } from "./AuditLogger";
+import { DurableAuditEntryKind } from "../audit";
+import { ExecutionStatus } from "../types";
 import { isRecord, sleepMs, parseSignalState } from "../utils";
 
 export interface SignalHandlerCallbacks {
@@ -39,9 +41,16 @@ export class SignalHandler {
 
       const stepResults = await this.store.listStepResults?.(executionId);
       if (stepResults) {
-        const isWaitingSignalResult = (
-          result: unknown,
-        ): result is { state: "waiting"; signalId: string; timerId?: string } => {
+        type WaitingSignalResult = {
+          state: "waiting";
+          signalId: string;
+          timerId?: string;
+        };
+
+        const isWaitingSignalStep = (
+          step: { stepId: string; result: unknown },
+        ): step is { stepId: string; result: WaitingSignalResult } => {
+          const result = step.result;
           if (!isRecord(result)) return false;
           if (result.state !== "waiting") return false;
           if (typeof result.signalId !== "string") return false;
@@ -53,7 +62,7 @@ export class SignalHandler {
 
         const waiting = stepResults
           .filter((step) => step.stepId.startsWith("__signal:"))
-          .filter((step) => isWaitingSignalResult(step.result))
+          .filter(isWaitingSignalStep)
           .filter((step) => step.result.signalId === signalId)
           .map((step) => ({
             stepId: step.stepId,
@@ -187,7 +196,7 @@ export class SignalHandler {
     const execution = await this.store.getExecution(executionId);
     const attempt = execution ? execution.attempt : 0;
     await this.auditLogger.log({
-      kind: "signal_delivered",
+      kind: DurableAuditEntryKind.SignalDelivered,
       executionId,
       taskId: execution?.taskId,
       attempt,
@@ -199,9 +208,9 @@ export class SignalHandler {
 
     if (!execution) return;
     if (
-      execution.status === "completed" ||
-      execution.status === "failed" ||
-      execution.status === "compensation_failed"
+      execution.status === ExecutionStatus.Completed ||
+      execution.status === ExecutionStatus.Failed ||
+      execution.status === ExecutionStatus.CompensationFailed
     )
       return;
 
