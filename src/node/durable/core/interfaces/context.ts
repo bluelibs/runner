@@ -1,5 +1,5 @@
 import type { IEventDefinition } from "../../../../types/event";
-import type { DurableSignalId, DurableStepId } from "../ids";
+import type { DurableStepId } from "../ids";
 
 export interface StepOptions {
   retries?: number;
@@ -65,29 +65,19 @@ export interface IDurableContext {
    * Use options.stepId to provide a stable identifier for replay safety.
    */
   waitForSignal<TPayload>(
-    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
+    signal: IEventDefinition<TPayload>,
   ): Promise<TPayload>;
   waitForSignal<TPayload>(
-    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
+    signal: IEventDefinition<TPayload>,
     options: SignalOptions & { timeoutMs: number },
   ): Promise<{ kind: "signal"; payload: TPayload } | { kind: "timeout" }>;
   waitForSignal<TPayload>(
-    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
+    signal: IEventDefinition<TPayload>,
     options: SignalOptions,
   ): Promise<TPayload>;
 
   emit<TPayload>(
     event: IEventDefinition<TPayload>,
-    payload: TPayload,
-    options?: EmitOptions,
-  ): Promise<void>;
-  emit<TPayload>(
-    event: DurableSignalId<TPayload>,
-    payload: TPayload,
-    options?: EmitOptions,
-  ): Promise<void>;
-  emit<TPayload>(
-    event: string | { id: string },
     payload: TPayload,
     options?: EmitOptions,
   ): Promise<void>;

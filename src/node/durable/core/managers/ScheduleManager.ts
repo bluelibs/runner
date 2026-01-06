@@ -2,7 +2,7 @@ import type { IDurableStore } from "../interfaces/store";
 import type { DurableTask, ScheduleOptions } from "../interfaces/service";
 import type { Schedule } from "../types";
 import { CronParser } from "../CronParser";
-import { createExecutionId } from "../utils";
+import { createExecutionId, sleepMs } from "../utils";
 import type { TaskRegistry } from "./TaskRegistry";
 
 /**
@@ -13,6 +13,92 @@ export class ScheduleManager {
     private readonly store: IDurableStore,
     private readonly taskRegistry: TaskRegistry,
   ) {}
+
+  async ensureSchedule<TInput>(
+    task: DurableTask<TInput, unknown>,
+    input: TInput | undefined,
+    options: ScheduleOptions & { id: string },
+  ): Promise<string> {
+    if (!options.cron && options.interval === undefined) {
+      throw new Error("ensureSchedule() requires cron or interval");
+    }
+
+    this.taskRegistry.register(task);
+
+    const scheduleId = options.id;
+
+    const lockTtlMs = 10_000;
+    const lockResource = `schedule:${scheduleId}`;
+    const canLock = !!this.store.acquireLock && !!this.store.releaseLock;
+
+    let lockId: string | null = null;
+    if (canLock) {
+      const maxAttempts = 20;
+      for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+        lockId = await this.store.acquireLock!(lockResource, lockTtlMs);
+        if (lockId !== null) break;
+        await sleepMs(5);
+      }
+      if (lockId === null) {
+        throw new Error(
+          `Failed to acquire schedule lock for '${scheduleId}'`,
+        );
+      }
+    }
+
+    try {
+      const existing = await this.store.getSchedule(scheduleId);
+
+      const type = options.cron ? "cron" : "interval";
+      const pattern = options.cron ?? String(options.interval);
+
+      if (existing) {
+        if (existing.taskId !== task.id) {
+          throw new Error(
+            `Schedule '${scheduleId}' already exists for task '${existing.taskId}', cannot rebind to '${task.id}'`,
+          );
+        }
+
+        await this.store.updateSchedule(scheduleId, {
+          type,
+          pattern,
+          input,
+          status: "active",
+          updatedAt: new Date(),
+        });
+
+        const updated = await this.store.getSchedule(scheduleId);
+        if (updated) {
+          await this.reschedule(updated);
+        }
+
+        return scheduleId;
+      }
+
+      const schedule: Schedule<TInput> = {
+        id: scheduleId,
+        taskId: task.id,
+        input,
+        pattern,
+        type,
+        status: "active",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      await this.store.createSchedule(schedule);
+      await this.reschedule(schedule);
+      return scheduleId;
+    } finally {
+      if (canLock && lockId !== null) {
+        try {
+          await this.store.releaseLock!(lockResource, lockId);
+        } catch {
+          // best-effort cleanup; ignore
+        }
+      }
+    }
+  }
 
   async schedule<TInput>(
     task: DurableTask<TInput, unknown>,
@@ -70,7 +156,7 @@ export class ScheduleManager {
     }
 
     await this.store.createTimer({
-      id: `sched:${schedule.id}:${nextRun.getTime()}`,
+      id: `sched:${schedule.id}`,
       scheduleId: schedule.id,
       taskId: schedule.taskId,
       input: schedule.input,

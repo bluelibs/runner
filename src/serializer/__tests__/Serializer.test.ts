@@ -484,4 +484,44 @@ describe("Serializer", () => {
       }).toThrow("Unknown type: UnknownType");
     });
   });
+
+  describe("Security Hardening", () => {
+    it("drops unsafe keys during legacy deserialization", () => {
+      const payload =
+        '{"__proto__":{"polluted":true},"constructor":{"prototype":{"polluted":true}},"safe":1}';
+
+      const result = serializer.deserialize<Record<string, unknown>>(payload);
+
+      expect(result.safe).toBe(1);
+      expect(
+        Object.prototype.hasOwnProperty.call(result, "__proto__"),
+      ).toBe(false);
+      expect(
+        Object.prototype.hasOwnProperty.call(result, "constructor"),
+      ).toBe(false);
+      expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+    });
+
+    it("drops unsafe keys inside graph object nodes", () => {
+      const payload = JSON.stringify({
+        __graph: true,
+        version: 1,
+        root: { __ref: "obj_1" },
+        nodes: {
+          obj_1: {
+            kind: "object",
+            value: { "__proto__": { polluted: true }, ok: true },
+          },
+        },
+      });
+
+      const result = serializer.deserialize<Record<string, unknown>>(payload);
+
+      expect(result.ok).toBe(true);
+      expect(
+        Object.prototype.hasOwnProperty.call(result, "__proto__"),
+      ).toBe(false);
+      expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
+    });
+  });
 });

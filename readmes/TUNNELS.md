@@ -43,6 +43,8 @@ As your app grows, other processes need to call your tasks: workers, CLIs, brows
 - Optional server allow‑lists: restrict which ids are reachable.
 - Exclusivity: each task can be owned by at most one tunnel client. If two tunnel resources select the same task, Runner throws during init to prevent ambiguous routing.
 
+`nodeExposure` is a Runner **resource** that starts a small HTTP server: when registered, it listens on a port and exposes a controlled HTTP surface that lets remote callers execute tasks and emit events by id (under a configured `basePath` like `/__runner`).
+
 ### 2.1 Architecture deep dive
 
 The tunnel pipeline is split into three layers with clear responsibilities. This keeps transport concerns isolated from your task/event code and makes the system testable end-to-end.
@@ -62,6 +64,7 @@ The tunnel pipeline is split into three layers with clear responsibilities. This
 3) Serialization and file/stream handling
 - Standard DTOs go through the serializer (global serializer resource is the source of truth).
 - File uploads use a `$ejson: "File"` sentinel that triggers multipart handling; files are not serializer types.
+  - Mental model: the **serializer** handles values (Dates, RegExp, custom types), while the **tunnel client** chooses the **transport** (JSON vs multipart vs octet‑stream) based on your input shape.
 - Raw duplex streaming uses `application/octet-stream` with `useExposureContext()` on the server.
 - Async contexts propagate via `x-runner-context` and are hydrated server-side for the duration of the call.
 
@@ -133,6 +136,14 @@ const sum = await client.task<{ a: number; b: number }, number>(
 ```
 
 ## 4) Choose your client
+
+### Quick decision guide
+
+- Browser (or universal code): use **Unified** (`createHttpClient` or `globals.resources.httpClientFactory`).
+- Node:
+  - Default choice: use **Mixed** (it auto-selects JSON vs multipart vs duplex when possible).
+  - Use **Smart** only when you want to force the streaming-capable path (or you don’t want the fetch fallback).
+  - Use **Pure fetch** only when you want the tiniest JSON-only surface.
 
 ### 4.1 Unified client (browser + node)
 
@@ -584,6 +595,11 @@ Use in task `.run()`: `const { signal, req, res } = useExposureContext();`
 
 For conditional access without errors in non-exposed tasks, use `hasExposureContext()`: `if (hasExposureContext()) { const ctx = useExposureContext(); ... }`
 
+Practical guidance:
+
+- Keep domain logic transport-agnostic: put HTTP-specific code (headers, raw streams, status codes) in a thin wrapper task, then call a pure task/function for your business logic.
+- If you need to reuse a task both internally and over HTTP, always gate `useExposureContext()` behind `hasExposureContext()`.
+
 #### Examples
 
 **Abort Handling:** (See expanded above.)
@@ -850,7 +866,7 @@ It is possible to introduce compression for both responses and requests, but it 
 
   - Server: if `Content-Encoding` is present, transparently decompress before parsing JSON/multipart or forwarding duplex streams to tasks. Busboy expects plain multipart, so decompression must occur before piping to the parser.
   - Unified client (fetch): browsers typically do not gzip request bodies and disallow manual `Accept-Encoding`; keep using plain JSON/multipart in the browser.
-  - Node Smart client: can optionally gzip request bodies.
+  - Node Smart client: can optionally gzip request bodies (there is no automatic request-compression negotiation).
     - JSON: gzip the serialized body and set `Content-Encoding: gzip`.
     - Multipart: gzip the multipart body stream and set `Content-Encoding: gzip` (server must decompress before Busboy).
     - Duplex/octet‑stream: optionally gzip the request stream and set `Content-Encoding: gzip` if the server supports it.
@@ -923,6 +939,13 @@ Notes:
 
 - Phantom builders expose `.dependencies()`, `.middleware()`, `.tags()`, `.meta()`, `.inputSchema()`, and `.resultSchema()`. They intentionally do not expose `.run()`.
 - Without a matching tunnel, calling the task resolves to `undefined`. This helps catch misconfiguration early (for example, missing client or wrong allow‑list).
+- If you want a hard failure instead of `undefined`, use `assertTaskRouted()` from `@bluelibs/runner`:
+
+```ts
+import { assertTaskRouted } from "@bluelibs/runner";
+
+const result = assertTaskRouted(await remoteHello({ name: "Ada" }), remoteHello.id);
+```
 - You can combine phantom tasks with server allow‑lists (see section 9) to control what’s reachable when you host an exposure.
 - Single-owner rule: phantom or regular tasks routed through tunnels still follow exclusivity. The first tunnel that selects a task becomes its owner; subsequent tunnels attempting to select the same task cause init to fail with a clear error message.
 

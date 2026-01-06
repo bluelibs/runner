@@ -1,28 +1,44 @@
-import Redis from "ioredis";
 import type {
   BusEvent,
   BusEventHandler,
   IEventBus,
 } from "../core/interfaces/bus";
 import { Serializer } from "../../../serializer";
+import { createIORedisClient } from "../optionalDeps/ioredis";
 
 export interface RedisEventBusConfig {
   prefix?: string;
-  redis?: Redis | string;
+  redis?: RedisEventBusClient | string;
+}
+
+export interface RedisEventBusClient {
+  publish(channel: string, payload: string): Promise<unknown>;
+  subscribe(channel: string): Promise<unknown>;
+  unsubscribe(channel: string): Promise<unknown>;
+  on(event: "message", fn: (channel: string, message: string) => void): unknown;
+  quit(): Promise<unknown>;
+  duplicate(): RedisEventBusClient;
 }
 
 export class RedisEventBus implements IEventBus {
-  private pub: Redis;
-  private sub: Redis;
+  private pub: RedisEventBusClient;
+  private sub: RedisEventBusClient;
   private prefix: string;
   private readonly handlers = new Map<string, Set<BusEventHandler>>();
   private readonly serializer = new Serializer();
 
   constructor(config: RedisEventBusConfig) {
     this.pub =
-      typeof config.redis === "string"
-        ? new Redis(config.redis)
-        : config.redis || new Redis();
+      typeof config.redis === "string" || config.redis === undefined
+        ? (createIORedisClient(config.redis) as RedisEventBusClient)
+        : config.redis;
+
+    if (!this.pub.duplicate) {
+      throw new Error(
+        "RedisEventBus requires a redis client that supports duplicate()",
+      );
+    }
+
     this.sub = this.pub.duplicate();
     this.prefix = config.prefix || "durable:bus:";
 

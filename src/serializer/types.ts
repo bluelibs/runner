@@ -84,6 +84,14 @@ export interface SerializedGraph {
 export interface SerializerOptions {
   /** Whether to pretty-print JSON (for debugging) */
   pretty?: boolean;
+  /** Maximum recursion depth allowed during serialize/deserialize */
+  maxDepth?: number;
+  /** Restrict deserialization to this list of type IDs */
+  allowedTypes?: readonly string[];
+  /** Maximum accepted RegExp pattern length during deserialization */
+  maxRegExpPatternLength?: number;
+  /** Allow RegExp patterns that fail the safety heuristic */
+  allowUnsafeRegExp?: boolean;
 }
 
 /**

@@ -11,9 +11,9 @@ If your process restarts (deploys, crashes, scale-out), the workflow continues f
 Inside a durable task you get a `DurableContext` (via `durable.use()`):
 
 - `ctx.step(id, fn)` — run once, memoize result, replay from store
-- `ctx.sleep(ms)` — durable timer (survives restarts)
-- `ctx.waitForSignal(signal)` — suspend until an external signal arrives
-- `ctx.emit(event, payload)` — best-effort cross-worker notification (replay-safe via internal steps)
+- `ctx.sleep(ms, { stepId? })` — durable timer (survives restarts; use `stepId` for replay stability)
+- `ctx.waitForSignal(signalDef, { timeoutMs?, stepId? })` — suspend until an external signal arrives
+- `ctx.emit(eventDef, payload, { stepId? })` — best-effort cross-worker notification (replay-safe via internal steps)
 - `ctx.rollback()` — run registered compensations in reverse order
 
 ## Minimal Setup
@@ -30,26 +30,30 @@ Use `durableResource.fork("app.durable").with(...)` so the service can execute R
 	const durable = durableResource.fork("app.durable");
 	const durableRegistration = durable.with({ store: new MemoryStore() });
 
-	const processOrder = r
-	  .task("app.tasks.processOrder")
-	  .dependencies({ durable })
-	  .run(async (input: { orderId: string }, { durable }) => {
-	    const ctx = durable.use();
-	    const charged = await ctx.step("charge", async () => {
-	      return { chargeId: "ch_1" };
-	    });
+		const processOrder = r
+		  .task("app.tasks.processOrder")
+		  .dependencies({ durable })
+		  .run(async (input: { orderId: string }, { durable }) => {
+		    const ctx = durable.use();
+		    const charged = await ctx.step("charge", async () => {
+		      return { chargeId: "ch_1" };
+		    });
 
-    await ctx.sleep(5_000);
+		    const OrderApproved = r.event<{ approvedBy: string }>("orders.approved").build();
+		    const OrdersProcessed = r.event<{
+		      orderId: string;
+		      approved: { approvedBy: string };
+		    }>("orders.processed").build();
 
-    const approved = await ctx.waitForSignal<{ approvedBy: string }>(
-      "orders.approved",
-    );
+	    await ctx.sleep(5_000);
 
-    await ctx.emit("orders.processed", { orderId: input.orderId, approved });
+	    const approved = await ctx.waitForSignal(OrderApproved);
 
-    return { ok: true, charged };
-  })
-  .build();
+	    await ctx.emit(OrdersProcessed, { orderId: input.orderId, approved });
+
+	    return { ok: true, charged };
+	  })
+	  .build();
 
 	const app = r
 	  .resource("app")
@@ -78,18 +82,18 @@ If you want stricter type-safety (and to prevent tasks that can return `undefine
 const result = await service.executeStrict(processOrder, { orderId: "o1" });
 ```
 
-## Scheduling (One-Time / Cron / Interval)
+	## Scheduling (One-Time / Cron / Interval)
 
 Use scheduling for background jobs and delayed work. Schedules are driven by the durable polling loop (timers), so keep `polling.enabled` on in the process responsible for polling.
 
 ```ts
-// One-time run
-await service.schedule(processOrder, { orderId: "o1" }, { at: new Date(Date.now() + 60_000) });
-await service.schedule(processOrder, { orderId: "o1" }, { delay: 60_000 });
+	// One-time run
+	await service.schedule(processOrder, { orderId: "o1" }, { at: new Date(Date.now() + 60_000) });
+	await service.schedule(processOrder, { orderId: "o1" }, { delay: 60_000 });
 
-// Recurring
-await service.schedule(processOrder, { orderId: "o1" }, { id: "orders.hourly", cron: "0 * * * *" });
-await service.schedule(processOrder, { orderId: "o1" }, { id: "orders.poll", interval: 30_000 });
+	// Recurring (idempotent; recommended for boot-time setup)
+	await service.ensureSchedule(processOrder, { orderId: "o1" }, { id: "orders.hourly", cron: "0 * * * *" });
+	await service.ensureSchedule(processOrder, { orderId: "o1" }, { id: "orders.poll", interval: 30_000 });
 
 // Manage recurring schedules
 await service.pauseSchedule("orders.hourly");
@@ -100,21 +104,15 @@ await service.removeSchedule("orders.hourly");
 
 ## Signals (Type-Safe)
 
-`waitForSignal()` and `durableService.signal()` accept:
+`waitForSignal()` and `durableService.signal()` accept **event definitions** (`IEventDefinition<TPayload>`).
 
-- `string` ids: `"orders.approved"`
-- Runner event defs: `r.event("...").payloadSchema<...>().build()`
-- Durable signal ids: `createDurableSignalId<TPayload>("...")`
+Create them with Runner’s `event<T>({ id })` helper (preferred).
 
 ```ts
-import { createDurableSignalId } from "@bluelibs/runner/node";
+		const OrderApproved = r.event<{ approvedBy: string }>("orders.approved").build();
 
-const OrderApproved = createDurableSignalId<{ approvedBy: string }>(
-  "orders.approved",
-);
-
-// In the workflow:
-const approved = await ctx.waitForSignal(OrderApproved);
+	// In the workflow:
+	const approved = await ctx.waitForSignal(OrderApproved);
 
 // From the outside:
 await service.signal(executionId, OrderApproved, { approvedBy: "Ada" });
@@ -134,10 +132,13 @@ const charged = await ctx.step(Charge, async () => {
 });
 ```
 
-## Notes On Safety
+	## Notes On Safety
 
-- **Step IDs are part of the durable contract.** Changing a step id changes replay behavior.
-- Internal step ids starting with `__` and `rollback:` are reserved.
+	- **Step IDs are part of the durable contract.** Changing a step id changes replay behavior.
+	- Internal step ids starting with `__` and `rollback:` are reserved.
+	- Avoid implicit internal ids (`sleep/emit/waitForSignal` without `{ stepId }`) in concurrent flows (`Promise.all`); always use explicit `stepId` there.
+	- Timeouts are not cancellation; timed-out async work may still finish later and perform side effects.
+	- Dependency injection does not make side effects replay-safe; keep them inside `ctx.step(...)` / `ctx.emit(...)`.
 
 ## Configuration Knobs (Common)
 

@@ -1,4 +1,4 @@
-import { r } from "../../..";
+import { event, r } from "../../..";
 import type { IDurableQueue, QueueMessage } from "../core/interfaces/queue";
 import { SuspensionSignal } from "../core/interfaces/context";
 import type { ITaskExecutor } from "../core/interfaces/service";
@@ -13,7 +13,7 @@ import {
 } from "../core/DurableService";
 import { AuditLogger } from "../core/managers";
 import type { DurableAuditEmitter } from "../core/audit";
-import { createDurableSignalId } from "../core/ids";
+import { event } from "../../..";
 import type { Execution, Schedule, Timer } from "../core/types";
 import { MemoryStore } from "../store/MemoryStore";
 
@@ -47,6 +47,10 @@ class SpyQueue implements IDurableQueue {
 }
 
 describe("durable: DurableService (unit)", () => {
+  const Paid = event<{ paidAt: number }>({ id: "paid" });
+  const Timed = event<{ paidAt: number }>({ id: "timed" });
+  const X = event<any>({ id: "x" });
+
   it("arms a kickoff failsafe timer and removes it after enqueue succeeds", async () => {
     const store = new MemoryStore();
     const queue = new SpyQueue();
@@ -1075,7 +1079,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 1 });
+    await service.signal("e1", Paid, { paidAt: 1 });
     expect(queue.enqueued).toEqual([
       { type: "resume", payload: { executionId: "e1" } },
     ]);
@@ -1083,6 +1087,60 @@ describe("durable: DurableService (unit)", () => {
       state: "completed",
       payload: { paidAt: 1 },
     });
+  });
+
+  it("signals work without listStepResults() support (fallback scan path)", async () => {
+    const base = new MemoryStore();
+
+    const storeNoList: IDurableStore = {
+      saveExecution: base.saveExecution.bind(base),
+      getExecution: base.getExecution.bind(base),
+      updateExecution: base.updateExecution.bind(base),
+      listIncompleteExecutions: base.listIncompleteExecutions.bind(base),
+      getStepResult: base.getStepResult.bind(base),
+      saveStepResult: base.saveStepResult.bind(base),
+      createTimer: base.createTimer.bind(base),
+      getReadyTimers: base.getReadyTimers.bind(base),
+      markTimerFired: base.markTimerFired.bind(base),
+      deleteTimer: base.deleteTimer.bind(base),
+      createSchedule: base.createSchedule.bind(base),
+      getSchedule: base.getSchedule.bind(base),
+      updateSchedule: base.updateSchedule.bind(base),
+      deleteSchedule: base.deleteSchedule.bind(base),
+      listSchedules: base.listSchedules.bind(base),
+      listActiveSchedules: base.listActiveSchedules.bind(base),
+    };
+
+    const queue = new SpyQueue();
+    const service = new DurableService({ store: storeNoList, queue, tasks: [] });
+
+    await storeNoList.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: "sleeping",
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    await storeNoList.saveStepResult({
+      executionId: "e1",
+      stepId: "__signal:paid",
+      result: { state: "waiting" },
+      completedAt: new Date(),
+    });
+
+    await service.signal("e1", Paid, { paidAt: 42 });
+
+    expect((await storeNoList.getStepResult("e1", "__signal:paid"))?.result).toEqual({
+      state: "completed",
+      payload: { paidAt: 42 },
+    });
+    expect(queue.enqueued).toEqual([
+      { type: "resume", payload: { executionId: "e1" } },
+    ]);
   });
 
   it("throws when signal() cannot acquire the signal lock", async () => {
@@ -1112,7 +1170,7 @@ describe("durable: DurableService (unit)", () => {
 
     const service = new DurableService({ store: storeLocked, tasks: [] });
 
-    await expect(service.signal("e1", "paid", { paidAt: 1 })).rejects.toThrow(
+    await expect(service.signal("e1", Paid, { paidAt: 1 })).rejects.toThrow(
       "signal lock",
     );
   });
@@ -1120,8 +1178,6 @@ describe("durable: DurableService (unit)", () => {
   it("accepts typed signal ids in signal()", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
-
-    const Paid = createDurableSignalId<{ paidAt: number }>("paid");
 
     await store.saveStepResult({
       executionId: "e1",
@@ -1161,7 +1217,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 123 });
+    await service.signal("e1", Paid, { paidAt: 123 });
 
     expect((await store.getStepResult("e1", "__signal:stable-paid"))?.result).toEqual({
       state: "completed",
@@ -1203,7 +1259,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 1 });
+    await service.signal("e1", Paid, { paidAt: 1 });
 
     expect((await store.getStepResult("e1", "__signal:paid"))?.result).toEqual({
       state: "completed",
@@ -1244,7 +1300,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 2 });
+    await service.signal("e1", Paid, { paidAt: 2 });
 
     expect((await store.getStepResult("e1", "__signal:paid:2"))?.result).toEqual({
       state: "completed",
@@ -1284,7 +1340,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 2 });
+    await service.signal("e1", Paid, { paidAt: 2 });
 
     expect((await store.getStepResult("e1", "__signal:paid:2"))?.result).toEqual({
       state: "completed",
@@ -1338,7 +1394,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(2),
     });
 
-    await service.signal("e1", "paid", { paidAt: 101 });
+    await service.signal("e1", Paid, { paidAt: 101 });
 
     expect((await store.getStepResult("e1", "__signal:paid:1"))?.result).toEqual({
       state: "completed",
@@ -1378,7 +1434,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 6 });
+    await service.signal("e1", Paid, { paidAt: 6 });
 
     expect((await store.getStepResult("e1", "__signal:aaa"))?.result).toEqual({
       state: "completed",
@@ -1421,7 +1477,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 3 });
+    await service.signal("e1", Paid, { paidAt: 3 });
 
     const timers = await store.getReadyTimers(new Date(0));
     expect(timers.some((t) => t.id === "signal_timeout:e1:__signal:paid")).toBe(false);
@@ -1457,7 +1513,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 9 });
+    await service.signal("e1", Paid, { paidAt: 9 });
 
     expect((await store.getStepResult("e1", "__signal:paid"))?.result).toEqual({
       state: "completed",
@@ -1477,7 +1533,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("missing", "paid", { paidAt: 4 });
+    await service.signal("missing", Paid, { paidAt: 4 });
 
     expect((await store.getStepResult("missing", "__signal:stable-paid"))?.result).toEqual({
       state: "completed",
@@ -1511,7 +1567,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("done", "paid", { paidAt: 7 });
+    await service.signal("done", Paid, { paidAt: 7 });
 
     expect(queue.enqueued.length).toBe(0);
     expect((await store.getStepResult("done", "__signal:stable-paid"))?.result).toEqual({
@@ -1554,7 +1610,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 8 });
+    await service.signal("e1", Paid, { paidAt: 8 });
 
     expect((await store.getExecution("e1"))?.status).toBe("completed");
   });
@@ -1603,7 +1659,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 5 });
+    await service.signal("e1", Paid, { paidAt: 5 });
 
     expect((await base.getStepResult("e1", "__signal:paid"))?.result).toEqual({
       state: "completed",
@@ -1625,7 +1681,7 @@ describe("durable: DurableService (unit)", () => {
       result: { state: "waiting" },
       completedAt: new Date(),
     });
-    await expect(service.signal("missing", "x", 1)).resolves.toBeUndefined();
+    await expect(service.signal("missing", X, 1)).resolves.toBeUndefined();
     expect(queue.enqueued.length).toBe(0);
     expect((await store.getStepResult("missing", "__signal:x"))?.result).toEqual({
       state: "completed",
@@ -1650,7 +1706,7 @@ describe("durable: DurableService (unit)", () => {
       result: { state: "waiting" },
       completedAt: new Date(),
     });
-    await service.signal("done", "x", 1);
+    await service.signal("done", X, 1);
 
     await store.saveExecution({
       id: "failed",
@@ -1669,7 +1725,7 @@ describe("durable: DurableService (unit)", () => {
       result: { state: "waiting" },
       completedAt: new Date(),
     });
-    await service.signal("failed", "x", 1);
+    await service.signal("failed", X, 1);
 
     expect(queue.enqueued.length).toBe(0);
   });
@@ -1693,7 +1749,7 @@ describe("durable: DurableService (unit)", () => {
       updatedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 1 });
+    await service.signal("e1", Paid, { paidAt: 1 });
 
     const entries = await store.listAuditEntries("e1");
     expect(entries.some((entry) => entry.kind === "signal_delivered")).toBe(
@@ -1716,7 +1772,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("missing", "x", { ok: true });
+    await service.signal("missing", X, { ok: true });
 
     const entries = await store.listAuditEntries("missing");
     expect(entries[0]?.attempt).toBe(0);
@@ -1745,7 +1801,7 @@ describe("durable: DurableService (unit)", () => {
       result: { state: "completed", payload: { paidAt: 1 } },
       completedAt: new Date(),
     });
-    await service.signal("e1", "paid", { paidAt: 2 });
+    await service.signal("e1", Paid, { paidAt: 2 });
 
     expect((await store.getStepResult("e1", "__signal:paid"))?.result).toEqual({
       state: "completed",
@@ -1762,7 +1818,7 @@ describe("durable: DurableService (unit)", () => {
       result: { state: "timed_out" },
       completedAt: new Date(),
     });
-    await service.signal("e1", "timed", { paidAt: 2 });
+    await service.signal("e1", Timed, { paidAt: 2 });
     expect((await store.getStepResult("e1", "__signal:timed"))?.result).toEqual({
       state: "timed_out",
     });
@@ -1795,7 +1851,7 @@ describe("durable: DurableService (unit)", () => {
       result: { state: "completed" },
       completedAt: new Date(),
     });
-    await service.signal("e1", "paid", { paidAt: 123 });
+    await service.signal("e1", Paid, { paidAt: 123 });
     expect((await store.getStepResult("e1", "__signal:paid"))?.result).toEqual({
       state: "completed",
     });
@@ -1806,7 +1862,7 @@ describe("durable: DurableService (unit)", () => {
       result: { state: "timed_out" },
       completedAt: new Date(),
     });
-    await service.signal("e1", "timed", { paidAt: 123 });
+    await service.signal("e1", Timed, { paidAt: 123 });
     expect((await store.getStepResult("e1", "__signal:timed"))?.result).toEqual(
       { state: "timed_out" },
     );
@@ -1851,7 +1907,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await service.signal("e1", "paid", { paidAt: 2 });
+    await service.signal("e1", Paid, { paidAt: 2 });
 
     expect((await store.getStepResult("e1", "__signal:paid:1"))?.result).toEqual(
       { state: "completed", payload: { paidAt: 2 } },
@@ -1893,7 +1949,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await expect(service.signal("e1", "paid", { paidAt: 2 })).rejects.toThrow(
+    await expect(service.signal("e1", Paid, { paidAt: 2 })).rejects.toThrow(
       "Invalid signal step state",
     );
     expect(queue.enqueued).toEqual([]);
@@ -1934,7 +1990,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await expect(service.signal("e1", "paid", { paidAt: 1 })).rejects.toThrow(
+    await expect(service.signal("e1", Paid, { paidAt: 1 })).rejects.toThrow(
       "Too many signal slots",
     );
   });
@@ -1969,7 +2025,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await expect(service.signal("e1", "paid", { paidAt: 2 })).rejects.toThrow(
+    await expect(service.signal("e1", Paid, { paidAt: 2 })).rejects.toThrow(
       "Invalid signal step state",
     );
     expect(queue.enqueued).toEqual([]);
@@ -2005,7 +2061,7 @@ describe("durable: DurableService (unit)", () => {
       completedAt: new Date(),
     });
 
-    await expect(service.signal("e1", "paid", 456)).rejects.toThrow(
+    await expect(service.signal("e1", Paid, 456)).rejects.toThrow(
       "Invalid signal step state",
     );
     expect(queue.enqueued).toEqual([]);

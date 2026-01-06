@@ -11,7 +11,7 @@ import { SuspensionSignal } from "./interfaces/context";
 import type { IDurableStore } from "./interfaces/store";
 import { StepBuilder } from "./StepBuilder";
 import type { IEventDefinition } from "../../../types/event";
-import type { DurableSignalId, DurableStepId } from "./ids";
+import type { DurableStepId } from "./ids";
 import {
   createDurableAuditEntryId,
   isDurableInternalStepId,
@@ -32,12 +32,10 @@ type SignalStepState =
   | { state: "timed_out" };
 
 type SignalInput<TPayload> =
-  | string
-  | IEventDefinition<TPayload>
-  | DurableSignalId<TPayload>;
+  IEventDefinition<TPayload>;
 
 function getSignalId(signal: SignalInput<unknown>): string {
-  return typeof signal === "string" ? signal : signal.id;
+  return signal.id;
 }
 
 function parseSignalStepState(value: unknown): SignalStepState | null {
@@ -579,15 +577,11 @@ export class DurableContext implements IDurableContext {
   }
 
   async emit<TPayload>(
-    event:
-      | string
-      | { id: string }
-      | IEventDefinition<TPayload>
-      | DurableSignalId<TPayload>,
+    event: IEventDefinition<TPayload>,
     payload: TPayload,
     options?: EmitOptions,
   ): Promise<void> {
-    const eventId = typeof event === "string" ? event : event.id;
+    const eventId = event.id;
     
     let stepId: string;
     if (options?.stepId) {

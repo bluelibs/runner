@@ -2,6 +2,7 @@ import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { DurableContext } from "../core/DurableContext";
 import type { IDurableStore } from "../core/interfaces/store";
 import { SuspensionSignal } from "../core/interfaces/context";
+import { event } from "../../..";
 import { MemoryStore } from "../store/MemoryStore";
 
 describe("durable: DurableContext audit branches", () => {
@@ -70,7 +71,8 @@ describe("durable: DurableContext audit branches", () => {
       received.push(evt.type);
     });
 
-    await expect(ctx.emit("evt.1", { a: 1 })).resolves.toBeUndefined();
+    const Evt1 = event<{ a: number }>({ id: "evt.1" });
+    await expect(ctx.emit(Evt1, { a: 1 })).resolves.toBeUndefined();
     expect(received).toEqual(["evt.1"]);
   });
 });

@@ -193,6 +193,16 @@ export const tunnelOwnershipConflictError = error<
   )
   .build();
 
+// Phantom task executed without a matching tunnel route
+export const phantomTaskNotRoutedError = error<
+  { taskId: string } & DefaultErrorType
+>("runner.errors.phantomTaskNotRouted")
+  .format(
+    ({ taskId }) =>
+      `Phantom task "${taskId}" is not routed through any tunnel. Ensure a tunnel client selects this task id (or avoid calling the phantom task directly).`,
+  )
+  .build();
+
 export function isCancellationError(err: unknown): boolean {
   return cancellationError.is(err);
 }

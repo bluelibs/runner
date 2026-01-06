@@ -1,10 +1,33 @@
-import { connect } from "amqplib";
-import type { Channel, ChannelModel, ConsumeMessage } from "amqplib";
 import type {
   IDurableQueue,
   MessageHandler,
   QueueMessage,
 } from "../core/interfaces/queue";
+import { connectAmqplib } from "../optionalDeps/amqplib";
+
+type ConsumeMessage = { content: Buffer };
+
+type Channel = {
+  assertQueue: (queue: string, options: Record<string, unknown>) => Promise<unknown>;
+  prefetch: (count: number) => Promise<unknown>;
+  sendToQueue: (
+    queue: string,
+    content: Buffer,
+    options: Record<string, unknown>,
+  ) => unknown;
+  consume: (
+    queue: string,
+    onMessage: (msg: ConsumeMessage | null) => Promise<void>,
+  ) => Promise<unknown>;
+  ack: (msg: ConsumeMessage) => unknown;
+  nack: (msg: ConsumeMessage, allUpTo?: boolean, requeue?: boolean) => unknown;
+  close: () => Promise<unknown>;
+};
+
+type ChannelModel = {
+  createChannel: () => Promise<Channel>;
+  close: () => Promise<unknown>;
+};
 
 export interface RabbitMQQueueConfig {
   url?: string;
@@ -40,7 +63,7 @@ export class RabbitMQQueue implements IDurableQueue {
   }
 
   async init(): Promise<void> {
-    const connection = await connect(this.url);
+    const connection = (await connectAmqplib(this.url)) as ChannelModel;
     const channel = await connection.createChannel();
     this.connection = connection;
     this.channel = channel;

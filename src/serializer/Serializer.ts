@@ -16,6 +16,9 @@ import type {
 import { builtInTypes } from "./builtins";
 
 const GRAPH_VERSION = 1;
+const DEFAULT_MAX_DEPTH = 1000;
+const DEFAULT_MAX_REGEXP_PATTERN_LENGTH = 1024;
+const DEFAULT_UNSAFE_KEYS = new Set(["__proto__", "constructor", "prototype"]);
 
 type SerializeState = {
   serializingValueTypes: WeakSet<object>;
@@ -40,9 +43,38 @@ export class Serializer {
 
   /** JSON indentation width when pretty printing is enabled */
   private readonly indent: number | undefined;
+  /** Maximum recursion depth allowed */
+  private readonly maxDepth: number;
+  /** Allowed type IDs for deserialization (null = allow all) */
+  private readonly allowedTypes: ReadonlySet<string> | null;
+  /** Maximum allowed RegExp pattern length during deserialization */
+  private readonly maxRegExpPatternLength: number;
+  /** Allow RegExp patterns that fail the safety heuristic */
+  private readonly allowUnsafeRegExp: boolean;
+  /** Disallowed keys that can lead to prototype pollution */
+  private readonly unsafeKeys: ReadonlySet<string>;
 
   constructor(options: SerializerOptions = {}) {
     this.indent = options.pretty ? 2 : undefined;
+    const maxDepth = options.maxDepth;
+    this.maxDepth =
+      typeof maxDepth === "number" && Number.isFinite(maxDepth) && maxDepth >= 0
+        ? Math.floor(maxDepth)
+        : DEFAULT_MAX_DEPTH;
+    this.allowedTypes = options.allowedTypes
+      ? new Set(options.allowedTypes)
+      : null;
+    const maxPatternLength = options.maxRegExpPatternLength;
+    this.maxRegExpPatternLength =
+      maxPatternLength === Number.POSITIVE_INFINITY
+        ? Number.POSITIVE_INFINITY
+        : typeof maxPatternLength === "number" &&
+            Number.isFinite(maxPatternLength) &&
+            maxPatternLength > 0
+          ? Math.floor(maxPatternLength)
+          : DEFAULT_MAX_REGEXP_PATTERN_LENGTH;
+    this.allowUnsafeRegExp = options.allowUnsafeRegExp ?? false;
+    this.unsafeKeys = DEFAULT_UNSAFE_KEYS;
     this.registerBuiltInTypes();
     this.refreshTypeCache();
   }
@@ -55,7 +87,7 @@ export class Serializer {
       stack: new WeakSet(),
       serializingValueTypes: new WeakSet(),
       excludedTypeIds: [],
-    });
+    }, 0);
     return this.jsonStringify(root);
   }
 
@@ -85,7 +117,7 @@ export class Serializer {
       serializingValueTypes: new WeakSet(),
       excludedTypeIds: [],
     };
-    const root = this.serializeValue(value, ctx, state);
+    const root = this.serializeValue(value, ctx, state, 0);
     if (ctx.nodeCount === 0 && !this.isObjectReference(root)) {
       return this.jsonStringify(root);
     }
@@ -116,7 +148,7 @@ export class Serializer {
       resolving: new Set(),
     };
 
-    return this.deserializeValue(parsed.root, context) as T;
+    return this.deserializeValue(parsed.root, context, 0) as T;
   }
 
   /**
@@ -212,7 +244,9 @@ export class Serializer {
       serializingValueTypes: WeakSet<object>;
       excludedTypeIds: string[];
     },
+    depth: number,
   ): unknown {
+    this.assertDepth(depth);
     if (value === null) {
       return null;
     }
@@ -266,7 +300,11 @@ export class Serializer {
           if (shouldExcludeCurrentType) {
             context.excludedTypeIds.push(typeDef.id);
           }
-          const payload = this.serializeTreeValue(serializedPayload, context);
+          const payload = this.serializeTreeValue(
+            serializedPayload,
+            context,
+            depth + 1,
+          );
           return {
             __type: typeDef.id,
             value: payload,
@@ -287,7 +325,11 @@ export class Serializer {
         const length = objectValue.length;
         const items: unknown[] = new Array(length);
         for (let index = 0; index < length; index += 1) {
-          items[index] = this.serializeTreeValue(objectValue[index], context);
+          items[index] = this.serializeTreeValue(
+            objectValue[index],
+            context,
+            depth + 1,
+          );
         }
         return items;
       }
@@ -298,11 +340,14 @@ export class Serializer {
         if (!Object.prototype.hasOwnProperty.call(source, key)) {
           continue;
         }
+        if (this.isUnsafeKey(key)) {
+          continue;
+        }
         const entryValue = source[key];
         if (typeof entryValue === "undefined") {
           continue;
         }
-        record[key] = this.serializeTreeValue(entryValue, context);
+        record[key] = this.serializeTreeValue(entryValue, context, depth + 1);
       }
 
       return record;
@@ -329,7 +374,9 @@ export class Serializer {
     value: unknown,
     context: SerializationContext,
     state: SerializeState,
+    depth: number,
   ): SerializedValue {
+    this.assertDepth(depth);
     if (value === null) {
       return null;
     }
@@ -385,7 +432,12 @@ export class Serializer {
             state.excludedTypeIds.push(typeDef.id);
           }
           try {
-            const payload = this.serializeValue(serializedPayload, context, state);
+            const payload = this.serializeValue(
+              serializedPayload,
+              context,
+              state,
+              depth + 1,
+            );
             // Value types are serialized inline and do not preserve identity
             // This produces stable JSON output for value-like types (ex: Date)
             return {
@@ -412,7 +464,12 @@ export class Serializer {
           state.excludedTypeIds.push(typeDef.id);
         }
         try {
-          const payload = this.serializeValue(serializedPayload, context, state);
+          const payload = this.serializeValue(
+            serializedPayload,
+            context,
+            state,
+            depth + 1,
+          );
 
           this.storeNode(context, objectIdForType, {
             kind: "type",
@@ -435,7 +492,12 @@ export class Serializer {
       const length = objectValue.length;
       const items: SerializedValue[] = new Array(length);
       for (let index = 0; index < length; index += 1) {
-        items[index] = this.serializeValue(objectValue[index], context, state);
+        items[index] = this.serializeValue(
+          objectValue[index],
+          context,
+          state,
+          depth + 1,
+        );
       }
       this.storeNode(context, objectId, { kind: "array", value: items });
       return { __ref: objectId };
@@ -447,11 +509,14 @@ export class Serializer {
       if (!Object.prototype.hasOwnProperty.call(source, key)) {
         continue;
       }
+      if (this.isUnsafeKey(key)) {
+        continue;
+      }
       const entryValue = source[key];
       if (typeof entryValue === "undefined") {
         continue;
       }
-      record[key] = this.serializeValue(entryValue, context, state);
+      record[key] = this.serializeValue(entryValue, context, state, depth + 1);
     }
 
     this.storeNode(context, objectId, { kind: "object", value: record });
@@ -488,8 +553,177 @@ export class Serializer {
       return false;
     }
   }
-  // ... (skipping unchanged methods)
 
+  private assertDepth(depth: number): void {
+    if (depth > this.maxDepth) {
+      throw new Error(`Maximum depth exceeded (${this.maxDepth})`);
+    }
+  }
+
+  private isUnsafeKey(key: string): boolean {
+    return this.unsafeKeys.has(key);
+  }
+
+  private getTypeDefinition(
+    typeId: string,
+  ): TypeDefinition<unknown, unknown> {
+    if (this.allowedTypes && !this.allowedTypes.has(typeId)) {
+      throw new Error(`Type "${typeId}" is not allowed`);
+    }
+    const typeDef = this.typeMap.get(typeId);
+    if (!typeDef) {
+      throw new Error(`Unknown type: ${typeId}`);
+    }
+    return typeDef;
+  }
+
+  private deserializeType(
+    typeDef: TypeDefinition<unknown, unknown>,
+    typeId: string,
+    data: unknown,
+  ): unknown {
+    if (typeId === "RegExp") {
+      const payload = this.assertRegExpPayload(data);
+      return typeDef.deserialize(payload);
+    }
+    return typeDef.deserialize(data);
+  }
+
+  private assertRegExpPayload(
+    value: unknown,
+  ): { pattern: string; flags: string } {
+    if (!value || typeof value !== "object") {
+      throw new Error("Invalid RegExp payload");
+    }
+    const record = value as Record<string, unknown>;
+    if (typeof record.pattern !== "string" || typeof record.flags !== "string") {
+      throw new Error("Invalid RegExp payload");
+    }
+    if (record.pattern.length > this.maxRegExpPatternLength) {
+      throw new Error(
+        `RegExp pattern exceeds limit (${this.maxRegExpPatternLength})`,
+      );
+    }
+    if (!this.allowUnsafeRegExp && !this.isRegExpPatternSafe(record.pattern)) {
+      throw new Error("Unsafe RegExp pattern");
+    }
+    return { pattern: record.pattern, flags: record.flags };
+  }
+
+  /** @internal */
+  public readonly isRegExpPatternSafe = (pattern: string): boolean => {
+    const groupStack: Array<{ hasQuantifier: boolean }> = [];
+    let escaped = false;
+    let inCharClass = false;
+
+    for (let index = 0; index < pattern.length; index += 1) {
+      const char = pattern[index];
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (inCharClass) {
+        if (char === "]") {
+          inCharClass = false;
+        }
+        continue;
+      }
+      if (char === "[") {
+        inCharClass = true;
+        continue;
+      }
+      if (char === "(") {
+        groupStack.push({ hasQuantifier: false });
+        if (pattern[index + 1] === "?") {
+          index += 1;
+        }
+        continue;
+      }
+      if (char === ")") {
+        const group = groupStack.pop();
+        if (group?.hasQuantifier && this.isQuantifierAt(pattern, index + 1)) {
+          return false;
+        }
+        if (group?.hasQuantifier && groupStack.length > 0) {
+          groupStack[groupStack.length - 1].hasQuantifier = true;
+        }
+        continue;
+      }
+      if (this.isQuantifierChar(char, pattern, index)) {
+        if (groupStack.length > 0) {
+          groupStack[groupStack.length - 1].hasQuantifier = true;
+        }
+      }
+    }
+
+    return true;
+  };
+
+  /** @internal */
+  public readonly isQuantifierAt = (pattern: string, index: number): boolean => {
+    if (index >= pattern.length) {
+      return false;
+    }
+    const char = pattern[index];
+    if (char === "*" || char === "+" || char === "?") {
+      return true;
+    }
+    if (char === "{") {
+      return this.isBoundedQuantifier(pattern, index);
+    }
+    return false;
+  };
+
+  /** @internal */
+  public readonly isQuantifierChar = (
+    char: string,
+    pattern: string,
+    index: number,
+  ): boolean => {
+    if (char === "*" || char === "+") {
+      return true;
+    }
+    if (char === "?") {
+      if (index > 0 && pattern[index - 1] === "(") {
+        return false;
+      }
+      return true;
+    }
+    if (char === "{") {
+      return this.isBoundedQuantifier(pattern, index);
+    }
+    return false;
+  };
+
+  /** @internal */
+  public readonly isBoundedQuantifier = (
+    pattern: string,
+    index: number,
+  ): boolean => {
+    let sawDigit = false;
+    let sawComma = false;
+
+    for (let i = index + 1; i < pattern.length; i += 1) {
+      const char = pattern[i];
+      if (char >= "0" && char <= "9") {
+        sawDigit = true;
+        continue;
+      }
+      if (char === "," && !sawComma) {
+        sawComma = true;
+        continue;
+      }
+      if (char === "}") {
+        return sawDigit;
+      }
+      return false;
+    }
+    return false;
+  };
   private isObjectReference(value: unknown): value is ObjectReference {
     return Boolean(
       value &&
@@ -527,15 +761,30 @@ export class Serializer {
     nodes: Record<string, SerializedNode>,
   ): Record<string, SerializedNode> {
     if (!nodes || typeof nodes !== "object") {
-      return Object.create(null);
+      const empty: Record<string, SerializedNode> = {};
+      Object.setPrototypeOf(empty, null);
+      return empty;
     }
-    return nodes;
+    const record: Record<string, SerializedNode> = {};
+    Object.setPrototypeOf(record, null);
+    for (const key in nodes) {
+      if (!Object.prototype.hasOwnProperty.call(nodes, key)) {
+        continue;
+      }
+      if (this.isUnsafeKey(key)) {
+        continue;
+      }
+      record[key] = nodes[key];
+    }
+    return record;
   }
 
   private deserializeValue(
     value: SerializedValue,
     context: DeserializationContext,
+    depth: number,
   ): unknown {
+    this.assertDepth(depth);
     if (value === null || typeof value !== "object") {
       return value;
     }
@@ -544,25 +793,23 @@ export class Serializer {
       const length = value.length;
       const result: unknown[] = new Array(length);
       for (let index = 0; index < length; index += 1) {
-        result[index] = this.deserializeValue(value[index], context);
+        result[index] = this.deserializeValue(value[index], context, depth + 1);
       }
       return result;
     }
 
     if (this.isObjectReference(value)) {
-      return this.resolveReference(value.__ref, context);
+      return this.resolveReference(value.__ref, context, depth + 1);
     }
 
     if (this.isSerializedTypeRecord(value)) {
-      const typeDef = this.typeMap.get(value.__type);
-      if (!typeDef) {
-        throw new Error(`Unknown type: ${value.__type}`);
-      }
+      const typeDef = this.getTypeDefinition(value.__type);
       const data = this.deserializeValue(
         value.value as SerializedValue,
         context,
+        depth + 1,
       );
-      return typeDef.deserialize(data);
+      return this.deserializeType(typeDef, value.__type, data);
     }
 
     const obj: Record<string, unknown> = {};
@@ -571,7 +818,10 @@ export class Serializer {
       if (!Object.prototype.hasOwnProperty.call(source, key)) {
         continue;
       }
-      obj[key] = this.deserializeValue(source[key], context);
+      if (this.isUnsafeKey(key)) {
+        continue;
+      }
+      obj[key] = this.deserializeValue(source[key], context, depth + 1);
     }
     return obj;
   }
@@ -579,7 +829,12 @@ export class Serializer {
   private resolveReference(
     id: string,
     context: DeserializationContext,
+    depth: number,
   ): unknown {
+    this.assertDepth(depth);
+    if (this.isUnsafeKey(id)) {
+      throw new Error(`Unresolved reference id "${id}"`);
+    }
     if (context.resolved.has(id)) {
       return context.resolved.get(id);
     }
@@ -595,7 +850,7 @@ export class Serializer {
         const arr: unknown[] = new Array(values.length);
         context.resolved.set(id, arr);
         for (let index = 0; index < values.length; index += 1) {
-          arr[index] = this.deserializeValue(values[index], context);
+          arr[index] = this.deserializeValue(values[index], context, depth + 1);
         }
         return arr;
       }
@@ -608,16 +863,16 @@ export class Serializer {
           if (!Object.prototype.hasOwnProperty.call(source, key)) {
             continue;
           }
-          target[key] = this.deserializeValue(source[key], context);
+          if (this.isUnsafeKey(key)) {
+            continue;
+          }
+          target[key] = this.deserializeValue(source[key], context, depth + 1);
         }
         return target;
       }
 
       case "type": {
-        const typeDef = this.typeMap.get(node.type);
-        if (!typeDef) {
-          throw new Error(`Unknown type: ${node.type}`);
-        }
+        const typeDef = this.getTypeDefinition(node.type);
 
         const createdPlaceholder =
           typeof typeDef.create === "function" ? typeDef.create() : undefined;
@@ -629,8 +884,16 @@ export class Serializer {
         context.resolved.set(id, placeholder);
         context.resolving.add(id);
 
-        const deserializedPayload = this.deserializeValue(node.value, context);
-        const result = typeDef.deserialize(deserializedPayload);
+        const deserializedPayload = this.deserializeValue(
+          node.value,
+          context,
+          depth + 1,
+        );
+        const result = this.deserializeType(
+          typeDef,
+          node.type,
+          deserializedPayload,
+        );
         const finalResult = hasFactory
           ? this.mergePlaceholder(placeholder, result)
           : result;
@@ -676,39 +939,47 @@ export class Serializer {
       result !== null &&
       typeof result === "object"
     ) {
-      Object.assign(
-        placeholder as Record<string, unknown>,
-        result as Record<string, unknown>,
-      );
+      const target = placeholder as Record<string, unknown>;
+      const source = result as Record<string, unknown>;
+      for (const key in source) {
+        if (!Object.prototype.hasOwnProperty.call(source, key)) {
+          continue;
+        }
+        if (this.isUnsafeKey(key)) {
+          continue;
+        }
+        target[key] = source[key];
+      }
       return placeholder;
     }
 
     return result;
   }
 
-  private deserializeLegacy(value: unknown): unknown {
+  private deserializeLegacy(value: unknown, depth = 0): unknown {
+    this.assertDepth(depth);
     if (value === null || typeof value !== "object") {
       return value;
     }
 
     if (Array.isArray(value)) {
-      return value.map((item) => this.deserializeLegacy(item));
+      return value.map((item) => this.deserializeLegacy(item, depth + 1));
     }
 
     if (this.isSerializedTypeRecord(value)) {
-      const typeDef = this.typeMap.get(value.__type);
-      if (!typeDef) {
-        throw new Error(`Unknown type: ${value.__type}`);
-      }
-      const data = this.deserializeLegacy(value.value);
-      return typeDef.deserialize(data);
+      const typeDef = this.getTypeDefinition(value.__type);
+      const data = this.deserializeLegacy(value.value, depth + 1);
+      return this.deserializeType(typeDef, value.__type, data);
     }
 
     const obj: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(
       value as Record<string, unknown>,
     )) {
-      obj[key] = this.deserializeLegacy(entry);
+      if (this.isUnsafeKey(key)) {
+        continue;
+      }
+      obj[key] = this.deserializeLegacy(entry, depth + 1);
     }
     return obj;
   }

@@ -39,7 +39,8 @@ describe("durable: audit trail (integration)", () => {
         await ctx.note("starting", { orderId: "o1" });
 
         const before = await ctx.step("before", async () => "before");
-        await ctx.emit("durable.tests.audit.event", { a: 1 });
+        const AuditEvt = event<{ a: number }>({ id: "durable.tests.audit.event" });
+        await ctx.emit(AuditEvt, { a: 1 });
 
         await ctx.sleep(1);
 

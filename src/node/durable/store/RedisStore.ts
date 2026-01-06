@@ -1,4 +1,3 @@
-import Redis from "ioredis";
 import * as crypto from "node:crypto";
 import type {
   Execution,
@@ -16,6 +15,7 @@ import {
   createDurableAuditEntryId,
   type DurableAuditEntry,
 } from "../core/audit";
+import { createIORedisClient } from "../optionalDeps/ioredis";
 
 const serializer = getDefaultSerializer();
 
@@ -59,9 +59,9 @@ export class RedisStore implements IDurableStore {
 
   constructor(config: RedisStoreConfig) {
     this.redis =
-      typeof config.redis === "string"
-        ? new Redis(config.redis)
-        : (config.redis ?? new Redis());
+      typeof config.redis === "string" || config.redis === undefined
+        ? (createIORedisClient(config.redis) as RedisClient)
+        : config.redis;
     this.prefix = config.prefix || "durable:";
   }
 

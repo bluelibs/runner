@@ -8,7 +8,6 @@ import type {
 } from "./interfaces/service";
 import type { Schedule } from "./types";
 import type { IEventDefinition } from "../../../types/event";
-import type { DurableSignalId } from "./ids";
 import { createExecutionId } from "./utils";
 
 import {
@@ -170,6 +169,14 @@ export class DurableService implements IDurableService {
     return this.scheduleManager.schedule(task, input, options);
   }
 
+  async ensureSchedule<TInput>(
+    task: DurableTask<TInput, unknown>,
+    input: TInput | undefined,
+    options: ScheduleOptions & { id: string },
+  ): Promise<string> {
+    return this.scheduleManager.ensureSchedule(task, input, options);
+  }
+
   async recover(): Promise<void> {
     const incomplete = await this.config.store.listIncompleteExecutions();
     for (const exec of incomplete) {
@@ -221,7 +228,7 @@ export class DurableService implements IDurableService {
 
   async signal<TPayload>(
     executionId: string,
-    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
+    signal: IEventDefinition<TPayload>,
     payload: TPayload,
   ): Promise<void> {
     await this.signalHandler.signal(executionId, signal, payload);

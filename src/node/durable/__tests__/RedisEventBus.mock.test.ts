@@ -1,14 +1,13 @@
-import Redis from "ioredis";
 import { RedisEventBus } from "../bus/RedisEventBus";
 import { Serializer } from "../../../serializer";
+import { createIORedisClient } from "../optionalDeps/ioredis";
 
-jest.mock("ioredis", () => ({ __esModule: true, default: jest.fn() }));
+jest.mock("../optionalDeps/ioredis", () => ({ createIORedisClient: jest.fn() }));
 
 describe("durable: RedisEventBus", () => {
   let redisMock: any;
   let bus: RedisEventBus;
   let onMessage: ((chan: string, msg: string) => void) | undefined;
-  const RedisMock = Redis as unknown as jest.Mock;
 
   beforeEach(() => {
     onMessage = undefined;
@@ -22,7 +21,6 @@ describe("durable: RedisEventBus", () => {
       quit: jest.fn().mockResolvedValue("OK"),
       duplicate: jest.fn().mockReturnThis(),
     };
-    RedisMock.mockImplementation(() => redisMock);
     bus = new RedisEventBus({ redis: redisMock });
   });
 
@@ -180,7 +178,7 @@ describe("durable: RedisEventBus", () => {
   });
 
   it("supports string redis url and default redis in constructor", async () => {
-    RedisMock.mockClear();
+    (createIORedisClient as unknown as jest.Mock).mockReturnValue(redisMock);
 
     const busFromUrl = new RedisEventBus({ redis: "redis://localhost:6379" });
     await busFromUrl.publish("chan", {
@@ -196,6 +194,7 @@ describe("durable: RedisEventBus", () => {
       timestamp: new Date(),
     });
 
-    expect(RedisMock).toHaveBeenCalled();
+    expect(createIORedisClient).toHaveBeenCalledWith("redis://localhost:6379");
+    expect(createIORedisClient).toHaveBeenCalledWith(undefined);
   });
 });

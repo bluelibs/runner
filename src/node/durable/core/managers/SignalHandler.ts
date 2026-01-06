@@ -1,7 +1,6 @@
 import type { IDurableStore } from "../interfaces/store";
 import type { IDurableQueue } from "../interfaces/queue";
 import type { IEventDefinition } from "../../../../types/event";
-import type { DurableSignalId } from "../ids";
 import type { AuditLogger } from "./AuditLogger";
 import { isRecord, sleepMs, parseSignalState } from "../utils";
 
@@ -23,10 +22,10 @@ export class SignalHandler {
 
   async signal<TPayload>(
     executionId: string,
-    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
+    signal: IEventDefinition<TPayload>,
     payload: TPayload,
   ): Promise<void> {
-    const signalId = typeof signal === "string" ? signal : signal.id;
+    const signalId = signal.id;
     const baseStepId = `__signal:${signalId}`;
 
     const maxSignalSlotsToScan = 1000;

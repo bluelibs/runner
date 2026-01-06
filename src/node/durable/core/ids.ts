@@ -1,11 +1,6 @@
-export interface DurableSignalId<TPayload = unknown> {
-  id: string;
-  /**
-   * Phantom field used only for type inference. Not present at runtime.
-   * The payload type is carried through the object type.
-   */
-  readonly __payload?: TPayload;
-}
+import type { IEventDefinition } from "../../../types/event";
+
+export type DurableSignalId<TPayload = unknown> = IEventDefinition<TPayload>;
 
 export interface DurableStepId<TResult = unknown> {
   id: string;
@@ -16,13 +11,6 @@ export interface DurableStepId<TResult = unknown> {
   readonly __result?: TResult;
 }
 
-export function createDurableSignalId<TPayload>(
-  id: string,
-): DurableSignalId<TPayload> {
-  return { id };
-}
-
 export function createDurableStepId<TResult>(id: string): DurableStepId<TResult> {
   return { id };
 }
-

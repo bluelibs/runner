@@ -157,9 +157,9 @@ const result = await d.wait(executionId, { timeout: 30_000 });
 The key insight (Temporal/Inngest-style) is that workflows are just functions with checkpoints. We provide a `DurableContext` that gives tasks:
 
 1. **`step(id, fn)`** - Execute a function once, cache the result, return cached on replay
-2. **`sleep(ms)`** - Durable sleep that survives process restarts
-3. **`emit(event, data)`** - Publish a best-effort notification, de-duplicated via `step()` (not guaranteed delivery)
-4. **`waitForSignal(signal)`** - Suspend until an external signal is delivered (eg. payment confirmation)
+2. **`sleep(ms, { stepId? })`** - Durable sleep that survives process restarts (use `stepId` for replay stability)
+3. **`emit(event, data, { stepId? })`** - Publish a best-effort notification, de-duplicated via `step()` (not guaranteed delivery)
+4. **`waitForSignal(signal, { timeoutMs?, stepId? })`** - Suspend until an external signal is delivered (eg. payment confirmation)
 
 **Scalability Model:** Multiple worker instances can process executions concurrently. Work is distributed via a durable queue (RabbitMQ quorum queues by default), with state stored in Redis.
 
@@ -492,27 +492,40 @@ This section summarizes the safety guarantees and expectations of the durable wo
   - `ctx.step(stepId, fn)` ensures each step function is *observably* executed at most once per execution: results are memoized in the store and returned on replay.  
   - External side effects inside a step must still be designed to be idempotent or safely repeatable (for example, idempotent payment/refund APIs).
 
+- **Memoization vs retries (throw vs return)**  
+  - If a step **throws**, the execution attempt fails and the workflow is retried (up to `maxAttempts` / retry policies).  
+  - If a step **returns**, the value is memoized as the step result and will be returned on replay.  
+  - If you want to “memoize a failure” (eg. *user not found* from a 3rd party), return a typed outcome instead of throwing:
+    - `return { kind: 'not_found' }` (memoized) vs `throw new Error('not found')` (retries)
+
+- **Step builders (compensation / rollback)**  
+  `ctx.step(stepId)` also supports a fluent builder API used for compensation:
+  - `await ctx.step("reserve").up(async () => ...).down(async (result) => ...)`
+  - The builder is `PromiseLike<T>`; awaiting it runs the `up()` function and records the `down()` function for `ctx.rollback()`.
+
 - **Sleep and resumption**  
-  - `ctx.sleep(ms)` persists a timer and marks the execution as `sleeping`.  
+  - `ctx.sleep(ms, { stepId? })` persists a timer and marks the execution as `sleeping`.  
   - When the timer fires, execution is resumed from the code *after* `sleep`, and all previous steps are replayed via cached results (no re‑issuing of side effects wrapped in `step`).
 
 - **Event emission without duplicates**  
-  - `ctx.emit(event, data)` is implemented as one or more internal `step`s under the hood.  
+  - `ctx.emit(event, data, { stepId? })` is implemented as one or more internal `step`s under the hood.  
   - Each call is assigned a deterministic internal id like `__emit:<eventId>:<index>` so you can emit the same event type multiple times in one workflow.  
   - On replay, memoization prevents duplicates for each individual emission.
   - **Determinism note:** those internal `:<index>` suffixes are derived from call order within the workflow. If you change the workflow structure (branching / adding/removing calls), the internal step ids may shift and past executions may no longer replay cleanly. Use explicit `{ stepId }` (or set `determinism.implicitInternalStepIds` to `"warn"`/`"error"`).
 
 - **Signals (wait until external confirmation)**
-  - `ctx.waitForSignal(signal)` suspends an execution until `durable.signal(executionId, signal, payload)` is called.
+  - `ctx.waitForSignal(signal, { timeoutMs?, stepId? })` suspends an execution until `durable.signal(executionId, signal, payload)` is called.
   - `stepId` keeps the same return type (payload + timeout error), while `timeoutMs` switches to a `{ kind: "signal" | "timeout" }` outcome.
-  - Signals are memoized as steps under `__signal:<signal.id>[:index]` (or `__signal:<id>[:index]` for string ids).
-  - Repeated waits use `__signal:<id>:<index>` and are resolved by the first available slot; payloads can be buffered for future waits.
+  - Without `stepId`, signals are memoized under `__signal:<signal.id>[:index]`.
+  - Repeated waits use `__signal:<id>:<index>` and are resolved 1:1 (arrival order ↔ wait order); payloads can be buffered for future waits.
+  - With `stepId`, the durable step key becomes `__signal:<stepId>` (no indexing); use a unique `stepId` per wait call.
   - **Determinism note:** like `emit`, the `:<index>` suffixes are derived from call order within the workflow; code changes can shift indexes on replay. Use explicit `{ stepId }` (or set `determinism.implicitInternalStepIds` to `"warn"`/`"error"`).
 
 - **Retries and timeouts**  
   - `StepOptions.retries` and `DurableServiceConfig.execution.maxAttempts` control step‑level and execution‑level retries respectively.  
   - `StepOptions.timeout` and `execution.timeout` bound how long a single step or the whole execution may run.
   - **Global Timeouts**: `execution.timeout` measures the total time from the very first attempt (`createdAt`) and is not reset on retries or resumptions.
+  - **Important: timeouts do not cancel work**: Node.js promises are not cancellable. A timed-out async operation may still complete later and perform side effects. Treat timeouts as a control-flow boundary, not a cancellation mechanism.
 
 - **Queue and worker semantics**  
   - `IDurableQueue` provides **at-least-once** delivery: messages may be delivered more than once but will not be silently dropped.  
@@ -614,6 +627,20 @@ You can pass a stable step id for replay stability without changing the return t
 const payment = await ctx.waitForSignal(Paid, { stepId: "stable-paid" });
 ```
 
+### How signals map to waits (buffering + indexes)
+
+`waitForSignal()` is implemented as a durable step whose `result` is a small state machine (`waiting` → `completed` | `timed_out`).
+
+When you call `durable.signal(executionId, Approved, payload)`:
+- If there is an *active waiter* for `Approved`, the signal completes that waiter and resumes the execution.
+- If there is **no active waiter yet**, the payload is still persisted (buffered) into the next available `__signal:*` slot. The next `waitForSignal(Approved)` will read it immediately and continue without suspending.
+
+With implicit (call-order) indexing, sequential waits map 1:1 in arrival order:
+- 3 signals delivered quickly + 3 sequential `waitForSignal(Approval)` calls => each wait receives exactly one payload, in order.
+- If the process crashes after the 2nd signal is stored but before the 3rd wait runs, the 3rd payload is already in the store; on replay the 3rd `waitForSignal()` returns immediately.
+
+**Reordering risk:** if you rely on implicit indexes and you reorder the `waitForSignal()` calls in code, the step ids they read (`__signal:<id>`, `__signal:<id>:1`, ...) change and buffered signals can map to different logic. In production, prefer explicit `{ stepId }` for each waiter.
+
 ---
 
 ## Compensation / Rollback Pattern
@@ -702,40 +729,25 @@ const dailyCleanup = r.task('app.tasks.dailyCleanup')
   })
   .build();
 
-// Create schedules once at startup (in a bootstrap resource/task)
-if (!(await durable.getSchedule('daily-cleanup'))) {
-  await durable.schedule(dailyCleanup, {}, { id: 'daily-cleanup', cron: '0 3 * * *' });
-}
-if (!(await durable.getSchedule('hourly-sync'))) {
-  await durable.schedule(syncInventory, { full: false }, { id: 'hourly-sync', cron: '0 * * * *' });
-}
-if (!(await durable.getSchedule('weekly-report'))) {
-  await durable.schedule(generateWeeklyReport, { type: 'weekly' }, { id: 'weekly-report', cron: '0 9 * * MON' });
-}
+// Create recurring schedules at startup (safe under multi-node boot)
+await durable.ensureSchedule(dailyCleanup, {}, { id: 'daily-cleanup', cron: '0 3 * * *' });
+await durable.ensureSchedule(syncInventory, { full: false }, { id: 'hourly-sync', cron: '0 * * * *' });
+await durable.ensureSchedule(generateWeeklyReport, { type: 'weekly' }, { id: 'weekly-report', cron: '0 9 * * MON' });
 ```
+
+Why `ensureSchedule()`?
+- `if (!getSchedule()) schedule(...)` is a race in multi-node boot (many nodes can observe “missing” and all try to create it).
+- `ensureSchedule()` is intended to be **idempotent**: it creates the schedule if missing, or updates it if it already exists (same `id`), then ensures the next timer is armed.
+- If you try to “rebind” an existing schedule id to a different `taskId`, `ensureSchedule()` throws to prevent silently changing semantics in production.
 
 ### Interval-Based Scheduling
 
 Run tasks at fixed intervals (e.g., every 30 seconds):
 
 ```typescript
-if (!(await durable.getSchedule('health-check'))) {
-  await durable.schedule(
-    healthCheckTask,
-    { endpoints: ['api', 'db'] },
-    { id: 'health-check', interval: 30_000 },
-  );
-}
-if (!(await durable.getSchedule('poll-external-api'))) {
-  await durable.schedule(
-    pollExternalApi,
-    {},
-    { id: 'poll-external-api', interval: 5 * 60 * 1000 },
-  );
-}
-if (!(await durable.getSchedule('metrics-sync'))) {
-  await durable.schedule(metricsSync, { flush: true }, { id: 'metrics-sync', interval: 60_000 });
-}
+await durable.ensureSchedule(healthCheckTask, { endpoints: ['api', 'db'] }, { id: 'health-check', interval: 30_000 });
+await durable.ensureSchedule(pollExternalApi, {}, { id: 'poll-external-api', interval: 5 * 60 * 1000 });
+await durable.ensureSchedule(metricsSync, { flush: true }, { id: 'metrics-sync', interval: 60_000 });
 ```
 
 **Interval vs Cron:**
@@ -778,6 +790,9 @@ Common patterns:
 ### Schedule Management API
 
 ```typescript
+// Idempotently ensure a recurring schedule exists (recommended for boot-time setup)
+await durable.ensureSchedule(dailyCleanup, {}, { id: 'daily-cleanup', cron: '0 3 * * *' });
+
 // Pause a schedule
 await durable.pauseSchedule('daily-cleanup');
 
@@ -945,8 +960,6 @@ export interface IDurableStore {
 ## DurableContext
 
 ```typescript
-// DurableContext.ts
-
 export interface IDurableContext {
   readonly executionId: string;
   readonly attempt: number;
@@ -954,23 +967,67 @@ export interface IDurableContext {
   /**
    * Execute a step with memoization. On replay, returns cached result.
    */
+  step<T>(stepId: string): IStepBuilder<T>;
   step<T>(stepId: string, fn: () => Promise<T>): Promise<T>;
   step<T>(stepId: string, options: StepOptions, fn: () => Promise<T>): Promise<T>;
   
   /**
    * Durable sleep that survives process restarts.
    */
-  sleep(durationMs: number): Promise<void>;
+  sleep(durationMs: number, options?: SleepOptions): Promise<void>;
+
+  /**
+   * Suspend until an external signal is delivered via durable.signal(executionId, ...).
+   * Use options.stepId for replay stability (and keep it unique per wait).
+   */
+  waitForSignal<TPayload>(
+    signal: IEventDefinition<TPayload>,
+  ): Promise<TPayload>;
+  waitForSignal<TPayload>(
+    signal: IEventDefinition<TPayload>,
+    options: SignalOptions & { timeoutMs: number },
+  ): Promise<{ kind: "signal"; payload: TPayload } | { kind: "timeout" }>;
+  waitForSignal<TPayload>(
+    signal: IEventDefinition<TPayload>,
+    options: SignalOptions,
+  ): Promise<TPayload>;
   
   /**
    * Emit an event durably (as a step).
    */
-  emit<T>(event: IEvent<T>, data: T): Promise<void>;
+  emit<TPayload>(
+    event: IEventDefinition<TPayload>,
+    payload: TPayload,
+    options?: EmitOptions,
+  ): Promise<void>;
+
+  /**
+   * Run registered compensations in reverse order.
+   */
+  rollback(): Promise<void>;
 }
 
 export interface StepOptions {
   retries?: number;
   timeout?: number;
+}
+
+export interface SleepOptions {
+  stepId?: string;
+}
+
+export interface SignalOptions {
+  timeoutMs?: number;
+  stepId?: string;
+}
+
+export interface EmitOptions {
+  stepId?: string;
+}
+
+export interface IStepBuilder<T> extends PromiseLike<T> {
+  up(fn: () => Promise<T>): this;
+  down(fn: (result: T) => Promise<void>): this;
 }
 ```
 
@@ -1223,6 +1280,30 @@ const durableRegistration = durable.with({
 ```
 
 Make sure at least one worker process runs with polling enabled, otherwise sleeps/timeouts/schedules will never fire.
+
+### Routing Workloads (Multiple Queues)
+
+By default, a single durable resource uses a single queue (eg. `durable-executions`). If you want to route different workloads to different worker pools (eg. GPU-heavy video encoding vs. low-latency emails), run **multiple durable resources** with different queue names and register different task sets in each pool.
+
+```ts
+import { durableResource, RabbitMQQueue } from "@bluelibs/runner/node";
+
+const durableGpu = durableResource.fork("app.durable.gpu").with({
+  store,
+  eventBus,
+  queue: new RabbitMQQueue({ url: process.env.RABBITMQ_URL, queue: { name: "durable-gpu" } }),
+  worker: true,
+});
+
+const durableDefault = durableResource.fork("app.durable.default").with({
+  store,
+  eventBus,
+  queue: new RabbitMQQueue({ url: process.env.RABBITMQ_URL, queue: { name: "durable-default" } }),
+  worker: true,
+});
+
+// Register GPU tasks only on GPU workers; register everything else on default workers.
+```
 
 ### RabbitMQ Quorum Queues
 
@@ -1525,6 +1606,9 @@ A basic dashboard middleware is provided to inspect executions, view step result
 
 The dashboard UI is **pre-built and included** in the published npm package — no build step required.
 
+> [!WARNING]
+> **Protect the dashboard.** Treat it like an admin control plane: it can expose payloads and enable operator actions (retry/skip/patch). Put it behind authentication + authorization and avoid exposing it on the public internet.
+
 > [!NOTE]
 > **Working from source?** If you've cloned this repo and are developing locally, run `npm run build:dashboard` once to build the UI assets into `dist/ui/`.
 
@@ -1534,7 +1618,8 @@ import { createDashboardMiddleware, DurableOperator } from '@bluelibs/runner/nod
 // Create operator
 const operator = new DurableOperator(store);
 
-// Expose dashboard on /durable-dashboard
+// Expose dashboard on /durable-dashboard (add auth!)
+// app.use('/durable-dashboard', requireAdminAuth(), createDashboardMiddleware(d.service, operator));
 const d = runtime.getResourceValue(durable);
 app.use('/durable-dashboard', createDashboardMiddleware(d.service, operator));
 ```
@@ -1572,6 +1657,8 @@ import express from "express";
 import { DurableOperator, createDashboardMiddleware } from "@bluelibs/runner/node";
 
 const app = express();
+// Protect this route in production (authn/authz + network isolation)
+// app.use("/durable-dashboard", requireAdminAuth(), createDashboardMiddleware(d.service, new DurableOperator(store)));
 app.use("/durable-dashboard", createDashboardMiddleware(d.service, new DurableOperator(store)));
 app.listen(3000);
 ```
@@ -1694,15 +1781,48 @@ const mirrorAudit = r
 
 ## Gotchas & Troubleshooting
 
-- **Always put side effects inside `ctx.step(...)`**: anything outside a step can run multiple times on retries/replays.
+- **Always put side effects inside `ctx.step(...)`**: anything outside a step can run multiple times on retries/replays. Dependency injection does not make side effects “safe”.
 - **Keep step ids stable**: renaming a step id (or changing control-flow so a different call order happens) can break replay determinism for existing executions.
 - **Call-order indexing is real**: `sleep()`/`emit()`/`waitForSignal()` allocate internal ids based on call order by default; prefer explicit `{ stepId }` and consider `determinism.implicitInternalStepIds: "warn" | "error"` in production.
+- **Avoid implicit internal ids in concurrency (`Promise.all`)**: if concurrent branches call `sleep/emit/waitForSignal` without an explicit `{ stepId }`, the call-order indexes can become race-dependent and cause non-deterministic replay. In concurrent flows, always pass explicit `stepId`s (or refactor to sequential logic).
 - **Recovery is indexed in Redis**: `RedisStore` maintains `durable:active_executions` so `recover()` and `listIncompleteExecutions()` don't scan historical executions.
-- **Signals are “deliver to current wait”**: `durableService.signal(executionId, ...)` delivers to the base signal slot if it’s not completed yet (this can buffer the first signal even if the workflow hasn’t reached the wait). Additional signals only deliver to subsequent indexed waits; otherwise they are ignored.
+- **Signals are buffered**: `durable.signal(executionId, ...)` completes the earliest waiting slot for that signal, otherwise it persists the payload into the next available `__signal:*` slot. If you keep sending signals without corresponding waits, you'll eventually hit a safety limit (default scan limit: 1000 slots per signal id).
+- **Timeouts don’t stop user code**: step/execution timeouts are not cancellation; timed-out async work may still finish later and perform side effects. Prefer idempotent operations, add your own cancellation/guards, or avoid heavy CPU work inside a durable step.
 - **Broker outages shouldn't strand executions**: `startExecution()` arms a short-lived store timer (default 10s via `execution.kickoffFailsafeDelayMs`) so `pending` executions get retried by workers even if the initial enqueue fails.
 - **Don’t hang forever**: prefer `durableService.wait(executionId, { timeout: ... })` unless you intentionally want an unbounded wait.
 - **Compensation failures are terminal**: if `ctx.rollback()` fails, execution becomes `compensation_failed` and `wait()` rejects. Use `DurableOperator.retryRollback(executionId)` after fixing the underlying issue.
 - **Debugging**: inspect step results + timers in the dashboard, or query your `IDurableStore` implementation directly (Redis keys are prefixed by `durable:` by default).
+
+### Changing workflow code safely (versioning + determinism)
+
+Treat workflow code like a “schema” for in-flight executions: **existing executions will replay using the new code** after you deploy.
+
+Safe changes:
+- Pure refactors (renaming locals, extracting pure functions) are safe.
+- Adding a new `ctx.step("new-explicit-id", ...)` is replay-safe, but it will run once for any execution that reaches it (including in-flight executions).
+
+Risky changes:
+- Reordering / inserting / removing `sleep()` / `emit()` / `waitForSignal()` calls **without explicit `{ stepId }`** can shift call-order indexes and break replay for in-flight executions.
+- Reordering repeated `waitForSignal(SameSignal)` calls without explicit step ids can remap buffered signals to the wrong logic.
+
+Production strategy:
+1. Use explicit `{ stepId }` for `sleep/emit/waitForSignal` in production code paths (and consider `determinism.implicitInternalStepIds: "error"` to enforce this).
+2. If you need a breaking behavioral change, ship it under a **new task id** (eg. `app.tasks.processOrder.v2`) and route new starts to v2 while v1 drains. Remove v1 only after `listIncompleteExecutions()` confirms none remain.
+
+### Deployments: shutdown + draining expectations
+
+`durableResource`/`DurableService` cleanup (`dispose()` / `stop()`) stops the timer poller and disposes the configured store/queue/eventBus, but it does **not** forcibly cancel user code that is currently executing inside a step.
+
+Implications:
+- If a process exits mid-step, that step has not been memoized yet, so it may run again on another attempt (design your step side effects to be idempotent).
+- Distributed locks use TTLs (execution lock is time-bounded), so another worker can take over after a crash.
+- To recover “stuck” executions (eg. status `running` after a hard crash), call `durable.recover()` on startup in worker processes.
+
+### Infinite loops (“zombie executions”)
+
+Avoid writing unbounded workflows like `while (true) { await ctx.sleep(1000) }`:
+- Each loop iteration creates another durable step result + timer, so history grows unbounded over time.
+- Prefer `durable.schedule(...)` / cron/interval schedules for recurring work, or structure long-running behavior as a sequence of bounded executions.
 
 ## What This Design Deliberately Excludes
 

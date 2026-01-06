@@ -2,7 +2,7 @@ import { event } from "../../..";
 import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { DurableContext } from "../core/DurableContext";
 import type { DurableAuditEmitter } from "../core/audit";
-import { createDurableSignalId, createDurableStepId } from "../core/ids";
+import { createDurableStepId } from "../core/ids";
 import { SuspensionSignal } from "../core/interfaces/context";
 import type { IDurableStore } from "../core/interfaces/store";
 import { MemoryStore } from "../store/MemoryStore";
@@ -242,7 +242,7 @@ describe("durable: DurableContext", () => {
     expect(runs).toBe(1);
   });
 
-  it("emits events using string and object ids", async () => {
+  it("emits events using event definitions", async () => {
     const { bus, ctx } = createContext();
 
     const received: Array<{ type: string; payload: unknown }> = [];
@@ -250,10 +250,14 @@ describe("durable: DurableContext", () => {
       received.push({ type: evt.type, payload: evt.payload });
     });
 
-    await ctx.emit("event.1", { a: 1 });
-    await ctx.emit("event.1", { a: 2 });
-    await ctx.emit({ id: "event.2" }, { b: 2 });
-    await ctx.emit(createDurableSignalId<{ c: number }>("event.3"), { c: 3 });
+    const E1 = event<{ a: number }>({ id: "event.1" });
+    const E2 = event<{ b: number }>({ id: "event.2" });
+    const E3 = event<{ c: number }>({ id: "event.3" });
+
+    await ctx.emit(E1, { a: 1 });
+    await ctx.emit(E1, { a: 2 });
+    await ctx.emit(E2, { b: 2 });
+    await ctx.emit(E3, { c: 3 });
 
     expect(received).toEqual([
       { type: "event.1", payload: { a: 1 } },
@@ -328,7 +332,8 @@ describe("durable: DurableContext", () => {
       completedAt: new Date(),
     });
 
-    await expect(ctx.waitForSignal<string>("raw")).rejects.toThrow(
+    const Raw = event<string>({ id: "raw" });
+    await expect(ctx.waitForSignal(Raw)).rejects.toThrow(
       "Invalid signal step state",
     );
   });
@@ -336,7 +341,7 @@ describe("durable: DurableContext", () => {
   it("supports waitForSignal() using typed signal ids", async () => {
     const { store, ctx } = createContext();
 
-    const PaidSignal = createDurableSignalId<{ paidAt: number }>(Paid.id);
+    const PaidSignal = event<{ paidAt: number }>({ id: Paid.id });
 
     await store.saveStepResult({
       executionId: "e1",
@@ -428,7 +433,7 @@ describe("durable: DurableContext", () => {
       completedAt: new Date(),
     });
 
-    await expect(ctx.waitForSignal<number>("durable.tests.paid")).rejects.toThrow(
+    await expect(ctx.waitForSignal(Paid)).rejects.toThrow(
       "Invalid signal step state",
     );
   });
@@ -560,7 +565,8 @@ describe("durable: DurableContext", () => {
       }),
     );
 
-    await ctx.emit("event.stable", { ok: true }, { stepId: "stable-emit" });
+    const Stable = event<{ ok: boolean }>({ id: "event.stable" });
+    await ctx.emit(Stable, { ok: true }, { stepId: "stable-emit" });
     expect(await store.getStepResult("e1", "__emit:stable-emit")).toEqual(
       expect.objectContaining({
         executionId: "e1",

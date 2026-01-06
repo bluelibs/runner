@@ -3,41 +3,11 @@ import type { RedisClient } from "../store/RedisStore";
 import type { Execution, Schedule, StepResult, Timer } from "../core/types";
 import { getDefaultSerializer } from "../../../serializer";
 import type { DurableAuditEntry } from "../core/audit";
+import { createIORedisClient } from "../optionalDeps/ioredis";
 
 const serializer = getDefaultSerializer();
 
-jest.mock("ioredis", () => {
-  return {
-    __esModule: true,
-    default: jest.fn().mockImplementation(() => {
-      const pipeline = {
-        get: jest.fn().mockReturnThis(),
-        hget: jest.fn().mockReturnThis(),
-        exec: jest.fn().mockResolvedValue([]),
-      };
-
-      return {
-        set: jest.fn().mockResolvedValue("OK"),
-        get: jest.fn().mockResolvedValue(null),
-        keys: jest.fn().mockResolvedValue([]),
-        scan: jest.fn().mockResolvedValue(["0", []]),
-        sscan: jest.fn().mockResolvedValue(["0", []]),
-        sadd: jest.fn().mockResolvedValue(1),
-        srem: jest.fn().mockResolvedValue(1),
-        pipeline: jest.fn().mockReturnValue(pipeline),
-        hset: jest.fn().mockResolvedValue(1),
-        hget: jest.fn().mockResolvedValue(null),
-        hdel: jest.fn().mockResolvedValue(1),
-        hgetall: jest.fn().mockResolvedValue({}),
-        zadd: jest.fn().mockResolvedValue(1),
-        zrangebyscore: jest.fn().mockResolvedValue([]),
-        zrem: jest.fn().mockResolvedValue(1),
-        eval: jest.fn().mockResolvedValue(1),
-        quit: jest.fn().mockResolvedValue("OK"),
-      };
-    }),
-  };
-});
+jest.mock("../optionalDeps/ioredis", () => ({ createIORedisClient: jest.fn() }));
 
 describe("durable: RedisStore", () => {
   let redisMock: jest.Mocked<RedisClient>;
@@ -675,6 +645,8 @@ describe("durable: RedisStore", () => {
   });
 
   it("supports string redis url and default redis in constructor", async () => {
+    (createIORedisClient as unknown as jest.Mock).mockReturnValue(redisMock);
+
     const fromUrl = new RedisStore({ redis: "redis://localhost:6379" });
     expect(fromUrl).toBeDefined();
 

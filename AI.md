@@ -35,19 +35,23 @@ Durable workflows are a **Node-only** module exported from `@bluelibs/runner/nod
 
 - Spec & guide: `readmes/DURABLE_WORKFLOWS.md`
 - Token-friendly durable guide: `readmes/DURABLE_WORKFLOWS_AI.md`
-- Core primitives: `ctx.step(id, fn)`, `ctx.sleep(ms)`, `ctx.emit(event, payload)`, `ctx.waitForSignal(signal)` and `durable.signal(executionId, signal, payload)`
+- Core primitives: `ctx.step(id, fn)`, `ctx.step(id).up(...).down(...)`, `ctx.sleep(ms, { stepId? })`, `ctx.emit(event, payload, { stepId? })`, `ctx.waitForSignal(signal, { timeoutMs?, stepId? })` and `durable.signal(executionId, signal, payload)`
 - `waitForSignal` return shapes:
   - `waitForSignal(signal)` or `waitForSignal(signal, { stepId })` => payload (throws on timeout)
   - `waitForSignal(signal, { timeoutMs })` => `{ kind: "signal" | "timeout" }` (stepId does not change the return type)
 - Note: `waitForSignal(signal, { stepId })` requires a store that supports listing step results (`listStepResults`) so `durable.signal(...)` can resume the correct waiter.
 - Semantics: repeated `emit` and repeated `waitForSignal` (same signal id) are supported and replay-safe (see the guides for details)
-- Determinism: internal `sleep()`/`emit()`/`waitForSignal()` step ids use call-order indexes by default; prefer explicit `{ stepId }` (or set `determinism.implicitInternalStepIds` to `"warn"`/`"error"`)
-- Type-safety helpers: `createDurableStepId<T>()`, `createDurableSignalId<TPayload>()`, and `durable.executeStrict(...)`
+- Determinism: internal `sleep()`/`emit()`/`waitForSignal()` step ids use call-order indexes by default; prefer explicit `{ stepId }` (or set `determinism.implicitInternalStepIds` to `"warn"`/`"error"` in production)
+- Concurrency: avoid implicit internal ids in concurrent flows (eg. `Promise.all`); always pass explicit `{ stepId }` for `sleep/emit/waitForSignal` in concurrent branches
+- Gotcha: injected dependencies are not replay-safe by themselves; keep external side effects inside `ctx.step(...)` / `ctx.emit(...)`
+- Memoization: `return` memoizes; `throw` triggers retries (so return a typed “not found / rejected” outcome when you want to stop retrying)
+- Operational: `dispose()` stops poller/queue integrations but doesn't cancel in-flight user code; call `durable.recover()` on startup to pick up incomplete executions after crashes/deploys
+- Type-safety helpers: `createDurableStepId<T>()` and `durable.executeStrict(...)` (signals are event definitions; use `event<T>({ id })`)
 - Polling: used for timers (`sleep`, signal timeouts, schedules); can be disabled per-process via `polling: { enabled: false }`
-- Scheduling: one-time (`{ at }` / `{ delay }`) and recurring (`{ cron }` / `{ interval }`) via `durable.schedule(...)` + `pauseSchedule/resumeSchedule/updateSchedule/removeSchedule`
+- Scheduling: one-time (`{ at }` / `{ delay }`) via `durable.schedule(...)`; recurring (`{ cron }` / `{ interval }`) via `durable.ensureSchedule(...)` + `pauseSchedule/resumeSchedule/updateSchedule/removeSchedule`
 - Observability: optional audit trail via `audit: { enabled: true }` + `ctx.note(...)` + `store.listAuditEntries(executionId)`
 - Events/logging: in Runner integration (`durableResource`), workflow lifecycle events are emitted via `durableEvents.*` by default; hook `durableEvents.audit.appended` to log/mirror
-- Dashboard UI: `createDashboardMiddleware(service, new DurableOperator(store))` exposes `/api/*` + a bundled UI for inspecting executions (from source: build via `npm run build:dashboard`)
+- Dashboard UI: `createDashboardMiddleware(service, new DurableOperator(store))` exposes `/api/*` + a bundled UI for inspecting executions (protect behind auth; from source: build via `npm run build:dashboard`)
 - Advanced config: `workerId` (distributed timer claims), `polling.claimTtlMs`, `taskResolver` (resolve tasks by id), `contextProvider` (AsyncLocalStorage-style context)
 - Recovery scalability: `RedisStore` maintains `durable:active_executions` so `recover()`/`listIncompleteExecutions()` are O(active) (no full history scan)
 - Queue failsafe: when a queue is configured, `startExecution()` arms a short-lived store timer (default 10s) so a transient enqueue failure can't strand an execution in `pending` (`execution.kickoffFailsafeDelayMs`)
@@ -398,9 +402,11 @@ try {
 
 Run Node exposures and connect to remote Runners with fluent resources.
 
+`nodeExposure` is a Runner **resource** that starts an HTTP server and exposes a controlled surface for executing tasks and emitting events over HTTP (under a `basePath` like `/__runner`).
+
 ```ts
-import { r, globals } from "@bluelibs/runner";
-import { nodeExposure } from "@bluelibs/runner/node";
+	import { r, globals } from "@bluelibs/runner";
+	import { nodeExposure } from "@bluelibs/runner/node";
 
 const httpExposure = nodeExposure.with({
   http: {
@@ -504,7 +510,9 @@ await client.task("app.tasks.upload", { file });
 ```
 
 - `createHttpSmartClient` (Node only) supports duplex streams.
+- In Node, prefer `createHttpMixedClient` as the default (it auto-selects JSON vs multipart vs duplex); use `createHttpSmartClient` when you want to force the streaming-capable path.
 - For Node-specific features such as `useExposureContext` for handling aborts and streaming in exposed tasks, see TUNNELS.md.
+- If a task may run both internally and via HTTP exposure, gate access behind `hasExposureContext()` to keep the code portable.
 - Register authentication middleware or rate limiting on the exposure via middleware tags and filters.
 - Single-owner policy: a task may be tunneled by exactly one tunnel resource. Runner enforces exclusivity at init time and throws if two tunnels select the same task. This is tracked via an internal symbol on the task linking it to the owning tunnel.
 - Architecture/testing deep dive: see `readmes/TUNNELS.md` sections 2.1 and 11.

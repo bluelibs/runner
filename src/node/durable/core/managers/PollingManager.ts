@@ -169,6 +169,16 @@ export class PollingManager {
 
       if (!timer.taskId) return;
 
+      if (timer.scheduleId) {
+        const schedule = await this.store.getSchedule(timer.scheduleId);
+        // If the schedule no longer exists, or is paused, don't execute.
+        if (!schedule || schedule.status !== "active") return;
+        // If schedule.nextRun exists, treat mismatched timers as stale (race/updates).
+        if (schedule.nextRun && timer.fireAt.getTime() !== schedule.nextRun.getTime()) {
+          return;
+        }
+      }
+
       const task = this.taskRegistry.find(timer.taskId);
       if (!task) return;
 

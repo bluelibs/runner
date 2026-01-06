@@ -1,6 +1,5 @@
 import type { ITask } from "../../../../types/task";
 import type { IEventDefinition } from "../../../../types/event";
-import type { DurableSignalId } from "../ids";
 import type { IDurableStore } from "./store";
 import type { IDurableQueue } from "./queue";
 import type { IEventBus } from "./bus";
@@ -142,6 +141,16 @@ export interface IDurableService {
     options: ScheduleOptions,
   ): Promise<string>;
 
+  /**
+   * Idempotently create (or update) a recurring schedule (cron/interval) with a stable id.
+   * Safe to call concurrently from multiple processes.
+   */
+  ensureSchedule<TInput>(
+    task: DurableTask<TInput, unknown>,
+    input: TInput | undefined,
+    options: ScheduleOptions & { id: string },
+  ): Promise<string>;
+
   recover(): Promise<void>;
 
   start(): void;
@@ -163,7 +172,7 @@ export interface IDurableService {
    */
   signal<TPayload>(
     executionId: string,
-    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
+    signal: IEventDefinition<TPayload>,
     payload: TPayload,
   ): Promise<void>;
 }

@@ -1,6 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { IEventDefinition } from "../../../types/event";
-import type { DurableSignalId } from "./ids";
 import type { IDurableContext } from "./interfaces/context";
 import type {
   DurableTask,
@@ -22,6 +21,7 @@ export interface IDurableResource
     | "execute"
     | "executeStrict"
     | "schedule"
+    | "ensureSchedule"
     | "pauseSchedule"
     | "resumeSchedule"
     | "getSchedule"
@@ -100,6 +100,14 @@ export class DurableResource implements IDurableResource {
     return this.service.schedule(task, input, options);
   }
 
+  ensureSchedule<TInput>(
+    task: DurableTask<TInput, unknown>,
+    input: TInput | undefined,
+    options: ScheduleOptions & { id: string },
+  ): Promise<string> {
+    return this.service.ensureSchedule(task, input, options);
+  }
+
   pauseSchedule(scheduleId: string): Promise<void> {
     return this.service.pauseSchedule(scheduleId);
   }
@@ -133,7 +141,7 @@ export class DurableResource implements IDurableResource {
 
   signal<TPayload>(
     executionId: string,
-    signal: string | IEventDefinition<TPayload> | DurableSignalId<TPayload>,
+    signal: IEventDefinition<TPayload>,
     payload: TPayload,
   ): Promise<void> {
     return this.service.signal(executionId, signal, payload);
