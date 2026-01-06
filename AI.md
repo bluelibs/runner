@@ -7,6 +7,7 @@
 - [BlueLibs Runner: Fluent Builder Field Guide](#bluelibs-runner-fluent-builder-field-guide)
   - [Table of Contents](#table-of-contents)
   - [Install](#install)
+  - [Durable Workflows (Node-only)](#durable-workflows-node-only)
   - [Resources](#resources)
     - [Tasks](#tasks)
     - [Events and Hooks](#events-and-hooks)
@@ -29,86 +30,12 @@
 npm install @bluelibs/runner
 ```
 
-## Durable Workflows
+## Durable Workflows (Node-only)
 
-Durable workflows are a **Node-only** module exported from `@bluelibs/runner/node` (implemented under `src/node/durable/`).
-
-- Spec & guide: `readmes/DURABLE_WORKFLOWS.md`
-- Token-friendly durable guide: `readmes/DURABLE_WORKFLOWS_AI.md`
-- Core primitives: `ctx.step(id, fn)`, `ctx.step(id).up(...).down(...)`, `ctx.sleep(ms, { stepId? })`, `ctx.emit(event, payload, { stepId? })`, `ctx.waitForSignal(signal, { timeoutMs?, stepId? })` and `durable.signal(executionId, signal, payload)`
-- `waitForSignal` return shapes:
-  - `waitForSignal(signal)` or `waitForSignal(signal, { stepId })` => payload (throws on timeout)
-  - `waitForSignal(signal, { timeoutMs })` => `{ kind: "signal" | "timeout" }` (stepId does not change the return type)
-- Note: `waitForSignal(signal, { stepId })` requires a store that supports listing step results (`listStepResults`) so `durable.signal(...)` can resume the correct waiter.
-- Semantics: repeated `emit` and repeated `waitForSignal` (same signal id) are supported and replay-safe (see the guides for details)
-- Determinism: internal `sleep()`/`emit()`/`waitForSignal()` step ids use call-order indexes by default; prefer explicit `{ stepId }` (or set `determinism.implicitInternalStepIds` to `"warn"`/`"error"` in production)
-- Concurrency: avoid implicit internal ids in concurrent flows (eg. `Promise.all`); always pass explicit `{ stepId }` for `sleep/emit/waitForSignal` in concurrent branches
-- Gotcha: injected dependencies are not replay-safe by themselves; keep external side effects inside `ctx.step(...)` / `ctx.emit(...)`
-- Memoization: `return` memoizes; `throw` triggers retries (so return a typed “not found / rejected” outcome when you want to stop retrying)
-- Operational: `dispose()` stops poller/queue integrations but doesn't cancel in-flight user code; call `durable.recover()` on startup to pick up incomplete executions after crashes/deploys
-- Type-safety helpers: `createDurableStepId<T>()` and `durable.executeStrict(...)` (signals are event definitions; use `event<T>({ id })`)
-- Polling: used for timers (`sleep`, signal timeouts, schedules); can be disabled per-process via `polling: { enabled: false }`
-- Scheduling: one-time (`{ at }` / `{ delay }`) via `durable.schedule(...)`; recurring (`{ cron }` / `{ interval }`) via `durable.ensureSchedule(...)` + `pauseSchedule/resumeSchedule/updateSchedule/removeSchedule`
-- Observability: optional audit trail via `audit: { enabled: true }` + `ctx.note(...)` + `store.listAuditEntries(executionId)`
-- Events/logging: in Runner integration (`durableResource`), workflow lifecycle events are emitted via `durableEvents.*` by default; hook `durableEvents.audit.appended` to log/mirror
-- Dashboard UI: `createDashboardMiddleware(service, new DurableOperator(store))` exposes `/api/*` + a bundled UI for inspecting executions (protect behind auth; from source: build via `npm run build:dashboard`)
-- Advanced config: `workerId` (distributed timer claims), `polling.claimTtlMs`, `taskResolver` (resolve tasks by id), `contextProvider` (AsyncLocalStorage-style context)
-- Recovery scalability: `RedisStore` maintains `durable:active_executions` so `recover()`/`listIncompleteExecutions()` are O(active) (no full history scan)
-- Queue failsafe: when a queue is configured, `startExecution()` arms a short-lived store timer (default 10s) so a transient enqueue failure can't strand an execution in `pending` (`execution.kickoffFailsafeDelayMs`)
-
-### Runner Integration Patterns (Real-World)
-
-**Single-process (local dev / tests)**: run the durable resource + tasks in the same Runner runtime.
-
-```ts
-import { r, run } from "@bluelibs/runner";
-import {
-  MemoryStore,
-  MemoryQueue,
-  MemoryEventBus,
-  durableResource,
-} from "@bluelibs/runner/node";
-
-const store = new MemoryStore();
-const queue = new MemoryQueue();
-const eventBus = new MemoryEventBus();
-
-const durable = durableResource.fork("app.durable");
-const durableRegistration = durable.with({
-  store,
-  queue,
-  eventBus,
-  worker: true, // consumes the queue in this process
-});
-
-const processOrder = r
-  .task("app.tasks.processOrder")
-  .dependencies({ durable })
-  .run(async (input: { orderId: string }, { durable }) => {
-    const ctx = durable.use();
-    await ctx.step("validate", async () => ({ ok: true }));
-    return { ok: true };
-  })
-  .build();
-
-const app = r
-  .resource("app")
-  .register([durableRegistration, processOrder])
-  .build();
-
-const runtime = await run(app);
-const d = runtime.getResourceValue(durable);
-```
-
-**Multi-process (production)**: run N worker processes that consume the queue and process executions.
-
-- Worker processes register the same durable resource with `worker: true`.
-- API processes usually **should not** run the durable poller/worker; configure `worker: false` + `polling: { enabled: false }`.
-
-Concrete approach with Runner itself:
-
-- Add a small “durable API” task (eg `app.durable.startOrder`) that calls `durable.startExecution(...)` and persists the returned `executionId` into your DB.
-- Add webhook/callback handlers that look up `executionId` from your DB and call `durable.signal(executionId, ...)`.
+Durable workflows are available from `@bluelibs/runner/node` (implemented under `src/node/durable/`).
+See `readmes/DURABLE_WORKFLOWS.md` (full) or `readmes/DURABLE_WORKFLOWS_AI.md` (token-friendly).
+They provide replay-safe primitives like `ctx.step(...)`, `ctx.sleep(...)`, `ctx.emit(...)`, and `ctx.waitForSignal(...)`.
+Use them when you need persistence and recovery across restarts/crashes.
 
 ## Resources
 
@@ -173,40 +100,9 @@ await runtime.runTask(createUser, { name: "Ada" });
 
 ### Resource Forking
 
-Use `.fork(newId)` to create multiple instances of a "template" resource with different identities:
-
-```ts
-// Define a reusable template
-const mailerBase = r
-  .resource<{ smtp: string }>("base.mailer")
-  .init(async (cfg) => new Mailer(cfg))
-  .build();
-
-// Fork with distinct identities - export these for dependency use
-export const txMailer = mailerBase.fork("app.mailers.transactional");
-export const mktMailer = mailerBase.fork("app.mailers.marketing");
-
-// Use forked resources as dependencies
-const orderService = r
-  .task("app.tasks.processOrder")
-  .dependencies({ mailer: txMailer })
-  .run(async (input, { mailer }) => {
-    /* ... */
-  })
-  .build();
-
-const app = r
-  .resource("app")
-  .register([
-    txMailer.with({ smtp: "tx.smtp.com" }),
-    mktMailer.with({ smtp: "mkt.smtp.com" }),
-    orderService,
-  ])
-  .build();
-```
-
-- Forked resources inherit tags, middleware, and all type parameters.
-- Each fork gets its own runtime instance (no shared state).
+Use `.fork(newId)` to clone a resource definition under a new id (handy for multi-instance patterns).
+Forks keep the same implementation/types but get separate runtime instances (no shared state).
+Prefer exporting forks so other tasks/resources can depend on them.
 
 ### Tasks
 
