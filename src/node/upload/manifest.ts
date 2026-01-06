@@ -1,5 +1,5 @@
 import type { Readable } from "stream";
-import type { EjsonFileSentinel, InputFileMeta } from "../../types/inputFile";
+import type { RunnerFileSentinel, InputFileMeta } from "../../types/inputFile";
 
 export interface NodeFileSource {
   id: string;
@@ -27,7 +27,7 @@ export function buildNodeManifest<T = any>(input: T): BuiltManifest<T> {
     if (!value || typeof value !== "object") return value;
     // Detect File sentinel with optional _node sidecar
     if (
-      (value as EjsonFileSentinel).$ejson === "File" &&
+      (value as RunnerFileSentinel).$runnerFile === "File" &&
       typeof (value as any).id === "string"
     ) {
       const v: any = value;
@@ -50,7 +50,7 @@ export function buildNodeManifest<T = any>(input: T): BuiltManifest<T> {
         });
       }
       // Strip _node from manifest copy
-      const copy: AnyObj = { $ejson: "File", id, meta };
+      const copy: AnyObj = { $runnerFile: "File", id, meta };
       return copy;
     }
 

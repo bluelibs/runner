@@ -1,5 +1,5 @@
 import type { Readable } from "stream";
-import type { InputFileMeta, EjsonFileSentinel } from "../types/inputFile";
+import type { InputFileMeta, RunnerFileSentinel } from "../types/inputFile";
 
 export interface NodeFileSource {
   stream?: Readable;
@@ -10,9 +10,9 @@ export function createNodeFile(
   meta: InputFileMeta,
   source: NodeFileSource,
   id: string = "F1",
-): EjsonFileSentinel & { _node: NodeFileSource } {
+): RunnerFileSentinel & { _node: NodeFileSource } {
   return {
-    $ejson: "File",
+    $runnerFile: "File",
     id,
     meta,
     _node: source,

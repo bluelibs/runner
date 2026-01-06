@@ -6,7 +6,7 @@ Make tasks and events callable across processes – from a CLI, another service,
 
 1. Why tunnels
 2. Architecture at a glance
-2.1 Architecture deep dive
+   2.1) Architecture deep dive
 3. Quick start (3 minutes)
 4. Choose your client
    - Unified client (browser + node)
@@ -16,8 +16,7 @@ Make tasks and events callable across processes – from a CLI, another service,
 5. Auth (static & dynamic)
 6. Uploads & files (`$ejson: "File"` sentinel, FormData, Node streams)
 7. Abort & timeouts
-
-- 7.1) useExposureContext API
+   7.1) useExposureContext API
 
 8. CORS
 9. Server allow‑lists
@@ -34,7 +33,9 @@ Make tasks and events callable across processes – from a CLI, another service,
 
 ## 1) Why tunnels
 
-As your app grows, other processes need to call your tasks: workers, CLIs, browser UIs. Tunnels give you a consistent, secure wire: the server exposes a small HTTP surface; clients call it with JSON or streams.
+The "Tunnels" mechanism in Runner is essentially Direct HTTP RPC. And it works on the concept of 'distributed monolith'. The reason it exists is to try to make scaling easy for as long as it's technically possible.
+
+Tunnels give you a consistent, secure wire: the server exposes a small HTTP surface; clients call it with JSON or streams. When you call a task: `processPayment()` you can route it via tunnels to other servers without changing semantics.
 
 ## 2) Architecture at a glance
 
@@ -49,19 +50,22 @@ As your app grows, other processes need to call your tasks: workers, CLIs, brows
 
 The tunnel pipeline is split into three layers with clear responsibilities. This keeps transport concerns isolated from your task/event code and makes the system testable end-to-end.
 
-1) Runner middleware and ownership
+1. Runner middleware and ownership
+
 - Tunnel resources are tagged with `globals.tags.tunnel`.
 - The resource middleware resolves the tunnel's task/event selectors (ids, defs, or predicates) and patches the matched definitions to delegate to the tunnel runner.
 - Tasks are marked with an internal "owned by tunnel" symbol; a second tunnel selecting the same task throws immediately during init (exclusivity).
 - Tunnel policy tags (`globals.tags.tunnelPolicy`) can whitelist which middlewares run on caller vs executor for a tunneled task.
 
-2) Protocol envelope and routing
+2. Protocol envelope and routing
+
 - HTTP clients send a `ProtocolEnvelope` `{ input }` or `{ payload, returnPayload }`.
 - The exposure server validates auth, checks allow-lists (if any), and routes to the registered task/event.
 - For events, optional `returnPayload` enables eventWithResult when supported by the server.
 - Typed errors can flow across the tunnel if the client provides an `errorRegistry`.
 
-3) Serialization and file/stream handling
+3. Serialization and file/stream handling
+
 - Standard DTOs go through the serializer (global serializer resource is the source of truth).
 - File uploads use a `$ejson: "File"` sentinel that triggers multipart handling; files are not serializer types.
   - Mental model: the **serializer** handles values (Dates, RegExp, custom types), while the **tunnel client** chooses the **transport** (JSON vs multipart vs octet‑stream) based on your input shape.
@@ -417,32 +421,38 @@ Match the exposure’s auth settings (header name and expected format).
 The HTTP exposure includes several layers of security to ensure the safety of your Runner network.
 
 ### Authentication
+
 - **Static Tokens**: Comparison is done using **timing-safe** algorithms to prevent side-channel attacks.
 - **Custom Validators**: Mark tasks with `globals.tags.authValidator` for dynamic logic.
 
 ### Denial of Service (DoS) Protection
+
 The server enforces configurable limits on request sizes:
+
 - **JSON Body**: Default **2MB** limit.
 - **Multipart Uploads**:
-    - **fileSize**: Default **20MB** per file.
-    - **files**: Default **10** files per request.
-    - **fields**: Default **100** fields.
-    - **fieldSize**: Default **1MB** per field value.
+  - **fileSize**: Default **20MB** per file.
+  - **files**: Default **10** files per request.
+  - **fields**: Default **100** fields.
+  - **fieldSize**: Default **1MB** per field value.
 
 Example configuration:
+
 ```ts
 nodeExposure.with({
   http: {
     limits: {
       json: { maxSize: 5 * 1024 * 1024 }, // 5MB
       multipart: { files: 2, fileSize: 100 * 1024 * 1024 }, // 2 files, 100MB each
-    }
-  }
-})
+    },
+  },
+});
 ```
 
 ### Information Leakage
+
 To prevent leaking sensitive internal data:
+
 - **Error Masking**: Internal server errors (status 500) that are not recognized `TypedError` instances are masked as "Internal Error".
 - **Transparent Typed Errors**: Errors created via `error().build()` and explicitly thrown are transmitted transparently (payload + formatted message).
 
@@ -815,22 +825,26 @@ Note: In browsers, read with the File/Blob APIs at the edge of your app (e.g., `
 
 Aim for layered coverage so failures are easy to localize:
 
-1) Unit tests for protocol and client behavior
+1. Unit tests for protocol and client behavior
+
 - Validate envelope shapes and error parsing (for example, `eventWithResult` return payload handling).
 - Mock fetch for the unified/pure clients to assert headers, payloads, and error paths.
 - For Node smart/mixed clients, test stream detection and the JSON vs multipart path selection.
 
-2) Integration tests for exposure + clients
+2. Integration tests for exposure + clients
+
 - Run a minimal root with a task, a tunnel resource, and `nodeExposure`.
 - Assert allow-list enforcement when server-mode tunnels exist.
 - Exercise typed errors over tunnels by registering an error and rethrowing on the client.
 - Include at least one streaming/duplex test when adding stream behaviors.
 
-3) Regression tests for ownership and policies
+3. Regression tests for ownership and policies
+
 - Confirm tunnel exclusivity at init time when two tunnels select the same task.
 - Validate `globals.tags.tunnelPolicy` whitelist behavior for caller/executor middleware paths.
 
 Local commands:
+
 - Full suite: `npm run coverage:ai`
 - Focused runs: `npm run test -- tunnel` or `npm run test -- exposure`
 
@@ -944,8 +958,12 @@ Notes:
 ```ts
 import { assertTaskRouted } from "@bluelibs/runner";
 
-const result = assertTaskRouted(await remoteHello({ name: "Ada" }), remoteHello.id);
+const result = assertTaskRouted(
+  await remoteHello({ name: "Ada" }),
+  remoteHello.id,
+);
 ```
+
 - You can combine phantom tasks with server allow‑lists (see section 9) to control what’s reachable when you host an exposure.
 - Single-owner rule: phantom or regular tasks routed through tunnels still follow exclusivity. The first tunnel that selects a task becomes its owner; subsequent tunnels attempting to select the same task cause init to fail with a clear error message.
 

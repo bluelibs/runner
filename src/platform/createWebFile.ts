@@ -1,4 +1,4 @@
-import type { InputFileMeta, EjsonFileSentinel } from "../types/inputFile";
+import type { InputFileMeta, RunnerFileSentinel } from "../types/inputFile";
 
 /**
  * Browser/edge-friendly File sentinel creator.
@@ -9,9 +9,9 @@ export function createWebFile(
   meta: InputFileMeta,
   blob: Blob,
   id: string = "F1",
-): EjsonFileSentinel & { _web: { blob: Blob } } {
+): RunnerFileSentinel & { _web: { blob: Blob } } {
   return {
-    $ejson: "File",
+    $runnerFile: "File",
     id,
     meta,
     _web: { blob },

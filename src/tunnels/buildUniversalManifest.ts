@@ -1,5 +1,5 @@
 import type { Readable } from "stream";
-import type { InputFileMeta, EjsonFileSentinel } from "../types/inputFile";
+import type { InputFileMeta, RunnerFileSentinel } from "../types/inputFile";
 
 export interface NodeCollectedFile {
   id: string;
@@ -33,7 +33,7 @@ export function buildUniversalManifest<T = any>(
     if (!value || typeof value !== "object") return value;
 
     if (
-      (value as EjsonFileSentinel).$ejson === "File" &&
+      (value as RunnerFileSentinel).$runnerFile === "File" &&
       typeof (value as any).id === "string"
     ) {
       const v: any = value;
@@ -60,7 +60,7 @@ export function buildUniversalManifest<T = any>(
         webFiles.push({ id, meta, blob: web.blob });
       }
 
-      const copy: AnyObj = { $ejson: "File", id, meta };
+      const copy: AnyObj = { $runnerFile: "File", id, meta };
       return copy;
     }
 

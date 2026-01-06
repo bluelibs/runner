@@ -17,7 +17,7 @@ describe("buildUniversalManifest", () => {
     expect(out.nodeFiles[0].source.type).toBe("buffer");
     // _node sidecar removed in cloned input
     expect((out.input as any).f._node).toBeUndefined();
-    expect((out.input as any).f.$ejson).toBe("File");
+    expect((out.input as any).f.$runnerFile).toBe("File");
   });
 
   it("collects node stream files and nested arrays/objects", () => {

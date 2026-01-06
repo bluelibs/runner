@@ -75,7 +75,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 ### Serialization
 
 - All JSON bodies/responses are serialized with Runner's serializer to preserve types like `Date`, `RegExp`, and custom classes (via `addType`).
-- Files are **not** custom serializer types: use sentinels `{"$ejson": "File", "id": "<uuid>", "meta": {...}}` (see Multipart Mode).
+- Files are **not** custom serializer types: use sentinels `{"$runnerFile": "File", "id": "<uuid>", "meta": {...}}` (see Multipart Mode).
 - Charset: UTF-8.
 - Custom Types: Client/server must sync `addType(name, factory)` via DI (`globals.resources.serializer`).
 
@@ -173,7 +173,7 @@ Server routes by `Content-Type`.
 - **Content-Type**: `multipart/form-data; boundary=<boundary>` (RFC 7578).
 - **Body Parts**:
   - `__manifest` (text/plain): JSON string of `{ input: <obj> }`.
-    - File placeholders: `{"$ejson": "File", "id": "<uuid>", "meta": { "name": string, "type"?: string, "size"?: number, "lastModified"?: number, "extra"?: object }}`
+    - File placeholders: `{"$runnerFile": "File", "id": "<uuid>", "meta": { "name": string, "type"?: string, "size"?: number, "lastModified"?: number, "extra"?: object }}`
     - `<uuid>`: Client-generated (unique per request).
   - `file:<id>` (binary): File bytes for each sentinel.
     - `Content-Disposition: form-data; name="file:<id>"; filename="<name>"`
@@ -256,12 +256,12 @@ Response:
 
 ### Multipart Upload (Node-like, conceptual curl)
 
-Manifest JSON: `{"input": {"file": {"$ejson": "File", "id": "f1", "meta": {"name": "doc.txt", "type": "text/plain"}}}}`
+Manifest JSON: `{"input": {"file": {"$runnerFile": "File", "id": "f1", "meta": {"name": "doc.txt", "type": "text/plain"}}}}`
 
 ```bash
 curl -X POST http://localhost:7070/__runner/task/app.tasks.upload \
   -H "x-runner-token: secret" \
-  -F '__manifest={"input": {"file": {"$ejson": "File", "id": "f1", "meta": {"name": "doc.txt"}}}}' \
+  -F '__manifest={"input": {"file": {"$runnerFile": "File", "id": "f1", "meta": {"name": "doc.txt"}}}}' \
   -F 'file:f1=@/path/to/doc.txt'
 ```
 

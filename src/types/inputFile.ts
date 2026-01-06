@@ -27,8 +27,8 @@ export interface InputFile<TStream = unknown> extends InputFileMeta {
 }
 
 /** Client-side sentinel to declare file presence in an input structure. */
-export interface EjsonFileSentinel {
-  $ejson: "File";
+export interface RunnerFileSentinel {
+  $runnerFile: "File";
   id: string;
   meta: InputFileMeta;
 }

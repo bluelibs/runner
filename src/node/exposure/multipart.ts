@@ -26,7 +26,7 @@ import type { SerializerLike } from "../../serializer";
 // Import with explicit .ts extension to prevent tsup from resolving it
 // via the native-node-modules plugin (which looks for paths ending in .node)
 import { NodeInputFile } from "../inputFile.model";
-import type { InputFileMeta, EjsonFileSentinel } from "../../types/inputFile";
+import type { InputFileMeta, RunnerFileSentinel } from "../../types/inputFile";
 import { jsonErrorResponse } from "./httpResponse";
 import type { JsonResponse } from "./types";
 
@@ -338,7 +338,7 @@ function hydrateInputWithFiles(
     if (!value || typeof value !== "object") {
       return value;
     }
-    if (isEjsonFileSentinel(value)) {
+    if (isRunnerFileSentinel(value)) {
       const entry = ensureEntry(value.id, value.meta);
       return entry.file;
     }
@@ -352,6 +352,15 @@ function hydrateInputWithFiles(
     return out;
   };
   return visit(input);
+}
+
+function isRunnerFileSentinel(value: unknown): value is RunnerFileSentinel {
+  return (
+    !!value &&
+    typeof value === "object" &&
+    (value as RunnerFileSentinel).$runnerFile === "File" &&
+    typeof (value as RunnerFileSentinel).id === "string"
+  );
 }
 
 const DEFAULT_NAME = "upload";
@@ -419,11 +428,4 @@ function applyMeta(
   }
 }
 
-function isEjsonFileSentinel(value: unknown): value is EjsonFileSentinel {
-  return (
-    !!value &&
-    typeof value === "object" &&
-    (value as EjsonFileSentinel).$ejson === "File" &&
-    typeof (value as EjsonFileSentinel).id === "string"
-  );
-}
+// End of file
