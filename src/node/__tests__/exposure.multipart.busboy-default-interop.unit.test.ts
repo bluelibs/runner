@@ -125,7 +125,10 @@ describe("parseMultipartInput - busboy default export interop", () => {
       throw new Error("Expected multipart parsing to fail");
     }
     expect(parsed.response.status).toBe(413);
-    expect(parsed.response.body.error.message).toBe("Field limit exceeded");
+    expect(
+      (parsed.response.body as unknown as { error: { message: string } }).error
+        .message,
+    ).toBe("Field limit exceeded");
   });
 
   it("propagates file size limit via finalize() after manifest is accepted", async () => {
@@ -170,9 +173,10 @@ describe("parseMultipartInput - busboy default export interop", () => {
       throw new Error("Expected finalize() to fail");
     }
     expect(finalized.response.status).toBe(413);
-    expect(finalized.response.body.error.message).toBe(
-      "File size limit exceeded",
-    );
+    expect(
+      (finalized.response.body as unknown as { error: { message: string } })
+        .error.message,
+    ).toBe("File size limit exceeded");
   });
 
   it("propagates fields/files/parts limits via finalize() after manifest is accepted", async () => {
@@ -210,6 +214,9 @@ describe("parseMultipartInput - busboy default export interop", () => {
       throw new Error("Expected finalize() to fail");
     }
     expect(finalized.response.status).toBe(413);
-    expect(finalized.response.body.error.code).toBe("PAYLOAD_TOO_LARGE");
+    expect(
+      (finalized.response.body as unknown as { error: { code: string } }).error
+        .code,
+    ).toBe("PAYLOAD_TOO_LARGE");
   });
 });

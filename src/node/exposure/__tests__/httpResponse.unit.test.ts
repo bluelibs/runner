@@ -1,3 +1,4 @@
+import { Readable } from "node:stream";
 import {
   respondJson,
   jsonErrorResponse,
@@ -57,7 +58,6 @@ describe("httpResponse helpers", () => {
   });
 
   it("respondStream pipes a plain Readable with defaults", () => {
-    const { Readable } = require("stream") as typeof import("stream");
     let ended = false;
     const chunks: Buffer[] = [];
     const headers: Record<string, string> = {};
@@ -84,12 +84,11 @@ describe("httpResponse helpers", () => {
     });
     respondStream(res, r);
     expect(headers["content-type"]).toMatch(/application\/octet-stream/i);
-    expect(Buffer.concat(chunks).toString("utf8")).toBe("ab");
+    expect(Buffer.concat(chunks as Uint8Array[]).toString("utf8")).toBe("ab");
     expect(ended).toBe(true);
   });
 
   it("respondStream pipes a StreamingResponse wrapper and respects headers", () => {
-    const { Readable } = require("stream") as typeof import("stream");
     let ended = false;
     const chunks: Buffer[] = [];
     const headers: Record<string, string> = {};
@@ -121,7 +120,7 @@ describe("httpResponse helpers", () => {
     });
     expect(headers["content-type"]).toMatch(/text\/plain/i);
     expect(headers["x-demo"]).toBe("1");
-    expect(Buffer.concat(chunks).toString("utf8")).toBe("x");
+    expect(Buffer.concat(chunks as Uint8Array[]).toString("utf8")).toBe("x");
     expect(ended).toBe(true);
   });
 
@@ -145,7 +144,6 @@ describe("httpResponse helpers", () => {
   });
 
   it("respondStream drains async chunks and cleans up listeners", async () => {
-    const { Readable } = require("stream") as typeof import("stream");
     const chunks: Buffer[] = [];
     const res: any = {
       writableEnded: false,
@@ -170,7 +168,9 @@ describe("httpResponse helpers", () => {
     stream.push(null);
     await new Promise((resolve) => setImmediate(resolve));
     expect(res.writableEnded).toBe(true);
-    expect(Buffer.concat(chunks).toString("utf8")).toBe("hello");
+    expect(Buffer.concat(chunks as Uint8Array[]).toString("utf8")).toBe(
+      "hello",
+    );
     expect(stream.listenerCount("data")).toBe(0);
   });
 
@@ -187,7 +187,6 @@ describe("httpResponse helpers", () => {
         this.writableEnded = true;
       },
     };
-    const { Readable } = require("stream") as typeof import("stream");
     const stream = new Readable({ read() {} });
     respondStream(res, {
       stream,
@@ -198,7 +197,6 @@ describe("httpResponse helpers", () => {
   });
 
   it("respondStream falls back to removeListener when .off is unavailable", async () => {
-    const { Readable } = require("stream") as typeof import("stream");
     const chunks: Buffer[] = [];
     const res: any = {
       writableEnded: false,
@@ -224,14 +222,13 @@ describe("httpResponse helpers", () => {
     stream.push(null);
     await new Promise((resolve) => setImmediate(resolve));
     expect(res.writableEnded).toBe(true);
-    expect(Buffer.concat(chunks).toString("utf8")).toBe("hi");
+    expect(Buffer.concat(chunks as Uint8Array[]).toString("utf8")).toBe("hi");
     expect(removeListenerSpy).toHaveBeenCalledWith(
       "data",
       expect.any(Function),
     );
   });
   it("respondStream ends response on stream error", async () => {
-    const { Readable } = require("stream") as typeof import("stream");
     const res: any = {
       writableEnded: false,
       statusCode: 0,
@@ -252,7 +249,6 @@ describe("httpResponse helpers", () => {
   });
 
   it("respondStream returns early when already ended", () => {
-    const { Readable } = require("stream") as typeof import("stream");
     const res: any = {
       writableEnded: true,
       setHeader() {},

@@ -38,7 +38,10 @@ describe("ensureSchedule()", () => {
   it("creates a new cron schedule and arms a stable schedule timer id", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
-    const task = r.task("t.ensure.cron").run(async () => "ok").build();
+    const task = r
+      .task("t.ensure.cron")
+      .run(async (_input: { a: number }) => "ok")
+      .build();
 
     await expect(
       service.ensureSchedule(task, { a: 1 }, { id: "s1", cron: "*/5 * * * *" }),
@@ -59,7 +62,10 @@ describe("ensureSchedule()", () => {
   it("updates an existing schedule (same id/task) and re-arms its timer", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
-    const task = r.task("t.ensure.update").run(async () => "ok").build();
+    const task = r
+      .task("t.ensure.update")
+      .run(async (_input: { v: number }) => "ok")
+      .build();
 
     await service.ensureSchedule(task, { v: 1 }, { id: "s1", interval: 1000 });
     const first = (await store.getSchedule("s1")) as Schedule;
@@ -78,8 +84,14 @@ describe("ensureSchedule()", () => {
   it("rejects rebinding an existing schedule id to a different task id", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
-    const a = r.task("t.ensure.a").run(async () => "ok").build();
-    const b = r.task("t.ensure.b").run(async () => "ok").build();
+    const a = r
+      .task("t.ensure.a")
+      .run(async () => "ok")
+      .build();
+    const b = r
+      .task("t.ensure.b")
+      .run(async () => "ok")
+      .build();
 
     await service.ensureSchedule(a, undefined, { id: "s1", interval: 1000 });
     await expect(
@@ -90,11 +102,16 @@ describe("ensureSchedule()", () => {
   it("throws when ensureSchedule() is called without cron/interval", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
-    const task = r.task("t.ensure.invalid").run(async () => "ok").build();
+    const task = r
+      .task("t.ensure.invalid")
+      .run(async () => "ok")
+      .build();
 
     await expect(
-      // @ts-expect-error - runtime should validate schedule type
-      service.ensureSchedule(task, undefined, { id: "s1" }),
+      service.ensureSchedule(task, undefined, { id: "s1" } as {
+        id: string;
+        cron: string;
+      }),
     ).rejects.toThrow("requires cron or interval");
   });
 
@@ -102,7 +119,10 @@ describe("ensureSchedule()", () => {
     const base = new MemoryStore();
     const store = createNoLockStore(base);
     const service = new DurableService({ store, tasks: [] });
-    const task = r.task("t.ensure.nolock").run(async () => "ok").build();
+    const task = r
+      .task("t.ensure.nolock")
+      .run(async () => "ok")
+      .build();
 
     await expect(
       service.ensureSchedule(task, undefined, { id: "s1", interval: 1000 }),
@@ -119,7 +139,10 @@ describe("ensureSchedule()", () => {
 
     const store = new LockedStore();
     const service = new DurableService({ store, tasks: [] });
-    const task = r.task("t.ensure.locked").run(async () => "ok").build();
+    const task = r
+      .task("t.ensure.locked")
+      .run(async () => "ok")
+      .build();
 
     await expect(
       service.ensureSchedule(task, undefined, { id: "s1", interval: 1000 }),
@@ -130,7 +153,10 @@ describe("ensureSchedule()", () => {
     const store = new MemoryStore();
     const service = new DurableService({ store, tasks: [] });
     const durable = new DurableResource(service, new AsyncLocalStorage());
-    const task = r.task("t.ensure.resource").run(async () => "ok").build();
+    const task = r
+      .task("t.ensure.resource")
+      .run(async () => "ok")
+      .build();
 
     await expect(
       durable.ensureSchedule(task, undefined, { id: "s1", interval: 1000 }),

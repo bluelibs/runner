@@ -20,12 +20,19 @@ describe("node exposure helpers", () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.response.status).toBe(500);
-        expect(result.response.body.error.code).toBe("AUTH_NOT_CONFIGURED");
+        expect(
+          (result.response.body as unknown as { error: { code: string } }).error
+            .code,
+        ).toBe("AUTH_NOT_CONFIGURED");
       }
     });
 
     it("returns passthrough when allowAnonymous is explicitly true", async () => {
-      const auth = createAuthenticator({ allowAnonymous: true }, mockTaskRunner, []);
+      const auth = createAuthenticator(
+        { allowAnonymous: true },
+        mockTaskRunner,
+        [],
+      );
       const result = await auth({ headers: {} } as any);
       expect(result).toEqual({ ok: true });
     });

@@ -1,4 +1,5 @@
 import * as http from "http";
+import { Readable } from "node:stream";
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { nodeExposure } from "../../exposure.resource";
@@ -67,7 +68,6 @@ describe("nodeExposure - task returned stream", () => {
     const streamTask = defineTask<void, Promise<NodeJS.ReadableStream>>({
       id: "tests.stream.task",
       async run() {
-        const { Readable } = require("stream") as typeof import("stream");
         let i = 0;
         return new Readable({
           read() {
@@ -79,7 +79,11 @@ describe("nodeExposure - task returned stream", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.stream.json",
@@ -112,7 +116,6 @@ describe("nodeExposure - task returned stream", () => {
     >({
       id: "tests.stream.wrapper",
       async run() {
-        const { Readable } = require("stream") as typeof import("stream");
         let i = 0;
         const stream = new Readable({
           read() {
@@ -125,7 +128,11 @@ describe("nodeExposure - task returned stream", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.stream.octet",

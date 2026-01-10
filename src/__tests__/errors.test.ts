@@ -17,6 +17,7 @@ import {
   lockedError,
   storeAlreadyInitializedError,
   validationError,
+  phantomTaskNotRoutedError,
 } from "../errors";
 
 describe("Errors", () => {
@@ -421,6 +422,13 @@ describe("Errors", () => {
       expect(ve2.message).toBe(
         "Resource config validation failed for test-resource: Invalid configuration",
       );
+
+      const phantom = capture(() =>
+        phantomTaskNotRoutedError.throw({ taskId: "my.phantom.task" }),
+      );
+      expect(phantom.message).toContain('Phantom task "my.phantom.task"');
+      expect(phantom.message).toContain("not routed through any tunnel");
+      expect(phantomTaskNotRoutedError.is(phantom)).toBe(true);
     });
   });
 });

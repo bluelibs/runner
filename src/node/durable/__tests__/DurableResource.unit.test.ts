@@ -7,25 +7,44 @@ import { MemoryEventBus } from "../bus/MemoryEventBus";
 import { MemoryStore } from "../store/MemoryStore";
 import { event, r } from "../../..";
 
+/**
+ * Creates a mock IDurableService for testing. Uses properly-typed functions
+ * that satisfy the generic constraints of the interface.
+ */
+function createMockService(
+  spied = false,
+): IDurableService & { [K in keyof IDurableService]: jest.Mock } {
+  // Generic methods need to return a value compatible with Promise<TResult>
+  // Using "ok" as the mock value works because the test code casts appropriately
+  const mockFn = spied
+    ? <T>(val: T) => jest.fn().mockResolvedValue(val)
+    : <T>(val: T) => jest.fn(async () => val);
+
+  return {
+    startExecution: mockFn("e1"),
+    wait: mockFn("ok"),
+    execute: mockFn("ok"),
+    executeStrict: mockFn("ok"),
+    schedule: mockFn("sched1"),
+    ensureSchedule: mockFn("sched1"),
+    pauseSchedule: mockFn(undefined),
+    resumeSchedule: mockFn(undefined),
+    getSchedule: mockFn(null),
+    listSchedules: mockFn([]),
+    updateSchedule: mockFn(undefined),
+    removeSchedule: mockFn(undefined),
+    recover: mockFn(undefined),
+    signal: mockFn(undefined),
+    start: jest.fn(),
+    stop: mockFn(undefined),
+    // Cast is necessary because generic methods like wait<TResult>() can't be
+    // satisfied by a mock returning a concrete type - this is a known TypeScript limitation
+  } as IDurableService & { [K in keyof IDurableService]: jest.Mock };
+}
+
 describe("durable: DurableResource", () => {
   it("throws when use() is called outside a durable execution", () => {
-    const service = {
-      startExecution: async () => "e1",
-      wait: async () => "ok",
-      execute: async () => "ok",
-      executeStrict: async () => "ok",
-      schedule: async () => "sched1",
-      pauseSchedule: async () => undefined,
-      resumeSchedule: async () => undefined,
-      getSchedule: async () => null,
-      listSchedules: async () => [],
-      updateSchedule: async () => undefined,
-      removeSchedule: async () => undefined,
-      recover: async () => undefined,
-      signal: async () => undefined,
-      start: () => undefined,
-      stop: async () => undefined,
-    } satisfies IDurableService;
+    const service = createMockService();
     const storage = new AsyncLocalStorage<IDurableContext>();
     const durable = new DurableResource(service, storage);
 
@@ -35,34 +54,25 @@ describe("durable: DurableResource", () => {
   });
 
   it("proxies durable methods to the underlying service and exposes a scoped use()", async () => {
-    const service = {
-      startExecution: jest.fn(async () => "e1"),
-      wait: jest.fn(async () => "ok"),
-      execute: jest.fn(async () => "ok"),
-      executeStrict: jest.fn(async () => "ok"),
-      schedule: jest.fn(async () => "sched1"),
-      pauseSchedule: jest.fn(async () => undefined),
-      resumeSchedule: jest.fn(async () => undefined),
-      getSchedule: jest.fn(async () => null),
-      listSchedules: jest.fn(async () => []),
-      updateSchedule: jest.fn(async () => undefined),
-      removeSchedule: jest.fn(async () => undefined),
-      recover: jest.fn(async () => undefined),
-      signal: jest.fn(async () => undefined),
-
-      // not used by DurableResource, but required by the interface
-      start: jest.fn(),
-      stop: jest.fn(async () => undefined),
-    } satisfies IDurableService;
+    const service = createMockService(true);
 
     const storage = new AsyncLocalStorage<IDurableContext>();
     const durable = new DurableResource(service, storage);
 
-    const task = r.task("durable.tests.resource.task").run(async () => "ok").build();
-    const signalDef = event<{ a: number }>({ id: "durable.tests.resource.signal" });
+    const task = r
+      .task("durable.tests.resource.task")
+      .run(async (_input: { a: number }) => "ok")
+      .build();
+    const signalDef = event<{ a: number }>({
+      id: "durable.tests.resource.signal",
+    });
 
     expect(await durable.startExecution(task, { a: 1 })).toBe("e1");
-    expect(service.startExecution).toHaveBeenCalledWith(task, { a: 1 }, undefined);
+    expect(service.startExecution).toHaveBeenCalledWith(
+      task,
+      { a: 1 },
+      undefined,
+    );
 
     expect(await durable.wait<string>("e1")).toBe("ok");
     expect(service.wait).toHaveBeenCalledWith("e1", undefined);
@@ -71,11 +81,13 @@ describe("durable: DurableResource", () => {
     expect(service.execute).toHaveBeenCalledWith(task, { a: 1 }, undefined);
 
     expect(await durable.executeStrict(task, { a: 1 })).toBe("ok");
-    expect(service.executeStrict).toHaveBeenCalledWith(task, { a: 1 }, undefined);
+    expect(service.executeStrict).toHaveBeenCalledWith(
+      task,
+      { a: 1 },
+      undefined,
+    );
 
-    expect(
-      await durable.schedule(task, { a: 1 }, { delay: 1 }),
-    ).toBe("sched1");
+    expect(await durable.schedule(task, { a: 1 }, { delay: 1 })).toBe("sched1");
     expect(service.schedule).toHaveBeenCalledWith(task, { a: 1 }, { delay: 1 });
 
     await durable.pauseSchedule("s1");

@@ -19,7 +19,10 @@ jest.mock("../multipart", () => ({
 
 import { Readable } from "stream";
 import type { IncomingMessage, ServerResponse } from "http";
-import { createRequestHandlers } from "../requestHandlers";
+import {
+  createRequestHandlers,
+  type RequestProcessingDeps,
+} from "../requestHandlers";
 import { getDefaultSerializer } from "../../../serializer";
 
 function makeReq(path: string): IncomingMessage {
@@ -75,9 +78,11 @@ describe("requestHandlers - sanitizeErrorResponse non-string code fallback", () 
         isUnderBase: () => true,
       },
       serializer: getDefaultSerializer(),
-    } satisfies Parameters<typeof createRequestHandlers>[0];
+    };
 
-    const { handleTask } = createRequestHandlers(deps);
+    const { handleTask } = createRequestHandlers(
+      deps as unknown as RequestProcessingDeps,
+    );
 
     const req = makeReq("/api/task/t");
     const res = makeRes();

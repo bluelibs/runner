@@ -62,6 +62,13 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
       },
     };
 
+    // Response type matching the standard Runner HTTP response shape
+    type JsonResponse = {
+      ok?: boolean;
+      result?: any;
+      error?: { code?: string; message?: string; id?: string; data?: unknown };
+    };
+
     return {
       req,
       res,
@@ -71,12 +78,12 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
       get resStatus() {
         return res.statusCode as number;
       },
-      get json() {
+      get json(): JsonResponse | undefined {
         if (chunks.length === 0) return undefined;
         try {
           return getDefaultSerializer().parse(
             Buffer.concat(chunks as readonly Uint8Array[]).toString("utf8"),
-          );
+          ) as JsonResponse;
         } catch {
           return undefined;
         }
@@ -545,7 +552,11 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     // No auth configured -> need allowAnonymous to permit access (secure by default)
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "unit.exposure.coverage.app5",

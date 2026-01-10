@@ -2,7 +2,9 @@ import { RedisEventBus } from "../bus/RedisEventBus";
 import { Serializer } from "../../../serializer";
 import { createIORedisClient } from "../optionalDeps/ioredis";
 
-jest.mock("../optionalDeps/ioredis", () => ({ createIORedisClient: jest.fn() }));
+jest.mock("../optionalDeps/ioredis", () => ({
+  createIORedisClient: jest.fn(),
+}));
 
 describe("durable: RedisEventBus", () => {
   let redisMock: any;
@@ -55,7 +57,7 @@ describe("durable: RedisEventBus", () => {
   });
 
   it("supports tree-encoded Date timestamps (Serializer path)", async () => {
-    let received: Date | null = null;
+    let received: Date | undefined;
     await bus.subscribe("chan", async (evt) => {
       received = evt.timestamp;
     });

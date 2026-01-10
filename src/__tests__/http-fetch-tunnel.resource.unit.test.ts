@@ -1,5 +1,5 @@
 import { createExposureFetch } from "../http-fetch-tunnel.resource";
-import { getDefaultSerializer, type Serializer } from "../serializer";
+import { getDefaultSerializer, Serializer } from "../serializer";
 
 describe("http-fetch-tunnel.resource (unit)", () => {
   it("createExposureFetch: throws when baseUrl is empty or '/'", () => {
@@ -251,12 +251,16 @@ describe("http-fetch-tunnel.resource (unit)", () => {
   });
 
   it("createExposureFetch: honors a custom serializer when provided", async () => {
-    const stringify = jest.fn((value: unknown) =>
-      JSON.stringify({ wrapped: value }),
-    );
-    const parse = jest.fn((text: string) => JSON.parse(text).wrapped);
-    const addType = jest.fn();
-    const serializer: Serializer = { stringify, parse, addType };
+    const serializer = new Serializer();
+    const stringify = jest
+      .spyOn(serializer, "stringify")
+      .mockImplementation((value: unknown) =>
+        JSON.stringify({ wrapped: value }),
+      );
+    const parse = jest
+      .spyOn(serializer, "parse")
+      .mockImplementation((text: string) => JSON.parse(text).wrapped);
+    const addType = jest.spyOn(serializer, "addType");
 
     const fetchImpl: typeof fetch = (async (_url: any, init: any) => {
       expect(init.body).toBe(

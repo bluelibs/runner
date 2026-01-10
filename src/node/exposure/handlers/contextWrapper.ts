@@ -65,7 +65,7 @@ export const withExposureContext = <T>(
       },
       userWrapped,
     );
-  return run();
+  return Promise.resolve(run());
 };
 
 /**

@@ -394,9 +394,9 @@ describe("Serializer Coverage Tests", () => {
       const graphPayload = JSON.parse(serializer.serialize(record));
       const node = graphPayload.nodes.obj_1;
       expect(node.kind).toBe("object");
-      expect(Object.prototype.hasOwnProperty.call(node.value, "__proto__")).toBe(
-        false,
-      );
+      expect(
+        Object.prototype.hasOwnProperty.call(node.value, "__proto__"),
+      ).toBe(false);
       expect(node.value.safe).toBe(1);
 
       const treePayload = JSON.parse(serializer.stringify(record));
@@ -538,23 +538,33 @@ describe("Serializer Coverage Tests", () => {
         enumerable: true,
         value: { kind: "object", value: { inherited: true } },
       });
-      const nodes = Object.create(proto) as Record<string, unknown>;
+      const nodes: Record<string, unknown> = Object.create(proto);
       nodes.safe = { kind: "object", value: { ok: true } };
-      nodes.constructor = { kind: "object", value: { polluted: true } };
+      // Intentionally assign to constructor to test prototype pollution filtering
+      (nodes as { constructor: unknown }).constructor = {
+        kind: "object",
+        value: { polluted: true },
+      };
 
       const record = helpers.toNodeRecord(nodes);
       expect(record.safe).toBeDefined();
       expect(Object.prototype.hasOwnProperty.call(record, "constructor")).toBe(
         false,
       );
-      expect(Object.prototype.hasOwnProperty.call(record, "inherited")).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(record, "inherited")).toBe(
+        false,
+      );
 
       const placeholder: Record<string, unknown> = {};
       const mergeProto = {};
-      Object.defineProperty(mergeProto, "inherited", { enumerable: true, value: 1 });
-      const mergeSource = Object.create(mergeProto) as Record<string, unknown>;
+      Object.defineProperty(mergeProto, "inherited", {
+        enumerable: true,
+        value: 1,
+      });
+      const mergeSource: Record<string, unknown> = Object.create(mergeProto);
       mergeSource.safe = 1;
-      mergeSource.constructor = 2;
+      // Intentionally assign to constructor to test prototype pollution filtering
+      (mergeSource as { constructor: unknown }).constructor = 2;
 
       const merged = helpers.mergePlaceholder(placeholder, mergeSource);
       expect(merged).toBe(placeholder);
@@ -574,12 +584,11 @@ describe("Serializer Coverage Tests", () => {
         root: { ["__proto__"]: { polluted: true }, safe: 1 },
         nodes: {},
       });
-      const rootObject = serializer.deserialize<Record<string, unknown>>(
-        rootObjectPayload,
-      );
-      expect(Object.prototype.hasOwnProperty.call(rootObject, "__proto__")).toBe(
-        false,
-      );
+      const rootObject =
+        serializer.deserialize<Record<string, unknown>>(rootObjectPayload);
+      expect(
+        Object.prototype.hasOwnProperty.call(rootObject, "__proto__"),
+      ).toBe(false);
       expect(rootObject.safe).toBe(1);
 
       const nodeObjectPayload = JSON.stringify({
@@ -593,12 +602,11 @@ describe("Serializer Coverage Tests", () => {
           },
         },
       });
-      const nodeObject = serializer.deserialize<Record<string, unknown>>(
-        nodeObjectPayload,
-      );
-      expect(Object.prototype.hasOwnProperty.call(nodeObject, "__proto__")).toBe(
-        false,
-      );
+      const nodeObject =
+        serializer.deserialize<Record<string, unknown>>(nodeObjectPayload);
+      expect(
+        Object.prototype.hasOwnProperty.call(nodeObject, "__proto__"),
+      ).toBe(false);
       expect(nodeObject.ok).toBe(true);
     });
   });
@@ -706,7 +714,9 @@ describe("Serializer Coverage Tests", () => {
           serialize: undefined as any,
           deserialize: undefined as any,
         }),
-      ).toThrow("Invalid type definition: serialize and deserialize are required");
+      ).toThrow(
+        "Invalid type definition: serialize and deserialize are required",
+      );
     });
 
     it("covers value-type instance guards created by addType(name, factory)", () => {

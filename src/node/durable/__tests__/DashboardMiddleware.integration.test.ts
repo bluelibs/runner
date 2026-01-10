@@ -33,10 +33,14 @@ function createUnusedService(): IDurableService {
     updateSchedule: async () => unused(),
     removeSchedule: async () => unused(),
     signal: async () => unused(),
+    ensureSchedule: async () => unused(),
   };
 }
 
-async function createTempUiDist(): Promise<{ path: string; cleanup: () => Promise<void> }> {
+async function createTempUiDist(): Promise<{
+  path: string;
+  cleanup: () => Promise<void>;
+}> {
   const base = await fs.promises.mkdtemp(
     path.join(os.tmpdir(), "runner-durable-dashboard-ui-"),
   );
@@ -49,7 +53,7 @@ async function createTempUiDist(): Promise<{ path: string; cleanup: () => Promis
       "<!doctype html>",
       "<html>",
       "  <head>",
-      "    <meta charset=\"UTF-8\" />",
+      '    <meta charset="UTF-8" />',
       "    <title>Test Dashboard</title>",
       "  </head>",
       "  <body>",
@@ -75,14 +79,18 @@ async function createTempUiDist(): Promise<{ path: string; cleanup: () => Promis
   };
 }
 
-async function request(app: Express, params: {
-  label?: string;
-  method: string;
-  url: string;
-  headers?: Record<string, string>;
-  body?: unknown;
-}): Promise<{ status: number; body: string }> {
-  const bodyText = params.body === undefined ? undefined : JSON.stringify(params.body);
+async function request(
+  app: Express,
+  params: {
+    label?: string;
+    method: string;
+    url: string;
+    headers?: Record<string, string>;
+    body?: unknown;
+  },
+): Promise<{ status: number; body: string }> {
+  const bodyText =
+    params.body === undefined ? undefined : JSON.stringify(params.body);
   const headers: Record<string, string> = { ...(params.headers ?? {}) };
   if (bodyText !== undefined && headers["content-type"] === undefined) {
     headers["content-type"] = "application/json";
@@ -117,7 +125,12 @@ async function request(app: Express, params: {
     if (chunk !== undefined) {
       const buffer =
         typeof chunk === "string"
-          ? Buffer.from(chunk, typeof encoding === "string" ? encoding : "utf8")
+          ? Buffer.from(
+              chunk,
+              (typeof encoding === "string"
+                ? encoding
+                : "utf8") as BufferEncoding,
+            )
           : Buffer.from(chunk);
       bodyChunks.push(buffer);
     }
@@ -129,7 +142,12 @@ async function request(app: Express, params: {
     if (chunk !== undefined) {
       const buffer =
         typeof chunk === "string"
-          ? Buffer.from(chunk, typeof encoding === "string" ? encoding : "utf8")
+          ? Buffer.from(
+              chunk,
+              (typeof encoding === "string"
+                ? encoding
+                : "utf8") as BufferEncoding,
+            )
           : Buffer.from(chunk);
       bodyChunks.push(buffer);
     }
@@ -139,15 +157,25 @@ async function request(app: Express, params: {
   return await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => {
       const label = params.label ? `${params.label} ` : "";
-      reject(new Error(`${label}Request timed out: ${params.method} ${params.url}`));
+      reject(
+        new Error(`${label}Request timed out: ${params.method} ${params.url}`),
+      );
     }, 2000);
     res.once("finish", () => {
       clearTimeout(timeout);
-      resolve({ status: res.statusCode, body: Buffer.concat(bodyChunks).toString("utf8") });
+      resolve({
+        status: res.statusCode,
+        body: Buffer.concat(bodyChunks as Uint8Array[]).toString("utf8"),
+      });
     });
 
     try {
-      app.handle(req as any, res as any);
+      // Express internal handle method exists at runtime but not in types
+      (
+        app as unknown as {
+          handle: (req: http.IncomingMessage, res: http.ServerResponse) => void;
+        }
+      ).handle(req, res);
       process.nextTick(() => {
         if (bodyText !== undefined) {
           req.emit("data", Buffer.from(bodyText, "utf8"));

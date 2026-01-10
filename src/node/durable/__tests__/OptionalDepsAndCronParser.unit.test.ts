@@ -1,4 +1,7 @@
 import { RedisEventBus } from "../bus/RedisEventBus";
+import type * as IoredisMod from "../optionalDeps/ioredis";
+import type * as AmqplibMod from "../optionalDeps/amqplib";
+import type * as CronParserMod from "../core/CronParser";
 
 describe("durable: optional deps helpers", () => {
   it("createIORedisClient() throws when ioredis is missing", () => {
@@ -12,8 +15,12 @@ describe("durable: optional deps helpers", () => {
         { virtual: true },
       );
 
-      const { createIORedisClient } = require("../optionalDeps/ioredis") as typeof import("../optionalDeps/ioredis");
-      expect(() => createIORedisClient()).toThrow("Missing optional dependency 'ioredis'");
+      const {
+        createIORedisClient,
+      }: typeof IoredisMod = require("../optionalDeps/ioredis");
+      expect(() => createIORedisClient()).toThrow(
+        "Missing optional dependency 'ioredis'",
+      );
     });
   });
 
@@ -29,7 +36,9 @@ describe("durable: optional deps helpers", () => {
         { virtual: true },
       );
 
-      const { createIORedisClient } = require("../optionalDeps/ioredis") as typeof import("../optionalDeps/ioredis");
+      const {
+        createIORedisClient,
+      }: typeof IoredisMod = require("../optionalDeps/ioredis");
       expect(() => createIORedisClient()).toThrow(
         "Missing optional dependency 'ioredis'",
       );
@@ -39,9 +48,11 @@ describe("durable: optional deps helpers", () => {
   it("createIORedisClient() supports default exports", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      const ctor = jest.fn().mockImplementation(function Redis(this: any, url?: string) {
-        this.url = url ?? null;
-      });
+      const ctor = jest
+        .fn()
+        .mockImplementation(function Redis(this: any, url?: string) {
+          this.url = url ?? null;
+        });
 
       jest.doMock(
         "ioredis",
@@ -52,10 +63,14 @@ describe("durable: optional deps helpers", () => {
         { virtual: true },
       );
 
-      const { createIORedisClient } = require("../optionalDeps/ioredis") as typeof import("../optionalDeps/ioredis");
+      const {
+        createIORedisClient,
+      }: typeof IoredisMod = require("../optionalDeps/ioredis");
       const client1 = createIORedisClient("redis://localhost");
       const client2 = createIORedisClient();
-      expect(client1).toEqual(expect.objectContaining({ url: "redis://localhost" }));
+      expect(client1).toEqual(
+        expect.objectContaining({ url: "redis://localhost" }),
+      );
       expect(client2).toEqual(expect.objectContaining({ url: null }));
       expect(ctor).toHaveBeenCalledTimes(2);
     });
@@ -64,12 +79,16 @@ describe("durable: optional deps helpers", () => {
   it("createIORedisClient() supports function exports", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      const ctor = jest.fn().mockImplementation(function Redis(this: any, url?: string) {
-        this.url = url ?? "default";
-      });
+      const ctor = jest
+        .fn()
+        .mockImplementation(function Redis(this: any, url?: string) {
+          this.url = url ?? "default";
+        });
       jest.doMock("ioredis", () => ctor, { virtual: true });
 
-      const { createIORedisClient } = require("../optionalDeps/ioredis") as typeof import("../optionalDeps/ioredis");
+      const {
+        createIORedisClient,
+      }: typeof IoredisMod = require("../optionalDeps/ioredis");
       const client1 = createIORedisClient();
       const client2 = createIORedisClient("redis://x");
       expect(client1).toEqual(expect.objectContaining({ url: "default" }));
@@ -81,13 +100,13 @@ describe("durable: optional deps helpers", () => {
   it("createIORedisClient() rejects invalid ioredis exports", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      jest.doMock(
-        "ioredis",
-        () => ({ __esModule: true, default: {} }),
-        { virtual: true },
-      );
+      jest.doMock("ioredis", () => ({ __esModule: true, default: {} }), {
+        virtual: true,
+      });
 
-      const { createIORedisClient } = require("../optionalDeps/ioredis") as typeof import("../optionalDeps/ioredis");
+      const {
+        createIORedisClient,
+      }: typeof IoredisMod = require("../optionalDeps/ioredis");
       expect(() => createIORedisClient()).toThrow(
         "Missing optional dependency 'ioredis'",
       );
@@ -104,9 +123,9 @@ describe("durable: optional deps helpers", () => {
       { virtual: true },
     );
 
-    let connectAmqplib: typeof import("../optionalDeps/amqplib").connectAmqplib;
+    let connectAmqplib!: typeof AmqplibMod.connectAmqplib;
     jest.isolateModules(() => {
-      ({ connectAmqplib } = require("../optionalDeps/amqplib") as typeof import("../optionalDeps/amqplib"));
+      ({ connectAmqplib } = require("../optionalDeps/amqplib"));
     });
 
     await expect(connectAmqplib("amqp://localhost")).rejects.toThrow(
@@ -125,9 +144,9 @@ describe("durable: optional deps helpers", () => {
       { virtual: true },
     );
 
-    let connectAmqplib: typeof import("../optionalDeps/amqplib").connectAmqplib;
+    let connectAmqplib!: typeof AmqplibMod.connectAmqplib;
     jest.isolateModules(() => {
-      ({ connectAmqplib } = require("../optionalDeps/amqplib") as typeof import("../optionalDeps/amqplib"));
+      ({ connectAmqplib } = require("../optionalDeps/amqplib"));
     });
 
     await expect(connectAmqplib("amqp://localhost")).rejects.toThrow(
@@ -140,9 +159,9 @@ describe("durable: optional deps helpers", () => {
     const connect = jest.fn().mockResolvedValue({ ok: true });
     jest.doMock("amqplib", () => ({ connect }), { virtual: true });
 
-    let connectAmqplib: typeof import("../optionalDeps/amqplib").connectAmqplib;
+    let connectAmqplib!: typeof AmqplibMod.connectAmqplib;
     jest.isolateModules(() => {
-      ({ connectAmqplib } = require("../optionalDeps/amqplib") as typeof import("../optionalDeps/amqplib"));
+      ({ connectAmqplib } = require("../optionalDeps/amqplib"));
     });
 
     await expect(connectAmqplib("amqp://localhost")).resolves.toEqual({
@@ -159,9 +178,9 @@ describe("durable: optional deps helpers", () => {
     jest.resetModules();
     jest.doMock("amqplib", () => 123, { virtual: true });
 
-    let connectAmqplib: typeof import("../optionalDeps/amqplib").connectAmqplib;
+    let connectAmqplib!: typeof AmqplibMod.connectAmqplib;
     jest.isolateModules(() => {
-      ({ connectAmqplib } = require("../optionalDeps/amqplib") as typeof import("../optionalDeps/amqplib"));
+      ({ connectAmqplib } = require("../optionalDeps/amqplib"));
     });
 
     await expect(connectAmqplib("amqp://localhost")).rejects.toThrow(
@@ -173,9 +192,9 @@ describe("durable: optional deps helpers", () => {
     jest.resetModules();
     jest.doMock("amqplib", () => ({ connect: 123 }), { virtual: true });
 
-    let connectAmqplib: typeof import("../optionalDeps/amqplib").connectAmqplib;
+    let connectAmqplib!: typeof AmqplibMod.connectAmqplib;
     jest.isolateModules(() => {
-      ({ connectAmqplib } = require("../optionalDeps/amqplib") as typeof import("../optionalDeps/amqplib"));
+      ({ connectAmqplib } = require("../optionalDeps/amqplib"));
     });
 
     await expect(connectAmqplib("amqp://localhost")).rejects.toThrow(
@@ -202,7 +221,9 @@ describe("durable: CronParser", () => {
         { virtual: true },
       );
 
-      const { CronParser } = require("../core/CronParser") as typeof import("../core/CronParser");
+      const {
+        CronParser,
+      }: typeof CronParserMod = require("../core/CronParser");
       const next = CronParser.getNextRun("*/5 * * * *", new Date());
       expect(next.getTime()).toBe(1234);
       expect(parse).toHaveBeenCalled();
@@ -221,7 +242,9 @@ describe("durable: CronParser", () => {
         { virtual: true },
       );
 
-      const { CronParser } = require("../core/CronParser") as typeof import("../core/CronParser");
+      const {
+        CronParser,
+      }: typeof CronParserMod = require("../core/CronParser");
       const from = new Date(2020, 0, 1, 0, 0, 0);
       const next = CronParser.getNextRun("*/5 * * * *", from);
 
@@ -243,7 +266,9 @@ describe("durable: CronParser", () => {
         { virtual: true },
       );
 
-      const { CronParser } = require("../core/CronParser") as typeof import("../core/CronParser");
+      const {
+        CronParser,
+      }: typeof CronParserMod = require("../core/CronParser");
       const saturdayNoon = new Date(2020, 0, 4, 12, 0, 0); // Sat
       const next = CronParser.getNextRun("0 0 * * 7", saturdayNoon);
       expect(next.getDay()).toBe(0);
@@ -263,7 +288,9 @@ describe("durable: CronParser", () => {
         { virtual: true },
       );
 
-      const { CronParser } = require("../core/CronParser") as typeof import("../core/CronParser");
+      const {
+        CronParser,
+      }: typeof CronParserMod = require("../core/CronParser");
       const fridayNoon = new Date(2020, 0, 3, 12, 0, 0); // Fri
       const next = CronParser.getNextRun("0 0 * * 6", fridayNoon); // Sat
       expect(next.getDay()).toBe(6);
@@ -281,7 +308,9 @@ describe("durable: CronParser", () => {
         { virtual: true },
       );
 
-      const { CronParser } = require("../core/CronParser") as typeof import("../core/CronParser");
+      const {
+        CronParser,
+      }: typeof CronParserMod = require("../core/CronParser");
       expect(CronParser.isValid("1-5 * * * *")).toBe(false);
       expect(CronParser.isValid("*/0 * * * *")).toBe(false);
       expect(CronParser.isValid("not-a-cron")).toBe(false);
@@ -293,7 +322,9 @@ describe("durable: CronParser", () => {
     jest.resetModules();
     jest.isolateModules(() => {
       jest.doMock("cron-parser", () => 123, { virtual: true });
-      const { CronParser } = require("../core/CronParser") as typeof import("../core/CronParser");
+      const {
+        CronParser,
+      }: typeof CronParserMod = require("../core/CronParser");
       const from = new Date(2020, 0, 1, 0, 0, 0);
       const next = CronParser.getNextRun("*/5 * * * *", from);
       expect(next.getTime()).toBeGreaterThan(from.getTime());
@@ -308,7 +339,9 @@ describe("durable: CronParser", () => {
         () => ({ CronExpressionParser: { parse: 123 } }),
         { virtual: true },
       );
-      const { CronParser } = require("../core/CronParser") as typeof import("../core/CronParser");
+      const {
+        CronParser,
+      }: typeof CronParserMod = require("../core/CronParser");
       const from = new Date(2020, 0, 1, 0, 0, 0);
       const next = CronParser.getNextRun("*/5 * * * *", from);
       expect(next.getTime()).toBeGreaterThan(from.getTime());
@@ -326,7 +359,9 @@ describe("durable: CronParser", () => {
         { virtual: true },
       );
 
-      const { CronParser } = require("../core/CronParser") as typeof import("../core/CronParser");
+      const {
+        CronParser,
+      }: typeof CronParserMod = require("../core/CronParser");
       const from = new Date(2020, 0, 1, 0, 0, 0);
       const next = CronParser.getNextRun("0 0 * * */2", from);
       expect(next.getDay() % 2).toBe(0);
@@ -344,10 +379,12 @@ describe("durable: CronParser", () => {
         { virtual: true },
       );
 
-      const { CronParser } = require("../core/CronParser") as typeof import("../core/CronParser");
-      expect(() => CronParser.getNextRun("0 0 31 2 *", new Date(2020, 0, 1))).toThrow(
-        "did not match any time",
-      );
+      const {
+        CronParser,
+      }: typeof CronParserMod = require("../core/CronParser");
+      expect(() =>
+        CronParser.getNextRun("0 0 31 2 *", new Date(2020, 0, 1)),
+      ).toThrow("did not match any time");
     });
   });
 });
@@ -362,8 +399,8 @@ describe("durable: RedisEventBus validation", () => {
       quit: async () => "OK",
     } as any;
 
-    expect(
-      () => new RedisEventBus({ redis: clientWithoutDuplicate }),
-    ).toThrow("duplicate()");
+    expect(() => new RedisEventBus({ redis: clientWithoutDuplicate })).toThrow(
+      "duplicate()",
+    );
   });
 });

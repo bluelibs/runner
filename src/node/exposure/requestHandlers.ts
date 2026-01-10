@@ -19,7 +19,7 @@ import { computeAllowList } from "../tunnel.allowlist";
 import { createTaskHandler } from "./handlers/taskHandler";
 import { createEventHandler } from "./handlers/eventHandler";
 
-interface RequestProcessingDeps {
+export interface RequestProcessingDeps {
   store: NodeExposureDeps["store"];
   taskRunner: NodeExposureDeps["taskRunner"];
   eventManager: NodeExposureDeps["eventManager"];
