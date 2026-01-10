@@ -151,8 +151,6 @@ export class ResourceMiddlewareComposer {
       return runner;
     }
 
-    const reversedInterceptors = [...interceptors].reverse();
-
     const createExecutionInput = (
       config: any,
       nextFunc: any,
@@ -166,8 +164,8 @@ export class ResourceMiddlewareComposer {
 
     let currentNext = runner;
 
-    for (let i = reversedInterceptors.length - 1; i >= 0; i--) {
-      const interceptor = reversedInterceptors[i];
+    for (let i = interceptors.length - 1; i >= 0; i--) {
+      const interceptor = interceptors[i];
       const nextFunction = currentNext;
 
       currentNext = async (cfg: any) => {

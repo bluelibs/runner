@@ -369,7 +369,7 @@ describe("MiddlewareManager", () => {
       }).toThrow("Cannot modify the MiddlewareManager when it is locked.");
     });
 
-    it("should apply task middleware interceptors in reverse order", async () => {
+    it("should apply task middleware interceptors in registration order", async () => {
       const order: string[] = [];
 
       // Add interceptors
@@ -406,15 +406,15 @@ describe("MiddlewareManager", () => {
 
       expect(result).toBe(6);
       expect(order).toEqual([
-        "interceptor2:before", // Last added runs first
         "interceptor1:before",
+        "interceptor2:before",
         "task:run",
-        "interceptor1:after",
         "interceptor2:after",
+        "interceptor1:after",
       ]);
     });
 
-    it("should apply resource middleware interceptors in reverse order", async () => {
+    it("should apply resource middleware interceptors in registration order", async () => {
       const order: string[] = [];
 
       // Add interceptors
@@ -444,11 +444,11 @@ describe("MiddlewareManager", () => {
 
       expect(result).toBe(6);
       expect(order).toEqual([
-        "interceptor2:before", // Last added runs first
         "interceptor1:before",
+        "interceptor2:before",
         "resource:init",
-        "interceptor1:after",
         "interceptor2:after",
+        "interceptor1:after",
       ]);
     });
 

@@ -120,8 +120,6 @@ export class TaskMiddlewareComposer {
       return runner;
     }
 
-    const reversedInterceptors = [...interceptors].reverse();
-
     const createExecutionInput = (
       input: any,
       nextFunc: any,
@@ -135,8 +133,8 @@ export class TaskMiddlewareComposer {
 
     let currentNext = runner;
 
-    for (let i = reversedInterceptors.length - 1; i >= 0; i--) {
-      const interceptor = reversedInterceptors[i];
+    for (let i = interceptors.length - 1; i >= 0; i--) {
+      const interceptor = interceptors[i];
       const nextFunction = currentNext;
 
       currentNext = async (input) => {

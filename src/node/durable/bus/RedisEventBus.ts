@@ -111,7 +111,12 @@ export class RedisEventBus implements IEventBus {
     if (!subs) {
       subs = new Set();
       this.handlers.set(fullChannel, subs);
-      await this.sub.subscribe(fullChannel);
+      try {
+        await this.sub.subscribe(fullChannel);
+      } catch (e) {
+        this.handlers.delete(fullChannel);
+        throw e;
+      }
     }
 
     subs.add(handler);
