@@ -543,9 +543,9 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
       id: "ok.task.buffer",
       run: async ({ n = 1 }) => n,
     });
-    // No auth configured -> authenticate() returns ok: true via !authCfg?.token
+    // No auth configured -> need allowAnonymous to permit access (secure by default)
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "unit.exposure.coverage.app5",

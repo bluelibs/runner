@@ -50,7 +50,7 @@ describe("Node exposure cancellation", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.cancel.json",
@@ -90,7 +90,7 @@ describe("Node exposure cancellation", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.cancel.multipart",
@@ -149,7 +149,7 @@ describe("Node exposure cancellation", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.cancel.octet",

@@ -27,7 +27,7 @@ describe("nodeExposure request context (raw-body)", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "ctx.raw.app",

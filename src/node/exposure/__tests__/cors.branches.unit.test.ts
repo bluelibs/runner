@@ -30,11 +30,12 @@ describe("cors helpers - branch coverage", () => {
     expect(res._headers["access-control-allow-origin"]).toBe("*");
   });
 
-  it("credentials without origin: echoes request origin and sets Vary: Origin", () => {
+  it("credentials without origin: denies access (secure by default - no origin echoing)", () => {
     const req = makeReq("POST", { origin: "https://c.test" });
     const res = makeRes();
     applyCorsActual(req, res, { credentials: true });
-    expect(res._headers["access-control-allow-origin"]).toBe("https://c.test");
+    // SECURITY: Should NOT echo request origin when credentials=true without explicit origin config
+    expect(res._headers["access-control-allow-origin"]).toBeUndefined();
     expect(res._headers["vary"]).toContain("Origin");
   });
 
@@ -176,8 +177,9 @@ describe("cors helpers - branch coverage", () => {
   it("appendVaryHeader avoids duplicates when called twice (via actual then preflight)", () => {
     const req = makeReq("OPTIONS", { origin: "https://dup.test" });
     const res = makeRes();
-    applyCorsActual(req, res, { credentials: true });
-    handleCorsPreflight(req, res, { credentials: true });
+    // Use explicit origin config to test Vary header behavior
+    applyCorsActual(req, res, { origin: ["https://dup.test"], credentials: true });
+    handleCorsPreflight(req, res, { origin: ["https://dup.test"], credentials: true });
     const vary = (res._headers["vary"] || "").split(",").map((s) => s.trim());
     const occurrences = vary.filter((v) => v.toLowerCase() === "origin").length;
     expect(occurrences).toBe(1);

@@ -81,7 +81,7 @@ describe("requestHandlers - event non-cancellation error path", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.handlers.event.error",
@@ -120,7 +120,7 @@ describe("requestHandlers - event non-cancellation error path", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.handlers.event.error.string",

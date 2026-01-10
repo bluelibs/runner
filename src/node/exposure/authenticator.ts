@@ -11,6 +11,14 @@ import type { TaskRunner } from "../../models/TaskRunner";
 export interface NodeExposureHttpAuthConfig {
   header?: string;
   token?: string | string[];
+  /**
+   * When true, allows unauthenticated access if no token or validators are configured.
+   * Defaults to false (secure by default - requires explicit auth configuration).
+   *
+   * WARNING: Setting this to true without proper network isolation exposes
+   * all tasks and events to unauthenticated access.
+   */
+  allowAnonymous?: boolean;
 }
 
 function safeCompare(a: string, b: string): boolean {
@@ -72,9 +80,20 @@ export function createAuthenticator(
       }
     }
 
-    // 3. No token configured and no validators = open access (backwards compatible)
+    // 3. No token configured and no validators = check allowAnonymous flag
+    // SECURITY: Fail-closed by default. Explicit opt-in required for anonymous access.
     if (!authCfg?.token && validatorTasks.length === 0) {
-      return { ok: true };
+      if (authCfg?.allowAnonymous === true) {
+        return { ok: true };
+      }
+      return {
+        ok: false,
+        response: jsonErrorResponse(
+          500,
+          "Authentication not configured. Set auth.token, add validator tasks, or explicitly enable auth.allowAnonymous.",
+          "AUTH_NOT_CONFIGURED",
+        ),
+      };
     }
 
     return {

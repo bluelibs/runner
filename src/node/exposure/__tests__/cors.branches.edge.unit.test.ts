@@ -22,12 +22,13 @@ function makeRes() {
 }
 
 describe("cors edge branches", () => {
-  it("credentials with undefined origin echoes request or 'null' (line 25)", () => {
+  it("credentials with undefined origin denies access (secure by default)", () => {
     const req = makeReq({});
     const { res, headers } = makeRes();
     handleCorsPreflight(req, res, { credentials: true });
-    // No origin on request -> should set allow-origin to 'null'
-    expect(headers["Access-Control-Allow-Origin"]).toBe("null");
+    // SECURITY: credentials=true without explicit origin config should NOT set allow-origin
+    // Previously it would set 'null', but this is insecure behavior
+    expect(headers["Access-Control-Allow-Origin"]).toBeUndefined();
   });
 
   it("array origin non-match sets vary but no allow-origin (35, 55, 64)", () => {

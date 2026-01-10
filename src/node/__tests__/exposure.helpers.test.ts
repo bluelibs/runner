@@ -14,8 +14,18 @@ describe("node exposure helpers", () => {
   });
 
   describe("createAuthenticator", () => {
-    it("returns passthrough when token is not configured and no validators", async () => {
+    it("returns AUTH_NOT_CONFIGURED when token is not set and no validators (fail-closed)", async () => {
       const auth = createAuthenticator(undefined, mockTaskRunner, []);
+      const result = await auth({ headers: {} } as any);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.response.status).toBe(500);
+        expect(result.response.body.error.code).toBe("AUTH_NOT_CONFIGURED");
+      }
+    });
+
+    it("returns passthrough when allowAnonymous is explicitly true", async () => {
+      const auth = createAuthenticator({ allowAnonymous: true }, mockTaskRunner, []);
       const result = await auth({ headers: {} } as any);
       expect(result).toEqual({ ok: true });
     });

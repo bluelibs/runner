@@ -19,10 +19,14 @@ function resolveOrigin(
   cfg: NodeExposureHttpCorsConfig | undefined,
   requestOrigin: string | undefined,
 ): ResolvedOrigin {
-  // Defaults: allow all unless credentials requires echoing
+  // Defaults: allow all unless credentials requires explicit origin
   if (!cfg || cfg.origin === undefined || cfg.origin === null) {
     if (cfg && cfg.credentials) {
-      return { value: requestOrigin ? requestOrigin : "null", vary: true };
+      // SECURITY: credentials=true without explicit origin is a misconfiguration.
+      // Echoing the request origin is effectively "allow any origin with credentials",
+      // which bypasses CORS protections. Deny by default for safety.
+      // To allow specific origins with credentials, explicitly set cfg.origin.
+      return { value: null, vary: true };
     }
     return { value: "*", vary: false };
   }

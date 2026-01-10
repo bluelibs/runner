@@ -79,7 +79,7 @@ describe("nodeExposure - task returned stream", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.stream.json",
@@ -125,7 +125,7 @@ describe("nodeExposure - task returned stream", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.stream.octet",

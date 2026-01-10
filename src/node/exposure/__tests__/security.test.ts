@@ -44,6 +44,9 @@ function createReqRes(init: {
     setHeader(k: string, v: string) {
       this.headers[k.toLowerCase()] = v;
     },
+    getHeader(k: string) {
+      return this.headers[k.toLowerCase()];
+    },
     write(payload?: any) {
       if (payload != null)
         chunks.push(
@@ -82,7 +85,7 @@ describe("Security Fixes", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.security.json",
@@ -120,7 +123,7 @@ describe("Security Fixes", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.security.masking",
@@ -156,7 +159,7 @@ describe("Security Fixes", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.security.typed",
@@ -197,7 +200,7 @@ describe("Typed Error Security", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner" },
+      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.security.typed2",
@@ -263,7 +266,7 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { limits: { multipart: { fieldSize: 10 } } },
+      http: { limits: { multipart: { fieldSize: 10 } }, auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.security.multipart.field",
@@ -300,7 +303,7 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { limits: { json: { maxSize: 10 } } },
+      http: { limits: { json: { maxSize: 10 } }, auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.security.body.abort",
@@ -338,7 +341,7 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { limits: { multipart: { files: 1 } } },
+      http: { limits: { multipart: { files: 1 } }, auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.security.multipart.files",
@@ -381,7 +384,7 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { limits: { multipart: { parts: 1 } } },
+      http: { limits: { multipart: { parts: 1 } }, auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.security.multipart.parts",
@@ -422,7 +425,7 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { limits: { multipart: { fields: 1 } } },
+      http: { limits: { multipart: { fields: 1 } }, auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.security.multipart.fields",
@@ -463,7 +466,7 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { limits: { multipart: { fileSize: 10 } } },
+      http: { limits: { multipart: { fileSize: 10 } }, auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.security.multipart.fileSize",
@@ -501,7 +504,7 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { server: http.createServer() },
+      http: { server: http.createServer(), auth: { allowAnonymous: true } },
     });
     const app = defineResource({
       id: "tests.app.security.multipart.missingFile",
@@ -532,6 +535,377 @@ describe("Boundary Security Coverage", () => {
       expect(transport.res.statusCode).toBe(500);
       expect(transport.json.error.message).toBe("Internal Error");
       expect(transport.text).not.toContain("Missing file part");
+    } finally {
+      await rr.dispose();
+    }
+  });
+});
+
+describe("Fail-Closed Authentication Security", () => {
+  it("rejects requests when no auth is configured (fail-closed)", async () => {
+    const t = defineTask<any, Promise<string>>({
+      id: "tests.security.auth.failclosed",
+      async run() {
+        return "should not reach here";
+      },
+    });
+    // No auth configuration at all
+    const exposure = nodeExposure.with({
+      http: { server: http.createServer(), basePath: "/__runner" },
+    });
+    const app = defineResource({
+      id: "tests.app.security.auth.failclosed",
+      register: [t, exposure],
+    });
+    const rr = await run(app);
+    try {
+      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const transport = createReqRes({
+        method: "POST",
+        url: `/__runner/task/${encodeURIComponent(t.id)}`,
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      await handlers.handleTask(transport.req as any, transport.res as any);
+
+      expect(transport.res.statusCode).toBe(500);
+      expect(transport.json.error.code).toBe("AUTH_NOT_CONFIGURED");
+      expect(transport.json.error.message).toContain("Authentication not configured");
+    } finally {
+      await rr.dispose();
+    }
+  });
+
+  it("allows requests when allowAnonymous is explicitly true", async () => {
+    const t = defineTask<any, Promise<string>>({
+      id: "tests.security.auth.allowanon",
+      async run() {
+        return "allowed";
+      },
+    });
+    const exposure = nodeExposure.with({
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
+    });
+    const app = defineResource({
+      id: "tests.app.security.auth.allowanon",
+      register: [t, exposure],
+    });
+    const rr = await run(app);
+    try {
+      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const transport = createReqRes({
+        method: "POST",
+        url: `/__runner/task/${encodeURIComponent(t.id)}`,
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      await handlers.handleTask(transport.req as any, transport.res as any);
+
+      expect(transport.res.statusCode).toBe(200);
+      expect(transport.json.ok).toBe(true);
+      expect(transport.json.result).toBe("allowed");
+    } finally {
+      await rr.dispose();
+    }
+  });
+
+  it("allows requests when token is configured and provided", async () => {
+    const t = defineTask<any, Promise<string>>({
+      id: "tests.security.auth.token",
+      async run() {
+        return "authenticated";
+      },
+    });
+    const exposure = nodeExposure.with({
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: "secret-token-123" },
+      },
+    });
+    const app = defineResource({
+      id: "tests.app.security.auth.token",
+      register: [t, exposure],
+    });
+    const rr = await run(app);
+    try {
+      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const transport = createReqRes({
+        method: "POST",
+        url: `/__runner/task/${encodeURIComponent(t.id)}`,
+        headers: {
+          "content-type": "application/json",
+          "x-runner-token": "secret-token-123",
+        },
+        body: "{}",
+      });
+      await handlers.handleTask(transport.req as any, transport.res as any);
+
+      expect(transport.res.statusCode).toBe(200);
+      expect(transport.json.ok).toBe(true);
+      expect(transport.json.result).toBe("authenticated");
+    } finally {
+      await rr.dispose();
+    }
+  });
+
+  it("rejects requests with wrong token", async () => {
+    const t = defineTask<any, Promise<string>>({
+      id: "tests.security.auth.wrongtoken",
+      async run() {
+        return "should not reach";
+      },
+    });
+    const exposure = nodeExposure.with({
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: "correct-token" },
+      },
+    });
+    const app = defineResource({
+      id: "tests.app.security.auth.wrongtoken",
+      register: [t, exposure],
+    });
+    const rr = await run(app);
+    try {
+      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const transport = createReqRes({
+        method: "POST",
+        url: `/__runner/task/${encodeURIComponent(t.id)}`,
+        headers: {
+          "content-type": "application/json",
+          "x-runner-token": "wrong-token",
+        },
+        body: "{}",
+      });
+      await handlers.handleTask(transport.req as any, transport.res as any);
+
+      expect(transport.res.statusCode).toBe(401);
+      expect(transport.json.error.code).toBe("UNAUTHORIZED");
+    } finally {
+      await rr.dispose();
+    }
+  });
+});
+
+describe("Error Sanitization Security", () => {
+  it("does not leak stack traces in 500 errors", async () => {
+    const t = defineTask<void, Promise<void>>({
+      id: "tests.security.error.stack",
+      async run() {
+        const err = new Error("Secret internal error");
+        (err as any).stack = "at secretFunction (internal/secrets.ts:42)";
+        (err as any).cause = { sql: "SELECT * FROM passwords" };
+        throw err;
+      },
+    });
+    const exposure = nodeExposure.with({
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
+    });
+    const app = defineResource({
+      id: "tests.app.security.error.stack",
+      register: [t, exposure],
+    });
+    const rr = await run(app);
+    try {
+      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const transport = createReqRes({
+        method: "POST",
+        url: `/__runner/task/${encodeURIComponent(t.id)}`,
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      await handlers.handleTask(transport.req as any, transport.res as any);
+
+      expect(transport.res.statusCode).toBe(500);
+      expect(transport.json.error.message).toBe("Internal Error");
+      // Ensure sensitive data is not leaked
+      expect(transport.text).not.toContain("secretFunction");
+      expect(transport.text).not.toContain("secrets.ts");
+      expect(transport.text).not.toContain("passwords");
+      expect(transport.text).not.toContain("cause");
+      expect(transport.text).not.toContain("stack");
+    } finally {
+      await rr.dispose();
+    }
+  });
+
+  it("uses INTERNAL_ERROR code when error has no code property", async () => {
+    const t = defineTask<void, Promise<void>>({
+      id: "tests.security.error.nocode",
+      async run() {
+        throw new Error("plain error without code");
+      },
+    });
+    const exposure = nodeExposure.with({
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
+    });
+    const app = defineResource({
+      id: "tests.app.security.error.nocode",
+      register: [t, exposure],
+    });
+    const rr = await run(app);
+    try {
+      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const transport = createReqRes({
+        method: "POST",
+        url: `/__runner/task/${encodeURIComponent(t.id)}`,
+        headers: { "content-type": "application/json" },
+        body: "{}",
+      });
+      await handlers.handleTask(transport.req as any, transport.res as any);
+
+      expect(transport.res.statusCode).toBe(500);
+      expect(transport.json.error.code).toBe("INTERNAL_ERROR");
+      expect(transport.json.error.message).toBe("Internal Error");
+    } finally {
+      await rr.dispose();
+    }
+  });
+});
+
+describe("CORS Security", () => {
+  it("denies credentials without explicit origin configuration", async () => {
+    const t = defineTask<any, Promise<string>>({
+      id: "tests.security.cors.credentialsnoorgin",
+      async run() {
+        return "ok";
+      },
+    });
+    const exposure = nodeExposure.with({
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+        // credentials=true but no origin specified - should NOT echo origin
+        cors: { credentials: true },
+      },
+    });
+    const app = defineResource({
+      id: "tests.app.security.cors.credentialsnoorgin",
+      register: [t, exposure],
+    });
+    const rr = await run(app);
+    try {
+      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const transport = createReqRes({
+        method: "POST",
+        url: `/__runner/task/${encodeURIComponent(t.id)}`,
+        headers: {
+          "content-type": "application/json",
+          origin: "https://evil-site.com",
+        },
+        body: "{}",
+      });
+      await handlers.handleTask(transport.req as any, transport.res as any);
+
+      // Should NOT echo the origin back - that would be insecure
+      expect(transport.headers["access-control-allow-origin"]).not.toBe(
+        "https://evil-site.com",
+      );
+    } finally {
+      await rr.dispose();
+    }
+  });
+
+  it("allows credentials with explicit origin configuration", async () => {
+    const t = defineTask<any, Promise<string>>({
+      id: "tests.security.cors.credentialswithorigin",
+      async run() {
+        return "ok";
+      },
+    });
+    const exposure = nodeExposure.with({
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+        cors: {
+          credentials: true,
+          origin: ["https://trusted-site.com"],
+        },
+      },
+    });
+    const app = defineResource({
+      id: "tests.app.security.cors.credentialswithorigin",
+      register: [t, exposure],
+    });
+    const rr = await run(app);
+    try {
+      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const transport = createReqRes({
+        method: "POST",
+        url: `/__runner/task/${encodeURIComponent(t.id)}`,
+        headers: {
+          "content-type": "application/json",
+          origin: "https://trusted-site.com",
+        },
+        body: "{}",
+      });
+      await handlers.handleTask(transport.req as any, transport.res as any);
+
+      expect(transport.headers["access-control-allow-origin"]).toBe(
+        "https://trusted-site.com",
+      );
+      expect(transport.headers["access-control-allow-credentials"]).toBe(
+        "true",
+      );
+    } finally {
+      await rr.dispose();
+    }
+  });
+
+  it("rejects untrusted origins when allowlist is configured", async () => {
+    const t = defineTask<any, Promise<string>>({
+      id: "tests.security.cors.untrusted",
+      async run() {
+        return "ok";
+      },
+    });
+    const exposure = nodeExposure.with({
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+        cors: {
+          credentials: true,
+          origin: ["https://trusted-site.com"],
+        },
+      },
+    });
+    const app = defineResource({
+      id: "tests.app.security.cors.untrusted",
+      register: [t, exposure],
+    });
+    const rr = await run(app);
+    try {
+      const handlers = await rr.getResourceValue(exposure.resource as any);
+      const transport = createReqRes({
+        method: "POST",
+        url: `/__runner/task/${encodeURIComponent(t.id)}`,
+        headers: {
+          "content-type": "application/json",
+          origin: "https://evil-site.com",
+        },
+        body: "{}",
+      });
+      await handlers.handleTask(transport.req as any, transport.res as any);
+
+      // Should not set Access-Control-Allow-Origin for untrusted origins
+      expect(transport.headers["access-control-allow-origin"]).toBeUndefined();
     } finally {
       await rr.dispose();
     }

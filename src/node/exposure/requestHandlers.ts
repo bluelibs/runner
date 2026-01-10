@@ -1,88 +1,23 @@
 import type { IncomingMessage, ServerResponse } from "http";
 
 import {
-  jsonErrorResponse,
   jsonOkResponse,
   METHOD_NOT_ALLOWED_RESPONSE,
   NOT_FOUND_RESPONSE,
   respondJson,
-  respondStream,
 } from "./httpResponse";
-import { isMultipart, parseMultipartInput } from "./multipart";
-import { readJsonBody } from "./requestBody";
 import type { SerializerLike } from "../../serializer";
 import { requestUrl, resolveTargetFromRequest } from "./router";
-import { errorMessage, safeLogError } from "./logging";
-import type {
-  Authenticator,
-  AllowListGuard,
-  JsonBody,
-  JsonResponse,
-  RequestHandler,
-  StreamingResponse,
-} from "./types";
+import type { Authenticator, AllowListGuard, RequestHandler } from "./types";
 import type { ExposureRouter } from "./router";
 import type {
   NodeExposureDeps,
   NodeExposureHttpCorsConfig,
 } from "./resourceTypes";
-import { ExposureRequestContext } from "./requestContext";
-import { isCancellationError } from "../../errors";
 import { applyCorsActual, handleCorsPreflight } from "./cors";
-import { createAbortControllerForRequest, getContentType } from "./utils";
 import { computeAllowList } from "../tunnel.allowlist";
-
-/** Sanitizes 500 errors if they are not application-defined */
-const sanitizeErrorResponse = (response: unknown): JsonResponse => {
-  const asRecord =
-    response && typeof response === "object"
-      ? (response as Record<string, unknown>)
-      : undefined;
-
-  const statusRaw = asRecord?.status ?? asRecord?.statusCode;
-  const status =
-    typeof statusRaw === "number" && Number.isFinite(statusRaw)
-      ? statusRaw
-      : 500;
-
-  const bodyRaw = asRecord?.body;
-  const hasBody = bodyRaw && typeof bodyRaw === "object";
-  const body = hasBody ? (bodyRaw as Record<string, unknown>) : undefined;
-
-  const errorRaw =
-    (body && typeof body.error === "object" ? body.error : undefined) ??
-    (asRecord && typeof asRecord.error === "object" ? asRecord.error : undefined);
-
-  const normalizedBody: JsonBody = ((): JsonBody => {
-    if (body && typeof body.ok === "boolean") {
-      return body as JsonBody;
-    }
-    if (errorRaw) {
-      return { ok: false, error: errorRaw as Record<string, unknown> };
-    }
-    return { ok: false, error: { message: "Internal Error", code: "INTERNAL_ERROR" } };
-  })();
-
-  const sanitizedBody: JsonBody = ((): JsonBody => {
-    const maybeError = (normalizedBody as { error?: unknown } | undefined)?.error;
-    const bodyError =
-      maybeError && typeof maybeError === "object"
-        ? (maybeError as Record<string, unknown>)
-        : undefined;
-
-    if (status !== 500 || !bodyError) return normalizedBody;
-
-    return {
-      ...normalizedBody,
-      error: {
-        ...bodyError,
-        message: "Internal Error",
-      },
-    };
-  })();
-
-  return { status, body: sanitizedBody };
-};
+import { createTaskHandler } from "./handlers/taskHandler";
+import { createEventHandler } from "./handlers/eventHandler";
 
 interface RequestProcessingDeps {
   store: NodeExposureDeps["store"];
@@ -96,7 +31,7 @@ interface RequestProcessingDeps {
   serializer: SerializerLike;
   limits?: {
     json?: { maxSize?: number };
-    multipart?: any; // avoid circular or strict import if possible, but we have it imported already
+    multipart?: any; // avoid circular or strict import if possible
   };
 }
 
@@ -123,407 +58,28 @@ export function createRequestHandlers(
   const serializer = deps.serializer;
   const cors = deps.cors;
 
-  const isReadableStream = (value: unknown): value is NodeJS.ReadableStream =>
-    !!value && typeof (value as { pipe?: unknown }).pipe === "function";
+  const processTaskRequest = createTaskHandler({
+    store,
+    taskRunner,
+    logger,
+    authenticator,
+    allowList,
+    router,
+    cors,
+    serializer,
+    limits,
+  });
 
-  const isStreamingResponse = (value: unknown): value is StreamingResponse =>
-    !!value &&
-    typeof value === "object" &&
-    "stream" in value &&
-    isReadableStream((value as { stream?: unknown }).stream);
-
-  const processTaskRequest = async (
-    req: IncomingMessage,
-    res: ServerResponse,
-    taskId: string,
-  ): Promise<void> => {
-    if (req.method !== "POST") {
-      respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
-      return;
-    }
-
-    const auth = await authenticator(req);
-    if (!auth.ok) {
-      applyCorsActual(req, res, cors);
-      respondJson(res, auth.response, serializer);
-      return;
-    }
-
-    const allowError = allowList.ensureTask(taskId);
-    if (allowError) {
-      applyCorsActual(req, res, cors);
-      respondJson(res, allowError, serializer);
-      return;
-    }
-
-    const storeTask = store.tasks.get(taskId);
-    if (!storeTask) {
-      applyCorsActual(req, res, cors);
-      respondJson(
-        res,
-        jsonErrorResponse(404, `Task ${taskId} not found`, "NOT_FOUND"),
-        serializer,
-      );
-      return;
-    }
-
-    // Cancellation wiring per request
-    const controller = createAbortControllerForRequest(req, res);
-
-    try {
-      const contentType = getContentType(req.headers);
-      const url = requestUrl(req);
-
-      // Build a composed provider: first user async contexts (if any), then exposure context
-      const buildProvider = <T>(fn: () => Promise<T>) => {
-        // Read context header if present
-        const rawHeader = req.headers["x-runner-context"];
-        let headerText: string | undefined;
-        if (Array.isArray(rawHeader)) headerText = rawHeader[0];
-        else if (typeof rawHeader === "string") headerText = rawHeader;
-
-        let userWrapped = fn;
-        if (headerText) {
-          try {
-            const map = serializer.parse<Record<string, string>>(headerText);
-            // Compose provides for known contexts present in the map
-            for (const [id, ctx] of store.asyncContexts.entries()) {
-              const raw = map[id];
-              if (typeof raw === "string") {
-                try {
-                  const value = ctx.parse(raw);
-                  const prev = userWrapped;
-                  userWrapped = async () => await ctx.provide(value, prev);
-                } catch {}
-              }
-            }
-          } catch {
-            // ignore bad header
-          }
-        }
-        // Always wrap with exposure request context
-        const run = () =>
-          ExposureRequestContext.provide(
-            {
-              req,
-              res,
-              url,
-              basePath: router.basePath,
-              headers: req.headers,
-              method: req.method,
-              signal: controller.signal,
-            },
-            userWrapped,
-          );
-        return run();
-      };
-
-      if (isMultipart(contentType)) {
-        const multipart = await parseMultipartInput(
-          req,
-          controller.signal,
-          serializer,
-          limits?.multipart,
-        );
-        if (!multipart.ok) {
-          applyCorsActual(req, res, cors);
-          respondJson(res, sanitizeErrorResponse(multipart.response), serializer);
-          return;
-        }
-        const finalizePromise = multipart.finalize;
-        let taskError: unknown = undefined;
-        let taskResult: unknown;
-        try {
-          taskResult = await buildProvider(() =>
-            taskRunner.run(storeTask.task, multipart.value),
-          );
-        } catch (err) {
-          taskError = err;
-        }
-        const finalize = await finalizePromise;
-        if (!finalize.ok) {
-          if (!res.writableEnded && !res.headersSent) {
-            applyCorsActual(req, res, cors);
-            respondJson(res, sanitizeErrorResponse(finalize.response), serializer);
-          }
-          return;
-        }
-        if (taskError) {
-          throw taskError;
-        }
-        // Streamed responses: if task returned a readable or a streaming wrapper
-        if (!res.writableEnded && isReadableStream(taskResult)) {
-          applyCorsActual(req, res, cors);
-          respondStream(res, taskResult);
-          return;
-        }
-        if (!res.writableEnded && isStreamingResponse(taskResult)) {
-          applyCorsActual(req, res, cors);
-          respondStream(res, taskResult);
-          return;
-        }
-        // If the task already handled the response (wrote headers/body),
-        // skip the default JSON envelope.
-        if (res.writableEnded || res.headersSent) return;
-        applyCorsActual(req, res, cors);
-        respondJson(res, jsonOkResponse({ result: taskResult }), serializer);
-        return;
-      }
-
-      // Raw-body streaming mode: when content-type is application/octet-stream
-      // we do not pre-consume the request body and allow task to read from context.req
-      if (/^application\/octet-stream(?:;|$)/i.test(contentType)) {
-        const result = await buildProvider(() =>
-          taskRunner.run(storeTask.task, undefined),
-        );
-        if (!res.writableEnded && isReadableStream(result)) {
-          applyCorsActual(req, res, cors);
-          respondStream(res, result);
-          return;
-        }
-        if (!res.writableEnded && isStreamingResponse(result)) {
-          applyCorsActual(req, res, cors);
-          respondStream(res, result);
-          return;
-        }
-        // If the task streamed a custom response, do not append JSON.
-        if (res.writableEnded || res.headersSent) return;
-        applyCorsActual(req, res, cors);
-        respondJson(res, jsonOkResponse({ result }), serializer);
-        return;
-      }
-
-      const body = await readJsonBody<{ input?: unknown }>(
-        req,
-        controller.signal,
-        serializer,
-        limits?.json?.maxSize,
-      );
-      if (!body.ok) {
-        applyCorsActual(req, res, cors);
-        respondJson(res, body.response, serializer);
-        return;
-      }
-      const payload = (() => {
-        if (!body.value || typeof body.value !== "object") {
-          return body.value as unknown;
-        }
-        if (
-          Object.prototype.hasOwnProperty.call(
-            body.value as Record<string, unknown>,
-            "input",
-          )
-        ) {
-          return (body.value as Record<string, unknown>).input;
-        }
-        return body.value as unknown;
-      })();
-      const result = await buildProvider(() =>
-        taskRunner.run(storeTask.task, payload),
-      );
-      if (!res.writableEnded && isReadableStream(result)) {
-        applyCorsActual(req, res, cors);
-        respondStream(res, result);
-        return;
-      }
-      if (!res.writableEnded && isStreamingResponse(result)) {
-        applyCorsActual(req, res, cors);
-        respondStream(res, result);
-        return;
-      }
-      // If the task already wrote a response, do nothing further.
-      if (res.writableEnded || res.headersSent) return;
-      applyCorsActual(req, res, cors);
-      respondJson(res, jsonOkResponse({ result }), serializer);
-    } catch (error) {
-      if (isCancellationError(error)) {
-        if (!res.writableEnded && !res.headersSent) {
-          applyCorsActual(req, res, cors);
-          respondJson(
-            res,
-            jsonErrorResponse(499, "Client Closed Request", "REQUEST_ABORTED"),
-            serializer,
-          );
-        }
-        return;
-      }
-      // Detect application-defined errors and surface minimal identity
-      let appErrorExtra: Record<string, unknown> | undefined;
-      try {
-        for (const helper of store.errors.values()) {
-          if (helper.is(error)) {
-            const err = error as { name?: unknown; data?: unknown };
-            const id = typeof err.name === "string" ? err.name : undefined;
-            appErrorExtra = { id, data: err.data };
-            break;
-          }
-        }
-      } catch {
-        // best-effort only
-      }
-      const logMessage = errorMessage(error);
-      const displayMessage =
-        appErrorExtra && error instanceof Error && error.message
-          ? error.message
-          : "Internal Error";
-      safeLogError(logger, "exposure.task.error", {
-        error: logMessage,
-      });
-      applyCorsActual(req, res, cors);
-      respondJson(
-        res,
-        jsonErrorResponse(500, displayMessage, "INTERNAL_ERROR", appErrorExtra),
-        serializer,
-      );
-    }
-  };
-
-  const processEventRequest = async (
-    req: IncomingMessage,
-    res: ServerResponse,
-    eventId: string,
-  ): Promise<void> => {
-    if (req.method !== "POST") {
-      respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
-      return;
-    }
-
-    const auth = await authenticator(req);
-    if (!auth.ok) {
-      applyCorsActual(req, res, cors);
-      respondJson(res, auth.response, serializer);
-      return;
-    }
-
-    const allowError = allowList.ensureEvent(eventId);
-    if (allowError) {
-      applyCorsActual(req, res, cors);
-      respondJson(res, allowError);
-      return;
-    }
-
-    const storeEvent = store.events.get(eventId);
-    if (!storeEvent) {
-      applyCorsActual(req, res, cors);
-      respondJson(
-        res,
-        jsonErrorResponse(404, `Event ${eventId} not found`, "NOT_FOUND"),
-        serializer,
-      );
-      return;
-    }
-
-    // Cancellation wiring for events as well
-    const controller = createAbortControllerForRequest(req, res);
-    try {
-      const body = await readJsonBody<{
-        payload?: unknown;
-        returnPayload?: boolean;
-      }>(req, controller.signal, serializer, limits?.json?.maxSize);
-      if (!body.ok) {
-        applyCorsActual(req, res, cors);
-        respondJson(res, body.response, serializer);
-        return;
-      }
-      const returnPayload = Boolean(body.value?.returnPayload);
-      if (returnPayload && storeEvent.event.parallel) {
-        applyCorsActual(req, res, cors);
-        respondJson(
-          res,
-          jsonErrorResponse(
-            400,
-            `Event ${eventId} is marked parallel; returning a payload is not supported.`,
-            "PARALLEL_EVENT_RETURN_UNSUPPORTED",
-          ),
-          serializer,
-        );
-        return;
-      }
-      // Build context providers for events as well
-      const rawHeader = req.headers["x-runner-context"];
-      let headerText: string | undefined;
-      if (Array.isArray(rawHeader)) headerText = rawHeader[0];
-      else if (typeof rawHeader === "string") headerText = rawHeader;
-      // Compose user contexts; events do not need exposure req context
-      let runEmit = async () => {
-        if (returnPayload) {
-          return await eventManager.emitWithResult(
-            storeEvent.event,
-            body.value?.payload,
-            "exposure:http",
-          );
-        }
-        await eventManager.emit(
-          storeEvent.event,
-          body.value?.payload,
-          "exposure:http",
-        );
-        return undefined;
-      };
-      if (headerText) {
-        try {
-          const map = serializer.parse<Record<string, string>>(headerText);
-          for (const [id, ctx] of store.asyncContexts.entries()) {
-            const raw = map[id];
-            if (typeof raw === "string") {
-              try {
-                const value = ctx.parse(raw);
-                const prev = runEmit;
-                runEmit = async () => await ctx.provide(value, prev);
-              } catch {}
-            }
-          }
-        } catch {}
-      }
-      const payload = await runEmit();
-      applyCorsActual(req, res, cors);
-      respondJson(
-        res,
-        returnPayload ? jsonOkResponse({ result: payload }) : jsonOkResponse(),
-        serializer,
-      );
-    } catch (error) {
-      if (isCancellationError(error)) {
-        if (!res.writableEnded && !res.headersSent) {
-          applyCorsActual(req, res, cors);
-          respondJson(
-            res,
-            jsonErrorResponse(499, "Client Closed Request", "REQUEST_ABORTED"),
-            serializer,
-          );
-        }
-        return;
-      }
-      // Detect application-defined errors and surface minimal identity
-      let appErrorExtra: Record<string, unknown> | undefined;
-      try {
-        for (const helper of store.errors.values()) {
-          if (helper.is(error)) {
-            const err = error as { name?: unknown; data?: unknown };
-            const id = typeof err.name === "string" ? err.name : undefined;
-            appErrorExtra = { id, data: err.data };
-            break;
-          }
-        }
-      } catch {
-        // best-effort only
-      }
-      const logMessage = errorMessage(error);
-      const displayMessage =
-        appErrorExtra && error instanceof Error && error.message
-          ? error.message
-          : "Internal Error";
-      safeLogError(logger, "exposure.event.error", {
-        error: logMessage,
-      });
-      applyCorsActual(req, res, cors);
-      respondJson(
-        res,
-        jsonErrorResponse(500, displayMessage, "INTERNAL_ERROR", appErrorExtra),
-        serializer,
-      );
-    }
-  };
+  const processEventRequest = createEventHandler({
+    store,
+    eventManager,
+    logger,
+    authenticator,
+    allowList,
+    cors,
+    serializer,
+    limits,
+  });
 
   const handleTask = async (req: IncomingMessage, res: ServerResponse) => {
     if (handleCorsPreflight(req, res, cors)) return;
