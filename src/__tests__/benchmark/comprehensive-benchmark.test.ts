@@ -197,7 +197,7 @@ describe("Comprehensive Performance Benchmarks", () => {
           middlewareOverheadMs: parseFloat(
             (
               duration / iterations -
-              results.basicTaskExecution.avgTimePerTaskMs
+              results.basicTaskExecution.avgTimePerTaskMs.median
             ).toFixed(4),
           ),
         };
