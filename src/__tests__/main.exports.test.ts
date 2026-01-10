@@ -1,9 +1,9 @@
 import { defineTask } from "../define";
+import * as mainExports from "../index";
 
 describe("main exports", () => {
-  it("should export all public APIs correctly", async () => {
+  it("should export all public APIs correctly", () => {
     // Test main index exports for 100% coverage
-    const mainExports = await import("../index");
 
     expect(typeof mainExports.task).toBe("function");
     expect(typeof mainExports.resource).toBe("function");

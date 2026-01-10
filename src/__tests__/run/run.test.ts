@@ -7,6 +7,7 @@ import {
   defineResourceMiddleware,
 } from "../../define";
 import { run } from "../../run";
+import { globalEvents } from "../../globals/globalEvents";
 
 describe("run", () => {
   // Initial run
@@ -980,7 +981,6 @@ describe("run", () => {
 
   describe("system ready event", () => {
     it("should allow listeners to hook into globalEvents.ready and be called when the system is ready", async () => {
-      const { globalEvents } = await import("../../globals/globalEvents");
       const handler = jest.fn();
       const readyListener = defineHook({
         id: "ready.listener",

@@ -1,4 +1,6 @@
 import { NoopEventBus } from "../bus/NoopEventBus";
+import * as durable from "../index";
+import * as core from "../core";
 
 describe("durable: NoopEventBus", () => {
   it("implements the bus contract as no-ops", async () => {
@@ -14,8 +16,7 @@ describe("durable: NoopEventBus", () => {
 });
 
 describe("durable: index barrel", () => {
-  it("loads via src/node/durable/index.ts", async () => {
-    const durable = await import("../index");
+  it("loads via src/node/durable/index.ts", () => {
     expect(typeof durable.DurableService).toBe("function");
     expect(typeof durable.durableResource).toBe("object");
     expect((durable as Record<string, unknown>).durableContext).toBeUndefined();
@@ -24,7 +25,6 @@ describe("durable: index barrel", () => {
       void (durable as Record<string, unknown>)[key];
     }
 
-    const core = await import("../core");
     expect(typeof core.DurableService).toBe("function");
     for (const key of Object.keys(core)) {
       void (core as Record<string, unknown>)[key];

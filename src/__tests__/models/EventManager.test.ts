@@ -1194,7 +1194,6 @@ describe("EventManager", () => {
   });
 
   it("should exclude global listeners when event has excludeFromGlobalHooks tag", async () => {
-    const { globalTags } = await import("../../globals/globalTags");
     const handlerEvent = jest.fn();
     const handlerGlobal = jest.fn();
 

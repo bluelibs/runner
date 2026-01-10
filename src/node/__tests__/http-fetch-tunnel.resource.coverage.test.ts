@@ -1,4 +1,7 @@
-import { createExposureFetch } from "../../http-fetch-tunnel.resource";
+import {
+  createExposureFetch,
+  normalizeError,
+} from "../../http-fetch-tunnel.resource";
 import { getDefaultSerializer } from "../../serializer";
 
 describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
@@ -103,8 +106,7 @@ describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
     ).toThrow(/requires baseUrl/i);
   });
 
-  it("normalizeError exports and works standalone", async () => {
-    const { normalizeError } = await import("../../http-fetch-tunnel.resource");
+  it("normalizeError exports and works standalone", () => {
     const e1 = normalizeError(new Error("boom"));
     expect(e1).toBeInstanceOf(Error);
     expect(e1.message).toBe("boom");

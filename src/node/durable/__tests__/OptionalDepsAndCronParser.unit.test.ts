@@ -204,6 +204,19 @@ describe("durable: optional deps helpers", () => {
 });
 
 describe("durable: CronParser", () => {
+  type RequireFn = (id: string) => unknown;
+
+  function mockNodeCreateRequire(requireFn: RequireFn): void {
+    jest.doMock("node:module", () => {
+      const actual = jest.requireActual("node:module") as typeof import("node:module");
+
+      return {
+        ...actual,
+        createRequire: () => requireFn,
+      };
+    });
+  }
+
   it("uses cron-parser when available", () => {
     jest.resetModules();
     jest.isolateModules(() => {
@@ -213,13 +226,10 @@ describe("durable: CronParser", () => {
         }),
       }));
 
-      jest.doMock(
-        "cron-parser",
-        () => ({
-          CronExpressionParser: { parse },
-        }),
-        { virtual: true },
-      );
+      mockNodeCreateRequire((id) => {
+        if (id === "cron-parser") return { CronExpressionParser: { parse } };
+        throw new Error(`Cannot find module '${id}'`);
+      });
 
       const {
         CronParser,
@@ -234,13 +244,12 @@ describe("durable: CronParser", () => {
   it("falls back to a basic parser when cron-parser is missing", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      jest.doMock(
-        "cron-parser",
-        () => {
+      mockNodeCreateRequire((id) => {
+        if (id === "cron-parser") {
           throw new Error("Cannot find module 'cron-parser'");
-        },
-        { virtual: true },
-      );
+        }
+        throw new Error(`Cannot find module '${id}'`);
+      });
 
       const {
         CronParser,
@@ -258,13 +267,12 @@ describe("durable: CronParser", () => {
   it("supports day-of-week 7 (Sunday) in fallback parser", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      jest.doMock(
-        "cron-parser",
-        () => {
+      mockNodeCreateRequire((id) => {
+        if (id === "cron-parser") {
           throw new Error("Cannot find module 'cron-parser'");
-        },
-        { virtual: true },
-      );
+        }
+        throw new Error(`Cannot find module '${id}'`);
+      });
 
       const {
         CronParser,
@@ -280,13 +288,12 @@ describe("durable: CronParser", () => {
   it("supports explicit day-of-week values in fallback parser", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      jest.doMock(
-        "cron-parser",
-        () => {
+      mockNodeCreateRequire((id) => {
+        if (id === "cron-parser") {
           throw new Error("Cannot find module 'cron-parser'");
-        },
-        { virtual: true },
-      );
+        }
+        throw new Error(`Cannot find module '${id}'`);
+      });
 
       const {
         CronParser,
@@ -300,13 +307,12 @@ describe("durable: CronParser", () => {
   it("rejects unsupported cron syntax in fallback parser", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      jest.doMock(
-        "cron-parser",
-        () => {
+      mockNodeCreateRequire((id) => {
+        if (id === "cron-parser") {
           throw new Error("Cannot find module 'cron-parser'");
-        },
-        { virtual: true },
-      );
+        }
+        throw new Error(`Cannot find module '${id}'`);
+      });
 
       const {
         CronParser,
@@ -321,7 +327,10 @@ describe("durable: CronParser", () => {
   it("ignores cron-parser modules with unexpected exports", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      jest.doMock("cron-parser", () => 123, { virtual: true });
+      mockNodeCreateRequire((id) => {
+        if (id === "cron-parser") return 123;
+        throw new Error(`Cannot find module '${id}'`);
+      });
       const {
         CronParser,
       }: typeof CronParserMod = require("../core/CronParser");
@@ -334,11 +343,10 @@ describe("durable: CronParser", () => {
   it("ignores cron-parser modules without a parse() function", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      jest.doMock(
-        "cron-parser",
-        () => ({ CronExpressionParser: { parse: 123 } }),
-        { virtual: true },
-      );
+      mockNodeCreateRequire((id) => {
+        if (id === "cron-parser") return { CronExpressionParser: { parse: 123 } };
+        throw new Error(`Cannot find module '${id}'`);
+      });
       const {
         CronParser,
       }: typeof CronParserMod = require("../core/CronParser");
@@ -351,13 +359,12 @@ describe("durable: CronParser", () => {
   it("supports step-based day-of-week in fallback parser", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      jest.doMock(
-        "cron-parser",
-        () => {
+      mockNodeCreateRequire((id) => {
+        if (id === "cron-parser") {
           throw new Error("Cannot find module 'cron-parser'");
-        },
-        { virtual: true },
-      );
+        }
+        throw new Error(`Cannot find module '${id}'`);
+      });
 
       const {
         CronParser,
@@ -371,13 +378,12 @@ describe("durable: CronParser", () => {
   it("throws when fallback cron has no valid matches", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      jest.doMock(
-        "cron-parser",
-        () => {
+      mockNodeCreateRequire((id) => {
+        if (id === "cron-parser") {
           throw new Error("Cannot find module 'cron-parser'");
-        },
-        { virtual: true },
-      );
+        }
+        throw new Error(`Cannot find module '${id}'`);
+      });
 
       const {
         CronParser,

@@ -1,5 +1,7 @@
 import { Readable } from "stream";
 import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
 import { NodeInputFile } from "../inputFile.model";
 import { toPassThrough } from "../inputFile.model";
 
@@ -72,8 +74,8 @@ describe("NodeInputFile", () => {
       { name: "" } as any,
       Readable.from(payload) as any,
     );
-    const { path } = await f.toTempFile();
-    const base = (await import("path")).basename(path);
+    const { path: tempPath } = await f.toTempFile();
+    const base = path.basename(tempPath);
     expect(base.startsWith("upload.")).toBe(true);
   });
 
@@ -92,14 +94,14 @@ describe("NodeInputFile", () => {
 
   it("toTempFile accepts explicit directory (branch)", async () => {
     const payload = Buffer.from("DIR");
-    const tempDir = (await import("os")).tmpdir();
+    const tempDir = os.tmpdir();
     const f = new NodeInputFile(
       { name: "dir.txt" } as any,
       Readable.from(payload) as any,
     );
-    const { path, bytesWritten } = await f.toTempFile(tempDir);
+    const { path: tempFilePath, bytesWritten } = await f.toTempFile(tempDir);
     expect(bytesWritten).toBe(payload.length);
-    const content = await (await import("fs")).promises.readFile(path);
+    const content = await fs.promises.readFile(tempFilePath);
     expect(content.equals(payload)).toBe(true);
   });
 

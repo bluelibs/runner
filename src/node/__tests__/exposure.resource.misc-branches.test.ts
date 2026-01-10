@@ -1,4 +1,5 @@
 import * as http from "http";
+import { z } from "zod";
 import { defineResource } from "../../define";
 import { defineTask } from "../../definers/defineTask";
 import { defineEvent } from "../../definers/defineEvent";
@@ -197,7 +198,6 @@ describe("nodeExposure - misc branches", () => {
 
   it("swallows logger errors inside catch blocks (task)", async () => {
     const TOKEN2 = "unit-secret-2";
-    const { z } = await import("zod");
     const badTask = defineTask<{ v: number }, Promise<number>>({
       id: "unit.exposure.misc.badTask",
       inputSchema: z.object({ v: z.number() }).strict(),
