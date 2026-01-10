@@ -126,7 +126,6 @@ export { PlatformAdapter, setPlatform } from "./platform";
 // HTTP and tunnel functionality
 export * from "./http-client";
 export * from "./http-fetch-tunnel.resource";
-export * from "./tunnels/assertTaskRouted";
 
 // Re-export types at the package root so consumer declaration emits can reference them directly
 export type * from "./defs";

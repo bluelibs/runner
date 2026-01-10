@@ -10,6 +10,27 @@ export interface SignalHandlerCallbacks {
   processExecution: (executionId: string) => Promise<void>;
 }
 
+type WaitingSignalResult = {
+  state: "waiting";
+  signalId: string;
+  timerId?: string;
+};
+
+const isWaitingSignalStep = (step: {
+  stepId: string;
+  result: unknown;
+}): step is { stepId: string; result: WaitingSignalResult } => {
+  const result = step.result;
+  if (!isRecord(result)) return false;
+  const waitResult = result as unknown as WaitingSignalResult;
+  if (waitResult.state !== "waiting") return false;
+  if (typeof waitResult.signalId !== "string") return false;
+  if (waitResult.timerId !== undefined) {
+    if (typeof waitResult.timerId !== "string") return false;
+  }
+  return true;
+};
+
 /**
  * Handles signal delivery to waiting durable executions.
  */
@@ -41,33 +62,19 @@ export class SignalHandler {
 
       const stepResults = await this.store.listStepResults?.(executionId);
       if (stepResults) {
-        type WaitingSignalResult = {
-          state: "waiting";
-          signalId: string;
-          timerId?: string;
-        };
-
-        const isWaitingSignalStep = (
-          step: { stepId: string; result: unknown },
-        ): step is { stepId: string; result: WaitingSignalResult } => {
-          const result = step.result;
-          if (!isRecord(result)) return false;
-          if (result.state !== "waiting") return false;
-          if (typeof result.signalId !== "string") return false;
-          if (result.timerId !== undefined) {
-            if (typeof result.timerId !== "string") return false;
+        const waiting: Array<{ stepId: string; timerId?: string }> = [];
+        for (const step of stepResults) {
+          if (
+            step.stepId.startsWith("__signal:") &&
+            isWaitingSignalStep(step) &&
+            step.result.signalId === signalId
+          ) {
+            waiting.push({
+              stepId: step.stepId,
+              timerId: step.result.timerId,
+            });
           }
-          return true;
-        };
-
-        const waiting = stepResults
-          .filter((step) => step.stepId.startsWith("__signal:"))
-          .filter(isWaitingSignalStep)
-          .filter((step) => step.result.signalId === signalId)
-          .map((step) => ({
-            stepId: step.stepId,
-            timerId: step.result.timerId,
-          }));
+        }
 
         if (waiting.length > 0) {
           const pickKey = (stepId: string) => {

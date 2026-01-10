@@ -1,5 +1,5 @@
 import type { Request, Response, Router } from "express";
-import express = require("express");
+import * as express from "express";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import { IDurableService } from "../core/interfaces/service";
@@ -118,7 +118,10 @@ export function createDashboardMiddleware(
           await operator.skipStep(executionId, stepId);
           break;
         case "forceFail":
-          await operator.forceFail(executionId, reason || "Operator forced fail");
+          await operator.forceFail(
+            executionId,
+            reason || "Operator forced fail",
+          );
           break;
         case "editState":
           await operator.editState(executionId, stepId, state);
