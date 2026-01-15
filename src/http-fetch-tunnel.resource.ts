@@ -42,7 +42,7 @@ async function postSerialized<T = any>(options: {
   } = options;
   const controller =
     timeoutMs && timeoutMs > 0 ? new AbortController() : undefined;
-  let timeout: any;
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     if (controller) {
       timeout = setTimeout(() => controller.abort(), timeoutMs);

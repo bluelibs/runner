@@ -43,10 +43,9 @@ export function defineOverride<
     | AnyHook,
 >(base: T, patch: OverridePatch<T>): T {
   // Ensure we never change the id, and merge overrides last
-  const rest = patch as any;
   return {
-    ...(base as any),
-    ...rest,
-    id: (base as any).id,
-  } as T;
+    ...base,
+    ...patch,
+    id: base.id,
+  } as unknown as T;
 }

@@ -63,7 +63,7 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
     // Override selected tasks' run() to delegate to tunnel runner (reversible)
     for (const t of tasks) {
       // Enforce single-owner policy: a task can be tunneled by only one resource
-      const currentOwner: string | undefined = (t as any)[symbolTunneledBy];
+      const currentOwner: string | undefined = t[symbolTunneledBy];
       const resourceId = resource.definition.id;
       if (currentOwner && currentOwner !== resourceId) {
         tunnelOwnershipConflictError.throw({
@@ -79,7 +79,7 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
         return value.run!(t as any, input);
       }) as any;
       t.isTunneled = true;
-      (t as any)[symbolTunneledBy] = resourceId;
+      t[symbolTunneledBy] = resourceId;
     }
 
     if (events.length > 0) {

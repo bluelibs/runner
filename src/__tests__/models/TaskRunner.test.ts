@@ -24,7 +24,7 @@ describe("TaskRunner", () => {
   });
 
   it("should run an task without middleware", async () => {
-    const app = defineResource({
+    defineResource({
       id: "app",
       register: () => [task],
     });
@@ -55,7 +55,7 @@ describe("TaskRunner", () => {
 
     const middleware2 = defineTaskMiddleware({
       id: "middleware2",
-      run: async ({ task, next }, deps, config) => {
+      run: async ({ task, next }, _deps, _config) => {
         const result = await next(task?.input);
         return result * 2;
       },
@@ -75,11 +75,13 @@ describe("TaskRunner", () => {
     store.taskMiddlewares.set(middleware1.id, {
       middleware: middleware1,
       computedDependencies: {},
-    } as any);
+      isInitialized: true,
+    });
     store.taskMiddlewares.set(middleware2.id, {
       middleware: middleware2,
       computedDependencies: {},
-    } as any);
+      isInitialized: true,
+    });
 
     const result = await taskRunner.run(task, 5);
     expect(result).toBe(21); // ((5 + 5) * 2) + 1

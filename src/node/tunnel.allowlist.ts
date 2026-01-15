@@ -1,4 +1,6 @@
 import type { Store } from "../models/Store";
+import type { ResourceStoreElementType } from "../types/storeTypes";
+import type { ITag } from "../defs";
 import { globalTags } from "../globals/globalTags";
 
 export interface TunnelAllowList {
@@ -7,23 +9,29 @@ export interface TunnelAllowList {
   eventIds: Set<string>;
 }
 
+/** Item that can be referenced - either a string id or an object with id */
+type IdentifiableItem = string | { id: string };
+
+/** Shape of a tunnel resource's initialized value */
+interface TunnelResourceValue {
+  mode?: "server" | "client" | "both";
+  transport?: "http" | string;
+  tasks?: IdentifiableItem[] | ((task: { id: string }) => boolean);
+  events?: IdentifiableItem[] | ((event: { id: string }) => boolean);
+}
+
 export function computeAllowList(store: Store): TunnelAllowList {
   const taskIds: Set<string> = new Set();
   const eventIds: Set<string> = new Set();
 
   // Iterate actual store resource entries to access initialized values
-  const resourceEntries = Array.from(
-    (store as any).resources?.values?.() ?? [],
-  ) as Array<{
-    resource: { id: string; tags: any[] };
-    value?: any;
-  }>;
-  const tunnelEntries = resourceEntries.filter((e) =>
-    e.resource.tags?.some((t: any) => t?.id === globalTags.tunnel.id),
+  const resourceEntries = Array.from(store.resources?.values() ?? []);
+  const tunnelEntries = resourceEntries.filter((e: ResourceStoreElementType) =>
+    e.resource.tags?.some((t: ITag) => t?.id === globalTags.tunnel.id),
   );
 
   for (const entry of tunnelEntries) {
-    const v = entry?.value;
+    const v = entry?.value as TunnelResourceValue | undefined;
     if (!v || typeof v !== "object") continue;
     if (v.mode !== "server" && v.mode !== "both") continue;
     if (v.transport && v.transport !== "http") continue;
@@ -37,7 +45,7 @@ export function computeAllowList(store: Store): TunnelAllowList {
           } catch (_) {}
         }
       } else if (Array.isArray(v.tasks)) {
-        for (const t of v.tasks as any[]) {
+        for (const t of v.tasks) {
           if (typeof t === "string") {
             taskIds.add(t);
           } else if (t && typeof t === "object" && t.id) {
@@ -56,7 +64,7 @@ export function computeAllowList(store: Store): TunnelAllowList {
           } catch (_) {}
         }
       } else if (Array.isArray(v.events)) {
-        for (const e of v.events as any[]) {
+        for (const e of v.events) {
           if (typeof e === "string") {
             eventIds.add(e);
           } else if (e && typeof e === "object" && e.id) {

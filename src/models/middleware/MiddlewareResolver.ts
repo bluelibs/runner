@@ -59,15 +59,18 @@ export class MiddlewareResolver {
       return middlewares;
     }
 
-    const cfg = globalTags.tunnelPolicy.extract(task) as any;
+    const cfg = globalTags.tunnelPolicy.extract(task);
     const allowList = cfg?.client;
 
     if (!Array.isArray(allowList)) {
       return middlewares;
     }
 
-    const toId = (x: any) => (typeof x === "string" ? x : x?.id);
-    const allowed = new Set(allowList.map(toId).filter(Boolean));
+    const toId = (x: string | { id: string }) =>
+      typeof x === "string" ? x : x?.id;
+    const allowed = new Set(
+      allowList.map(toId).filter((id): id is string => !!id),
+    );
 
     return middlewares.filter((m) => allowed.has(m.id));
   }

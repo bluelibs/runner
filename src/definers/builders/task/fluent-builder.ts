@@ -64,33 +64,7 @@ export function makeTaskBuilder<
         dependencies: nextDependencies as unknown as TDeps & TNewDeps,
       });
 
-      if (override) {
-        return makeTaskBuilder<
-          TInput,
-          TOutput,
-          TNewDeps,
-          TMeta,
-          TTags,
-          TMiddleware
-        >(
-          next as unknown as BuilderState<
-            TInput,
-            TOutput,
-            TNewDeps,
-            TMeta,
-            TTags,
-            TMiddleware
-          >,
-        );
-      }
-      return makeTaskBuilder<
-        TInput,
-        TOutput,
-        TDeps & TNewDeps,
-        TMeta,
-        TTags,
-        TMiddleware
-      >(next);
+      return makeTaskBuilder(next) as any;
     },
 
     middleware<TNewMw extends TaskMiddlewareAttachmentType[]>(
@@ -114,9 +88,7 @@ export function makeTaskBuilder<
       >(state, {
         middleware: mergeArray(state.middleware, mw, override) as TNewMw,
       });
-      return makeTaskBuilder<TInput, TOutput, TDeps, TMeta, TTags, TNewMw>(
-        next,
-      );
+      return makeTaskBuilder(next);
     },
 
     tags<TNewTags extends TagType[]>(
@@ -140,14 +112,7 @@ export function makeTaskBuilder<
       >(state, {
         tags: mergeArray(state.tags, t, override) as [...TTags, ...TNewTags],
       });
-      return makeTaskBuilder(next) as unknown as TaskFluentBuilder<
-        TInput,
-        TOutput,
-        TDeps,
-        TMeta,
-        [...TTags, ...TNewTags],
-        TMiddleware
-      >;
+      return makeTaskBuilder(next) as any;
     },
 
     inputSchema<TNewInput>(schema: IValidationSchema<TNewInput>) {
@@ -215,16 +180,7 @@ export function makeTaskBuilder<
       const wrapped = (input: unknown, deps: unknown) =>
         fn(
           input as ResolveInput<TInput, TNewInput>,
-          deps as Parameters<
-            ITaskDefinition<
-              ResolveInput<TInput, TNewInput>,
-              TNewOutput,
-              TDeps,
-              TMeta,
-              TTags,
-              TMiddleware
-            >["run"]
-          >[1],
+          deps as any, // Dependencies are injected at runtime
         );
 
       const next = clone<
@@ -240,7 +196,7 @@ export function makeTaskBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(state, { run: wrapped });
+      >(state, { run: wrapped as any });
       return makeTaskBuilder<
         ResolveInput<TInput, TNewInput>,
         TNewOutput,
@@ -298,13 +254,22 @@ export function makeTaskBuilder<
         inputSchema: state.inputSchema,
         resultSchema: state.resultSchema,
         throws: state.throws,
-        run: state.run as any, // Cast for run signature compatibility
+        run: state.run as NonNullable<
+          ITaskDefinition<
+            TInput,
+            TOutput,
+            TDeps,
+            TMeta,
+            TTags,
+            TMiddleware
+          >["run"]
+        >,
         tags: state.tags,
         meta: state.meta,
       };
 
       const task = defineTask(definition);
-      (task as any)[symbolFilePath] = state.filePath;
+      (task as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
       return task;
     },
   };

@@ -39,7 +39,7 @@ export class TaskMiddlewareComposer {
     runner = this.applyGlobalInterceptors(runner, task);
 
     // 4. Apply middleware layers
-    runner = this.applyMiddlewares(runner, task, storeTask);
+    runner = this.applyMiddlewares(runner, task);
 
     return runner as (input: TInput) => Promise<Awaited<TOutput>>;
   }
@@ -157,9 +157,7 @@ export class TaskMiddlewareComposer {
   private applyMiddlewares(
     runner: (input: any) => Promise<any>,
     task: ITask<any, any, any>,
-    storeTask: TaskStoreElementType,
   ): (input: any) => Promise<any> {
-    const tDef = storeTask.task;
     let middlewares =
       this.middlewareResolver.getApplicableTaskMiddlewares(task);
 
@@ -203,6 +201,7 @@ export class TaskMiddlewareComposer {
       next = this.wrapWithInterceptors(
         baseMiddlewareRunner,
         middlewareInterceptors,
+        task,
       );
     }
 
@@ -214,7 +213,13 @@ export class TaskMiddlewareComposer {
    */
   private wrapWithInterceptors(
     middlewareRunner: (input: any) => Promise<any>,
-    interceptors: Array<(next: any, input: any) => Promise<any>>,
+    interceptors: Array<
+      (
+        next: (input: any) => Promise<any>,
+        input: ITaskMiddlewareExecutionInput<any>,
+      ) => Promise<any>
+    >,
+    task: ITask<any, any, any>,
   ): (input: any) => Promise<any> {
     if (interceptors.length === 0) {
       return middlewareRunner;
@@ -230,10 +235,10 @@ export class TaskMiddlewareComposer {
       wrapped = async (input: any) => {
         const executionInput: ITaskMiddlewareExecutionInput<any> = {
           task: {
-            definition: null as any,
+            definition: task,
             input: input,
           },
-          next: nextFunction as any,
+          next: nextFunction,
         };
 
         const wrappedNext = (
@@ -242,7 +247,7 @@ export class TaskMiddlewareComposer {
           return nextFunction(i.task.input);
         };
 
-        return interceptor(wrappedNext as any, executionInput);
+        return interceptor(wrappedNext, executionInput);
       };
     }
 

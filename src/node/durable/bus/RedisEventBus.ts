@@ -20,11 +20,16 @@ export interface RedisEventBusClient {
   duplicate(): RedisEventBusClient;
 }
 
+interface ChannelState {
+  handlers: Set<BusEventHandler>;
+  subscriptionPromise: Promise<void> | null;
+}
+
 export class RedisEventBus implements IEventBus {
   private pub: RedisEventBusClient;
   private sub: RedisEventBusClient;
   private prefix: string;
-  private readonly handlers = new Map<string, Set<BusEventHandler>>();
+  private readonly channels = new Map<string, ChannelState>();
   private readonly serializer = new Serializer();
 
   constructor(config: RedisEventBusConfig) {
@@ -43,13 +48,13 @@ export class RedisEventBus implements IEventBus {
     this.prefix = config.prefix || "durable:bus:";
 
     this.sub.on("message", (chan, message) => {
-      const handlers = this.handlers.get(chan);
-      if (!handlers || handlers.size === 0) return;
+      const state = this.channels.get(chan);
+      if (!state || state.handlers.size === 0) return;
 
       const event = this.deserializeEvent(message);
       if (!event) return;
 
-      handlers.forEach((h) => h(event).catch(console.error));
+      state.handlers.forEach((h) => h(event).catch(console.error));
     });
   }
 
@@ -107,25 +112,43 @@ export class RedisEventBus implements IEventBus {
 
   async subscribe(channel: string, handler: BusEventHandler): Promise<void> {
     const fullChannel = this.k(channel);
-    let subs = this.handlers.get(fullChannel);
-    if (!subs) {
-      subs = new Set();
-      this.handlers.set(fullChannel, subs);
-      try {
-        await this.sub.subscribe(fullChannel);
-      } catch (e) {
-        this.handlers.delete(fullChannel);
-        throw e;
-      }
+
+    let state = this.channels.get(fullChannel);
+
+    if (!state) {
+      // First subscriber: create state and initiate Redis subscription
+      state = {
+        handlers: new Set(),
+        subscriptionPromise: null,
+      };
+      this.channels.set(fullChannel, state);
+
+      const subscriptionPromise = this.sub
+        .subscribe(fullChannel)
+        .then(() => {
+          state!.subscriptionPromise = null;
+        })
+        .catch((err) => {
+          this.channels.delete(fullChannel);
+          throw err;
+        });
+
+      state.subscriptionPromise = subscriptionPromise as Promise<void>;
     }
 
-    subs.add(handler);
+    // Wait for pending subscription to complete (applies to all callers)
+    if (state.subscriptionPromise) {
+      await state.subscriptionPromise;
+    }
+
+    // Only add handler after subscription succeeds
+    state.handlers.add(handler);
   }
 
   async unsubscribe(channel: string): Promise<void> {
     const fullChannel = this.k(channel);
     await this.sub.unsubscribe(fullChannel);
-    this.handlers.delete(fullChannel);
+    this.channels.delete(fullChannel);
   }
 
   async dispose(): Promise<void> {

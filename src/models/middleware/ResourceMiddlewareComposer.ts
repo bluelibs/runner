@@ -131,6 +131,7 @@ export class ResourceMiddlewareComposer {
       next = this.wrapWithInterceptors(
         baseMiddlewareRunner,
         middlewareInterceptors,
+        resource,
       );
     }
 
@@ -185,7 +186,13 @@ export class ResourceMiddlewareComposer {
    */
   private wrapWithInterceptors(
     middlewareRunner: (config: any) => Promise<any>,
-    interceptors: Array<(next: any, input: any) => Promise<any>>,
+    interceptors: Array<
+      (
+        next: (input: IResourceMiddlewareExecutionInput<any>) => Promise<any>,
+        input: IResourceMiddlewareExecutionInput<any>,
+      ) => Promise<any>
+    >,
+    resource: IResource<any, any, any, any>,
   ): (config: any) => Promise<any> {
     if (interceptors.length === 0) {
       return middlewareRunner;
@@ -201,17 +208,17 @@ export class ResourceMiddlewareComposer {
       wrapped = async (config: any) => {
         const executionInput: IResourceMiddlewareExecutionInput<any> = {
           resource: {
-            definition: null as any,
+            definition: resource,
             config: config,
           },
-          next: nextFunction as any,
+          next: nextFunction,
         };
 
         const wrappedNext = (input: IResourceMiddlewareExecutionInput<any>) => {
           return nextFunction(input.resource.config);
         };
 
-        return interceptor(wrappedNext as any, executionInput);
+        return interceptor(wrappedNext, executionInput);
       };
     }
 

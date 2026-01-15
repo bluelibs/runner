@@ -9,36 +9,40 @@ export function detectEnvironment(): PlatformId {
     return "browser";
   }
 
-  if (
-    typeof process !== "undefined" &&
-    (process as any).versions &&
-    (process as any).versions.node
-  ) {
+  const global = globalThis as unknown as {
+    process?: { versions?: { node?: string; bun?: string } };
+    Deno?: unknown;
+    Bun?: unknown;
+    importScripts?: unknown;
+    WorkerGlobalScope?: unknown;
+    document?: unknown;
+    addEventListener?: unknown;
+  };
+
+  if (global.process?.versions?.node) {
     return "node";
   }
 
-  if (typeof (globalThis as any).Deno !== "undefined") {
+  if (typeof global.Deno !== "undefined") {
     return "universal";
   }
 
-  if (
-    typeof (globalThis as any).Bun !== "undefined" ||
-    (typeof process !== "undefined" && (process as any).versions?.bun)
-  ) {
+  if (typeof global.Bun !== "undefined" || global.process?.versions?.bun) {
     return "universal";
   }
 
-  // Heuristics for WebWorker-like environments (tests may only set importScripts)
+  // Heuristics for WebWorker-like environments
   if (
-    typeof (globalThis as any).importScripts === "function" &&
+    typeof global.importScripts === "function" &&
     typeof window === "undefined"
   ) {
     return "edge";
   }
+
   if (
-    typeof (globalThis as any).WorkerGlobalScope !== "undefined" &&
+    typeof global.WorkerGlobalScope !== "undefined" &&
     typeof self !== "undefined" &&
-    self instanceof (globalThis as any).WorkerGlobalScope
+    self instanceof (global.WorkerGlobalScope as any)
   ) {
     return "edge";
   }
@@ -51,61 +55,42 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
   private inner: IPlatformAdapter | null = null;
 
   async init() {
-    if (!this.inner) {
-      const kind = detectEnvironment();
-      if (
-        typeof (globalThis as any).document !== "undefined" ||
-        typeof (globalThis as any).addEventListener === "function"
-      ) {
-        this.inner = new BrowserPlatformAdapter();
-      } else {
-        switch (kind) {
-          case "node":
-            this.inner = new NodePlatformAdapter();
-            break;
-          // istanbul ignore next: this branch is unreachable in practice because detectEnvironment()
-          // returns "browser" only when document is defined; we keep it for completeness.
-          case "browser":
-            this.inner = new BrowserPlatformAdapter();
-            break;
-          case "edge":
-            this.inner = new EdgePlatformAdapter();
-            break;
-          default:
-            this.inner = new GenericUniversalPlatformAdapter();
-        }
-      }
-    }
+    this.ensureInner();
     await this.inner!.init();
   }
 
-  private get() {
-    if (!this.inner) {
-      const kind = detectEnvironment();
-      if (
-        typeof (globalThis as any).document !== "undefined" ||
-        typeof (globalThis as any).addEventListener === "function"
-      ) {
-        this.inner = new BrowserPlatformAdapter();
-      } else {
-        switch (kind) {
-          case "node":
-            this.inner = new NodePlatformAdapter();
-            break;
-          // istanbul ignore next: this branch is unreachable in practice because detectEnvironment()
-          // returns "browser" only when document is defined; we keep it for completeness.
-          case "browser":
-            this.inner = new BrowserPlatformAdapter();
-            break;
-          case "edge":
-            this.inner = new EdgePlatformAdapter();
-            break;
-          default:
-            this.inner = new GenericUniversalPlatformAdapter();
-        }
+  private ensureInner() {
+    if (this.inner) return;
+
+    const kind = detectEnvironment();
+    const global = globalThis as unknown as {
+      document?: unknown;
+      addEventListener?: unknown;
+    };
+
+    if (
+      typeof global.document !== "undefined" ||
+      typeof global.addEventListener === "function"
+    ) {
+      this.inner = new BrowserPlatformAdapter();
+    } else {
+      switch (kind) {
+        case "node":
+          this.inner = new NodePlatformAdapter();
+          break;
+        case "edge":
+          this.inner = new EdgePlatformAdapter();
+          break;
+        default:
+          // Covers "browser" (unreachable - would hit first if), "universal", and future cases
+          this.inner = new GenericUniversalPlatformAdapter();
       }
     }
-    return this.inner;
+  }
+
+  private get() {
+    this.ensureInner();
+    return this.inner!;
   }
 
   onUncaughtException(handler: (error: Error) => void) {

@@ -34,25 +34,34 @@ export function mergeDepsNoConfig<
   const isFnAddition = typeof addition === "function";
 
   if (override || !existing) {
-    return addition as any as (TExisting & TNew) | (() => TExisting & TNew);
+    return addition as unknown as (TExisting & TNew) | (() => TExisting & TNew);
   }
 
   if (isFnExisting && isFnAddition) {
     const e = existing as () => TExisting;
     const a = addition as () => TNew;
-    return (() => ({ ...(e() as any), ...(a() as any) })) as any;
+    return (() => ({
+      ...e(),
+      ...a(),
+    })) as unknown as () => TExisting & TNew;
   }
   if (isFnExisting && !isFnAddition) {
     const e = existing as () => TExisting;
     const a = addition as TNew;
-    return (() => ({ ...(e() as any), ...(a as any) })) as any;
+    return (() => ({
+      ...e(),
+      ...a,
+    })) as unknown as () => TExisting & TNew;
   }
   if (!isFnExisting && isFnAddition) {
     const e = existing as TExisting;
     const a = addition as () => TNew;
-    return (() => ({ ...(e as any), ...(a() as any) })) as any;
+    return (() => ({
+      ...e,
+      ...a(),
+    })) as unknown as () => TExisting & TNew;
   }
   const e = existing as TExisting;
   const a = addition as TNew;
-  return { ...(e as any), ...(a as any) } as any;
+  return { ...e, ...a } as unknown as TExisting & TNew;
 }

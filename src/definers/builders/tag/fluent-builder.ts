@@ -14,31 +14,33 @@ export function makeTagBuilder<TConfig, TEnforceIn, TEnforceOut>(
   const builder: TagFluentBuilder<TConfig, TEnforceIn, TEnforceOut> = {
     id: state.id,
 
-    meta(m) {
-      const next = clone(state, { meta: m as unknown as ITagMeta });
+    meta(m: ITagMeta) {
+      const next = clone(state, { meta: m });
       return makeTagBuilder(next);
     },
 
     configSchema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
-      const next = clone(state, { configSchema: schema });
-      return makeTagBuilder<TNewConfig, TEnforceIn, TEnforceOut>(
-        next as unknown as BuilderState<TNewConfig, TEnforceIn, TEnforceOut>,
-      );
+      const next = clone(state, {
+        configSchema: schema,
+      }) as unknown as BuilderState<TNewConfig, TEnforceIn, TEnforceOut>;
+      return makeTagBuilder(next);
     },
 
     config<TNewConfig>(config: TNewConfig) {
-      const next = clone(state, { config: config as unknown as TConfig });
-      return makeTagBuilder<TNewConfig, TEnforceIn, TEnforceOut>(
-        next as unknown as BuilderState<TNewConfig, TEnforceIn, TEnforceOut>,
-      );
+      const next = clone(state, { config }) as unknown as BuilderState<
+        TNewConfig,
+        TEnforceIn,
+        TEnforceOut
+      >;
+      return makeTagBuilder(next);
     },
 
     build() {
       const tag = defineTag<TConfig, TEnforceIn, TEnforceOut>({
         id: state.id,
         meta: state.meta,
-        configSchema: state.configSchema as any,
-        config: state.config as any,
+        configSchema: state.configSchema as IValidationSchema<TConfig>,
+        config: state.config as TConfig,
       });
       (tag as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
       return tag;

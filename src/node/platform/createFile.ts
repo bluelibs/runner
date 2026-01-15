@@ -11,10 +11,12 @@ export function createFile(
   source: NodeFileSource,
   id: string = "F1",
 ): RunnerFileSentinel & { _node: NodeFileSource } {
+  // Type assertion needed: returning a sentinel object that satisfies the interface
+  // but doesn't implement the full InputFile methods (those are added by NodeInputFile)
   return {
     $runnerFile: "File",
     id,
     meta,
     _node: source,
-  } as any;
+  } as RunnerFileSentinel & { _node: NodeFileSource };
 }

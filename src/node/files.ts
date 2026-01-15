@@ -16,5 +16,5 @@ export function createNodeFile(
     id,
     meta,
     _node: source,
-  } as any;
+  };
 }

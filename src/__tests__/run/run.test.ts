@@ -56,7 +56,7 @@ describe("run", () => {
     it("should be able to register an task with dependencies and execute it", async () => {
       const dependencyTask = defineTask({
         id: "dependency.task",
-        run: async (_, { d1 }) => {
+        run: async (_, { _d1 }) => {
           return "Dependency";
         },
       });
@@ -99,7 +99,7 @@ describe("run", () => {
       const handlerTask = defineHook({
         id: "handler.task",
         on: testEvent,
-        run: eventHandler as any,
+        run: async (event) => eventHandler(event),
       });
 
       const app = defineResource({
@@ -133,7 +133,7 @@ describe("run", () => {
       const hookListener = defineHook({
         id: "listener.task",
         on: testEvent,
-        run: eventHandler as any,
+        run: async (event) => eventHandler(event),
       });
 
       const app = defineResource({
@@ -159,8 +159,8 @@ describe("run", () => {
         },
       });
 
-      const value = false;
-      const errorHook = jest.fn();
+      const _value = false;
+      const _errorHook = jest.fn();
 
       const app = defineResource({
         id: "app",
@@ -263,11 +263,11 @@ describe("run", () => {
     it("should throw an error if there's an infinite dependency", async () => {
       const task1: any = defineTask({
         id: "task1",
-        dependencies: (): any => ({ task2 }), // Corrected line
+        dependencies: () => ({ task2 }),
         run: async () => "Task 1",
       });
 
-      const task2: any = defineTask({
+      const task2 = defineTask({
         id: "task2",
         dependencies: { task1 },
         run: async () => "Task 2",
@@ -276,7 +276,7 @@ describe("run", () => {
       // define circular dependency resources
       const resource1: any = defineResource({
         id: "resource1",
-        dependencies: (): any => ({
+        dependencies: () => ({
           resource2,
         }),
         init: async () => "Resource 1",
@@ -305,7 +305,7 @@ describe("run", () => {
       const task = defineHook({
         id: "app",
         on: testEvent,
-        async run(event) {
+        async run(_event) {
           eventHandler();
         },
       });
@@ -331,7 +331,7 @@ describe("run", () => {
         id: "app",
         on: testEvent,
         dependencies: () => ({ testEvent }),
-        async run(event, { testEvent }) {
+        async run(_event, { testEvent }) {
           eventHandler();
           await testEvent({ message: "Event emitted" });
         },
@@ -364,7 +364,7 @@ describe("run", () => {
         id: "app.hook",
         on: "*",
         dependencies: { dummyResource },
-        async run(event, { dummyResource }) {
+        async run(_event, { dummyResource }) {
           if (dummyResource === "dummy") {
             matched = true;
           }
@@ -460,19 +460,9 @@ describe("run", () => {
         init: async (config: { prefix: string }) => `${config.prefix} World!`,
       });
 
-      const t2 = defineResource({
+      defineResource({
         id: "test.r2",
         async init() {},
-      });
-
-      const typeTest = defineResource({
-        id: "typeTest",
-        register: [
-          t2,
-          testResource.with({
-            prefix: "Hello,",
-          }),
-        ],
       });
 
       const app = defineResource({
@@ -500,7 +490,7 @@ describe("run", () => {
       });
       const erroringTask = defineTask({
         id: "error.task",
-        run: async (event) => {
+        run: async (_event) => {
           if (true === true) {
             throw new Error("Run failed");
           }
@@ -677,7 +667,7 @@ describe("run", () => {
         id: "app",
         register: [testResource],
         dependencies: { testResource },
-        async init(_, { testResource }) {
+        async init(_config, { testResource: _ }) {
           return 42; // primitive number
         },
       });
@@ -701,7 +691,7 @@ describe("run", () => {
         id: "app",
         register: [testResource],
         dependencies: { testResource },
-        async init(_, { testResource }) {
+        async init(_config, { testResource: _ }) {
           return { api: "server", value: 42 };
         },
       });
@@ -725,7 +715,7 @@ describe("run", () => {
         id: "app",
         register: [testResource],
         dependencies: { testResource },
-        async init(_, { testResource }) {
+        async init(_config, { testResource: _ }) {
           return null; // null return value
         },
       });
@@ -748,7 +738,7 @@ describe("run", () => {
         id: "app",
         register: [testResource],
         dependencies: { testResource },
-        async init(_, { testResource }) {
+        async init(_config, { testResource: _ }) {
           return undefined; // undefined return value
         },
       });
@@ -771,7 +761,7 @@ describe("run", () => {
         id: "app",
         register: [testResource],
         dependencies: { testResource },
-        async init(_, { testResource }) {
+        async init(_config, { testResource: _ }) {
           return true; // boolean return value
         },
       });
@@ -794,7 +784,7 @@ describe("run", () => {
         id: "app",
         register: [testResource],
         dependencies: { testResource },
-        async init(_, { testResource }) {
+        async init(_config, { testResource: _ }) {
           return "hello world test"; // string return value
         },
       });
@@ -817,7 +807,7 @@ describe("run", () => {
         id: "app",
         register: [testResource],
         dependencies: { testResource },
-        async init(_, { testResource }) {
+        async init(_config, { testResource: _ }) {
           return Symbol("test"); // symbol return value
         },
       });
@@ -841,7 +831,7 @@ describe("run", () => {
         id: "app",
         register: [testResource],
         dependencies: { testResource },
-        async init(_, { testResource }) {
+        async init(_config, { testResource: _ }) {
           return BigInt(123); // bigint return value
         },
       });
@@ -861,7 +851,7 @@ describe("run", () => {
       const dbResource = defineResource({
         id: "db.resource",
         context: () => ({ connections: [] as string[] }),
-        async init(config, deps, context) {
+        async init(_config, _deps, context) {
           context.connections.push("main-db");
           // @ts-expect-error - should not allow access to non-existent properties
           context.nonExistentProperty;
@@ -869,7 +859,7 @@ describe("run", () => {
           context.anotherProperty = "test";
           return "connected";
         },
-        async dispose(value, config, deps, context) {
+        async dispose(_value, _config, _deps, context) {
           expect(context.connections).toEqual(["main-db"]);
           disposeFn();
 
@@ -897,7 +887,7 @@ describe("run", () => {
     it("should work without context", async () => {
       const simpleResource = defineResource({
         id: "simple.resource",
-        async init(config, deps) {
+        async init(_config, _deps) {
           return "simple value";
         },
       });
@@ -924,7 +914,7 @@ describe("run", () => {
         id: "context.only",
         context: () => ({ cleanupTasks: ["task1", "task2"] }),
         // This resource only has dispose, testing the private context in dispose scenario
-        dispose: async function (value, config, deps, context) {
+        dispose: async function (_value, _config, _deps, _context) {
           // When there's no init, dispose still gets called but private context should be available
           // Note: This won't have private context since init wasn't called
           disposeFn();
@@ -985,7 +975,7 @@ describe("run", () => {
       const readyListener = defineHook({
         id: "ready.listener",
         on: globalEvents.ready,
-        run: handler as any,
+        run: async (event) => handler(event),
       });
       const app = defineResource({
         id: "app",

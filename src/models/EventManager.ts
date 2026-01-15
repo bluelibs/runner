@@ -298,21 +298,11 @@ export class EventManager {
     event: IEventEmission<any>,
     computedDependencies: DependencyValuesType<any>,
   ): Promise<any> {
-    // Base hook execution function
     const baseExecute = async (
       hookToExecute: IHook<any, any>,
       eventForHook: IEventEmission<any>,
     ): Promise<any> => {
-      try {
-        const result = await hookToExecute.run(
-          eventForHook,
-          computedDependencies,
-        );
-
-        return result;
-      } catch (err: unknown) {
-        throw err;
-      }
+      return hookToExecute.run(eventForHook, computedDependencies);
     };
 
     const executeWithInterceptors = composeInterceptors(
