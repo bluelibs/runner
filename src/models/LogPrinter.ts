@@ -221,8 +221,7 @@ export class LogPrinter {
     indentation = "  ",
   ): string[] {
     if (!context) return [];
-    const filtered = { ...context };
-    delete (filtered as any).source;
+    const { source: _source, ...filtered } = context;
     if (Object.keys(filtered).length === 0) return [];
     const lines: string[] = [];
     const formatted = safeStringify(filtered, 2, { maxDepth: 3 }).split("\n");
@@ -236,8 +235,8 @@ export class LogPrinter {
     return lines;
   }
 
-  private normalizeForJson(log: PrintableLog) {
-    const normalized: any = { ...log };
+  private normalizeForJson(log: PrintableLog): PrintableLog {
+    const normalized = { ...log };
     if (typeof log.message === "object") {
       const text = safeStringify(log.message);
       try {

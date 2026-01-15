@@ -21,28 +21,32 @@ export interface BuiltUniversalManifest<T = any> {
   webFiles: WebCollectedFile[];
 }
 
-type AnyObj = Record<string, any>;
+type AnyObj = Record<string, unknown>;
 
-export function buildUniversalManifest<T = any>(
+/** Internal representation of a file value with platform-specific data */
+interface InternalFileValue extends RunnerFileSentinel {
+  _node?: { buffer?: Buffer; stream?: Readable };
+  _web?: { blob?: Blob };
+}
+
+export function buildUniversalManifest<T = unknown>(
   input: T,
 ): BuiltUniversalManifest<T> {
   const nodeFiles: NodeCollectedFile[] = [];
   const webFiles: WebCollectedFile[] = [];
 
-  function visit(value: any): any {
+  function visit(value: unknown): unknown {
     if (!value || typeof value !== "object") return value;
 
     if (
       (value as RunnerFileSentinel).$runnerFile === "File" &&
-      typeof (value as any).id === "string"
+      typeof (value as RunnerFileSentinel).id === "string"
     ) {
-      const v: any = value;
+      const v = value as InternalFileValue;
       const id: string = v.id;
       const meta: InputFileMeta = v.meta;
-      const node = v._node as
-        | { buffer?: Buffer; stream?: Readable }
-        | undefined;
-      const web = v._web as { blob?: Blob } | undefined;
+      const node = v._node;
+      const web = v._web;
 
       if (node?.buffer) {
         nodeFiles.push({

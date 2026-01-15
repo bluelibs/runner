@@ -7,7 +7,7 @@ export function safeStringify(
   const holderDepth = new WeakMap<object, number>();
 
   const maxDepth =
-    typeof options?.maxDepth === "number" ? options!.maxDepth! : Infinity;
+    typeof options?.maxDepth === "number" ? options.maxDepth : Infinity;
 
   const replacer = function (this: any, _key: string, val: any) {
     // Normalize functions to a readable placeholder

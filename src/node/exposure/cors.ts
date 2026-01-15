@@ -7,10 +7,11 @@ interface ResolvedOrigin {
 }
 
 function getRequestOrigin(req: IncomingMessage): string | undefined {
-  const originHeader = (req.headers as any)["origin"];
+  const headers = req.headers as Record<string, string | string[] | undefined>;
+  const originHeader = headers["origin"];
   if (Array.isArray(originHeader)) return originHeader[0];
   if (typeof originHeader === "string") return originHeader;
-  const OriginHeader = (req.headers as any)["Origin"];
+  const OriginHeader = headers["Origin"];
   if (Array.isArray(OriginHeader)) return OriginHeader[0];
   if (typeof OriginHeader === "string") return OriginHeader;
 }
@@ -31,7 +32,7 @@ function resolveOrigin(
     return { value: "*", vary: false };
   }
 
-  const spec: any = (cfg as any).origin;
+  const spec = cfg.origin;
   if (typeof spec === "string") {
     return { value: spec, vary: false };
   }
@@ -111,9 +112,8 @@ export function handleCorsPreflight(
       : ["POST", "OPTIONS"];
   res.setHeader("Access-Control-Allow-Methods", methods.join(", "));
 
-  const rawReqHeaders: any = (req.headers as any)[
-    "access-control-request-headers"
-  ];
+  const headers = req.headers as Record<string, string | string[] | undefined>;
+  const rawReqHeaders = headers["access-control-request-headers"];
   const requested = Array.isArray(rawReqHeaders)
     ? rawReqHeaders.join(", ")
     : rawReqHeaders
@@ -132,7 +132,6 @@ export function handleCorsPreflight(
 
   res.statusCode = 204;
   res.setHeader("content-length", "0");
-  const end = (res as any).end;
-  if (typeof end === "function") end.call(res);
+  if (typeof res.end === "function") res.end();
   return true;
 }

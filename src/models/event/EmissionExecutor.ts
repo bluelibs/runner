@@ -1,6 +1,21 @@
 import { IEventEmission } from "../../defs";
 import { IListenerStorage } from "./types";
 
+/**
+ * Error type with optional listener metadata attached.
+ */
+interface ListenerError extends Error {
+  listenerId?: string;
+  listenerOrder?: number;
+}
+
+/**
+ * Aggregate error containing multiple listener errors.
+ */
+interface ListenerAggregateError extends Error {
+  errors: ListenerError[];
+}
+
 interface ExecuteOptions {
   listeners: IListenerStorage[];
   event: IEventEmission<any>;
@@ -53,10 +68,10 @@ export async function executeInParallel({
       )
       .map(({ result, listener }) => {
         const reason = result.reason;
-        const errObj =
+        const errObj: ListenerError =
           reason && typeof reason === "object"
-            ? (reason as any)
-            : (new Error(String(reason)) as any);
+            ? (reason as ListenerError)
+            : new Error(String(reason));
 
         if (errObj.listenerId === undefined) {
           errObj.listenerId = listener.id;
@@ -65,21 +80,17 @@ export async function executeInParallel({
           errObj.listenerOrder = listener.order;
         }
 
-        return errObj as Error & {
-          listenerId?: string;
-          listenerOrder?: number;
-        };
+        return errObj;
       });
 
     if (errors.length > 0) {
       if (errors.length === 1) {
         throw errors[0];
       }
-      const aggregateError = new Error(
-        `${errors.length} listeners failed in parallel batch`,
+      const aggregateError: ListenerAggregateError = Object.assign(
+        new Error(`${errors.length} listeners failed in parallel batch`),
+        { errors, name: "AggregateError" },
       );
-      (aggregateError as any).errors = errors;
-      aggregateError.name = "AggregateError";
       throw aggregateError;
     }
   };

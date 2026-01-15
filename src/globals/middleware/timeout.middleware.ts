@@ -8,6 +8,17 @@ export interface TimeoutMiddlewareConfig {
   ttl: number;
 }
 
+/**
+ * Custom error class for timeout errors.
+ * Using a class allows proper instanceof checks and avoids `as any` casts.
+ */
+export class TimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TimeoutError";
+  }
+}
+
 export const timeoutTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.timeout.task",
   async run({ task, next }, _deps, config: TimeoutMiddlewareConfig) {
@@ -18,9 +29,7 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
 
     // Fast-path: immediate timeout
     if (ttl === 0) {
-      const error = new Error(message);
-      (error as any).name = "TimeoutError";
-      throw error;
+      throw new TimeoutError(message);
     }
 
     const controller = new AbortController();
@@ -29,9 +38,7 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
     const timeoutPromise = new Promise((_, reject) => {
       const timeoutId = setTimeout(() => {
         controller.abort();
-        const error = new Error(message);
-        (error as any).name = "TimeoutError";
-        reject(error);
+        reject(new TimeoutError(message));
       }, ttl);
 
       // Clean up timeout if abort signal fires for other reasons
@@ -52,17 +59,13 @@ export const timeoutResourceMiddleware = defineResourceMiddleware({
     const ttl = Math.max(0, config.ttl);
     const message = `Operation timed out after ${ttl}ms`;
     if (ttl === 0) {
-      const error = new Error(message);
-      (error as any).name = "TimeoutError";
-      throw error;
+      throw new TimeoutError(message);
     }
     const controller = new AbortController();
     const timeoutPromise = new Promise((_, reject) => {
       const timeoutId = setTimeout(() => {
         controller.abort();
-        const error = new Error(message);
-        (error as any).name = "TimeoutError";
-        reject(error);
+        reject(new TimeoutError(message));
       }, ttl);
       controller.signal.addEventListener("abort", () => {
         clearTimeout(timeoutId);
