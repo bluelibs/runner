@@ -15,6 +15,8 @@ import type { TaskFluentBuilder } from "../task/fluent-builder.interface";
 import type { ResolveInput } from "../task/types";
 import { mergeArray, mergeDependencies } from "../task/utils";
 
+type AnyTask = ITask<any, any, any, any, any, any>;
+
 type TaskOverrideState<
   TInput,
   TOutput extends Promise<any>,
@@ -80,7 +82,7 @@ function makeTaskOverrideBuilder<
   TTags extends TagType[],
   TMiddleware extends TaskMiddlewareAttachmentType[],
 >(
-  base: ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>,
+  base: AnyTask,
   state: TaskOverrideState<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>,
 ): TaskFluentBuilder<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware> {
   const builder: TaskFluentBuilder<
@@ -120,7 +122,7 @@ function makeTaskOverrideBuilder<
         dependencies: nextDependencies as unknown as TDeps & TNewDeps,
       });
 
-      return makeTaskOverrideBuilder(base as any, next);
+      return makeTaskOverrideBuilder(base, next);
     },
 
     middleware<TNewMw extends TaskMiddlewareAttachmentType[]>(
@@ -144,7 +146,7 @@ function makeTaskOverrideBuilder<
       >(state, {
         middleware: mergeArray(state.middleware, mw, override) as TNewMw,
       });
-      return makeTaskOverrideBuilder(base as any, next);
+      return makeTaskOverrideBuilder(base, next);
     },
 
     tags<TNewTags extends TagType[]>(
@@ -168,7 +170,7 @@ function makeTaskOverrideBuilder<
       >(state, {
         tags: mergeArray(state.tags, t, override) as [...TTags, ...TNewTags],
       });
-      return makeTaskOverrideBuilder(base as any, next);
+      return makeTaskOverrideBuilder(base, next);
     },
 
     inputSchema<TNewInput>(schema: IValidationSchema<TNewInput>) {
@@ -193,7 +195,7 @@ function makeTaskOverrideBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
 
     resultSchema<TResolved>(schema: IValidationSchema<TResolved>) {
@@ -218,7 +220,7 @@ function makeTaskOverrideBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
 
     run<TNewInput = TInput, TNewOutput extends Promise<any> = TOutput>(
@@ -260,7 +262,7 @@ function makeTaskOverrideBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
 
     meta<TNewMeta extends ITaskMeta>(m: TNewMeta) {
@@ -285,7 +287,7 @@ function makeTaskOverrideBuilder<
         TNewMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
 
     throws(list: ThrowsList) {
@@ -297,18 +299,18 @@ function makeTaskOverrideBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
 
     build() {
+      const normalizedThrows = normalizeThrows(
+        { kind: "task", id: state.id },
+        state.throws,
+      );
       const { id: _id, ...patch } = state;
-      if (patch.throws) {
-        patch.throws = normalizeThrows(
-          { kind: "task", id: state.id },
-          patch.throws,
-        );
-      }
-      return defineOverride(base, patch as any);
+      return defineOverride<
+        ITask<TInput, TOutput, TDeps, TMeta, TTags, TMiddleware>
+      >(base, { ...patch, throws: normalizedThrows });
     },
   };
 

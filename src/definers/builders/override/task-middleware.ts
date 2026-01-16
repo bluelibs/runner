@@ -10,6 +10,8 @@ import { defineOverride } from "../../defineOverride";
 import type { TaskMiddlewareFluentBuilder } from "../middleware/task.interface";
 import { mergeArray, mergeDependencies } from "../middleware/utils";
 
+type AnyTaskMiddleware = ITaskMiddleware<any, any, any, any>;
+
 type TaskMiddlewareOverrideState<
   C,
   In,
@@ -49,7 +51,7 @@ function makeTaskMiddlewareOverrideBuilder<
   Out,
   D extends DependencyMapType,
 >(
-  base: ITaskMiddleware<C, In, Out, D>,
+  base: AnyTaskMiddleware,
   state: TaskMiddlewareOverrideState<C, In, Out, D>,
 ): TaskMiddlewareFluentBuilder<C, In, Out, D> {
   const builder: TaskMiddlewareFluentBuilder<C, In, Out, D> = {
@@ -80,12 +82,12 @@ function makeTaskMiddlewareOverrideBuilder<
 
       if (override) {
         return makeTaskMiddlewareOverrideBuilder<C, In, Out, TNewDeps>(
-          base as any,
+          base,
           next as TaskMiddlewareOverrideState<C, In, Out, TNewDeps>,
         );
       }
       return makeTaskMiddlewareOverrideBuilder<C, In, Out, D & TNewDeps>(
-        base as any,
+        base,
         next,
       );
     },
@@ -95,20 +97,17 @@ function makeTaskMiddlewareOverrideBuilder<
         state as unknown as TaskMiddlewareOverrideState<TNew, In, Out, D>,
         { configSchema: schema },
       );
-      return makeTaskMiddlewareOverrideBuilder<TNew, In, Out, D>(
-        base as any,
-        next,
-      );
+      return makeTaskMiddlewareOverrideBuilder<TNew, In, Out, D>(base, next);
     },
 
     run(fn) {
       const next = cloneTaskMiddlewareState(state, { run: fn });
-      return makeTaskMiddlewareOverrideBuilder(base as any, next);
+      return makeTaskMiddlewareOverrideBuilder(base, next);
     },
 
     meta<TNewMeta extends IMiddlewareMeta>(m: TNewMeta) {
       const next = cloneTaskMiddlewareState(state, { meta: m });
-      return makeTaskMiddlewareOverrideBuilder(base as any, next);
+      return makeTaskMiddlewareOverrideBuilder(base, next);
     },
 
     tags<TNewTags extends TagType[]>(
@@ -119,17 +118,17 @@ function makeTaskMiddlewareOverrideBuilder<
       const next = cloneTaskMiddlewareState(state, {
         tags: mergeArray(state.tags, t, override) as TagType[],
       });
-      return makeTaskMiddlewareOverrideBuilder(base as any, next);
+      return makeTaskMiddlewareOverrideBuilder(base, next);
     },
 
     everywhere(flag) {
       const next = cloneTaskMiddlewareState(state, { everywhere: flag });
-      return makeTaskMiddlewareOverrideBuilder(base as any, next);
+      return makeTaskMiddlewareOverrideBuilder(base, next);
     },
 
     build() {
       const { id: _id, ...patch } = state;
-      return defineOverride(base, patch as any);
+      return defineOverride<ITaskMiddleware<C, In, Out, D>>(base, { ...patch });
     },
   };
 

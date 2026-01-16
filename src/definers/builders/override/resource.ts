@@ -20,6 +20,8 @@ import {
   mergeRegister,
 } from "../resource/utils";
 
+type AnyResource = IResource<any, any, any, any, any, any, any>;
+
 type ResourceOverrideState<
   TConfig,
   TValue extends Promise<any>,
@@ -110,7 +112,7 @@ function makeResourceOverrideBuilder<
   TTags extends TagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 >(
-  base: IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>,
+  base: AnyResource,
   state: ResourceOverrideState<
     TConfig,
     TValue,
@@ -170,14 +172,14 @@ function makeResourceOverrideBuilder<
         ) as unknown as TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
       });
 
-      return makeResourceOverrideBuilder(base as any, next);
+      return makeResourceOverrideBuilder(base, next);
     },
     register(items, options) {
       const override = options?.override ?? false;
       const next = cloneResourceState(state, {
         register: mergeRegister(state.register, items, override),
       });
-      return makeResourceOverrideBuilder(base as any, next);
+      return makeResourceOverrideBuilder(base, next);
     },
     middleware<TNewMw extends ResourceMiddlewareAttachmentType[]>(
       mw: TNewMw,
@@ -202,7 +204,7 @@ function makeResourceOverrideBuilder<
       >(state, {
         middleware: mergeArray(state.middleware, mw, override) as TNewMw,
       });
-      return makeResourceOverrideBuilder(base as any, next);
+      return makeResourceOverrideBuilder(base, next);
     },
     tags<TNewTags extends TagType[]>(
       tags: TNewTags,
@@ -230,7 +232,7 @@ function makeResourceOverrideBuilder<
           ...TNewTags,
         ],
       });
-      return makeResourceOverrideBuilder(base as any, next);
+      return makeResourceOverrideBuilder(base, next);
     },
     context<TNewCtx>(factory: () => TNewCtx) {
       const next = cloneResourceState<
@@ -257,7 +259,7 @@ function makeResourceOverrideBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
     configSchema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
       const next = cloneResourceState<
@@ -284,7 +286,7 @@ function makeResourceOverrideBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
     resultSchema<TResolved>(schema: IValidationSchema<TResolved>) {
       const next = cloneResourceState<
@@ -311,7 +313,7 @@ function makeResourceOverrideBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
     init<TNewConfig = TConfig, TNewValue extends Promise<any> = TValue>(
       fn: ResourceInitFn<
@@ -348,7 +350,7 @@ function makeResourceOverrideBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
     dispose(
       fn: NonNullable<
@@ -374,7 +376,7 @@ function makeResourceOverrideBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
     meta<TNewMeta extends IResourceMeta>(m: TNewMeta) {
       const next = cloneResourceState<
@@ -401,7 +403,7 @@ function makeResourceOverrideBuilder<
         TNewMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
     overrides(o: Array<OverridableElements>, options?: { override?: boolean }) {
       const override = options?.override ?? false;
@@ -416,7 +418,7 @@ function makeResourceOverrideBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
     throws(list: ThrowsList) {
       const next = cloneResourceState(state, { throws: list });
@@ -428,17 +430,17 @@ function makeResourceOverrideBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(base as any, next);
+      >(base, next);
     },
     build() {
+      const normalizedThrows = normalizeThrows(
+        { kind: "resource", id: state.id },
+        state.throws,
+      );
       const { id: _id, ...patch } = state;
-      if (patch.throws) {
-        patch.throws = normalizeThrows(
-          { kind: "resource", id: state.id },
-          patch.throws,
-        );
-      }
-      return defineOverride(base, patch as any);
+      return defineOverride<
+        IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>
+      >(base, { ...patch, throws: normalizedThrows });
     },
   };
   return builder;

@@ -21,10 +21,17 @@ export interface HookOverrideBuilder<
 > {
   id: string;
   order(order: number): HookOverrideBuilder<TDeps, TOn, TMeta>;
-  dependencies<TNewDeps extends DependencyMapType>(
+  dependencies<
+    TNewDeps extends DependencyMapType,
+    TIsOverride extends boolean = false,
+  >(
     deps: TNewDeps | (() => TNewDeps),
-    options?: { override?: boolean },
-  ): HookOverrideBuilder<TDeps & TNewDeps, TOn, TMeta>;
+    options?: { override?: TIsOverride },
+  ): HookOverrideBuilder<
+    TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
+    TOn,
+    TMeta
+  >;
   tags<TNewTags extends TagType[]>(
     t: TNewTags,
     options?: { override?: boolean },
@@ -43,6 +50,8 @@ type HookOverrideState<
   TOn extends HookOn,
   TMeta extends ITaskMeta,
 > = Readonly<IHookDefinition<TDeps, TOn, TMeta>>;
+
+type AnyHook = IHook<any, any, any>;
 
 function cloneHookState<
   TDeps extends DependencyMapType,
@@ -66,7 +75,7 @@ function makeHookOverrideBuilder<
   TOn extends HookOn,
   TMeta extends ITaskMeta,
 >(
-  base: IHook<TDeps, TOn, TMeta>,
+  base: AnyHook,
   state: HookOverrideState<TDeps, TOn, TMeta>,
 ): HookOverrideBuilder<TDeps, TOn, TMeta> {
   const builder: HookOverrideBuilder<TDeps, TOn, TMeta> = {
@@ -74,13 +83,14 @@ function makeHookOverrideBuilder<
 
     order(order: number) {
       const next = cloneHookState(state, { order });
-      return makeHookOverrideBuilder(base as any, next);
+      return makeHookOverrideBuilder(base, next);
     },
 
-    dependencies<TNewDeps extends DependencyMapType>(
-      deps: TNewDeps | (() => TNewDeps),
-      options?: { override?: boolean },
-    ) {
+    dependencies<
+      TNewDeps extends DependencyMapType,
+      TIsOverride extends boolean = false,
+    >(deps: TNewDeps | (() => TNewDeps), options?: { override?: TIsOverride }) {
+      type NextDeps = TIsOverride extends true ? TNewDeps : TDeps & TNewDeps;
       const override = options?.override ?? false;
       const nextDependencies = mergeDependencies<TDeps, TNewDeps>(
         state.dependencies as TDeps | (() => TDeps),
@@ -88,23 +98,11 @@ function makeHookOverrideBuilder<
         override,
       );
 
-      const next = cloneHookState<TDeps, TOn, TMeta, TDeps & TNewDeps>(
-        state as HookOverrideState<TDeps, TOn, TMeta>,
-        {
-          dependencies: nextDependencies as unknown as TDeps & TNewDeps,
-        },
-      );
+      const next = cloneHookState<TDeps, TOn, TMeta, NextDeps>(state, {
+        dependencies: nextDependencies as unknown as NextDeps,
+      });
 
-      if (override) {
-        return makeHookOverrideBuilder<TNewDeps, TOn, TMeta>(
-          base as any,
-          next as HookOverrideState<TNewDeps, TOn, TMeta>,
-        ) as any;
-      }
-      return makeHookOverrideBuilder<TDeps & TNewDeps, TOn, TMeta>(
-        base as any,
-        next,
-      );
+      return makeHookOverrideBuilder<NextDeps, TOn, TMeta>(base, next);
     },
 
     tags<TNewTags extends TagType[]>(
@@ -115,7 +113,7 @@ function makeHookOverrideBuilder<
       const next = cloneHookState(state, {
         tags: mergeArray(state.tags, t, override) as TagType[],
       });
-      return makeHookOverrideBuilder(base as any, next);
+      return makeHookOverrideBuilder(base, next);
     },
 
     meta<TNewMeta extends ITaskMeta>(m: TNewMeta) {
@@ -125,17 +123,17 @@ function makeHookOverrideBuilder<
           meta: m,
         },
       );
-      return makeHookOverrideBuilder<TDeps, TOn, TNewMeta>(base as any, next);
+      return makeHookOverrideBuilder<TDeps, TOn, TNewMeta>(base, next);
     },
 
     run(fn) {
       const next = cloneHookState(state, { run: fn });
-      return makeHookOverrideBuilder(base as any, next);
+      return makeHookOverrideBuilder(base, next);
     },
 
     build() {
       const { id: _id, on: _on, ...patch } = state;
-      return defineOverride(base, patch as any);
+      return defineOverride<IHook<TDeps, TOn, TMeta>>(base, { ...patch });
     },
   };
 

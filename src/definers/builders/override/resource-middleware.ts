@@ -10,6 +10,8 @@ import { defineOverride } from "../../defineOverride";
 import type { ResourceMiddlewareFluentBuilder } from "../middleware/resource.interface";
 import { mergeArray, mergeDependencies } from "../middleware/utils";
 
+type AnyResourceMiddleware = IResourceMiddleware<any, any, any, any>;
+
 type ResourceMiddlewareOverrideState<
   C,
   In,
@@ -49,7 +51,7 @@ function makeResourceMiddlewareOverrideBuilder<
   Out,
   D extends DependencyMapType,
 >(
-  base: IResourceMiddleware<C, In, Out, D>,
+  base: AnyResourceMiddleware,
   state: ResourceMiddlewareOverrideState<C, In, Out, D>,
 ): ResourceMiddlewareFluentBuilder<C, In, Out, D> {
   const builder: ResourceMiddlewareFluentBuilder<C, In, Out, D> = {
@@ -80,12 +82,12 @@ function makeResourceMiddlewareOverrideBuilder<
 
       if (override) {
         return makeResourceMiddlewareOverrideBuilder<C, In, Out, TNewDeps>(
-          base as any,
+          base,
           next as ResourceMiddlewareOverrideState<C, In, Out, TNewDeps>,
         );
       }
       return makeResourceMiddlewareOverrideBuilder<C, In, Out, D & TNewDeps>(
-        base as any,
+        base,
         next,
       );
     },
@@ -96,19 +98,19 @@ function makeResourceMiddlewareOverrideBuilder<
         { configSchema: schema },
       );
       return makeResourceMiddlewareOverrideBuilder<TNew, In, Out, D>(
-        base as any,
+        base,
         next,
       );
     },
 
     run(fn) {
       const next = cloneResourceMiddlewareState(state, { run: fn });
-      return makeResourceMiddlewareOverrideBuilder(base as any, next);
+      return makeResourceMiddlewareOverrideBuilder(base, next);
     },
 
     meta<TNewMeta extends IMiddlewareMeta>(m: TNewMeta) {
       const next = cloneResourceMiddlewareState(state, { meta: m });
-      return makeResourceMiddlewareOverrideBuilder(base as any, next);
+      return makeResourceMiddlewareOverrideBuilder(base, next);
     },
 
     tags<TNewTags extends TagType[]>(
@@ -119,17 +121,19 @@ function makeResourceMiddlewareOverrideBuilder<
       const next = cloneResourceMiddlewareState(state, {
         tags: mergeArray(state.tags, t, override) as TagType[],
       });
-      return makeResourceMiddlewareOverrideBuilder(base as any, next);
+      return makeResourceMiddlewareOverrideBuilder(base, next);
     },
 
     everywhere(flag) {
       const next = cloneResourceMiddlewareState(state, { everywhere: flag });
-      return makeResourceMiddlewareOverrideBuilder(base as any, next);
+      return makeResourceMiddlewareOverrideBuilder(base, next);
     },
 
     build() {
       const { id: _id, ...patch } = state;
-      return defineOverride(base, patch as any);
+      return defineOverride<IResourceMiddleware<C, In, Out, D>>(base, {
+        ...patch,
+      });
     },
   };
 
