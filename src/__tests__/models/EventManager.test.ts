@@ -1,4 +1,4 @@
-import { IEvent, IEventEmission } from "../../defs";
+import { IEvent, IEventEmission, IHook } from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
@@ -921,9 +921,12 @@ describe("EventManager", () => {
       eventManager.interceptHook(interceptor1);
       eventManager.interceptHook(interceptor2);
 
-      expect((eventManager as any).hookInterceptors).toHaveLength(2);
-      expect((eventManager as any).hookInterceptors[0]).toBe(interceptor1);
-      expect((eventManager as any).hookInterceptors[1]).toBe(interceptor2);
+      const intercepts = (
+        eventManager as unknown as { hookInterceptors: any[] }
+      ).hookInterceptors;
+      expect(intercepts).toHaveLength(2);
+      expect(intercepts[0]).toBe(interceptor1);
+      expect(intercepts[1]).toBe(interceptor2);
     });
 
     it("should throw error when adding hook interceptors after lock", () => {
@@ -954,8 +957,8 @@ describe("EventManager", () => {
       };
 
       const result = await eventManager.executeHookWithInterceptors(
-        mockHook as any,
-        mockEvent as any,
+        mockHook as unknown as IHook<any, any>,
+        mockEvent as unknown as IEventEmission<any>,
         {},
       );
 
@@ -995,8 +998,8 @@ describe("EventManager", () => {
       };
 
       await eventManager.executeHookWithInterceptors(
-        mockHook as any,
-        mockEvent as any,
+        mockHook as unknown as IHook<any, any>,
+        mockEvent as unknown as IEventEmission<any>,
         {},
       );
 
@@ -1030,8 +1033,8 @@ describe("EventManager", () => {
       };
 
       await eventManager.executeHookWithInterceptors(
-        mockHook as any,
-        mockEvent as any,
+        mockHook as unknown as IHook<any, any>,
+        mockEvent as unknown as IEventEmission<any>,
         {},
       );
 
@@ -1063,8 +1066,8 @@ describe("EventManager", () => {
       };
 
       const result = await eventManager.executeHookWithInterceptors(
-        mockHook as any,
-        mockEvent as any,
+        mockHook as unknown as IHook<any, any>,
+        mockEvent as unknown as IEventEmission<any>,
         {},
       );
 
@@ -1087,11 +1090,11 @@ describe("EventManager", () => {
         stopPropagation: () => {},
         isPropagationStopped: () => false,
         tags: [globalTags.excludeFromGlobalHooks],
-      } as any;
+      } as unknown as IHook<any, any>;
 
       const result = await eventManager.executeHookWithInterceptors(
-        mockHook as any,
-        mockEvent as any,
+        mockHook as unknown as IHook<any, any>,
+        mockEvent as unknown as IEventEmission<any>,
         {},
       );
 
@@ -1114,12 +1117,12 @@ describe("EventManager", () => {
         stopPropagation: () => {},
         isPropagationStopped: () => false,
         tags: [],
-      } as any;
+      } as unknown as IEventEmission<any>;
 
       await expect(
         eventManager.executeHookWithInterceptors(
-          mockHook as any,
-          mockEvent as any,
+          mockHook as unknown as IHook<any, any>,
+          mockEvent as unknown as IEventEmission<any>,
           {},
         ),
       ).rejects.toThrow("boom");
@@ -1131,7 +1134,7 @@ describe("EventManager", () => {
       const mockHook = {
         id: "noContextHook",
         run: jest.fn().mockResolvedValue("ok-no-context"),
-      } as any;
+      } as unknown as IHook<any, any>;
 
       const mockEvent = {
         id: "evt",
@@ -1139,7 +1142,7 @@ describe("EventManager", () => {
         timestamp: new Date(),
         source: "s",
         tags: [],
-      } as any;
+      } as unknown as IEventEmission<any>;
 
       const result = await em.executeHookWithInterceptors(
         mockHook,
@@ -1200,8 +1203,8 @@ describe("EventManager", () => {
 
       await expect(
         eventManager.executeHookWithInterceptors(
-          mockHook as any,
-          mockEvent as any,
+          mockHook as unknown as IHook<any, any>,
+          mockEvent as unknown as IEventEmission<any>,
           {},
         ),
       ).rejects.toThrow("Hook interceptor error");
@@ -1276,7 +1279,10 @@ describe("EventManager", () => {
   });
 
   it("uses only event-specific listeners when excludeFromGlobal is set (avoids merging)", async () => {
-    const spy = jest.spyOn(eventManager as any, "getCachedMergedListeners");
+    const spy = jest.spyOn(
+      eventManager as unknown as { getCachedMergedListeners: any },
+      "getCachedMergedListeners",
+    );
 
     const handlerEvent = jest.fn();
     const handlerGlobal = jest.fn();
@@ -1300,10 +1306,12 @@ describe("EventManager", () => {
 
   it("exposes getCachedMergedListeners for backward compatibility", () => {
     const manager = new EventManager();
-    const registry = (manager as any).registry;
+    const registry = (manager as unknown as { registry: any }).registry;
     const spy = jest.spyOn(registry, "getCachedMergedListeners");
 
-    (manager as any).getCachedMergedListeners("evt-bc");
+    (
+      manager as unknown as { getCachedMergedListeners: any }
+    ).getCachedMergedListeners("evt-bc");
 
     expect(spy).toHaveBeenCalledWith("evt-bc");
   });
@@ -1325,7 +1333,7 @@ describe("EventManager", () => {
         executionOrder.push("hook-run");
         return "ok";
       }),
-    } as any;
+    } as unknown as IHook<any, any>;
 
     const mockEvent = {
       id: "evt",
@@ -1336,7 +1344,7 @@ describe("EventManager", () => {
       stopPropagation: () => {},
       isPropagationStopped: () => false,
       tags: [globalTags.excludeFromGlobalHooks],
-    } as any;
+    } as unknown as IEventEmission<any>;
 
     const result = await eventManager.executeHookWithInterceptors(
       mockHook,
@@ -1380,11 +1388,11 @@ describe("EventManager", () => {
           }
           return undefined;
         },
-      } as any;
+      } as unknown as IHook<any, any>;
 
       em.addListener(A, async (event) => {
         // Execute hook within currentHookIdContext via executeHookWithInterceptors
-        await em.executeHookWithInterceptors(hook, event, {} as any);
+        await em.executeHookWithInterceptors(hook, event, {});
       });
 
       // Initial emit should not throw because re-emit is from the same hook id

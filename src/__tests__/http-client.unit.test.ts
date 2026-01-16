@@ -50,7 +50,7 @@ describe("http-client (universal)", () => {
       baseUrl,
       serializer: getDefaultSerializer(),
     });
-    await client.event("e.hello", { x: true } as any);
+    await client.event("e.hello", { x: true });
     const event = (createExposureFetch as any).__event as jest.Mock;
     expect(event).toHaveBeenCalledTimes(1);
     expect(event.mock.calls[0][0]).toBe("e.hello");
@@ -63,7 +63,7 @@ describe("http-client (universal)", () => {
       serializer: getDefaultSerializer(),
     });
     expect(typeof client.eventWithResult).toBe("function");
-    const out = await client.eventWithResult!("e.ret", { x: true } as any);
+    const out = await client.eventWithResult!("e.ret", { x: true });
     const eventWithResult = (createExposureFetch as any)
       .__eventWithResult as jest.Mock;
     expect(eventWithResult).toHaveBeenCalledTimes(1);
@@ -80,9 +80,9 @@ describe("http-client (universal)", () => {
       baseUrl,
       serializer: getDefaultSerializer(),
     });
-    await expect(
-      client.eventWithResult!("e.nope", { a: 1 } as any),
-    ).rejects.toThrow(/eventWithResult not available/i);
+    await expect(client.eventWithResult!("e.nope", { a: 1 })).rejects.toThrow(
+      /eventWithResult not available/i,
+    );
   });
 
   it("eventWithResult: rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
@@ -109,9 +109,9 @@ describe("http-client (universal)", () => {
       serializer: getDefaultSerializer(),
       errorRegistry: new Map([["tests.errors.evret", helper]]),
     });
-    await expect(
-      client.eventWithResult!("e.ret", { a: 1 } as any),
-    ).rejects.toThrow(/typed-evret:9/);
+    await expect(client.eventWithResult!("e.ret", { a: 1 })).rejects.toThrow(
+      /typed-evret:9/,
+    );
   });
 
   it("browser multipart uses FormData and onRequest sees auth header", async () => {
@@ -137,12 +137,12 @@ describe("http-client (universal)", () => {
       const env = { ok: true, result: "UP" };
       return {
         text: async () => getDefaultSerializer().stringify(env),
-      } as any;
+      } as unknown as Response;
     });
     const onRequest = jest.fn();
     const client = createHttpClient({
       baseUrl,
-      fetchImpl: fetchMock as any,
+      fetchImpl: fetchMock as unknown as typeof fetch,
       auth: { token: "tok" },
       onRequest,
       serializer: getDefaultSerializer(),
@@ -154,10 +154,10 @@ describe("http-client (universal)", () => {
           parse: (s: string) => JSON.parse(s),
           provide: (v: any, fn: any) => fn(),
           require: () => ({}) as any,
-        } as any,
+        } as unknown as any,
       ],
     });
-    const r = await client.task("t.upload.web", { file } as any);
+    const r = await client.task("t.upload.web", { file });
     expect(r).toBe("UP");
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(onRequest).toHaveBeenCalledTimes(1);
@@ -166,7 +166,7 @@ describe("http-client (universal)", () => {
   });
 
   it("browser multipart uses default filename when meta.name missing", async () => {
-    const blob = new Blob([Buffer.from("abc") as any], {
+    const blob = new Blob([new Uint8Array(Buffer.from("abc"))], {
       type: "application/octet-stream",
     });
     // Intentionally pass meta without name to exercise default filename branch
@@ -249,9 +249,7 @@ describe("http-client (universal)", () => {
       serializer: getDefaultSerializer(),
       errorRegistry: new Map([["tests.errors.ev", helper]]),
     });
-    await expect(client.event("e.1", { a: 1 } as any)).rejects.toThrow(
-      /typed-ev:8/,
-    );
+    await expect(client.event("e.1", { a: 1 })).rejects.toThrow(/typed-ev:8/);
   });
 
   it("JSON fallback rethrows TunnelError when no registry present", async () => {

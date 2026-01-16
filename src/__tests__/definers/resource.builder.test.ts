@@ -1,4 +1,12 @@
-import { r, resource, definitions, run, tag } from "../..";
+import {
+  r,
+  resource,
+  definitions,
+  run,
+  tag,
+  IResourceMeta,
+  IResource,
+} from "../..";
 
 describe("resource builder", () => {
   it("build() returns branded resource with id", () => {
@@ -93,9 +101,7 @@ describe("resource builder", () => {
 
     expect(typeof composed.register).toBe("function");
     if (typeof composed.register === "function") {
-      const ids = composed
-        .register({} as unknown as any)
-        .map((rSrc: { id: string }) => rSrc.id);
+      const ids = composed.register().map((rSrc: { id: string }) => rSrc.id);
       expect(ids).toEqual([alpha.id, beta.id]);
     }
   });
@@ -110,7 +116,7 @@ describe("resource builder", () => {
       .tags([])
       .middleware([])
       .context(() => ({ c: 0 }))
-      .meta({ title: "X" } as unknown as any)
+      .meta({ title: "X" } as unknown as IResourceMeta)
       .overrides([])
       .init(async (_cfg, deps, ctx) => {
         ctx.c++;
@@ -219,7 +225,7 @@ describe("resource builder", () => {
         parse: (x: unknown) => x as { foo: number },
       })
       .resultSchema<number>({ parse: (x: unknown) => x as number })
-      .meta({ title: "Configured" } as unknown as any)
+      .meta({ title: "Configured" } as unknown as IResourceMeta)
       .init(async () => Promise.resolve(42))
       .build();
 

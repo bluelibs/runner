@@ -1,5 +1,6 @@
 import { createExposureFetch } from "../http-fetch-tunnel.resource";
 import { getDefaultSerializer, Serializer } from "../serializer";
+import { IErrorHelper } from "../defs";
 
 describe("http-fetch-tunnel.resource (unit)", () => {
   it("createExposureFetch: throws when baseUrl is empty or '/'", () => {
@@ -148,7 +149,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
             data: { code: 12 },
           },
         }),
-    })) as any;
+    })) as unknown as typeof fetch;
 
     const helper = {
       id: "tests.errors.evr",
@@ -157,7 +158,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       },
       is: () => false,
       toString: () => "",
-    } as any;
+    } as unknown as IErrorHelper<any>;
 
     const c = createExposureFetch({
       baseUrl: "http://api",

@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
 import { r, run, globals } from "../index";
+import { Serializer } from "../serializer";
 import { createHttpSmartClient, createHttpMixedClient } from "../node";
 import type { RunResult } from "../models/RunResult";
 
@@ -121,7 +122,7 @@ describe("httpClientFactory", () => {
     it("should provide createSmartClient in Node environment via node entry", async () => {
       const serializer = (await runtime.getResourceValue(
         globals.resources.serializer,
-      )) as any;
+      )) as Serializer;
       const smartClient = createHttpSmartClient({
         baseUrl: "http://localhost:9999/__runner",
         serializer,
@@ -135,7 +136,7 @@ describe("httpClientFactory", () => {
     it("should provide createMixedClient in Node environment via node entry", async () => {
       const serializer = (await runtime.getResourceValue(
         globals.resources.serializer,
-      )) as any;
+      )) as Serializer;
       const mixedClient = createHttpMixedClient({
         baseUrl: "http://localhost:9999/__runner",
         serializer,
