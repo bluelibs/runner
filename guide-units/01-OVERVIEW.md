@@ -25,7 +25,7 @@ import { r, globals } from "@bluelibs/runner";
 // Built-in middleware from globals
 const { cache, retry } = globals.middleware.task;
 
-// ✅ ONE LINE to add caching with TTL
+// ONE LINE to add caching with TTL
 const getUser = r
   .task("users.get")
   .dependencies({ db })
@@ -33,14 +33,14 @@ const getUser = r
   .run(async (id, { db }) => db.query("SELECT * FROM users WHERE id = ?", id))
   .build();
 
-// ✅ ONE LINE to add retry with exponential backoff
+// ONE LINE to add retry with exponential backoff
 const callAPI = r
   .task("api.call")
   .middleware([retry.with({ retries: 3, backoff: "exponential" })]) // ← Auto-retry failures
   .run(async (url) => fetch(url))
   .build();
 
-// ✅ Testing is actually pleasant
+// Testing is actually pleasant
 test("getUser works", async () => {
   const result = await getUser.run("user-123", { db: mockDb }); // ← Just call it
   expect(result.name).toBe("John");
@@ -66,8 +66,8 @@ test("getUser works", async () => {
 | **Middleware**        | Built-in      | Built-in   | Manual      | Manual     | Manual     |
 | **Events**            | Built-in      | Built-in   | Manual      | Manual     | Manual     |
 | **Async Context**     | Built-in      | Manual     | Manual      | Manual     | Manual     |
-| **Durable Workflows** | Built-in      | ❌         | ❌          | ❌         | ❌         |
-| **HTTP Tunnels**      | Built-in      | ❌         | ❌          | ❌         | ❌         |
+| **Durable Workflows** | Built-in      | No         | No          | No         | No         |
+| **HTTP Tunnels**      | Built-in      | No         | No          | No         | No         |
 | **Debug Experience**  | Crystal clear | Confusing  | Confusing   | Confusing  | Confusing  |
 
 **TL;DR:** Runner gives you the features of NestJS with the simplicity of plain functions.

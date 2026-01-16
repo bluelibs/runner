@@ -132,14 +132,14 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 
 - [Why Runner?](#why-runner) - The problem we solve
 - [What Is This Thing?](#what-is-this-thing)
-- [Show Me the Magic](#-show-me-the-magic) - See it in action
-- [How Does It Compare?](#-how-does-it-compare) - vs. other frameworks
-- [Performance at a Glance](#-performance-at-a-glance) - Real benchmarks
-- [What's in the Box?](#-whats-in-the-box) - Feature matrix
+- [Show Me the Magic](#show-me-the-magic) - See it in action
+- [How Does It Compare?](#how-does-it-compare) - vs. other frameworks
+- [Performance at a Glance](#performance-at-a-glance) - Real benchmarks
+- [What's in the Box?](#whats-in-the-box) - Feature matrix
 - [Your First 5 Minutes](#your-first-5-minutes) - **Start here!**
 - [Quick Start](#quick-start) - Full Express example
 - [Learning Guide](#learning-guide) - Common patterns
-- [Quick Wins](#-quick-wins-copy-paste-solutions) - Copy-paste solutions
+- [Quick Wins](#quick-wins-copy-paste-solutions) - Copy-paste solutions
 - [The Big Five](#the-big-five) - Core concepts
 
 **Core Concepts**
@@ -191,7 +191,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 
 **Developer Experience**
 
-- [ Quick Reference Cheat Sheet](#-quick-reference-cheat-sheet) - **Bookmark this!**
+- [Quick Reference Cheat Sheet](#quick-reference-cheat-sheet) - **Bookmark this!**
 - [Fluent Builders](#fluent-builders-r) - Ergonomic API
 - [Type Helpers](#type-helpers) - TypeScript utilities
 - [Runtime Validation](#runtime-validation) - Schema validation
@@ -205,7 +205,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [Performance](#performance) - Benchmarks and metrics
 - [Why Choose BlueLibs Runner?](#why-choose-bluelibs-runner) - Framework comparison
 - [Migration Path](#the-migration-path) - Adopting Runner
-- [Troubleshooting](#-troubleshooting) - Common issues and solutions
+- [Troubleshooting](#troubleshooting) - Common issues and solutions
 - [Community & Support](#community--support) - Getting help
 
 ---
@@ -236,7 +236,7 @@ import { r, globals } from "@bluelibs/runner";
 // Built-in middleware from globals
 const { cache, retry } = globals.middleware.task;
 
-// ✅ ONE LINE to add caching with TTL
+// ONE LINE to add caching with TTL
 const getUser = r
   .task("users.get")
   .dependencies({ db })
@@ -244,14 +244,14 @@ const getUser = r
   .run(async (id, { db }) => db.query("SELECT * FROM users WHERE id = ?", id))
   .build();
 
-// ✅ ONE LINE to add retry with exponential backoff
+// ONE LINE to add retry with exponential backoff
 const callAPI = r
   .task("api.call")
   .middleware([retry.with({ retries: 3, backoff: "exponential" })]) // ← Auto-retry failures
   .run(async (url) => fetch(url))
   .build();
 
-// ✅ Testing is actually pleasant
+// Testing is actually pleasant
 test("getUser works", async () => {
   const result = await getUser.run("user-123", { db: mockDb }); // ← Just call it
   expect(result.name).toBe("John");
@@ -277,8 +277,8 @@ test("getUser works", async () => {
 | **Middleware**        | Built-in      | Built-in   | Manual      | Manual     | Manual     |
 | **Events**            | Built-in      | Built-in   | Manual      | Manual     | Manual     |
 | **Async Context**     | Built-in      | Manual     | Manual      | Manual     | Manual     |
-| **Durable Workflows** | Built-in      | ❌         | ❌          | ❌         | ❌         |
-| **HTTP Tunnels**      | Built-in      | ❌         | ❌          | ❌         | ❌         |
+| **Durable Workflows** | Built-in      | No         | No          | No         | No         |
+| **HTTP Tunnels**      | Built-in      | No         | No          | No         | No         |
 | **Debug Experience**  | Crystal clear | Confusing  | Confusing   | Confusing  | Confusing  |
 
 **TL;DR:** Runner gives you the features of NestJS with the simplicity of plain functions.
@@ -470,24 +470,28 @@ That's it! You just:
 Now that you've seen the basics, let's build something real! Here's a complete Express API server with dependency injection, logging, and proper lifecycle management. (And yes, it's less code than most frameworks need for "Hello World" )
 
 ```bash
-npm install @bluelibs/runner express
+npm install @bluelibs/runner express zod
 ```
 
 ```typescript
 import express from "express";
 import { r, run, globals } from "@bluelibs/runner";
+import { z } from "zod";
 
 // A resource is anything you want to share across your app, a singleton
 const server = r
   .resource<{ port: number }>("app.server")
-  .init(async ({ port }, dependencies) => {
-    const app = express();
-    app.use(express.json());
-    const listener = await app.listen(port);
-    console.log(`Server running on port ${port}`);
-
-    return { listener };
-  })
+  .init(
+    async ({ port }) =>
+      new Promise((resolve) => {
+        const app = express();
+        app.use(express.json());
+        const listener = app.listen(port, () => {
+          console.log(`Server running on port ${port}`);
+          resolve({ app, listener });
+        });
+      }),
+  )
   .dispose(async ({ listener }) => listener.close())
   .build();
 
@@ -495,8 +499,8 @@ const server = r
 const createUser = r
   .task("app.tasks.createUser")
   .dependencies({ server, logger: globals.resources.logger })
-  .inputSchema<{ name: string }>({ parse: (value) => value })
-  .run(async (input, { server, logger }) => {
+  .inputSchema(z.object({ name: z.string() }))
+  .run(async (input, { logger }) => {
     await logger.info(`Creating ${input.name}`);
     return { id: "user-123", name: input.name };
   })
@@ -508,10 +512,6 @@ const app = r
   .register([server.with({ port: 3000 }), createUser])
   .dependencies({ server, createUser })
   .init(async (_config, { server, createUser }) => {
-    server.listener.on("listening", () => {
-      console.log("Runner HTTP server ready");
-    });
-
     server.app.post("/users", async (req, res) => {
       const user = await createUser(req.body);
       res.json(user);
@@ -521,10 +521,13 @@ const app = r
 
 // That's it! Each run is fully isolated
 const runtime = await run(app);
-const { dispose, runTask, getResourceValue, emitEvent } = runtime;
+
+// Use the runtime helpers
+await runtime.runTask(createUser, { name: "Ada" });
+await runtime.dispose();
 
 // Want to see what's happening? Add debug logging:
-await run(app, { debug: "verbose" });
+// await run(app, { debug: "verbose" });
 ```
 
 ** What you just built:**
@@ -532,6 +535,7 @@ await run(app, { debug: "verbose" });
 - A full Express API with proper lifecycle management
 - Dependency injection (tasks get what they need automatically)
 - Built-in logging (via `globals.resources.logger`)
+- Schema validation with Zod
 - Graceful shutdown (the `dispose()` method)
 - Type-safe everything (TypeScript has your back)
 
@@ -554,11 +558,17 @@ const app = resource({ id: "app", register: [db, add] });
 await run(app);
 ```
 
-See [complete docs](./readmes/FLUENT_BUILDERS.md) for migration tips and side‑by‑side patterns.
+See [Fluent Builders](#fluent-builders-r) for migration tips and side‑by‑side patterns.
 
 ### Platform & Async Context
 
-Runner auto-detects the platform and adapts behavior at runtime. The only feature present only in Node.js is the use of `AsyncLocalStorage` for managing async context.
+Runner auto-detects the platform (Node.js, browser, edge) and adapts behavior at runtime.
+
+**Node-specific features:**
+
+- [Async Context](#async-context) - Request-scoped state via `AsyncLocalStorage`
+- [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows
+- [HTTP Tunnels](./readmes/TUNNELS.md) - Remote task execution
 
 ---
 ## Learning Guide
@@ -567,7 +577,7 @@ Runner auto-detects the platform and adapts behavior at runtime. The only featur
 
 Here are some patterns that'll help you write clean Runner code. We've seen lots of developers learn these the hard way, so let's save you some time! 
 
-###  Pattern 1: Not Everything Needs to Be a Task
+### Pattern 1: Not Everything Needs to Be a Task
 
 When you're starting out, it's tempting to make everything a task. Here's the golden rule: **use regular functions for utilities, use tasks for business operations**.
 
@@ -592,7 +602,7 @@ const processOrder = r
 
 **Want detailed guidance?** See the [Tasks section](#tasks) below for a comprehensive breakdown of when to use tasks vs. functions.
 
-###  Pattern 2: The Right Way to Call Tasks
+### Pattern 2: The Right Way to Call Tasks
 
 This one trips everyone up at first! Here's the pattern:
 
@@ -615,12 +625,13 @@ await dispose();
 
 **Remember**: You `run()` the **app**, then you `runTask()` the **task**. Think of it like starting a car (run the app) before you can drive it (runTask).
 
-###  Pattern 3: Two Ways to Test
+### Pattern 3: Two Ways to Test
 
 Runner gives you flexibility in testing:
 
 ```typescript
-//  Unit Testing: Call .run() directly with mocks
+// Unit Testing: Call .run() directly with mocks
+// This BYPASSES middleware - fast and isolated
 test("calculateTotal", async () => {
   const result = await calculateTotal.run(
     { price: 100 },
@@ -629,7 +640,8 @@ test("calculateTotal", async () => {
   expect(result).toBe(110);
 });
 
-//  Integration Testing: Use the full runtime
+// Integration Testing: Use the full runtime
+// This runs through the FULL pipeline including middleware
 test("full order flow", async () => {
   const { runTask, dispose } = await run(app);
   const result = await runTask(processOrder, { orderId: "123" });
@@ -638,14 +650,14 @@ test("full order flow", async () => {
 });
 ```
 
-**Tip**: Start with unit tests (faster, simpler), then add integration tests for critical flows.
+**Tip**: Start with unit tests (faster, simpler), then add integration tests for critical flows. See [Testing](#testing) for more patterns.
 
-###  Pattern 4: Remember to Register
+### Pattern 4: Remember to Register
 
 This is easy to forget when you're moving fast:
 
 ```typescript
-//  The complete pattern
+// The complete pattern
 const database = r
   .resource("db")
   .init(async () => connectToDB())
@@ -670,13 +682,60 @@ const app = r
 
 **Think of it this way**: `dependencies` says "I need these things" and `register` says "these things exist". Both are needed!
 
+### Pattern 5: Configure Resources with `.with()`
+
+Resources often need configuration. Use `.with()` to pass it:
+
+```typescript
+// Define the resource with a config type
+const database = r
+  .resource<{ connectionString: string }>("db")
+  .init(async ({ connectionString }) => connect(connectionString))
+  .build();
+
+// Configure when registering
+const app = r
+  .resource("app")
+  .register([database.with({ connectionString: "postgres://..." })])
+  .build();
+```
+
+### Pattern 6: Built-in Globals
+
+Runner provides commonly-used resources and middleware out of the box:
+
+```typescript
+import { globals } from "@bluelibs/runner";
+
+const myTask = r
+  .task("myTask")
+  .dependencies({ logger: globals.resources.logger }) // Built-in logger
+  .middleware([globals.middleware.task.cache.with({ ttl: 60000 })]) // Built-in cache
+  .run(async (input, { logger }) => {
+    await logger.info("Processing...");
+  })
+  .build();
+```
+
+See [Quick Wins](#quick-wins-copy-paste-solutions) for ready-to-use examples with globals.
+
 ---
 
-##  Quick Wins: Copy-Paste Solutions
+### What's Next?
+
+Now that you know the patterns, here's your learning path:
+
+1. **[Quick Wins](#quick-wins-copy-paste-solutions)** - Copy-paste solutions for caching, retry, timeouts
+2. **[The Big Five](#the-big-five)** - Deep dive into Tasks, Resources, Events, Middleware, Tags
+3. **[Events & Hooks](#events)** - Decouple your app with event-driven patterns
+4. **[Middleware](#middleware)** - Add cross-cutting concerns cleanly
+
+---
+## Quick Wins: Copy-Paste Solutions
 
 **5 real-world problems, solved in minutes.** Just copy, customize, and ship. 
 
-###  Add Caching to Any Task (with automatic invalidation)
+### Add Caching to Any Task (with automatic invalidation)
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -699,7 +758,7 @@ const getUser = r
 // After 60s: refreshes automatically
 ```
 
-###  Retry Failed API Calls (with exponential backoff)
+### Retry Failed API Calls (with exponential backoff)
 
 ```typescript
 const callExternalAPI = r
@@ -722,7 +781,7 @@ const callExternalAPI = r
 // Gives up on permanent errors
 ```
 
-###  Add Request Timeouts (prevent hanging operations)
+### Add Request Timeouts (prevent hanging operations)
 
 ```typescript
 const slowOperation = r
@@ -747,7 +806,7 @@ const robustTask = r
   .build();
 ```
 
-###  Set Up Event-Driven Architecture (in 30 seconds)
+### Set Up Event-Driven Architecture (in 30 seconds)
 
 ```typescript
 // Define your events
@@ -783,7 +842,7 @@ const sendWelcomeEmail = r
 // Automatically decoupled - no direct dependencies!
 ```
 
-###  Add Structured Logging (with context)
+### Add Structured Logging (with context)
 
 ```typescript
 const processPayment = r

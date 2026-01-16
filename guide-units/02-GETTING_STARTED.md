@@ -61,24 +61,28 @@ That's it! You just:
 Now that you've seen the basics, let's build something real! Here's a complete Express API server with dependency injection, logging, and proper lifecycle management. (And yes, it's less code than most frameworks need for "Hello World" )
 
 ```bash
-npm install @bluelibs/runner express
+npm install @bluelibs/runner express zod
 ```
 
 ```typescript
 import express from "express";
 import { r, run, globals } from "@bluelibs/runner";
+import { z } from "zod";
 
 // A resource is anything you want to share across your app, a singleton
 const server = r
   .resource<{ port: number }>("app.server")
-  .init(async ({ port }, dependencies) => {
-    const app = express();
-    app.use(express.json());
-    const listener = await app.listen(port);
-    console.log(`Server running on port ${port}`);
-
-    return { listener };
-  })
+  .init(
+    async ({ port }) =>
+      new Promise((resolve) => {
+        const app = express();
+        app.use(express.json());
+        const listener = app.listen(port, () => {
+          console.log(`Server running on port ${port}`);
+          resolve({ app, listener });
+        });
+      }),
+  )
   .dispose(async ({ listener }) => listener.close())
   .build();
 
@@ -86,8 +90,8 @@ const server = r
 const createUser = r
   .task("app.tasks.createUser")
   .dependencies({ server, logger: globals.resources.logger })
-  .inputSchema<{ name: string }>({ parse: (value) => value })
-  .run(async (input, { server, logger }) => {
+  .inputSchema(z.object({ name: z.string() }))
+  .run(async (input, { logger }) => {
     await logger.info(`Creating ${input.name}`);
     return { id: "user-123", name: input.name };
   })
@@ -99,10 +103,6 @@ const app = r
   .register([server.with({ port: 3000 }), createUser])
   .dependencies({ server, createUser })
   .init(async (_config, { server, createUser }) => {
-    server.listener.on("listening", () => {
-      console.log("Runner HTTP server ready");
-    });
-
     server.app.post("/users", async (req, res) => {
       const user = await createUser(req.body);
       res.json(user);
@@ -112,10 +112,13 @@ const app = r
 
 // That's it! Each run is fully isolated
 const runtime = await run(app);
-const { dispose, runTask, getResourceValue, emitEvent } = runtime;
+
+// Use the runtime helpers
+await runtime.runTask(createUser, { name: "Ada" });
+await runtime.dispose();
 
 // Want to see what's happening? Add debug logging:
-await run(app, { debug: "verbose" });
+// await run(app, { debug: "verbose" });
 ```
 
 ** What you just built:**
@@ -123,6 +126,7 @@ await run(app, { debug: "verbose" });
 - A full Express API with proper lifecycle management
 - Dependency injection (tasks get what they need automatically)
 - Built-in logging (via `globals.resources.logger`)
+- Schema validation with Zod
 - Graceful shutdown (the `dispose()` method)
 - Type-safe everything (TypeScript has your back)
 
@@ -145,10 +149,16 @@ const app = resource({ id: "app", register: [db, add] });
 await run(app);
 ```
 
-See [complete docs](./readmes/FLUENT_BUILDERS.md) for migration tips and side‑by‑side patterns.
+See [Fluent Builders](#fluent-builders-r) for migration tips and side‑by‑side patterns.
 
 ### Platform & Async Context
 
-Runner auto-detects the platform and adapts behavior at runtime. The only feature present only in Node.js is the use of `AsyncLocalStorage` for managing async context.
+Runner auto-detects the platform (Node.js, browser, edge) and adapts behavior at runtime.
+
+**Node-specific features:**
+
+- [Async Context](#async-context) - Request-scoped state via `AsyncLocalStorage`
+- [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows
+- [HTTP Tunnels](./readmes/TUNNELS.md) - Remote task execution
 
 ---

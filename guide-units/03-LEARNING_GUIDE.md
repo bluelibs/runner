@@ -4,7 +4,7 @@
 
 Here are some patterns that'll help you write clean Runner code. We've seen lots of developers learn these the hard way, so let's save you some time! 
 
-###  Pattern 1: Not Everything Needs to Be a Task
+### Pattern 1: Not Everything Needs to Be a Task
 
 When you're starting out, it's tempting to make everything a task. Here's the golden rule: **use regular functions for utilities, use tasks for business operations**.
 
@@ -29,7 +29,7 @@ const processOrder = r
 
 **Want detailed guidance?** See the [Tasks section](#tasks) below for a comprehensive breakdown of when to use tasks vs. functions.
 
-###  Pattern 2: The Right Way to Call Tasks
+### Pattern 2: The Right Way to Call Tasks
 
 This one trips everyone up at first! Here's the pattern:
 
@@ -52,12 +52,13 @@ await dispose();
 
 **Remember**: You `run()` the **app**, then you `runTask()` the **task**. Think of it like starting a car (run the app) before you can drive it (runTask).
 
-###  Pattern 3: Two Ways to Test
+### Pattern 3: Two Ways to Test
 
 Runner gives you flexibility in testing:
 
 ```typescript
-//  Unit Testing: Call .run() directly with mocks
+// Unit Testing: Call .run() directly with mocks
+// This BYPASSES middleware - fast and isolated
 test("calculateTotal", async () => {
   const result = await calculateTotal.run(
     { price: 100 },
@@ -66,7 +67,8 @@ test("calculateTotal", async () => {
   expect(result).toBe(110);
 });
 
-//  Integration Testing: Use the full runtime
+// Integration Testing: Use the full runtime
+// This runs through the FULL pipeline including middleware
 test("full order flow", async () => {
   const { runTask, dispose } = await run(app);
   const result = await runTask(processOrder, { orderId: "123" });
@@ -75,14 +77,14 @@ test("full order flow", async () => {
 });
 ```
 
-**Tip**: Start with unit tests (faster, simpler), then add integration tests for critical flows.
+**Tip**: Start with unit tests (faster, simpler), then add integration tests for critical flows. See [Testing](#testing) for more patterns.
 
-###  Pattern 4: Remember to Register
+### Pattern 4: Remember to Register
 
 This is easy to forget when you're moving fast:
 
 ```typescript
-//  The complete pattern
+// The complete pattern
 const database = r
   .resource("db")
   .init(async () => connectToDB())
@@ -107,5 +109,52 @@ const app = r
 
 **Think of it this way**: `dependencies` says "I need these things" and `register` says "these things exist". Both are needed!
 
+### Pattern 5: Configure Resources with `.with()`
+
+Resources often need configuration. Use `.with()` to pass it:
+
+```typescript
+// Define the resource with a config type
+const database = r
+  .resource<{ connectionString: string }>("db")
+  .init(async ({ connectionString }) => connect(connectionString))
+  .build();
+
+// Configure when registering
+const app = r
+  .resource("app")
+  .register([database.with({ connectionString: "postgres://..." })])
+  .build();
+```
+
+### Pattern 6: Built-in Globals
+
+Runner provides commonly-used resources and middleware out of the box:
+
+```typescript
+import { globals } from "@bluelibs/runner";
+
+const myTask = r
+  .task("myTask")
+  .dependencies({ logger: globals.resources.logger }) // Built-in logger
+  .middleware([globals.middleware.task.cache.with({ ttl: 60000 })]) // Built-in cache
+  .run(async (input, { logger }) => {
+    await logger.info("Processing...");
+  })
+  .build();
+```
+
+See [Quick Wins](#quick-wins-copy-paste-solutions) for ready-to-use examples with globals.
+
 ---
 
+### What's Next?
+
+Now that you know the patterns, here's your learning path:
+
+1. **[Quick Wins](#quick-wins-copy-paste-solutions)** - Copy-paste solutions for caching, retry, timeouts
+2. **[The Big Five](#the-big-five)** - Deep dive into Tasks, Resources, Events, Middleware, Tags
+3. **[Events & Hooks](#events)** - Decouple your app with event-driven patterns
+4. **[Middleware](#middleware)** - Add cross-cutting concerns cleanly
+
+---

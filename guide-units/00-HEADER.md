@@ -132,14 +132,14 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 
 - [Why Runner?](#why-runner) - The problem we solve
 - [What Is This Thing?](#what-is-this-thing)
-- [Show Me the Magic](#-show-me-the-magic) - See it in action
-- [How Does It Compare?](#-how-does-it-compare) - vs. other frameworks
-- [Performance at a Glance](#-performance-at-a-glance) - Real benchmarks
-- [What's in the Box?](#-whats-in-the-box) - Feature matrix
+- [Show Me the Magic](#show-me-the-magic) - See it in action
+- [How Does It Compare?](#how-does-it-compare) - vs. other frameworks
+- [Performance at a Glance](#performance-at-a-glance) - Real benchmarks
+- [What's in the Box?](#whats-in-the-box) - Feature matrix
 - [Your First 5 Minutes](#your-first-5-minutes) - **Start here!**
 - [Quick Start](#quick-start) - Full Express example
 - [Learning Guide](#learning-guide) - Common patterns
-- [Quick Wins](#-quick-wins-copy-paste-solutions) - Copy-paste solutions
+- [Quick Wins](#quick-wins-copy-paste-solutions) - Copy-paste solutions
 - [The Big Five](#the-big-five) - Core concepts
 
 **Core Concepts**
@@ -191,7 +191,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 
 **Developer Experience**
 
-- [ Quick Reference Cheat Sheet](#-quick-reference-cheat-sheet) - **Bookmark this!**
+- [Quick Reference Cheat Sheet](#quick-reference-cheat-sheet) - **Bookmark this!**
 - [Fluent Builders](#fluent-builders-r) - Ergonomic API
 - [Type Helpers](#type-helpers) - TypeScript utilities
 - [Runtime Validation](#runtime-validation) - Schema validation
@@ -205,7 +205,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [Performance](#performance) - Benchmarks and metrics
 - [Why Choose BlueLibs Runner?](#why-choose-bluelibs-runner) - Framework comparison
 - [Migration Path](#the-migration-path) - Adopting Runner
-- [Troubleshooting](#-troubleshooting) - Common issues and solutions
+- [Troubleshooting](#troubleshooting) - Common issues and solutions
 - [Community & Support](#community--support) - Getting help
 
 ---

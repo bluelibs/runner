@@ -1,8 +1,8 @@
-##  Quick Wins: Copy-Paste Solutions
+## Quick Wins: Copy-Paste Solutions
 
 **5 real-world problems, solved in minutes.** Just copy, customize, and ship. 
 
-###  Add Caching to Any Task (with automatic invalidation)
+### Add Caching to Any Task (with automatic invalidation)
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -25,7 +25,7 @@ const getUser = r
 // After 60s: refreshes automatically
 ```
 
-###  Retry Failed API Calls (with exponential backoff)
+### Retry Failed API Calls (with exponential backoff)
 
 ```typescript
 const callExternalAPI = r
@@ -48,7 +48,7 @@ const callExternalAPI = r
 // Gives up on permanent errors
 ```
 
-###  Add Request Timeouts (prevent hanging operations)
+### Add Request Timeouts (prevent hanging operations)
 
 ```typescript
 const slowOperation = r
@@ -73,7 +73,7 @@ const robustTask = r
   .build();
 ```
 
-###  Set Up Event-Driven Architecture (in 30 seconds)
+### Set Up Event-Driven Architecture (in 30 seconds)
 
 ```typescript
 // Define your events
@@ -109,7 +109,7 @@ const sendWelcomeEmail = r
 // Automatically decoupled - no direct dependencies!
 ```
 
-###  Add Structured Logging (with context)
+### Add Structured Logging (with context)
 
 ```typescript
 const processPayment = r
