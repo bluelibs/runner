@@ -5,7 +5,7 @@ export function extractToken(
   cookieName: string,
 ): string | null {
   const authHeader =
-    req.headers["authorization"] || req.headers["Authorization" as any];
+    req.headers["authorization"] || req.headers["Authorization" as keyof typeof req.headers];
   if (
     typeof authHeader === "string" &&
     authHeader.toLowerCase().startsWith("bearer ")

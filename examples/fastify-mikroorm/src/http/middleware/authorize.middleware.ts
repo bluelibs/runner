@@ -18,7 +18,7 @@ export type AuthorizeConfig = {
  */
 export const authorize = r.middleware
   .task("http.middleware.task.authorize")
-  .configSchema<AuthorizeConfig>({ parse: (x: any) => x })
+  .configSchema<AuthorizeConfig>({ parse: (x: unknown) => x as AuthorizeConfig })
   .run(async ({ task, next }, _deps, config) => {
     const { user, request } = fastifyContext.use();
 

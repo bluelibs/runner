@@ -41,7 +41,7 @@ export const expressServerResource = r
       };
 
       // Store request data for use in tasks
-      (req as any).requestData = requestData;
+      (req as unknown as { requestData: RequestData }).requestData = requestData;
       next();
     });
 

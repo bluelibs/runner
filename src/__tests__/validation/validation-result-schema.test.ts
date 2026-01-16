@@ -18,11 +18,11 @@ describe("Result Schema Validation", () => {
   describe("Task resultSchema", () => {
     it("validates successful result and passes through", async () => {
       const resultSchema = new MockValidationSchema((value: unknown) => {
-        const v = value as any;
-        if (!v || typeof v.ok !== "boolean") {
+        const v = value as { ok: boolean };
+        if (!v || typeof v !== "object" || typeof v.ok !== "boolean") {
           throw new Error("expected { ok: boolean }");
         }
-        return v as { ok: boolean };
+        return v;
       });
 
       const t = defineTask({
@@ -49,18 +49,23 @@ describe("Result Schema Validation", () => {
 
     it("throws when result is invalid", async () => {
       const resultSchema = new MockValidationSchema((value: unknown) => {
-        const v = value as any;
-        if (!v || typeof v.ok !== "boolean") {
+        // Safe validation
+        if (
+          !value ||
+          typeof value !== "object" ||
+          !("ok" in value) ||
+          typeof (value as { ok: unknown }).ok !== "boolean"
+        ) {
           throw new Error("expected { ok: boolean }");
         }
-        return v as { ok: boolean };
+        return value as { ok: boolean };
       });
 
       const t = defineTask({
         id: "tests.result.task.invalid",
         resultSchema,
         async run() {
-          return { nope: true } as any;
+          return { nope: true } as unknown as { ok: boolean };
         },
       });
 
@@ -78,11 +83,15 @@ describe("Result Schema Validation", () => {
 
     it("does not validate middleware-returned values (validation happens before middleware)", async () => {
       const resultSchema = new MockValidationSchema((value: unknown) => {
-        const v = value as any;
-        if (!v || typeof v.ok !== "boolean") {
+        if (
+          !value ||
+          typeof value !== "object" ||
+          !("ok" in value) ||
+          typeof (value as { ok: unknown }).ok !== "boolean"
+        ) {
           throw new Error("expected { ok: boolean }");
         }
-        return v as { ok: boolean };
+        return value as { ok: boolean };
       });
 
       const mw = defineTaskMiddleware({
@@ -91,7 +100,7 @@ describe("Result Schema Validation", () => {
           const base = await next();
           // Return an invalid shape w.r.t. resultSchema; should not be re-validated
           expect(base).toEqual({ ok: true });
-          return { invalid: true } as any;
+          return { invalid: true } as unknown;
         },
       });
 
@@ -123,11 +132,15 @@ describe("Result Schema Validation", () => {
   describe("Resource resultSchema", () => {
     it("validates successful resource value", async () => {
       const resultSchema = new MockValidationSchema((value: unknown) => {
-        const v = value as any;
-        if (!v || typeof v.connected !== "boolean") {
+        if (
+          !value ||
+          typeof value !== "object" ||
+          !("connected" in value) ||
+          typeof (value as { connected: unknown }).connected !== "boolean"
+        ) {
           throw new Error("expected { connected: boolean }");
         }
-        return v as { connected: boolean };
+        return value as { connected: boolean };
       });
 
       const r = defineResource({
@@ -153,18 +166,18 @@ describe("Result Schema Validation", () => {
 
     it("throws when resource value is invalid", async () => {
       const resultSchema = new MockValidationSchema((value: unknown) => {
-        const v = value as any;
-        if (!v || typeof v.connected !== "boolean") {
+        const v = value as { connected: boolean };
+        if (!v || typeof v !== "object" || typeof v.connected !== "boolean") {
           throw new Error("expected { connected: boolean }");
         }
-        return v as { connected: boolean };
+        return v;
       });
 
       const r = defineResource({
         id: "tests.result.resource.invalid",
         resultSchema,
         async init() {
-          return { nope: true } as any;
+          return { nope: true } as unknown as { connected: boolean };
         },
       });
 
@@ -173,11 +186,11 @@ describe("Result Schema Validation", () => {
 
     it("does not validate middleware-returned values (validation happens before resource middleware)", async () => {
       const resultSchema = new MockValidationSchema((value: unknown) => {
-        const v = value as any;
-        if (!v || typeof v.connected !== "boolean") {
+        const v = value as { connected: boolean };
+        if (!v || typeof v !== "object" || typeof v.connected !== "boolean") {
           throw new Error("expected { connected: boolean }");
         }
-        return v as { connected: boolean };
+        return v;
       });
 
       const mw = defineResourceMiddleware({
@@ -185,7 +198,7 @@ describe("Result Schema Validation", () => {
         async run({ next }) {
           const base = await next();
           expect(base).toEqual({ connected: true });
-          return { broken: true } as any;
+          return { broken: true } as unknown;
         },
       });
 
@@ -204,8 +217,8 @@ describe("Result Schema Validation", () => {
         dependencies: { r },
         async init(_, { r }) {
           // Should receive middleware-modified value without validation error
-          expect((r as any).broken).toBe(true);
-          return r as any;
+          expect((r as unknown as { broken: boolean }).broken).toBe(true);
+          return r;
         },
       });
 

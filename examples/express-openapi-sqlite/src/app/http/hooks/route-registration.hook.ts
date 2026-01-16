@@ -1,5 +1,6 @@
 // examples/express-openapi-sqlite/src/tasks/routeRegistration.ts
 import { r, globals } from "@bluelibs/runner";
+import { ITask } from "@bluelibs/runner/defs";
 import { Request, Response } from "express";
 import { httpTag } from "../tags/http.tag";
 import { RequestContext, RequestData } from "../contexts/request.context";
@@ -25,9 +26,12 @@ export const routeRegistrationHook = r
     let routesRegistered = 0;
 
     const createRouteHandler =
-      (task: any) => async (req: Request, res: Response) => {
+      (task: ITask<any, any, any, any, any, any>) =>
+      async (req: Request, res: Response) => {
         try {
-          const requestData: RequestData = (req as any).requestData;
+          const requestData: RequestData = (
+            req as unknown as { requestData: RequestData }
+          ).requestData;
           const taskInput = {
             ...req.body,
             ...req.params,
@@ -69,7 +73,10 @@ export const routeRegistrationHook = r
       if (!method || !path) return;
 
       // Register runtime express handler
-      (app as any)[method.toLowerCase()](path, createRouteHandler(task));
+      (app as unknown as Record<string, Function>)[method.toLowerCase()](
+        path,
+        createRouteHandler(task as unknown as ITask<any, any, any, any, any, any>),
+      );
       logger.info(`📍 ${method} ${path} -> ${String(task.id)}`);
       routesRegistered++;
 

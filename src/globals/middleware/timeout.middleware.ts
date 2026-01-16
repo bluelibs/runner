@@ -10,7 +10,7 @@ export interface TimeoutMiddlewareConfig {
 
 /**
  * Custom error class for timeout errors.
- * Using a class allows proper instanceof checks and avoids `as any` casts.
+ * Using a class allows proper instanceof checks.
  */
 export class TimeoutError extends Error {
   constructor(message: string) {
