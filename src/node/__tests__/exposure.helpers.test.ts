@@ -4,9 +4,15 @@ import {
   startHttpServer,
   stopHttpServer,
 } from "../exposure/serverLifecycle";
+import { TaskRunner } from "../../models/TaskRunner";
+import { ITask } from "../../defs";
+import { IncomingMessage } from "http";
+import { Logger } from "../../models/Logger";
 
 // Mock TaskRunner for tests
-const mockTaskRunner = { run: jest.fn() } as any;
+const mockTaskRunner = {
+  run: jest.fn(),
+} as unknown as jest.Mocked<TaskRunner>;
 
 describe("node exposure helpers", () => {
   beforeEach(() => {
@@ -16,7 +22,9 @@ describe("node exposure helpers", () => {
   describe("createAuthenticator", () => {
     it("returns AUTH_NOT_CONFIGURED when token is not set and no validators (fail-closed)", async () => {
       const auth = createAuthenticator(undefined, mockTaskRunner, []);
-      const result = await auth({ headers: {} } as any);
+      const result = await auth({
+        headers: {},
+      } as unknown as IncomingMessage);
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.response.status).toBe(500);
@@ -33,7 +41,7 @@ describe("node exposure helpers", () => {
         mockTaskRunner,
         [],
       );
-      const result = await auth({ headers: {} } as any);
+      const result = await auth({ headers: {} } as unknown as IncomingMessage);
       expect(result).toEqual({ ok: true });
     });
 
@@ -43,7 +51,9 @@ describe("node exposure helpers", () => {
         mockTaskRunner,
         [],
       );
-      const ok = await auth({ headers: { "x-custom": ["secret"] } } as any);
+      const ok = await auth({
+        headers: { "x-custom": ["secret"] },
+      } as unknown as IncomingMessage);
       expect(ok).toEqual({ ok: true });
     });
 
@@ -55,7 +65,7 @@ describe("node exposure helpers", () => {
       );
       const ok = await auth({
         headers: { "x-runner-token": "expected" },
-      } as any);
+      } as unknown as IncomingMessage);
       expect(ok).toEqual({ ok: true });
     });
 
@@ -65,7 +75,7 @@ describe("node exposure helpers", () => {
         mockTaskRunner,
         [],
       );
-      const result = await auth({ headers: {} } as any);
+      const result = await auth({ headers: {} } as unknown as IncomingMessage);
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.response.status).toBe(401);
@@ -78,7 +88,9 @@ describe("node exposure helpers", () => {
         mockTaskRunner,
         [],
       );
-      const result = await auth({ headers: { "x-runner-token": [] } } as any);
+      const result = await auth({
+        headers: { "x-runner-token": [] },
+      } as unknown as IncomingMessage);
       expect(result.ok).toBe(false);
     });
 
@@ -90,24 +102,28 @@ describe("node exposure helpers", () => {
       );
       const ok1 = await auth({
         headers: { "x-runner-token": "token1" },
-      } as any);
+      } as unknown as IncomingMessage);
       expect(ok1).toEqual({ ok: true });
       const ok2 = await auth({
         headers: { "x-runner-token": "token2" },
-      } as any);
+      } as unknown as IncomingMessage);
       expect(ok2).toEqual({ ok: true });
       const fail = await auth({
         headers: { "x-runner-token": "wrong" },
-      } as any);
+      } as unknown as IncomingMessage);
       expect(fail.ok).toBe(false);
     });
 
     it("runs validator tasks when token check fails", async () => {
-      const task = { id: "v1" } as any;
-      mockTaskRunner.run.mockResolvedValueOnce({ ok: true });
+      const task = {
+        id: "v1",
+      } as unknown as ITask;
+      mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: true }));
 
       const auth = createAuthenticator(undefined, mockTaskRunner, [task]);
-      const result = await auth({ headers: {} } as any);
+      const result = await auth({
+        headers: {},
+      } as unknown as IncomingMessage);
 
       expect(mockTaskRunner.run).toHaveBeenCalledWith(
         task,
@@ -120,38 +136,40 @@ describe("node exposure helpers", () => {
     });
 
     it("tries next validator if first fails", async () => {
-      const t1 = { id: "v1" } as any;
-      const t2 = { id: "v2" } as any;
+      const t1 = { id: "v1" } as unknown as ITask;
+      const t2 = { id: "v2" } as unknown as ITask;
 
-      mockTaskRunner.run.mockResolvedValueOnce({ ok: false });
-      mockTaskRunner.run.mockResolvedValueOnce({ ok: true });
+      mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: false }));
+      mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: true }));
 
       const auth = createAuthenticator(undefined, mockTaskRunner, [t1, t2]);
-      const result = await auth({ headers: {} } as any);
+      const result = await auth({ headers: {} } as unknown as IncomingMessage);
 
       expect(result).toEqual({ ok: true });
       expect(mockTaskRunner.run).toHaveBeenCalledTimes(2);
     });
 
     it("treats validator exceptions as failures and continues", async () => {
-      const t1 = { id: "v1" } as any;
-      const t2 = { id: "v2" } as any;
+      const t1 = { id: "v1" } as unknown as ITask;
+      const t2 = { id: "v2" } as unknown as ITask;
 
       mockTaskRunner.run.mockRejectedValueOnce(new Error("oops"));
-      mockTaskRunner.run.mockResolvedValueOnce({ ok: true });
+      mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: true }));
 
       const auth = createAuthenticator(undefined, mockTaskRunner, [t1, t2]);
-      const result = await auth({ headers: {} } as any);
+      const result = await auth({ headers: {} } as unknown as IncomingMessage);
 
       expect(result).toEqual({ ok: true });
     });
 
     it("fails if all validators fail", async () => {
-      const t1 = { id: "v1" } as any;
-      mockTaskRunner.run.mockResolvedValueOnce({ ok: false });
+      const t1 = { id: "v1" } as unknown as ITask;
+      mockTaskRunner.run.mockResolvedValueOnce(Promise.resolve({ ok: false }));
 
       const auth = createAuthenticator(undefined, mockTaskRunner, [t1]);
-      const result = await auth({ headers: {} } as any);
+      const result = await auth({
+        headers: {},
+      } as unknown as IncomingMessage);
 
       expect(result.ok).toBe(false);
     });
@@ -163,7 +181,7 @@ describe("node exposure helpers", () => {
       res: any,
     ) => {
       await new Promise<void>((resolve) => {
-        listener({} as any, res);
+        listener({} as unknown as import("http").IncomingMessage, res);
         setImmediate(resolve);
       });
     };
@@ -187,7 +205,9 @@ describe("node exposure helpers", () => {
     });
 
     it("responds with 404 when handler reports miss", async () => {
-      const logger = { error: () => {} } as any;
+      const logger = {
+        error: () => {},
+      } as unknown as Logger;
       const res = createResponse();
       const listener = makeRequestListener({
         handler: async () => false,
@@ -200,7 +220,9 @@ describe("node exposure helpers", () => {
     });
 
     it("ignores miss when respondOnMiss is disabled", async () => {
-      const logger = { error: () => {} } as any;
+      const logger = {
+        error: () => {},
+      } as unknown as Logger;
       const res = createResponse();
       const listener = makeRequestListener({
         handler: async () => false,
@@ -213,7 +235,9 @@ describe("node exposure helpers", () => {
     });
 
     it("skips response when already ended on miss", async () => {
-      const logger = { error: () => {} } as any;
+      const logger = {
+        error: () => {},
+      } as unknown as Logger;
       const res = createResponse();
       res.writableEnded = true;
       const listener = makeRequestListener({
@@ -229,7 +253,7 @@ describe("node exposure helpers", () => {
       const errors: Array<Record<string, unknown>> = [];
       const logger = {
         error: (_: string, data: Record<string, unknown>) => errors.push(data),
-      } as any;
+      } as unknown as Logger;
       const res = createResponse();
       const listener = makeRequestListener({
         handler: async () => {
@@ -248,7 +272,9 @@ describe("node exposure helpers", () => {
     });
 
     it("does not write response when handler throws after response ended", async () => {
-      const logger = { error: () => {} } as any;
+      const logger = {
+        error: () => {},
+      } as unknown as Logger;
       const res = createResponse();
       res.writableEnded = true;
       const listener = makeRequestListener({
@@ -272,7 +298,7 @@ describe("node exposure helpers", () => {
           calls.push({ port, host });
           cb();
         },
-      };
+      } as unknown as import("net").Server;
       await startHttpServer(fakeServer, { port: 4321 });
       expect(calls).toEqual([{ port: 4321, host: "127.0.0.1" }]);
     });
@@ -289,7 +315,7 @@ describe("node exposure helpers", () => {
           closed = true;
           cb();
         },
-      };
+      } as unknown as import("net").Server;
       await startHttpServer(fakeServer, { port: 1234, host: "0.0.0.0" });
       expect(calls).toEqual([{ port: 1234, host: "0.0.0.0" }]);
       await stopHttpServer(fakeServer);

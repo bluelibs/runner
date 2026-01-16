@@ -154,6 +154,49 @@ describe("requestHandlers - auth fail and missing task", () => {
     expect(json?.error?.code).toBe("NOT_FOUND");
   });
 
+  it("returns 403 when exposure is disabled", async () => {
+    const store = {
+      tasks: new Map([["t", { task: { id: "t" } }]]),
+      events: new Map(),
+      asyncContexts: new Map(),
+      resources: new Map(),
+    } as unknown as NodeExposureDeps["store"];
+    const taskRunner = {
+      async run() {
+        return 1;
+      },
+    } as unknown as NodeExposureDeps["taskRunner"];
+    const eventManager = {
+      emit: async () => {},
+    } as unknown as NodeExposureDeps["eventManager"];
+    const logger = {
+      info: async () => {},
+      warn: async () => {},
+      error: async () => {},
+    } as unknown as NodeExposureDeps["logger"];
+
+    const deps = {
+      store,
+      taskRunner,
+      eventManager,
+      logger,
+      authenticator: async () => ({ ok: true }),
+      allowList: createAllowListGuard(store),
+      router: makeRouter((_p: string) => ({ kind: "task", id: "t" })),
+      cors: undefined,
+      serializer: getDefaultSerializer(),
+    } satisfies Parameters<typeof createRequestHandlers>[0];
+    const { handleTask } = createRequestHandlers(deps);
+    const req = makeJsonReq("/api/task/t");
+    const res = makeRes();
+    await handleTask(req, res);
+    expect(res._status).toBe(403);
+    const json = res._buf
+      ? (deps.serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+      : undefined;
+    expect(json?.error?.code).toBe("FORBIDDEN");
+  });
+
   it("returns 403 when task/event blocked by allow-list", async () => {
     const store = {
       tasks: new Map([["allowed.task", { task: { id: "allowed.task" } }]]),

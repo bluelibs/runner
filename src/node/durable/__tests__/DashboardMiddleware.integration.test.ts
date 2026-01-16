@@ -233,6 +233,31 @@ describe("durable: dashboard middleware (e2e)", () => {
     }
   });
 
+  it("blocks operator actions when operator auth is not configured", async () => {
+    const ui = await createTempUiDist();
+
+    const store = new MemoryStore();
+    const operator = new DurableOperator(store);
+    const service = createUnusedService();
+
+    const app = express();
+    app.use(
+      "/durable-dashboard",
+      createDashboardMiddleware(service, operator, { uiDistPath: ui.path }),
+    );
+
+    try {
+      const retryRes = await request(app, {
+        method: "POST",
+        url: "/durable-dashboard/api/operator/retryRollback",
+        body: { executionId: "e1" },
+      });
+      expect(retryRes.status).toBe(403);
+    } finally {
+      await ui.cleanup();
+    }
+  });
+
   it("exposes dashboard APIs and operator actions under the mounted prefix", async () => {
     const ui = await createTempUiDist();
 
@@ -266,7 +291,10 @@ describe("durable: dashboard middleware (e2e)", () => {
     const app = express();
     app.use(
       "/durable-dashboard",
-      createDashboardMiddleware(service, operator, { uiDistPath: ui.path }),
+      createDashboardMiddleware(service, operator, {
+        uiDistPath: ui.path,
+        operatorAuth: () => true,
+      }),
     );
 
     try {

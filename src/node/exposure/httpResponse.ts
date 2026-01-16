@@ -5,6 +5,16 @@ import type { JsonResponse, StreamingResponse } from "./types";
 
 export const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
 
+enum SecurityHeaderName {
+  ContentTypeOptions = "X-Content-Type-Options",
+  FrameOptions = "X-Frame-Options",
+}
+
+enum SecurityHeaderValue {
+  NoSniff = "nosniff",
+  Deny = "DENY",
+}
+
 export const NOT_FOUND_RESPONSE = jsonErrorResponse(
   404,
   "Not Found",
@@ -56,6 +66,7 @@ export function respondJson(
   res.statusCode = response.status;
   res.setHeader("content-type", JSON_CONTENT_TYPE);
   res.setHeader("content-length", String(payload.length));
+  applySecurityHeaders(res);
   res.end(payload);
 }
 
@@ -83,6 +94,7 @@ export function respondStream(
   if (headers) {
     for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
   }
+  applySecurityHeaders(res);
   // Some unit tests stub `res` without full stream interface (no `.on`).
   // Prefer pipe when destination looks like a Writable stream, otherwise manually forward chunks.
   const canPipe = typeof (res as unknown as { on?: unknown }).on === "function";
@@ -161,4 +173,12 @@ export function respondStream(
   if (typeof resume === "function") {
     resume.call(stream);
   }
+}
+
+function applySecurityHeaders(res: ServerResponse): void {
+  res.setHeader(
+    SecurityHeaderName.ContentTypeOptions,
+    SecurityHeaderValue.NoSniff,
+  );
+  res.setHeader(SecurityHeaderName.FrameOptions, SecurityHeaderValue.Deny);
 }

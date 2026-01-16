@@ -20,7 +20,10 @@ export async function createNodeExposure(
   const httpConfig = cfg?.http;
   const basePath = resolveBasePath(httpConfig?.basePath);
   const router = createRouter(basePath);
-  const allowList = createAllowListGuard(store);
+  const allowList = createAllowListGuard(
+    store,
+    !!httpConfig?.dangerouslyAllowOpenExposure,
+  );
 
   // Discover auth validator tasks
   const validatorTasks = store.getTasksWithTag(

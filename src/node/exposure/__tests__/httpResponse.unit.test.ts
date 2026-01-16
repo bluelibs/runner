@@ -6,14 +6,27 @@ import {
   respondStream,
 } from "../httpResponse";
 
+enum SecurityHeaderName {
+  ContentTypeOptions = "x-content-type-options",
+  FrameOptions = "x-frame-options",
+}
+
+enum SecurityHeaderValue {
+  NoSniff = "nosniff",
+  Deny = "DENY",
+}
+
 describe("httpResponse helpers", () => {
   it("respondJson writes JSON when response not ended", () => {
     let status = 0;
     let body = Buffer.alloc(0);
+    const headers: Record<string, string> = {};
     const res: any = {
       writableEnded: false,
       statusCode: 0,
-      setHeader() {},
+      setHeader(k: string, v: string) {
+        headers[k.toLowerCase()] = v;
+      },
       end(buf?: any) {
         status = this.statusCode;
         if (buf) body = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
@@ -25,6 +38,12 @@ describe("httpResponse helpers", () => {
     const out = JSON.parse(body.toString("utf8"));
     expect(out.ok).toBe(true);
     expect(out.a).toBe(1);
+    expect(headers[SecurityHeaderName.ContentTypeOptions]).toBe(
+      SecurityHeaderValue.NoSniff,
+    );
+    expect(headers[SecurityHeaderName.FrameOptions]).toBe(
+      SecurityHeaderValue.Deny,
+    );
   });
 
   it("respondJson returns early when already ended", () => {
@@ -84,6 +103,12 @@ describe("httpResponse helpers", () => {
     });
     respondStream(res, r);
     expect(headers["content-type"]).toMatch(/application\/octet-stream/i);
+    expect(headers[SecurityHeaderName.ContentTypeOptions]).toBe(
+      SecurityHeaderValue.NoSniff,
+    );
+    expect(headers[SecurityHeaderName.FrameOptions]).toBe(
+      SecurityHeaderValue.Deny,
+    );
     expect(Buffer.concat(chunks as Uint8Array[]).toString("utf8")).toBe("ab");
     expect(ended).toBe(true);
   });

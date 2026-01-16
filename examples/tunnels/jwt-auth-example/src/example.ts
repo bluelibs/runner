@@ -81,7 +81,11 @@ const helloTask = r
   .build();
 
 const exposure = nodeExposure.with({
-  http: { basePath: BASE_PATH, listen: { port: 7070, host: "127.0.0.1" } },
+  http: {
+    dangerouslyAllowOpenExposure: true,
+    basePath: BASE_PATH,
+    listen: { port: 7070, host: "127.0.0.1" },
+  },
 });
 
 const callHelloDirect = r

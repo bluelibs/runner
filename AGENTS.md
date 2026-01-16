@@ -3,6 +3,7 @@
 - The code should be designed as re-usable without being over-engineered.
 - The code should be human-friendly (descriptive variables, function names, comments that describe the 'why'), code readability are a big plus.
 - Keep functions small, decouple early on. Make code be read like a story.
+- Keep files small (under 300 lines) (including tests). Decouple/destructure early on.
 - When doing a tasks, first think about the contracts and interfaces, then think about the acceptance criteria, and only then think about implementation.
 - Type-strictness is a must, avoid type casting unless forced to
 - Use `npm run coverage:ai` to test the full suite and see coverage in a token-friendly way. 
@@ -30,5 +31,6 @@
 - When building new features/enhancements/changes
 - Must be implemented with care without affecting the system and not over-polute files.
 - Must retain 100% test coverage.
-- Ensure AI.md (minimal version of README) and README.md is properly updated
+- Ensure AI.md (minimal version of README)
+- Read guide-units/CORE.md to understand how we compose the main documentation.
   </new_feature>

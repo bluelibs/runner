@@ -79,6 +79,7 @@ describe("exposure CORS - more branches", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         cors: {
@@ -144,6 +145,7 @@ describe("exposure CORS - more branches", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         cors: {

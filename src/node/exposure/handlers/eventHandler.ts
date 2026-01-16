@@ -7,7 +7,6 @@ import {
 } from "../httpResponse";
 import { readJsonBody } from "../requestBody";
 import type { SerializerLike } from "../../../serializer";
-import { errorMessage, safeLogError } from "../logging";
 import type { Authenticator, AllowListGuard } from "../types";
 import type {
   NodeExposureDeps,
@@ -17,6 +16,7 @@ import { isCancellationError } from "../../../errors";
 import { applyCorsActual } from "../cors";
 import { createAbortControllerForRequest } from "../utils";
 import { withUserContexts } from "./contextWrapper";
+import { ExposureErrorLogKey, handleRequestError } from "./errorHandlers";
 
 interface EventHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -142,34 +142,16 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
         }
         return;
       }
-      // Detect application-defined errors and surface minimal identity
-      let appErrorExtra: Record<string, unknown> | undefined;
-      try {
-        for (const helper of store.errors.values()) {
-          if (helper.is(error)) {
-            const err = error as { name?: unknown; data?: unknown };
-            const id = typeof err.name === "string" ? err.name : undefined;
-            appErrorExtra = { id, data: err.data };
-            break;
-          }
-        }
-      } catch {
-        // best-effort only
-      }
-      const logMessage = errorMessage(error);
-      const displayMessage =
-        appErrorExtra && error instanceof Error && error.message
-          ? error.message
-          : "Internal Error";
-      safeLogError(logger, "exposure.event.error", {
-        error: logMessage,
-      });
-      applyCorsActual(req, res, cors);
-      respondJson(
+      handleRequestError({
+        error,
+        req,
         res,
-        jsonErrorResponse(500, displayMessage, "INTERNAL_ERROR", appErrorExtra),
+        store,
+        logger,
+        cors,
         serializer,
-      );
+        logKey: ExposureErrorLogKey.EventError,
+      });
     }
   };
 };

@@ -54,7 +54,12 @@ const service = await initDurableService({ store, eventBus });
 const operator = new DurableOperator(store);
 
 // Mount at /durable-dashboard (or any other prefix)
-app.use('/durable-dashboard', createDashboardMiddleware(service, operator));
+app.use(
+  '/durable-dashboard',
+  createDashboardMiddleware(service, operator, {
+    operatorAuth: (req) => req.headers['x-ops-token'] === process.env.OPS_TOKEN,
+  }),
+);
 
 app.listen(3000);
 ```
@@ -71,6 +76,9 @@ The dashboard communicates with these backend endpoints:
 | `/api/operator/skipStep` | POST | Skip a stuck step |
 | `/api/operator/forceFail` | POST | Force workflow to fail |
 | `/api/operator/editState` | POST | Manually patch step state |
+
+> [!NOTE]
+> Operator actions are denied unless you provide `operatorAuth`. To opt out, set `dangerouslyAllowUnauthenticatedOperator: true` (not recommended).
 
 ## Project Structure
 

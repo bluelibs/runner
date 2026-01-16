@@ -80,6 +80,7 @@ describe("nodeExposure - task returned stream", () => {
 
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -129,6 +130,7 @@ describe("nodeExposure - task returned stream", () => {
 
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },

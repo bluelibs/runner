@@ -31,6 +31,11 @@ export interface NodeExposureHttpConfig {
     json?: JsonLimits;
     multipart?: MultipartLimits;
   };
+  /**
+   * Opt out of fail-closed exposure (not recommended).
+   * When true and no server-mode tunnel is registered, exposure is open.
+   */
+  dangerouslyAllowOpenExposure?: boolean;
 }
 
 export interface NodeExposureConfig {

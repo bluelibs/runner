@@ -79,6 +79,7 @@ describe("exposure CORS", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -136,6 +137,7 @@ describe("exposure CORS", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         cors: {
@@ -201,6 +203,7 @@ describe("exposure CORS", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         cors: {

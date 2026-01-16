@@ -9,13 +9,14 @@
   - [Install](#install)
   - [Durable Workflows (Node-only)](#durable-workflows-node-only)
   - [Resources](#resources)
-    - [Tasks](#tasks)
-    - [Events and Hooks](#events-and-hooks)
-    - [Middleware](#middleware)
-    - [Tags](#tags)
-    - [Async Context](#async-context)
-    - [Errors](#errors)
-    - [Overrides](#overrides)
+    - [Resource Forking](#resource-forking)
+  - [Tasks](#tasks)
+  - [Events and Hooks](#events-and-hooks)
+  - [Middleware](#middleware)
+  - [Tags](#tags)
+  - [Async Context](#async-context)
+  - [Errors](#errors)
+  - [Overrides](#overrides)
   - [HTTP \& Tunnels](#http--tunnels)
     - [HTTP Client Factory (Recommended)](#http-client-factory-recommended)
     - [Direct Client Creation (Legacy)](#direct-client-creation-legacy)
@@ -243,6 +244,8 @@ Retrieve tagged items by using `globals.resources.store` inside a hook or resour
 
 Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node). Use the fluent builder under `r.asyncContext` or the classic `asyncContext({ ... })` export.
 
+> **Platform Note**: `AsyncLocalStorage` is Node.js-only. Async Context is unavailable in browsers/edge runtimes.
+
 ```ts
 import { r } from "@bluelibs/runner";
 
@@ -311,7 +314,11 @@ const mockMailer = r
   .init(async () => new MockMailer())
   .build();
 
-const app = r.resource("app").register([realMailer]).overrides([mockMailer]).build();
+const app = r
+  .resource("app")
+  .register([realMailer])
+  .overrides([mockMailer])
+  .build();
 ```
 
 - `r.override(base)` starts from the base definition and applies fluent mutations (dependencies/tags/middleware append by default; use `{ override: true }` to replace).
@@ -343,6 +350,8 @@ const httpExposure = nodeExposure.with({
 
 > [!NOTE]
 > **Security & DoS Protection**: The HTTP tunnel provides built-in protections including timing-safe authentication, request body size limits (default 2MB for JSON, 20MB for multipart files), and internal error masking (500 errors are sanitized to prevent information leakage).
+>
+> **Fail-closed exposure**: `nodeExposure` requires a server-mode HTTP tunnel resource to enable task/event execution. For legacy/dev usage, set `http.dangerouslyAllowOpenExposure: true`.
 
 const tunnelClient = r
   .resource("app.tunnels.http")
@@ -454,7 +463,10 @@ const serializerSetup = r
   .dependencies({ serializer: globals.resources.serializer })
   .init(async (_config, { serializer }) => {
     class Distance {
-      constructor(public value: number, public unit: string) {}
+      constructor(
+        public value: number,
+        public unit: string,
+      ) {}
       typeName() {
         return "Distance";
       }

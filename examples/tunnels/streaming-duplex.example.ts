@@ -70,7 +70,11 @@ const duplexTask = task({
 });
 
 const exposure = nodeExposure.with({
-  http: { listen: { port: 0 }, basePath: BASE_PATH },
+  http: {
+    dangerouslyAllowOpenExposure: true,
+    listen: { port: 0 },
+    basePath: BASE_PATH,
+  },
 });
 const app = resource({
   id: "examples.streaming.duplex.app",

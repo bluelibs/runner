@@ -84,6 +84,7 @@ describe("nodeExposure - more edge branches", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -131,6 +132,7 @@ describe("nodeExposure - more edge branches", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -178,6 +180,7 @@ describe("nodeExposure - more edge branches", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -222,6 +225,7 @@ describe("nodeExposure - more edge branches", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -268,6 +272,7 @@ describe("nodeExposure - more edge branches", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -367,6 +372,7 @@ describe("nodeExposure - more edge branches", () => {
     try {
       const exposure = require("../exposure.resource").nodeExposure.with({
         http: {
+          dangerouslyAllowOpenExposure: true,
           listen: { port: 0 },
           basePath: "/__runner",
           auth: { token: "T" },
@@ -409,6 +415,7 @@ describe("nodeExposure - more edge branches", () => {
 
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -521,6 +528,7 @@ describe("nodeExposure - more edge branches", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         listen: { port: 0 },
         basePath: "/__runner",
         auth: { token: "T" },

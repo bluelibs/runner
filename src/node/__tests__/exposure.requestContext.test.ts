@@ -28,6 +28,7 @@ describe("nodeExposure request context (raw-body)", () => {
 
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },

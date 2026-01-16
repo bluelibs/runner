@@ -82,7 +82,11 @@ const appendTask = task({
 });
 
 const exposure = nodeExposure.with({
-  http: { basePath: "/__runner", listen: { port: 0 } },
+  http: {
+    dangerouslyAllowOpenExposure: true,
+    basePath: "/__runner",
+    listen: { port: 0 },
+  },
 });
 const app = resource({
   id: "examples.streaming.append.app",

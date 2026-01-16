@@ -8,8 +8,8 @@ function asIncoming(
   res: Readable,
   headers: Record<string, string>,
 ): http.IncomingMessage {
-  (res as any).headers = headers;
-  return res as any as http.IncomingMessage;
+  (res as unknown as { headers: Record<string, string> }).headers = headers;
+  return res as unknown as http.IncomingMessage;
 }
 
 describe("createHttpSmartClient (unit)", () => {
@@ -26,7 +26,8 @@ describe("createHttpSmartClient (unit)", () => {
   it("JSON: posts JSON and parses ok envelope", async () => {
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
         // Fake response with JSON content type
         const env = { ok: true, result: 5 };
         const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
@@ -35,7 +36,7 @@ describe("createHttpSmartClient (unit)", () => {
           "content-type": "application/json; charset=utf-8",
         });
         // Node's http.request calls callback synchronously in our mock
-        cb(im);
+        callback(im);
         const req = new Writable({
           write(_chunk, _enc, next) {
             next();
@@ -43,13 +44,13 @@ describe("createHttpSmartClient (unit)", () => {
           final(cb2) {
             cb2();
           },
-        }) as any;
-        req.on = (_: any, __: any) => req;
-        req.setTimeout = () => req;
-        req.end = () => undefined;
-        req.destroy = () => undefined;
+        }) as unknown as http.ClientRequest;
+        (req as unknown as { on: any }).on = (_: any, __: any) => req;
+        (req as unknown as { setTimeout: any }).setTimeout = () => req;
+        (req as unknown as { end: any }).end = () => undefined;
+        (req as unknown as { destroy: any }).destroy = () => undefined;
         return req;
-      }) as any;
+      }) as unknown;
 
     const out = await client.task("x", { a: 2, b: 3 } as any);
     expect(out).toBe(5);
@@ -58,24 +59,27 @@ describe("createHttpSmartClient (unit)", () => {
 
   it("JSON: invokes onRequest hook with headers", async () => {
     const onRequest = jest.fn();
-    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
-      const env = { ok: true, result: 1 };
-      const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
-      const res = Readable.from([body]);
-      cb(asIncoming(res, { "content-type": "application/json" }));
-      const sink = new Writable({
-        write(_c, _e, n) {
-          n();
-        },
-        final(n) {
-          n();
-        },
+    jest
+      .spyOn(http, "request")
+      .mockImplementation((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
+        const env = { ok: true, result: 1 };
+        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const res = Readable.from([body]);
+        callback(asIncoming(res, { "content-type": "application/json" }));
+        const sink = new Writable({
+          write(_c, _e, n) {
+            n();
+          },
+          final(n) {
+            n();
+          },
+        }) as any;
+        sink.on = (_: any, __: any) => sink;
+        sink.setTimeout = () => sink;
+        sink.destroy = () => undefined;
+        return sink;
       }) as any;
-      sink.on = (_: any, __: any) => sink;
-      sink.setTimeout = () => sink;
-      sink.destroy = () => undefined;
-      return sink;
-    }) as any;
     const c = createHttpSmartClient({
       baseUrl,
       onRequest,
@@ -94,12 +98,13 @@ describe("createHttpSmartClient (unit)", () => {
   it("multipart: detects File sentinel and returns JSON result", async () => {
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "OK" };
         const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
-        cb(im);
+        callback(im);
         const sink = new Writable({
           write(_chunk, _enc, next) {
             next();
@@ -129,12 +134,13 @@ describe("createHttpSmartClient (unit)", () => {
   it("multipart (buffer): covers buffer branch in encoder", async () => {
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "BUF" };
         const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
-        cb(im);
+        callback(im);
         const sink = new Writable({
           write(_c, _e, n) {
             n();
@@ -164,7 +170,8 @@ describe("createHttpSmartClient (unit)", () => {
   it("multipart (streaming response): returns Readable when server streams", async () => {
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
         const res = new Readable({
           read() {
             this.push(Buffer.from("STREAM", "utf8"));
@@ -172,7 +179,7 @@ describe("createHttpSmartClient (unit)", () => {
           },
         });
         const im = asIncoming(res, { "content-type": "text/plain" });
-        cb(im);
+        callback(im);
         const sink = new Writable({
           write(_c, _e, n) {
             n();
@@ -201,7 +208,7 @@ describe("createHttpSmartClient (unit)", () => {
         chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(String(c))),
       );
       out.on("end", () =>
-        resolve(Buffer.concat(chunks as readonly Uint8Array[])),
+        resolve(Buffer.concat(chunks as unknown as Uint8Array[])),
       );
       out.on("error", reject);
     });
@@ -210,23 +217,26 @@ describe("createHttpSmartClient (unit)", () => {
   });
 
   it("parseMaybeJsonResponse error path: rejects when JSON parsing fails", async () => {
-    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
-      const res = Readable.from([Buffer.from("not-json", "utf8")]);
-      const im = asIncoming(res, { "content-type": "application/json" });
-      cb(im);
-      const sink = new Writable({
-        write(_c, _e, n) {
-          n();
-        },
-        final(n) {
-          n();
-        },
+    jest
+      .spyOn(http, "request")
+      .mockImplementation((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
+        const res = Readable.from([Buffer.from("not-json", "utf8")]);
+        const im = asIncoming(res, { "content-type": "application/json" });
+        callback(im);
+        const sink = new Writable({
+          write(_c, _e, n) {
+            n();
+          },
+          final(n) {
+            n();
+          },
+        }) as any;
+        sink.on = (_: any, __: any) => sink;
+        sink.setTimeout = () => sink;
+        sink.destroy = () => undefined;
+        return sink;
       }) as any;
-      sink.on = (_: any, __: any) => sink;
-      sink.setTimeout = () => sink;
-      sink.destroy = () => undefined;
-      return sink;
-    }) as any;
 
     const input = {
       file: createNodeFile(
@@ -241,12 +251,13 @@ describe("createHttpSmartClient (unit)", () => {
   it("event(): posts JSON envelope and validates ok", async () => {
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: undefined };
         const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
-        cb(im);
+        callback(im);
         const sink = new Writable({
           write(_c, _e, n) {
             n();
@@ -268,12 +279,13 @@ describe("createHttpSmartClient (unit)", () => {
     const sent: Buffer[] = [];
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: { x: 2 } };
         const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
-        cb(im);
+        callback(im);
         const sink = new Writable({
           write(chunk, _enc, next) {
             sent.push(
@@ -294,30 +306,35 @@ describe("createHttpSmartClient (unit)", () => {
     const out = await client.eventWithResult!("evt", { x: 1 } as any);
     expect(out).toEqual({ x: 2 });
 
-    const sentText = Buffer.concat(sent).toString("utf8");
+    const sentText = Buffer.concat(sent as unknown as Uint8Array[]).toString(
+      "utf8",
+    );
     const sentJson = getDefaultSerializer().parse<any>(sentText);
     expect(sentJson).toEqual({ payload: { x: 1 }, returnPayload: true });
     expect(spy).toHaveBeenCalled();
   });
 
   it("eventWithResult(): throws when server is ok but omits result", async () => {
-    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
-      const env = { ok: true };
-      const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
-      const res = Readable.from([body]);
-      cb(asIncoming(res, { "content-type": "application/json" }));
-      const sink = new Writable({
-        write(_c, _e, n) {
-          n();
-        },
-        final(n) {
-          n();
-        },
+    jest
+      .spyOn(http, "request")
+      .mockImplementation((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
+        const env = { ok: true };
+        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const res = Readable.from([body]);
+        callback(asIncoming(res, { "content-type": "application/json" }));
+        const sink = new Writable({
+          write(_c, _e, n) {
+            n();
+          },
+          final(n) {
+            n();
+          },
+        }) as any;
+        sink.on = (_: any, __: any) => sink;
+        sink.destroy = () => undefined;
+        return sink;
       }) as any;
-      sink.on = (_: any, __: any) => sink;
-      sink.destroy = () => undefined;
-      return sink;
-    }) as any;
 
     await expect(
       client.eventWithResult!("evt", { x: 1 } as any),
@@ -327,12 +344,13 @@ describe("createHttpSmartClient (unit)", () => {
   it("uses https.request when baseUrl is https and includes auth header", async () => {
     const httpsReqSpy = jest
       .spyOn(require("https"), "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: 7 };
         const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
-        cb(im);
+        callback(im);
         const sink = new Writable({
           write(_c, _e, n) {
             n();
@@ -345,7 +363,9 @@ describe("createHttpSmartClient (unit)", () => {
         sink.setTimeout = () => sink;
         sink.destroy = () => undefined;
         // verify header passed
-        expect(String((opts.headers || {})["x-token"])).toBe("secret");
+        expect(
+          String(((opts as http.RequestOptions).headers || {})["x-token"]),
+        ).toBe("secret");
         return sink;
       }) as any;
     const c = createHttpSmartClient({
@@ -359,31 +379,34 @@ describe("createHttpSmartClient (unit)", () => {
   });
 
   it("parseMaybeJsonResponse: rejects when response emits error", async () => {
-    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
-      const res = new Readable({
-        read() {
-          /* no data */
-        },
-      });
-      const im = asIncoming(res, { "content-type": "application/json" });
-      // Defer emit to next tick so Promise wiring is in place
-      process.nextTick(() => {
-        (im as any).emit("error", new Error("bad"));
-      });
-      cb(im);
-      const sink = new Writable({
-        write(_c, _e, n) {
-          n();
-        },
-        final(n) {
-          n();
-        },
+    jest
+      .spyOn(http, "request")
+      .mockImplementation((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
+        const res = new Readable({
+          read() {
+            /* no data */
+          },
+        });
+        const im = asIncoming(res, { "content-type": "application/json" });
+        // Defer emit to next tick so Promise wiring is in place
+        process.nextTick(() => {
+          (im as any).emit("error", new Error("bad"));
+        });
+        callback(im);
+        const sink = new Writable({
+          write(_c, _e, n) {
+            n();
+          },
+          final(n) {
+            n();
+          },
+        }) as any;
+        sink.on = (_: any, __: any) => sink;
+        sink.setTimeout = () => sink;
+        sink.destroy = () => undefined;
+        return sink;
       }) as any;
-      sink.on = (_: any, __: any) => sink;
-      sink.setTimeout = () => sink;
-      sink.destroy = () => undefined;
-      return sink;
-    }) as any;
     const input = {
       file: createNodeFile({ name: "x" }, { stream: Readable.from("x") }, "F5"),
     } as const;
@@ -401,7 +424,8 @@ describe("createHttpSmartClient (unit)", () => {
   it("octet-stream: when input is Readable, returns response stream", async () => {
     const spy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
         const res = new Readable({
           read() {
             this.push(Buffer.from("HELLO", "utf8"));
@@ -409,7 +433,7 @@ describe("createHttpSmartClient (unit)", () => {
           },
         });
         const im = asIncoming(res, {});
-        cb(im);
+        callback(im);
         const sink = new Writable({
           write(_chunk, _enc, next) {
             next();
@@ -435,29 +459,33 @@ describe("createHttpSmartClient (unit)", () => {
         .on("end", () => resolve())
         .on("error", reject);
     });
-    expect(Buffer.concat(chunks).toString("utf8")).toBe("HELLO");
+    expect(
+      Buffer.concat(chunks as unknown as Uint8Array[]).toString("utf8"),
+    ).toBe("HELLO");
     expect(spy).toHaveBeenCalled();
   });
 
   it("octet-stream: propagates request error (req.on('error'))", async () => {
-    jest.spyOn(http, "request").mockImplementation((_opts: any, _cb: any) => {
-      const sink = new Writable({
-        write(_c, _e, n) {
-          n();
-        },
-        final(n) {
-          n();
-        },
-      }) as any;
-      // minimal EventEmitter API
-      sink.on = (event: string, handler: any) => {
-        if (event === "error") setImmediate(() => handler(new Error("boom")));
+    jest
+      .spyOn(http, "request")
+      .mockImplementation((_opts: unknown, _cb: unknown) => {
+        const sink = new Writable({
+          write(_c, _e, n) {
+            n();
+          },
+          final(n) {
+            n();
+          },
+        }) as any;
+        // minimal EventEmitter API
+        sink.on = (event: string, handler: any) => {
+          if (event === "error") setImmediate(() => handler(new Error("boom")));
+          return sink;
+        };
+        sink.setTimeout = () => sink;
+        sink.destroy = () => undefined;
         return sink;
-      };
-      sink.setTimeout = () => sink;
-      sink.destroy = () => undefined;
-      return sink;
-    }) as any;
+      }) as any;
     const input = Readable.from("ignored");
     await expect(client.task("duplex", input)).rejects.toBeTruthy();
   });
@@ -465,24 +493,27 @@ describe("createHttpSmartClient (unit)", () => {
   it("onRequest is invoked for multipart and octet-stream", async () => {
     const onRequest = jest.fn();
     // multipart path
-    jest.spyOn(http, "request").mockImplementationOnce((opts: any, cb: any) => {
-      const env = { ok: true, result: "OK" };
-      const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
-      const res = Readable.from([body]);
-      cb(asIncoming(res, { "content-type": "application/json" }));
-      const sink = new Writable({
-        write(_c, _e, n) {
-          n();
-        },
-        final(n) {
-          n();
-        },
+    jest
+      .spyOn(http, "request")
+      .mockImplementationOnce((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
+        const env = { ok: true, result: "OK" };
+        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const res = Readable.from([body]);
+        callback(asIncoming(res, { "content-type": "application/json" }));
+        const sink = new Writable({
+          write(_c, _e, n) {
+            n();
+          },
+          final(n) {
+            n();
+          },
+        }) as any;
+        sink.on = (_: any, __: any) => sink;
+        sink.setTimeout = () => sink;
+        sink.destroy = () => undefined;
+        return sink;
       }) as any;
-      sink.on = (_: any, __: any) => sink;
-      sink.setTimeout = () => sink;
-      sink.destroy = () => undefined;
-      return sink;
-    }) as any;
     const c = createHttpSmartClient({
       baseUrl,
       onRequest,
@@ -493,22 +524,25 @@ describe("createHttpSmartClient (unit)", () => {
     } as any);
 
     // octet-stream path
-    jest.spyOn(http, "request").mockImplementationOnce((opts: any, cb: any) => {
-      const res = Readable.from([Buffer.from("x")]);
-      cb(asIncoming(res, {}));
-      const sink = new Writable({
-        write(_c, _e, n) {
-          n();
-        },
-        final(n) {
-          n();
-        },
+    jest
+      .spyOn(http, "request")
+      .mockImplementationOnce((opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
+        const res = Readable.from([Buffer.from("x")]);
+        callback(asIncoming(res, {}));
+        const sink = new Writable({
+          write(_c, _e, n) {
+            n();
+          },
+          final(n) {
+            n();
+          },
+        }) as any;
+        sink.on = (_: any, __: any) => sink;
+        sink.setTimeout = () => sink;
+        sink.destroy = () => undefined;
+        return sink;
       }) as any;
-      sink.on = (_: any, __: any) => sink;
-      sink.setTimeout = () => sink;
-      sink.destroy = () => undefined;
-      return sink;
-    }) as any;
     await c.task("duplex", Readable.from("x"));
     expect(onRequest).toHaveBeenCalledTimes(2);
   });

@@ -24,6 +24,7 @@ describe("nodeExposure - misc branches", () => {
     // basePath without leading slash -> should be prefixed with '/'
     const exposure1 = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: externalServer,
         basePath: "runner",
         auth: { token: TOKEN },
@@ -41,6 +42,7 @@ describe("nodeExposure - misc branches", () => {
     // basePath with trailing slash -> should be trimmed
     const exposure2 = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: externalServer,
         basePath: "/trimmed/",
         auth: { token: TOKEN },
@@ -61,6 +63,7 @@ describe("nodeExposure - misc branches", () => {
   it("readJson branch: accepts non-Buffer chunks (string)", async () => {
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: TOKEN },
@@ -206,6 +209,7 @@ describe("nodeExposure - misc branches", () => {
 
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: TOKEN2 },
@@ -285,6 +289,7 @@ describe("nodeExposure - misc branches", () => {
   it("handleEvent success branch returns 200 (direct)", async () => {
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: TOKEN },
@@ -335,6 +340,7 @@ describe("nodeExposure - misc branches", () => {
   it("swallows logger errors inside catch blocks (event)", async () => {
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: TOKEN },

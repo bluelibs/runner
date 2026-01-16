@@ -1,11 +1,56 @@
+import type { IncomingMessage, ServerResponse } from "http";
+
+import type { SerializerLike } from "../../../serializer";
+import type { Logger } from "../../../models/Logger";
+import type { Store } from "../../../models/Store";
+import type { NodeExposureHttpCorsConfig } from "../resourceTypes";
+import { applyCorsActual } from "../cors";
+import { jsonErrorResponse, respondJson } from "../httpResponse";
+import { errorMessage, safeLogError } from "../logging";
 import type { JsonBody, JsonResponse } from "../types";
+
+enum ExposureErrorCode {
+  InternalError = "INTERNAL_ERROR",
+}
+
+enum ExposureErrorMessage {
+  InternalError = "Internal Error",
+}
+
+enum ExposureErrorField {
+  Name = "name",
+  Message = "message",
+  Code = "code",
+  Id = "id",
+  Data = "data",
+  Stack = "stack",
+  Cause = "cause",
+  Sql = "sql",
+}
+
+export enum ExposureErrorLogKey {
+  TaskError = "exposure.task.error",
+  EventError = "exposure.event.error",
+}
+
+const UNSAFE_ERROR_FIELDS = new Set<string>([
+  ExposureErrorField.Stack,
+  ExposureErrorField.Cause,
+  ExposureErrorField.Sql,
+]);
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object";
+
+const isJsonBody = (value: unknown): value is JsonBody =>
+  isRecord(value) && typeof value.ok === "boolean";
+
+const toErrorRecord = (value: unknown): Record<string, unknown> | undefined =>
+  isRecord(value) ? value : undefined;
 
 /** Sanitizes 500 errors if they are not application-defined */
 export const sanitizeErrorResponse = (response: unknown): JsonResponse => {
-  const asRecord =
-    response && typeof response === "object"
-      ? (response as Record<string, unknown>)
-      : undefined;
+  const asRecord = isRecord(response) ? response : undefined;
 
   const statusRaw = asRecord?.status ?? asRecord?.statusCode;
   const status =
@@ -14,61 +59,134 @@ export const sanitizeErrorResponse = (response: unknown): JsonResponse => {
       : 500;
 
   const bodyRaw = asRecord?.body;
-  const hasBody = bodyRaw && typeof bodyRaw === "object";
-  const body = hasBody ? (bodyRaw as Record<string, unknown>) : undefined;
+  const body = isRecord(bodyRaw) ? bodyRaw : undefined;
 
   const errorRaw =
-    (body && typeof body.error === "object" ? body.error : undefined) ??
-    (asRecord && typeof asRecord.error === "object"
-      ? asRecord.error
-      : undefined);
+    (body ? toErrorRecord(body.error) : undefined) ??
+    toErrorRecord(asRecord?.error);
 
   const normalizedBody: JsonBody = ((): JsonBody => {
-    if (body && typeof body.ok === "boolean") {
-      return body as JsonBody;
+    if (isJsonBody(bodyRaw)) {
+      return bodyRaw;
     }
     if (errorRaw) {
-      return { ok: false, error: errorRaw as Record<string, unknown> };
+      return { ok: false, error: errorRaw };
     }
     return {
       ok: false,
-      error: { message: "Internal Error", code: "INTERNAL_ERROR" },
+      error: {
+        message: ExposureErrorMessage.InternalError,
+        code: ExposureErrorCode.InternalError,
+      },
     };
   })();
 
   const sanitizedBody: JsonBody = ((): JsonBody => {
-    const maybeError = (normalizedBody as { error?: unknown } | undefined)
-      ?.error;
-    const bodyError =
-      maybeError && typeof maybeError === "object"
-        ? (maybeError as Record<string, unknown>)
-        : undefined;
+    if (normalizedBody.ok) return normalizedBody;
 
-    if (status !== 500 || !bodyError) return normalizedBody;
+    const bodyError = toErrorRecord(
+      (normalizedBody as { error?: unknown }).error,
+    );
 
-    // SECURITY: For 500 errors, only preserve safe fields to prevent information leakage.
-    // Fields like 'stack', 'cause', or internal details must not reach the client.
-    const safeError: Record<string, unknown> = {
-      message: "Internal Error",
-      code:
-        typeof bodyError.code === "string" ? bodyError.code : "INTERNAL_ERROR",
-    };
+    if (!bodyError) return normalizedBody;
 
-    // Preserve app error identity if present (for typed errors)
-    if (typeof bodyError.id === "string") {
-      safeError.id = bodyError.id;
+    if (status === 500) {
+      // SECURITY: For 500 errors, only preserve safe fields to prevent information leakage.
+      // Fields like 'stack', 'cause', or internal details must not reach the client.
+      const isTypedError = typeof bodyError.id === "string";
+      const safeMessage =
+        isTypedError && typeof bodyError.message === "string"
+          ? bodyError.message
+          : ExposureErrorMessage.InternalError;
+      const safeError: Record<string, unknown> = {
+        message: safeMessage,
+        code:
+          typeof bodyError.code === "string"
+            ? bodyError.code
+            : ExposureErrorCode.InternalError,
+      };
+
+      // Preserve app error identity if present (for typed errors)
+      if (typeof bodyError.id === "string") {
+        safeError.id = bodyError.id;
+      }
+
+      // Preserve app error data if present (user-controlled payload from typed errors)
+      if (bodyError.data !== undefined) {
+        safeError.data = bodyError.data;
+      }
+
+      return {
+        ok: false,
+        error: safeError,
+      };
     }
 
-    // Preserve app error data if present (user-controlled payload from typed errors)
-    if (bodyError.data !== undefined) {
-      safeError.data = bodyError.data;
+    const sanitizedError: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(bodyError)) {
+      if (UNSAFE_ERROR_FIELDS.has(key)) continue;
+      sanitizedError[key] = value;
     }
 
     return {
       ok: false,
-      error: safeError,
+      error: sanitizedError,
     };
   })();
 
   return { status, body: sanitizedBody };
+};
+
+export interface HandleRequestErrorOptions {
+  error: unknown;
+  req: IncomingMessage;
+  res: ServerResponse;
+  store: Store;
+  logger: Logger;
+  cors?: NodeExposureHttpCorsConfig;
+  serializer: SerializerLike;
+  logKey: ExposureErrorLogKey;
+}
+
+const resolveAppErrorExtra = (
+  store: Store,
+  error: unknown,
+): Record<string, unknown> | undefined => {
+  try {
+    for (const helper of store.errors.values()) {
+      if (helper.is(error)) {
+        if (!isRecord(error)) return { id: undefined, data: undefined };
+        const name = error[ExposureErrorField.Name];
+        const id = typeof name === "string" ? name : undefined;
+        const data = error[ExposureErrorField.Data];
+        return { id, data };
+      }
+    }
+  } catch {
+    // best-effort only
+  }
+  return undefined;
+};
+
+export const handleRequestError = (options: HandleRequestErrorOptions): void => {
+  const { error, req, res, store, logger, cors, serializer, logKey } = options;
+  const appErrorExtra = resolveAppErrorExtra(store, error);
+  const displayMessage =
+    appErrorExtra && error instanceof Error && error.message
+      ? error.message
+      : ExposureErrorMessage.InternalError;
+  safeLogError(logger, logKey, { error: errorMessage(error) });
+  applyCorsActual(req, res, cors);
+  respondJson(
+    res,
+    sanitizeErrorResponse(
+      jsonErrorResponse(
+        500,
+        displayMessage,
+        ExposureErrorCode.InternalError,
+        appErrorExtra,
+      ),
+    ),
+    serializer,
+  );
 };

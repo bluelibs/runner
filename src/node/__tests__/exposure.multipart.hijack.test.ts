@@ -20,6 +20,7 @@ describe("nodeExposure multipart hijack", () => {
 
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },

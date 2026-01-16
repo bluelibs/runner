@@ -8,8 +8,8 @@ function asIncoming(
   res: Readable,
   headers: Record<string, string>,
 ): http.IncomingMessage {
-  (res as any).headers = headers;
-  return res as any as http.IncomingMessage;
+  (res as unknown as { headers: Record<string, string> }).headers = headers;
+  return res as unknown as http.IncomingMessage;
 }
 
 describe("createMixedHttpClient (unit)", () => {
@@ -25,22 +25,22 @@ describe("createMixedHttpClient (unit)", () => {
       headers: Record<string, string>;
       body: any;
     }> = [];
-    const fetchMock = async (url: any, init?: any) => {
+    const fetchMock = async (url: RequestInfo | URL, init?: RequestInit) => {
       const bodyStr = String(init?.body ?? "");
       calls.push({
         url: String(url),
-        headers: init?.headers ?? {},
+        headers: (init?.headers as Record<string, string>) ?? {},
         body: JSON.parse(bodyStr),
       });
       return {
         text: async () =>
           getDefaultSerializer().stringify({ ok: true, result: 42 }),
-      } as any;
+      } as unknown as Response;
     };
 
     const client = createHttpMixedClient({
       baseUrl,
-      fetchImpl: fetchMock as any,
+      fetchImpl: fetchMock,
       serializer: getDefaultSerializer(),
     });
     const out = await client.task<{ a: number }, number>("my.task", { a: 1 });
@@ -55,10 +55,11 @@ describe("createMixedHttpClient (unit)", () => {
   it("Readable input: delegates to Smart client and returns a stream", async () => {
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
         const res = Readable.from([Buffer.from("STREAM", "utf8")]);
         const im = asIncoming(res, { "content-type": "text/plain" });
-        cb(im);
+        callback(im);
         const sink = new Writable({
           write(_c, _e, n) {
             n();
@@ -66,12 +67,12 @@ describe("createMixedHttpClient (unit)", () => {
           final(n) {
             n();
           },
-        }) as any;
-        sink.on = (_: any, __: any) => sink;
-        sink.setTimeout = () => sink;
-        sink.destroy = () => undefined;
+        }) as unknown as http.ClientRequest;
+        (sink as unknown as { on: any }).on = (_: any, __: any) => sink;
+        (sink as unknown as { setTimeout: any }).setTimeout = () => sink;
+        (sink as unknown as { destroy: any }).destroy = () => undefined;
         return sink;
-      }) as any;
+      });
 
     const client = createHttpMixedClient({
       baseUrl,
@@ -88,19 +89,27 @@ describe("createMixedHttpClient (unit)", () => {
         .on("end", () => resolve())
         .on("error", reject);
     });
-    expect(Buffer.concat(chunks).toString("utf8")).toBe("STREAM");
+    expect(
+      Buffer.concat(chunks as unknown as Uint8Array[]).toString("utf8"),
+    ).toBe("STREAM");
     expect(reqSpy).toHaveBeenCalled();
   });
 
   it("Node File sentinel: delegates to Smart client (multipart)", async () => {
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "OK" };
         const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
-        const res = Readable.from([body]);
+        const res = Readable.from([body]); // Correction: was [body] in previous view, but let's check carefully.
+        // Wait, original was:
+        // const res = Readable.from([body]);
+        // The previous tool output showed I replaced it with... nothing changed in body logic, just indentation.
+        // But my tool call above replaced lines 98-116.
+        // Let's use the content I know is there.
         const im = asIncoming(res, { "content-type": "application/json" });
-        cb(im);
+        callback(im);
         const sink = new Writable({
           write(_c, _e, n) {
             n();
@@ -108,12 +117,12 @@ describe("createMixedHttpClient (unit)", () => {
           final(n) {
             n();
           },
-        }) as any;
-        sink.on = (_: any, __: any) => sink;
-        sink.setTimeout = () => sink;
-        sink.destroy = () => undefined;
+        }) as unknown as http.ClientRequest;
+        (sink as unknown as { on: any }).on = (_: any, __: any) => sink;
+        (sink as unknown as { setTimeout: any }).setTimeout = () => sink;
+        (sink as unknown as { destroy: any }).destroy = () => undefined;
         return sink;
-      }) as any;
+      });
 
     const client = createHttpMixedClient({
       baseUrl,
@@ -126,7 +135,7 @@ describe("createMixedHttpClient (unit)", () => {
         "F1",
       ),
     } as const;
-    const out = await client.task("upload", input as any);
+    const out = await client.task("upload", input);
     expect(out).toBe("OK");
     expect(reqSpy).toHaveBeenCalled();
   });
@@ -134,12 +143,13 @@ describe("createMixedHttpClient (unit)", () => {
   it("Array + nested object sentinel: Smart client path is used", async () => {
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "OK2" };
         const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
-        cb(im);
+        callback(im);
         const sink = new Writable({
           write(_c, _e, n) {
             n();
@@ -147,12 +157,12 @@ describe("createMixedHttpClient (unit)", () => {
           final(n) {
             n();
           },
-        }) as any;
-        sink.on = (_: any, __: any) => sink;
-        sink.setTimeout = () => sink;
-        sink.destroy = () => undefined;
+        }) as unknown as http.ClientRequest;
+        (sink as unknown as { on: any }).on = (_: any, __: any) => sink;
+        (sink as unknown as { setTimeout: any }).setTimeout = () => sink;
+        (sink as unknown as { destroy: any }).destroy = () => undefined;
         return sink;
-      }) as any;
+      });
 
     const client = createHttpMixedClient({
       baseUrl,
@@ -169,14 +179,14 @@ describe("createMixedHttpClient (unit)", () => {
         },
       ],
     } as const;
-    const out = await client.task("upload", input as any);
+    const out = await client.task("upload", input);
     expect(out).toBe("OK2");
     expect(reqSpy).toHaveBeenCalled();
   });
 
   it("event(): always uses JSON path", async () => {
     const calls: Array<{ url: string; body: any }> = [];
-    const fetchMock = async (url: any, init?: any) => {
+    const fetchMock = async (url: RequestInfo | URL, init?: RequestInit) => {
       calls.push({
         url: String(url),
         body: JSON.parse(String(init?.body ?? "")),
@@ -184,12 +194,12 @@ describe("createMixedHttpClient (unit)", () => {
       return {
         text: async () =>
           getDefaultSerializer().stringify({ ok: true, result: undefined }),
-      } as any;
+      } as unknown as Response;
     };
 
     const client = createHttpMixedClient({
       baseUrl,
-      fetchImpl: fetchMock as any,
+      fetchImpl: fetchMock,
       serializer: getDefaultSerializer(),
     });
     await client.event("log", { x: 1 });
@@ -199,7 +209,7 @@ describe("createMixedHttpClient (unit)", () => {
 
   it("eventWithResult(): uses JSON path and returns result", async () => {
     const calls: Array<{ url: string; body: any }> = [];
-    const fetchMock = async (url: any, init?: any) => {
+    const fetchMock = async (url: RequestInfo | URL, init?: RequestInit) => {
       calls.push({
         url: String(url),
         body: getDefaultSerializer().parse(String(init?.body ?? "")),
@@ -207,12 +217,12 @@ describe("createMixedHttpClient (unit)", () => {
       return {
         text: async () =>
           getDefaultSerializer().stringify({ ok: true, result: { x: 2 } }),
-      } as any;
+      } as unknown as Response;
     };
 
     const client = createHttpMixedClient({
       baseUrl,
-      fetchImpl: fetchMock as any,
+      fetchImpl: fetchMock,
       serializer: getDefaultSerializer(),
     });
 
@@ -227,7 +237,7 @@ describe("createMixedHttpClient (unit)", () => {
   it("throws when baseUrl is empty", () => {
     expect(() =>
       createHttpMixedClient({
-        baseUrl: "" as any,
+        baseUrl: "" as unknown as string, // Force invalid url to validation
         serializer: getDefaultSerializer(),
       } as any),
     ).toThrow();
@@ -235,7 +245,7 @@ describe("createMixedHttpClient (unit)", () => {
 
   it("Invalid Node File sentinel (id not string): stays on JSON path", async () => {
     const calls: Array<{ url: string; body: any }> = [];
-    const fetchMock = async (url: any, init?: any) => {
+    const fetchMock = async (url: RequestInfo | URL, init?: RequestInit) => {
       calls.push({
         url: String(url),
         body: JSON.parse(String(init?.body ?? "")),
@@ -243,19 +253,19 @@ describe("createMixedHttpClient (unit)", () => {
       return {
         text: async () =>
           getDefaultSerializer().stringify({ ok: true, result: 9 }),
-      } as any;
+      } as unknown as Response;
     };
 
     const client = createHttpMixedClient({
       baseUrl,
-      fetchImpl: fetchMock as any,
+      fetchImpl: fetchMock,
       serializer: getDefaultSerializer(),
     });
 
     const httpReqSpy = jest.spyOn(http, "request");
     const out = await client.task("my.task", {
       file: { $runnerFile: "File", id: 123, _node: { buffer: "x" } },
-    } as any);
+    } as unknown as { file: unknown });
 
     expect(out).toBe(9);
     expect(calls).toHaveLength(1);
@@ -264,7 +274,7 @@ describe("createMixedHttpClient (unit)", () => {
 
   it("Invalid Node File sentinel (_node not object): stays on JSON path", async () => {
     const calls: Array<{ url: string; body: any }> = [];
-    const fetchMock = async (url: any, init?: any) => {
+    const fetchMock = async (url: RequestInfo | URL, init?: RequestInit) => {
       calls.push({
         url: String(url),
         body: JSON.parse(String(init?.body ?? "")),
@@ -272,19 +282,19 @@ describe("createMixedHttpClient (unit)", () => {
       return {
         text: async () =>
           getDefaultSerializer().stringify({ ok: true, result: 10 }),
-      } as any;
+      } as unknown as Response;
     };
 
     const client = createHttpMixedClient({
       baseUrl,
-      fetchImpl: fetchMock as any,
+      fetchImpl: fetchMock,
       serializer: getDefaultSerializer(),
     });
 
     const httpReqSpy = jest.spyOn(http, "request");
     const out = await client.task("my.task", {
       file: { $runnerFile: "File", id: "F1", _node: null },
-    } as any);
+    } as unknown as { file: unknown });
 
     expect(out).toBe(10);
     expect(calls).toHaveLength(1);
@@ -293,7 +303,7 @@ describe("createMixedHttpClient (unit)", () => {
 
   it("Primitive inputs stay on JSON path", async () => {
     const calls: Array<{ url: string; body: any }> = [];
-    const fetchMock = async (url: any, init?: any) => {
+    const fetchMock = async (url: RequestInfo | URL, init?: RequestInit) => {
       calls.push({
         url: String(url),
         body: JSON.parse(String(init?.body ?? "")),
@@ -301,17 +311,17 @@ describe("createMixedHttpClient (unit)", () => {
       return {
         text: async () =>
           getDefaultSerializer().stringify({ ok: true, result: 11 }),
-      } as any;
+      } as unknown as Response;
     };
 
     const client = createHttpMixedClient({
       baseUrl,
-      fetchImpl: fetchMock as any,
+      fetchImpl: fetchMock,
       serializer: getDefaultSerializer(),
     });
 
     const httpReqSpy = jest.spyOn(http, "request");
-    const out = await client.task("my.task", 1 as any);
+    const out = await client.task("my.task", 1);
 
     expect(out).toBe(11);
     expect(calls).toHaveLength(1);

@@ -85,6 +85,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - **Dynamic**: Clients can override per-request via `onRequest({ headers })`.
 - **Failure**: 401 Unauthorized + JSON error.
 - **Allow-Lists**: Server restricts to tagged resources (`globals.tags.tunnel`, `mode: "server"`, `transport: "http"`). Unknown IDs → 403 Forbidden.
+- **Exposure disabled**: If no server-mode HTTP tunnel is registered, task/event requests return 403 (fail-closed).
 
 ### Error Handling
 

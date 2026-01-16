@@ -85,6 +85,7 @@ describe("Security Fixes", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -127,6 +128,7 @@ describe("Security Fixes", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -167,6 +169,7 @@ describe("Security Fixes", () => {
 
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -212,6 +215,7 @@ describe("Typed Error Security", () => {
 
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -282,6 +286,7 @@ describe("Boundary Security Coverage", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         limits: { multipart: { fieldSize: 10 } },
         auth: { allowAnonymous: true },
       },
@@ -322,6 +327,7 @@ describe("Boundary Security Coverage", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         limits: { json: { maxSize: 10 } },
         auth: { allowAnonymous: true },
       },
@@ -363,6 +369,7 @@ describe("Boundary Security Coverage", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         limits: { multipart: { files: 1 } },
         auth: { allowAnonymous: true },
       },
@@ -409,6 +416,7 @@ describe("Boundary Security Coverage", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         limits: { multipart: { parts: 1 } },
         auth: { allowAnonymous: true },
       },
@@ -453,6 +461,7 @@ describe("Boundary Security Coverage", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         limits: { multipart: { fields: 1 } },
         auth: { allowAnonymous: true },
       },
@@ -497,6 +506,7 @@ describe("Boundary Security Coverage", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         limits: { multipart: { fileSize: 10 } },
         auth: { allowAnonymous: true },
       },
@@ -537,7 +547,11 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), auth: { allowAnonymous: true } },
+      http: {
+        dangerouslyAllowOpenExposure: true,
+        server: http.createServer(),
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.security.multipart.missingFile",
@@ -620,6 +634,7 @@ describe("Fail-Closed Authentication Security", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -657,6 +672,7 @@ describe("Fail-Closed Authentication Security", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "secret-token-123" },
@@ -697,6 +713,7 @@ describe("Fail-Closed Authentication Security", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "correct-token" },
@@ -741,6 +758,7 @@ describe("Error Sanitization Security", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -783,6 +801,7 @@ describe("Error Sanitization Security", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -822,6 +841,7 @@ describe("CORS Security", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -865,6 +885,7 @@ describe("CORS Security", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -912,6 +933,7 @@ describe("CORS Security", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },

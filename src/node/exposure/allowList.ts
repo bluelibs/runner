@@ -5,34 +5,56 @@ import type { Store } from "../../models/Store";
 import { jsonErrorResponse } from "./httpResponse";
 import type { AllowListGuard } from "./types";
 
-export function createAllowListGuard(store: Store): AllowListGuard {
-  let cache: TunnelAllowList | null = null;
+enum AllowListErrorCode {
+  Forbidden = "FORBIDDEN",
+}
 
-  const allowList = () => {
-    if (!cache) {
-      cache = computeAllowList(store);
-    }
-    return cache;
-  };
+enum AllowListErrorMessage {
+  ExposureNotEnabled = "Exposure not enabled",
+}
+
+export function createAllowListGuard(
+  store: Store,
+  allowOpen: boolean = false,
+): AllowListGuard {
+  const allowList = (): TunnelAllowList => computeAllowList(store);
 
   return {
     ensureTask(id) {
       const list = allowList();
       if (!list.enabled) {
-        return null;
+        if (allowOpen) return null;
+        return jsonErrorResponse(
+          403,
+          AllowListErrorMessage.ExposureNotEnabled,
+          AllowListErrorCode.Forbidden,
+        );
       }
       if (!list.taskIds.has(id)) {
-        return jsonErrorResponse(403, `Task ${id} not exposed`, "FORBIDDEN");
+        return jsonErrorResponse(
+          403,
+          `Task ${id} not exposed`,
+          AllowListErrorCode.Forbidden,
+        );
       }
       return null;
     },
     ensureEvent(id) {
       const list = allowList();
       if (!list.enabled) {
-        return null;
+        if (allowOpen) return null;
+        return jsonErrorResponse(
+          403,
+          AllowListErrorMessage.ExposureNotEnabled,
+          AllowListErrorCode.Forbidden,
+        );
       }
       if (!list.eventIds.has(id)) {
-        return jsonErrorResponse(403, `Event ${id} not exposed`, "FORBIDDEN");
+        return jsonErrorResponse(
+          403,
+          `Event ${id} not exposed`,
+          AllowListErrorCode.Forbidden,
+        );
       }
       return null;
     },

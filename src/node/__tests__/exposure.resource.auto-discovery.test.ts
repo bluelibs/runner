@@ -84,6 +84,7 @@ describe("nodeExposure auto-discovery (server-mode http)", () => {
 
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },

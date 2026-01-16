@@ -51,6 +51,19 @@ interface MultipartSuccess {
 
 type MultipartResult = MultipartSuccess | { ok: false; response: JsonResponse };
 
+enum MultipartLimitErrorMessage {
+  LimitExceeded = "Multipart limit exceeded",
+}
+
+class MultipartLimitError extends Error {
+  readonly response: JsonResponse;
+
+  constructor(response: JsonResponse) {
+    super(MultipartLimitErrorMessage.LimitExceeded);
+    this.response = response;
+  }
+}
+
 interface FileEntry {
   id: string;
   file: NodeInputFile;
@@ -90,6 +103,7 @@ export async function parseMultipartInput(
 ): Promise<MultipartResult> {
   const files = new Map<string, FileEntry>();
   let manifestRaw = "";
+  let manifestBytes = 0;
   let _manifestSeen = false;
   let readyResolved = false;
   let finalizeSettled = false;
@@ -120,7 +134,14 @@ export async function parseMultipartInput(
   ): FileEntry => {
     let entry = files.get(id);
     if (!entry) {
+      const maxFiles = limits.files;
+      if (typeof maxFiles === "number" && files.size >= maxFiles) {
+        throw new MultipartLimitError(payloadTooLarge("Files limit exceeded"));
+      }
       const pass = new PassThrough();
+      pass.on("error", () => {
+        // Avoid unhandled error events when we abort multipart streams.
+      });
       const file = new NodeInputFile(
         {
           name: meta?.name ?? "upload",
@@ -141,10 +162,13 @@ export async function parseMultipartInput(
 
   let busboyInst: any | undefined;
 
-  const endAllStreamsSafely = () => {
-    // Ensure any PassThrough streams created for expected files are closed
+  const destroyAllStreamsSafely = () => {
+    const error = new Error();
     for (const entry of files.values()) {
-      if (!entry.connected) {
+      if (entry.stream.destroyed) continue;
+      try {
+        entry.stream.destroy(error);
+      } catch {
         try {
           entry.stream.end();
         } catch {
@@ -168,7 +192,7 @@ export async function parseMultipartInput(
       // ignore
     }
     // Prevent tasks from hanging waiting on never-connected streams
-    endAllStreamsSafely();
+    destroyAllStreamsSafely();
     settleFinalize({ ok: false, response });
     if (!readyResolved) {
       readyResolved = true;
@@ -188,6 +212,20 @@ export async function parseMultipartInput(
     return await readyPromise;
   }
 
+  const appendManifestChunk = (chunk: string): boolean => {
+    const maxFieldSize = limits.fieldSize;
+    if (typeof maxFieldSize === "number") {
+      const chunkBytes = Buffer.byteLength(chunk, "utf8");
+      if (manifestBytes + chunkBytes > maxFieldSize) {
+        fail(payloadTooLarge("Field limit exceeded"));
+        return false;
+      }
+      manifestBytes += chunkBytes;
+    }
+    manifestRaw += chunk;
+    return true;
+  };
+
   busboyInst.on("field", (name: string, value: unknown, info: FieldInfo) => {
     if (info.nameTruncated || info.valueTruncated) {
       fail(payloadTooLarge("Field limit exceeded"));
@@ -198,7 +236,9 @@ export async function parseMultipartInput(
     try {
       // Safely coerce to string; this may throw for exotic objects
       const text = typeof value === "string" ? value : String(value);
-      manifestRaw += text;
+      if (!appendManifestChunk(text)) {
+        return;
+      }
       const manifest = manifestRaw
         ? serializer.parse<{ input?: unknown }>(manifestRaw)
         : undefined;
@@ -211,7 +251,11 @@ export async function parseMultipartInput(
         readyResolved = true;
         resolveReady({ ok: true, value: hydrated, finalize: finalizePromise });
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof MultipartLimitError) {
+        fail(error.response);
+        return;
+      }
       fail(jsonErrorResponse(400, "Invalid manifest", "INVALID_MULTIPART"));
     }
   });
@@ -230,19 +274,29 @@ export async function parseMultipartInput(
         extra?: Record<string, unknown>;
       };
       const ext = info as ExtendedFileInfo;
-      const entry = ensureEntry(
-        id,
-        {
-          name: info.filename,
-          type: info.mimeType,
-          ...(ext.size !== undefined ? { size: ext.size } : {}),
-          ...(ext.lastModified !== undefined
-            ? { lastModified: ext.lastModified }
-            : {}),
-          ...(ext.extra !== undefined ? { extra: ext.extra } : {}),
-        },
-        "file",
-      );
+      let entry: FileEntry;
+      try {
+        entry = ensureEntry(
+          id,
+          {
+            name: info.filename,
+            type: info.mimeType,
+            ...(ext.size !== undefined ? { size: ext.size } : {}),
+            ...(ext.lastModified !== undefined
+              ? { lastModified: ext.lastModified }
+              : {}),
+            ...(ext.extra !== undefined ? { extra: ext.extra } : {}),
+          },
+          "file",
+        );
+      } catch (error) {
+        if (error instanceof MultipartLimitError) {
+          fail(error.response);
+          stream.resume();
+          return;
+        }
+        throw error;
+      }
       entry.connected = true;
 
       // Busboy emits 'limit' event on the file stream if fileSize limit is reached

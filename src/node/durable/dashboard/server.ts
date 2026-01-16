@@ -52,6 +52,19 @@ export type DashboardMiddlewareOptions = {
    * Useful for tests or custom deployments.
    */
   uiDistPath?: string;
+  /**
+   * Authorization hook for operator actions (retry/skip/force/edit).
+   * Return true to allow, false to deny.
+   */
+  operatorAuth?: (req: Request) => boolean | Promise<boolean>;
+  /**
+   * Opt out of operator auth checks (not recommended).
+   */
+  dangerouslyAllowUnauthenticatedOperator?: boolean;
+};
+
+enum DashboardErrorMessage {
+  Forbidden = "Forbidden",
 };
 
 export function createDashboardMiddleware(
@@ -110,6 +123,17 @@ export function createDashboardMiddleware(
     const { executionId, stepId, reason, state } = req.body;
 
     try {
+      if (options.operatorAuth) {
+        const isAuthorized = await options.operatorAuth(req);
+        if (!isAuthorized) {
+          return res
+            .status(403)
+            .json({ error: DashboardErrorMessage.Forbidden });
+        }
+      } else if (!options.dangerouslyAllowUnauthenticatedOperator) {
+        return res.status(403).json({ error: DashboardErrorMessage.Forbidden });
+      }
+
       switch (action) {
         case "retryRollback":
           await operator.retryRollback(executionId);

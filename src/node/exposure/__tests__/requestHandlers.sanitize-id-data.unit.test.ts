@@ -106,8 +106,8 @@ describe("requestHandlers - sanitizeErrorResponse preserves id and data fields",
       reason: "quota_exceeded",
     });
 
-    // Should mask the message
-    expect(json?.error?.message).toBe("Internal Error");
+    // Should preserve typed error message
+    expect(json?.error?.message).toBe("Sensitive internal error message");
 
     // Should NOT include sensitive fields
     expect(json?.error?.stack).toBeUndefined();

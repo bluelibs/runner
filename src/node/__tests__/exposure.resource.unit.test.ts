@@ -29,6 +29,7 @@ D("nodeExposure - unit edge cases", () => {
   async function startExposureServer() {
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         basePath: "/__runner",
         listen: { port: 0 },
         auth: { token: TOKEN },
@@ -326,6 +327,7 @@ D("nodeExposure - unit edge cases", () => {
   it("supports custom auth header name", async () => {
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         basePath: "/__runner",
         listen: { port: 0 },
         auth: { header: "authorization", token: "Bearer XYZ" },

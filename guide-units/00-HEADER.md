@@ -15,11 +15,13 @@
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
-// Define a task with dependencies and type-safe input/output
+// Define a task with dependencies, schema validation, and type-safe input/output
 const createUser = r
   .task("users.create")
   .dependencies({ db, mailer })
+  .inputSchema(z.object({ name: z.string(), email: z.string() }))
   .run(async (input, { db, mailer }) => {
+    // type-safety infered from schema
     const user = await db.users.insert(input);
     await mailer.sendWelcome(user.email);
     return user;
@@ -46,7 +48,7 @@ const runtime = await run(app);
 | [Design Documents](https://github.com/bluelibs/runner/blob/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
-| [AI Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)                  | Chatbot | Interactive Q&A assistant           |
+| [AI Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner)                                       | Chatbot | Interactive Q&A assistant           |
 
 ### Community & Policies
 
@@ -150,11 +152,12 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [Tags](#tags) - Component discovery and configuration
 - [Errors](#errors) - Typed error handling
 
-**Runtime & Execution**
+**Runtime & Lifecycle**
 
 - [run() and RunOptions](#run-and-runoptions) - Starting your application
 - [Task Interceptors](#task-interceptors) - Advanced task control
 - [Error Boundaries](#error-boundaries) - Fault isolation
+- [Lifecycle Hooks](#lifecycle-hooks) - Graceful shutdown and cleanup
 
 **Advanced Features**
 
@@ -163,12 +166,21 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [Timeouts](#timeouts) - Operation time limits
 - [Logging](#logging) - Structured observability
 - [Debug](#debug) - Development tooling
+
+**Concurrency & Scheduling**
+
 - [Semaphore](#semaphore) - Concurrency control
 - [Queue](#queue) - Task scheduling
+
+**Node-Specific Features** (see dedicated guides in `./readmes/`)
+
+- [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows
+- [HTTP Tunnels](./readmes/TUNNELS.md) - Remote task execution
 
 **Architecture Patterns**
 
 - [Optional Dependencies](#optional-dependencies) - Graceful degradation
+- [Resource Forking](#resource-forking) - Multi-instance patterns
 - [Serialization](#serialization) - Advanced data handling
 - [Tunnels](#tunnels-bridging-runners) - Distributed systems
 - [Async Context](#async-context) - Request-scoped state

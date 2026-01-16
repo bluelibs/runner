@@ -27,6 +27,7 @@ describe("nodeExposure discovery endpoint", () => {
 
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },

@@ -113,6 +113,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
 
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -305,6 +306,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const okEvent = defineEvent<void>({ id: "hr.event" });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -373,6 +375,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -437,6 +440,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -499,6 +503,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -553,6 +558,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     // No auth configured -> need allowAnonymous to permit access (secure by default)
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { allowAnonymous: true },
@@ -600,6 +606,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         listen: { port: 0 },
         basePath: "/__runner",
         auth: { token: "T" },
@@ -632,6 +639,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -701,6 +709,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const okEvent = defineEvent<{ v?: number }>({ id: "ok.event.custom" });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "ABC", header: "x-custom-token" },
@@ -743,6 +752,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -791,6 +801,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -819,6 +830,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "T" },
@@ -880,6 +892,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "ARR" },
@@ -921,6 +934,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "DET" },
@@ -966,6 +980,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "AB" },
@@ -1007,6 +1022,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "L" },
@@ -1039,6 +1055,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const evt = defineEvent<void>({ id: "coverage.event.nonerror" });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "EV" },
@@ -1082,6 +1099,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "EVERR" },
@@ -1114,6 +1132,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "CS" },
@@ -1149,6 +1168,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "W" },
@@ -1185,6 +1205,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     const evt = defineEvent<void>({ id: "coverage.header.arr" });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "ARR" },
@@ -1217,6 +1238,7 @@ describe("nodeExposure - isolated branch coverage (no sockets)", () => {
     });
     const exposure = nodeExposure.with({
       http: {
+        dangerouslyAllowOpenExposure: true,
         server: http.createServer(),
         basePath: "/__runner",
         auth: { token: "R" },

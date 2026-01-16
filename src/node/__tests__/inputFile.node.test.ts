@@ -9,8 +9,11 @@ describe("NodeInputFile", () => {
   it("resolves stream once and supports toTempFile", async () => {
     const payload = Buffer.from("HelloFile");
     const f1 = new NodeInputFile(
-      { name: "a.txt", type: "text/plain" } as any,
-      Readable.from(payload) as any,
+      { name: "a.txt", type: "text/plain" } as unknown as {
+        name: string;
+        type: string;
+      },
+      Readable.from(payload),
     );
 
     // resolve() returns a stream that we can consume
@@ -32,19 +35,19 @@ describe("NodeInputFile", () => {
 
     // New instance to test toTempFile
     const f2 = new NodeInputFile(
-      { name: "b.txt" } as any,
-      Readable.from(payload) as any,
+      { name: "b.txt" } as unknown as { name: string },
+      Readable.from(payload),
     );
     const { path, bytesWritten } = await f2.toTempFile();
     expect(bytesWritten).toBe(payload.length);
     const disk = await fs.promises.readFile(path);
-    expect(disk.equals(payload)).toBe(true);
+    expect(disk.equals(payload as unknown as any)).toBe(true);
   });
 
   it("throws when stream is not available and toPassThrough works", async () => {
     const payload = Buffer.from("PTS");
-    const src = Readable.from(payload);
-    const pt = toPassThrough(src as any);
+    const src = Readable.from(payload as unknown as any);
+    const pt = toPassThrough(src);
     const chunks: Buffer[] = [];
     await new Promise<void>((resolve, reject) => {
       pt.on("data", (c: any) =>
@@ -58,12 +61,12 @@ describe("NodeInputFile", () => {
     ).toBe("PTS");
 
     const f = new NodeInputFile(
-      { name: "x" } as any,
-      Readable.from("data") as any,
+      { name: "x" } as unknown as { name: string },
+      Readable.from("data"),
     );
     // Corrupt internal stream to simulate unavailable stream
-    (f as any)._consumed = false;
-    (f as any)._stream = null;
+    (f as unknown as { _consumed: boolean })._consumed = false;
+    (f as unknown as { _stream: unknown })._stream = null;
     expect(() => f.stream()).toThrow(/not available/i);
   });
 
@@ -71,8 +74,8 @@ describe("NodeInputFile", () => {
     const payload = Buffer.from("Z");
     // Empty name triggers fallback to 'upload'
     const f = new NodeInputFile(
-      { name: "" } as any,
-      Readable.from(payload) as any,
+      { name: "" } as unknown as { name: string },
+      Readable.from(payload),
     );
     const { path: tempPath } = await f.toTempFile();
     const base = path.basename(tempPath);
@@ -87,7 +90,10 @@ describe("NodeInputFile", () => {
         this.push(null);
       },
     });
-    const f = new NodeInputFile({ name: "s.txt" } as any, src as any);
+    const f = new NodeInputFile(
+      { name: "s.txt" } as unknown as { name: string },
+      src,
+    );
     const { bytesWritten } = await f.toTempFile();
     expect(bytesWritten).toBe(3);
   });
@@ -96,13 +102,13 @@ describe("NodeInputFile", () => {
     const payload = Buffer.from("DIR");
     const tempDir = os.tmpdir();
     const f = new NodeInputFile(
-      { name: "dir.txt" } as any,
-      Readable.from(payload) as any,
+      { name: "dir.txt" } as unknown as { name: string },
+      Readable.from(payload),
     );
     const { path: tempFilePath, bytesWritten } = await f.toTempFile(tempDir);
     expect(bytesWritten).toBe(payload.length);
     const content = await fs.promises.readFile(tempFilePath);
-    expect(content.equals(payload)).toBe(true);
+    expect(content.equals(payload as unknown as any)).toBe(true);
   });
 
   it("toTempFile rejects when pipeline errors (branch)", async () => {
@@ -112,7 +118,10 @@ describe("NodeInputFile", () => {
         this.emit("error", new Error("boom"));
       },
     });
-    const f = new NodeInputFile({ name: "err.txt" } as any, src as any);
+    const f = new NodeInputFile(
+      { name: "err.txt" } as unknown as { name: string },
+      src as unknown as Readable,
+    );
     await expect(f.toTempFile()).rejects.toThrow(/boom/);
   });
 });
