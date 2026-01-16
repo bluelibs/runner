@@ -57,10 +57,10 @@ describe("Validation Edge Cases", () => {
     });
 
     expect(() => {
-      resource.with({ invalid: "config" } as any);
+      resource.with({ invalid: "config" });
     }).toThrow();
     expect(() => {
-      resource.with({ invalid: "config" } as any);
+      resource.with({ invalid: "config" });
     }).toThrow(
       "Resource config validation failed for resource.nonErrorValidation: Resource config error string",
     );
@@ -78,10 +78,10 @@ describe("Validation Edge Cases", () => {
     });
 
     expect(() => {
-      middleware.with({ invalid: "config" } as any);
+      middleware.with({ invalid: "config" });
     }).toThrow();
     expect(() => {
-      middleware.with({ invalid: "config" } as any);
+      middleware.with({ invalid: "config" });
     }).toThrow(
       "Middleware config validation failed for middleware.nonErrorValidation: Middleware config error string",
     );

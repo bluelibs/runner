@@ -13,7 +13,8 @@ describe("resource builder - register function+function merge branch", () => {
 
     expect(typeof composed.register).toBe("function");
     if (typeof composed.register === "function") {
-      const ids = composed.register({} as any).map((it) => it.id);
+      // @ts-expect-error test
+      const ids = composed.register({}).map((it) => it.id);
       expect(ids).toEqual([a.id, b.id]);
     }
   });
@@ -121,7 +122,7 @@ describe("resource builder - register function+function merge branch", () => {
 
     const app = r
       .resource("tests.builder.init.exotic")
-      .init(proxied as any)
+      .init(proxied as unknown as () => Promise<string>)
       .build();
 
     const rr = await run(app);

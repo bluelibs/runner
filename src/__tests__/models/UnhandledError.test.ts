@@ -1,4 +1,4 @@
-import { Logger } from "../../models/Logger";
+import { Logger, ILogInfo } from "../../models/Logger";
 import {
   bindProcessErrorHandler,
   createDefaultUnhandledError,
@@ -9,7 +9,7 @@ describe("UnhandledError helpers", () => {
   const makeLogger = () =>
     new Logger({
       printThreshold: null,
-      printStrategy: "pretty" as any,
+      printStrategy: "pretty",
       bufferLogs: false,
     });
 
@@ -21,7 +21,7 @@ describe("UnhandledError helpers", () => {
     expect(spy).toHaveBeenCalledTimes(1);
     const args = spy.mock.calls[0];
     expect(args[0]).toBe("Error: boom");
-    const info = args[1] as any;
+    const info = args[1] as ILogInfo;
     expect(info.source).toBe("x");
     expect(info.error).toBeInstanceOf(Error);
     // Logger may augment data (e.g., include the error); assert partial match
@@ -33,7 +33,7 @@ describe("UnhandledError helpers", () => {
     const spy = jest.spyOn(logger, "error").mockResolvedValue();
     const handler = createDefaultUnhandledError(logger);
     await handler({ error: new Error("e") });
-    const info = spy.mock.calls[0][1] as any;
+    const info = spy.mock.calls[0][1] as ILogInfo;
     // Data may be present (logger may include error), but should not include kind
     expect(info.data?.kind).toBeUndefined();
   });
@@ -44,7 +44,7 @@ describe("UnhandledError helpers", () => {
     const base = createDefaultUnhandledError(logger);
     const wrapped = bindProcessErrorHandler(base);
     await wrapped(new Error("proc"), "uncaughtException");
-    const info = spy.mock.calls[0][1] as any;
+    const info = spy.mock.calls[0][1] as ILogInfo;
     expect(info.error).toBeInstanceOf(Error);
     // Allow extra fields in data; ensure kind is set correctly
     expect(info.data).toMatchObject({ kind: "process" });

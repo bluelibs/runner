@@ -19,6 +19,7 @@ import { createHttpClient } from "../http-client";
 import { createWebFile } from "../platform/createWebFile";
 import { createFile as createNodeFile } from "../node/platform/createFile";
 import { getDefaultSerializer } from "../serializer";
+import { IErrorHelper } from "../defs";
 
 describe("http-client (universal)", () => {
   const baseUrl = "http://127.0.0.1:7070/__runner";
@@ -33,12 +34,14 @@ describe("http-client (universal)", () => {
       baseUrl,
       serializer: getDefaultSerializer(),
     });
-    const result = await client.task("t.json", { a: 1 } as any);
+    const result = await client.task("t.json", { a: 1 });
     expect(result).toBe("JSON-OK");
     expect((createExposureFetch as any).__lastCfg.baseUrl).toBe(
       baseUrl.replace(/\/$/, ""),
     );
-    expect((createExposureFetch as any).__task).toBeDefined();
+    expect(
+      (createExposureFetch as unknown as { __task: unknown }).__task,
+    ).toBeDefined();
   });
 
   it("event delegates to exposure fetch event", async () => {
@@ -112,7 +115,9 @@ describe("http-client (universal)", () => {
   });
 
   it("browser multipart uses FormData and onRequest sees auth header", async () => {
-    const blob = new Blob([Buffer.from("abc") as any], { type: "text/plain" });
+    const blob = new Blob([new Uint8Array(Buffer.from("abc"))], {
+      type: "text/plain",
+    });
     const file = createWebFile(
       { name: "a.txt", type: "text/plain" },
       blob,
@@ -210,7 +215,7 @@ describe("http-client (universal)", () => {
       },
       is: () => false,
       toString: () => "",
-    } as any;
+    } as unknown as IErrorHelper<{ code: number; message: string }>;
     const client = createHttpClient({
       baseUrl,
       fetchImpl: fetchMock as any,

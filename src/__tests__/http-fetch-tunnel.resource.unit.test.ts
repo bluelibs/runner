@@ -3,23 +3,27 @@ import { getDefaultSerializer, Serializer } from "../serializer";
 
 describe("http-fetch-tunnel.resource (unit)", () => {
   it("createExposureFetch: throws when baseUrl is empty or '/'", () => {
-    expect(() => createExposureFetch({ baseUrl: "/" } as any)).toThrow(
+    // @ts-expect-error
+    expect(() => createExposureFetch({ baseUrl: "/" })).toThrow(
       /requires baseUrl/,
     );
-    expect(() => createExposureFetch({ baseUrl: "" } as any)).toThrow(
+    // @ts-expect-error
+    expect(() => createExposureFetch({ baseUrl: "" })).toThrow(
       /requires baseUrl/,
     );
   });
 
   it("createExposureFetch: throws when fetch is missing and no fetchImpl provided", () => {
-    const original = (globalThis as any).fetch;
-    (globalThis as any).fetch = undefined as any;
+    const original = globalThis.fetch;
+    // @ts-expect-error
+    globalThis.fetch = undefined;
     try {
-      expect(() => createExposureFetch({ baseUrl: "http://x" } as any)).toThrow(
+      // @ts-expect-error
+      expect(() => createExposureFetch({ baseUrl: "http://x" })).toThrow(
         /fetch is not available/i,
       );
     } finally {
-      (globalThis as any).fetch = original;
+      globalThis.fetch = original;
     }
   });
 
@@ -29,8 +33,8 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       calls.push({ url, init });
       return {
         text: async () => JSON.stringify({ ok: true, result: 42 }),
-      } as any;
-    }) as any;
+      } as Response;
+    }) as unknown as typeof fetch;
 
     const client = createExposureFetch({
       baseUrl: "http://api",
@@ -55,7 +59,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const fetchErrMsg: typeof fetch = (async () => ({
       text: async () =>
         JSON.stringify({ ok: false, error: { message: "boom" } }),
-    })) as any;
+    })) as unknown as typeof fetch;
     const c1 = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchErrMsg,
@@ -66,7 +70,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     // Then, with default message fallback
     const fetchNoMsg: typeof fetch = (async () => ({
       text: async () => JSON.stringify({ ok: false }),
-    })) as any;
+    })) as unknown as typeof fetch;
     const c2 = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchNoMsg,
@@ -80,7 +84,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
   it("createExposureFetch: event() throws when server returns empty response body", async () => {
     const fetchEmpty: typeof fetch = (async () => ({
       text: async () => "",
-    })) as any;
+    })) as unknown as typeof fetch;
     const c = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchEmpty,
@@ -99,8 +103,8 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       calls.push({ url: String(url), init, body: parsed });
       return {
         text: async () => serializer.stringify({ ok: true, result: { x: 2 } }),
-      } as any;
-    }) as any;
+      } as Response;
+    }) as unknown as typeof fetch;
 
     const c = createExposureFetch({
       baseUrl: "http://api",
@@ -119,7 +123,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const serializer = getDefaultSerializer();
     const fetchImpl: typeof fetch = (async () => ({
       text: async () => serializer.stringify({ ok: true }),
-    })) as any;
+    })) as unknown as typeof fetch;
     const c = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl,
@@ -171,7 +175,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const serializer = getDefaultSerializer();
     const fetchImpl: typeof fetch = (async () => ({
       text: async () => serializer.stringify({ ok: false }),
-    })) as any;
+    })) as unknown as typeof fetch;
     const c = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl,
@@ -186,7 +190,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
   it("createExposureFetch: task() error branch uses default message when missing", async () => {
     const fetchNoMsg: typeof fetch = (async () => ({
       text: async () => JSON.stringify({ ok: false }),
-    })) as any;
+    })) as unknown as typeof fetch;
     const c = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchNoMsg,
@@ -201,8 +205,8 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       calls.push({ url, init });
       return {
         text: async () => JSON.stringify({ ok: true, result: "ok" }),
-      } as any;
-    }) as any;
+      } as Response;
+    }) as unknown as typeof fetch;
 
     const client = createExposureFetch({
       baseUrl: "http://api/",
@@ -224,8 +228,8 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       const envelope = { ok: true, result: { seenAt: responseDate } };
       return {
         text: async () => serializer.stringify(envelope),
-      } as any;
-    }) as any;
+      } as Response;
+    }) as unknown as typeof fetch;
 
     const client = createExposureFetch({
       baseUrl: "http://api",
@@ -242,7 +246,9 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     expect(seen).toHaveLength(1);
     expect(typeof seen[0].init.body).toBe("string");
     // Verify the request body can be deserialized correctly
-    const parsedRequest = serializer.parse(seen[0].init.body) as any;
+    const parsedRequest = serializer.parse<{ input: { seenAt: Date } }>(
+      seen[0].init.body,
+    );
     expect(parsedRequest.input.seenAt).toBeInstanceOf(Date);
     expect(parsedRequest.input.seenAt.getTime()).toBe(requestDate.getTime());
     // Verify the response was deserialized correctly
@@ -268,8 +274,8 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       );
       return {
         text: async () => JSON.stringify({ wrapped: { ok: true, result: 99 } }),
-      } as any;
-    }) as any;
+      } as Response;
+    }) as unknown as typeof fetch;
 
     const client = createExposureFetch({
       baseUrl: "http://api",

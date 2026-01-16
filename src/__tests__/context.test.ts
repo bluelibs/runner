@@ -121,9 +121,9 @@ describe("Context System", () => {
 
   test("serialize/parse default implementations work", () => {
     const raw = { id: "ser" };
-    const text = (TestContext as any).serialize(raw);
+    const text = TestContext.serialize(raw);
     expect(typeof text).toBe("string");
-    const back = (TestContext as any).parse(text);
+    const back = TestContext.parse(text);
     expect(back).toEqual(raw);
   });
 });

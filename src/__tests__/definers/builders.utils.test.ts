@@ -43,13 +43,13 @@ describe("definers builders utils", () => {
     const aFn = () => ({ b });
     const mergedFn = mergeDepsNoConfig(eFn, aFn, false);
     expect(typeof mergedFn).toBe("function");
-    expect((mergedFn as any)()).toEqual({ a, b });
+    expect((mergedFn as () => unknown)()).toEqual({ a, b });
 
     const mergedFn2 = mergeDepsNoConfig(eFn, aObj, false);
-    expect((mergedFn2 as any)()).toEqual({ a, b });
+    expect((mergedFn2 as () => unknown)()).toEqual({ a, b });
 
     const mergedFn3 = mergeDepsNoConfig(eObj, aFn, false);
-    expect((mergedFn3 as any)()).toEqual({ a, b });
+    expect((mergedFn3 as () => unknown)()).toEqual({ a, b });
 
     const overridden = mergeDepsNoConfig(eObj, aObj, true);
     expect(overridden).toEqual({ b });
@@ -77,7 +77,7 @@ describe("error fluent builder + defineError", () => {
     const E = defineError<{ message: string }>({
       id: "tests.errors.defaultFormat",
       dataSchema: { parse: (v: unknown) => v as { message: string } },
-    } as any);
+    });
 
     try {
       E.throw({ message: "x" });

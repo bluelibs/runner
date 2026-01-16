@@ -1,11 +1,12 @@
 import { Logger } from "../../models/Logger";
+import { LogPrinter, PrintableLog } from "../../models/LogPrinter";
 
 describe("Logger coverage", () => {
   it("detectColorSupport respects NO_COLOR and TTY", async () => {
-    const origEnv = (process as any).env;
-    const origIsTTY = (process as any).stdout?.isTTY;
+    const origEnv = process.env;
+    const origIsTTY = process.stdout?.isTTY;
     try {
-      (process as any).env = { ...origEnv, NO_COLOR: "1" };
+      process.env = { ...origEnv, NO_COLOR: "1" };
       Object.defineProperty(process.stdout, "isTTY", {
         value: true,
         configurable: true,
@@ -16,7 +17,7 @@ describe("Logger coverage", () => {
         bufferLogs: false,
       });
       // Private method is exercised via constructor path; create another logger with NO_COLOR off
-      (process as any).env = { ...origEnv };
+      process.env = { ...origEnv };
       Object.defineProperty(process.stdout, "isTTY", {
         value: true,
         configurable: true,
@@ -32,7 +33,7 @@ describe("Logger coverage", () => {
       const child = loggerTty.with({});
       await child.debug("m");
     } finally {
-      (process as any).env = origEnv;
+      process.env = origEnv;
       if (typeof origIsTTY !== "undefined") {
         Object.defineProperty(process.stdout, "isTTY", {
           value: origIsTTY,
@@ -43,10 +44,10 @@ describe("Logger coverage", () => {
   });
 
   it("detectColorSupport returns false when no TTY", async () => {
-    const origEnv = (process as any).env;
-    const origIsTTY = (process as any).stdout?.isTTY;
+    const origEnv = process.env;
+    const origIsTTY = process.stdout?.isTTY;
     try {
-      (process as any).env = { ...origEnv };
+      process.env = { ...origEnv };
       Object.defineProperty(process.stdout, "isTTY", {
         value: false,
         configurable: true,
@@ -58,7 +59,7 @@ describe("Logger coverage", () => {
       });
       expect(logger).toBeInstanceOf(Logger);
     } finally {
-      (process as any).env = origEnv;
+      process.env = origEnv;
       if (typeof origIsTTY !== "undefined") {
         Object.defineProperty(process.stdout, "isTTY", {
           value: origIsTTY,
@@ -74,7 +75,7 @@ describe("Logger coverage", () => {
       Object.defineProperty(process, "stdout", {
         value: undefined,
         configurable: true,
-      } as any);
+      });
       const logger = new Logger({
         printThreshold: null,
         printStrategy: "pretty",
@@ -83,15 +84,15 @@ describe("Logger coverage", () => {
       expect(logger).toBeInstanceOf(Logger);
       // No throw means the branch with falsy stdout executed
     } finally {
-      if (desc) Object.defineProperty(process, "stdout", desc as any);
+      if (desc) Object.defineProperty(process, "stdout", desc);
     }
   });
 
   it("detectColorSupport handles when global process is undefined", async () => {
-    const originalProcess = (global as any).process;
+    const originalProcess = (global as unknown as { process: unknown }).process;
     try {
       // Remove global process to exercise typeof check branch
-      (global as any).process = undefined;
+      (global as unknown as { process: unknown }).process = undefined;
       const logger = new Logger({
         printThreshold: null,
         printStrategy: "pretty",
@@ -99,7 +100,7 @@ describe("Logger coverage", () => {
       });
       expect(logger).toBeInstanceOf(Logger);
     } finally {
-      (global as any).process = originalProcess;
+      (global as unknown as { process: unknown }).process = originalProcess;
     }
   });
 
@@ -109,7 +110,7 @@ describe("Logger coverage", () => {
       Object.defineProperty(process, "stdout", {
         value: {},
         configurable: true,
-      } as any);
+      });
       const logger = new Logger({
         printThreshold: null,
         printStrategy: "pretty",
@@ -117,7 +118,7 @@ describe("Logger coverage", () => {
       });
       expect(logger).toBeInstanceOf(Logger);
     } finally {
-      if (desc) Object.defineProperty(process, "stdout", desc as any);
+      if (desc) Object.defineProperty(process, "stdout", desc);
     }
   });
 
@@ -134,8 +135,14 @@ describe("Logger coverage", () => {
     });
 
     // Spy on printer.print to ensure canPrint gating is exercised
-    const spyOn = jest.spyOn((loggerOn as any).printer, "print");
-    const spyOff = jest.spyOn((loggerOff as any).printer, "print");
+    const spyOn = jest.spyOn(
+      (loggerOn as unknown as { printer: LogPrinter }).printer,
+      "print",
+    );
+    const spyOff = jest.spyOn(
+      (loggerOff as unknown as { printer: LogPrinter }).printer,
+      "print",
+    );
 
     await loggerOn.info("visible");
     await loggerOff.info("hidden");
@@ -150,7 +157,10 @@ describe("Logger coverage", () => {
       printStrategy: "pretty",
       bufferLogs: true,
     });
-    const spy = jest.spyOn((logger as any).printer, "print");
+    const spy = jest.spyOn(
+      (logger as unknown as { printer: LogPrinter }).printer,
+      "print",
+    );
 
     await logger.info("low");
     await logger.error("high");
@@ -160,7 +170,9 @@ describe("Logger coverage", () => {
     await logger.lock();
 
     // Only error (>= warn) should have been printed after flush
-    const printedMessages = spy.mock.calls.map((c) => (c[0] as any)?.message);
+    const printedMessages = spy.mock.calls.map(
+      (c) => (c[0] as PrintableLog)?.message,
+    );
     expect(printedMessages).toContain("high");
     expect(printedMessages).not.toContain("low");
   });

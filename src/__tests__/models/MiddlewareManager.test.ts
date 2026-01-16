@@ -12,6 +12,8 @@ import {
 } from "../../define";
 import { OnUnhandledError } from "../../index";
 import { RunnerMode } from "../../types/runner";
+import { TaskStoreElementType } from "../../types/storeTypes";
+import { ITaskMiddleware, IResource } from "../../defs";
 
 describe("MiddlewareManager", () => {
   let store: Store;
@@ -29,7 +31,8 @@ describe("MiddlewareManager", () => {
     onUnhandledError = jest.fn();
     store = new Store(eventManager, logger, onUnhandledError, RunnerMode.TEST);
     // Get the store's existing middleware manager
-    manager = (store as any).middlewareManager;
+    manager = (store as unknown as { middlewareManager: MiddlewareManager })
+      .middlewareManager;
   });
 
   it("composes task runner with interceptors inside middleware and preserves order", async () => {
@@ -141,11 +144,13 @@ describe("MiddlewareManager", () => {
     store.taskMiddlewares.set(mLocal.id, {
       middleware: mLocal,
       computedDependencies: {},
-    } as any);
+      isInitialized: true,
+    });
     store.taskMiddlewares.set(mOther.id, {
       middleware: mOther,
       computedDependencies: {},
-    } as any);
+      isInitialized: true,
+    });
 
     // Stub global middleware provider to return one with same id as local; manager should dedupe it
     const spy = jest
@@ -183,7 +188,7 @@ describe("MiddlewareManager", () => {
       middleware: m,
       computedDependencies: {},
       isInitialized: true,
-    } as any);
+    });
 
     const result = await manager.runResourceInit(resource, { n: 5 }, {}, {});
     // base = 10, middleware adds 10 => 20
@@ -193,8 +198,8 @@ describe("MiddlewareManager", () => {
   it("returns undefined when resource has no init", async () => {
     const resource = defineResource({ id: "r2" });
     const result = await manager.runResourceInit(
-      resource as any,
-      undefined as any,
+      resource as unknown as IResource<any>,
+      undefined as unknown,
       {},
       {},
     );
@@ -241,7 +246,9 @@ describe("MiddlewareManager", () => {
 
   it("should access resourceMiddlewareInterceptors getter", () => {
     // Access the deprecated getter for coverage
-    const interceptors = (manager as any).resourceMiddlewareInterceptors;
+    const interceptors = (
+      manager as unknown as { resourceMiddlewareInterceptors: any[] }
+    ).resourceMiddlewareInterceptors;
     expect(Array.isArray(interceptors)).toBe(true);
   });
 
@@ -297,7 +304,7 @@ describe("MiddlewareManager", () => {
       task,
       computedDependencies: {},
       isInitialized: true,
-    } as any);
+    } as unknown as TaskStoreElementType<any, any, any>);
 
     const runner = manager.composeTaskRunner(task);
     await expect(runner(undefined)).rejects.toThrow();
@@ -350,7 +357,10 @@ describe("MiddlewareManager", () => {
       }).not.toThrow();
       expect(manager.isLocked).toBe(false);
       // Check that interceptor was added
-      expect((manager as any).taskMiddlewareInterceptors.length).toBe(1);
+      expect(
+        (manager as unknown as { taskMiddlewareInterceptors: any[] })
+          .taskMiddlewareInterceptors.length,
+      ).toBe(1);
     });
 
     it("should add resource middleware interceptor", () => {
@@ -567,7 +577,7 @@ describe("MiddlewareManager", () => {
         middleware: taskMiddleware,
         computedDependencies: {},
         isInitialized: true,
-      } as any);
+      });
 
       const runner = manager.composeTaskRunner(task);
       const result = await runner(10);
@@ -628,7 +638,7 @@ describe("MiddlewareManager", () => {
         middleware: resourceMiddleware,
         computedDependencies: {},
         isInitialized: true,
-      } as any);
+      });
 
       const result = await manager.runResourceInit(resource, { n: 3 }, {}, {});
 
@@ -645,7 +655,10 @@ describe("MiddlewareManager", () => {
     });
 
     it("should throw when interceptMiddleware receives an unknown middleware type", () => {
-      const bogusMiddleware = { id: "bogus" } as any;
+      const bogusMiddleware = { id: "bogus" } as unknown as ITaskMiddleware<
+        any,
+        any
+      >;
       expect(() =>
         manager.interceptMiddleware(
           bogusMiddleware,

@@ -16,8 +16,8 @@ describe("errors.isCancellationError", () => {
   it("returns false for undefined/null and false for plain object without brand", () => {
     expect(isCancellationError(undefined)).toBe(false);
     expect(isCancellationError(null as unknown as Error)).toBe(false);
-    expect(isCancellationError({ name: "CancellationError" } as any)).toBe(
-      false,
-    );
+    expect(
+      isCancellationError({ name: "CancellationError" } as unknown as Error),
+    ).toBe(false);
   });
 });

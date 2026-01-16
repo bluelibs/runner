@@ -19,7 +19,7 @@ describe("asyncContext as dependency", () => {
     const runtime = await run(app);
 
     const result = await ctx.provide({ id: "abc" }, async () => {
-      return runtime.runTask(t, undefined as any);
+      return runtime.runTask(t);
     });
 
     expect(result).toBe("abc");
@@ -57,14 +57,14 @@ describe("asyncContext as dependency", () => {
       register: [ctx, withOpt],
     });
     const rr1 = await run(withOptApp);
-    expect(await rr1.runTask(withOpt, undefined as any)).toBe(ctx.id);
+    expect(await rr1.runTask(withOpt)).toBe(ctx.id);
     await rr1.dispose();
 
-    const withoutOpt = defineTask<void, Promise<undefined>>({
+    const withoutOpt = defineTask<void, Promise<string | undefined>>({
       id: "spec.tasks.ctx.dep.opt.absent",
       dependencies: { ctx: ctx.optional() },
       run: async (_i, { ctx }) => {
-        return ctx?.id as any;
+        return ctx?.id;
       },
     });
 
@@ -73,7 +73,7 @@ describe("asyncContext as dependency", () => {
       register: [withoutOpt],
     });
     const rr2 = await run(withoutOptApp);
-    expect(await rr2.runTask(withoutOpt, undefined as any)).toBeUndefined();
+    expect(await rr2.runTask(withoutOpt)).toBeUndefined();
     await rr2.dispose();
   });
 });

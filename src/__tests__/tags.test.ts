@@ -152,7 +152,7 @@ describe("Configurable Tags", () => {
 
     it("should work with a simple taggable carrying tags at root level", () => {
       const t = defineTag<{ p: number }>({ id: "pp" });
-      const taggable = { tags: [t.with({ p: 9 })] } as any;
+      const taggable = { tags: [t.with({ p: 9 })] };
       const extracted = t.extract(taggable);
       expect(extracted).toEqual({ p: 9 });
     });

@@ -55,8 +55,13 @@ describe("Optional dependencies", () => {
       async init(_config, deps) {
         expect(typeof deps.maybeTask).toBe("function");
         // Has intercept() available
-        expect(typeof (deps.maybeTask as any).intercept).toBe("function");
-        const out = await (deps.maybeTask as any)();
+        expect(
+          typeof (deps.maybeTask as unknown as { intercept: unknown })
+            .intercept,
+        ).toBe("function");
+        const out = await (
+          deps.maybeTask as unknown as () => Promise<string>
+        )();
         expect(out).toBe("result");
         return "done" as const;
       },
@@ -163,7 +168,7 @@ describe("Optional dependencies", () => {
       id: "tests.optional.event.user",
       dependencies: {
         maybeEvent: ev.optional(),
-      } as any,
+      },
       async init(_config, deps) {
         expect(deps.maybeEvent).toBeUndefined();
         return "ok" as const;
@@ -197,7 +202,7 @@ describe("Optional dependencies", () => {
   });
 
   test("optional wrapper with invalid inner throws UnknownItemTypeError", async () => {
-    const badWrapper: any = {
+    const badWrapper: unknown = {
       inner: { nope: true },
       [definitions.symbolOptionalDependency]: true,
     };
@@ -205,8 +210,9 @@ describe("Optional dependencies", () => {
     const app = resource({
       id: "tests.optional.invalid",
       dependencies: {
+        // @ts-expect-error
         bad: badWrapper,
-      } as any,
+      },
       async init() {
         return "never";
       },

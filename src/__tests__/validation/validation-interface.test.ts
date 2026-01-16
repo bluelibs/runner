@@ -33,7 +33,7 @@ const mockSchema = {
       if (typeof input !== "object" || input === null) {
         throw new Error("Expected object");
       }
-      const obj = input as any;
+      const obj = input as Record<string, unknown>;
       for (const [key, expectedType] of Object.entries(shape)) {
         if (expectedType === "string" && typeof obj[key] !== "string") {
           throw new Error(`${key} must be string`);
@@ -108,7 +108,7 @@ describe("Generic Validation Interface", () => {
         id: "task.createUser",
         inputSchema: userSchema,
         run: async (input) => {
-          return `Created user ${(input as any).name}`;
+          return `Created user ${(input as { name: string }).name}`;
         },
       });
 
@@ -134,7 +134,7 @@ describe("Generic Validation Interface", () => {
         if (typeof input !== "object" || input === null) {
           throw new Error("Expected object");
         }
-        const obj = input as any;
+        const obj = input as Record<string, unknown>;
         if (typeof obj.name !== "string") {
           throw new Error("name must be string");
         }
@@ -148,7 +148,7 @@ describe("Generic Validation Interface", () => {
         id: "task.createUser.invalid",
         inputSchema: userSchema,
         run: async (input) => {
-          return `Created user ${(input as any).name}`;
+          return `Created user ${(input as { name: string }).name}`;
         },
       });
 
@@ -187,7 +187,9 @@ describe("Generic Validation Interface", () => {
         register: [mathTask],
         dependencies: { mathTask },
         init: async (_, { mathTask }) => {
-          const result = await (mathTask as any)("42"); // String input should be transformed to number
+          const result = await (
+            mathTask as unknown as (i: string) => Promise<number>
+          )("42"); // String input should be transformed to number
           expect(result).toBe(84);
           return result;
         },
@@ -203,7 +205,7 @@ describe("Generic Validation Interface", () => {
         if (typeof input !== "object" || input === null) {
           throw new Error("Expected object");
         }
-        const obj = input as any;
+        const obj = input as Record<string, unknown>;
         if (typeof obj.host !== "string") {
           throw new Error("host must be string");
         }
@@ -219,7 +221,7 @@ describe("Generic Validation Interface", () => {
         init: async (config) => {
           return {
             connect: () =>
-              `Connected to ${(config as any).host}:${(config as any).port}`,
+              `Connected to ${(config as { host: string }).host}:${(config as { port: number }).port}`,
           };
         },
       });
@@ -248,7 +250,7 @@ describe("Generic Validation Interface", () => {
         init: async (config) => {
           return {
             connect: () =>
-              `Connected to ${(config as any).host}:${(config as any).port}`,
+              `Connected to ${(config as { host: string }).host}:${(config as { port: number }).port}`,
           };
         },
       });
@@ -279,7 +281,7 @@ describe("Generic Validation Interface", () => {
         if (typeof input !== "object" || input === null) {
           throw new Error("Expected object");
         }
-        const obj = input as any;
+        const obj = input as Record<string, unknown>;
         if (typeof obj.message !== "string") {
           throw new Error("message must be string");
         }
@@ -296,7 +298,7 @@ describe("Generic Validation Interface", () => {
         id: "task.listener",
         on: testEvent,
         run: async (event) => {
-          receivedMessage = (event.data as any).message;
+          receivedMessage = (event.data as { message: string }).message;
         },
       });
 
@@ -310,7 +312,8 @@ describe("Generic Validation Interface", () => {
           expect(receivedMessage).toBe("Hello World");
 
           // This should throw with invalid payload
-          await expect(testEvent({ invalidField: 123 } as any)).rejects.toThrow(
+
+          await expect(testEvent({ invalidField: 123 })).rejects.toThrow(
             /Event payload validation failed/,
           );
         },
@@ -326,7 +329,7 @@ describe("Generic Validation Interface", () => {
         if (typeof input !== "object" || input === null) {
           throw new Error("Expected object");
         }
-        const obj = input as any;
+        const obj = input as Record<string, unknown>;
         if (typeof obj.timeout !== "number" || obj.timeout <= 0) {
           throw new Error("timeout must be positive number");
         }
@@ -363,7 +366,7 @@ describe("Generic Validation Interface", () => {
           const start = Date.now();
           const result = await next();
           const duration = Date.now() - start;
-          expect(typeof (config as any).timeout).toBe("number");
+          expect(typeof (config as { timeout: number }).timeout).toBe("number");
           return result;
         },
       });

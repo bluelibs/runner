@@ -1,5 +1,6 @@
 import { createExposureFetch } from "../http-fetch-tunnel.resource";
 import { getDefaultSerializer } from "../serializer";
+import { IErrorHelper } from "../defs";
 
 describe("createExposureFetch - context header and typed rethrow", () => {
   const baseUrl = "http://127.0.0.1:8080/__runner";
@@ -18,7 +19,9 @@ describe("createExposureFetch - context header and typed rethrow", () => {
           data: { code: 3, message: "X" },
         },
       };
-      return { text: async () => serializer.stringify(env) } as any;
+      return {
+        text: async () => serializer.stringify(env),
+      } as unknown as Response;
     });
 
     const contexts = [
@@ -28,7 +31,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
         provide: (v: any, fn: any) => fn(),
-        require: () => ({}) as any,
+        require: () => ({}),
       },
     ];
     const helper = {
@@ -38,13 +41,13 @@ describe("createExposureFetch - context header and typed rethrow", () => {
       },
       is: () => false,
       toString: () => "",
-    } as any;
+    } as unknown as IErrorHelper<{ code: number; message: string }>;
 
     const client = createExposureFetch({
       baseUrl,
       serializer,
-      fetchImpl: fetchImpl as any,
-      contexts: contexts as any,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      contexts: contexts as unknown as any[],
       errorRegistry: new Map([["tests.errors.app", helper]]),
     });
 
@@ -69,7 +72,9 @@ describe("createExposureFetch - context header and typed rethrow", () => {
     const fetchImpl = jest.fn(async (url: any, init?: any) => {
       calls.push({ url: String(url), headers: init?.headers ?? {} });
       const env = { ok: true, result: 1 };
-      return { text: async () => serializer.stringify(env) } as any;
+      return {
+        text: async () => serializer.stringify(env),
+      } as unknown as Response;
     });
     const contexts = [
       {
@@ -80,14 +85,14 @@ describe("createExposureFetch - context header and typed rethrow", () => {
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
         provide: (v: any, fn: any) => fn(),
-        require: () => ({}) as any,
+        require: () => ({}),
       },
     ];
     const client = createExposureFetch({
       baseUrl,
       serializer,
-      fetchImpl: fetchImpl as any,
-      contexts: contexts as any,
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      contexts: contexts as unknown as any[],
     });
     await client.task("t.none", { a: 1 } as any);
     expect(calls[0].headers["x-runner-context"]).toBeUndefined();

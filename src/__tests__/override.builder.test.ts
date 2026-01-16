@@ -170,7 +170,7 @@ describe(SuiteName.OverrideBuilder, () => {
       .tags([tagSecondary], { override: true })
       .inputSchema(inputSchema)
       .resultSchema(resultSchema)
-      .meta({ [MetaKey.Label]: TaskValue.Base } as any)
+      .meta({ [MetaKey.Label]: TaskValue.Base } as Record<string, any>)
       .throws([errorHelper])
       .run(async () => TaskValue.Base)
       .build();
@@ -266,7 +266,7 @@ describe(SuiteName.OverrideBuilder, () => {
       .resultSchema(resultSchema)
       .init(async () => ResourceValue.Override)
       .dispose(async () => undefined)
-      .meta({ [MetaKey.Label]: ResourceValue.Override } as any)
+      .meta({ [MetaKey.Label]: ResourceValue.Override } as Record<string, any>)
       .overrides([overrideTask])
       .overrides([overrideTask], { override: true })
       .throws([errorHelper])
@@ -343,7 +343,7 @@ describe(SuiteName.OverrideBuilder, () => {
       .dependencies({ depTask }, { override: true })
       .tags([tagPrimary])
       .tags([tagSecondary], { override: true })
-      .meta({ [MetaKey.Label]: TaskValue.Base } as any)
+      .meta({ [MetaKey.Label]: TaskValue.Base } as Record<string, any>)
       .order(TaskValue.DepA)
       .run(async () => undefined)
       .build();
@@ -410,7 +410,7 @@ describe(SuiteName.OverrideBuilder, () => {
       .configSchema(configSchema)
       .tags([tagPrimary])
       .tags([tagSecondary], { override: true })
-      .meta({ [MetaKey.Label]: TaskValue.Base } as any)
+      .meta({ [MetaKey.Label]: TaskValue.Base } as Record<string, any>)
       .everywhere(true)
       .run(async ({ next }) => next())
       .build();
@@ -480,7 +480,7 @@ describe(SuiteName.OverrideBuilder, () => {
       .configSchema(configSchema)
       .tags([tagPrimary])
       .tags([tagSecondary], { override: true })
-      .meta({ [MetaKey.Label]: ResourceValue.Base } as any)
+      .meta({ [MetaKey.Label]: ResourceValue.Base } as Record<string, any>)
       .everywhere(true)
       .run(async ({ next }) => next())
       .build();

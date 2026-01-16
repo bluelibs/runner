@@ -20,7 +20,6 @@ describe("run.ts shutdown hooks & error boundary", () => {
     });
 
     // Emit uncaughtException without killing the process by catching internally
-    // @ts-ignore
     process.emit("uncaughtException", new Error("boom-uncaught"));
 
     // Give event loop a tick
@@ -49,7 +48,6 @@ describe("run.ts shutdown hooks & error boundary", () => {
         onUnhandledError(error, kind, source),
     });
 
-    // @ts-ignore
     process.emit(
       "unhandledRejection",
       new Error("boom-unhandled"),
@@ -77,20 +75,18 @@ describe("run.ts shutdown hooks & error boundary", () => {
       },
     });
 
-    const originalExit = process.exit as any;
+    const originalExit = process.exit;
     const exitCalls: any[] = [];
-    // @ts-ignore
-    process.exit = (code?: number) => {
+    (process as unknown as { exit: unknown }).exit = ((code?: number) => {
       exitCalls.push(code);
-      return undefined as any;
-    };
+      return undefined as unknown as never;
+    }) as unknown as never;
 
     const { value } = await run(app, {
       errorBoundary: false,
       shutdownHooks: true,
     });
 
-    // @ts-ignore
     process.emit("SIGTERM");
 
     await new Promise((r) => setTimeout(r, 0));
@@ -99,7 +95,6 @@ describe("run.ts shutdown hooks & error boundary", () => {
     expect(exitCalls[0]).toBe(0);
 
     // restore
-    // @ts-ignore
-    process.exit = originalExit;
+    (process as unknown as { exit: unknown }).exit = originalExit;
   });
 });

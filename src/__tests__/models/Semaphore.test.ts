@@ -497,7 +497,7 @@ describe("Semaphore", () => {
 
   describe("edge cases and error handling", () => {
     it("should handle rapid acquire/release cycles", async () => {
-      const operations: any[] = [];
+      const operations: Promise<number>[] = [];
 
       // Rapid fire operations
       for (let i = 0; i < 100; i++) {
@@ -562,7 +562,7 @@ describe("Semaphore", () => {
 
     it("should maintain consistency under stress", async () => {
       const concurrentOps = 50;
-      const operations: any[] = [];
+      const operations: Promise<number>[] = [];
 
       // Start many concurrent operations
       for (let i = 0; i < concurrentOps; i++) {
@@ -586,7 +586,11 @@ describe("Semaphore", () => {
     });
 
     it("ignores redundant queue removals defensively", () => {
-      expect(() => (semaphore as any).removeFromQueue({})).not.toThrow();
+      expect(() =>
+        (
+          semaphore as unknown as { removeFromQueue: (item: unknown) => void }
+        ).removeFromQueue({}),
+      ).not.toThrow();
       expect(semaphore.getWaitingCount()).toBe(0);
     });
   });
@@ -682,7 +686,7 @@ describe("Semaphore", () => {
         id: i,
         data: `item-${i}`,
       }));
-      const processed: any[] = [];
+      const processed: { id: number; data: string; processed: boolean }[] = [];
 
       const processBatch = async () => {
         const promises = items.map((item) =>

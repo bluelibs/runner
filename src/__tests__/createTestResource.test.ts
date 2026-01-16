@@ -23,7 +23,8 @@ describe("createTestResource", () => {
     expect(() =>
       task({
         id: "spec.tasks.classic.throws.invalid",
-        throws: [{} as any],
+        // @ts-expect-error
+        throws: [{}],
         run: async () => "ok",
       }),
     ).toThrow(/Invalid throws entry/);
@@ -31,7 +32,8 @@ describe("createTestResource", () => {
     expect(() =>
       resource({
         id: "spec.resources.classic.throws.invalid",
-        throws: [{} as any],
+        // @ts-expect-error
+        throws: [{}],
         init: async () => "ok",
       }),
     ).toThrow(/Invalid throws entry/);
@@ -124,7 +126,7 @@ describe("createTestResource", () => {
       // @ts-expect-error bad input
       t.runTask(sum, { a: 1 });
       // @ts-expect-error missing input
-      t.runTask(sum as any);
+      t.runTask(sum);
     };
     void typeOnly;
 

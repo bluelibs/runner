@@ -148,15 +148,15 @@ describe("UniversalPlatformAdapter", () => {
   describe("init", () => {
     it("should initialize inner adapter based on detected environment", async () => {
       await adapter.init();
-      expect((adapter as any).inner).toBeDefined();
+      expect((adapter as unknown as { inner: unknown }).inner).toBeDefined();
     });
 
     it("should not reinitialize if already initialized", async () => {
       await adapter.init();
-      const firstInner = (adapter as any).inner;
+      const firstInner = (adapter as unknown as { inner: unknown }).inner;
 
       await adapter.init();
-      const secondInner = (adapter as any).inner;
+      const secondInner = (adapter as unknown as { inner: unknown }).inner;
 
       expect(firstInner).toBe(secondInner);
     });
