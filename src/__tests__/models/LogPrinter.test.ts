@@ -7,16 +7,16 @@ describe("LogPrinter", () => {
   let errs: string[];
 
   beforeAll(() => {
-    console.log = ((msg?: any) => logs.push(String(msg))) as any;
-    console.error = ((msg?: any) => errs.push(String(msg))) as any;
+    console.log = (...args: any[]) => logs.push(args.map(String).join(" "));
+    console.error = (...args: any[]) => errs.push(args.map(String).join(" "));
   });
 
   beforeEach(() => {
     logs = [];
     errs = [];
     LogPrinter.setWriters({
-      log: (msg: any) => logs.push(String(msg)),
-      error: (msg: any) => errs.push(String(msg)),
+      log: (msg: unknown) => logs.push(String(msg)),
+      error: (msg: unknown) => errs.push(String(msg)),
     });
   });
 
@@ -76,7 +76,7 @@ describe("LogPrinter", () => {
     p.print({ ...baseLog, message: circ });
     expect(logs[0]).toContain("[Circular]");
     logs = [];
-    p.print({ ...baseLog, message: { big: BigInt(10) } as any });
+    p.print({ ...baseLog, message: { big: BigInt(10) } });
     expect(logs[0]).toContain('"10"');
     // Force stringify fallback path by throwing in toString
     logs = [];
@@ -96,9 +96,7 @@ describe("LogPrinter", () => {
   it("resetWriters restores default console writers", () => {
     LogPrinter.resetWriters();
     const spyLog = jest.spyOn(console, "log").mockImplementation(() => {});
-    const spyErr = jest
-      .spyOn(console, "error")
-      .mockImplementation((() => {}) as any);
+    const spyErr = jest.spyOn(console, "error").mockImplementation(() => {});
 
     try {
       const p = new LogPrinter({ strategy: "pretty", useColors: false });

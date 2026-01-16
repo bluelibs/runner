@@ -38,7 +38,7 @@ describe("Phantom tasks - fluent builders", () => {
       .dependencies({ ph })
       .run(async (input: { n: number }, deps) => {
         const r = await deps.ph({ x: input.n });
-        return (r as unknown as number) ?? 0;
+        return (r as number) ?? 0;
       })
       .build();
 
@@ -66,7 +66,8 @@ describe("Phantom tasks - fluent builders", () => {
         async (): Promise<TunnelRunner> => ({
           mode: "client",
           tasks: [ph.id],
-          run: async (task: any, input: any) => `TUN:${task.id}:${input?.v}`,
+          run: async (task: { id: string }, input: { v: string }) =>
+            `TUN:${task.id}:${input?.v}`,
         }),
       )
       .build();
@@ -115,15 +116,15 @@ describe("Phantom tasks - fluent builders", () => {
       .middleware([tmw2])
       .tags([tagA])
       .tags([tagB])
-      .inputSchema<{ z: number }>({ parse: (x: any) => x })
-      .resultSchema<number>({ parse: (x: any) => x })
+      .inputSchema<{ z: number }>({ parse: (x: unknown) => x as { z: number } })
+      .resultSchema<number>({ parse: (x: unknown) => x as number })
       .throws([err, err.id])
-      .meta({ title: "P" } as any)
+      .meta({ title: "P" } as unknown as any)
       .build();
 
     const depsMerged =
       typeof ph1.dependencies === "function"
-        ? (ph1.dependencies as any)()
+        ? (ph1.dependencies as () => any)()
         : ph1.dependencies;
     expect(Object.keys(depsMerged)).toEqual(["t1", "t2"]);
     expect(ph1.middleware.map((m) => m.id)).toEqual([tmw1.id, tmw2.id]);
@@ -140,7 +141,7 @@ describe("Phantom tasks - fluent builders", () => {
       .build();
     const depsOver =
       typeof ph2.dependencies === "function"
-        ? (ph2.dependencies as any)()
+        ? (ph2.dependencies as () => any)()
         : ph2.dependencies;
     expect(Object.keys(depsOver)).toEqual(["t2"]);
 
@@ -152,7 +153,7 @@ describe("Phantom tasks - fluent builders", () => {
       .build();
     const depsFO =
       typeof ph3.dependencies === "function"
-        ? (ph3.dependencies as any)()
+        ? (ph3.dependencies as () => any)()
         : ph3.dependencies;
     expect(Object.keys(depsFO)).toEqual(["t1", "t2"]);
 

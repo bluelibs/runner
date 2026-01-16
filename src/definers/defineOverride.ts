@@ -14,7 +14,6 @@ import {
  * @param patch - Properties to override (except `id`).
  * @returns A definition of the same kind with overrides applied.
  */
-// Narrowed helper types for better inference and diagnostics
 type AnyTask = ITask<any, any, any, any, any, any>;
 type AnyResource = IResource<any, any, any, any, any, any, any>;
 type AnyTaskMiddleware = ITaskMiddleware<any, any, any, any>;
@@ -28,41 +27,26 @@ type AnyOverrideable =
   | AnyResourceMiddleware
   | AnyHook;
 
-type BaseKindOf<T> = T extends AnyTask
-  ? AnyTask
-  : T extends AnyResource
-    ? AnyResource
-    : T extends AnyTaskMiddleware
-      ? AnyTaskMiddleware
-      : T extends AnyResourceMiddleware
-        ? AnyResourceMiddleware
-        : T extends AnyHook
-          ? AnyHook
-          : never;
-
-// Conditional patch type that maps the required/allowed fields based on base kind
-type OverridePatch<T> = Readonly<
-  T extends AnyTask
-    ? Omit<Partial<T>, "id"> & Pick<T, "run">
-    : T extends AnyResource
-      ? Omit<Partial<T>, "id"> & Pick<T, "init">
-      : T extends AnyTaskMiddleware
-        ? Omit<Partial<T>, "id">
-        : T extends AnyResourceMiddleware
-          ? Omit<Partial<T>, "id"> & Pick<T, "run">
-          : T extends AnyHook
-            ? Omit<Partial<T>, "id" | "on"> & Pick<T, "run">
-            : never
+type OverridePatch<TBase extends AnyOverrideable> = Readonly<
+  TBase extends AnyHook
+    ? Omit<Partial<TBase>, "id" | "on">
+    : Omit<Partial<TBase>, "id">
 >;
 
-export function defineOverride<TNext extends AnyOverrideable>(
-  base: BaseKindOf<TNext>,
-  patch: OverridePatch<TNext>,
-): TNext {
-  // Ensure we never change the id, and merge overrides last
-  return {
+export function defineOverride<TBase extends AnyOverrideable>(
+  base: TBase,
+  patch: OverridePatch<TBase>,
+): TBase {
+  const overridden = {
     ...base,
     ...patch,
     id: base.id,
-  } as unknown as TNext;
+  } as TBase;
+
+  // Hooks should preserve the event binding identity as well.
+  if ((base as AnyHook).on !== undefined) {
+    (overridden as unknown as AnyHook).on = (base as AnyHook).on;
+  }
+
+  return overridden;
 }

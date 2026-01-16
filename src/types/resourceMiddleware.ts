@@ -62,7 +62,7 @@ export interface IResourceMiddleware<
   [symbolResourceMiddleware]: true;
 
   id: string;
-  dependencies: TDependencies | (() => TDependencies);
+  dependencies: TDependencies | ((config: TConfig) => TDependencies);
   /** Current configuration object (empty by default). */
   config: TConfig;
   /** Configure the middleware and return a marked, configured instance. */

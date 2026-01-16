@@ -4,7 +4,7 @@ describe("Logger detectColorSupport branches", () => {
   const original = process.env.NO_COLOR;
   afterEach(() => {
     if (original === undefined) {
-      delete (process.env as any).NO_COLOR;
+      delete process.env.NO_COLOR;
     } else {
       process.env.NO_COLOR = original;
     }
@@ -18,11 +18,15 @@ describe("Logger detectColorSupport branches", () => {
       bufferLogs: false,
     });
     // @ts-ignore access private via any for coverage
-    expect((logger as any).detectColorSupport()).toBe(false);
+    expect(
+      (
+        logger as unknown as { detectColorSupport: () => boolean }
+      ).detectColorSupport(),
+    ).toBe(false);
   });
 
   it("checks tty when NO_COLOR not set", () => {
-    delete (process.env as any).NO_COLOR;
+    delete process.env.NO_COLOR;
     const logger = new Logger({
       printThreshold: null,
       printStrategy: "pretty",
@@ -30,7 +34,9 @@ describe("Logger detectColorSupport branches", () => {
     });
     // We can't force TTY in CI; ensure it returns a boolean without throwing
     // @ts-ignore access private via any for coverage
-    const result = (logger as any).detectColorSupport();
+    const result = (
+      logger as unknown as { detectColorSupport: () => boolean }
+    ).detectColorSupport();
     expect(typeof result).toBe("boolean");
   });
 });

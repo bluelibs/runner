@@ -26,7 +26,9 @@ describe("task/event/hook/middleware builders", () => {
     const task = r
       .task("tests.builder.task")
       .dependencies({ svc })
-      .inputSchema<{ a: number; b: number }>({ parse: (x: any) => x })
+      .inputSchema<{ a: number; b: number }>({
+        parse: (x: unknown) => x as { a: number; b: number },
+      })
       .run(
         async (
           input: { a: number; b: number },
@@ -35,7 +37,11 @@ describe("task/event/hook/middleware builders", () => {
       )
       .build();
 
-    expect((task as any)[definitions.symbolTask]).toBe(true);
+    expect(
+      (task as unknown as { [definitions.symbolTask]: boolean })[
+        definitions.symbolTask
+      ],
+    ).toBe(true);
     const app = resource({ id: "tests.app.task", register: [svc, task] });
     const rr = await run(app);
     const out = await rr.runTask(task, { a: 2, b: 3 });
@@ -56,7 +62,7 @@ describe("task/event/hook/middleware builders", () => {
 
     const app = resource({ id: "tests.app.ev", register: [ev, listener] });
     const rr = await run(app);
-    await rr.emitEvent(ev, undefined as any);
+    await rr.emitEvent(ev, undefined);
     expect(calls).toEqual([ev.id]);
     await rr.dispose();
   });
@@ -70,8 +76,16 @@ describe("task/event/hook/middleware builders", () => {
       .resource("tests.builder.rm")
       .run(async ({ next, resource }) => next(resource.config))
       .build();
-    expect((tmw as any)[definitions.symbolTaskMiddleware]).toBe(true);
-    expect((rmw as any)[definitions.symbolResourceMiddleware]).toBe(true);
+    expect(
+      (tmw as unknown as { [definitions.symbolTaskMiddleware]: boolean })[
+        definitions.symbolTaskMiddleware
+      ],
+    ).toBe(true);
+    expect(
+      (rmw as unknown as { [definitions.symbolResourceMiddleware]: boolean })[
+        definitions.symbolResourceMiddleware
+      ],
+    ).toBe(true);
   });
 
   it("tags append and override on event, hook, and middlewares", () => {
@@ -187,9 +201,13 @@ describe("task/event/hook/middleware builders", () => {
       .event("tests.builder.event.meta")
       .payloadSchema<{ foo: number }>({ parse: (x: any) => x })
       .tags([])
-      .meta({ title: "E" } as any)
+      .meta({ title: "E" } as unknown as any)
       .build();
-    expect((ev as any)[definitions.symbolEvent]).toBe(true);
+    expect(
+      (ev as unknown as { [definitions.symbolEvent]: boolean })[
+        definitions.symbolEvent
+      ],
+    ).toBe(true);
   });
 
   it("hook builder supports order, dependencies, tags, meta", async () => {
@@ -205,7 +223,7 @@ describe("task/event/hook/middleware builders", () => {
       .order(5)
       .dependencies({ svc })
       .tags([])
-      .meta({ title: "H" } as any)
+      .meta({ title: "H" } as unknown as any)
       .run(async (em) => {
         calls.push(em.id);
       })
@@ -215,7 +233,7 @@ describe("task/event/hook/middleware builders", () => {
       register: [svc, ev, hk],
     });
     const rr = await run(app);
-    await rr.emitEvent(ev, undefined as any);
+    await rr.emitEvent(ev, undefined);
     expect(calls).toEqual([ev.id]);
     await rr.dispose();
   });
@@ -227,7 +245,7 @@ describe("task/event/hook/middleware builders", () => {
       .tags([])
       .middleware([])
       .resultSchema<number>({ parse: (x: any) => x })
-      .meta({ title: "T" } as any)
+      .meta({ title: "T" } as unknown as any)
       .run(async (input: number) => Promise.resolve(input + 1))
       .build();
     const app = resource({ id: "tests.app.task.more", register: [task] });
@@ -254,7 +272,7 @@ describe("task/event/hook/middleware builders", () => {
     expect(() =>
       r
         .task("tests.builder.task.throws.invalid")
-        .throws([{} as any])
+        .throws([{} as unknown as string])
         .run(async () => Promise.resolve("ok"))
         .build(),
     ).toThrow(/Invalid throws entry/);
@@ -282,7 +300,7 @@ describe("task/event/hook/middleware builders", () => {
       register: [a, b, t1],
     });
     const rr1 = await run(app1);
-    expect(await rr1.runTask(t1, undefined as any)).toBe(5);
+    expect(await rr1.runTask(t1)).toBe(5);
     await rr1.dispose();
 
     const t2 = r
@@ -296,7 +314,7 @@ describe("task/event/hook/middleware builders", () => {
       register: [a, b, t2],
     });
     const rr2 = await run(app2);
-    expect(await rr2.runTask(t2, undefined as any)).toBe(3);
+    expect(await rr2.runTask(t2)).toBe(3);
     await rr2.dispose();
   });
 
@@ -319,7 +337,7 @@ describe("task/event/hook/middleware builders", () => {
 
     const app = resource({ id: "tests.app.task.deps.ff", register: [a, b, t] });
     const rr = await run(app);
-    expect(await rr.runTask(t, undefined as any)).toBe(10);
+    expect(await rr.runTask(t)).toBe(10);
     await rr.dispose();
   });
 
@@ -348,7 +366,7 @@ describe("task/event/hook/middleware builders", () => {
       register: [a, b, ev, hk],
     });
     const rr = await run(app);
-    await rr.emitEvent(ev, undefined as any);
+    await rr.emitEvent(ev, undefined);
     expect(seen).toEqual([3]);
     await rr.dispose();
   });
@@ -370,7 +388,7 @@ describe("task/event/hook/middleware builders", () => {
       .build();
     const depsObj =
       typeof rmw.dependencies === "function"
-        ? (rmw.dependencies as any)()
+        ? (rmw.dependencies as unknown as () => any)()
         : rmw.dependencies;
     expect(Object.keys(depsObj)).toEqual(["a", "b"]);
   });
@@ -438,7 +456,7 @@ describe("task/event/hook/middleware builders", () => {
       register: [a, b, ev, hk, tmw],
     });
     const rr = await run(app);
-    await rr.emitEvent(ev, undefined as any);
+    await rr.emitEvent(ev, undefined);
     expect(calls).toEqual([3]);
     await rr.dispose();
   });
@@ -469,7 +487,7 @@ describe("task/event/hook/middleware builders", () => {
       register: [a, b, ev, hk],
     });
     const rr = await run(app);
-    await rr.emitEvent(ev, undefined as any);
+    await rr.emitEvent(ev, undefined);
     expect(seen).toEqual([2]);
     await rr.dispose();
   });
@@ -487,7 +505,7 @@ describe("task/event/hook/middleware builders", () => {
     // dependencies is function; call to get merged object
     const depsObj =
       typeof tmw.dependencies === "function"
-        ? (tmw.dependencies as any)()
+        ? (tmw.dependencies as unknown as () => any)()
         : tmw.dependencies;
     expect(Object.keys(depsObj)).toEqual(["a", "b"]);
 
@@ -499,7 +517,7 @@ describe("task/event/hook/middleware builders", () => {
       .build();
     const depsObj2 =
       typeof tmw2.dependencies === "function"
-        ? (tmw2.dependencies as any)()
+        ? (tmw2.dependencies as unknown as () => any)()
         : tmw2.dependencies;
     expect(Object.keys(depsObj2)).toEqual(["b"]);
   });
@@ -515,7 +533,7 @@ describe("task/event/hook/middleware builders", () => {
       .build();
     const depsObj =
       typeof rmw.dependencies === "function"
-        ? (rmw.dependencies as any)()
+        ? (rmw.dependencies as unknown as () => any)()
         : rmw.dependencies;
     expect(Object.keys(depsObj)).toEqual(["a", "b"]);
 
@@ -527,7 +545,7 @@ describe("task/event/hook/middleware builders", () => {
       .build();
     const depsObj2 =
       typeof rmw2.dependencies === "function"
-        ? (rmw2.dependencies as any)()
+        ? (rmw2.dependencies as unknown as () => any)()
         : rmw2.dependencies;
     expect(Object.keys(depsObj2)).toEqual(["b"]);
   });
@@ -634,11 +652,15 @@ describe("task/event/hook/middleware builders", () => {
       .dependencies({})
       .configSchema<{ retry: number }>({ parse: (x: any) => x })
       .tags([])
-      .meta({ title: "TM" } as any)
+      .meta({ title: "TM" } as unknown as any)
       .everywhere(() => true)
       .run(async ({ next, task }) => next(task.input))
       .build();
-    expect((tmw as any)[definitions.symbolTaskMiddleware]).toBe(true);
+    expect(
+      (tmw as unknown as { [definitions.symbolTaskMiddleware]: boolean })[
+        definitions.symbolTaskMiddleware
+      ],
+    ).toBe(true);
   });
 
   it("resource middleware builder supports configSchema, tags, meta, everywhere", () => {
@@ -647,10 +669,14 @@ describe("task/event/hook/middleware builders", () => {
       .dependencies({})
       .configSchema<{ timeout: number }>({ parse: (x: any) => x })
       .tags([])
-      .meta({ title: "RM" } as any)
+      .meta({ title: "RM" } as unknown as any)
       .everywhere(() => true)
       .run(async ({ next, resource }) => next(resource.config))
       .build();
-    expect((rmw as any)[definitions.symbolResourceMiddleware]).toBe(true);
+    expect(
+      (rmw as unknown as { [definitions.symbolResourceMiddleware]: boolean })[
+        definitions.symbolResourceMiddleware
+      ],
+    ).toBe(true);
   });
 });

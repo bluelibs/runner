@@ -146,7 +146,7 @@ describe("Queue", () => {
     const rejectingPromise = Promise.reject(
       new Error("Simulated tail rejection"),
     );
-    (q as any).tail = rejectingPromise;
+    (q as unknown as { tail: Promise<any> }).tail = rejectingPromise;
 
     // Spy on the rejecting promise to verify the catch is called
     const catchSpy = jest.spyOn(rejectingPromise, "catch");
@@ -194,8 +194,8 @@ describe("Queue", () => {
     // Create a Queue instance which will use the detected platform
     const q = new Queue();
 
-    // @ts-expect-error
-    q["hasAsyncLocalStorage"] = false; // force false to simulate non-node environment
+    (q as unknown as { hasAsyncLocalStorage: boolean }).hasAsyncLocalStorage =
+      false;
 
     // Run a simple task to ensure basic functionality works
     const result = await q.run(async () => 3);

@@ -37,8 +37,7 @@ export function defineTaskMiddleware<
     config: {} as TConfig,
     configSchema: middlewareDef.configSchema,
     ...middlewareDef,
-    dependencies:
-      (middlewareDef.dependencies as TDependencies) || ({} as TDependencies),
+    dependencies: middlewareDef.dependencies || ({} as TDependencies),
   } as ITaskMiddleware<
     TConfig,
     TEnforceInputContract,

@@ -64,7 +64,7 @@ export interface ITaskMiddleware<
   [symbolTaskMiddleware]: true;
   [symbolFilePath]: string;
   id: string;
-  dependencies: TDependencies | (() => TDependencies);
+  dependencies: TDependencies | ((config: TConfig) => TDependencies);
   /** Current configuration object (empty by default). */
   config: TConfig;
   /** Configure the middleware and return a marked, configured instance. */

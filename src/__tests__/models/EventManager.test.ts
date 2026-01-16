@@ -309,14 +309,15 @@ describe("EventManager", () => {
 
     try {
       await eventManager.emit(parallelEvent, "data", "src");
-    } catch (err: any) {
-      expect(err.name).toBe("AggregateError");
-      expect(Array.isArray(err.errors)).toBe(true);
-      expect(err.errors.map((e: any) => e.listenerId)).toEqual(
+    } catch (err: unknown) {
+      const aggErr = err as { name: string; errors: any[] };
+      expect(aggErr.name).toBe("AggregateError");
+      expect(Array.isArray(aggErr.errors)).toBe(true);
+      expect(aggErr.errors.map((e: any) => e.listenerId)).toEqual(
         expect.arrayContaining(["l2", "l3"]),
       );
-      expect(err.errors.map((e: any) => e.listenerOrder)).toEqual([0, 0]);
-      expect(err.errors[0]).toBeInstanceOf(Error);
+      expect(aggErr.errors.map((e: any) => e.listenerOrder)).toEqual([0, 0]);
+      expect(aggErr.errors[0]).toBeInstanceOf(Error);
     }
   });
 
@@ -336,7 +337,12 @@ describe("EventManager", () => {
 
     try {
       await eventManager.emit(parallelEvent, "data", "src");
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as {
+        listenerId: string;
+        listenerOrder: number;
+        message: string;
+      };
       expect(err.listenerId).toBe("solo");
       expect(err.listenerOrder).toBe(0);
       expect(err.message).toBe("solo-bang");
@@ -457,7 +463,7 @@ describe("EventManager", () => {
   it("should skip listener when listener id equals source", async () => {
     const handler = jest.fn();
 
-    eventManager.addListener(eventDefinition, handler, { id: "self" } as any);
+    eventManager.addListener(eventDefinition, handler, { id: "self" });
 
     // When the source equals the listener id, the listener should be skipped
     await eventManager.emit(eventDefinition, "data", "self");
@@ -716,7 +722,11 @@ describe("EventManager", () => {
     expect(ok).toHaveBeenCalled();
 
     await expect(
-      eventManager.emit(schemaEvent, { x: "nope" } as any, "src"),
+      eventManager.emit(
+        schemaEvent,
+        { x: "nope" } as unknown as { x: number },
+        "src",
+      ),
     ).rejects.toThrow(/Event payload/i);
   });
 
@@ -738,7 +748,10 @@ describe("EventManager", () => {
   it("hasListeners returns true when only global listeners exist and event has empty array", () => {
     const handler = jest.fn();
     eventManager.addGlobalListener(handler);
-    (eventManager as any).listeners.set(eventDefinition.id, []);
+    (eventManager as unknown as { listeners: Map<any, any> }).listeners.set(
+      eventDefinition.id,
+      [],
+    );
     expect(eventManager.hasListeners(eventDefinition)).toBe(true);
   });
 
@@ -750,9 +763,12 @@ describe("EventManager", () => {
       eventManager.intercept(interceptor1);
       eventManager.intercept(interceptor2);
 
-      expect((eventManager as any).emissionInterceptors).toHaveLength(2);
-      expect((eventManager as any).emissionInterceptors[0]).toBe(interceptor1);
-      expect((eventManager as any).emissionInterceptors[1]).toBe(interceptor2);
+      const interceptors = (
+        eventManager as unknown as { emissionInterceptors: any[] }
+      ).emissionInterceptors;
+      expect(interceptors).toHaveLength(2);
+      expect(interceptors[0]).toBe(interceptor1);
+      expect(interceptors[1]).toBe(interceptor2);
     });
 
     it("should throw error when adding interceptors after lock", () => {

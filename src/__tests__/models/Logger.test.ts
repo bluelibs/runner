@@ -1,18 +1,22 @@
-import { Logger } from "../../models/Logger";
+import { Logger, ILog, PrintStrategy } from "../../models/Logger";
 
 describe("Logger", () => {
   let consoleSpy: jest.SpyInstance;
   let consoleErrorSpy: jest.SpyInstance;
 
   const createLogger = (
-    opts?: Partial<{ threshold: any; strategy: any; buffer: boolean }>,
+    opts?: Partial<{
+      threshold: any;
+      strategy: PrintStrategy;
+      buffer: boolean;
+    }>,
   ) =>
     new Logger({
       printThreshold:
         opts && Object.prototype.hasOwnProperty.call(opts, "threshold")
           ? opts.threshold
           : "info",
-      printStrategy: (opts?.strategy ?? "pretty") as any,
+      printStrategy: opts?.strategy ?? "pretty",
       bufferLogs: opts?.buffer ?? false,
     });
 
@@ -24,9 +28,7 @@ describe("Logger", () => {
 
   beforeEach(() => {
     consoleSpy = jest.spyOn(console, "log").mockImplementation(() => {});
-    consoleErrorSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation((() => {}) as any);
+    consoleErrorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -149,7 +151,7 @@ describe("Logger", () => {
     logger.onLog(() => {
       // throw a primitive to exercise the fallback branch
 
-      throw "primitive" as any;
+      throw "primitive";
     });
     await logger.info("hi");
     const outputs = gather();
@@ -168,7 +170,7 @@ describe("Logger", () => {
   it("formats errors without stack: shows only the error line", async () => {
     const logger = createLogger({ threshold: "trace" });
     const err = new Error("NoStack");
-    (err as any).stack = undefined;
+    Object.defineProperty(err, "stack", { value: undefined });
     await logger.error("oops", { error: err });
     const outputs = gather();
     expect(outputs).toContain("Error: NoStack");
@@ -215,7 +217,7 @@ describe("Logger", () => {
       error: undefined,
       data: undefined,
       context: undefined,
-    } as any;
+    } as unknown as ILog;
     logger.print(log);
     const outputs = gather();
     expect(outputs).toContain("no ctx");
@@ -240,7 +242,7 @@ describe("Logger", () => {
   });
 
   it("convenience methods call the core log with expected levels", async () => {
-    const logger = createLogger({ threshold: "trace", strategy: "none" });
+    const logger = createLogger({ threshold: "trace", strategy: "plain" });
     const spy = jest.spyOn(logger, "log");
     await logger.trace("t");
     await logger.debug("d");
@@ -297,7 +299,7 @@ describe("Logger", () => {
     // Root buffers; child logs should be buffered and later flushed by root.lock()
     const root = new Logger({
       printThreshold: "trace",
-      printStrategy: "pretty" as any,
+      printStrategy: "pretty",
       bufferLogs: true,
     });
 
@@ -329,7 +331,7 @@ describe("Logger", () => {
   it("registering listener on child delegates to root logger", async () => {
     const root = new Logger({
       printThreshold: "trace",
-      printStrategy: "pretty" as any,
+      printStrategy: "pretty",
       bufferLogs: false,
     });
 
@@ -350,7 +352,7 @@ describe("Logger", () => {
   it("child.triggerLogListeners delegates up to root (private path)", async () => {
     const root = new Logger({
       printThreshold: null,
-      printStrategy: "pretty" as any,
+      printStrategy: "pretty",
       bufferLogs: false,
     });
 
@@ -361,10 +363,15 @@ describe("Logger", () => {
       seen.push(String(log.message));
     });
 
-    const spy = jest.spyOn(root as any, "triggerLogListeners");
+    const spy = jest.spyOn(
+      root as unknown as { triggerLogListeners: any },
+      "triggerLogListeners",
+    );
 
     // Directly invoke the private method on the child to cover the branch
-    await (child as any).triggerLogListeners({
+    await (
+      child as unknown as { triggerLogListeners: (log: any) => Promise<void> }
+    ).triggerLogListeners({
       level: "info",
       message: "via child",
       timestamp: new Date(),
@@ -385,7 +392,8 @@ describe("Logger", () => {
       expect(outputs).not.toMatch(/\x1b\[/);
     } finally {
       if (prev === undefined) {
-        delete (process.env as any).NO_COLOR;
+        const env = process.env;
+        delete env.NO_COLOR;
       } else {
         process.env.NO_COLOR = prev;
       }
@@ -395,7 +403,7 @@ describe("Logger", () => {
   it("prints errors with stack", async () => {
     const logger = createLogger({ threshold: "trace" });
     const err = new Error("WithStack");
-    (err as any).stack = "stack";
+    Object.defineProperty(err, "stack", { value: "stack" });
     await logger.error("oops", { error: err });
     const outputs = gather();
     expect(outputs).toContain("Error: WithStack");
@@ -408,7 +416,7 @@ describe("Logger", () => {
       captured = log;
     });
     const err = new Error("RealBoom");
-    (err as any).stack = "STACK_TRACE";
+    Object.defineProperty(err, "stack", { value: "STACK_TRACE" });
     await logger.error("trigger", { error: err });
     expect(captured).toBeDefined();
     expect(captured.error).toBeDefined();
@@ -423,7 +431,9 @@ describe("Logger", () => {
     logger.onLog((log) => {
       captured = log;
     });
-    await logger.error("trigger primitive", { error: "primitive boom" as any });
+    await logger.error("trigger primitive", {
+      error: "primitive boom" as unknown as Error,
+    });
     expect(captured).toBeDefined();
     expect(captured.error).toEqual({
       name: "UnknownError",
