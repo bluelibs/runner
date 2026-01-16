@@ -147,24 +147,28 @@ describe("durable: DurableContext", () => {
   });
 
   it("memoizes steps, supports retries and timeouts", async () => {
-    const { ctx } = createContext();
+    const { store, bus } = createContext();
+    const ctx1 = new DurableContext(store, bus, "e1", 1);
 
     let count = 0;
-    const v1 = await ctx.step("cached", async () => {
+    const v1 = await ctx1.step("cached", async () => {
       count += 1;
       return "ok";
     });
-    const v2 = await ctx.step("cached", async () => {
+
+    // Simulate replay: new context, same execution ID
+    const ctx2 = new DurableContext(store, bus, "e1", 1);
+    const v2 = await ctx2.step("cached", async () => {
       count += 1;
       return "nope";
     });
 
     expect(v1).toBe("ok");
     expect(v2).toBe("ok");
-    expect(count).toBe(1);
+    expect(count).toBe(1); // Ran once, second time was cached
 
     let attempts = 0;
-    const retried = await ctx.step("retry", { retries: 1 }, async () => {
+    const retried = await ctx1.step("retry", { retries: 1 }, async () => {
       attempts += 1;
       if (attempts === 1) throw new Error("fail-once");
       return "recovered";
@@ -172,7 +176,7 @@ describe("durable: DurableContext", () => {
     expect(retried).toBe("recovered");
 
     await expect(
-      ctx.step(
+      ctx1.step(
         "timeout",
         { timeout: 1 },
         async () =>
@@ -223,16 +227,20 @@ describe("durable: DurableContext", () => {
   });
 
   it("supports strongly-typed step ids", async () => {
-    const { ctx } = createContext();
+    const { store, bus } = createContext();
+    const ctx1 = new DurableContext(store, bus, "e1", 1);
 
     const Create = createDurableStepId<string>("steps.create");
 
     let runs = 0;
-    const v1 = await ctx.step(Create, async () => {
+    const v1 = await ctx1.step(Create, async () => {
       runs += 1;
       return "ok";
     });
-    const v2 = await ctx.step(Create, async () => {
+
+    // Simulate replay
+    const ctx2 = new DurableContext(store, bus, "e1", 1);
+    const v2 = await ctx2.step(Create, async () => {
       runs += 1;
       return "nope";
     });
@@ -644,5 +652,15 @@ describe("durable: DurableContext", () => {
     const { ctx } = createContext("e1", 1, store, { auditEnabled: true });
 
     await expect(ctx.step("audit-fail", async () => "ok")).resolves.toBe("ok");
+  });
+
+  it("throws when reusing the same step ID in a single execution path", async () => {
+    const { ctx } = createContext();
+    await ctx.step("A", async () => "ok");
+    
+    // step() throws synchronously for duplicate IDs because it checks before returning the promise/builder
+    expect(() => ctx.step("A", async () => "fail")).toThrow(
+      "Duplicate step ID detected",
+    );
   });
 });

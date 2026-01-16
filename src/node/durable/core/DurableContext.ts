@@ -78,6 +78,9 @@ export class DurableContext implements IDurableContext {
     action: () => Promise<void>;
   }> = [];
 
+  // Track user and internal steps seen in this execution context instance
+  private readonly seenStepIds = new Set<string>();
+
   constructor(
     private readonly store: IDurableStore,
     private readonly bus: IEventBus,
@@ -113,6 +116,15 @@ export class DurableContext implements IDurableContext {
     this.implicitInternalStepIdsWarned.add(kind);
     // eslint-disable-next-line no-console
     console.warn(message);
+  }
+
+  private assertUniqueStepId(stepId: string): void {
+    if (this.seenStepIds.has(stepId)) {
+      throw new Error(
+        `Duplicate step ID detected: '${stepId}'. Step IDs must be unique within a single execution path to ensure deterministic replay.`,
+      );
+    }
+    this.seenStepIds.add(stepId);
   }
 
   private async appendAuditEntry(
@@ -228,6 +240,8 @@ export class DurableContext implements IDurableContext {
   ): any {
     const resolvedStepId = this.getStepId(stepId);
     this.assertUserStepId(resolvedStepId);
+    this.assertUniqueStepId(resolvedStepId);
+
     if (optionsOrFn === undefined) {
       return new StepBuilder<T>(this, resolvedStepId);
     }
@@ -318,6 +332,10 @@ export class DurableContext implements IDurableContext {
     try {
       for (const comp of reversed) {
         const rollbackStepId = `rollback:${comp.stepId}`;
+        // Rollbacks are often separate flow, generally re-entrant if idempotent, 
+        // but let's register the internal step id to be safe/consistent.
+        this.assertUniqueStepId(rollbackStepId);
+        
         await this.internalStep<{ rolledBack: true }>(rollbackStepId).up(
           async () => {
             await comp.action();
@@ -356,6 +374,8 @@ export class DurableContext implements IDurableContext {
       this.sleepIndex += 1;
       sleepStepId = `__sleep:${sleepStepIndex}`;
     }
+
+    this.assertUniqueStepId(sleepStepId);
 
     const existing = await this.store.getStepResult(
       this.executionId,
@@ -460,6 +480,8 @@ export class DurableContext implements IDurableContext {
             ? `__signal:${signalId}`
             : `__signal:${signalId}:${signalStepIndex}`;
       }
+
+      this.assertUniqueStepId(stepId);
 
       const existing = await this.store.getStepResult(this.executionId, stepId);
       if (existing) {
@@ -596,6 +618,8 @@ export class DurableContext implements IDurableContext {
       stepId = `__emit:${eventId}:${emitIndex}`;
     }
 
+    this.assertUniqueStepId(stepId);
+
     await this.internalStep<void>(stepId).up(async () => {
       await this.bus.publish("durable:events", {
         type: eventId,
@@ -618,6 +642,10 @@ export class DurableContext implements IDurableContext {
     if (!shouldPersist && !shouldEmit) return;
     const stepId = `__note:${this.noteIndex}`;
     this.noteIndex += 1;
+
+    // Notes are auto-indexed so collision is unlikely unless index reset, 
+    // but good to check anyway.
+    this.assertUniqueStepId(stepId);
 
     await this.internalStep<void>(stepId).up(async () => {
       await this.appendAuditEntry({

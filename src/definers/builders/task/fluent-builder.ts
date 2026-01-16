@@ -64,7 +64,7 @@ export function makeTaskBuilder<
         dependencies: nextDependencies as unknown as TDeps & TNewDeps,
       });
 
-      return makeTaskBuilder(next) as any;
+      return makeTaskBuilder(next);
     },
 
     middleware<TNewMw extends TaskMiddlewareAttachmentType[]>(
@@ -112,7 +112,7 @@ export function makeTaskBuilder<
       >(state, {
         tags: mergeArray(state.tags, t, override) as [...TTags, ...TNewTags],
       });
-      return makeTaskBuilder(next) as any;
+      return makeTaskBuilder(next);
     },
 
     inputSchema<TNewInput>(schema: IValidationSchema<TNewInput>) {
