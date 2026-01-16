@@ -58,37 +58,43 @@ function expectErrorCode(response: JsonResponse, expected: string): void {
   expect(code).toBe(expected);
 }
 
-type FakeBusboy = {
+type FakeBusboy = NodeJS.WritableStream & {
   emit: (event: string, ...args: unknown[]) => void;
 };
 
-type MockRequest = MultipartRequest & {
-  unpipe?: (dest: unknown) => void;
-  resume?: () => void;
-  pipe: (busboy: FakeBusboy) => MockRequest;
-  on: (event: string, cb: (...args: unknown[]) => void) => MockRequest;
-};
+type MockRequest = MultipartRequest & PassThrough;
+
+const isFakeBusboy = (value: NodeJS.WritableStream): value is FakeBusboy =>
+  !!value && typeof (value as { emit?: unknown }).emit === "function";
 
 function createMockRequest(
   headers: IncomingHttpHeaders,
   scenario: (busboy: FakeBusboy, req: MockRequest) => void,
 ): MultipartRequest {
-  const req: MockRequest = {
-    headers,
-    method: "POST" as const,
-    on() {
-      // parseMultipartInput attaches an 'error' listener; we ignore here
-      return req;
-    },
-    unpipe() {},
-    resume() {},
-    pipe(busboy: FakeBusboy) {
-      // Execute provided scenario to simulate busboy behavior
-      scenario(busboy, req);
-      return req;
-    },
-  };
-  return req;
+  class MockMultipartRequest extends PassThrough implements MultipartRequest {
+    headers: IncomingHttpHeaders;
+    method?: string;
+
+    constructor() {
+      super();
+      this.headers = headers;
+      this.method = "POST";
+    }
+
+    pipe<T extends NodeJS.WritableStream>(
+      destination: T,
+      options?: { end?: boolean },
+    ): T {
+      if (isFakeBusboy(destination)) {
+        // Execute provided scenario to simulate busboy behavior
+        scenario(destination, this);
+        return destination;
+      }
+      return super.pipe(destination, options);
+    }
+  }
+
+  return new MockMultipartRequest();
 }
 
 type FakeStream = {
@@ -226,16 +232,28 @@ describe("parseMultipartInput - extra mocked branches", () => {
   it("falls back to ending streams if destroy throws", async () => {
     const originalDestroy = PassThrough.prototype.destroy;
     const originalEnd = PassThrough.prototype.end;
+    type EndFn = (
+      this: PassThrough,
+      chunk?: any,
+      encodingOrCb?: BufferEncoding | (() => void),
+      cb?: () => void,
+    ) => PassThrough;
+    const endWithCallback: EndFn = originalEnd;
     let ended = false;
     PassThrough.prototype.destroy = function destroy() {
       throw new Error("nope");
     };
     PassThrough.prototype.end = function end(
       this: PassThrough,
-      ...args: Parameters<PassThrough["end"]>
+      chunk?: any,
+      encodingOrCb?: BufferEncoding | (() => void),
+      cb?: () => void,
     ) {
       ended = true;
-      return originalEnd.apply(this, args);
+      if (typeof encodingOrCb === "function") {
+        return endWithCallback.call(this, chunk, encodingOrCb);
+      }
+      return endWithCallback.call(this, chunk, encodingOrCb, cb);
     };
 
     try {

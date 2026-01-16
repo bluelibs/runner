@@ -1,4 +1,4 @@
-import type { Store } from "../../models/Store";
+import type { Store } from "../../../models/Store";
 import { createAllowListGuard } from "../allowList";
 
 describe("allowList guard (open exposure override)", () => {

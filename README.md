@@ -19,8 +19,9 @@ import { r, run } from "@bluelibs/runner";
 const createUser = r
   .task("users.create")
   .dependencies({ db, mailer })
-  .inputSchema<{ name: string; email: string }>({ parse: (v) => v })
+  .inputSchema(z.object({ name: z.string(), email: z.string() }))
   .run(async (input, { db, mailer }) => {
+    // type-safety infered from schema
     const user = await db.users.insert(input);
     await mailer.sendWelcome(user.email);
     return user;
@@ -230,28 +231,27 @@ BlueLibs Runner is a TypeScript-first framework that embraces functional program
 **Here's what "zero magic" looks like in practice:**
 
 ```typescript
-//  ONE LINE to add caching with TTL
+import { r, globals } from "@bluelibs/runner";
+
+// Built-in middleware from globals
+const { cache, retry } = globals.middleware.task;
+
+// ✅ ONE LINE to add caching with TTL
 const getUser = r
   .task("users.get")
+  .dependencies({ db })
   .middleware([cache.with({ ttl: 60000 })]) // ← That's it. 1 minute cache.
-  .run(async (id) => db.query("SELECT * FROM users WHERE id = ?", id))
+  .run(async (id, { db }) => db.query("SELECT * FROM users WHERE id = ?", id))
   .build();
 
-//  ONE LINE to add retry with exponential backoff
+// ✅ ONE LINE to add retry with exponential backoff
 const callAPI = r
   .task("api.call")
   .middleware([retry.with({ retries: 3, backoff: "exponential" })]) // ← Auto-retry failures
   .run(async (url) => fetch(url))
   .build();
 
-//  ONE LINE to add authentication
-const adminAction = r
-  .task("admin.action")
-  .middleware([auth.with({ role: "admin" })]) // ← Blocks non-admins
-  .run(async () => "Secret admin stuff")
-  .build();
-
-//  Testing is actually pleasant
+// ✅ Testing is actually pleasant
 test("getUser works", async () => {
   const result = await getUser.run("user-123", { db: mockDb }); // ← Just call it
   expect(result.name).toBe("John");
@@ -277,6 +277,8 @@ test("getUser works", async () => {
 | **Middleware**        | Built-in      | Built-in   | Manual      | Manual     | Manual     |
 | **Events**            | Built-in      | Built-in   | Manual      | Manual     | Manual     |
 | **Async Context**     | Built-in      | Manual     | Manual      | Manual     | Manual     |
+| **Durable Workflows** | Built-in      | ❌         | ❌          | ❌         | ❌         |
+| **HTTP Tunnels**      | Built-in      | ❌         | ❌          | ❌         | ❌         |
 | **Debug Experience**  | Crystal clear | Confusing  | Confusing   | Confusing  | Confusing  |
 
 **TL;DR:** Runner gives you the features of NestJS with the simplicity of plain functions.
@@ -312,6 +314,8 @@ Overhead Analysis:
 - **Lower cloud costs** - Handle more requests with fewer resources
 - **Production ready** - Battle-tested at scale (see [Performance](#performance) for details)
 
+> **Note:** Benchmarks will vary by hardware. These numbers show relative overhead, not absolute performance targets.
+
 ---
 
 ## What's in the Box?
@@ -341,7 +345,9 @@ Runner comes with **everything you need** to build production apps:
 - Event System
 - Middleware Pipeline
 - Async Context
-- Serialization
+- Serialization (Dates, RegExp, Binary)
+- HTTP Client Factory
+- File Upload Support
 
 </td>
 <td width="33%" valign="top">
@@ -386,6 +392,7 @@ Runner comes with **everything you need** to build production apps:
 
 **Advanced Patterns**
 
+- Durable Workflows (Node)
 - Tunnels (Distributed)
 - Tags System
 - Factory Pattern

@@ -24,6 +24,8 @@
 - Node specific code goes under ./src/node/ folder. It is exported only for node.
 - This package is multi-platform (readmes/MULTIPLATFORM.md) be sure to take this into account when implementing changes
 - AI.md contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
+- Always run `npm run typecheck` to ensure type safety.
+- Always run `npm run coverage:ai` to ensure coverage.
 </specifics>
 
 <new_feature>
