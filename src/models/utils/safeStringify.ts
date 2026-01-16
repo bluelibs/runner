@@ -40,7 +40,9 @@ export function safeStringify(
   } as (this: unknown, key: string, value: unknown) => unknown;
 
   try {
-    return JSON.stringify(value, replacer as any, space);
+    // JSON.stringify's replacer type is complex (overloaded). Our replacer satisfies
+    // the (key: string, value: unknown) => unknown signature used at runtime.
+    return JSON.stringify(value, replacer as (key: string, value: unknown) => unknown, space);
   } catch {
     try {
       return String(value);

@@ -400,9 +400,10 @@ export class StoreRegistry {
       const deps = h.hook.dependencies;
       if (deps) {
         for (const value of Object.values(deps)) {
-          const candidate = (
-            utils.isOptional(value) ? (value as any).inner : value
-          ) as Record<string, any>;
+          // For optional wrappers, extract the inner value
+          const candidate: { id?: string } = utils.isOptional(value)
+            ? (value as { inner: { id?: string } }).inner
+            : (value as { id?: string });
           if (candidate && utils.isEvent(candidate)) {
             depEvents.push(candidate.id);
           }

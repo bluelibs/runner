@@ -21,9 +21,9 @@ export function tagBuilder<
     {
       id,
       filePath,
-      meta: {} as any,
-      configSchema: undefined as any,
-      config: undefined as any,
+      meta: {} as BuilderState<TConfig, TEnforceIn, TEnforceOut>["meta"],
+      configSchema: undefined as BuilderState<TConfig, TEnforceIn, TEnforceOut>["configSchema"],
+      config: undefined as BuilderState<TConfig, TEnforceIn, TEnforceOut>["config"],
     },
   );
 

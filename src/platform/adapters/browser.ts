@@ -5,47 +5,78 @@ import type {
 } from "../types";
 import { platformUnsupportedFunctionError } from "../../errors";
 
+/**
+ * Interface representing a browser-like event target with optional event methods.
+ * These are optional because they may not exist in all environments (e.g., Node.js).
+ */
+interface BrowserEventTarget {
+  addEventListener?(type: string, listener: EventListener): void;
+  removeEventListener?(type: string, listener: EventListener): void;
+}
+
+/**
+ * Interface representing a browser document with visibility state.
+ */
+interface BrowserDocument {
+  visibilityState?: "visible" | "hidden" | "prerender";
+}
+
+/**
+ * Interface for browser global scope with window, document, and env access.
+ */
+interface BrowserGlobalScope extends BrowserEventTarget {
+  window?: BrowserEventTarget;
+  document?: BrowserDocument;
+  __ENV__?: Record<string, string>;
+  env?: Record<string, string>;
+}
+
 export class BrowserPlatformAdapter implements IPlatformAdapter {
   readonly id: PlatformId = "browser";
   async init() {}
 
-  onUncaughtException(handler: (error: any) => void) {
-    const target =
-      (globalThis as unknown as Record<string, any>).window ?? globalThis;
-    const h = (e: any) => handler(e?.error ?? e);
-    (target as any).addEventListener?.("error", h as any);
-    return () => (target as any).removeEventListener?.("error", h as any);
+  onUncaughtException(handler: (error: Error) => void) {
+    const g = globalThis as unknown as BrowserGlobalScope;
+    const target: BrowserEventTarget = g.window ?? g;
+    const h: EventListener = (e) => {
+      // Pass through the error property if it exists, otherwise the raw event
+      // Runtime may receive non-Error values from browser events
+      const errorEvent = e as ErrorEvent;
+      handler((errorEvent?.error ?? e) as Error);
+    };
+    target.addEventListener?.("error", h);
+    return () => target.removeEventListener?.("error", h);
   }
 
-  onUnhandledRejection(handler: (reason: any) => void) {
-    const target =
-      (globalThis as unknown as Record<string, any>).window ?? globalThis;
-    const wrap = (e: any) => handler(e?.reason ?? e);
-    (target as any).addEventListener?.("unhandledrejection", wrap as any);
-    return () =>
-      (target as any).removeEventListener?.("unhandledrejection", wrap as any);
+  onUnhandledRejection(handler: (reason: unknown) => void) {
+    const g = globalThis as unknown as BrowserGlobalScope;
+    const target: BrowserEventTarget = g.window ?? g;
+    const wrap: EventListener = (e) =>
+      handler((e as PromiseRejectionEvent)?.reason ?? e);
+    target.addEventListener?.("unhandledrejection", wrap);
+    return () => target.removeEventListener?.("unhandledrejection", wrap);
   }
 
   onShutdownSignal(handler: () => void) {
-    const win =
-      (globalThis as unknown as Record<string, any>).window ?? globalThis;
-    const handlers: { before?: any; visibility?: any } = {};
+    const g = globalThis as unknown as BrowserGlobalScope;
+    const win: BrowserEventTarget = g.window ?? g;
+    const handlers: { before?: EventListener; visibility?: EventListener } = {};
 
-    handlers.before = (e?: any) => handler();
-    (win as any).addEventListener?.("beforeunload", handlers.before);
+    handlers.before = () => handler();
+    win.addEventListener?.("beforeunload", handlers.before);
 
-    const doc = (globalThis as unknown as Record<string, any>).document;
-    if (doc && typeof (win as any).addEventListener === "function") {
+    const doc = g.document;
+    if (doc && typeof win.addEventListener === "function") {
       handlers.visibility = () => {
-        if ((doc as any).visibilityState === "hidden") handler();
+        if (doc.visibilityState === "hidden") handler();
       };
-      (win as any).addEventListener?.("visibilitychange", handlers.visibility);
+      win.addEventListener?.("visibilitychange", handlers.visibility);
     }
 
     return () => {
-      (win as any).removeEventListener?.("beforeunload", handlers.before);
+      if (handlers.before) win.removeEventListener?.("beforeunload", handlers.before);
       if (handlers.visibility)
-        (win as any).removeEventListener?.("visibilitychange", handlers.visibility);
+        win.removeEventListener?.("visibilitychange", handlers.visibility);
     };
   }
 
@@ -54,7 +85,7 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
   }
 
   getEnv(key: string) {
-    const g = globalThis as unknown as Record<string, any>;
+    const g = globalThis as unknown as BrowserGlobalScope;
     if (g.__ENV__ && typeof g.__ENV__ === "object") return g.__ENV__[key];
     if (
       typeof process !== "undefined" &&
@@ -71,17 +102,18 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
 
   createAsyncLocalStorage<T>(): IAsyncLocalStorage<T> {
     // Return a wrapper that throws on use; creation itself shouldn't crash callers
+    const throwUnsupported = (): never => {
+      platformUnsupportedFunctionError.throw({
+        functionName: "createAsyncLocalStorage",
+      });
+      // TypeScript knows this is unreachable but we need to satisfy the return type
+      /* istanbul ignore next -- unreachable: throw() always throws */
+      throw new Error("Unreachable");
+    };
+
     return {
-      getStore: (): any => {
-        platformUnsupportedFunctionError.throw({
-          functionName: "createAsyncLocalStorage",
-        });
-      },
-      run: (_store: any, _callback: () => any): any => {
-        platformUnsupportedFunctionError.throw({
-          functionName: "createAsyncLocalStorage",
-        });
-      },
+      getStore: (): T | undefined => throwUnsupported(),
+      run: <R>(_store: T, _callback: () => R): R => throwUnsupported(),
     };
   }
 

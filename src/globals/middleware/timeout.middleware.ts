@@ -48,7 +48,8 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
     });
 
     // Race between the actual operation and the timeout
-    return Promise.race([next(input as any), timeoutPromise]);
+    // Input type is unknown at compile time for generic middleware
+    return Promise.race([next(input as unknown), timeoutPromise]);
   },
 });
 
@@ -71,6 +72,7 @@ export const timeoutResourceMiddleware = defineResourceMiddleware({
         clearTimeout(timeoutId);
       });
     });
-    return Promise.race([next(input as any), timeoutPromise]);
+    // Input type is unknown at compile time for generic middleware
+    return Promise.race([next(input as unknown), timeoutPromise]);
   },
 });

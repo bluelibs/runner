@@ -84,10 +84,10 @@ export function makeResourceBuilder<
           state.dependencies,
           deps,
           override,
-        ) as any,
+        ) as unknown as TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
       });
 
-      return makeResourceBuilder(next) as any;
+      return makeResourceBuilder(next);
     },
     register(items, options) {
       const override = options?.override ?? false;
@@ -141,8 +141,8 @@ export function makeResourceBuilder<
         TMeta,
         [...TTags, ...TNewTags],
         TMiddleware
-      >(state, { tags: mergeArray(state.tags, tags, override) as any });
-      return makeResourceBuilder(next) as any;
+      >(state, { tags: mergeArray(state.tags, tags, override) as unknown as [...TTags, ...TNewTags] });
+      return makeResourceBuilder(next);
     },
     context<TNewCtx>(factory: () => TNewCtx) {
       const next = clone<
@@ -369,7 +369,7 @@ export function makeResourceBuilder<
         throws: state.throws,
       };
       const resource = defineResource(definition);
-      (resource as any)[symbolFilePath] = state.filePath;
+      (resource as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
       return resource;
     },
   };

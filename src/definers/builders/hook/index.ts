@@ -18,10 +18,10 @@ export function hookBuilder(id: string): HookFluentBuilder<{}, any, ITaskMeta> {
     id,
     filePath,
     dependencies: {} as {},
-    on: "*" as any,
-    order: undefined as any,
+    on: "*" as BuilderState<{}, any, ITaskMeta>["on"],
+    order: undefined as unknown as BuilderState<{}, any, ITaskMeta>["order"],
     meta: {} as ITaskMeta,
-    run: undefined as any,
+    run: undefined as unknown as BuilderState<{}, any, ITaskMeta>["run"],
     tags: [] as TagType[],
   });
 

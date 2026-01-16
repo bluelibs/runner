@@ -36,9 +36,12 @@ export function makeResourceMiddlewareBuilder<
         override,
       );
 
-      const next = cloneRes<C, In, Out, D & TNewDeps>(state as any, {
-        dependencies: nextDependencies as unknown as D & TNewDeps,
-      });
+      const next = cloneRes<C, In, Out, D & TNewDeps>(
+        state as unknown as ResMwState<C, In, Out, D & TNewDeps>,
+        {
+          dependencies: nextDependencies as unknown as D & TNewDeps,
+        },
+      );
 
       if (override) {
         return makeResourceMiddlewareBuilder<C, In, Out, TNewDeps>(
@@ -49,19 +52,22 @@ export function makeResourceMiddlewareBuilder<
     },
 
     configSchema<TNew>(schema: IValidationSchema<TNew>) {
-      const next = cloneRes<TNew, In, Out, D>(state as any, {
-        configSchema: schema as any,
-      });
+      const next = cloneRes<TNew, In, Out, D>(
+        state as unknown as ResMwState<TNew, In, Out, D>,
+        {
+          configSchema: schema as unknown as ResMwState<TNew, In, Out, D>["configSchema"],
+        },
+      );
       return makeResourceMiddlewareBuilder<TNew, In, Out, D>(next);
     },
 
     run(fn) {
-      const next = cloneRes(state, { run: fn as any });
+      const next = cloneRes(state, { run: fn as typeof state.run });
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },
 
     meta<TNewMeta extends IMiddlewareMeta>(m: TNewMeta) {
-      const next = cloneRes(state, { meta: m as any });
+      const next = cloneRes(state, { meta: m as IMiddlewareMeta });
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },
 

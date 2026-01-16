@@ -19,7 +19,7 @@ export function eventBuilder<TPayload = void>(
   const initial: BuilderState<TPayload> = Object.freeze({
     id,
     filePath,
-    meta: {} as any,
+    meta: {} as BuilderState<TPayload>["meta"],
     payloadSchema: undefined,
     tags: [] as TagType[],
     parallel: undefined,

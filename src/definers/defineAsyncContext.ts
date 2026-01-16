@@ -58,7 +58,8 @@ export function defineAsyncContext<T>(
 
     map.set(ctxId, value);
 
-    return storage.run(map, fn as any);
+    // storage.run expects () => R, our fn is () => Promise<R> | R which is compatible
+    return storage.run(map, fn as () => R);
   };
 
   const serializer = getDefaultSerializer();

@@ -35,16 +35,16 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
   // Only applies to resources tagged with globals.tags.tunnel
   everywhere: (resource) => globalTags.tunnel.exists(resource),
   run: async ({ resource, next }, { store, eventManager }) => {
-    const deps = { store, eventManager } as unknown as Record<string, any>;
-    const { store: s, eventManager: em } = deps;
     // Initialize the resource and get its value (tunnel runner)
-    const value = (await next(resource.config)) as TunnelRunner;
+    const value = await next(resource.config);
 
     const mode = value.mode || "none";
     const delivery = value.eventDeliveryMode || "mirror";
-    const tasks = value.tasks ? resolveTasks(s as any, value.tasks) : [];
+    // Cast store to Store type for helper functions
+    const typedStore = store as unknown as Store;
+    const tasks = value.tasks ? resolveTasks(typedStore, value.tasks) : [];
     const events = value.events
-      ? resolveEvents(s as any, value.events as unknown as TunnelEventSelector)
+      ? resolveEvents(typedStore, value.events as unknown as TunnelEventSelector)
       : [];
 
     if (mode === "client" || mode === "both") {

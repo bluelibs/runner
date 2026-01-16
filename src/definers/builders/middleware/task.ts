@@ -36,9 +36,12 @@ export function makeTaskMiddlewareBuilder<
         override,
       );
 
-      const next = cloneTask<C, In, Out, D & TNewDeps>(state as any, {
-        dependencies: nextDependencies as unknown as D & TNewDeps,
-      });
+      const next = cloneTask<C, In, Out, D & TNewDeps>(
+        state as unknown as TaskMwState<C, In, Out, D & TNewDeps>,
+        {
+          dependencies: nextDependencies as unknown as D & TNewDeps,
+        },
+      );
 
       if (override) {
         return makeTaskMiddlewareBuilder<C, In, Out, TNewDeps>(
@@ -49,19 +52,22 @@ export function makeTaskMiddlewareBuilder<
     },
 
     configSchema<TNew>(schema: IValidationSchema<TNew>) {
-      const next = cloneTask<TNew, In, Out, D>(state as any, {
-        configSchema: schema as any,
-      });
+      const next = cloneTask<TNew, In, Out, D>(
+        state as unknown as TaskMwState<TNew, In, Out, D>,
+        {
+          configSchema: schema as unknown as TaskMwState<TNew, In, Out, D>["configSchema"],
+        },
+      );
       return makeTaskMiddlewareBuilder<TNew, In, Out, D>(next);
     },
 
     run(fn) {
-      const next = cloneTask(state, { run: fn as any });
+      const next = cloneTask(state, { run: fn as typeof state.run });
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },
 
     meta<TNewMeta extends IMiddlewareMeta>(m: TNewMeta) {
-      const next = cloneTask(state, { meta: m as any });
+      const next = cloneTask(state, { meta: m as IMiddlewareMeta });
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },
 

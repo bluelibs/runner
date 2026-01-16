@@ -30,12 +30,12 @@ export function taskMiddlewareBuilder<
   const initial: TaskMwState<C, In, Out, D> = Object.freeze({
     id,
     filePath,
-    dependencies: {} as any,
-    configSchema: undefined as any,
-    run: undefined as any,
-    meta: {} as any,
+    dependencies: {} as D,
+    configSchema: undefined as unknown as TaskMwState<C, In, Out, D>["configSchema"],
+    run: undefined as unknown as TaskMwState<C, In, Out, D>["run"],
+    meta: {} as IMiddlewareMeta,
     tags: [] as TagType[],
-    everywhere: undefined as any,
+    everywhere: undefined as unknown as TaskMwState<C, In, Out, D>["everywhere"],
   });
 
   return makeTaskMiddlewareBuilder(initial);
@@ -54,12 +54,12 @@ export function resourceMiddlewareBuilder<
   const initial: ResMwState<C, In, Out, D> = Object.freeze({
     id,
     filePath,
-    dependencies: {} as any,
-    configSchema: undefined as any,
-    run: undefined as any,
+    dependencies: {} as D,
+    configSchema: undefined as unknown as ResMwState<C, In, Out, D>["configSchema"],
+    run: undefined as unknown as ResMwState<C, In, Out, D>["run"],
     meta: {} as IMiddlewareMeta,
     tags: [] as TagType[],
-    everywhere: undefined as any,
+    everywhere: undefined as unknown as ResMwState<C, In, Out, D>["everywhere"],
   });
 
   return makeResourceMiddlewareBuilder(initial);

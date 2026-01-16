@@ -21,8 +21,9 @@ export function makeEventBuilder<TPayload>(
     id: state.id,
 
     payloadSchema<TNew>(schema: IValidationSchema<TNew>) {
-      const next = clone(state, { payloadSchema: schema as any });
-      return makeEventBuilder<TNew>(next as unknown as BuilderState<TNew>);
+      // Cast state to target type for widening, then assign the schema
+      const next = clone(state as unknown as BuilderState<TNew>, { payloadSchema: schema });
+      return makeEventBuilder<TNew>(next);
     },
 
     tags<TNewTags extends TagType[]>(
@@ -37,7 +38,7 @@ export function makeEventBuilder<TPayload>(
     },
 
     meta<TNewMeta extends IEventMeta>(m: TNewMeta) {
-      const next = clone(state, { meta: m as any });
+      const next = clone(state, { meta: m as IEventMeta });
       return makeEventBuilder<TPayload>(next);
     },
 

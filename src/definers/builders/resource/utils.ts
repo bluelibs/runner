@@ -166,37 +166,38 @@ export function mergeDependencies<
   const isFnExisting = typeof existing === "function";
   const isFnAddition = typeof addition === "function";
 
+  type Result = (TExisting & TNew) | ((config: TConfig) => TExisting & TNew);
+
   if (override || !existing) {
-    return addition as any as
-      | (TExisting & TNew)
-      | ((config: TConfig) => TExisting & TNew);
+    return addition as unknown as Result;
   }
 
   if (isFnExisting && isFnAddition) {
     const e = existing as (config: TConfig) => TExisting;
     const a = addition as (config: TConfig) => TNew;
     return ((config: TConfig) => ({
-      ...(e(config) as any),
-      ...(a(config) as any),
-    })) as any;
+      ...e(config),
+      ...a(config),
+    })) as Result;
   }
   if (isFnExisting && !isFnAddition) {
     const e = existing as (config: TConfig) => TExisting;
     const a = addition as TNew;
     return ((config: TConfig) => ({
-      ...(e(config) as any),
-      ...(a as any),
-    })) as any;
+      ...e(config),
+      ...a,
+    })) as Result;
   }
   if (!isFnExisting && isFnAddition) {
     const e = existing as TExisting;
     const a = addition as (config: TConfig) => TNew;
     return ((config: TConfig) => ({
-      ...(e as any),
-      ...(a(config) as any),
-    })) as any;
+      ...e,
+      ...a(config),
+    })) as Result;
   }
   const e = existing as TExisting;
   const a = addition as TNew;
-  return { ...(e as any), ...(a as any) } as any;
+  return { ...e, ...a } as Result;
 }
+

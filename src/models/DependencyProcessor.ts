@@ -285,7 +285,7 @@ export class DependencyProcessor {
         // Maybe later we can allow this to be opt-in to save 'memory' in the case of large tasks?
         const val = object[key] as unknown;
         if (val instanceof Logger) {
-          object[key] = val.with({ source }) as any;
+          (object as Record<string, unknown>)[key] = val.with({ source });
         }
       } catch (e) {
         const errorMessage = String(e);

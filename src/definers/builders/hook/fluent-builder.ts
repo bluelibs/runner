@@ -54,7 +54,7 @@ export function makeHookBuilder<
       );
 
       const next = clone<TDeps, TOn, TMeta, TDeps & TNewDeps, TOn, TMeta>(
-        state as any,
+        state as BuilderState<TDeps, TOn, TMeta>,
         {
           dependencies: nextDependencies as unknown as TDeps & TNewDeps,
         },
@@ -81,7 +81,7 @@ export function makeHookBuilder<
 
     meta<TNewMeta extends ITaskMeta>(m: TNewMeta) {
       const next = clone<TDeps, TOn, TMeta, TDeps, TOn, TNewMeta>(
-        state as any,
+        state as BuilderState<TDeps, TOn, TMeta>,
         {
           meta: m as TNewMeta,
         },
@@ -90,7 +90,7 @@ export function makeHookBuilder<
     },
 
     run(fn) {
-      const next = clone(state, { run: fn as any });
+      const next = clone(state, { run: fn as typeof state.run });
       return makeHookBuilder<TDeps, TOn, TMeta>(next);
     },
 
