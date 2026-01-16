@@ -4,6 +4,30 @@ _Graceful shutdown and cleanup when your app needs to stop_
 
 The framework includes built-in support for graceful shutdowns with automatic cleanup and configurable shutdown hooks:
 
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Runner
+    participant R1 as Resource A
+    participant R2 as Resource B (depends on A)
+
+    Note over App,R2: Startup (dependencies first)
+    App->>Runner: run(app)
+    Runner->>R1: init()
+    R1-->>Runner: initialized
+    Runner->>R2: init()
+    R2-->>Runner: initialized
+    Runner-->>App: { runTask, dispose }
+
+    Note over App,R2: Shutdown (reverse order)
+    App->>Runner: dispose()
+    Runner->>R2: dispose()
+    R2-->>Runner: cleaned up
+    Runner->>R1: dispose()
+    R1-->>Runner: cleaned up
+    Runner-->>App: shutdown complete
+```
+
 ```typescript
 import { run } from "@bluelibs/runner";
 

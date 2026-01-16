@@ -15,33 +15,33 @@ BlueLibs Runner is a TypeScript-first framework that embraces functional program
 
 ---
 
-## 🔥 Show Me the Magic
+## Show Me the Magic
 
 **Here's what "zero magic" looks like in practice:**
 
 ```typescript
-// 1️⃣ ONE LINE to add caching with TTL
+//  ONE LINE to add caching with TTL
 const getUser = r
   .task("users.get")
   .middleware([cache.with({ ttl: 60000 })]) // ← That's it. 1 minute cache.
   .run(async (id) => db.query("SELECT * FROM users WHERE id = ?", id))
   .build();
 
-// 2️⃣ ONE LINE to add retry with exponential backoff
+//  ONE LINE to add retry with exponential backoff
 const callAPI = r
   .task("api.call")
   .middleware([retry.with({ retries: 3, backoff: "exponential" })]) // ← Auto-retry failures
   .run(async (url) => fetch(url))
   .build();
 
-// 3️⃣ ONE LINE to add authentication
+//  ONE LINE to add authentication
 const adminAction = r
   .task("admin.action")
   .middleware([auth.with({ role: "admin" })]) // ← Blocks non-admins
   .run(async () => "Secret admin stuff")
   .build();
 
-// 4️⃣ Testing is actually pleasant
+//  Testing is actually pleasant
 test("getUser works", async () => {
   const result = await getUser.run("user-123", { db: mockDb }); // ← Just call it
   expect(result.name).toBe("John");
@@ -52,28 +52,28 @@ test("getUser works", async () => {
 
 ---
 
-## 📊 How Does It Compare?
+## How Does It Compare?
 
-| Feature               | Runner           | NestJS        | InversifyJS  | TypeDI        | tsyringe      |
-| --------------------- | ---------------- | ------------- | ------------ | ------------- | ------------- |
-| **Learning Curve**    | ⚡ Gentle        | 🏔️ Steep      | 🏔️ Steep     | 📚 Moderate   | 📚 Moderate   |
-| **Magic/Decorators**  | ❌ None          | ✅ Heavy      | ✅ Heavy     | ✅ Heavy      | ✅ Heavy      |
-| **Bundle Size**       | 🪶 Small         | 🦣 Large      | 🦣 Large     | 📦 Medium     | 📦 Medium     |
-| **Type Safety**       | 💯 Perfect       | ⚠️ Runtime    | ⚠️ Runtime   | ⚠️ Runtime    | ⚠️ Runtime    |
-| **Test Speed**        | ⚡ Instant       | 🐌 Slow       | 🐌 Slow      | 🚶 OK         | 🚶 OK         |
-| **Built-in Features** | ✅ Everything    | ✅ Everything | ❌ Basic DI  | ❌ Basic DI   | ❌ Basic DI   |
-| **Framework Lock-in** | ❌ None          | ✅ Heavy      | ❌ Light     | ❌ Light      | ❌ Light      |
-| **Functional Style**  | ✅ Native        | ❌ Awkward    | ❌ Awkward   | ❌ Class-only | ❌ Class-only |
-| **Middleware**        | ✅ Built-in      | ✅ Built-in   | ❌ Manual    | ❌ Manual     | ❌ Manual     |
-| **Events**            | ✅ Built-in      | ✅ Built-in   | ❌ Manual    | ❌ Manual     | ❌ Manual     |
-| **Async Context**     | ✅ Built-in      | ❌ Manual     | ❌ Manual    | ❌ Manual     | ❌ Manual     |
-| **Debug Experience**  | 🎯 Crystal clear | 🤔 Confusing  | 🤔 Confusing | 🤔 Confusing  | 🤔 Confusing  |
+| Feature               | Runner        | NestJS     | InversifyJS | TypeDI     | tsyringe   |
+| --------------------- | ------------- | ---------- | ----------- | ---------- | ---------- |
+| **Learning Curve**    | Gentle        | ️ Steep     | ️ Steep      | Moderate   | Moderate   |
+| **Magic/Decorators**  | None          | Heavy      | Heavy       | Heavy      | Heavy      |
+| **Bundle Size**       | Small         | Large      | Large       | Medium     | Medium     |
+| **Type Safety**       | Perfect       | ️ Runtime   | ️ Runtime    | ️ Runtime   | ️ Runtime   |
+| **Test Speed**        | Instant       | Slow       | Slow        | OK         | OK         |
+| **Built-in Features** | Everything    | Everything | Basic DI    | Basic DI   | Basic DI   |
+| **Framework Lock-in** | None          | Heavy      | Light       | Light      | Light      |
+| **Functional Style**  | Native        | Awkward    | Awkward     | Class-only | Class-only |
+| **Middleware**        | Built-in      | Built-in   | Manual      | Manual     | Manual     |
+| **Events**            | Built-in      | Built-in   | Manual      | Manual     | Manual     |
+| **Async Context**     | Built-in      | Manual     | Manual      | Manual     | Manual     |
+| **Debug Experience**  | Crystal clear | Confusing  | Confusing   | Confusing  | Confusing  |
 
 **TL;DR:** Runner gives you the features of NestJS with the simplicity of plain functions.
 
 ---
 
-## ⚡ Performance at a Glance
+## Performance at a Glance
 
 **Runner is FAST.** Here are real benchmarks from an M1 Max:
 
@@ -98,90 +98,90 @@ Overhead Analysis:
 
 **What this means for you:**
 
-- 🚀 **Instant feedback** - Tests run in milliseconds, not seconds
-- 💰 **Lower cloud costs** - Handle more requests with fewer resources
-- 🎯 **Production ready** - Battle-tested at scale (see [Performance](#performance) for details)
+- **Instant feedback** - Tests run in milliseconds, not seconds
+- **Lower cloud costs** - Handle more requests with fewer resources
+- **Production ready** - Battle-tested at scale (see [Performance](#performance) for details)
 
 ---
 
-## 🎁 What's in the Box?
+## What's in the Box?
 
 Runner comes with **everything you need** to build production apps:
 
 <table>
 <tr>
-<td width="33%">
+<td width="33%" valign="top">
 
-**🏗️ Core Architecture**
+**Core Architecture**
 
-- ✅ Dependency Injection
-- ✅ Lifecycle Management
-- ✅ Type-safe Everything
-- ✅ Zero Configuration
-- ✅ Multi-platform (Node/Browser)
-
-</td>
-<td width="33%">
-
-**🔥 Built-in Features**
-
-- ✅ Caching (LRU + Custom)
-- ✅ Retry with Backoff
-- ✅ Timeouts
-- ✅ Event System
-- ✅ Middleware Pipeline
-- ✅ Async Context
-- ✅ Serialization
+- Dependency Injection
+- Lifecycle Management
+- Type-safe Everything
+- Zero Configuration
+- Multi-platform (Node/Browser)
 
 </td>
-<td width="33%">
+<td width="33%" valign="top">
 
-**🛠️ Developer Experience**
+**Built-in Features**
 
-- ✅ Fluent API
-- ✅ Debug Tools
-- ✅ Error Boundaries
-- ✅ Testing Utilities
-- ✅ TypeDoc Integration
-- ✅ Full TypeScript Support
-- ✅ Tree-shakable
+- Caching (LRU + Custom)
+- Retry with Backoff
+- Timeouts
+- Event System
+- Middleware Pipeline
+- Async Context
+- Serialization
+
+</td>
+<td width="33%" valign="top">
+
+**Developer Experience**
+
+- Fluent API
+- Debug Tools
+- Error Boundaries
+- Testing Utilities
+- TypeDoc Integration
+- Full TypeScript Support
+- Tree-shakable
 
 </td>
 </tr>
 <tr>
-<td width="33%">
+<td width="33%" valign="top">
 
-**📊 Observability**
+**Observability**
 
-- ✅ Structured Logging
-- ✅ Task Interceptors
-- ✅ Event Tracking
-- ✅ Performance Metrics
-- ✅ Debug Mode
-
-</td>
-<td width="33%">
-
-**🔐 Production Ready**
-
-- ✅ Graceful Shutdown
-- ✅ Error Handling
-- ✅ Typed Errors
-- ✅ Optional Dependencies
-- ✅ Semaphore/Queue
-- ✅ Concurrency Control
+- Structured Logging
+- Task Interceptors
+- Event Tracking
+- Performance Metrics
+- Debug Mode
 
 </td>
-<td width="33%">
+<td width="33%" valign="top">
 
-**🌐 Advanced Patterns**
+**Production Ready**
 
-- ✅ Tunnels (Distributed)
-- ✅ Tags System
-- ✅ Factory Pattern
-- ✅ Namespacing
-- ✅ Overrides
-- ✅ Meta/Documentation
+- Graceful Shutdown
+- Error Handling
+- Typed Errors
+- Optional Dependencies
+- Semaphore/Queue
+- Concurrency Control
+
+</td>
+<td width="33%" valign="top">
+
+**Advanced Patterns**
+
+- Tunnels (Distributed)
+- Tags System
+- Factory Pattern
+- Namespacing
+- Overrides
+- Meta/Documentation
 
 </td>
 </tr>

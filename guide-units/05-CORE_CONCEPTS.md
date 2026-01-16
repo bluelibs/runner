@@ -2,6 +2,26 @@
 
 The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using the runner effectively.
 
+```mermaid
+graph LR
+    subgraph "Runner Core"
+        T[Tasks] --> |use| R[Resources]
+        R --> |emit| E[Events]
+        E --> |trigger| H[Hooks]
+        M[Middleware] --> |wrap| T
+        M --> |wrap| R
+        Tags --> |annotate| T
+        Tags --> |annotate| R
+    end
+
+    style T fill:#4CAF50,color:#fff
+    style R fill:#2196F3,color:#fff
+    style E fill:#FF9800,color:#fff
+    style H fill:#FF9800,color:#fff
+    style M fill:#9C27B0,color:#fff
+    style Tags fill:#607D8B,color:#fff
+```
+
 ### Tasks
 
 Tasks are where your business logic lives. Think of them as **functions with superpowers** – they get automatic dependency injection, type safety, middleware support, and observability. Pretty cool, right?
@@ -56,7 +76,7 @@ const testResult = await sendEmail.run(
 
 Here's a friendly guideline (not a strict rule!):
 
-✅ **Make it a task when:**
+**Make it a task when:**
 
 - It's a core business operation (user registration, order processing, payment handling)
 - You need dependency injection (database, services, configs)
@@ -64,7 +84,7 @@ Here's a friendly guideline (not a strict rule!):
 - Multiple parts of your app need to use it
 - You want observability (logging, monitoring, debugging)
 
-🤷 **Keep it as a regular function when:**
+  **Keep it as a regular function when:**
 
 - It's a simple utility (date formatting, string manipulation, calculations)
 - It's a pure function with no dependencies
@@ -210,6 +230,20 @@ const dbResource = r
 ### Events
 
 Events let different parts of your app talk to each other without tight coupling. It's like having a really good office messenger who never forgets anything.
+
+```mermaid
+flowchart LR
+    T[Task: registerUser] -->|emit| E((userRegistered))
+    E -->|triggers| H1[Hook: sendWelcomeEmail]
+    E -->|triggers| H2[Hook: updateAnalytics]
+    E -->|triggers| H3[Hook: notifyAdmin]
+
+    style T fill:#4CAF50,color:#fff
+    style E fill:#FF9800,color:#fff
+    style H1 fill:#2196F3,color:#fff
+    style H2 fill:#2196F3,color:#fff
+    style H3 fill:#2196F3,color:#fff
+```
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -362,7 +396,7 @@ const systemReadyHook = r
   .hook("app.hooks.systemReady")
   .on(globals.events.ready)
   .run(async () => {
-    console.log("🚀 System is ready and operational!");
+    console.log(" System is ready and operational!");
   })
   .build();
 ```
@@ -397,13 +431,13 @@ const emergencyHandler = r
     console.log(`Alert received: ${event.data.severity}`);
 
     if (event.data.severity === "critical") {
-      console.log("🚨 CRITICAL ALERT - Activating emergency protocols");
+      console.log(" CRITICAL ALERT - Activating emergency protocols");
 
       // Stop other handlers from running
       event.stopPropagation();
       // Notify the on-call team, escalate, etc.
 
-      console.log("🛑 Event propagation stopped - emergency protocols active");
+      console.log(" Event propagation stopped - emergency protocols active");
     }
   })
   .build();
@@ -705,7 +739,7 @@ const userContract = r
 const profileTask = r
   .task("app.tasks.getProfile")
   .tags([userContract]) // Must return { name: string }
-  .run(async (input) => ({ name: input.id + "Ada" })) // ✅ Satisfies contract
+  .run(async (input) => ({ name: input.id + "Ada" })) //  Satisfies contract
   .build();
 ```
 
@@ -730,7 +764,7 @@ const getUser = r
   })
   .build();
 
-const root = r.resource("app").register([userNotFoundError, getUser]).build();
+const app = r.resource("app").register([userNotFoundError, getUser]).build();
 ```
 
 Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.

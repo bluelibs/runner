@@ -2,9 +2,9 @@
 
 ### Common Patterns
 
-Here are some patterns that'll help you write clean Runner code. We've seen lots of developers learn these the hard way, so let's save you some time! 💡
+Here are some patterns that'll help you write clean Runner code. We've seen lots of developers learn these the hard way, so let's save you some time! 
 
-### 💡 Pattern 1: Not Everything Needs to Be a Task
+###  Pattern 1: Not Everything Needs to Be a Task
 
 When you're starting out, it's tempting to make everything a task. Here's the golden rule: **use regular functions for utilities, use tasks for business operations**.
 
@@ -29,7 +29,7 @@ const processOrder = r
 
 **Want detailed guidance?** See the [Tasks section](#tasks) below for a comprehensive breakdown of when to use tasks vs. functions.
 
-### 💡 Pattern 2: The Right Way to Call Tasks
+###  Pattern 2: The Right Way to Call Tasks
 
 This one trips everyone up at first! Here's the pattern:
 
@@ -52,12 +52,12 @@ await dispose();
 
 **Remember**: You `run()` the **app**, then you `runTask()` the **task**. Think of it like starting a car (run the app) before you can drive it (runTask).
 
-### 💡 Pattern 3: Two Ways to Test
+###  Pattern 3: Two Ways to Test
 
 Runner gives you flexibility in testing:
 
 ```typescript
-// 🧪 Unit Testing: Call .run() directly with mocks
+//  Unit Testing: Call .run() directly with mocks
 test("calculateTotal", async () => {
   const result = await calculateTotal.run(
     { price: 100 },
@@ -66,7 +66,7 @@ test("calculateTotal", async () => {
   expect(result).toBe(110);
 });
 
-// 🔄 Integration Testing: Use the full runtime
+//  Integration Testing: Use the full runtime
 test("full order flow", async () => {
   const { runTask, dispose } = await run(app);
   const result = await runTask(processOrder, { orderId: "123" });
@@ -77,12 +77,12 @@ test("full order flow", async () => {
 
 **Tip**: Start with unit tests (faster, simpler), then add integration tests for critical flows.
 
-### 💡 Pattern 4: Remember to Register
+###  Pattern 4: Remember to Register
 
 This is easy to forget when you're moving fast:
 
 ```typescript
-// ✅ The complete pattern
+//  The complete pattern
 const database = r
   .resource("db")
   .init(async () => connectToDB())

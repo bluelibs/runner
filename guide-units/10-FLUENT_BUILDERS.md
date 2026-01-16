@@ -55,4 +55,4 @@ await run(app);
 
 The builder API provides a clean, step-by-step way to construct everything from simple tasks to complex resources with middleware, tags, and schemas.
 
-For a complete guide and more examples, check out the [full Fluent Builders documentation](../readmes/FLUENT_BUILDERS.md).
+For a complete guide and more examples, check out the [full Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).

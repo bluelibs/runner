@@ -1,5 +1,9 @@
 # Object-Oriented Programming with BlueLibs Runner
 
+← [Back to main README](../README.md)
+
+---
+
 _Or: How to Keep Your Classes and Have Runner Too_
 
 Runner is excellent for wiring systems together (see `AI.md`), but that doesn't mean you shouldn't write classes. It means you don't need framework-specific classes. Keep your domain modeled with plain, testable classes, and let Runner handle lifecycle, wiring, configuration, and cross-cutting concerns.
@@ -41,7 +45,10 @@ class UserService {
 
 // ✅ Runner approach
 class UserService {
-  constructor(private readonly db: Database, private readonly logger: Logger) {}
+  constructor(
+    private readonly db: Database,
+    private readonly logger: Logger,
+  ) {}
 
   async createUser(userData: UserData): Promise<User> {
     this.logger.info("Creating user", { email: userData.email });

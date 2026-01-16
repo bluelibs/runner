@@ -1,5 +1,3 @@
-<div align="center">
-
 # BlueLibs Runner
 
 ### TypeScript-First Dependency Injection Framework
@@ -33,9 +31,7 @@ const app = r.resource("app").register([db, mailer, createUser]).build();
 const runtime = await run(app);
 ```
 
-**[📚 Documentation](https://bluelibs.github.io/runner/)** · **[🎮 Examples](./examples)** · **[💬 Discord](#community--support)** · **[⭐ GitHub](https://github.com/bluelibs/runner)**
-
-</div>
+**[ Documentation](https://bluelibs.github.io/runner/)** · **[ Examples](https://github.com/bluelibs/runner/tree/main/examples)** · **[ GitHub](https://github.com/bluelibs/runner)**
 
 ---
 
@@ -64,7 +60,7 @@ const runtime = await run(app);
 
 <table>
 <tr>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### The Problem
 
@@ -91,7 +87,7 @@ export class UserService {
 ```
 
 </td>
-<td width="50%">
+<td width="50%" valign="top">
 
 ### The Solution
 
@@ -183,7 +179,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 
 **Developer Experience**
 
-- [📚 Quick Reference Cheat Sheet](#-quick-reference-cheat-sheet) - 🔖 **Bookmark this!**
+- [ Quick Reference Cheat Sheet](#-quick-reference-cheat-sheet) - **Bookmark this!**
 - [Fluent Builders](#fluent-builders-r) - Ergonomic API
 - [Type Helpers](#type-helpers) - TypeScript utilities
 - [Runtime Validation](#runtime-validation) - Schema validation
@@ -197,6 +193,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [Performance](#performance) - Benchmarks and metrics
 - [Why Choose BlueLibs Runner?](#why-choose-bluelibs-runner) - Framework comparison
 - [Migration Path](#the-migration-path) - Adopting Runner
+- [Troubleshooting](#-troubleshooting) - Common issues and solutions
 - [Community & Support](#community--support) - Getting help
 
 ---

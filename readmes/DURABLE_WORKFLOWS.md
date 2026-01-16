@@ -1,6 +1,10 @@
 # Durable Workflows (Node-only) — Architecture v2
 
-> Durable workflows are Runner tasks with “save points”. If your process dies, deploys, or scales horizontally, the workflow comes back and continues like nothing happened (except now you can finally sleep at night).
+← [Back to main README](../README.md)
+
+---
+
+> Durable workflows are Runner tasks with "save points". If your process dies, deploys, or scales horizontally, the workflow comes back and continues like nothing happened (except now you can finally sleep at night).
 
 ## Table of Contents
 
@@ -1487,7 +1491,13 @@ const operator = new DurableOperator(store);
 
 // Expose dashboard on /durable-dashboard
 const d = runtime.getResourceValue(durable);
-app.use('/durable-dashboard', createDashboardMiddleware(d.service, operator));
+app.use(
+  '/durable-dashboard',
+  createDashboardMiddleware(d.service, operator, {
+    // Require explicit auth for operator actions
+    operatorAuth: (req) => req.headers['x-ops-token'] === process.env.OPS_TOKEN,
+  }),
+);
 ```
 
 ### What is the store?
@@ -1523,9 +1533,17 @@ import express from "express";
 import { DurableOperator, createDashboardMiddleware } from "@bluelibs/runner/node";
 
 const app = express();
-app.use("/durable-dashboard", createDashboardMiddleware(d.service, new DurableOperator(store)));
+app.use(
+  "/durable-dashboard",
+  createDashboardMiddleware(d.service, new DurableOperator(store), {
+    operatorAuth: (req) => req.headers["x-ops-token"] === process.env.OPS_TOKEN,
+  }),
+);
 app.listen(3000);
 ```
+
+> [!NOTE]
+> Operator actions are denied by default unless you provide `operatorAuth`. You can opt out with `dangerouslyAllowUnauthenticatedOperator: true` (not recommended).
 
 2) Start a few executions (so you have something to look at), then open:
 

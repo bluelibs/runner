@@ -2,6 +2,8 @@
 
 Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node). Use the fluent builder under `r.asyncContext` to create contexts that can be registered and injected as dependencies.
 
+> ️ **Platform Note**: `AsyncLocalStorage` is a **Node.js-only** feature. In browsers and edge runtimes, async context is not available. If you need request-scoped state in browsers, consider passing context explicitly through function parameters or using a state management solution.
+
 ```typescript
 import { r } from "@bluelibs/runner";
 

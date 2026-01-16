@@ -1,5 +1,9 @@
 ## 🚀 Migration Guide: From 3.x.x to 4.x.x (Extended Edition)
 
+← [Back to main README](../README.md)
+
+---
+
 ### 🎉 What's New & Shiny
 
 - 🎣 **Hook system got its own apartment!** No more living with tasks - they're officially separated

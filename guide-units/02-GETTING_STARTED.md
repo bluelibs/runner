@@ -25,7 +25,7 @@ import { r, run } from "@bluelibs/runner";
 // Step 1: Create a simple task (just a function with a name)
 const greet = r
   .task("greet")
-  .run(async (name: string) => `Hello, ${name}! 👋`)
+  .run(async (name: string) => `Hello, ${name}! `)
   .build();
 
 // Step 2: Put it in a resource (think of it as your app container)
@@ -39,7 +39,7 @@ const { runTask, dispose } = await run(app);
 
 // Step 4: Use your task
 const message = await runTask(greet, "World");
-console.log(message); // "Hello, World! 👋"
+console.log(message); // "Hello, World! "
 
 // Step 5: Clean up when done
 await dispose();
@@ -47,10 +47,10 @@ await dispose();
 
 That's it! You just:
 
-1. ✅ Created a task
-2. ✅ Registered it
-3. ✅ Ran it
-4. ✅ Cleaned up
+1.  Created a task
+2.  Registered it
+3.  Ran it
+4.  Cleaned up
 
 **What you just learned**: The basic Runner pattern: Define → Register → Run → Execute. Everything else builds on this foundation.
 
@@ -58,7 +58,7 @@ That's it! You just:
 
 ### Building a Real Express Server
 
-Now that you've seen the basics, let's build something real! Here's a complete Express API server with dependency injection, logging, and proper lifecycle management. (And yes, it's less code than most frameworks need for "Hello World" 😊)
+Now that you've seen the basics, let's build something real! Here's a complete Express API server with dependency injection, logging, and proper lifecycle management. (And yes, it's less code than most frameworks need for "Hello World" )
 
 ```bash
 npm install @bluelibs/runner express
@@ -118,13 +118,13 @@ const { dispose, runTask, getResourceValue, emitEvent } = runtime;
 await run(app, { debug: "verbose" });
 ```
 
-**🎉 What you just built:**
+** What you just built:**
 
-- ✅ A full Express API with proper lifecycle management
-- ✅ Dependency injection (tasks get what they need automatically)
-- ✅ Built-in logging (via `globals.resources.logger`)
-- ✅ Graceful shutdown (the `dispose()` method)
-- ✅ Type-safe everything (TypeScript has your back)
+- A full Express API with proper lifecycle management
+- Dependency injection (tasks get what they need automatically)
+- Built-in logging (via `globals.resources.logger`)
+- Graceful shutdown (the `dispose()` method)
+- Type-safe everything (TypeScript has your back)
 
 **Note**: See how we used `r.task()` and `r.resource()`? That's the **fluent builder API** – the recommended way to build with Runner. It's chainable, type-safe, and reads like a story.
 
@@ -145,7 +145,7 @@ const app = resource({ id: "app", register: [db, add] });
 await run(app);
 ```
 
-See [complete docs](../readmes/FLUENT_BUILDERS.md) for migration tips and side‑by‑side patterns.
+See [complete docs](./readmes/FLUENT_BUILDERS.md) for migration tips and side‑by‑side patterns.
 
 ### Platform & Async Context
 

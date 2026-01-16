@@ -1,5 +1,9 @@
 # Runner Tunnels (v2)
 
+← [Back to main README](../README.md) | [Tunnels section in README](../README.md#tunnels-bridging-runners)
+
+---
+
 Tunnels let you **call a task in another process** (or emit an event remotely) while keeping your application code written as if everything is local.
 
 Think: **one codebase, many processes** — you scale out by moving execution, not by rewriting APIs.
@@ -29,17 +33,17 @@ Then you hit the “now it has to run somewhere else” moment:
 
 **Tunnels solve that moment** with three pieces:
 
-1) **Exposure (server-side)**: `nodeExposure` exposes a small HTTP surface:
+1. **Exposure (server-side)**: `nodeExposure` exposes a small HTTP surface:
    - `POST {basePath}/task/{taskId}`
    - `POST {basePath}/event/{eventId}`
    - `GET|POST {basePath}/discovery`
 
-2) **Clients (caller-side)**: HTTP clients that speak Runner’s tunnel protocol:
+2. **Clients (caller-side)**: HTTP clients that speak Runner’s tunnel protocol:
    - universal (`createHttpClient` / `globals.resources.httpClientFactory`) for browser + Node (JSON + browser `FormData`)
    - Node streaming (`createHttpSmartClient`, `createHttpMixedClient`) for multipart + duplex streams
    - minimal fetch (`globals.tunnels.http.createClient` / `createExposureFetch`) for JSON-only
 
-3) **Tunnel resources (optional, but where the magic happens)**: a resource tagged with `globals.tags.tunnel` that:
+3. **Tunnel resources (optional, but where the magic happens)**: a resource tagged with `globals.tags.tunnel` that:
    - **selects** tasks/events it wants to route,
    - and in `mode: "client"` it **patches those tasks** so calling them delegates to the tunnel client.
 
@@ -100,8 +104,8 @@ At this point you have an HTTP surface, but you still need to decide what’s re
 
 Runner can run in two modes:
 
-- **Open-by-default**: if you don’t register any *server-mode* HTTP tunnel resource, `nodeExposure` does not enforce allow-lists (it still only executes ids that are registered in the runtime).
-- **Allow-listed**: once the runtime contains at least one tunnel resource whose value has `mode: "server"` (or `"both"`) and `transport: "http"`, `nodeExposure` switches into allow-list mode and rejects non-allow-listed ids with 403.
+- **Fail-closed**: if you don’t register any _server-mode_ HTTP tunnel resource, `nodeExposure` rejects task/event requests with 403 (exposure disabled).
+- **Allow-listed**: once the runtime contains at least one tunnel resource whose value has `mode: "server"` (or `"both"`) and `transport: "http"`, `nodeExposure` enforces allow-lists and rejects non-allow-listed ids with 403.
 
 To opt into allow-lists, register a server-mode tunnel resource (it does not route calls; it declares “what may be reached”):
 
@@ -133,6 +137,9 @@ export const app = r
 ```
 
 Now `GET {basePath}/discovery` (auth required) tells you exactly what’s reachable.
+
+> [!NOTE]
+> **Legacy open behavior** (not recommended): set `http.dangerouslyAllowOpenExposure: true` in `nodeExposure.with({ http: { ... } })`.
 
 ### Step 4 — Call it from somewhere else (client runtime)
 
@@ -167,7 +174,7 @@ This is great when you want the boundary to be obvious in code.
 
 If you want your code to call `add(...)` directly and let the tunnel decide where it runs, register a **client-mode** tunnel resource.
 
-The key trick is: the *caller runtime* must also have a task definition with the same id — but it shouldn’t contain the real implementation. That’s what **phantom tasks** are for.
+The key trick is: the _caller runtime_ must also have a task definition with the same id — but it shouldn’t contain the real implementation. That’s what **phantom tasks** are for.
 
 The tunnel middleware will:
 
@@ -302,8 +309,8 @@ const sum = await client.task<{ a: number; b: number }, number>(
 
 `nodeExposure` supports:
 
-1) **Static token**: `http.auth.token` (string or string[]) compared via timing-safe compare.
-2) **Validator tasks**: any task tagged `globals.tags.authValidator` can approve a request by returning `{ ok: true }`.
+1. **Static token**: `http.auth.token` (string or string[]) compared via timing-safe compare.
+2. **Validator tasks**: any task tagged `globals.tags.authValidator` can approve a request by returning `{ ok: true }`.
 
 Authorization rule:
 
@@ -349,9 +356,12 @@ In practice:
 Example (server registers two tasks):
 
 ```ts
-export const createInvoice = r.task("app.tasks.invoice.create").run(async () => {
-  return { id: "inv_1" };
-}).build();
+export const createInvoice = r
+  .task("app.tasks.invoice.create")
+  .run(async () => {
+    return { id: "inv_1" };
+  })
+  .build();
 
 export const createInvoice2 = r
   .task("app.tasks.invoice.create.2")
@@ -364,7 +374,9 @@ export const createInvoice2 = r
 Example (client chooses explicitly):
 
 ```ts
-await client.task("app.tasks.invoice.create.2", { /* ... */ });
+await client.task("app.tasks.invoice.create.2", {
+  /* ... */
+});
 ```
 
 For **non-breaking** evolution, prefer keeping the same id and making schemas backward-compatible (add optional fields, accept unions, return supersets).
@@ -630,27 +642,27 @@ nodeExposure.with({
 
 ## Troubleshooting checklist (the fast kind)
 
-1) 401 Unauthorized
+1. 401 Unauthorized
    - confirm the client sends the correct header (default `x-runner-token`)
    - if you use validators, ensure one returns `{ ok: true }`
 
-2) 403 Forbidden (allow-list)
+2. 403 Forbidden (exposure disabled / allow-list)
    - confirm you registered a server-mode HTTP tunnel resource
    - confirm the id is in its `tasks`/`events` selector
    - check `GET {basePath}/discovery`
 
-3) 404 Not Found
-   - the id is not registered in the server runtime (even open-by-default can’t run unknown ids)
+3. 404 Not Found
+   - the id is not registered in the server runtime
 
-4) Unexpected local execution
+4. Unexpected local execution
    - confirm a client-mode tunnel resource selected that task id
    - confirm no tunnel ownership conflict happened during init
 
-5) Uploads/streams not working
+5. Uploads/streams not working
    - universal client only supports browser `Blob`/`FormData`
    - use Node Mixed/Smart clients for Node streams and Node multipart uploads
 
-6) 499 Client Closed Request
+6. 499 Client Closed Request
    - the caller aborted or disconnected; in tasks, check `useExposureContext().signal`
 
 ---

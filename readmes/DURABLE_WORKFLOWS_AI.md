@@ -1,5 +1,9 @@
 # Durable Workflows (v2) — Token-Friendly
 
+← [Back to main README](../README.md) | [Full documentation](./DURABLE_WORKFLOWS.md)
+
+---
+
 Durable workflows are **Runner tasks with replay-safe checkpoints** (Node-only: `@bluelibs/runner/node`).
 
 They’re designed for flows that span time (minutes → days): approvals, payments, onboarding, shipping.
@@ -15,16 +19,16 @@ Rule: side effects belong inside `ctx.step(...)`.
 
 ## The happy path
 
-1) **Register a durable resource** (store + queue + event bus).
-2) **Write a durable task**:
+1. **Register a durable resource** (store + queue + event bus).
+2. **Write a durable task**:
    - stable `ctx.step("...")` ids
    - explicit `{ stepId }` for `sleep/emit/waitForSignal` in production
-3) **Start the workflow**:
+3. **Start the workflow**:
    - `executionId = await service.startExecution(task, input)`
    - persist `executionId` in your domain row (eg. `orders.execution_id`)
    - or `await service.execute(task, input)` to start + wait in one call
    - or `await service.executeStrict(task, input)` for stricter result typing
-4) **Interact later via signals**:
+4. **Interact later via signals**:
    - look up `executionId`
    - `await service.signal(executionId, SignalDef, payload)`
 
@@ -54,7 +58,7 @@ Signals buffer if no waiter exists yet; the next `waitForSignal(...)` consumes t
   - `store.listAuditEntries(executionId)` → timeline (step_completed, signal_waiting, signal_delivered, sleeps, status changes)
 - `new DurableOperator(store).getExecutionDetail(executionId)` returns `{ execution, steps, audit }`.
 
-There’s also a dashboard middleware: `createDashboardMiddleware(service, new DurableOperator(store))` (protect behind auth).
+There’s also a dashboard middleware: `createDashboardMiddleware(service, new DurableOperator(store), { operatorAuth })` (operator actions are denied unless `operatorAuth` is provided; opt out with `dangerouslyAllowUnauthenticatedOperator: true`).
 
 “Internal steps” are recorded steps created by durable primitives (`sleep/waitForSignal/emit` and some bookkeeping). They typically use reserved step id prefixes like `__...` or `rollback:...`.
 
@@ -73,7 +77,7 @@ Import and subscribe using event definitions (not strings): `import { durableEve
 
 - Step ids are part of the durable contract: don’t rename/reorder casually.
 - For breaking behavior changes, ship a **new workflow task id** (eg. `...v2`) and route new starts to it while v1 drains.
-- A “dispatcher/alias” task is great for *new starts*, but in-flight stability requires the version choice to be stable (don’t silently change behavior under the same durable task id).
+- A “dispatcher/alias” task is great for _new starts_, but in-flight stability requires the version choice to be stable (don’t silently change behavior under the same durable task id).
 
 ## Operational notes
 

@@ -1,8 +1,8 @@
-## 📚 Quick Reference: Cheat Sheet
+## Quick Reference: Cheat Sheet
 
 **Bookmark this section for quick lookups!**
 
-### 🎯 Creating Components
+### Creating Components
 
 ```typescript
 // Task - Basic
@@ -52,7 +52,7 @@ const myHook = r
   .build();
 ```
 
-### 🏃 Running Your App
+### Running Your App
 
 ```typescript
 // Basic
@@ -71,7 +71,7 @@ const result = await runTask(myTask, input);
 await dispose();
 ```
 
-### 🧪 Testing Patterns
+### Testing Patterns
 
 ```typescript
 // Unit Test - Direct call
@@ -83,7 +83,7 @@ const result = await runTask(myTask, input);
 await dispose();
 ```
 
-### 🎨 Built-in Middleware
+### Built-in Middleware
 
 ```typescript
 import { globals } from "@bluelibs/runner";
@@ -105,7 +105,7 @@ globals.middleware.task.retry.with({
 globals.middleware.task.timeout.with({ ttl: 5000 });
 ```
 
-### 🏷️ Common Patterns
+### ️ Common Patterns
 
 ```typescript
 // Register components
@@ -143,7 +143,7 @@ const task = r.task("id")
   .build();
 ```
 
-### 🔍 Type Helpers
+### Type Helpers
 
 ```typescript
 import type { TaskInput, TaskOutput, ResourceValue } from "@bluelibs/runner";
@@ -153,27 +153,27 @@ type Output = TaskOutput<typeof myTask>; // Get task output type
 type Value = ResourceValue<typeof myResource>; // Get resource value type
 ```
 
-### ⚡ Performance Tips
+### Performance Tips
 
 ```typescript
-// ✅ Use caching for expensive operations
+//  Use caching for expensive operations
 .middleware([cache.with({ ttl: 60000 })])
 
-// ✅ Add timeouts to external calls
+//  Add timeouts to external calls
 .middleware([timeout.with({ ttl: 5000 })])
 
-// ✅ Retry transient failures
+//  Retry transient failures
 .middleware([retry.with({ retries: 3 })])
 
-// ✅ Use events for decoupling
+//  Use events for decoupling
 await userRegistered({ userId, email });
 
-// ✅ Keep tasks focused (single responsibility)
-const getUserTask = r.task("users.get")...  // ✅ One thing
-const createUserTask = r.task("users.create")... // ✅ One thing
+//  Keep tasks focused (single responsibility)
+const getUserTask = r.task("users.get")...  //  One thing
+const createUserTask = r.task("users.create")... //  One thing
 ```
 
-### 🐛 Debugging
+### Debugging
 
 ```typescript
 // Enable debug logging
@@ -189,5 +189,28 @@ const task = r.task("id")
 .dependencies({ logger: globals.resources.logger })
 ```
 
----
+### Concurrency Utilities
 
+```typescript
+import { Semaphore, Queue } from "@bluelibs/runner";
+
+// Semaphore - limit concurrent operations
+const sem = new Semaphore(3); // max 3 concurrent
+await sem.acquire();
+try {
+  await doWork();
+} finally {
+  sem.release();
+}
+
+// Queue - sequential task processing
+const queue = new Queue();
+await queue.add(async () => {
+  /* runs in order */
+});
+await queue.add(async () => {
+  /* waits for previous */
+});
+```
+
+---

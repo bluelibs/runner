@@ -1,5 +1,9 @@
 # Multi-Platform Architecture Guide
 
+← [Back to main README](../README.md)
+
+---
+
 Welcome to the BlueLibs Runner multi-platform architecture! This guide will walk you through one of our most interesting architectural decisions: **how we made a single codebase work seamlessly across Node.js, browsers, edge workers, and other JavaScript runtimes**.
 
 ## 🎯 The Challenge We Solved
@@ -440,16 +444,13 @@ All registration methods return disposers. Tests should:
 ### Patterns we used in tests
 
 - Browser beforeunload & visibilitychange
-
   - Mock `window.addEventListener`/`removeEventListener` and stash handlers to invoke them synchronously.
   - Provide a `document` mock with `visibilityState = "hidden"` to trigger the visibility handler.
 
 - Error/unhandledrejection handling
-
   - Register handlers via the adapter, then call captured listeners with shapes `{ error: Error }` or `{ reason: value }` to validate unwrapping paths.
 
 - Timers exposure
-
   - Call `adapter.setTimeout(fn, ms)` and immediately `adapter.clearTimeout(id)` to ensure bindings are wired and execute without throwing.
 
 - AsyncLocalStorage

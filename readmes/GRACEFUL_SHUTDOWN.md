@@ -1,5 +1,9 @@
 ### Rollback and Shutdown/Process Hooks
 
+← [Back to main README](../README.md) | [Lifecycle section in README](../README.md#system-shutdown-hooks)
+
+---
+
 - When initialization fails, the runner now performs a rollback: it disposes every resource that was successfully initialized up to the failure point.
 - Process listeners are singletons:
   - One global handler for `uncaughtException` and `unhandledRejection` that dispatches to all active runs.

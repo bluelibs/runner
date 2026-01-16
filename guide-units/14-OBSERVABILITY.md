@@ -13,18 +13,18 @@ const app = r
   .resource("app")
   .dependencies({ logger: globals.resources.logger })
   .init(async (_config, { logger }) => {
-    logger.info("Starting business process"); // ✅ Visible by default
-    logger.warn("This might take a while"); // ✅ Visible by default
+    logger.info("Starting business process"); //  Visible by default
+    logger.warn("This might take a while"); //  Visible by default
     logger.error("Oops, something went wrong", {
-      // ✅ Visible by default
+      //  Visible by default
       error: new Error("Database connection failed"),
     });
     logger.critical("System is on fire", {
-      // ✅ Visible by default
+      //  Visible by default
       data: { temperature: "9000°C" },
     });
-    logger.debug("Debug information"); // ❌ Hidden by default
-    logger.trace("Very detailed trace"); // ❌ Hidden by default
+    logger.debug("Debug information"); //  Hidden by default
+    logger.trace("Very detailed trace"); //  Hidden by default
 
     logger.onLog(async (log) => {
       // Sub-loggers instantiated .with() share the same log listeners.

@@ -1,5 +1,9 @@
 # BlueLibs Runner: Functional Programming Without Classes
 
+← [Back to main README](../README.md)
+
+---
+
 _Or: How I Learned to Stop Worrying and Love Closures_
 
 This guide shows how to build applications using BlueLibs Runner's functional approach. Instead of thinking in classes, think in terms of functions that return capabilities. You get the power of OOP patterns with the simplicity and testability of functions. With 100% type-safety.
@@ -209,9 +213,11 @@ Use contract tags to discover and select implementations at runtime.
 ```ts
 // 1. Define the strategy contract
 const paymentStrategyContract = r
-  .tag<void, void, { process(amount: number): Promise<boolean> }>(
-    "contract.paymentStrategy",
-  )
+  .tag<
+    void,
+    void,
+    { process(amount: number): Promise<boolean> }
+  >("contract.paymentStrategy")
   .build();
 
 // 2. Implement concrete strategies

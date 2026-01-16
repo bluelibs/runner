@@ -23,7 +23,7 @@ The beauty of BlueLibs Runner is that you can adopt it incrementally. Start with
 
 This is part of the [BlueLibs](https://www.bluelibs.com) ecosystem. We're not trying to reinvent everything – just the parts that were broken.
 
-- [GitHub Repository](https://github.com/bluelibs/runner) - ⭐ if you find this useful
+- [GitHub Repository](https://github.com/bluelibs/runner) -  if you find this useful
 - [Documentation](https://bluelibs.github.io/runner/) - When you need the full details
 - [Issues](https://github.com/bluelibs/runner/issues) - When something breaks (or you want to make it better)
 - [Contributing](./CONTRIBUTING.md) - How to file great issues and PRs

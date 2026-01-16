@@ -1,5 +1,9 @@
 ## Runner Fluent Builders (r.\*) — End-to-End Guide
 
+← [Back to main README](../README.md) | [Fluent Builders section in README](../README.md#fluent-builders-r)
+
+---
+
 This guide shows how to use the new fluent Builder API exposed via a single `r` namespace. Builders are ergonomic, type-safe, and compile to the same definitions used by Runner today, without runtime overhead or breaking changes.
 
 ### Import
