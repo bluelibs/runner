@@ -51,13 +51,9 @@ describe("createExposureFetch - context header and typed rethrow", () => {
       errorRegistry: new Map([["tests.errors.app", helper]]),
     });
 
-    await expect(client.task("t.id", { a: 1 } as any)).rejects.toThrow(
-      /typed:3/,
-    );
+    await expect(client.task("t.id", { a: 1 })).rejects.toThrow(/typed:3/);
     // Also test event path typed rethrow
-    await expect(client.event("e.id", { x: 1 } as any)).rejects.toThrow(
-      /typed:3/,
-    );
+    await expect(client.event("e.id", { x: 1 })).rejects.toThrow(/typed:3/);
     // Verify context header added
     const hdr = calls[0]?.headers?.["x-runner-context"];
     expect(typeof hdr).toBe("string");
@@ -94,7 +90,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
       fetchImpl: fetchImpl as unknown as typeof fetch,
       contexts: contexts as unknown as any[],
     });
-    await client.task("t.none", { a: 1 } as any);
+    await client.task("t.none", { a: 1 });
     expect(calls[0].headers["x-runner-context"]).toBeUndefined();
   });
 });

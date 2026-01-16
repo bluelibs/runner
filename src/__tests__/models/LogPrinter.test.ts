@@ -87,7 +87,7 @@ describe("LogPrinter", () => {
       toString() {
         throw new Error("no string 4u");
       },
-    } as any;
+    } as unknown as any;
     // Should not throw and should return [Unserializable]
     p.print({ ...baseLog, message: bad });
     expect(logs[0]).toContain("[Unserializable]");

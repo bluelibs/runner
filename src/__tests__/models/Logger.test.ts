@@ -271,7 +271,7 @@ describe("Logger", () => {
       error: undefined,
       data: undefined,
       context: {},
-    } as any;
+    } as unknown as ILog;
     consoleSpy.mockClear();
     consoleErrorSpy.mockClear();
     logger.print(fake);

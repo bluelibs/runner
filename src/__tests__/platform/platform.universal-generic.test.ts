@@ -1,5 +1,15 @@
 import { GenericUniversalPlatformAdapter } from "../../platform/adapters/universal-generic";
 
+interface TestGlobal {
+  addEventListener?: typeof globalThis.addEventListener;
+  removeEventListener?: typeof globalThis.removeEventListener;
+  document?: { visibilityState: string };
+  __ENV__?: any;
+  process?: any;
+  env?: any;
+}
+const testGlobal = globalThis as unknown as TestGlobal;
+
 describe("GenericUniversalPlatformAdapter", () => {
   let adapter: GenericUniversalPlatformAdapter;
 
@@ -14,16 +24,16 @@ describe("GenericUniversalPlatformAdapter", () => {
   });
 
   describe("onUncaughtException", () => {
-    const originalAddEventListener = (globalThis as any).addEventListener;
-    const originalRemoveEventListener = (globalThis as any).removeEventListener;
+    const originalAddEventListener = testGlobal.addEventListener;
+    const originalRemoveEventListener = testGlobal.removeEventListener;
 
     afterEach(() => {
-      (globalThis as any).addEventListener = originalAddEventListener;
-      (globalThis as any).removeEventListener = originalRemoveEventListener;
+      testGlobal.addEventListener = originalAddEventListener;
+      testGlobal.removeEventListener = originalRemoveEventListener;
     });
 
     it("should return no-op when addEventListener is not available", () => {
-      delete (globalThis as any).addEventListener;
+      delete testGlobal.addEventListener;
 
       const handler = jest.fn();
       const cleanup = adapter.onUncaughtException(handler);
@@ -36,8 +46,8 @@ describe("GenericUniversalPlatformAdapter", () => {
       const addSpy = jest.fn();
       const removeSpy = jest.fn();
 
-      (globalThis as any).addEventListener = addSpy;
-      (globalThis as any).removeEventListener = removeSpy;
+      testGlobal.addEventListener = addSpy;
+      testGlobal.removeEventListener = removeSpy;
 
       const handler = jest.fn();
       const cleanup = adapter.onUncaughtException(handler);
@@ -50,16 +60,16 @@ describe("GenericUniversalPlatformAdapter", () => {
   });
 
   describe("onUnhandledRejection", () => {
-    const originalAddEventListener = (globalThis as any).addEventListener;
-    const originalRemoveEventListener = (globalThis as any).removeEventListener;
+    const originalAddEventListener = testGlobal.addEventListener;
+    const originalRemoveEventListener = testGlobal.removeEventListener;
 
     afterEach(() => {
-      (globalThis as any).addEventListener = originalAddEventListener;
-      (globalThis as any).removeEventListener = originalRemoveEventListener;
+      testGlobal.addEventListener = originalAddEventListener;
+      testGlobal.removeEventListener = originalRemoveEventListener;
     });
 
     it("should return no-op when addEventListener is not available", () => {
-      delete (globalThis as any).addEventListener;
+      delete testGlobal.addEventListener;
 
       const handler = jest.fn();
       const cleanup = adapter.onUnhandledRejection(handler);
@@ -72,8 +82,8 @@ describe("GenericUniversalPlatformAdapter", () => {
       const addSpy = jest.fn();
       const removeSpy = jest.fn();
 
-      (globalThis as any).addEventListener = addSpy;
-      (globalThis as any).removeEventListener = removeSpy;
+      testGlobal.addEventListener = addSpy;
+      testGlobal.removeEventListener = removeSpy;
 
       const handler = jest.fn();
       const cleanup = adapter.onUnhandledRejection(handler);
@@ -92,18 +102,18 @@ describe("GenericUniversalPlatformAdapter", () => {
   });
 
   describe("onShutdownSignal", () => {
-    const originalAddEventListener = (globalThis as any).addEventListener;
-    const originalRemoveEventListener = (globalThis as any).removeEventListener;
-    const originalDocument = (globalThis as any).document;
+    const originalAddEventListener = testGlobal.addEventListener;
+    const originalRemoveEventListener = testGlobal.removeEventListener;
+    const originalDocument = testGlobal.document;
 
     afterEach(() => {
-      (globalThis as any).addEventListener = originalAddEventListener;
-      (globalThis as any).removeEventListener = originalRemoveEventListener;
-      (globalThis as any).document = originalDocument;
+      testGlobal.addEventListener = originalAddEventListener;
+      testGlobal.removeEventListener = originalRemoveEventListener;
+      testGlobal.document = originalDocument;
     });
 
     it("should return no-op when addEventListener is not available", () => {
-      delete (globalThis as any).addEventListener;
+      delete testGlobal.addEventListener;
 
       const handler = jest.fn();
       const cleanup = adapter.onShutdownSignal(handler);
@@ -116,9 +126,9 @@ describe("GenericUniversalPlatformAdapter", () => {
       const addSpy = jest.fn();
       const removeSpy = jest.fn();
 
-      (globalThis as any).addEventListener = addSpy;
-      (globalThis as any).removeEventListener = removeSpy;
-      delete (globalThis as any).document;
+      testGlobal.addEventListener = addSpy;
+      testGlobal.removeEventListener = removeSpy;
+      delete testGlobal.document;
 
       const handler = jest.fn();
       const cleanup = adapter.onShutdownSignal(handler);
@@ -140,9 +150,9 @@ describe("GenericUniversalPlatformAdapter", () => {
       const addSpy = jest.fn();
       const removeSpy = jest.fn();
 
-      (globalThis as any).addEventListener = addSpy;
-      (globalThis as any).removeEventListener = removeSpy;
-      (globalThis as any).document = { visibilityState: "visible" };
+      testGlobal.addEventListener = addSpy;
+      testGlobal.removeEventListener = removeSpy;
+      testGlobal.document = { visibilityState: "visible" };
 
       const handler = jest.fn();
       const cleanup = adapter.onShutdownSignal(handler);
@@ -172,38 +182,38 @@ describe("GenericUniversalPlatformAdapter", () => {
   });
 
   describe("getEnv", () => {
-    const originalEnv = (globalThis as any).__ENV__;
-    const originalProcess = (globalThis as any).process;
-    const originalGlobalEnv = (globalThis as any).env;
+    const originalEnv = testGlobal.__ENV__;
+    const originalProcess = testGlobal.process;
+    const originalGlobalEnv = testGlobal.env;
 
     afterEach(() => {
-      (globalThis as any).__ENV__ = originalEnv;
-      (globalThis as any).process = originalProcess;
-      (globalThis as any).env = originalGlobalEnv;
+      testGlobal.__ENV__ = originalEnv;
+      testGlobal.process = originalProcess;
+      testGlobal.env = originalGlobalEnv;
     });
 
     it("should return value from __ENV__ when available", () => {
-      (globalThis as any).__ENV__ = { TEST_KEY: "from-env" };
+      testGlobal.__ENV__ = { TEST_KEY: "from-env" };
       expect(adapter.getEnv("TEST_KEY")).toBe("from-env");
     });
 
     it("should return value from process.env when available and __ENV__ is not object", () => {
-      (globalThis as any).__ENV__ = null;
-      (globalThis as any).process = { env: { TEST_KEY: "from-process" } };
+      testGlobal.__ENV__ = null;
+      testGlobal.process = { env: { TEST_KEY: "from-process" } };
       expect(adapter.getEnv("TEST_KEY")).toBe("from-process");
     });
 
     it("should return value from globalThis.env when available", () => {
-      delete (globalThis as any).__ENV__;
-      delete (globalThis as any).process;
-      (globalThis as any).env = { TEST_KEY: "from-global-env" };
+      delete testGlobal.__ENV__;
+      delete testGlobal.process;
+      testGlobal.env = { TEST_KEY: "from-global-env" };
       expect(adapter.getEnv("TEST_KEY")).toBe("from-global-env");
     });
 
     it("should return undefined when key is not found", () => {
-      delete (globalThis as any).__ENV__;
-      delete (globalThis as any).process;
-      delete (globalThis as any).env;
+      delete testGlobal.__ENV__;
+      delete testGlobal.process;
+      delete testGlobal.env;
       expect(adapter.getEnv("NONEXISTENT_KEY")).toBeUndefined();
     });
   });
@@ -222,7 +232,7 @@ describe("GenericUniversalPlatformAdapter", () => {
       expect(typeof als.run).toBe("function");
 
       expect(() => als.getStore()).toThrow();
-      expect(() => als.run(undefined as any, () => {})).toThrow();
+      expect(() => als.run(undefined as unknown as any, () => {})).toThrow();
     });
   });
 

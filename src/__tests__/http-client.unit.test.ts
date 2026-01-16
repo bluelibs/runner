@@ -6,10 +6,12 @@ jest.mock("../http-fetch-tunnel.resource", () => {
     ok: true,
   }));
   const createExposureFetch = jest.fn((cfg: any) => {
-    (createExposureFetch as any).__lastCfg = cfg;
-    (createExposureFetch as any).__task = task;
-    (createExposureFetch as any).__event = event;
-    (createExposureFetch as any).__eventWithResult = eventWithResult;
+    (createExposureFetch as unknown as MockCreateExposureFetch).__lastCfg = cfg;
+    (createExposureFetch as unknown as MockCreateExposureFetch).__task = task;
+    (createExposureFetch as unknown as MockCreateExposureFetch).__event = event;
+    (
+      createExposureFetch as unknown as MockCreateExposureFetch
+    ).__eventWithResult = eventWithResult;
     return { task, event, eventWithResult };
   });
   return { createExposureFetch };
@@ -21,6 +23,18 @@ import { createFile as createNodeFile } from "../node/platform/createFile";
 import { getDefaultSerializer } from "../serializer";
 import { IErrorHelper } from "../defs";
 
+type MockCreateExposureFetch = jest.Mock & {
+  __lastCfg?: any;
+  __task?: jest.Mock;
+  __event?: jest.Mock;
+  __eventWithResult?: jest.Mock;
+};
+
+interface TestGlobal {
+  fetch?: typeof fetch;
+}
+const testGlobal = globalThis as unknown as TestGlobal;
+
 describe("http-client (universal)", () => {
   const baseUrl = "http://127.0.0.1:7070/__runner";
 
@@ -30,42 +44,43 @@ describe("http-client (universal)", () => {
 
   it("JSON fallback uses exposure fetch", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const mockFactory =
+      createExposureFetch as unknown as MockCreateExposureFetch;
     const client = createHttpClient({
       baseUrl,
       serializer: getDefaultSerializer(),
     });
     const result = await client.task("t.json", { a: 1 });
     expect(result).toBe("JSON-OK");
-    expect((createExposureFetch as any).__lastCfg.baseUrl).toBe(
-      baseUrl.replace(/\/$/, ""),
-    );
-    expect(
-      (createExposureFetch as unknown as { __task: unknown }).__task,
-    ).toBeDefined();
+    expect(mockFactory.__lastCfg.baseUrl).toBe(baseUrl.replace(/\/$/, ""));
+    expect(mockFactory.__task).toBeDefined();
   });
 
   it("event delegates to exposure fetch event", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const mockFactory =
+      createExposureFetch as unknown as MockCreateExposureFetch;
     const client = createHttpClient({
       baseUrl,
       serializer: getDefaultSerializer(),
     });
     await client.event("e.hello", { x: true });
-    const event = (createExposureFetch as any).__event as jest.Mock;
+    const event = mockFactory.__event as jest.Mock;
     expect(event).toHaveBeenCalledTimes(1);
     expect(event.mock.calls[0][0]).toBe("e.hello");
   });
 
   it("eventWithResult delegates to exposure fetch eventWithResult", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const mockFactory =
+      createExposureFetch as unknown as MockCreateExposureFetch;
     const client = createHttpClient({
       baseUrl,
       serializer: getDefaultSerializer(),
     });
     expect(typeof client.eventWithResult).toBe("function");
     const out = await client.eventWithResult!("e.ret", { x: true });
-    const eventWithResult = (createExposureFetch as any)
-      .__eventWithResult as jest.Mock;
+    const eventWithResult = mockFactory.__eventWithResult as jest.Mock;
     expect(eventWithResult).toHaveBeenCalledTimes(1);
     expect(eventWithResult.mock.calls[0][0]).toBe("e.ret");
     expect(out).toEqual({ ok: true });
@@ -87,15 +102,15 @@ describe("http-client (universal)", () => {
 
   it("eventWithResult: rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const mockFactory =
+      createExposureFetch as unknown as MockCreateExposureFetch;
     const { TunnelError } = require("../globals/resources/tunnel/protocol");
-    (createExposureFetch as any).__eventWithResult.mockImplementationOnce(
-      async () => {
-        throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
-          id: "tests.errors.evret",
-          data: { code: 9, message: "evret" },
-        });
-      },
-    );
+    mockFactory.__eventWithResult!.mockImplementationOnce(async () => {
+      throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
+        id: "tests.errors.evret",
+        data: { code: 9, message: "evret" },
+      });
+    });
     const helper = {
       id: "tests.errors.evret",
       throw: (data: any) => {
@@ -229,8 +244,10 @@ describe("http-client (universal)", () => {
 
   it("event: rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const mockFactory =
+      createExposureFetch as unknown as MockCreateExposureFetch;
     const { TunnelError } = require("../globals/resources/tunnel/protocol");
-    (createExposureFetch as any).__event.mockImplementationOnce(async () => {
+    mockFactory.__event!.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
         id: "tests.errors.ev",
         data: { code: 8, message: "ev" },
@@ -254,8 +271,10 @@ describe("http-client (universal)", () => {
 
   it("JSON fallback rethrows TunnelError when no registry present", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const mockFactory =
+      createExposureFetch as unknown as MockCreateExposureFetch;
     const { TunnelError } = require("../globals/resources/tunnel/protocol");
-    (createExposureFetch as any).__task.mockImplementationOnce(async () => {
+    mockFactory.__task!.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "json-raw");
     });
     const client = createHttpClient({
@@ -269,8 +288,10 @@ describe("http-client (universal)", () => {
 
   it("event rethrows TunnelError when no registry present", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const mockFactory =
+      createExposureFetch as unknown as MockCreateExposureFetch;
     const { TunnelError } = require("../globals/resources/tunnel/protocol");
-    (createExposureFetch as any).__event.mockImplementationOnce(async () => {
+    mockFactory.__event!.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "ev-raw");
     });
     const client = createHttpClient({
@@ -312,11 +333,11 @@ describe("http-client (universal)", () => {
   });
 
   it("falls back to global fetch when fetchImpl not provided (web multipart)", async () => {
-    const origFetch = (globalThis as any).fetch;
-    (globalThis as any).fetch = jest.fn(async (_url: any, _init?: any) => ({
+    const origFetch = testGlobal.fetch;
+    testGlobal.fetch = jest.fn(async (_url: any, _init?: any) => ({
       text: async () =>
         getDefaultSerializer().stringify({ ok: true, result: "GUP" }),
-    }));
+    })) as unknown as typeof fetch;
     try {
       const blob = new Blob([Buffer.from("abc") as any], {
         type: "text/plain",
@@ -333,9 +354,9 @@ describe("http-client (universal)", () => {
       });
       const r = await client.task("t.upload.web2", { file } as any);
       expect(r).toBe("GUP");
-      expect(globalThis.fetch as any).toHaveBeenCalledTimes(1);
+      expect(testGlobal.fetch).toHaveBeenCalledTimes(1);
     } finally {
-      (globalThis as any).fetch = origFetch;
+      testGlobal.fetch = origFetch;
     }
   });
 
@@ -350,9 +371,11 @@ describe("http-client (universal)", () => {
 
   it("rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
     const { createExposureFetch } = require("../http-fetch-tunnel.resource");
+    const mockFactory =
+      createExposureFetch as unknown as MockCreateExposureFetch;
     const { TunnelError } = require("../globals/resources/tunnel/protocol");
     // Make the mocked exposure fetch throw a TunnelError
-    (createExposureFetch as any).__task.mockImplementationOnce(async () => {
+    mockFactory.__task!.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
         id: "tests.errors.app",
         data: { code: 5, message: "boom" },
