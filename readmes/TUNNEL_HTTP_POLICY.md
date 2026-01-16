@@ -44,7 +44,6 @@ The Runner tunnel HTTP protocol enables remote invocation of tasks and emission 
 ### Goals
 
 - **Simplicity**: Minimal overhead; leverages HTTP/1.1+ with serialized JSON for structured data.
-- **Simplicity**: Minimal overhead; leverages HTTP/1.1+ with serialized JSON for structured data.
 - **Cross-Platform**: Works in Node (streams/files) and browsers (fetch/FormData).
 - **Security**: Mandatory auth, allow-lists, CORS, abort handling.
 - **Efficiency**: Supports streaming (duplex/raw) and files (manifest-based multipart) without buffering.
@@ -225,7 +224,7 @@ Server routes by `Content-Type`.
 
 - **Mechanism**: Snapshots `AsyncLocalStorage` (created via `createContext(id: string)`).
 - **Transport**:
-  - JSON/Multipart: Embed in `__tunnelCtx` (serialized) or headers (`x-runner-ctx-*`).
+  - JSON/Multipart: Serialized map sent in `x-runner-context` header.
   - Octet: Headers for small values; envelope prefix (length + serialized) for full.
 - **Rules**: Stable IDs; optional `serialize`/`parse` hooks. Filtered for size/serializability.
 - **Security**: Server validates before restore; caps size.
@@ -234,7 +233,7 @@ Server routes by `Content-Type`.
 
 - **Duplex**: Octet mode (req → task processing → res stream).
 - **Server Push**: Task returns stream → piped to res.
-- **Client**: `createHttpSmartClient` returns `Readable`; `createMixedHttpClient` auto-switches.
+- **Client**: `createHttpSmartClient` returns `Readable`; `createHttpMixedClient` auto-switches.
 - **Abort**: Signal destroys pipes.
 
 ## Examples

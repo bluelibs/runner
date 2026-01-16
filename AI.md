@@ -397,7 +397,6 @@ You can also create clients directly without DI (manual serializer/error/context
 
 ```ts
 import { createHttpClient } from "@bluelibs/runner";
-import { createFile as createWebFile } from "@bluelibs/runner/platform/createFile";
 
 const client = createHttpClient({
   baseUrl: "/__runner",
@@ -407,7 +406,13 @@ const client = createHttpClient({
 
 await client.task("app.tasks.getHealth");
 
-const file = createWebFile({ name: "notes.txt" }, new Blob(["Hello"]));
+// Browser file upload using Blob (works with universal client)
+const file = {
+  $runnerFile: "File" as const,
+  id: "F1",
+  meta: { name: "notes.txt" },
+  _web: { blob: new Blob(["Hello"]) },
+};
 await client.task("app.tasks.upload", { file });
 ```
 

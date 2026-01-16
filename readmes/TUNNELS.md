@@ -385,14 +385,18 @@ Client helpers add a sidecar (`_web` or `_node`) that provides the actual bytes/
 
 ### Browser / universal
 
-Use `createFile` (or `createWebFile`) and the universal client:
+For browser uploads, create a file sentinel with a `_web` sidecar containing the Blob:
 
 ```ts
-import { createFile } from "@bluelibs/runner";
+// Browser file upload - create the sentinel directly
+const file = {
+  $runnerFile: "File" as const,
+  id: "F1",
+  meta: { name: "a.bin" },
+  _web: { blob: new Blob([1, 2, 3]) },
+};
 
-await client.task("app.tasks.upload", {
-  file: createFile({ name: "a.bin" }, new Blob([1, 2, 3]), "F1"),
-});
+await client.task("app.tasks.upload", { file });
 ```
 
 ### Node
@@ -544,13 +548,14 @@ export const remoteHello = r.task
   .build();
 ```
 
-When you want “missing route” to be a hard error:
+When you want "missing route" to be a hard error, check for `undefined`:
 
 ```ts
-import { assertTaskRouted } from "@bluelibs/runner";
-
 const value = await remoteHello({ name: "Ada" });
-return assertTaskRouted(value, remoteHello.id);
+if (value === undefined) {
+  throw new Error(`Task ${remoteHello.id} was not routed through a tunnel`);
+}
+return value;
 ```
 
 This pattern pairs well with client-mode tunnel resources: the phantom gives you type safety, the tunnel provides the transport.
