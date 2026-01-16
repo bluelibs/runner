@@ -389,17 +389,20 @@ export class StoreRegistry {
     // For each hook, if it listens to concrete event(s) and depends on events, add edges listenedEvent -> depEvent
     for (const h of this.hooks.values()) {
       const listened: string[] = [];
-      const on = h.hook.on as any;
+      const on = h.hook.on;
       if (on === "*") continue; // avoid over-reporting for global hooks
-      if (Array.isArray(on)) listened.push(...on.map((e: IEvent) => e.id));
-      else listened.push(on.id);
+      if (Array.isArray(on))
+        listened.push(...(on as IEvent[]).map((e: IEvent) => e.id));
+      else listened.push((on as IEvent).id);
 
       // Collect event dependencies from the hook
       const depEvents: string[] = [];
-      const deps = h.hook.dependencies as any;
+      const deps = h.hook.dependencies;
       if (deps) {
         for (const value of Object.values(deps)) {
-          const candidate = utils.isOptional(value) ? value.inner : value;
+          const candidate = (
+            utils.isOptional(value) ? (value as any).inner : value
+          ) as Record<string, any>;
           if (candidate && utils.isEvent(candidate)) {
             depEvents.push(candidate.id);
           }

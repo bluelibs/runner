@@ -14,7 +14,7 @@ export function detectEnvironment(): PlatformId {
     Deno?: unknown;
     Bun?: unknown;
     importScripts?: unknown;
-    WorkerGlobalScope?: unknown;
+    WorkerGlobalScope?: new () => any;
     document?: unknown;
     addEventListener?: unknown;
   };
@@ -42,7 +42,7 @@ export function detectEnvironment(): PlatformId {
   if (
     typeof global.WorkerGlobalScope !== "undefined" &&
     typeof self !== "undefined" &&
-    self instanceof (global.WorkerGlobalScope as any)
+    self instanceof global.WorkerGlobalScope
   ) {
     return "edge";
   }

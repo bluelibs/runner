@@ -6,7 +6,7 @@ export function getCallerFile(): string {
     // Prefer robust Node path with structured stack frames
     if (isNode()) {
       const err = new Error();
-      Error.prepareStackTrace = (_err, stack) => stack as unknown as any;
+      Error.prepareStackTrace = (_err, stack) => stack;
       const stack = err.stack as unknown as Array<{
         getFileName?: () => string | null;
       }>;
@@ -17,7 +17,7 @@ export function getCallerFile(): string {
       const candidate = stack.shift();
       const file = candidate?.getFileName?.();
       // In Node, V8 always provides a filename for this frame; keep branchless for coverage
-      return file as unknown as string;
+      return file!;
     }
 
     // Browser/edge fallback: do not attempt fragile parsing; keep deterministic

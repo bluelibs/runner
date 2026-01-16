@@ -1,5 +1,6 @@
 import type {
   DependencyMapType,
+  DependencyValuesType,
   ITaskDefinition,
   ITaskMeta,
   IValidationSchema,
@@ -180,7 +181,7 @@ export function makeTaskBuilder<
       const wrapped = (input: unknown, deps: unknown) =>
         fn(
           input as ResolveInput<TInput, TNewInput>,
-          deps as any, // Dependencies are injected at runtime
+          deps as unknown as DependencyValuesType<TDeps>, // Dependencies are injected at runtime
         );
 
       const next = clone<
@@ -196,7 +197,7 @@ export function makeTaskBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(state, { run: wrapped as any });
+      >(state, { run: wrapped });
       return makeTaskBuilder<
         ResolveInput<TInput, TNewInput>,
         TNewOutput,

@@ -156,11 +156,11 @@ export class DependencyProcessor {
   ): ResourceDependencyValuesType<TD> {
     const wrapped: Record<string, unknown> = {};
     for (const key of Object.keys(deps) as Array<keyof TD>) {
-      const original = deps[key] as any;
+      const original = deps[key];
       const value = (extracted as Record<string, unknown>)[key as string];
       // Handle optional wrappers
       if (utils.isOptional(original)) {
-        const inner = original.inner as any;
+        const inner = (original as { inner: unknown }).inner;
         if (utils.isTask(inner)) {
           wrapped[key as string] = value
             ? this.makeTaskWithIntercept(inner)
@@ -199,7 +199,7 @@ export class DependencyProcessor {
         if (!storeTask.interceptors) storeTask.interceptors = [];
         storeTask.interceptors.push(middleware);
       },
-    }) as TaskDependencyWithIntercept<I, O>;
+    }) as unknown as TaskDependencyWithIntercept<I, O>;
   }
 
   public async initializeRoot() {
@@ -244,21 +244,29 @@ export class DependencyProcessor {
         if (eventDefinition === "*") {
           this.eventManager.addGlobalListener(handler, { order });
         } else if (Array.isArray(eventDefinition)) {
-          for (const ed of eventDefinition) {
-            if (this.store.events.get(ed.id) === undefined) {
-              eventNotFoundError.throw({ id: ed.id });
+          for (const e of eventDefinition) {
+            if (this.store.events.get(e.id) === undefined) {
+              eventNotFoundError.throw({ id: e.id });
             }
           }
-          this.eventManager.addListener(eventDefinition as any, handler, {
-            order,
-          });
+          this.eventManager.addListener(
+            eventDefinition as unknown as IEvent[],
+            handler,
+            {
+              order,
+            },
+          );
         } else {
           if (this.store.events.get(eventDefinition.id) === undefined) {
             eventNotFoundError.throw({ id: eventDefinition.id });
           }
-          this.eventManager.addListener(eventDefinition as any, handler, {
-            order,
-          });
+          this.eventManager.addListener(
+            eventDefinition as unknown as IEvent,
+            handler,
+            {
+              order,
+            },
+          );
         }
       }
     }
@@ -275,8 +283,9 @@ export class DependencyProcessor {
         object[key] = await this.extractDependency(map[key], source);
         // Special handling, a little bit of magic and memory sacrifice for the sake of observability.
         // Maybe later we can allow this to be opt-in to save 'memory' in the case of large tasks?
-        if ((object[key] as any) instanceof Logger) {
-          object[key] = object[key].with({ source });
+        const val = object[key] as unknown;
+        if (val instanceof Logger) {
+          object[key] = val.with({ source }) as any;
         }
       } catch (e) {
         const errorMessage = String(e);

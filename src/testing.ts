@@ -58,7 +58,7 @@ function buildTestFacade(deps: {
       task: ITask<I, O, D>,
       ...args: I extends undefined ? [] : [I]
     ): Promise<Awaited<O> | undefined> =>
-      deps.taskRunner.run(task, ...args) as any,
+      deps.taskRunner.run(task, ...args) as Promise<Awaited<O> | undefined>,
     // Access a resource value by id (string or symbol)
     getResource: (id: string) => deps.store.resources.get(id)?.value,
     // Expose internals when needed in tests (not recommended for app usage)

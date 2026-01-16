@@ -15,7 +15,7 @@ export interface WebCollectedFile {
   blob: Blob;
 }
 
-export interface BuiltUniversalManifest<T = any> {
+export interface BuiltUniversalManifest<T = unknown> {
   input: T; // cloned input with sidecars removed
   nodeFiles: NodeCollectedFile[];
   webFiles: WebCollectedFile[];

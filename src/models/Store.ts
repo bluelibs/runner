@@ -1,4 +1,11 @@
-import { IResource, RegisterableItems, ITag } from "../defs";
+import {
+  IResource,
+  RegisterableItems,
+  ITag,
+  ITaskMiddleware,
+  IResourceMiddleware,
+  DependencyMapType,
+} from "../defs";
 import { findCircularDependencies } from "./utils/findCircularDependencies";
 import { globalEventsArray } from "../globals/globalEvents";
 import {
@@ -129,7 +136,7 @@ export class Store {
   private registerGlobalComponents() {
     const builtInResourcesMap = new Map<
       IResource<any, any, any, any, any>,
-      any
+      unknown
     >();
     builtInResourcesMap.set(globalResources.store, this);
     builtInResourcesMap.set(globalResources.eventManager, this.eventManager);
@@ -172,7 +179,7 @@ export class Store {
     ];
     builtInTaskMiddlewares.forEach((middleware) => {
       this.registry.taskMiddlewares.set(middleware.id, {
-        middleware: middleware as any,
+        middleware: middleware as unknown as ITaskMiddleware<any>,
         computedDependencies: {},
         isInitialized: false,
       });
@@ -185,7 +192,7 @@ export class Store {
     ];
     builtInResourceMiddlewares.forEach((middleware) => {
       this.registry.resourceMiddlewares.set(middleware.id, {
-        middleware: middleware as any,
+        middleware: middleware as unknown as IResourceMiddleware<any>,
         computedDependencies: {},
         isInitialized: false,
       });
@@ -257,7 +264,7 @@ export class Store {
         await resource.resource.dispose(
           resource.value,
           resource.config,
-          resource.computedDependencies as any,
+          resource.computedDependencies as unknown as DependencyMapType,
           resource.context,
         );
       }

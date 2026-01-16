@@ -2,7 +2,12 @@ import { defineResourceMiddleware } from "../../define";
 import { globalTags } from "../globalTags";
 import { globalResources } from "../globalResources";
 import type { Store } from "../../models/Store";
-import type { ITask, IEvent, IEventEmission } from "../../defs";
+import type {
+  ITask,
+  IEvent,
+  IEventEmission,
+  DependencyMapType,
+} from "../../defs";
 import type {
   TunnelRunner,
   TunnelTaskSelector,
@@ -18,9 +23,9 @@ const originalRuns = new WeakMap<
 
 export const tunnelResourceMiddleware = defineResourceMiddleware<
   void,
-  any,
+  DependencyMapType,
   TunnelRunner,
-  any
+  DependencyMapType
 >({
   id: "globals.middleware.resource.tunnel",
   dependencies: {
@@ -30,14 +35,16 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
   // Only applies to resources tagged with globals.tags.tunnel
   everywhere: (resource) => globalTags.tunnel.exists(resource),
   run: async ({ resource, next }, { store, eventManager }) => {
+    const deps = { store, eventManager } as unknown as Record<string, any>;
+    const { store: s, eventManager: em } = deps;
     // Initialize the resource and get its value (tunnel runner)
     const value = (await next(resource.config)) as TunnelRunner;
 
     const mode = value.mode || "none";
     const delivery = value.eventDeliveryMode || "mirror";
-    const tasks = value.tasks ? resolveTasks(store, value.tasks) : [];
+    const tasks = value.tasks ? resolveTasks(s as any, value.tasks) : [];
     const events = value.events
-      ? resolveEvents(store, value.events as any)
+      ? resolveEvents(s as any, value.events as unknown as TunnelEventSelector)
       : [];
 
     if (mode === "client" || mode === "both") {
@@ -63,7 +70,9 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
     // Override selected tasks' run() to delegate to tunnel runner (reversible)
     for (const t of tasks) {
       // Enforce single-owner policy: a task can be tunneled by only one resource
-      const currentOwner: string | undefined = t[symbolTunneledBy];
+      const currentOwner = (
+        t as unknown as Record<symbol, string | undefined>
+      )[symbolTunneledBy];
       const resourceId = resource.definition.id;
       if (currentOwner && currentOwner !== resourceId) {
         tunnelOwnershipConflictError.throw({
@@ -73,11 +82,11 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
         });
       }
       if (!originalRuns.has(t)) {
-        originalRuns.set(t, t.run as any);
+        originalRuns.set(t, t.run);
       }
-      t.run = (async (input: any) => {
-        return value.run!(t as any, input);
-      }) as any;
+      t.run = (async (input: unknown) => {
+        return value.run!(t as unknown as ITask, input);
+      }) as unknown as ITask["run"];
       t.isTunneled = true;
       t[symbolTunneledBy] = resourceId;
     }
@@ -87,7 +96,10 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
       // Install a global emission interceptor for selected events
       // Install an emission interceptor for this tunnel instance as well
       eventManager.intercept(
-        async (next: any, emission: IEventEmission<any>) => {
+        async (
+          next: (emission: IEventEmission<any>) => Promise<void>,
+          emission: IEventEmission<any>,
+        ) => {
           if (!selectedEventIds.has(emission.id)) {
             return next(emission);
           }

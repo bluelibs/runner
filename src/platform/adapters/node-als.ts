@@ -2,6 +2,6 @@
 export async function loadAsyncLocalStorageClass() {
   // Use require for Jest/Node compatibility - this file is Node-specific anyway
 
-  const mod = require("node:async_hooks");
-  return (mod as any).AsyncLocalStorage;
+  const mod = require("node:async_hooks") as typeof import("node:async_hooks");
+  return mod.AsyncLocalStorage;
 }

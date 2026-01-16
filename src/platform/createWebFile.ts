@@ -15,5 +15,5 @@ export function createWebFile(
     id,
     meta,
     _web: { blob },
-  } as any;
+  } as RunnerFileSentinel & { _web: { blob: Blob } };
 }

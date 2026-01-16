@@ -7,7 +7,7 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   async init() {}
 
   onUncaughtException(handler: (error: any) => void) {
-    const tgt: any = globalThis as any;
+    const tgt = globalThis as unknown as Record<string, any>;
     if (tgt.addEventListener) {
       const h = (e: any) => handler(e?.error ?? e);
       tgt.addEventListener("error", h);
@@ -17,7 +17,7 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   }
 
   onUnhandledRejection(handler: (reason: any) => void) {
-    const tgt: any = globalThis as any;
+    const tgt = globalThis as unknown as Record<string, any>;
     if (tgt.addEventListener) {
       const wrap = (e: any) => handler(e?.reason ?? e);
       tgt.addEventListener("unhandledrejection", wrap);
@@ -27,13 +27,13 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   }
 
   onShutdownSignal(handler: () => void) {
-    const tgt: any = globalThis as any;
+    const tgt = globalThis as unknown as Record<string, any>;
     if (tgt.addEventListener) {
       const handlers: { before?: any; visibility?: any } = {};
       handlers.before = (e?: any) => handler();
       tgt.addEventListener("beforeunload", handlers.before);
 
-      const doc: any = (globalThis as any).document;
+      const doc = (globalThis as unknown as Record<string, any>).document;
       if (doc) {
         handlers.visibility = () => {
           if (doc.visibilityState === "hidden") handler();
@@ -55,10 +55,10 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   }
 
   getEnv(key: string): string | undefined {
-    const g: any = globalThis as any;
+    const g = globalThis as unknown as Record<string, any>;
     if (g.__ENV__ && typeof g.__ENV__ === "object") return g.__ENV__[key];
-    if (typeof process !== "undefined" && (process as any).env)
-      return (process as any).env[key];
+    if (typeof process !== "undefined" && (process as unknown as { env: Record<string, string> }).env)
+      return (process as unknown as { env: Record<string, string> }).env[key];
     if (g.env && typeof g.env === "object") return g.env[key];
     return undefined;
   }
