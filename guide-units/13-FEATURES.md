@@ -1,7 +1,5 @@
 ## Caching
 
-
-
 Because nobody likes waiting for the same expensive operation twice:
 
 ```typescript
@@ -20,7 +18,7 @@ const expensiveTask = r
     // This expensive operation will be cached
     return await doExpensiveCalculation(input.userId);
   })
-});
+  .build();
 
 // Global cache configuration
 const app = r
@@ -44,7 +42,7 @@ import { r } from "@bluelibs/runner";
 
 const redisCacheFactory = r
   .task("globals.tasks.cacheFactory") // Same ID as the default task
-  .run(async (input: { input: any }) => new RedisCache(input))
+  .run(async (input: any) => new RedisCache(input))
   .build();
 
 const app = r
@@ -121,11 +119,11 @@ for (let i = 0; i < 1000; i++) {
 ```typescript
 const task = r
   .task("app.performance.example")
-  middleware: [
+  .middleware([
     fastAuthCheck, // ~0.1ms
     slowRateLimiting, // ~2ms
     expensiveLogging, // ~5ms
-  ],
+  ])
   .run(async () => null)
   .build();
 ```
@@ -148,7 +146,7 @@ const database = r
 ```typescript
 const expensiveTask = r
   .task("app.performance.expensive")
-  .middleware([globals.middleware.cache.with({ ttl: 60000 })])
+  .middleware([globals.middleware.task.cache.with({ ttl: 60000 })])
   .run(async (input) => {
     // This expensive computation is cached
     return performExpensiveCalculation(input);
@@ -296,4 +294,3 @@ Best practices:
 - Consider network conditions when setting API call timeouts
 
 > **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It’s not me, it’s your molasses‑flavored endpoint. I just blow the whistle."
-

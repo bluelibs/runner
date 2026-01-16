@@ -1,7 +1,5 @@
 ## Async Context
 
-
-
 Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node). Use the fluent builder under `r.asyncContext` to create contexts that can be registered and injected as dependencies.
 
 ```typescript
@@ -38,5 +36,3 @@ const whoAmI = r
 
 const app = r.resource("app").register([requestContext, whoAmI]).build();
 ```
-
-// Legacy section for Private Context - different from Async Context

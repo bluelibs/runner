@@ -3,14 +3,7 @@
 Here's a more realistic application structure that shows everything working together:
 
 ```typescript
-import {
-  resource,
-  task,
-  event,
-  middleware,
-  run,
-  createContext,
-} from "@bluelibs/runner";
+import { r, run, createContext } from "@bluelibs/runner";
 
 // Configuration
 const config = r
@@ -74,7 +67,7 @@ const userService = r
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userService, userRegistered })
-  .run(async ({ input: userData }, { userService, userRegistered }) => {
+  .run(async (userData, { userService, userRegistered }) => {
     const user = await userService.createUser(userData);
     await userRegistered({ userId: user.id, email: user.email });
     return user;
@@ -101,7 +94,14 @@ const sendWelcomeEmail = r
 // Express server
 const server = r
   .resource("app.server")
-  .register([config, database, userService, registerUser, adminOnlyTask, sendWelcomeEmail])
+  .register([
+    config,
+    database,
+    userService,
+    registerUser,
+    adminOnlyTask,
+    sendWelcomeEmail,
+  ])
   .dependencies({ config, registerUser, adminOnlyTask })
   .init(async (_config, { config, registerUser, adminOnlyTask }) => {
     const app = express();
@@ -136,9 +136,9 @@ const server = r
     const server = app.listen(config.port);
     console.log(`Server running on port ${config.port}`);
     return server;
-  },
-  dispose: async (server) => server.close(),
-});
+  })
+  .dispose(async (server) => server.close())
+  .build();
 
 // Start the application with enhanced run options
 const { dispose, taskRunner, eventManager } = await run(server, {
@@ -155,4 +155,3 @@ process.on("SIGTERM", async () => {
 ```
 
 > **runtime:** "Ah yes, the 'Real‑World Example'—a terrarium where nothing dies and every request is polite. Release it into production and watch nature document a very different ecosystem."
-

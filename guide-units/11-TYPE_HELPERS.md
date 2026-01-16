@@ -1,7 +1,5 @@
 ## Type Helpers
 
-
-
 These utility types help you extract the generics from tasks, resources, and events without re-declaring them. Import them from `@bluelibs/runner`.
 
 ```ts
@@ -85,4 +83,3 @@ const handleRequest = r
 ```
 
 > **runtime:** "Context: global state with manners. You invented a teleporting clipboard for data and called it 'nice.' Forget to `provide()` once and I’ll unleash the 'Context not available' banshee scream exactly where your logs are least helpful."
-

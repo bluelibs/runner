@@ -1,7 +1,5 @@
 ## System Shutdown Hooks
 
- Hooks
-
 _Graceful shutdown and cleanup when your app needs to stop_
 
 The framework includes built-in support for graceful shutdowns with automatic cleanup and configurable shutdown hooks:
@@ -123,4 +121,3 @@ await run(app, {
 - Stop accepting new work before cleaning up
 
 > **runtime:** "An error boundary: a trampoline under your tightrope. I’m the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
-

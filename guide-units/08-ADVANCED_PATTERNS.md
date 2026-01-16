@@ -41,8 +41,8 @@ const userRegistration = r
     }
 
     return user;
-  },
-});
+  })
+  .build();
 ```
 
 **When to use optional dependencies:**
@@ -103,7 +103,10 @@ const serializerSetup = r
 
     // Custom types via factory
     class Distance {
-      constructor(public value: number, public unit: string) {}
+      constructor(
+        public value: number,
+        public unit: string,
+      ) {}
       toJSONValue() {
         return { value: this.value, unit: this.unit };
       }
@@ -158,7 +161,7 @@ app = app.build();
 const remoteTasksTunnel = r
   .resource("app.tunnels.http")
   .tags([globals.tags.tunnel])
-  .dependencies({ createClient: globals.resource.httpClientFactory })
+  .dependencies({ createClient: globals.resources.httpClientFactory })
   .init(async (_, { createClient }) => ({
     mode: "client", // or "server", or "none", or "both" for emulating network infrastructure
     transport: "http", // the only one supported for now
@@ -173,4 +176,4 @@ const remoteTasksTunnel = r
 
 This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
 
-For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
+For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](../readmes/TUNNELS.md).

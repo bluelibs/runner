@@ -39,18 +39,18 @@ const runtime = await run(app);
 
 ---
 
-| Resource                                                                                                            | Type    | Description                                    |
-| ------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------- |
-| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website | Overview and features                          |
-| [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases              |
-| [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling                    |
-| [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference                    |
-| [AI-Friendly Docs](https://github.com/bluelibs/runner/blob/main/AI.md)                                              | Docs    | Compact summary (<5000 tokens)                 |
-| [Migration Guide (3.x → 4.x)](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade instructions              |
-| [Design Documents](https://github.com/bluelibs/runner/blob/main/readmes)                                            | Docs    | Architecture notes and deep dives              |
-| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification            |
-| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM                |
-| [AI Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)                   | Chatbot | Interactive Q&A assistant                      |
+| Resource                                                                                                            | Type    | Description                         |
+| ------------------------------------------------------------------------------------------------------------------- | ------- | ----------------------------------- |
+| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website | Overview and features               |
+| [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
+| [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
+| [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
+| [AI-Friendly Docs](https://github.com/bluelibs/runner/blob/main/AI.md)                                              | Docs    | Compact summary (<5000 tokens)      |
+| [Migration Guide (3.x → 4.x)](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade instructions   |
+| [Design Documents](https://github.com/bluelibs/runner/blob/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
+| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
+| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
+| [AI Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)                  | Chatbot | Interactive Q&A assistant           |
 
 ### Community & Policies
 
@@ -140,7 +140,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [What's in the Box?](#-whats-in-the-box) - Feature matrix
 - [Your First 5 Minutes](#your-first-5-minutes) - **Start here!**
 - [Quick Start](#quick-start) - Full Express example
-- [Learning Guide](#learning-guide-common-patterns) - Common patterns
+- [Learning Guide](#learning-guide) - Common patterns
 - [Quick Wins](#-quick-wins-copy-paste-solutions) - Copy-paste solutions
 - [The Big Five](#the-big-five) - Core concepts
 

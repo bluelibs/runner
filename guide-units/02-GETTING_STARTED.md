@@ -1,3 +1,16 @@
+## Your First 5 Minutes
+
+**New to Runner?** Here's the absolute minimum you need to know:
+
+1. **Tasks** are your business logic functions
+2. **Resources** are shared services (database, config, etc.)
+3. **You compose them** using `r.resource()` and `r.task()`
+4. **You run them** with `run(app)` which gives you `runTask()` and `dispose()`
+
+That's it! Now let's see it in action:
+
+---
+
 ## Quick Start
 
 Let's start with the simplest possible example. Just copy this, run it, and you'll see Runner in action:
@@ -132,11 +145,10 @@ const app = resource({ id: "app", register: [db, add] });
 await run(app);
 ```
 
-See [complete docs](./readmes/FLUENT_BUILDERS.md) for migration tips and side‑by‑side patterns.
+See [complete docs](../readmes/FLUENT_BUILDERS.md) for migration tips and side‑by‑side patterns.
 
 ### Platform & Async Context
 
 Runner auto-detects the platform and adapts behavior at runtime. The only feature present only in Node.js is the use of `AsyncLocalStorage` for managing async context.
 
 ---
-

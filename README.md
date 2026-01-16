@@ -39,18 +39,18 @@ const runtime = await run(app);
 
 ---
 
-| Resource                                                                                                            | Type    | Description                                    |
-| ------------------------------------------------------------------------------------------------------------------- | ------- | ---------------------------------------------- |
-| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website | Overview and features                          |
-| [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases              |
-| [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling                    |
-| [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference                    |
-| [AI-Friendly Docs](https://github.com/bluelibs/runner/blob/main/AI.md)                                              | Docs    | Compact summary (<5000 tokens)                 |
-| [Migration Guide (3.x → 4.x)](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade instructions              |
-| [Design Documents](https://github.com/bluelibs/runner/blob/main/readmes)                                            | Docs    | Architecture notes and deep dives              |
-| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification            |
-| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM                |
-| [AI Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)                   | Chatbot | Interactive Q&A assistant                      |
+| Resource                                                                                                            | Type    | Description                         |
+| ------------------------------------------------------------------------------------------------------------------- | ------- | ----------------------------------- |
+| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website | Overview and features               |
+| [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
+| [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
+| [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
+| [AI-Friendly Docs](https://github.com/bluelibs/runner/blob/main/AI.md)                                              | Docs    | Compact summary (<5000 tokens)      |
+| [Migration Guide (3.x → 4.x)](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade instructions   |
+| [Design Documents](https://github.com/bluelibs/runner/blob/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
+| [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
+| [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
+| [AI Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner?model=gpt-5-thinking)                  | Chatbot | Interactive Q&A assistant           |
 
 ### Community & Policies
 
@@ -140,7 +140,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [What's in the Box?](#-whats-in-the-box) - Feature matrix
 - [Your First 5 Minutes](#your-first-5-minutes) - **Start here!**
 - [Quick Start](#quick-start) - Full Express example
-- [Learning Guide](#learning-guide-common-patterns) - Common patterns
+- [Learning Guide](#learning-guide) - Common patterns
 - [Quick Wins](#-quick-wins-copy-paste-solutions) - Copy-paste solutions
 - [The Big Five](#the-big-five) - Core concepts
 
@@ -392,6 +392,19 @@ Runner comes with **everything you need** to build production apps:
 **No extra packages needed.** It's all included and works together seamlessly.
 
 ---
+## Your First 5 Minutes
+
+**New to Runner?** Here's the absolute minimum you need to know:
+
+1. **Tasks** are your business logic functions
+2. **Resources** are shared services (database, config, etc.)
+3. **You compose them** using `r.resource()` and `r.task()`
+4. **You run them** with `run(app)` which gives you `runTask()` and `dispose()`
+
+That's it! Now let's see it in action:
+
+---
+
 ## Quick Start
 
 Let's start with the simplest possible example. Just copy this, run it, and you'll see Runner in action:
@@ -526,14 +539,13 @@ const app = resource({ id: "app", register: [db, add] });
 await run(app);
 ```
 
-See [complete docs](./readmes/FLUENT_BUILDERS.md) for migration tips and side‑by‑side patterns.
+See [complete docs](../readmes/FLUENT_BUILDERS.md) for migration tips and side‑by‑side patterns.
 
 ### Platform & Async Context
 
 Runner auto-detects the platform and adapts behavior at runtime. The only feature present only in Node.js is the use of `AsyncLocalStorage` for managing async context.
 
 ---
-
 ## Learning Guide
 
 ### Common Patterns
@@ -792,8 +804,6 @@ const processPayment = r
 
 ---
 
-
-
 ## The Big Five
 
 The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using the runner effectively.
@@ -938,8 +948,11 @@ Use `.fork(newId)` to create multiple instances of a "template" resource with di
 
 ```typescript
 // Define a reusable template
-const mailerBase = r.resource<{ smtp: string }>("base.mailer")
-  .init(async (cfg) => ({ send: (to: string) => console.log(`Sending via ${cfg.smtp}`) }))
+const mailerBase = r
+  .resource<{ smtp: string }>("base.mailer")
+  .init(async (cfg) => ({
+    send: (to: string) => console.log(`Sending via ${cfg.smtp}`),
+  }))
   .build();
 
 // Fork with distinct identities - export these for dependency use
@@ -947,14 +960,16 @@ export const txMailer = mailerBase.fork("app.mailers.transactional");
 export const mktMailer = mailerBase.fork("app.mailers.marketing");
 
 // Use forked resources as dependencies
-const orderService = r.task("app.tasks.processOrder")
-  .dependencies({ mailer: txMailer })  // ← uses forked identity
-  .run(async (input, { mailer }) => { 
+const orderService = r
+  .task("app.tasks.processOrder")
+  .dependencies({ mailer: txMailer }) // ← uses forked identity
+  .run(async (input, { mailer }) => {
     mailer.send(input.customerEmail);
   })
   .build();
 
-const app = r.resource("app")
+const app = r
+  .resource("app")
   .register([
     txMailer.with({ smtp: "tx.smtp.com" }),
     mktMailer.with({ smtp: "mkt.smtp.com" }),
@@ -964,6 +979,7 @@ const app = r.resource("app")
 ```
 
 Key points:
+
 - **`.fork()` returns a built `IResource`** — no need to call `.build()` again
 - **Tags, middleware, and type parameters are inherited**
 - **Each fork gets independent runtime** — no shared state
@@ -1537,7 +1553,6 @@ try {
 ```
 
 ---
-
 ## 📚 Quick Reference: Cheat Sheet
 
 **Bookmark this section for quick lookups!**
@@ -1733,8 +1748,6 @@ const task = r.task("id")
 
 ## run() and RunOptions
 
-
-
 The `run()` function boots a root `resource` and returns a `RunResult` handle to interact with your system.
 
 Basic usage:
@@ -1872,7 +1885,6 @@ await run(app);
 ```
 
 > **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You’re collapsing the waveform of a task at runtime and I’m Schrödinger’s runtime, praying the cat hasn’t overridden `run()` with `throw new Error('lol')`."
-
 ## Optional Dependencies
 
 _Making your app resilient when services aren't available_
@@ -1916,8 +1928,8 @@ const userRegistration = r
     }
 
     return user;
-  },
-});
+  })
+  .build();
 ```
 
 **When to use optional dependencies:**
@@ -1978,7 +1990,10 @@ const serializerSetup = r
 
     // Custom types via factory
     class Distance {
-      constructor(public value: number, public unit: string) {}
+      constructor(
+        public value: number,
+        public unit: string,
+      ) {}
       toJSONValue() {
         return { value: this.value, unit: this.unit };
       }
@@ -2033,7 +2048,7 @@ app = app.build();
 const remoteTasksTunnel = r
   .resource("app.tunnels.http")
   .tags([globals.tags.tunnel])
-  .dependencies({ createClient: globals.resource.httpClientFactory })
+  .dependencies({ createClient: globals.resources.httpClientFactory })
   .init(async (_, { createClient }) => ({
     mode: "client", // or "server", or "none", or "both" for emulating network infrastructure
     transport: "http", // the only one supported for now
@@ -2048,10 +2063,8 @@ const remoteTasksTunnel = r
 
 This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
 
-For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
+For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](../readmes/TUNNELS.md).
 ## Async Context
-
-
 
 Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node). Use the fluent builder under `r.asyncContext` to create contexts that can be registered and injected as dependencies.
 
@@ -2089,11 +2102,7 @@ const whoAmI = r
 
 const app = r.resource("app").register([requestContext, whoAmI]).build();
 ```
-
-// Legacy section for Private Context - different from Async Context
 ## Fluent Builders (`r.*`)
-
- (`r.*`)
 
 For a more ergonomic and chainable way to define your components, Runner offers a fluent builder API under the `r` namespace. These builders are fully type-safe, improve readability for complex definitions, and compile to the standard Runner definitions with zero runtime overhead.
 
@@ -2150,11 +2159,8 @@ await run(app);
 
 The builder API provides a clean, step-by-step way to construct everything from simple tasks to complex resources with middleware, tags, and schemas.
 
-For a complete guide and more examples, check out the [full Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).
-
+For a complete guide and more examples, check out the [full Fluent Builders documentation](../readmes/FLUENT_BUILDERS.md).
 ## Type Helpers
-
-
 
 These utility types help you extract the generics from tasks, resources, and events without re-declaring them. Import them from `@bluelibs/runner`.
 
@@ -2239,10 +2245,7 @@ const handleRequest = r
 ```
 
 > **runtime:** "Context: global state with manners. You invented a teleporting clipboard for data and called it 'nice.' Forget to `provide()` once and I’ll unleash the 'Context not available' banshee scream exactly where your logs are least helpful."
-
 ## System Shutdown Hooks
-
- Hooks
 
 _Graceful shutdown and cleanup when your app needs to stop_
 
@@ -2365,10 +2368,7 @@ await run(app, {
 - Stop accepting new work before cleaning up
 
 > **runtime:** "An error boundary: a trampoline under your tightrope. I’m the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
-
 ## Caching
-
-
 
 Because nobody likes waiting for the same expensive operation twice:
 
@@ -2388,7 +2388,7 @@ const expensiveTask = r
     // This expensive operation will be cached
     return await doExpensiveCalculation(input.userId);
   })
-});
+  .build();
 
 // Global cache configuration
 const app = r
@@ -2412,7 +2412,7 @@ import { r } from "@bluelibs/runner";
 
 const redisCacheFactory = r
   .task("globals.tasks.cacheFactory") // Same ID as the default task
-  .run(async (input: { input: any }) => new RedisCache(input))
+  .run(async (input: any) => new RedisCache(input))
   .build();
 
 const app = r
@@ -2489,11 +2489,11 @@ for (let i = 0; i < 1000; i++) {
 ```typescript
 const task = r
   .task("app.performance.example")
-  middleware: [
+  .middleware([
     fastAuthCheck, // ~0.1ms
     slowRateLimiting, // ~2ms
     expensiveLogging, // ~5ms
-  ],
+  ])
   .run(async () => null)
   .build();
 ```
@@ -2516,7 +2516,7 @@ const database = r
 ```typescript
 const expensiveTask = r
   .task("app.performance.expensive")
-  .middleware([globals.middleware.cache.with({ ttl: 60000 })])
+  .middleware([globals.middleware.task.cache.with({ ttl: 60000 })])
   .run(async (input) => {
     // This expensive computation is cached
     return performExpensiveCalculation(input);
@@ -2664,10 +2664,7 @@ Best practices:
 - Consider network conditions when setting API call timeouts
 
 > **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It’s not me, it’s your molasses‑flavored endpoint. I just blow the whistle."
-
 ## Logging
-
-
 
 _The structured logging system that actually makes debugging enjoyable_
 
@@ -2787,7 +2784,7 @@ const RequestContext = createContext<{ requestId: string; userId: string }>(
 const requestHandler = r
   .task("app.tasks.handleRequest")
   .dependencies({ logger: globals.resources.logger })
-  .run(async ({ input: requestData }, { logger }) => {
+  .run(async (requestData, { logger }) => {
     const request = RequestContext.use();
 
     // Create a contextual logger with bound metadata with source and context
@@ -3117,10 +3114,7 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it’s off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
-
 ## Meta
-
-
 
 _The structured way to describe what your components do and control their behavior_
 
@@ -3166,7 +3160,7 @@ const sendWelcomeEmail = r
     description: "Sends a welcome email to newly registered users",
   })
   .dependencies({ emailService })
-  .run(async ({ input: userData }, { emailService }) => {
+  .run(async (userData, { emailService }) => {
     // Email sending logic
   })
   .build();
@@ -3205,7 +3199,7 @@ const expensiveApiTask = r
     apiVersion: "v2",
     costLevel: "high", // Custom property!
   })
-  .run(async ({ input: prompt }) => {
+  .run(async (prompt) => {
     // AI generation logic
   })
   .build();
@@ -3411,7 +3405,7 @@ const userSchema = z.object({
 const createUserTask = r
   .task("app.tasks.createUser")
   .inputSchema(userSchema) // Works directly with Zod!
-  .run(async ({ input: userData }) => {
+  .run(async (userData) => {
     // userData is validated and properly typed
     return { id: "user-123", ...userData };
   })
@@ -3550,7 +3544,7 @@ Add a `configSchema` to middleware to validate configurations. Like resources, *
 ```typescript
 const timingConfigSchema = z.object({
   timeout: z.number().positive(),
-  logLevel: z.enum(["debug", "info", "warn", "error"])).default("info"),
+  logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
   logSuccessful: z.boolean().default(true),
 });
 
@@ -3617,7 +3611,7 @@ const advancedSchema = z
 const paymentTask = r
   .task("app.tasks.payment")
   .inputSchema(advancedSchema)
-  .run(async ({ input: payment }) => {
+  .run(async (payment) => {
     // payment.amount is now a number (transformed from string)
     // All validations have passed
     return processPayment(payment);
@@ -3712,7 +3706,7 @@ type UserData = z.infer<typeof userSchema>;
 const createUser = r
   .task("app.tasks.createUser.zod")
   .inputSchema(userSchema)
-  .run(async (input: { input: UserData }) => {
+  .run(async (input: UserData) => {
     // Both runtime validation AND compile-time typing
     return { id: "user-123", ...input };
   })
@@ -3720,7 +3714,6 @@ const createUser = r
 ```
 
 > **runtime:** "Validation: you hand me a velvet rope and a clipboard. 'Name? Email? Age within bounds?' I stamp passports or eject violators with a `ValidationError`. Dress code is types, darling."
-
 ## Internal Services
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):
@@ -3883,14 +3876,7 @@ This pattern allows you to maintain clean, type-safe code while handling the ine
 Here's a more realistic application structure that shows everything working together:
 
 ```typescript
-import {
-  resource,
-  task,
-  event,
-  middleware,
-  run,
-  createContext,
-} from "@bluelibs/runner";
+import { r, run, createContext } from "@bluelibs/runner";
 
 // Configuration
 const config = r
@@ -3954,7 +3940,7 @@ const userService = r
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userService, userRegistered })
-  .run(async ({ input: userData }, { userService, userRegistered }) => {
+  .run(async (userData, { userService, userRegistered }) => {
     const user = await userService.createUser(userData);
     await userRegistered({ userId: user.id, email: user.email });
     return user;
@@ -3981,7 +3967,14 @@ const sendWelcomeEmail = r
 // Express server
 const server = r
   .resource("app.server")
-  .register([config, database, userService, registerUser, adminOnlyTask, sendWelcomeEmail])
+  .register([
+    config,
+    database,
+    userService,
+    registerUser,
+    adminOnlyTask,
+    sendWelcomeEmail,
+  ])
   .dependencies({ config, registerUser, adminOnlyTask })
   .init(async (_config, { config, registerUser, adminOnlyTask }) => {
     const app = express();
@@ -4016,9 +4009,9 @@ const server = r
     const server = app.listen(config.port);
     console.log(`Server running on port ${config.port}`);
     return server;
-  },
-  dispose: async (server) => server.close(),
-});
+  })
+  .dispose(async (server) => server.close())
+  .build();
 
 // Start the application with enhanced run options
 const { dispose, taskRunner, eventManager } = await run(server, {
@@ -4035,7 +4028,6 @@ process.on("SIGTERM", async () => {
 ```
 
 > **runtime:** "Ah yes, the 'Real‑World Example'—a terrarium where nothing dies and every request is polite. Release it into production and watch nature document a very different ecosystem."
-
 ## Testing
 
 

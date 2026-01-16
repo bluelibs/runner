@@ -1,7 +1,5 @@
 ## run() and RunOptions
 
-
-
 The `run()` function boots a root `resource` and returns a `RunResult` handle to interact with your system.
 
 Basic usage:
@@ -139,4 +137,3 @@ await run(app);
 ```
 
 > **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You’re collapsing the waveform of a task at runtime and I’m Schrödinger’s runtime, praying the cat hasn’t overridden `run()` with `throw new Error('lol')`."
-

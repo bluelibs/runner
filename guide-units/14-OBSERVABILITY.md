@@ -1,7 +1,5 @@
 ## Logging
 
-
-
 _The structured logging system that actually makes debugging enjoyable_
 
 BlueLibs Runner comes with a built-in logging system that's structured, and doesn't make you hate your life when you're trying to debug at 2 AM.
@@ -120,7 +118,7 @@ const RequestContext = createContext<{ requestId: string; userId: string }>(
 const requestHandler = r
   .task("app.tasks.handleRequest")
   .dependencies({ logger: globals.resources.logger })
-  .run(async ({ input: requestData }, { logger }) => {
+  .run(async (requestData, { logger }) => {
     const request = RequestContext.use();
 
     // Create a contextual logger with bound metadata with source and context
@@ -450,4 +448,3 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it’s off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
-

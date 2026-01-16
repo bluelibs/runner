@@ -54,7 +54,7 @@ Common patterns and learning guide for developers new to Runner.
 
 ### 05-CORE_CONCEPTS.md
 
-The Big Five: Tasks, Resources, Events, Middleware, Tags, and Errors - the foundation of Runner.
+The Big Five: Tasks, Resources, Events, Middleware, and Tags - the foundation of Runner. Also covers Errors for typed error handling.
 
 ### 06-QUICK_REFERENCE.md
 

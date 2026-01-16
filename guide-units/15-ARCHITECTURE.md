@@ -1,7 +1,5 @@
 ## Meta
 
-
-
 _The structured way to describe what your components do and control their behavior_
 
 Metadata in BlueLibs Runner provides a systematic way to document, categorize, and control the behavior of your tasks, resources, events, and middleware. Think of it as your component's passport - it tells you and your tools everything they need to know about what this component does and how it should be treated.
@@ -46,7 +44,7 @@ const sendWelcomeEmail = r
     description: "Sends a welcome email to newly registered users",
   })
   .dependencies({ emailService })
-  .run(async ({ input: userData }, { emailService }) => {
+  .run(async (userData, { emailService }) => {
     // Email sending logic
   })
   .build();
@@ -85,7 +83,7 @@ const expensiveApiTask = r
     apiVersion: "v2",
     costLevel: "high", // Custom property!
   })
-  .run(async ({ input: prompt }) => {
+  .run(async (prompt) => {
     // AI generation logic
   })
   .build();
@@ -291,7 +289,7 @@ const userSchema = z.object({
 const createUserTask = r
   .task("app.tasks.createUser")
   .inputSchema(userSchema) // Works directly with Zod!
-  .run(async ({ input: userData }) => {
+  .run(async (userData) => {
     // userData is validated and properly typed
     return { id: "user-123", ...userData };
   })
@@ -430,7 +428,7 @@ Add a `configSchema` to middleware to validate configurations. Like resources, *
 ```typescript
 const timingConfigSchema = z.object({
   timeout: z.number().positive(),
-  logLevel: z.enum(["debug", "info", "warn", "error"])).default("info"),
+  logLevel: z.enum(["debug", "info", "warn", "error"]).default("info"),
   logSuccessful: z.boolean().default(true),
 });
 
@@ -497,7 +495,7 @@ const advancedSchema = z
 const paymentTask = r
   .task("app.tasks.payment")
   .inputSchema(advancedSchema)
-  .run(async ({ input: payment }) => {
+  .run(async (payment) => {
     // payment.amount is now a number (transformed from string)
     // All validations have passed
     return processPayment(payment);
@@ -592,7 +590,7 @@ type UserData = z.infer<typeof userSchema>;
 const createUser = r
   .task("app.tasks.createUser.zod")
   .inputSchema(userSchema)
-  .run(async (input: { input: UserData }) => {
+  .run(async (input: UserData) => {
     // Both runtime validation AND compile-time typing
     return { id: "user-123", ...input };
   })
@@ -600,4 +598,3 @@ const createUser = r
 ```
 
 > **runtime:** "Validation: you hand me a velvet rope and a clipboard. 'Name? Email? Age within bounds?' I stamp passports or eject violators with a `ValidationError`. Dress code is types, darling."
-

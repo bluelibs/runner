@@ -1,5 +1,3 @@
-
-
 ## The Big Five
 
 The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using the runner effectively.
@@ -144,8 +142,11 @@ Use `.fork(newId)` to create multiple instances of a "template" resource with di
 
 ```typescript
 // Define a reusable template
-const mailerBase = r.resource<{ smtp: string }>("base.mailer")
-  .init(async (cfg) => ({ send: (to: string) => console.log(`Sending via ${cfg.smtp}`) }))
+const mailerBase = r
+  .resource<{ smtp: string }>("base.mailer")
+  .init(async (cfg) => ({
+    send: (to: string) => console.log(`Sending via ${cfg.smtp}`),
+  }))
   .build();
 
 // Fork with distinct identities - export these for dependency use
@@ -153,14 +154,16 @@ export const txMailer = mailerBase.fork("app.mailers.transactional");
 export const mktMailer = mailerBase.fork("app.mailers.marketing");
 
 // Use forked resources as dependencies
-const orderService = r.task("app.tasks.processOrder")
-  .dependencies({ mailer: txMailer })  // ← uses forked identity
-  .run(async (input, { mailer }) => { 
+const orderService = r
+  .task("app.tasks.processOrder")
+  .dependencies({ mailer: txMailer }) // ← uses forked identity
+  .run(async (input, { mailer }) => {
     mailer.send(input.customerEmail);
   })
   .build();
 
-const app = r.resource("app")
+const app = r
+  .resource("app")
   .register([
     txMailer.with({ smtp: "tx.smtp.com" }),
     mktMailer.with({ smtp: "mkt.smtp.com" }),
@@ -170,6 +173,7 @@ const app = r.resource("app")
 ```
 
 Key points:
+
 - **`.fork()` returns a built `IResource`** — no need to call `.build()` again
 - **Tags, middleware, and type parameters are inherited**
 - **Each fork gets independent runtime** — no shared state
@@ -743,4 +747,3 @@ try {
 ```
 
 ---
-

@@ -1,7 +1,5 @@
 ## Fluent Builders (`r.*`)
 
- (`r.*`)
-
 For a more ergonomic and chainable way to define your components, Runner offers a fluent builder API under the `r` namespace. These builders are fully type-safe, improve readability for complex definitions, and compile to the standard Runner definitions with zero runtime overhead.
 
 Here’s a quick taste of how it looks, with and without `zod` for validation:
@@ -57,5 +55,4 @@ await run(app);
 
 The builder API provides a clean, step-by-step way to construct everything from simple tasks to complex resources with middleware, tags, and schemas.
 
-For a complete guide and more examples, check out the [full Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).
-
+For a complete guide and more examples, check out the [full Fluent Builders documentation](../readmes/FLUENT_BUILDERS.md).
