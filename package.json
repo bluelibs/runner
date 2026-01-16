@@ -95,7 +95,7 @@
     "lint": "eslint ./src",
     "lint:fix": "eslint ./src --fix",
     "prepublishOnly": "npm run clean && npm run build && npm run build:dashboard",
-    "postbuild": "guide:compose",
+    "postbuild": "npm run guide:compose",
     "typedoc": "typedoc --options typedoc.json",
     "benchmark": "jest --config jest.bench.config.js --verbose --runInBand",
     "benchmark:json": "BENCHMARK_OUTPUT=./benchmark-results.json NODE_OPTIONS=--expose-gc npm run benchmark",

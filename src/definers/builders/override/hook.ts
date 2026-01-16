@@ -1,5 +1,6 @@
 import type {
   DependencyMapType,
+  IEventDefinition,
   IHook,
   IHookDefinition,
   ITaskMeta,
@@ -8,8 +9,10 @@ import type {
 import { defineOverride } from "../../defineOverride";
 import { mergeArray, mergeDependencies } from "../hook/utils";
 
-// Relaxing generic constraint to allow any kind of event definition or strict string
-export type HookOn = any;
+export type HookOn =
+  | "*"
+  | IEventDefinition<any>
+  | readonly IEventDefinition<any>[];
 
 export interface HookOverrideBuilder<
   TDeps extends DependencyMapType,
@@ -43,7 +46,7 @@ type HookOverrideState<
 
 function cloneHookState<
   TDeps extends DependencyMapType,
-  TOn extends IHookDefinition<any, any, any>["on"],
+  TOn extends HookOn,
   TMeta extends ITaskMeta,
   TNextDeps extends DependencyMapType = TDeps,
   TNextOn extends HookOn = TOn,
