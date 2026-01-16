@@ -1,5 +1,6 @@
 import type {
   DependencyMapType,
+  IResource,
   IResourceDefinition,
   IResourceMeta,
   IValidationSchema,
@@ -8,18 +9,99 @@ import type {
   ResourceMiddlewareAttachmentType,
   TagType,
 } from "../../../defs";
-import { symbolFilePath } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
-import { defineResource } from "../../defineResource";
-import type { ResourceFluentBuilder } from "./fluent-builder.interface";
-import type { BuilderState, ResolveConfig } from "./types";
-import { clone, mergeArray, mergeDependencies, mergeRegister } from "./utils";
+import { normalizeThrows } from "../../../tools/throws";
+import { defineOverride } from "../../defineOverride";
+import type { ResourceFluentBuilder } from "../resource/fluent-builder.interface";
+import type { ResolveConfig } from "../resource/types";
+import {
+  mergeArray,
+  mergeDependencies,
+  mergeRegister,
+} from "../resource/utils";
 
-/**
- * Creates a ResourceFluentBuilder from the given state.
- * Each builder method returns a new builder with updated state.
- */
-export function makeResourceBuilder<
+type ResourceOverrideState<
+  TConfig,
+  TValue extends Promise<any>,
+  TDeps extends DependencyMapType,
+  TContext,
+  TMeta extends IResourceMeta,
+  TTags extends TagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[],
+> = Readonly<
+  IResourceDefinition<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    any,
+    any,
+    TMeta,
+    TTags,
+    TMiddleware
+  >
+>;
+
+function cloneResourceState<
+  TConfig,
+  TValue extends Promise<any>,
+  TDeps extends DependencyMapType,
+  TContext,
+  TMeta extends IResourceMeta,
+  TTags extends TagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[],
+  TNextConfig = TConfig,
+  TNextValue extends Promise<any> = TValue,
+  TNextDeps extends DependencyMapType = TDeps,
+  TNextContext = TContext,
+  TNextMeta extends IResourceMeta = TMeta,
+  TNextTags extends TagType[] = TTags,
+  TNextMiddleware extends ResourceMiddlewareAttachmentType[] = TMiddleware,
+>(
+  state: ResourceOverrideState<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >,
+  patch: Partial<
+    ResourceOverrideState<
+      TNextConfig,
+      TNextValue,
+      TNextDeps,
+      TNextContext,
+      TNextMeta,
+      TNextTags,
+      TNextMiddleware
+    >
+  >,
+): ResourceOverrideState<
+  TNextConfig,
+  TNextValue,
+  TNextDeps,
+  TNextContext,
+  TNextMeta,
+  TNextTags,
+  TNextMiddleware
+> {
+  return Object.freeze({
+    ...(state as unknown as ResourceOverrideState<
+      TNextConfig,
+      TNextValue,
+      TNextDeps,
+      TNextContext,
+      TNextMeta,
+      TNextTags,
+      TNextMiddleware
+    >),
+    ...patch,
+  });
+}
+
+function makeResourceOverrideBuilder<
   TConfig,
   TValue extends Promise<any>,
   TDeps extends DependencyMapType,
@@ -28,7 +110,8 @@ export function makeResourceBuilder<
   TTags extends TagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[],
 >(
-  state: BuilderState<
+  base: IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>,
+  state: ResourceOverrideState<
     TConfig,
     TValue,
     TDeps,
@@ -64,7 +147,7 @@ export function makeResourceBuilder<
       options?: { override?: TIsOverride },
     ) {
       const override = options?.override ?? false;
-      const next = clone<
+      const next = cloneResourceState<
         TConfig,
         TValue,
         TDeps,
@@ -87,21 +170,21 @@ export function makeResourceBuilder<
         ) as unknown as TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
       });
 
-      return makeResourceBuilder(next);
+      return makeResourceOverrideBuilder(base as any, next);
     },
     register(items, options) {
       const override = options?.override ?? false;
-      const next = clone(state, {
+      const next = cloneResourceState(state, {
         register: mergeRegister(state.register, items, override),
       });
-      return makeResourceBuilder(next);
+      return makeResourceOverrideBuilder(base as any, next);
     },
     middleware<TNewMw extends ResourceMiddlewareAttachmentType[]>(
       mw: TNewMw,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
-      const next = clone<
+      const next = cloneResourceState<
         TConfig,
         TValue,
         TDeps,
@@ -119,14 +202,14 @@ export function makeResourceBuilder<
       >(state, {
         middleware: mergeArray(state.middleware, mw, override) as TNewMw,
       });
-      return makeResourceBuilder(next);
+      return makeResourceOverrideBuilder(base as any, next);
     },
     tags<TNewTags extends TagType[]>(
       tags: TNewTags,
       options?: { override?: boolean },
     ) {
       const override = options?.override ?? false;
-      const next = clone<
+      const next = cloneResourceState<
         TConfig,
         TValue,
         TDeps,
@@ -147,10 +230,10 @@ export function makeResourceBuilder<
           ...TNewTags,
         ],
       });
-      return makeResourceBuilder(next);
+      return makeResourceOverrideBuilder(base as any, next);
     },
     context<TNewCtx>(factory: () => TNewCtx) {
-      const next = clone<
+      const next = cloneResourceState<
         TConfig,
         TValue,
         TDeps,
@@ -166,7 +249,7 @@ export function makeResourceBuilder<
         TTags,
         TMiddleware
       >(state, { context: factory });
-      return makeResourceBuilder<
+      return makeResourceOverrideBuilder<
         TConfig,
         TValue,
         TDeps,
@@ -174,10 +257,10 @@ export function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(next);
+      >(base as any, next);
     },
     configSchema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
-      const next = clone<
+      const next = cloneResourceState<
         TConfig,
         TValue,
         TDeps,
@@ -193,7 +276,7 @@ export function makeResourceBuilder<
         TTags,
         TMiddleware
       >(state, { configSchema: schema });
-      return makeResourceBuilder<
+      return makeResourceOverrideBuilder<
         TNewConfig,
         TValue,
         TDeps,
@@ -201,10 +284,10 @@ export function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(next);
+      >(base as any, next);
     },
     resultSchema<TResolved>(schema: IValidationSchema<TResolved>) {
-      const next = clone<
+      const next = cloneResourceState<
         TConfig,
         TValue,
         TDeps,
@@ -220,7 +303,7 @@ export function makeResourceBuilder<
         TTags,
         TMiddleware
       >(state, { resultSchema: schema });
-      return makeResourceBuilder<
+      return makeResourceOverrideBuilder<
         TConfig,
         Promise<TResolved>,
         TDeps,
@@ -228,7 +311,7 @@ export function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(next);
+      >(base as any, next);
     },
     init<TNewConfig = TConfig, TNewValue extends Promise<any> = TValue>(
       fn: ResourceInitFn<
@@ -241,7 +324,7 @@ export function makeResourceBuilder<
         TMiddleware
       >,
     ) {
-      const next = clone<
+      const next = cloneResourceState<
         TConfig,
         TValue,
         TDeps,
@@ -257,7 +340,7 @@ export function makeResourceBuilder<
         TTags,
         TMiddleware
       >(state, { init: fn });
-      return makeResourceBuilder<
+      return makeResourceOverrideBuilder<
         ResolveConfig<TConfig, TNewConfig>,
         TNewValue,
         TDeps,
@@ -265,7 +348,7 @@ export function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(next);
+      >(base as any, next);
     },
     dispose(
       fn: NonNullable<
@@ -282,8 +365,8 @@ export function makeResourceBuilder<
         >["dispose"]
       >,
     ) {
-      const next = clone(state, { dispose: fn });
-      return makeResourceBuilder<
+      const next = cloneResourceState(state, { dispose: fn });
+      return makeResourceOverrideBuilder<
         TConfig,
         TValue,
         TDeps,
@@ -291,10 +374,10 @@ export function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(next);
+      >(base as any, next);
     },
     meta<TNewMeta extends IResourceMeta>(m: TNewMeta) {
-      const next = clone<
+      const next = cloneResourceState<
         TConfig,
         TValue,
         TDeps,
@@ -310,7 +393,7 @@ export function makeResourceBuilder<
         TTags,
         TMiddleware
       >(state, { meta: m });
-      return makeResourceBuilder<
+      return makeResourceOverrideBuilder<
         TConfig,
         TValue,
         TDeps,
@@ -318,14 +401,14 @@ export function makeResourceBuilder<
         TNewMeta,
         TTags,
         TMiddleware
-      >(next);
+      >(base as any, next);
     },
     overrides(o: Array<OverridableElements>, options?: { override?: boolean }) {
       const override = options?.override ?? false;
-      const next = clone(state, {
+      const next = cloneResourceState(state, {
         overrides: mergeArray(state.overrides, o, override),
       });
-      return makeResourceBuilder<
+      return makeResourceOverrideBuilder<
         TConfig,
         TValue,
         TDeps,
@@ -333,11 +416,11 @@ export function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(next);
+      >(base as any, next);
     },
     throws(list: ThrowsList) {
-      const next = clone(state, { throws: list });
-      return makeResourceBuilder<
+      const next = cloneResourceState(state, { throws: list });
+      return makeResourceOverrideBuilder<
         TConfig,
         TValue,
         TDeps,
@@ -345,39 +428,64 @@ export function makeResourceBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(next);
+      >(base as any, next);
     },
     build() {
-      const definition: IResourceDefinition<
-        TConfig,
-        TValue,
-        TDeps,
-        TContext,
-        any,
-        any,
-        TMeta,
-        TTags,
-        TMiddleware
-      > = {
-        id: state.id,
-        dependencies: state.dependencies,
-        register: state.register,
-        middleware: state.middleware,
-        tags: state.tags,
-        context: state.context,
-        init: state.init,
-        dispose: state.dispose,
-        configSchema: state.configSchema,
-        resultSchema: state.resultSchema,
-        meta: state.meta,
-        overrides: state.overrides,
-        throws: state.throws,
-      };
-      const resource = defineResource(definition);
-      (resource as { [symbolFilePath]?: string })[symbolFilePath] =
-        state.filePath;
-      return resource;
+      const { id: _id, ...patch } = state;
+      if (patch.throws) {
+        patch.throws = normalizeThrows(
+          { kind: "resource", id: state.id },
+          patch.throws,
+        );
+      }
+      return defineOverride(base, patch as any);
     },
   };
   return builder;
+}
+
+export function resourceOverrideBuilder<
+  TConfig,
+  TValue extends Promise<any>,
+  TDeps extends DependencyMapType,
+  TContext,
+  TMeta extends IResourceMeta,
+  TTags extends TagType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[],
+>(
+  base: IResource<TConfig, TValue, TDeps, TContext, TMeta, TTags, TMiddleware>,
+): ResourceFluentBuilder<
+  TConfig,
+  TValue,
+  TDeps,
+  TContext,
+  TMeta,
+  TTags,
+  TMiddleware
+> {
+  const initial: ResourceOverrideState<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  > = Object.freeze({
+    id: base.id,
+    dependencies: base.dependencies,
+    register: base.register,
+    middleware: base.middleware,
+    tags: base.tags,
+    context: base.context,
+    init: base.init,
+    dispose: base.dispose,
+    configSchema: base.configSchema,
+    resultSchema: base.resultSchema,
+    meta: base.meta,
+    overrides: base.overrides,
+    throws: base.throws,
+  });
+
+  return makeResourceOverrideBuilder(base, initial);
 }

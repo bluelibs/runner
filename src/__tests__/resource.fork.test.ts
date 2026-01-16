@@ -75,10 +75,7 @@ describe("IResource.fork()", () => {
   it("inherits tags from the base resource", () => {
     const myTag = r.tag("test.tag").build();
 
-    const base = r
-      .resource("base.tagged")
-      .tags([myTag])
-      .build();
+    const base = r.resource("base.tagged").tags([myTag]).build();
 
     const forked = base.fork("forked.tagged");
 
@@ -142,10 +139,7 @@ describe("IResource.fork()", () => {
       .run(async ({ next }) => next())
       .build();
 
-    const base = r
-      .resource("base.with.mw")
-      .middleware([mw])
-      .build();
+    const base = r.resource("base.with.mw").middleware([mw]).build();
 
     const forked = base.fork("forked.with.mw");
 

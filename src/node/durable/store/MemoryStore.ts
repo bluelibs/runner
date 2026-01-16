@@ -199,7 +199,11 @@ export class MemoryStore implements IDurableStore {
     this.timers.delete(timerId);
   }
 
-  async claimTimer(timerId: string, workerId: string, ttlMs: number): Promise<boolean> {
+  async claimTimer(
+    timerId: string,
+    workerId: string,
+    ttlMs: number,
+  ): Promise<boolean> {
     const claimKey = `timer:claim:${timerId}`;
     const now = Date.now();
     const existing = this.locks.get(claimKey);

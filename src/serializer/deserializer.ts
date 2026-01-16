@@ -3,12 +3,7 @@
  * Extracted from Serializer.ts as a standalone module.
  */
 
-import type {
-  TypeDefinition,
-  SerializedValue,
-  DeserializationContext,
-  SerializedNode,
-} from "./types";
+import type { SerializedValue, DeserializationContext } from "./types";
 import {
   isObjectReference,
   isSerializedTypeRecord,

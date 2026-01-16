@@ -37,7 +37,11 @@ class SpyQueue implements IDurableQueue {
 
 describe("durable: DurableService waitForResult (eventBus)", () => {
   it("does not miss completion if the 'finished' event is published before subscribe resolves", async () => {
-    type Handler = (evt: { type: string; payload: unknown; timestamp: Date }) => Promise<void>;
+    type Handler = (evt: {
+      type: string;
+      payload: unknown;
+      timestamp: Date;
+    }) => Promise<void>;
 
     class SubscribeGateBus {
       public handlers = new Map<string, Set<Handler>>();
@@ -54,7 +58,10 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
         this.resolveGate();
       }
 
-      async publish(channel: string, event: { type: string; payload: unknown; timestamp: Date }): Promise<void> {
+      async publish(
+        channel: string,
+        event: { type: string; payload: unknown; timestamp: Date },
+      ): Promise<void> {
         const subs = this.handlers.get(channel);
         if (!subs) return;
         await Promise.all(Array.from(subs.values()).map((h) => h(event)));

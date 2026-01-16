@@ -29,12 +29,16 @@ type WaitForSignalOutcome<TPayload> =
 
 type SignalStepState =
   | { state: "waiting"; signalId?: string }
-  | { state: "waiting"; signalId?: string; timeoutAtMs: number; timerId: string }
+  | {
+      state: "waiting";
+      signalId?: string;
+      timeoutAtMs: number;
+      timerId: string;
+    }
   | { state: "completed"; payload: unknown }
   | { state: "timed_out" };
 
-type SignalInput<TPayload> =
-  IEventDefinition<TPayload>;
+type SignalInput<TPayload> = IEventDefinition<TPayload>;
 
 function getSignalId(signal: SignalInput<unknown>): string {
   return signal.id;
@@ -94,7 +98,8 @@ export class DurableContext implements IDurableContext {
   ) {
     this.auditEnabled = options.auditEnabled ?? false;
     this.auditEmitter = options.auditEmitter ?? null;
-    this.implicitInternalStepIdsPolicy = options.implicitInternalStepIds ?? "allow";
+    this.implicitInternalStepIdsPolicy =
+      options.implicitInternalStepIds ?? "allow";
   }
 
   private assertOrWarnImplicitInternalStepId(
@@ -114,7 +119,7 @@ export class DurableContext implements IDurableContext {
 
     if (this.implicitInternalStepIdsWarned.has(kind)) return;
     this.implicitInternalStepIdsWarned.add(kind);
-    // eslint-disable-next-line no-console
+
     console.warn(message);
   }
 
@@ -127,10 +132,9 @@ export class DurableContext implements IDurableContext {
     this.seenStepIds.add(stepId);
   }
 
-  private async appendAuditEntry(
-    entry: DurableAuditEntryInput,
-  ): Promise<void> {
-    const shouldPersist = this.auditEnabled === true && !!this.store.appendAuditEntry;
+  private async appendAuditEntry(entry: DurableAuditEntryInput): Promise<void> {
+    const shouldPersist =
+      this.auditEnabled === true && !!this.store.appendAuditEntry;
     const shouldEmit = this.auditEmitter !== null;
     if (!shouldPersist && !shouldEmit) return;
     const at = new Date();
@@ -332,10 +336,10 @@ export class DurableContext implements IDurableContext {
     try {
       for (const comp of reversed) {
         const rollbackStepId = `rollback:${comp.stepId}`;
-        // Rollbacks are often separate flow, generally re-entrant if idempotent, 
+        // Rollbacks are often separate flow, generally re-entrant if idempotent,
         // but let's register the internal step id to be safe/consistent.
         this.assertUniqueStepId(rollbackStepId);
-        
+
         await this.internalStep<{ rolledBack: true }>(rollbackStepId).up(
           async () => {
             await comp.action();
@@ -363,7 +367,7 @@ export class DurableContext implements IDurableContext {
 
   async sleep(durationMs: number, options?: SleepOptions): Promise<void> {
     let sleepStepId: string;
-    
+
     if (options?.stepId) {
       // Use explicit step ID for replay stability
       sleepStepId = `__sleep:${options.stepId}`;
@@ -606,7 +610,7 @@ export class DurableContext implements IDurableContext {
     options?: EmitOptions,
   ): Promise<void> {
     const eventId = event.id;
-    
+
     let stepId: string;
     if (options?.stepId) {
       // Use explicit step ID for replay stability
@@ -643,7 +647,7 @@ export class DurableContext implements IDurableContext {
     const stepId = `__note:${this.noteIndex}`;
     this.noteIndex += 1;
 
-    // Notes are auto-indexed so collision is unlikely unless index reset, 
+    // Notes are auto-indexed so collision is unlikely unless index reset,
     // but good to check anyway.
     this.assertUniqueStepId(stepId);
 

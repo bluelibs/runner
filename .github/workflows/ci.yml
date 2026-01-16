@@ -42,6 +42,9 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Lint
+        run: npm run lint
+
       # Run tests with enforced 100% coverage
       - name: Run tests with coverage enforcement
         run: npm run test:ci

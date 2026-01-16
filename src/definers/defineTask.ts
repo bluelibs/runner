@@ -72,7 +72,7 @@ defineTask.phantom = <Input = undefined, Output extends Promise<any> = any>(
 ) => {
   const taskDef = defineTask({
     ...taskConfig,
-    run: async (input: any): Promise<any> => {
+    run: async (_input: any): Promise<any> => {
       return undefined;
     },
   });

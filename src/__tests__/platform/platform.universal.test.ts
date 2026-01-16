@@ -200,9 +200,9 @@ describe("UniversalPlatformAdapter", () => {
 
       const browserAdapter = new UniversalPlatformAdapter();
       await browserAdapter.init();
-      expect((browserAdapter as unknown as { inner: unknown }).inner).toBeInstanceOf(
-        BrowserPlatformAdapter,
-      );
+      expect(
+        (browserAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(BrowserPlatformAdapter);
 
       // Test browser case without document but with addEventListener
       delete mutableGlobal.document;
@@ -212,9 +212,9 @@ describe("UniversalPlatformAdapter", () => {
 
       const browserAdapter2 = new UniversalPlatformAdapter();
       await browserAdapter2.init();
-      expect((browserAdapter2 as unknown as { inner: unknown }).inner).toBeInstanceOf(
-        BrowserPlatformAdapter,
-      );
+      expect(
+        (browserAdapter2 as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(BrowserPlatformAdapter);
 
       if (originalAdd === undefined) delete mutableGlobal.addEventListener;
       else mutableGlobal.addEventListener = originalAdd;
@@ -229,9 +229,9 @@ describe("UniversalPlatformAdapter", () => {
 
       const nodeAdapter = new UniversalPlatformAdapter();
       await nodeAdapter.init();
-      expect((nodeAdapter as unknown as { inner: unknown }).inner).toBeInstanceOf(
-        NodePlatformAdapter,
-      );
+      expect(
+        (nodeAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(NodePlatformAdapter);
 
       // Test explicit browser environment without document/addEventListener
       delete mutableGlobal.process;
@@ -265,9 +265,9 @@ describe("UniversalPlatformAdapter", () => {
 
       const edgeAdapter = new UniversalPlatformAdapter();
       await edgeAdapter.init();
-      expect((edgeAdapter as unknown as { inner: unknown }).inner).toBeInstanceOf(
-        EdgePlatformAdapter,
-      );
+      expect(
+        (edgeAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(EdgePlatformAdapter);
 
       // Test default/universal case
       delete mutableGlobal.WorkerGlobalScope;
@@ -280,9 +280,9 @@ describe("UniversalPlatformAdapter", () => {
 
       const defaultAdapter = new UniversalPlatformAdapter();
       await defaultAdapter.init();
-      expect((defaultAdapter as unknown as { inner: unknown }).inner).toBeInstanceOf(
-        GenericUniversalPlatformAdapter,
-      );
+      expect(
+        (defaultAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(GenericUniversalPlatformAdapter);
 
       // Restore
       if (originalDocument === undefined) delete mutableGlobal.document;
@@ -321,9 +321,9 @@ describe("UniversalPlatformAdapter", () => {
 
       const browserAdapter = new UniversalPlatformAdapter();
       browserAdapter.onUncaughtException(() => {});
-      expect((browserAdapter as unknown as { inner: unknown }).inner).toBeInstanceOf(
-        BrowserPlatformAdapter,
-      );
+      expect(
+        (browserAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(BrowserPlatformAdapter);
 
       // Test browser case without document but with addEventListener
       delete mutableGlobal.document;
@@ -350,9 +350,9 @@ describe("UniversalPlatformAdapter", () => {
 
       const nodeAdapter = new UniversalPlatformAdapter();
       nodeAdapter.onUncaughtException(() => {});
-      expect((nodeAdapter as unknown as { inner: unknown }).inner).toBeInstanceOf(
-        NodePlatformAdapter,
-      );
+      expect(
+        (nodeAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(NodePlatformAdapter);
 
       // Test explicit browser environment without document/addEventListener
       delete mutableGlobal.process;
@@ -386,9 +386,9 @@ describe("UniversalPlatformAdapter", () => {
 
       const edgeAdapter = new UniversalPlatformAdapter();
       edgeAdapter.onUncaughtException(() => {});
-      expect((edgeAdapter as unknown as { inner: unknown }).inner).toBeInstanceOf(
-        EdgePlatformAdapter,
-      );
+      expect(
+        (edgeAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(EdgePlatformAdapter);
 
       // Test default/universal case
       delete mutableGlobal.WorkerGlobalScope;
@@ -401,9 +401,9 @@ describe("UniversalPlatformAdapter", () => {
 
       const defaultAdapter = new UniversalPlatformAdapter();
       defaultAdapter.onUncaughtException(() => {});
-      expect((defaultAdapter as unknown as { inner: unknown }).inner).toBeInstanceOf(
-        GenericUniversalPlatformAdapter,
-      );
+      expect(
+        (defaultAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(GenericUniversalPlatformAdapter);
 
       // Restore
       if (originalDocument === undefined) delete mutableGlobal.document;

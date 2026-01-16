@@ -11,6 +11,8 @@ export interface DurableStepId<TResult = unknown> {
   readonly __result?: TResult;
 }
 
-export function createDurableStepId<TResult>(id: string): DurableStepId<TResult> {
+export function createDurableStepId<TResult>(
+  id: string,
+): DurableStepId<TResult> {
   return { id };
 }

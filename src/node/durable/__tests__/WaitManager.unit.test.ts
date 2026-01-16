@@ -41,9 +41,12 @@ describe("WaitManager", () => {
       return { ...baseExecution, status: "completed", result: { value: 42 } };
     });
 
-    const result = await waitManager.waitForResult<{ value: number }>("exec-1", {
-      waitPollIntervalMs: 123,
-    });
+    const result = await waitManager.waitForResult<{ value: number }>(
+      "exec-1",
+      {
+        waitPollIntervalMs: 123,
+      },
+    );
 
     expect(result.value).toBe(42);
     expect(sleepMs).toHaveBeenCalledWith(123);

@@ -8,7 +8,9 @@ async function waitUntil(
   const deadline = Date.now() + options.timeoutMs;
   while (Date.now() < deadline) {
     if (await predicate()) return;
-    await new Promise<void>((resolve) => setTimeout(resolve, options.intervalMs));
+    await new Promise<void>((resolve) =>
+      setTimeout(resolve, options.intervalMs),
+    );
   }
   throw new Error("Timed out waiting for condition");
 }
@@ -108,12 +110,13 @@ describe("durable: DurableService handleTimer audit branches", () => {
     service.start();
     try {
       await waitUntil(
-        async () =>
-          (await store.getReadyTimers(new Date(0))).length === 0,
+        async () => (await store.getReadyTimers(new Date(0))).length === 0,
         { timeoutMs: 2_000, intervalMs: 5 },
       );
 
-      expect(await store.getStepResult("missing-exec", "sleep:missing")).toBeNull();
+      expect(
+        await store.getStepResult("missing-exec", "sleep:missing"),
+      ).toBeNull();
     } finally {
       await service.stop();
     }
@@ -196,7 +199,10 @@ describe("durable: DurableService handleTimer audit branches", () => {
     try {
       await waitUntil(
         async () => {
-          const result = await store.getStepResult("missing-exec-2", "sig123:wait");
+          const result = await store.getStepResult(
+            "missing-exec-2",
+            "sig123:wait",
+          );
           return (
             typeof result?.result === "object" &&
             result.result !== null &&

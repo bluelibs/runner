@@ -53,8 +53,8 @@ export interface IResourceDefinition<
   TValue extends Promise<any> = Promise<any>,
   TDependencies extends DependencyMapType = {},
   TContext = any,
-  THooks = any,
-  TRegisterableItems = any,
+  _THooks = any,
+  _TRegisterableItems = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
   TMiddleware extends ResourceMiddlewareAttachmentType[] =
@@ -235,7 +235,15 @@ export interface IResource<
    */
   fork(
     newId: string,
-  ): IResource<TConfig, TValue, TDependencies, TContext, TMeta, TTags, TMiddleware>;
+  ): IResource<
+    TConfig,
+    TValue,
+    TDependencies,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
 }
 
 export interface IResourceWithConfig<

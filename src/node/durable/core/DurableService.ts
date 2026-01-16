@@ -62,14 +62,10 @@ export class DurableService implements IDurableService {
     );
 
     // Initialize wait manager
-    this.waitManager = new WaitManager(
-      config.store,
-      config.eventBus,
-      {
-        defaultTimeout: config.execution?.timeout,
-        defaultPollIntervalMs: 500,
-      },
-    );
+    this.waitManager = new WaitManager(config.store, config.eventBus, {
+      defaultTimeout: config.execution?.timeout,
+      defaultPollIntervalMs: 500,
+    });
 
     // Initialize schedule manager
     this.scheduleManager = new ScheduleManager(config.store, this.taskRegistry);

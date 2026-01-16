@@ -22,7 +22,9 @@ export function makeEventBuilder<TPayload>(
 
     payloadSchema<TNew>(schema: IValidationSchema<TNew>) {
       // Cast state to target type for widening, then assign the schema
-      const next = clone(state as unknown as BuilderState<TNew>, { payloadSchema: schema });
+      const next = clone(state as unknown as BuilderState<TNew>, {
+        payloadSchema: schema,
+      });
       return makeEventBuilder<TNew>(next);
     },
 

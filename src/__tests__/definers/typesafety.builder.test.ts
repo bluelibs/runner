@@ -5,6 +5,7 @@ import { isOneOf, onAnyOf } from "../../types/event";
 
 // This suite mirrors src/__tests__/typesafety.test.ts but uses ONLY builders (r.*)
 // It is skipped because it primarily asserts compile-time TypeScript behavior via @ts-expect-error.
+// eslint-disable-next-line jest/no-disabled-tests
 describe.skip("builders typesafety", () => {
   it("tasks, resources: should have proper type safety for dependencies", async () => {
     type InputTask = {

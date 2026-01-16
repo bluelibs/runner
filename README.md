@@ -3224,7 +3224,7 @@ Metadata transforms your components from anonymous functions into self-documenti
 
 Sometimes you need to replace a component entirely. Maybe you're doing integration testing or you want to override a library from an external package.
 
-You can now use a dedicated helper `override()` to safely override any property on tasks, resources, or middleware — except `id`. This ensures the identity is preserved, while allowing behavior changes.
+You can now use a dedicated helper `override()` or the fluent builder `r.override(...)` to safely override any property on tasks, resources, or middleware — except `id`. This ensures the identity is preserved, while allowing behavior changes.
 
 ```typescript
 const productionEmailer = r
@@ -3232,12 +3232,18 @@ const productionEmailer = r
   .init(async () => new SMTPEmailer())
   .build();
 
-// Option 1: Using override() to change behavior while preserving id (Recommended)
+// Option 1: Fluent override builder (Recommended)
+const testEmailer = r
+  .override(productionEmailer)
+  .init(async () => new MockEmailer())
+  .build();
+
+// Option 2: Using override() helper to change behavior while preserving id
 const testEmailer = override(productionEmailer, {
   init: async () => new MockEmailer(),
 });
 
-// Option 2: The system is really flexible, and override is just bringing in type safety, nothing else under the hood.
+// Option 3: The system is really flexible, and override is just bringing in type safety, nothing else under the hood.
 // Using spread operator works the same way but does not provide type-safety.
 const testEmailer = r
   .resource("app.emailer")
@@ -3284,6 +3290,8 @@ const overriddenMiddleware = override(originalMiddleware, {
 
 // Even hooks
 ```
+
+The override builder starts from the base definition and applies fluent mutations (dependencies/tags/middleware append by default; use `{ override: true }` to replace). Hook overrides keep the same `.on` target.
 
 Overrides can let you expand dependencies and even call your overriden resource (like a classical OOP extends):
 

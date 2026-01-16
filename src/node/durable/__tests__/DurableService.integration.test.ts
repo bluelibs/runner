@@ -38,10 +38,14 @@ describe("durable: DurableService integration", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
 
-    const res = await service.execute(task, { v: 1 }, {
-      timeout: 5_000,
-      waitPollIntervalMs: 5,
-    });
+    const res = await service.execute(
+      task,
+      { v: 1 },
+      {
+        timeout: 5_000,
+        waitPollIntervalMs: 5,
+      },
+    );
     expect(res).toEqual({ before: "before", after: "after" });
     expect(stepExecutions).toBe(1);
 

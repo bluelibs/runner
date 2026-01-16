@@ -2,6 +2,7 @@ import * as root from "../index";
 
 describe("package root exports coverage", () => {
   it("exposes all expected root exports", () => {
+    const functionType = typeof root.task;
     // Access all named exports to trigger any getter-based re-exports
     expect(root.globals).toBeDefined();
     expect(typeof root.task).toBe("function");
@@ -23,6 +24,7 @@ describe("package root exports coverage", () => {
     expect(typeof root.r.event).toBe("function");
     expect(typeof root.r.hook).toBe("function");
     expect(typeof root.r.tag).toBe("function");
+    expect(typeof root.r.override).toBe(functionType);
     expect(typeof root.r.middleware.task).toBe("function");
     expect(typeof root.r.middleware.resource).toBe("function");
 

@@ -55,7 +55,12 @@ export function makeResourceMiddlewareBuilder<
       const next = cloneRes<TNew, In, Out, D>(
         state as unknown as ResMwState<TNew, In, Out, D>,
         {
-          configSchema: schema as unknown as ResMwState<TNew, In, Out, D>["configSchema"],
+          configSchema: schema as unknown as ResMwState<
+            TNew,
+            In,
+            Out,
+            D
+          >["configSchema"],
         },
       );
       return makeResourceMiddlewareBuilder<TNew, In, Out, D>(next);

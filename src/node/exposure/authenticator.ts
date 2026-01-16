@@ -25,9 +25,7 @@ function safeCompare(a: string, b: string): boolean {
   try {
     const bufA = Buffer.from(a) as Uint8Array;
     const bufB = Buffer.from(b) as Uint8Array;
-    return (
-      bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB)
-    );
+    return bufA.length === bufB.length && crypto.timingSafeEqual(bufA, bufB);
   } catch {
     return false;
   }

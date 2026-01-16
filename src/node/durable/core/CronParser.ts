@@ -38,12 +38,16 @@ export class CronParser {
     };
 
     try {
-      const requireFn = createRequire(join(process.cwd(), "__runner_require__.js"));
+      const requireFn = createRequire(
+        join(process.cwd(), "__runner_require__.js"),
+      );
 
       const mod = requireFn("cron-parser") as CronParserModule;
       const candidate =
         (mod && mod.CronExpressionParser) ||
-        (mod && (mod.default as CronParserModule | undefined)?.CronExpressionParser) ||
+        (mod &&
+          (mod.default as CronParserModule | undefined)
+            ?.CronExpressionParser) ||
         mod.default ||
         mod;
 
@@ -78,7 +82,11 @@ export class CronParser {
     return {
       minute: parseField(minute, { min: 0, max: 59, name: "minute" }),
       hour: parseField(hour, { min: 0, max: 23, name: "hour" }),
-      dayOfMonth: parseField(dayOfMonth, { min: 1, max: 31, name: "dayOfMonth" }),
+      dayOfMonth: parseField(dayOfMonth, {
+        min: 1,
+        max: 31,
+        name: "dayOfMonth",
+      }),
       month: parseField(month, { min: 1, max: 12, name: "month" }),
       dayOfWeek: parseField(dayOfWeek, { min: 0, max: 7, name: "dayOfWeek" }),
     };

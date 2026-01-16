@@ -1,6 +1,5 @@
 import { RedisEventBus } from "../bus/RedisEventBus";
 import { Serializer } from "../../../serializer";
-import { createIORedisClient } from "../optionalDeps/ioredis";
 
 jest.mock("../optionalDeps/ioredis", () => ({
   createIORedisClient: jest.fn(),

@@ -14,8 +14,8 @@ export interface ITaggable {
 
 export interface ITagDefinition<
   TConfig = void,
-  TEnforceInputContract = void,
-  TEnforceOutputContract = void,
+  _TEnforceInputContract = void,
+  _TEnforceOutputContract = void,
 > {
   id: string;
   meta?: ITagMeta;
@@ -62,7 +62,7 @@ export interface ITag<
 }
 
 type ITagWithOptionalConfig<
-  TValue,
+  _TValue,
   TEnforceInputContract,
   TEnforceOutputContract,
 > = ITag<any, TEnforceInputContract, TEnforceOutputContract> & {

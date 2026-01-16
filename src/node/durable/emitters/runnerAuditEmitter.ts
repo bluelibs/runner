@@ -34,7 +34,11 @@ export function createDurableRunnerAuditEmitter(params: {
           await eventManager.emit(durableEvents.signal.waiting, entry, source);
           return;
         case "signal_delivered":
-          await eventManager.emit(durableEvents.signal.delivered, entry, source);
+          await eventManager.emit(
+            durableEvents.signal.delivered,
+            entry,
+            source,
+          );
           return;
         case "signal_timed_out":
           await eventManager.emit(durableEvents.signal.timedOut, entry, source);

@@ -44,7 +44,10 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
     const typedStore = store as unknown as Store;
     const tasks = value.tasks ? resolveTasks(typedStore, value.tasks) : [];
     const events = value.events
-      ? resolveEvents(typedStore, value.events as unknown as TunnelEventSelector)
+      ? resolveEvents(
+          typedStore,
+          value.events as unknown as TunnelEventSelector,
+        )
       : [];
 
     if (mode === "client" || mode === "both") {
@@ -70,9 +73,9 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
     // Override selected tasks' run() to delegate to tunnel runner (reversible)
     for (const t of tasks) {
       // Enforce single-owner policy: a task can be tunneled by only one resource
-      const currentOwner = (
-        t as unknown as Record<symbol, string | undefined>
-      )[symbolTunneledBy];
+      const currentOwner = (t as unknown as Record<symbol, string | undefined>)[
+        symbolTunneledBy
+      ];
       const resourceId = resource.definition.id;
       if (currentOwner && currentOwner !== resourceId) {
         tunnelOwnershipConflictError.throw({

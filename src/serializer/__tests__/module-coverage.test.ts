@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from "@jest/globals";
-import { isUnsafeKey, toNodeRecord, DEFAULT_UNSAFE_KEYS } from "../validation";
+import { isUnsafeKey, toNodeRecord } from "../validation";
 import { TypeRegistry } from "../type-registry";
 
 describe("Serializer Module Coverage", () => {

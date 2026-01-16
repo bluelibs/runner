@@ -44,7 +44,8 @@ export const durableEvents = {
       >("durable.step.completed")
       .meta({
         title: "Durable Step Completed",
-        description: "Emitted when a durable step is completed (including internals).",
+        description:
+          "Emitted when a durable step is completed (including internals).",
       })
       .tags([systemTag, excludeFromGlobalHooksTag])
       .build(),
@@ -74,7 +75,8 @@ export const durableEvents = {
       >("durable.sleep.completed")
       .meta({
         title: "Durable Sleep Completed",
-        description: "Emitted when a durable sleep timer fires and the step completes.",
+        description:
+          "Emitted when a durable sleep timer fires and the step completes.",
       })
       .tags([systemTag, excludeFromGlobalHooksTag])
       .build(),
@@ -90,7 +92,8 @@ export const durableEvents = {
       >("durable.signal.waiting")
       .meta({
         title: "Durable Signal Waiting",
-        description: "Emitted when a durable execution starts waiting for a signal.",
+        description:
+          "Emitted when a durable execution starts waiting for a signal.",
       })
       .tags([systemTag, excludeFromGlobalHooksTag])
       .build(),
@@ -104,7 +107,8 @@ export const durableEvents = {
       >("durable.signal.delivered")
       .meta({
         title: "Durable Signal Delivered",
-        description: "Emitted when a signal payload is delivered to a waiting execution.",
+        description:
+          "Emitted when a signal payload is delivered to a waiting execution.",
       })
       .tags([systemTag, excludeFromGlobalHooksTag])
       .build(),

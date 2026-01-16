@@ -93,8 +93,6 @@ describe("Comprehensive Performance Benchmarks", () => {
     });
 
     const runBenchmark = async () => {
-      let benchmarkResult: any;
-
       const app = defineResource({
         id: "benchmark.basic.app",
         register: [task],
@@ -115,7 +113,7 @@ describe("Comprehensive Performance Benchmarks", () => {
       }
       const duration = performance.now() - start;
 
-      benchmarkResult = {
+      const benchmarkResult = {
         totalTimeMs: parseFloat(duration.toFixed(2)),
         avgTimePerTaskMs: parseFloat((duration / iterations).toFixed(4)),
         tasksPerSecond: Math.round(iterations / (duration / 1000)),

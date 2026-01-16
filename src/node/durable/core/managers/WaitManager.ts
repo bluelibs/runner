@@ -25,7 +25,8 @@ export class WaitManager {
   ): Promise<TResult> {
     const startedAt = Date.now();
     const timeoutMs = options?.timeout ?? this.config?.defaultTimeout;
-    const pollEveryMs = options?.waitPollIntervalMs ?? this.config?.defaultPollIntervalMs ?? 500;
+    const pollEveryMs =
+      options?.waitPollIntervalMs ?? this.config?.defaultPollIntervalMs ?? 500;
 
     const check = async (): Promise<TResult | undefined> => {
       const exec = await this.store.getExecution(executionId);

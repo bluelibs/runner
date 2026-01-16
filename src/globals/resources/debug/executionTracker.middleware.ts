@@ -15,7 +15,7 @@ export const tasksTrackerMiddleware = defineTaskMiddleware({
     debugConfig,
     store: globalResources.store,
   },
-  run: async ({ task, next }, { logger, debugConfig, store }) => {
+  run: async ({ task, next }, { logger, debugConfig, store: _store }) => {
     const start = Date.now();
     logger = logger.with({
       source: tasksTrackerMiddleware.id,
@@ -54,7 +54,7 @@ export const resourcesTrackerMiddleware = defineResourceMiddleware({
     store: globalResources.store,
   },
   everywhere: (resource) => !globalTags.system.exists(resource),
-  run: async ({ resource, next }, { logger, debugConfig, store }) => {
+  run: async ({ resource, next }, { logger, debugConfig, store: _store }) => {
     const start = Date.now();
     logger = logger.with({
       source: resourcesTrackerMiddleware.id,

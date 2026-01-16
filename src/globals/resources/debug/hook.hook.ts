@@ -18,7 +18,7 @@ export const hookInterceptorResource = defineResource({
     debugConfig,
     eventManager: globalResources.eventManager,
   },
-  init: async (event, deps) => {
+  init: async (_event, deps) => {
     deps.eventManager.interceptHook(async (next, hook, event) => {
       const { logger, debugConfig } = deps;
 

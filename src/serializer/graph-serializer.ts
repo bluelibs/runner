@@ -4,7 +4,6 @@
  */
 
 import type {
-  TypeDefinition,
   SerializedValue,
   SerializationContext,
   SerializedNode,

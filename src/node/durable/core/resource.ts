@@ -38,23 +38,22 @@ export const durableResource = r
   .init(async (config, { taskRunner, eventManager, runnerStore }) => {
     const runnerEmitter = createDurableRunnerAuditEmitter({ eventManager });
     const userEmitter = config.audit?.emitter;
-    const auditEmitter =
-      userEmitter
-        ? {
-            emit: async (entry: DurableAuditEntry) => {
-              try {
-                await userEmitter.emit(entry);
-              } catch {
-                // Emissions must not affect workflow correctness.
-              }
-              try {
-                await runnerEmitter.emit(entry);
-              } catch {
-                // Emissions must not affect workflow correctness.
-              }
-            },
-          }
-        : runnerEmitter;
+    const auditEmitter = userEmitter
+      ? {
+          emit: async (entry: DurableAuditEntry) => {
+            try {
+              await userEmitter.emit(entry);
+            } catch {
+              // Emissions must not affect workflow correctness.
+            }
+            try {
+              await runnerEmitter.emit(entry);
+            } catch {
+              // Emissions must not affect workflow correctness.
+            }
+          },
+        }
+      : runnerEmitter;
 
     const contextStorage = new AsyncLocalStorage<IDurableContext>();
 

@@ -178,8 +178,14 @@ describe("cors helpers - branch coverage", () => {
     const req = makeReq("OPTIONS", { origin: "https://dup.test" });
     const res = makeRes();
     // Use explicit origin config to test Vary header behavior
-    applyCorsActual(req, res, { origin: ["https://dup.test"], credentials: true });
-    handleCorsPreflight(req, res, { origin: ["https://dup.test"], credentials: true });
+    applyCorsActual(req, res, {
+      origin: ["https://dup.test"],
+      credentials: true,
+    });
+    handleCorsPreflight(req, res, {
+      origin: ["https://dup.test"],
+      credentials: true,
+    });
     const vary = (res._headers["vary"] || "").split(",").map((s) => s.trim());
     const occurrences = vary.filter((v) => v.toLowerCase() === "origin").length;
     expect(occurrences).toBe(1);

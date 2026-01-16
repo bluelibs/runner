@@ -28,10 +28,10 @@ export const isUnsafeKey = (
 export const isObjectReference = (value: unknown): value is ObjectReference => {
   return Boolean(
     value &&
-      typeof value === "object" &&
-      value !== null &&
-      "__ref" in value &&
-      typeof (value as Record<"__ref", unknown>).__ref === "string",
+    typeof value === "object" &&
+    value !== null &&
+    "__ref" in value &&
+    typeof (value as Record<"__ref", unknown>).__ref === "string",
   );
 };
 

@@ -7,7 +7,9 @@ import { createIORedisClient } from "../optionalDeps/ioredis";
 
 const serializer = getDefaultSerializer();
 
-jest.mock("../optionalDeps/ioredis", () => ({ createIORedisClient: jest.fn() }));
+jest.mock("../optionalDeps/ioredis", () => ({
+  createIORedisClient: jest.fn(),
+}));
 
 describe("durable: RedisStore", () => {
   let redisMock: jest.Mocked<RedisClient>;

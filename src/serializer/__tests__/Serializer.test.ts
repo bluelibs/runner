@@ -244,11 +244,15 @@ describe("Serializer", () => {
       const original = new Map<string, unknown>([
         ["date", originalDate],
         ["regex", originalRegex],
-        ["innerMap", new Map([["innerDate", new Date("2024-02-02T00:00:00.000Z")]])],
+        [
+          "innerMap",
+          new Map([["innerDate", new Date("2024-02-02T00:00:00.000Z")]]),
+        ],
       ]);
 
       const serialized = serializer.serialize(original);
-      const deserialized = serializer.deserialize<Map<string, unknown>>(serialized);
+      const deserialized =
+        serializer.deserialize<Map<string, unknown>>(serialized);
 
       const dateValue = deserialized.get("date");
       expect(dateValue).toBeInstanceOf(Date);
@@ -493,12 +497,12 @@ describe("Serializer", () => {
       const result = serializer.deserialize<Record<string, unknown>>(payload);
 
       expect(result.safe).toBe(1);
-      expect(
-        Object.prototype.hasOwnProperty.call(result, "__proto__"),
-      ).toBe(false);
-      expect(
-        Object.prototype.hasOwnProperty.call(result, "constructor"),
-      ).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(result, "__proto__")).toBe(
+        false,
+      );
+      expect(Object.prototype.hasOwnProperty.call(result, "constructor")).toBe(
+        false,
+      );
       expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
     });
 
@@ -510,7 +514,7 @@ describe("Serializer", () => {
         nodes: {
           obj_1: {
             kind: "object",
-            value: { "__proto__": { polluted: true }, ok: true },
+            value: { __proto__: { polluted: true }, ok: true },
           },
         },
       });
@@ -518,9 +522,9 @@ describe("Serializer", () => {
       const result = serializer.deserialize<Record<string, unknown>>(payload);
 
       expect(result.ok).toBe(true);
-      expect(
-        Object.prototype.hasOwnProperty.call(result, "__proto__"),
-      ).toBe(false);
+      expect(Object.prototype.hasOwnProperty.call(result, "__proto__")).toBe(
+        false,
+      );
       expect(({} as { polluted?: boolean }).polluted).toBeUndefined();
     });
   });

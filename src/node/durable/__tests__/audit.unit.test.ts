@@ -20,4 +20,3 @@ describe("durable: audit helpers", () => {
     expect(fixed.startsWith("123:")).toBe(true);
   });
 });
-

@@ -55,8 +55,8 @@ export default tseslint.config(
       "unused-imports": unusedImports,
     },
     rules: {
-      // Preserve existing project preferences (relaxed rules)
-      "@typescript-eslint/no-explicit-any": "warn",
+      // Allow any as the codebase uses it extensively for generic wildcards
+      "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/explicit-function-return-type": "off",
       "@typescript-eslint/no-empty-function": "off",
       "@typescript-eslint/no-empty-object-type": "off",
@@ -101,6 +101,15 @@ export default tseslint.config(
           ignoreRestSiblings: true,
         },
       ],
+    },
+  },
+
+  // Test file overrides (must come after core config to properly override)
+  {
+    files: ["src/__tests__/**/*.ts", "**/*.test.ts"],
+    rules: {
+      // Allow unused vars in tests (common for setup/teardown)
+      "unused-imports/no-unused-vars": "off",
     },
   },
 

@@ -210,9 +210,8 @@ export class RedisStore implements IDurableStore {
       )
       .filter(
         (e): e is Execution =>
-          e !== null &&
-          this.isActiveExecutionStatus(e.status),
-    );
+          e !== null && this.isActiveExecutionStatus(e.status),
+      );
 
     for (let i = 0; i < activeIds.length; i += 1) {
       const raw = results[i]?.[1];
@@ -381,7 +380,9 @@ export class RedisStore implements IDurableStore {
     const results = await pipeline.exec();
     let entries = (results || [])
       .map(([_, res]) =>
-        typeof res === "string" ? (serializer.parse(res) as DurableAuditEntry) : null,
+        typeof res === "string"
+          ? (serializer.parse(res) as DurableAuditEntry)
+          : null,
       )
       .filter((e): e is DurableAuditEntry => e !== null)
       .sort((a, b) => a.at.getTime() - b.at.getTime());
@@ -442,7 +443,9 @@ export class RedisStore implements IDurableStore {
       .map(([_, res]) =>
         res ? (serializer.parse(res as string) as Timer) : null,
       )
-      .filter((t): t is Timer => t !== null && t.status === TimerStatus.Pending);
+      .filter(
+        (t): t is Timer => t !== null && t.status === TimerStatus.Pending,
+      );
   }
 
   async markTimerFired(timerId: string): Promise<void> {
@@ -465,7 +468,11 @@ export class RedisStore implements IDurableStore {
     await this.redis.zrem(this.k("timers_schedule"), timerId);
   }
 
-  async claimTimer(timerId: string, workerId: string, ttlMs: number): Promise<boolean> {
+  async claimTimer(
+    timerId: string,
+    workerId: string,
+    ttlMs: number,
+  ): Promise<boolean> {
     const key = this.k(`timer:claim:${timerId}`);
     const result = await this.redis.set(key, workerId, "PX", ttlMs, "NX");
     return result === "OK";

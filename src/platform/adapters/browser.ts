@@ -74,7 +74,8 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
     }
 
     return () => {
-      if (handlers.before) win.removeEventListener?.("beforeunload", handlers.before);
+      if (handlers.before)
+        win.removeEventListener?.("beforeunload", handlers.before);
       if (handlers.visibility)
         win.removeEventListener?.("visibilitychange", handlers.visibility);
     };

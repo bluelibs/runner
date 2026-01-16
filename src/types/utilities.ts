@@ -89,13 +89,13 @@ export interface IOptionalDependency<T> {
 
 // Helper Types for Extracting Generics
 export type ExtractTaskInput<T> =
-  T extends ITask<infer I, any, infer D> ? I : never;
+  T extends ITask<infer I, any, infer _D> ? I : never;
 export type ExtractTaskOutput<T> =
-  T extends ITask<any, infer O, infer D> ? O : never;
+  T extends ITask<any, infer O, infer _D> ? O : never;
 export type ExtractResourceConfig<T> =
   T extends IResource<infer C, any, any> ? C : never;
 export type ExtractResourceValue<T> =
-  T extends IResource<any, infer V, infer D>
+  T extends IResource<any, infer V, infer _D>
     ? V extends Promise<infer U>
       ? U
       : V

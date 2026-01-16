@@ -1,6 +1,5 @@
 import * as http from "http";
 import { Readable } from "stream";
-import { EventEmitter } from "events";
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { nodeExposure } from "../../exposure.resource";
@@ -85,7 +84,11 @@ describe("Security Fixes", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.security.json",
@@ -123,7 +126,11 @@ describe("Security Fixes", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.security.masking",
@@ -159,7 +166,11 @@ describe("Security Fixes", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.security.typed",
@@ -200,7 +211,11 @@ describe("Typed Error Security", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.security.typed2",
@@ -266,7 +281,10 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { limits: { multipart: { fieldSize: 10 } }, auth: { allowAnonymous: true } },
+      http: {
+        limits: { multipart: { fieldSize: 10 } },
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.security.multipart.field",
@@ -303,7 +321,10 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { limits: { json: { maxSize: 10 } }, auth: { allowAnonymous: true } },
+      http: {
+        limits: { json: { maxSize: 10 } },
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.security.body.abort",
@@ -341,7 +362,10 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { limits: { multipart: { files: 1 } }, auth: { allowAnonymous: true } },
+      http: {
+        limits: { multipart: { files: 1 } },
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.security.multipart.files",
@@ -384,7 +408,10 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { limits: { multipart: { parts: 1 } }, auth: { allowAnonymous: true } },
+      http: {
+        limits: { multipart: { parts: 1 } },
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.security.multipart.parts",
@@ -425,7 +452,10 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { limits: { multipart: { fields: 1 } }, auth: { allowAnonymous: true } },
+      http: {
+        limits: { multipart: { fields: 1 } },
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.security.multipart.fields",
@@ -466,7 +496,10 @@ describe("Boundary Security Coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { limits: { multipart: { fileSize: 10 } }, auth: { allowAnonymous: true } },
+      http: {
+        limits: { multipart: { fileSize: 10 } },
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.security.multipart.fileSize",
@@ -570,7 +603,9 @@ describe("Fail-Closed Authentication Security", () => {
 
       expect(transport.res.statusCode).toBe(500);
       expect(transport.json.error.code).toBe("AUTH_NOT_CONFIGURED");
-      expect(transport.json.error.message).toContain("Authentication not configured");
+      expect(transport.json.error.message).toContain(
+        "Authentication not configured",
+      );
     } finally {
       await rr.dispose();
     }

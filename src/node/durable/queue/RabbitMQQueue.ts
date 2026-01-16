@@ -8,7 +8,10 @@ import { connectAmqplib } from "../optionalDeps/amqplib";
 type ConsumeMessage = { content: Buffer };
 
 type Channel = {
-  assertQueue: (queue: string, options: Record<string, unknown>) => Promise<unknown>;
+  assertQueue: (
+    queue: string,
+    options: Record<string, unknown>,
+  ) => Promise<unknown>;
   prefetch: (count: number) => Promise<unknown>;
   sendToQueue: (
     queue: string,

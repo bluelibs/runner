@@ -58,7 +58,11 @@ export interface IDurableStore {
    * @param workerId A unique identifier for the worker claiming the timer
    * @param ttlMs Time-to-live in milliseconds for the claim (in case worker dies)
    */
-  claimTimer?(timerId: string, workerId: string, ttlMs: number): Promise<boolean>;
+  claimTimer?(
+    timerId: string,
+    workerId: string,
+    ttlMs: number,
+  ): Promise<boolean>;
   deleteTimer(timerId: string): Promise<void>;
 
   createSchedule(schedule: Schedule): Promise<void>;

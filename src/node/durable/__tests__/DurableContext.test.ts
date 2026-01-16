@@ -657,7 +657,7 @@ describe("durable: DurableContext", () => {
   it("throws when reusing the same step ID in a single execution path", async () => {
     const { ctx } = createContext();
     await ctx.step("A", async () => "ok");
-    
+
     // step() throws synchronously for duplicate IDs because it checks before returning the promise/builder
     expect(() => ctx.step("A", async () => "fail")).toThrow(
       "Duplicate step ID detected",

@@ -15,6 +15,7 @@
     - [Tags](#tags)
     - [Async Context](#async-context)
     - [Errors](#errors)
+    - [Overrides](#overrides)
   - [HTTP \& Tunnels](#http--tunnels)
     - [HTTP Client Factory (Recommended)](#http-client-factory-recommended)
     - [Direct Client Creation (Legacy)](#direct-client-creation-legacy)
@@ -299,6 +300,23 @@ try {
 
 - Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
+
+### Overrides
+
+Override a task/resource/hook/middleware while preserving `id`. Use the helper or the fluent override builder:
+
+```ts
+const mockMailer = r
+  .override(realMailer)
+  .init(async () => new MockMailer())
+  .build();
+
+const app = r.resource("app").register([realMailer]).overrides([mockMailer]).build();
+```
+
+- `r.override(base)` starts from the base definition and applies fluent mutations (dependencies/tags/middleware append by default; use `{ override: true }` to replace).
+- Hook overrides keep the same `.on` target; only behavior/metadata is overridable.
+- The `override(base, patch)` helper remains for direct, shallow patches.
 
 ## HTTP & Tunnels
 

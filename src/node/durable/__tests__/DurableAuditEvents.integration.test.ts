@@ -88,7 +88,9 @@ describe("durable: audit runner events (integration)", () => {
       { timeoutMs: 2_000, intervalMs: 5 },
     );
 
-    const receivedForExecution = received.filter((e) => e.executionId === executionId);
+    const receivedForExecution = received.filter(
+      (e) => e.executionId === executionId,
+    );
     expect(receivedForExecution.length).toBeGreaterThan(0);
     expect(notes).toEqual(expect.arrayContaining(["starting"]));
     await expect(store.listAuditEntries(executionId)).resolves.toEqual([]);
@@ -100,7 +102,9 @@ describe("durable: audit runner events (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.events.emitterFailure.durable");
+    const durable = durableResource.fork(
+      "durable.tests.events.emitterFailure.durable",
+    );
     const durableRegistration = durable.with({
       store,
       eventBus: bus,

@@ -30,7 +30,7 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
     const tgt = globalThis as unknown as Record<string, any>;
     if (tgt.addEventListener) {
       const handlers: { before?: any; visibility?: any } = {};
-      handlers.before = (e?: any) => handler();
+      handlers.before = (_e?: any) => handler();
       tgt.addEventListener("beforeunload", handlers.before);
 
       const doc = (globalThis as unknown as Record<string, any>).document;
@@ -57,7 +57,10 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   getEnv(key: string): string | undefined {
     const g = globalThis as unknown as Record<string, any>;
     if (g.__ENV__ && typeof g.__ENV__ === "object") return g.__ENV__[key];
-    if (typeof process !== "undefined" && (process as unknown as { env: Record<string, string> }).env)
+    if (
+      typeof process !== "undefined" &&
+      (process as unknown as { env: Record<string, string> }).env
+    )
       return (process as unknown as { env: Record<string, string> }).env[key];
     if (g.env && typeof g.env === "object") return g.env[key];
     return undefined;

@@ -1,5 +1,9 @@
 import type { IDurableStore } from "../interfaces/store";
-import type { DurableAuditEntryInput, DurableAuditEmitter, DurableAuditEntry } from "../audit";
+import type {
+  DurableAuditEntryInput,
+  DurableAuditEmitter,
+  DurableAuditEntry,
+} from "../audit";
 import { createDurableAuditEntryId } from "../audit";
 
 export interface AuditConfig {
@@ -26,7 +30,8 @@ export class AuditLogger {
   ) {}
 
   async log(params: DurableAuditEntryInput & { at?: Date }): Promise<void> {
-    const shouldPersist = this.config.enabled === true && !!this.store.appendAuditEntry;
+    const shouldPersist =
+      this.config.enabled === true && !!this.store.appendAuditEntry;
     const shouldEmit = !!this.config.emitter;
     if (!shouldPersist && !shouldEmit) return;
 

@@ -13,24 +13,23 @@ export interface DurableResourceConfig {
   worker?: boolean;
 }
 
-export interface IDurableResource
-  extends Pick<
-    IDurableService,
-    | "startExecution"
-    | "wait"
-    | "execute"
-    | "executeStrict"
-    | "schedule"
-    | "ensureSchedule"
-    | "pauseSchedule"
-    | "resumeSchedule"
-    | "getSchedule"
-    | "listSchedules"
-    | "updateSchedule"
-    | "removeSchedule"
-    | "recover"
-    | "signal"
-  > {
+export interface IDurableResource extends Pick<
+  IDurableService,
+  | "startExecution"
+  | "wait"
+  | "execute"
+  | "executeStrict"
+  | "schedule"
+  | "ensureSchedule"
+  | "pauseSchedule"
+  | "resumeSchedule"
+  | "getSchedule"
+  | "listSchedules"
+  | "updateSchedule"
+  | "removeSchedule"
+  | "recover"
+  | "signal"
+> {
   /**
    * Reads the durable context for the currently running workflow execution.
    * Throws if called outside of a durable execution.

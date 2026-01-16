@@ -23,8 +23,9 @@ export interface IErrorDefinition<
   meta?: IErrorMeta;
 }
 
-export interface IErrorDefinitionFinal<TData extends DefaultErrorType>
-  extends IErrorDefinition<TData> {
+export interface IErrorDefinitionFinal<
+  TData extends DefaultErrorType,
+> extends IErrorDefinition<TData> {
   format: (data: TData) => string;
 }
 

@@ -78,7 +78,11 @@ describe("exposure CORS", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.cors.default",

@@ -37,9 +37,9 @@ describe("durable: audit trail failure tolerance (integration)", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
 
-    await expect(service.execute(task, undefined, { timeout: 5_000 })).resolves.toBe(
-      "ok",
-    );
+    await expect(
+      service.execute(task, undefined, { timeout: 5_000 }),
+    ).resolves.toBe("ok");
 
     await runtime.dispose();
   });

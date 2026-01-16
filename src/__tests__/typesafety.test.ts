@@ -14,6 +14,7 @@ import z from "zod";
 import { isOneOf, onAnyOf } from "../types/event";
 
 // This is skipped because we mostly check typesafety.
+// eslint-disable-next-line jest/no-disabled-tests
 describe.skip("typesafety", () => {
   it("tasks, resources: should have propper type safety for dependeices", async () => {
     type InputTask = {

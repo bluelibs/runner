@@ -55,7 +55,12 @@ export function makeTaskMiddlewareBuilder<
       const next = cloneTask<TNew, In, Out, D>(
         state as unknown as TaskMwState<TNew, In, Out, D>,
         {
-          configSchema: schema as unknown as TaskMwState<TNew, In, Out, D>["configSchema"],
+          configSchema: schema as unknown as TaskMwState<
+            TNew,
+            In,
+            Out,
+            D
+          >["configSchema"],
         },
       );
       return makeTaskMiddlewareBuilder<TNew, In, Out, D>(next);

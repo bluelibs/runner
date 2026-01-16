@@ -73,6 +73,7 @@ import {
 import { tag as tagFn } from "./definers/builders/tag";
 import { error as errorFn } from "./definers/builders/error";
 import { asyncContext as asyncContextFn } from "./definers/builders/asyncContext";
+import { override as overrideBuilder } from "./definers/builders/override";
 
 const globals = {
   events: globalEvents,
@@ -109,6 +110,7 @@ export const r = Object.freeze({
   event: eventFn,
   hook: hookFn,
   tag: tagFn,
+  override: overrideBuilder,
   asyncContext: asyncContextFn,
   error: errorFn,
   middleware: Object.freeze({

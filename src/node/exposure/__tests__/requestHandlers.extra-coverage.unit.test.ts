@@ -76,7 +76,11 @@ describe("requestHandlers - additional streaming coverage", () => {
       },
     });
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.handlers.405",
@@ -115,7 +119,11 @@ describe("requestHandlers - additional streaming coverage", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.handlers.json",
@@ -154,7 +162,11 @@ describe("requestHandlers - additional streaming coverage", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.handlers.octet",
@@ -233,7 +245,11 @@ describe("requestHandlers - additional streaming coverage", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.handlers.multipart.plain",
@@ -309,7 +325,11 @@ describe("requestHandlers - additional streaming coverage", () => {
     });
 
     const exposure = nodeExposure.with({
-      http: { server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } },
+      http: {
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { allowAnonymous: true },
+      },
     });
     const app = defineResource({
       id: "tests.app.handlers.multipart.wrapper",

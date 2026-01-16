@@ -46,9 +46,7 @@ export class ScheduleManager {
         await sleepMs(5);
       }
       if (lockId === null) {
-        throw new Error(
-          `Failed to acquire schedule lock for '${scheduleId}'`,
-        );
+        throw new Error(`Failed to acquire schedule lock for '${scheduleId}'`);
       }
     }
 

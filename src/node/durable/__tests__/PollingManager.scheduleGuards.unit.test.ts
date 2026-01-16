@@ -79,4 +79,3 @@ describe("PollingManager schedule timer guards", () => {
     );
   });
 });
-

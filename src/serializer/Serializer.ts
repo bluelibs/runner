@@ -60,10 +60,10 @@ export class Serializer {
       maxPatternLength === Number.POSITIVE_INFINITY
         ? Number.POSITIVE_INFINITY
         : typeof maxPatternLength === "number" &&
-          Number.isFinite(maxPatternLength) &&
-          maxPatternLength > 0
-        ? Math.floor(maxPatternLength)
-        : DEFAULT_MAX_REGEXP_PATTERN_LENGTH;
+            Number.isFinite(maxPatternLength) &&
+            maxPatternLength > 0
+          ? Math.floor(maxPatternLength)
+          : DEFAULT_MAX_REGEXP_PATTERN_LENGTH;
     this.allowUnsafeRegExp = options.allowUnsafeRegExp ?? false;
     this.unsafeKeys = DEFAULT_UNSAFE_KEYS;
 

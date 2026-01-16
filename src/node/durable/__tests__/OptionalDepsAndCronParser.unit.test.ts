@@ -30,7 +30,6 @@ describe("durable: optional deps helpers", () => {
       jest.doMock(
         "ioredis",
         () => {
-          // eslint-disable-next-line no-throw-literal
           throw "boom";
         },
         { virtual: true },
@@ -48,11 +47,12 @@ describe("durable: optional deps helpers", () => {
   it("createIORedisClient() supports default exports", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      const ctor = jest
-        .fn()
-        .mockImplementation(function Redis(this: any, url?: string) {
-          this.url = url ?? null;
-        });
+      const ctor = jest.fn().mockImplementation(function Redis(
+        this: any,
+        url?: string,
+      ) {
+        this.url = url ?? null;
+      });
 
       jest.doMock(
         "ioredis",
@@ -79,11 +79,12 @@ describe("durable: optional deps helpers", () => {
   it("createIORedisClient() supports function exports", () => {
     jest.resetModules();
     jest.isolateModules(() => {
-      const ctor = jest
-        .fn()
-        .mockImplementation(function Redis(this: any, url?: string) {
-          this.url = url ?? "default";
-        });
+      const ctor = jest.fn().mockImplementation(function Redis(
+        this: any,
+        url?: string,
+      ) {
+        this.url = url ?? "default";
+      });
       jest.doMock("ioredis", () => ctor, { virtual: true });
 
       const {
@@ -138,7 +139,6 @@ describe("durable: optional deps helpers", () => {
     jest.doMock(
       "amqplib",
       () => {
-        // eslint-disable-next-line no-throw-literal
         throw "boom";
       },
       { virtual: true },
@@ -208,7 +208,9 @@ describe("durable: CronParser", () => {
 
   function mockNodeCreateRequire(requireFn: RequireFn): void {
     jest.doMock("node:module", () => {
-      const actual = jest.requireActual("node:module") as typeof import("node:module");
+      const actual = jest.requireActual(
+        "node:module",
+      ) as typeof import("node:module");
 
       return {
         ...actual,
@@ -344,7 +346,8 @@ describe("durable: CronParser", () => {
     jest.resetModules();
     jest.isolateModules(() => {
       mockNodeCreateRequire((id) => {
-        if (id === "cron-parser") return { CronExpressionParser: { parse: 123 } };
+        if (id === "cron-parser")
+          return { CronExpressionParser: { parse: 123 } };
         throw new Error(`Cannot find module '${id}'`);
       });
       const {

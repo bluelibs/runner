@@ -2,7 +2,9 @@ import { PassThrough } from "node:stream";
 import { getDefaultSerializer } from "../../../serializer";
 
 function createReq(): PassThrough & { headers: Record<string, string> } {
-  const req = new PassThrough() as PassThrough & { headers: Record<string, string> };
+  const req = new PassThrough() as PassThrough & {
+    headers: Record<string, string>;
+  };
   req.headers = { "content-type": "multipart/form-data; boundary=---" };
   return req;
 }
@@ -43,4 +45,3 @@ describe("multipart busboy interop branches", () => {
     expect(out.ok).toBe(false);
   });
 });
-

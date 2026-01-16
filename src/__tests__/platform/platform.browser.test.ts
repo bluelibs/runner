@@ -6,7 +6,10 @@ class FakePromiseRejectionEvent extends Event {
   promise: Promise<unknown>;
   reason: unknown;
 
-  constructor(type: string, init: { promise: Promise<unknown>; reason: unknown }) {
+  constructor(
+    type: string,
+    init: { promise: Promise<unknown>; reason: unknown },
+  ) {
     super(type);
     this.promise = init.promise;
     this.reason = init.reason;
@@ -22,8 +25,9 @@ declare global {
   }
 }
 
-(global as unknown as { PromiseRejectionEvent: unknown }).PromiseRejectionEvent =
-  FakePromiseRejectionEvent;
+(
+  global as unknown as { PromiseRejectionEvent: unknown }
+).PromiseRejectionEvent = FakePromiseRejectionEvent;
 
 import { detectEnvironment, PlatformAdapter } from "../../platform";
 import { defineAsyncContext, storage } from "../../definers/defineAsyncContext";
@@ -65,7 +69,7 @@ describe("PlatformAdapter (Browser)", () => {
     const removeSpy = jest.fn();
     globalThis.addEventListener = addSpy;
     globalThis.removeEventListener = removeSpy;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
     const { window: originalWindow, ..._rest } = globalThis as unknown as {
       window: unknown;
     };
@@ -97,7 +101,8 @@ describe("PlatformAdapter (Browser)", () => {
     const removeSpy = jest.fn();
     globalThis.addEventListener = addSpy;
     globalThis.removeEventListener = removeSpy;
-    const originalWindow = (globalThis as unknown as { window: unknown }).window;
+    const originalWindow = (globalThis as unknown as { window: unknown })
+      .window;
     delete (globalThis as unknown as { window: unknown }).window; // force fallback path
 
     const cleanup = adapter.onShutdownSignal(() => {});
@@ -120,7 +125,9 @@ describe("PlatformAdapter (Browser)", () => {
 
   it("should support env fallbacks", () => {
     const adapter = new PlatformAdapter("browser");
-    (window as unknown as Window & { __ENV__: Record<string, string> }).__ENV__ = {
+    (
+      window as unknown as Window & { __ENV__: Record<string, string> }
+    ).__ENV__ = {
       A: "1",
     };
     expect(adapter.getEnv("A")).toBe("1");
@@ -141,7 +148,8 @@ describe("PlatformAdapter (Browser)", () => {
   it("does not invoke shutdown handler when document is undefined on visibilitychange", () => {
     const adapter = new PlatformAdapter("browser");
 
-    const originalWindow = (globalThis as unknown as { window: unknown }).window;
+    const originalWindow = (globalThis as unknown as { window: unknown })
+      .window;
     const listeners: Record<string, Function> = {};
     (globalThis as unknown as { window: unknown }).window = {
       addEventListener: (evt: string, fn: Function) => (listeners[evt] = fn),
@@ -160,7 +168,8 @@ describe("PlatformAdapter (Browser)", () => {
     listeners["visibilitychange"]?.();
     expect(called).toBe(false);
 
-    (globalThis as unknown as { document: unknown }).document = originalDocument;
+    (globalThis as unknown as { document: unknown }).document =
+      originalDocument;
     (globalThis as unknown as { window: unknown }).window = originalWindow;
   });
 

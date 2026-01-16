@@ -6,7 +6,6 @@ import {
   ScheduleStatus,
   TimerType,
   type Execution,
-  type Schedule,
   type Timer,
 } from "../types";
 import type { AuditLogger } from "./AuditLogger";
@@ -112,11 +111,7 @@ export class PollingManager {
     try {
       await this.store.markTimerFired(timer.id);
 
-      if (
-        timer.type === TimerType.Sleep &&
-        timer.executionId &&
-        timer.stepId
-      ) {
+      if (timer.type === TimerType.Sleep && timer.executionId && timer.stepId) {
         await this.store.saveStepResult({
           executionId: timer.executionId,
           stepId: timer.stepId,
@@ -190,7 +185,10 @@ export class PollingManager {
         // If the schedule no longer exists, or is paused, don't execute.
         if (!schedule || schedule.status !== ScheduleStatus.Active) return;
         // If schedule.nextRun exists, treat mismatched timers as stale (race/updates).
-        if (schedule.nextRun && timer.fireAt.getTime() !== schedule.nextRun.getTime()) {
+        if (
+          schedule.nextRun &&
+          timer.fireAt.getTime() !== schedule.nextRun.getTime()
+        ) {
           return;
         }
       }
@@ -217,7 +215,9 @@ export class PollingManager {
       if (timer.scheduleId) {
         const schedule = await this.store.getSchedule(timer.scheduleId);
         if (schedule && schedule.status === ScheduleStatus.Active) {
-          await this.scheduleManager.reschedule(schedule, { lastRunAt: new Date() });
+          await this.scheduleManager.reschedule(schedule, {
+            lastRunAt: new Date(),
+          });
         }
       }
     } finally {

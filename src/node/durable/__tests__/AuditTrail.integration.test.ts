@@ -39,7 +39,9 @@ describe("durable: audit trail (integration)", () => {
         await ctx.note("starting", { orderId: "o1" });
 
         const before = await ctx.step("before", async () => "before");
-        const AuditEvt = event<{ a: number }>({ id: "durable.tests.audit.event" });
+        const AuditEvt = event<{ a: number }>({
+          id: "durable.tests.audit.event",
+        });
         await ctx.emit(AuditEvt, { a: 1 });
 
         await ctx.sleep(1);
@@ -75,9 +77,9 @@ describe("durable: audit trail (integration)", () => {
       ]),
     );
 
-    expect(audit.some((e) => e.kind === "note" && e.message === "starting")).toBe(
-      true,
-    );
+    expect(
+      audit.some((e) => e.kind === "note" && e.message === "starting"),
+    ).toBe(true);
 
     const internalSteps = audit.filter(
       (e) => e.kind === "step_completed" && e.isInternal,
@@ -91,7 +93,9 @@ describe("durable: audit trail (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.audit.signal.delivered.durable");
+    const durable = durableResource.fork(
+      "durable.tests.audit.signal.delivered.durable",
+    );
     const durableRegistration = durable.with({
       store,
       eventBus: bus,
@@ -121,7 +125,8 @@ describe("durable: audit trail (integration)", () => {
     });
 
     await waitUntil(
-      async () => (await store.getExecution(executionId))?.status === "sleeping",
+      async () =>
+        (await store.getExecution(executionId))?.status === "sleeping",
       { timeoutMs: 1000, intervalMs: 5 },
     );
 
@@ -144,7 +149,9 @@ describe("durable: audit trail (integration)", () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
-    const durable = durableResource.fork("durable.tests.audit.signal.timeout.durable");
+    const durable = durableResource.fork(
+      "durable.tests.audit.signal.timeout.durable",
+    );
     const durableRegistration = durable.with({
       store,
       eventBus: bus,

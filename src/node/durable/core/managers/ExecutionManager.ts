@@ -8,7 +8,12 @@ import type {
   ITaskExecutor,
 } from "../interfaces/service";
 import { DurableAuditEntryKind } from "../audit";
-import { ExecutionStatus, TimerStatus, TimerType, type Execution } from "../types";
+import {
+  ExecutionStatus,
+  TimerStatus,
+  TimerType,
+  type Execution,
+} from "../types";
 import type { TaskRegistry } from "./TaskRegistry";
 import type { AuditLogger } from "./AuditLogger";
 import type { WaitManager } from "./WaitManager";
@@ -80,7 +85,8 @@ export class ExecutionManager {
     });
 
     const kickoffTimerId = `kickoff:${executionId}`;
-    const kickoffFailsafeDelayMs = this.config.execution?.kickoffFailsafeDelayMs ?? 10_000;
+    const kickoffFailsafeDelayMs =
+      this.config.execution?.kickoffFailsafeDelayMs ?? 10_000;
     const shouldArmKickoffFailsafe =
       Boolean(this.config.queue) && kickoffFailsafeDelayMs > 0;
 
@@ -181,7 +187,6 @@ export class ExecutionManager {
   }
 
   async notifyExecutionFinished(execution: Execution): Promise<void> {
-
     await this.config.eventBus!.publish(`execution:${execution.id}`, {
       type: "finished",
       payload: execution,

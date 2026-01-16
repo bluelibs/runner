@@ -22,7 +22,9 @@ describe("durable test utils", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const durableRuntime = runtime.getResourceValue(durable);
 
-    await expect(durableRuntime.execute(task)).resolves.toEqual({ value: "ok" });
+    await expect(durableRuntime.execute(task)).resolves.toEqual({
+      value: "ok",
+    });
     expect((await store.listExecutions({})).length).toBeGreaterThan(0);
 
     await runtime.dispose();

@@ -22,7 +22,7 @@ export interface RetryMiddlewareConfig {
 
 export const retryTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.retry.task",
-  async run({ task, next }, deps, config: RetryMiddlewareConfig) {
+  async run({ task, next }, _deps, config: RetryMiddlewareConfig) {
     const input = task?.input;
     let attempts = 0;
 
@@ -57,7 +57,7 @@ export const retryTaskMiddleware = defineTaskMiddleware({
 
 export const retryResourceMiddleware = defineResourceMiddleware({
   id: "globals.middleware.retry.resource",
-  async run({ resource, next }, deps, config: RetryMiddlewareConfig) {
+  async run({ resource, next }, _deps, config: RetryMiddlewareConfig) {
     const input = resource?.config;
     let attempts = 0;
     const maxRetries = config.retries ?? 3;

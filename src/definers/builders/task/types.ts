@@ -23,8 +23,8 @@ export type ResolveInput<TExisting, TProposed> =
  * Kept immutable and frozen.
  */
 export type BuilderState<
-  TInput,
-  TOutput,
+  _TInput,
+  _TOutput,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
   TTags extends TagType[],
@@ -46,8 +46,8 @@ export type BuilderState<
  * Internal state for the PhantomTaskFluentBuilder.
  */
 export type PhantomBuilderState<
-  TInput,
-  TResolved,
+  _TInput,
+  _TResolved,
   TDeps extends DependencyMapType,
   TMeta extends ITaskMeta,
   TTags extends TagType[],

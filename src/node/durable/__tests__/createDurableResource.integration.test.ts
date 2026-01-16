@@ -113,7 +113,10 @@ describe("durable: durableResource + fork + with (integration)", () => {
     });
 
     await expect(
-      d.wait<{ v: number }>(executionId, { timeout: 5_000, waitPollIntervalMs: 5 }),
+      d.wait<{ v: number }>(executionId, {
+        timeout: 5_000,
+        waitPollIntervalMs: 5,
+      }),
     ).resolves.toEqual({ v: 4 });
 
     await runtime.dispose();
@@ -181,11 +184,16 @@ describe("durable: durableResource + fork + with (integration)", () => {
     ).resolves.toBe("a");
 
     await waitUntil(
-      () => received.some((e) => e.executionId === executionId && e.kind === "note"),
+      () =>
+        received.some(
+          (e) => e.executionId === executionId && e.kind === "note",
+        ),
       { timeoutMs: 2_000, intervalMs: 5 },
     );
 
-    const receivedForExecution = received.filter((e) => e.executionId === executionId);
+    const receivedForExecution = received.filter(
+      (e) => e.executionId === executionId,
+    );
     expect(receivedForExecution.length).toBeGreaterThan(0);
     expect(notes).toEqual(expect.arrayContaining(["starting"]));
     await expect(store.listAuditEntries(executionId)).resolves.toEqual([]);
@@ -248,12 +256,16 @@ describe("durable: durableResource + fork + with (integration)", () => {
 
     await waitUntil(
       () =>
-        received.some((e) => e.executionId === executionId && e.kind === "note"),
+        received.some(
+          (e) => e.executionId === executionId && e.kind === "note",
+        ),
       { timeoutMs: 2_000, intervalMs: 5 },
     );
 
     const audit = await store.listAuditEntries(executionId);
-    const receivedForExecution = received.filter((e) => e.executionId === executionId);
+    const receivedForExecution = received.filter(
+      (e) => e.executionId === executionId,
+    );
     expect(receivedForExecution).toHaveLength(audit.length);
 
     await runtime.dispose();
