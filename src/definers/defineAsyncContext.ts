@@ -3,11 +3,7 @@ import { getPlatform } from "../platform";
 import { ITaskMiddlewareConfigured } from "../defs";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
 import { contextError, platformUnsupportedFunctionError } from "../errors";
-import {
-  IAsyncContext,
-  IAsyncContextDefinition,
-  ASYNC_CONTEXT_TYPES_LOADED,
-} from "../types/asyncContext";
+import { IAsyncContext, IAsyncContextDefinition } from "../types/asyncContext";
 import { getDefaultSerializer } from "../serializer";
 import { symbolAsyncContext, symbolOptionalDependency } from "../types/symbols";
 
@@ -39,7 +35,6 @@ export function defineAsyncContext<T>(
 
   /* istanbul ignore next */
   const use = (): T => {
-    void ASYNC_CONTEXT_TYPES_LOADED; // keep async context types included under coverage
     const store = getCurrentStore();
     if (!store || !store.has(ctxId)) {
       contextError.throw({

@@ -1,4 +1,3 @@
-export const ASYNC_CONTEXT_TYPES_LOADED = true as const;
 import { symbolAsyncContext } from "./symbols";
 import { ITaskMiddlewareConfigured } from "./taskMiddleware";
 import type { IValidationSchema, IOptionalDependency } from "./utilities";
