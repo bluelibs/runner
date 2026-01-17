@@ -1,6 +1,8 @@
 /**
  * Graph-aware serializer/deserializer with circular reference
  * handling and pluggable type support.
+ *
+ * Internal protocol reference: `readmes/SERIALIZER_PROTOCOL.md`.
  */
 
 import type {
