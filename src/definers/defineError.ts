@@ -2,7 +2,6 @@ import {
   DefaultErrorType,
   IErrorDefinition,
   IErrorHelper,
-  ERROR_TYPES_LOADED,
   IErrorDefinitionFinal,
 } from "../types/error";
 import { symbolError, symbolOptionalDependency } from "../types/symbols";
@@ -31,8 +30,6 @@ export class ErrorHelper<
     return this.definition.id;
   }
   throw(data: TData): never {
-    // Touch the runtime marker to keep module included under coverage
-    void ERROR_TYPES_LOADED;
     const parsed = this.definition.dataSchema
       ? this.definition.dataSchema.parse(data)
       : data;
