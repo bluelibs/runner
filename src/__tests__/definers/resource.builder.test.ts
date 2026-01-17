@@ -1,12 +1,4 @@
-import {
-  r,
-  resource,
-  definitions,
-  run,
-  tag,
-  IResourceMeta,
-  IResource,
-} from "../..";
+import { r, resource, definitions, run, tag, IResourceMeta } from "../..";
 
 describe("resource builder", () => {
   it("build() returns branded resource with id", () => {

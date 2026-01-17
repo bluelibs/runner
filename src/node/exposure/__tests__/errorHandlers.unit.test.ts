@@ -115,7 +115,9 @@ describe("errorHandlers", () => {
     });
 
     expect(statusCode).toBe(500);
-    const json = payload ? serializer.parse(payload.toString("utf8")) : undefined;
+    const json = payload
+      ? serializer.parse(payload.toString("utf8"))
+      : undefined;
     expect(json && typeof json === "object").toBe(true);
     const ok = json ? (json as { ok?: unknown }).ok : undefined;
     expect(ok).toBe(false);

@@ -86,12 +86,9 @@ export const toNodeRecord = (
   unsafeKeys: ReadonlySet<string> = DEFAULT_UNSAFE_KEYS,
 ): Record<string, SerializedNode> => {
   if (!nodes || typeof nodes !== "object") {
-    const empty: Record<string, SerializedNode> = {};
-    Object.setPrototypeOf(empty, null);
-    return empty;
+    return Object.create(null);
   }
-  const record: Record<string, SerializedNode> = {};
-  Object.setPrototypeOf(record, null);
+  const record: Record<string, SerializedNode> = Object.create(null);
   for (const key in nodes) {
     if (!Object.prototype.hasOwnProperty.call(nodes, key)) {
       continue;

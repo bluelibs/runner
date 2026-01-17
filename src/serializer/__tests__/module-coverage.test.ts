@@ -6,6 +6,7 @@
 import { describe, it, expect } from "@jest/globals";
 import { isUnsafeKey, toNodeRecord } from "../validation";
 import { TypeRegistry } from "../type-registry";
+import { deserializeLegacy } from "../deserializer";
 
 describe("Serializer Module Coverage", () => {
   describe("validation.ts", () => {
@@ -41,6 +42,27 @@ describe("Serializer Module Coverage", () => {
       const typeIds = typeList.map((t) => t.id);
       expect(typeIds).toContain("Date");
       expect(typeIds).toContain("RegExp");
+    });
+  });
+
+  describe("deserializer.ts", () => {
+    it("skips inherited keys in legacy object deserialization", () => {
+      const registry = new TypeRegistry({
+        allowedTypes: null,
+        regExpValidator: { maxPatternLength: 1024, allowUnsafe: false },
+      });
+
+      const source = Object.create({ inherited: 1 }) as Record<string, unknown>;
+      source.own = 2;
+
+      const result = deserializeLegacy(source, 0, {
+        maxDepth: 1000,
+        unsafeKeys: new Set(),
+        typeRegistry: registry,
+      }) as Record<string, unknown>;
+
+      expect(result).toEqual({ own: 2 });
+      expect(result.inherited).toBeUndefined();
     });
   });
 });

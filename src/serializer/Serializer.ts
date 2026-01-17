@@ -37,6 +37,12 @@ export class Serializer {
   /** Type registry for managing custom types */
   private readonly typeRegistry: TypeRegistry;
 
+  private readonly runtimeOptions: {
+    maxDepth: number;
+    unsafeKeys: ReadonlySet<string>;
+    typeRegistry: TypeRegistry;
+  };
+
   /** JSON indentation width when pretty printing is enabled */
   private readonly indent: number | undefined;
   /** Maximum recursion depth allowed */
@@ -74,6 +80,12 @@ export class Serializer {
         allowUnsafe: this.allowUnsafeRegExp,
       },
     });
+
+    this.runtimeOptions = {
+      maxDepth: this.maxDepth,
+      unsafeKeys: this.unsafeKeys,
+      typeRegistry: this.typeRegistry,
+    };
   }
 
   /**
@@ -88,11 +100,7 @@ export class Serializer {
         excludedTypeIds: [],
       },
       0,
-      {
-        maxDepth: this.maxDepth,
-        unsafeKeys: this.unsafeKeys,
-        typeRegistry: this.typeRegistry,
-      },
+      this.runtimeOptions,
     );
     return this.jsonStringify(root);
   }
@@ -124,13 +132,7 @@ export class Serializer {
       excludedTypeIds: [],
     };
 
-    const options = {
-      maxDepth: this.maxDepth,
-      unsafeKeys: this.unsafeKeys,
-      typeRegistry: this.typeRegistry,
-    };
-
-    const root = serializeValue(value, ctx, state, 0, options);
+    const root = serializeValue(value, ctx, state, 0, this.runtimeOptions);
     if (ctx.nodeCount === 0 && !isObjectReference(root)) {
       return this.jsonStringify(root);
     }
@@ -151,14 +153,8 @@ export class Serializer {
   public deserialize<T = unknown>(payload: string): T {
     const parsed = JSON.parse(payload);
 
-    const options = {
-      maxDepth: this.maxDepth,
-      unsafeKeys: this.unsafeKeys,
-      typeRegistry: this.typeRegistry,
-    };
-
     if (!isGraphPayload(parsed)) {
-      return deserializeLegacy(parsed, 0, options) as T;
+      return deserializeLegacy(parsed, 0, this.runtimeOptions) as T;
     }
 
     const context: DeserializationContext = {
@@ -167,7 +163,12 @@ export class Serializer {
       resolving: new Set(),
     };
 
-    return deserializeValueFn(parsed.root, context, 0, options) as T;
+    return deserializeValueFn(
+      parsed.root,
+      context,
+      0,
+      this.runtimeOptions,
+    ) as T;
   }
 
   /**
@@ -251,12 +252,7 @@ export class Serializer {
     context: DeserializationContext,
     depth: number = 0,
   ): unknown {
-    const options = {
-      maxDepth: this.maxDepth,
-      unsafeKeys: this.unsafeKeys,
-      typeRegistry: this.typeRegistry,
-    };
-    return deserializeValueFn(value, context, depth, options);
+    return deserializeValueFn(value, context, depth, this.runtimeOptions);
   }
 
   /**
@@ -267,12 +263,7 @@ export class Serializer {
     context: DeserializationContext,
     depth: number = 0,
   ): unknown {
-    const options = {
-      maxDepth: this.maxDepth,
-      unsafeKeys: this.unsafeKeys,
-      typeRegistry: this.typeRegistry,
-    };
-    return resolveReferenceFn(id, context, depth, options);
+    return resolveReferenceFn(id, context, depth, this.runtimeOptions);
   }
 
   /**

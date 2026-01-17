@@ -168,7 +168,9 @@ const resolveAppErrorExtra = (
   return undefined;
 };
 
-export const handleRequestError = (options: HandleRequestErrorOptions): void => {
+export const handleRequestError = (
+  options: HandleRequestErrorOptions,
+): void => {
   const { error, req, res, store, logger, cors, serializer, logKey } = options;
   const appErrorExtra = resolveAppErrorExtra(store, error);
   const displayMessage =

@@ -12,6 +12,8 @@ import {
 } from "./validation";
 import type { TypeRegistry } from "./type-registry";
 
+const hasOwn = Object.prototype.hasOwnProperty;
+
 export interface DeserializerOptions {
   maxDepth: number;
   unsafeKeys: ReadonlySet<string>;
@@ -64,7 +66,7 @@ export const deserializeValue = (
   const obj: Record<string, unknown> = {};
   const source = value as Record<string, SerializedValue>;
   for (const key in source) {
-    if (!Object.prototype.hasOwnProperty.call(source, key)) {
+    if (!hasOwn.call(source, key)) {
       continue;
     }
     if (isUnsafeKey(key, options.unsafeKeys)) {
@@ -118,7 +120,7 @@ export const resolveReference = (
       context.resolved.set(id, target);
       const source = node.value;
       for (const key in source) {
-        if (!Object.prototype.hasOwnProperty.call(source, key)) {
+        if (!hasOwn.call(source, key)) {
           continue;
         }
         if (isUnsafeKey(key, options.unsafeKeys)) {
@@ -213,7 +215,7 @@ export const mergePlaceholder = (
     const target = placeholder as Record<string, unknown>;
     const source = result as Record<string, unknown>;
     for (const key in source) {
-      if (!Object.prototype.hasOwnProperty.call(source, key)) {
+      if (!hasOwn.call(source, key)) {
         continue;
       }
       if (isUnsafeKey(key, unsafeKeys)) {
@@ -241,7 +243,12 @@ export const deserializeLegacy = (
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => deserializeLegacy(item, depth + 1, options));
+    const length = value.length;
+    const result: unknown[] = new Array(length);
+    for (let index = 0; index < length; index += 1) {
+      result[index] = deserializeLegacy(value[index], depth + 1, options);
+    }
+    return result;
   }
 
   if (isSerializedTypeRecord(value)) {
@@ -251,11 +258,15 @@ export const deserializeLegacy = (
   }
 
   const obj: Record<string, unknown> = {};
-  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+  const source = value as Record<string, unknown>;
+  for (const key in source) {
+    if (!hasOwn.call(source, key)) {
+      continue;
+    }
     if (isUnsafeKey(key, options.unsafeKeys)) {
       continue;
     }
-    obj[key] = deserializeLegacy(entry, depth + 1, options);
+    obj[key] = deserializeLegacy(source[key], depth + 1, options);
   }
   return obj;
 };
