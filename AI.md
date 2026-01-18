@@ -168,7 +168,7 @@ const sendWelcomeEmail = r
   .on(userRegistered)
   .dependencies({ mailer: sendEmail })
   .run(async (event, { mailer }) => {
-    await mailer({ to: event.data.email, subject: "Welcome", body: "🎉" });
+    await mailer({ to: event.data.email, subject: "Welcome", body: "Welcome!" });
   })
   .build();
 ```
@@ -366,11 +366,47 @@ const app = r
 
 ## Reliability & Performance
 
-- Caching: `globals.middleware.task.cache` plus `globals.resources.cache` (override cache factory if you need Redis or custom backends).
-- Retry/backoff: `globals.middleware.task.retry` and `globals.middleware.resource.retry` for transient failures.
-- Timeouts: `globals.middleware.task.timeout` / `globals.middleware.resource.timeout` use AbortController and throw `TimeoutError`.
-- Logging: `globals.resources.logger` plus `run(..., { logs })` for print thresholds, format, and buffering.
-- Debug resource: `globals.resources.debug` or `run(..., { debug })` for lifecycle and input/output traces.
+- **Concurrency**: Limit parallel execution using a shared or local `Semaphore`.
+  ```ts
+  .middleware([globals.middleware.task.concurrency.with({ limit: 5 })])
+  ```
+- **Circuit Breaker**: Trip after failures to prevent cascading downstream pressure.
+  ```ts
+  .middleware([globals.middleware.task.circuitBreaker.with({ failureThreshold: 5, resetTimeout: 30000 })])
+  ```
+- **Rate Limit**: Protect APIs with fixed-window request counting.
+  ```ts
+  .middleware([globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 100 })])
+  ```
+- **Temporal (Debounce/Throttle)**: Control execution frequency.
+  ```ts
+  .middleware([globals.middleware.task.debounce.with({ ms: 300 })])
+  ```
+- **Fallback**: Provide a Plan B (value, function, or another task) when the primary fails.
+  ```ts
+  // Recommended: Fallback should be outer (on top) of Retry to catch final failures
+  .middleware([
+    globals.middleware.task.fallback.with({ fallback: "Guest User" }),
+    globals.middleware.task.retry.with({ attempts: 3 })
+  ])
+  ```
+- **Retry/Backoff**: `globals.middleware.task.retry` and `globals.middleware.resource.retry` for transient failures.
+  ```ts
+  .middleware([globals.middleware.task.retry.with({ retries: 3 })])
+  ```
+- **Caching**: `globals.middleware.task.cache` plus `globals.resources.cache`.
+  ```ts
+  .middleware([globals.middleware.task.cache.with({ ttl: 60000 })])
+  ```
+- **Timeouts**: `globals.middleware.task.timeout` / `globals.middleware.resource.timeout` using `AbortController`.
+  ```ts
+  .middleware([globals.middleware.task.timeout.with({ ttl: 5000 })])
+  ```
+- **Logging & Debug**: `globals.resources.logger` and `globals.resources.debug`.
+  ```ts
+  // Verbose debug logging for a specific task
+  .tags([globals.tags.debug])
+  ```
 
 ## HTTP & Tunnels
 

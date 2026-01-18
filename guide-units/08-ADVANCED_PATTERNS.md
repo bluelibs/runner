@@ -17,7 +17,7 @@ const registerUser = r
   .dependencies({ database, analytics }) // analytics must be available!
   .run(async (input, { database, analytics }) => {
     const user = await database.create(input);
-    await analytics.track("user.registered"); // 💥 Crashes if analytics is down
+    await analytics.track("user.registered"); // Crashes if analytics is down
     return user;
   })
   .build();
@@ -200,3 +200,53 @@ const remoteTasksTunnel = r
 This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
 
 For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
+
+---
+
+## Resilience Orchestration
+
+In production, one resilience strategy is rarely enough. Runner allows you to compose multiple middlewares into a "resilience onion" that protects your business logic from multiple failure modes.
+
+### The Problem
+
+A task that calls a remote API might fail due to network blips (needs **Retry**), hang indefinitely (needs **Timeout**), slam the API during traffic spikes (needs **Rate Limit**), or keep failing if the API is down (needs **Circuit Breaker**).
+
+### The Solution
+
+Combine them in the correct order. Like an onion, the outer layers handle broader concerns, while inner layers handle specific execution details.
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const resilientTask = r
+  .task("app.tasks.ultimateResilience")
+  .middleware([
+    // Outer layer: Fallback (the absolute Plan B if everything below fails)
+    globals.middleware.task.fallback.with({ fallback: { status: "offline-mode", data: [] } }),
+
+    // Next: Rate Limit (check this before wasting resources or retry budget)
+    globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 100 }),
+
+    // Next: Circuit Breaker (stop immediately if the service is known to be down)
+    globals.middleware.task.circuitBreaker.with({ failureThreshold: 5 }),
+
+    // Next: Retry (wrap the attempt in a retry loop)
+    globals.middleware.task.retry.with({ retries: 3 }),
+
+    // Inner layer: Timeout (enforce limit on EACH individual attempt)
+    globals.middleware.task.timeout.with({ ttl: 5000 }),
+  ])
+  .run(async () => {
+    return await fetchDataFromUnreliableSource();
+  })
+  .build();
+```
+
+### Best practices for orchestration
+
+1.  **Rate Limit first**: Don't even try to execute or retry if you've exceeded your quota.
+2.  **Circuit Breaker second**: Don't retry against a service that is known to be failing.
+3.  **Retry wraps Timeout**: Ensure the timeout applies to the *individual* attempt, so the retry logic can kick in when one attempt hangs.
+4.  **Fallback last**: The fallback should be the very last thing that happens if the entire resilience stack fails.
+
+> **runtime:** "Resilience Orchestration: layering defense-in-depth like a paranoid onion. I'm counting your turns, checking the circuit, spinning the retry wheel, and holding a stopwatch—all so you can sleep through a minor server fire."

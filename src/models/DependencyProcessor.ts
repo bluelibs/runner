@@ -126,6 +126,7 @@ export class DependencyProcessor {
         resource.context = context;
         resource.value = value;
         resource.isInitialized = true;
+        this.store.recordResourceInitialized(resource.resource.id);
       }
     }
   }
@@ -216,6 +217,7 @@ export class DependencyProcessor {
     rootResource.context = context;
     rootResource.value = value;
     rootResource.isInitialized = true;
+    this.store.recordResourceInitialized(rootResource.resource.id);
   }
 
   /**

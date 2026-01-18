@@ -626,6 +626,41 @@ describe("run", () => {
   });
 
   describe("disposal", () => {
+    it("disposes dependents before dependencies", async () => {
+      const callOrder: string[] = [];
+
+      const dependency = defineResource({
+        id: "test.resource.dispose.dep",
+        init: async () => "dep",
+        dispose: async () => {
+          callOrder.push("dep");
+        },
+      });
+
+      const dependent = defineResource({
+        id: "test.resource.dispose.dependent",
+        dependencies: { dependency },
+        init: async (_config, { dependency }) => `dependent:${dependency}`,
+        dispose: async () => {
+          callOrder.push("dependent");
+        },
+      });
+
+      const app = defineResource({
+        id: "test.resource.dispose.app",
+        // Register dependency first to ensure registration order does not
+        // accidentally match the desired disposal order.
+        register: [dependency, dependent],
+        dependencies: { dependent },
+        init: async (_config, { dependent }) => dependent,
+      });
+
+      const result = await run(app);
+      await result.dispose();
+
+      expect(callOrder).toEqual(["dependent", "dep"]);
+    });
+
     it("should be able to dispose of a resource", async () => {
       const disposeFn = jest.fn();
       const testResource = defineResource({

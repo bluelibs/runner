@@ -52,7 +52,164 @@ const app = r
   .build();
 ```
 
-> **runtime:** "'Because nobody likes waiting.' Correct. You keep asking the same question like a parrot with Wi‑Fi, so I built a memory palace. Now you get instant answers until you change one variable and whisper 'cache invalidation' like a curse."
+> **runtime:** "Because nobody likes waiting. Correct. You keep asking the same question like a parrot with Wi‑Fi, so I built a memory palace. Now you get instant answers until you change one variable and whisper 'cache invalidation' like a curse."
+
+---
+
+## Concurrency Control
+
+Stop slamming your database or external APIs. The concurrency middleware ensures that only a specific number of instances of a task (or group of tasks) run at the same time.
+
+```typescript
+import { r, globals, Semaphore } from "@bluelibs/runner";
+
+// Option 1: Simple limit (shared for all tasks using this middleware instance)
+const limitMiddleware = globals.middleware.task.concurrency.with({ limit: 5 });
+
+// Option 2: Explicit semaphore for fine-grained coordination
+const dbSemaphore = new Semaphore(10);
+const dbLimit = globals.middleware.task.concurrency.with({ semaphore: dbSemaphore });
+
+const heavyTask = r
+  .task("app.tasks.heavy")
+  .middleware([limitMiddleware])
+  .run(async () => {
+    // Max 5 of these will run in parallel
+  })
+  .build();
+```
+
+**Key benefits:**
+- **Resource protection**: Prevent connection pool exhaustion.
+- **Queueing**: Automatically queues excess requests instead of failing.
+- **Timeouts**: Supports waiting timeouts and cancellation via `AbortSignal`.
+
+> **runtime:** "Concurrency control: the bouncer of the event loop. I don't care how important your query is; if the room is full, you wait behind the velvet rope. No cutting, no exceptions."
+
+---
+
+## Circuit Breaker
+
+Prevent cascading failures. If an external service starts failing, the circuit breaker "trips," failing fast for all subsequent calls and giving the service time to recover.
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const resilientTask = r
+  .task("app.tasks.remoteCall")
+  .middleware([
+    globals.middleware.task.circuitBreaker.with({
+      failureThreshold: 5,   // Trip after 5 failures
+      resetTimeout: 30000,  // Stay open for 30 seconds
+    })
+  ])
+  .run(async () => {
+    return await callExternalService();
+  })
+  .build();
+```
+
+**How it works:**
+1. **CLOSED**: Everything is normal. Requests flow through.
+2. **OPEN**: Threshold reached. All requests throw `CircuitBreakerOpenError` immediately.
+3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
+4. **RECOVERY**: If the trial succeeds, it goes back to **CLOSED**. Otherwise, it returns to **OPEN**.
+
+> **runtime:** "Circuit Breaker: because 'hope' is not a resilience strategy. If the database is on fire, I stop sending you there to pour gasoline on it. I'll check back in thirty seconds to see if the smoke has cleared."
+
+---
+
+## Temporal Control: Debounce & Throttle
+
+Control the frequency of task execution over time. Perfect for event-driven tasks that might fire in bursts.
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+// Debounce: Run only after 500ms of inactivity
+const saveTask = r
+  .task("app.tasks.save")
+  .middleware([globals.middleware.task.debounce.with({ ms: 500 })])
+  .run(async (data) => {
+    return await db.save(data);
+  })
+  .build();
+
+// Throttle: Run at most once every 1000ms
+const logTask = r
+  .task("app.tasks.log")
+  .middleware([globals.middleware.task.throttle.with({ ms: 1000 })])
+  .run(async (msg) => {
+    console.log(msg);
+  })
+  .build();
+```
+
+**When to use:**
+- **Debounce**: Search-as-you-type, autosave, window resize events.
+- **Throttle**: Scroll listeners, telemetry pings, high-frequency webhooks.
+
+> **runtime:** "Temporal control: the mute button for your enthusiastic event emitters. You might be shouting a hundred times a second, but I'm only listening once per heartbeat."
+
+---
+
+## Fallback: The Plan B
+
+Define what happens when a task fails. Fallback middleware lets you return a default value or execute an alternative path gracefully.
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const getPrice = r
+  .task("app.tasks.getPrice")
+  .middleware([
+    globals.middleware.task.fallback.with({
+      // Can be a static value, a function, or another task
+      fallback: async (input, error) => {
+        console.warn(`Price fetch failed: ${error.message}. Using default.`);
+        return 9.99;
+      }
+    })
+  ])
+  .run(async () => {
+    return await fetchPriceFromAPI();
+  })
+  .build();
+```
+
+> **runtime:** "Fallback: the 'parachute' pattern. If your primary logic decides to take a nap mid-flight, I'll make sure we land on a soft pile of default values instead of a stack trace."
+
+---
+
+## Rate Limiting
+
+Protect your system from abuse by limiting the number of requests in a specific window of time.
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const sensitiveTask = r
+  .task("app.tasks.login")
+  .middleware([
+    globals.middleware.task.rateLimit.with({
+      windowMs: 60 * 1000, // 1 minute window
+      max: 5,              // Max 5 attempts per window
+    })
+  ])
+  .run(async (credentials) => {
+    return await auth.validate(credentials);
+  })
+  .build();
+```
+
+**Key features:**
+- **Fixed-window strategy**: Simple, predictable request counting.
+- **Isolation**: Limits are tracked per task definition.
+- **Error handling**: Throws `RateLimitError` when the limit is exceeded.
+
+> **runtime:** "Rate limiting: counting beans so you don't have to. You've had five turns this minute; come back when the clock says so."
+
+---
 
 ## Performance
 
@@ -206,6 +363,8 @@ BlueLibs Runner achieves high performance while providing enterprise features:
 
 > **runtime:** "'Millions of tasks per second.' Fantastic—on your lava‑warmed laptop, in a vacuum, with the wind at your back. Add I/O, entropy, and one feral user and watch those numbers molt. I’ll still be here, caffeinated and inevitable."
 
+---
+
 ## Retrying Failed Operations
 
 For when things go wrong, but you know they'll probably work if you just try again. The built-in retry middleware makes your tasks and resources more resilient to transient failures.
@@ -238,6 +397,8 @@ The retry middleware can be configured with:
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
 
 > **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it’ll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I’ll keep the attempts ledger while your API cosplays a coin toss."
+
+---
 
 ## Timeouts
 

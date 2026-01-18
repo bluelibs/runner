@@ -2189,7 +2189,7 @@ const registerUser = r
   .dependencies({ database, analytics }) // analytics must be available!
   .run(async (input, { database, analytics }) => {
     const user = await database.create(input);
-    await analytics.track("user.registered"); // 💥 Crashes if analytics is down
+    await analytics.track("user.registered"); // Crashes if analytics is down
     return user;
   })
   .build();
@@ -2372,6 +2372,56 @@ const remoteTasksTunnel = r
 This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
 
 For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
+
+---
+
+## Resilience Orchestration
+
+In production, one resilience strategy is rarely enough. Runner allows you to compose multiple middlewares into a "resilience onion" that protects your business logic from multiple failure modes.
+
+### The Problem
+
+A task that calls a remote API might fail due to network blips (needs **Retry**), hang indefinitely (needs **Timeout**), slam the API during traffic spikes (needs **Rate Limit**), or keep failing if the API is down (needs **Circuit Breaker**).
+
+### The Solution
+
+Combine them in the correct order. Like an onion, the outer layers handle broader concerns, while inner layers handle specific execution details.
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const resilientTask = r
+  .task("app.tasks.ultimateResilience")
+  .middleware([
+    // Outer layer: Fallback (the absolute Plan B if everything below fails)
+    globals.middleware.task.fallback.with({ fallback: { status: "offline-mode", data: [] } }),
+
+    // Next: Rate Limit (check this before wasting resources or retry budget)
+    globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 100 }),
+
+    // Next: Circuit Breaker (stop immediately if the service is known to be down)
+    globals.middleware.task.circuitBreaker.with({ failureThreshold: 5 }),
+
+    // Next: Retry (wrap the attempt in a retry loop)
+    globals.middleware.task.retry.with({ retries: 3 }),
+
+    // Inner layer: Timeout (enforce limit on EACH individual attempt)
+    globals.middleware.task.timeout.with({ ttl: 5000 }),
+  ])
+  .run(async () => {
+    return await fetchDataFromUnreliableSource();
+  })
+  .build();
+```
+
+### Best practices for orchestration
+
+1.  **Rate Limit first**: Don't even try to execute or retry if you've exceeded your quota.
+2.  **Circuit Breaker second**: Don't retry against a service that is known to be failing.
+3.  **Retry wraps Timeout**: Ensure the timeout applies to the *individual* attempt, so the retry logic can kick in when one attempt hangs.
+4.  **Fallback last**: The fallback should be the very last thing that happens if the entire resilience stack fails.
+
+> **runtime:** "Resilience Orchestration: layering defense-in-depth like a paranoid onion. I'm counting your turns, checking the circuit, spinning the retry wheel, and holding a stopwatch—all so you can sleep through a minor server fire."
 ## Async Context
 
 Ever needed to pass a request ID, user session, or trace ID through your entire call stack without threading it through every function parameter? That's what Async Context does.
@@ -2910,7 +2960,164 @@ const app = r
   .build();
 ```
 
-> **runtime:** "'Because nobody likes waiting.' Correct. You keep asking the same question like a parrot with Wi‑Fi, so I built a memory palace. Now you get instant answers until you change one variable and whisper 'cache invalidation' like a curse."
+> **runtime:** "Because nobody likes waiting. Correct. You keep asking the same question like a parrot with Wi‑Fi, so I built a memory palace. Now you get instant answers until you change one variable and whisper 'cache invalidation' like a curse."
+
+---
+
+## Concurrency Control
+
+Stop slamming your database or external APIs. The concurrency middleware ensures that only a specific number of instances of a task (or group of tasks) run at the same time.
+
+```typescript
+import { r, globals, Semaphore } from "@bluelibs/runner";
+
+// Option 1: Simple limit (shared for all tasks using this middleware instance)
+const limitMiddleware = globals.middleware.task.concurrency.with({ limit: 5 });
+
+// Option 2: Explicit semaphore for fine-grained coordination
+const dbSemaphore = new Semaphore(10);
+const dbLimit = globals.middleware.task.concurrency.with({ semaphore: dbSemaphore });
+
+const heavyTask = r
+  .task("app.tasks.heavy")
+  .middleware([limitMiddleware])
+  .run(async () => {
+    // Max 5 of these will run in parallel
+  })
+  .build();
+```
+
+**Key benefits:**
+- **Resource protection**: Prevent connection pool exhaustion.
+- **Queueing**: Automatically queues excess requests instead of failing.
+- **Timeouts**: Supports waiting timeouts and cancellation via `AbortSignal`.
+
+> **runtime:** "Concurrency control: the bouncer of the event loop. I don't care how important your query is; if the room is full, you wait behind the velvet rope. No cutting, no exceptions."
+
+---
+
+## Circuit Breaker
+
+Prevent cascading failures. If an external service starts failing, the circuit breaker "trips," failing fast for all subsequent calls and giving the service time to recover.
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const resilientTask = r
+  .task("app.tasks.remoteCall")
+  .middleware([
+    globals.middleware.task.circuitBreaker.with({
+      failureThreshold: 5,   // Trip after 5 failures
+      resetTimeout: 30000,  // Stay open for 30 seconds
+    })
+  ])
+  .run(async () => {
+    return await callExternalService();
+  })
+  .build();
+```
+
+**How it works:**
+1. **CLOSED**: Everything is normal. Requests flow through.
+2. **OPEN**: Threshold reached. All requests throw `CircuitBreakerOpenError` immediately.
+3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
+4. **RECOVERY**: If the trial succeeds, it goes back to **CLOSED**. Otherwise, it returns to **OPEN**.
+
+> **runtime:** "Circuit Breaker: because 'hope' is not a resilience strategy. If the database is on fire, I stop sending you there to pour gasoline on it. I'll check back in thirty seconds to see if the smoke has cleared."
+
+---
+
+## Temporal Control: Debounce & Throttle
+
+Control the frequency of task execution over time. Perfect for event-driven tasks that might fire in bursts.
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+// Debounce: Run only after 500ms of inactivity
+const saveTask = r
+  .task("app.tasks.save")
+  .middleware([globals.middleware.task.debounce.with({ ms: 500 })])
+  .run(async (data) => {
+    return await db.save(data);
+  })
+  .build();
+
+// Throttle: Run at most once every 1000ms
+const logTask = r
+  .task("app.tasks.log")
+  .middleware([globals.middleware.task.throttle.with({ ms: 1000 })])
+  .run(async (msg) => {
+    console.log(msg);
+  })
+  .build();
+```
+
+**When to use:**
+- **Debounce**: Search-as-you-type, autosave, window resize events.
+- **Throttle**: Scroll listeners, telemetry pings, high-frequency webhooks.
+
+> **runtime:** "Temporal control: the mute button for your enthusiastic event emitters. You might be shouting a hundred times a second, but I'm only listening once per heartbeat."
+
+---
+
+## Fallback: The Plan B
+
+Define what happens when a task fails. Fallback middleware lets you return a default value or execute an alternative path gracefully.
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const getPrice = r
+  .task("app.tasks.getPrice")
+  .middleware([
+    globals.middleware.task.fallback.with({
+      // Can be a static value, a function, or another task
+      fallback: async (input, error) => {
+        console.warn(`Price fetch failed: ${error.message}. Using default.`);
+        return 9.99;
+      }
+    })
+  ])
+  .run(async () => {
+    return await fetchPriceFromAPI();
+  })
+  .build();
+```
+
+> **runtime:** "Fallback: the 'parachute' pattern. If your primary logic decides to take a nap mid-flight, I'll make sure we land on a soft pile of default values instead of a stack trace."
+
+---
+
+## Rate Limiting
+
+Protect your system from abuse by limiting the number of requests in a specific window of time.
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const sensitiveTask = r
+  .task("app.tasks.login")
+  .middleware([
+    globals.middleware.task.rateLimit.with({
+      windowMs: 60 * 1000, // 1 minute window
+      max: 5,              // Max 5 attempts per window
+    })
+  ])
+  .run(async (credentials) => {
+    return await auth.validate(credentials);
+  })
+  .build();
+```
+
+**Key features:**
+- **Fixed-window strategy**: Simple, predictable request counting.
+- **Isolation**: Limits are tracked per task definition.
+- **Error handling**: Throws `RateLimitError` when the limit is exceeded.
+
+> **runtime:** "Rate limiting: counting beans so you don't have to. You've had five turns this minute; come back when the clock says so."
+
+---
 
 ## Performance
 
@@ -3064,6 +3271,8 @@ BlueLibs Runner achieves high performance while providing enterprise features:
 
 > **runtime:** "'Millions of tasks per second.' Fantastic—on your lava‑warmed laptop, in a vacuum, with the wind at your back. Add I/O, entropy, and one feral user and watch those numbers molt. I’ll still be here, caffeinated and inevitable."
 
+---
+
 ## Retrying Failed Operations
 
 For when things go wrong, but you know they'll probably work if you just try again. The built-in retry middleware makes your tasks and resources more resilient to transient failures.
@@ -3096,6 +3305,8 @@ The retry middleware can be configured with:
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
 
 > **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it’ll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I’ll keep the attempts ledger while your API cosplays a coin toss."
+
+---
 
 ## Timeouts
 
@@ -4707,6 +4918,8 @@ const users = await dbSemaphore.withPermit(async () => {
 }); // Permit released automatically, even if query throws
 ```
 
+**Pro Tip**: You don't always need to use `Semaphore` manually. The `concurrency` middleware (available via `globals.middleware.task.concurrency`) provides a declarative way to apply these limits to your tasks.
+
 ### Manual acquire/release
 
 When you need more control:
@@ -4788,54 +5001,17 @@ dbSemaphore.dispose();
 // Error: "Semaphore has been disposed"
 ```
 
-### Real-World Examples
+### From Utilities to Middlewares
 
-#### Database Connection Pool Manager
+While `Semaphore` and `Queue` provide powerful manual control, Runner often wraps these into declarative middlewares for common patterns:
 
-```typescript
-class DatabaseManager {
-  private semaphore = new Semaphore(10); // Max 10 concurrent queries
+- **concurrency**: Uses `Semaphore` internally to limit task parallelization.
+- **temporal**: Uses timers and promise-tracking to implement `debounce` and `throttle`.
+- **rateLimit**: Uses fixed-window counting to protect resources from bursts.
 
-  async query(sql: string, params?: any[]) {
-    return this.semaphore.withPermit(
-      async () => {
-        const connection = await this.pool.getConnection();
-        try {
-          return await connection.query(sql, params);
-        } finally {
-          connection.release();
-        }
-      },
-      { timeout: 30000 }, // 30 second timeout
-    );
-  }
+**What you just learned**: Utilities are the building blocks; Middlewares are the blueprints for common resilience patterns.
 
-  async shutdown() {
-    this.semaphore.dispose();
-    await this.pool.close();
-  }
-}
-```
-
-#### Rate-Limited API Client
-
-```typescript
-class APIClient {
-  private rateLimiter = new Semaphore(5); // Max 5 concurrent requests
-
-  async fetchUser(id: string, signal?: AbortSignal) {
-    return this.rateLimiter.withPermit(
-      async () => {
-        const response = await fetch(`/api/users/${id}`, { signal });
-        return response.json();
-      },
-      { signal, timeout: 10000 },
-    );
-  }
-}
-```
-
-> **runtime:** "Semaphore: velvet rope for chaos. Five in, the rest practice patience. I stamp hands, count permits, and break up race conditions before they form a band."
+> **runtime:** "I provide the bricks and the mortar. You decide if you're building a fortress or just a very complicated way to trip over your own feet. Use the middleware for common paths; use the utilities when you want to play architect."
 
 ---
 

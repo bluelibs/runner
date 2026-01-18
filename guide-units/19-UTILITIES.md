@@ -33,6 +33,8 @@ const users = await dbSemaphore.withPermit(async () => {
 }); // Permit released automatically, even if query throws
 ```
 
+**Pro Tip**: You don't always need to use `Semaphore` manually. The `concurrency` middleware (available via `globals.middleware.task.concurrency`) provides a declarative way to apply these limits to your tasks.
+
 ### Manual acquire/release
 
 When you need more control:
@@ -114,54 +116,17 @@ dbSemaphore.dispose();
 // Error: "Semaphore has been disposed"
 ```
 
-### Real-World Examples
+### From Utilities to Middlewares
 
-#### Database Connection Pool Manager
+While `Semaphore` and `Queue` provide powerful manual control, Runner often wraps these into declarative middlewares for common patterns:
 
-```typescript
-class DatabaseManager {
-  private semaphore = new Semaphore(10); // Max 10 concurrent queries
+- **concurrency**: Uses `Semaphore` internally to limit task parallelization.
+- **temporal**: Uses timers and promise-tracking to implement `debounce` and `throttle`.
+- **rateLimit**: Uses fixed-window counting to protect resources from bursts.
 
-  async query(sql: string, params?: any[]) {
-    return this.semaphore.withPermit(
-      async () => {
-        const connection = await this.pool.getConnection();
-        try {
-          return await connection.query(sql, params);
-        } finally {
-          connection.release();
-        }
-      },
-      { timeout: 30000 }, // 30 second timeout
-    );
-  }
+**What you just learned**: Utilities are the building blocks; Middlewares are the blueprints for common resilience patterns.
 
-  async shutdown() {
-    this.semaphore.dispose();
-    await this.pool.close();
-  }
-}
-```
-
-#### Rate-Limited API Client
-
-```typescript
-class APIClient {
-  private rateLimiter = new Semaphore(5); // Max 5 concurrent requests
-
-  async fetchUser(id: string, signal?: AbortSignal) {
-    return this.rateLimiter.withPermit(
-      async () => {
-        const response = await fetch(`/api/users/${id}`, { signal });
-        return response.json();
-      },
-      { signal, timeout: 10000 },
-    );
-  }
-}
-```
-
-> **runtime:** "Semaphore: velvet rope for chaos. Five in, the rest practice patience. I stamp hands, count permits, and break up race conditions before they form a band."
+> **runtime:** "I provide the bricks and the mortar. You decide if you're building a fortress or just a very complicated way to trip over your own feet. Use the middleware for common paths; use the utilities when you want to play architect."
 
 ---
 

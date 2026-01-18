@@ -11,6 +11,7 @@ import {
 } from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { mergeMiddlewareConfig } from "./middlewareConfig";
 
 export function defineTaskMiddleware<
   TConfig = any,
@@ -78,10 +79,7 @@ export function defineTaskMiddleware<
         return wrap({
           ...obj,
           [symbolMiddlewareConfigured]: true,
-          config: {
-            ...(obj.config as TConfig),
-            ...config,
-          },
+          config: mergeMiddlewareConfig(obj.config as TConfig, config),
         } satisfies ITaskMiddlewareConfigured<
           TConfig,
           TEnforceInputContract,
