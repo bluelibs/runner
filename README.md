@@ -733,7 +733,7 @@ Now that you know the patterns, here's your learning path:
 ---
 ## Quick Wins: Copy-Paste Solutions
 
-**5 real-world problems, solved in minutes.** Just copy, customize, and ship. 
+**6 real-world problems, solved in minutes.** Just copy, customize, and ship.
 
 ### Add Caching to Any Task (with automatic invalidation)
 
@@ -840,6 +840,30 @@ const sendWelcomeEmail = r
   .build();
 
 // Automatically decoupled - no direct dependencies!
+// Note: createUserInDB and emailService are your own implementations
+```
+
+### Prevent Race Conditions (per-process queue)
+
+The built-in queue provides in-process named locks - no Redis needed, but only works within a single Node.js process.
+
+```typescript
+const writeConfig = r
+  .task("config.write")
+  .dependencies({ queue: globals.resources.queue })
+  .run(async (input: { key: string; value: string }, { queue }) => {
+    // Only one write per key at a time within this process
+    return await queue.run(`config:${input.key}`, async () => {
+      await fs.writeFile(
+        `/config/${input.key}.json`,
+        JSON.stringify(input.value),
+      );
+      return { written: true };
+    });
+  })
+  .build();
+
+// Same key? Queued. Different keys? Parallel.
 ```
 
 ### Add Structured Logging (with context)
@@ -874,10 +898,39 @@ const processPayment = r
 // Perfect for production debugging!
 ```
 
-** That's it!** Each of these patterns is production-ready. No configuration, no extra packages, just works.
+### Wire It All Together
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+// After defining your tasks, events, and hooks...
+const app = r
+  .resource("app")
+  .register([
+    getUser, // cached task
+    callExternalAPI, // retrying task
+    registerUser, // event emitter
+    userRegistered, // event definition
+    sendWelcomeEmail, // hook listener
+    processOrder, // queue-protected task
+    processPayment, // logged task
+  ])
+  .build();
+
+// Start the runtime
+const { runTask, dispose } = await run(app);
+
+// Execute tasks
+const user = await runTask(getUser, { id: "123" });
+const result = await runTask(registerUser, { email: "new@user.com" });
+
+// Shutdown gracefully when done
+await dispose();
+```
+
+**That's it!** Each of these patterns is production-ready. No configuration, no extra packages, just works.
 
 ---
-
 ## The Big Five
 
 The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using the runner effectively.
@@ -1074,10 +1127,35 @@ const app = r
 
 Key points:
 
-- **`.fork()` returns a built `IResource`** — no need to call `.build()` again
+- **`.fork()` returns a built `IResource`** - no need to call `.build()` again
 - **Tags, middleware, and type parameters are inherited**
-- **Each fork gets independent runtime** — no shared state
+- **Each fork gets independent runtime** - no shared state
 - **Export forked resources** to use them as typed dependencies
+
+#### Optional Dependencies
+
+Mark dependencies as optional when they may not be registered. The injected value will be `undefined` if the dependency is missing:
+
+```typescript
+const analyticsService = r
+  .resource("app.analytics")
+  .init(async () => ({ track: (event: string) => console.log(event) }))
+  .build();
+
+const myTask = r
+  .task("app.tasks.doWork")
+  .dependencies({
+    analytics: analyticsService.optional(), // May be undefined
+  })
+  .run(async (input, { analytics }) => {
+    // Safe to call only if registered
+    analytics?.track("task.executed");
+    return { done: true };
+  })
+  .build();
+```
+
+Optional dependencies work on tasks, resources, events, async contexts, and errors.
 
 #### Private Context
 
@@ -1132,7 +1210,29 @@ const userRegistered = r
   .event("app.events.userRegistered")
   .payloadSchema<{ userId: string; email: string }>({ parse: (value) => value })
   .build();
+```
 
+#### Parallel Event Execution
+
+By default, hooks run sequentially in priority order. Use `.parallel(true)` on an event to enable concurrent execution within priority batches:
+
+```typescript
+const highVolumeEvent = r
+  .event("app.events.highVolume")
+  .payloadSchema<{ data: string }>({ parse: (v) => v })
+  .parallel(true) // Listeners with same priority run concurrently
+  .build();
+```
+
+**How parallel execution works:**
+
+- Listeners are grouped by `.order()` priority
+- Within each priority batch, listeners run concurrently
+- Batches execute sequentially (lowest priority number first)
+- If any listener throws, subsequent batches don't run
+- `stopPropagation()` is checked between batches only
+
+```typescript
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userService, userRegistered })
@@ -1276,7 +1376,7 @@ const systemReadyHook = r
   .hook("app.hooks.systemReady")
   .on(globals.events.ready)
   .run(async () => {
-    console.log(" System is ready and operational!");
+    console.log("System is ready and operational!");
   })
   .build();
 ```
@@ -1311,13 +1411,13 @@ const emergencyHandler = r
     console.log(`Alert received: ${event.data.severity}`);
 
     if (event.data.severity === "critical") {
-      console.log(" CRITICAL ALERT - Activating emergency protocols");
+      console.log("CRITICAL ALERT - Activating emergency protocols");
 
       // Stop other handlers from running
       event.stopPropagation();
       // Notify the on-call team, escalate, etc.
 
-      console.log(" Event propagation stopped - emergency protocols active");
+      console.log("Event propagation stopped - emergency protocols active");
     }
   })
   .build();
@@ -1659,6 +1759,17 @@ try {
   }
 }
 ```
+
+---
+
+### Beyond the Big Five
+
+The core concepts above cover most use cases. For specialized features:
+
+- **Async Context**: Per-request/thread-local state via `r.asyncContext()`. See [Async Context](#async-context) for Node.js `AsyncLocalStorage` patterns.
+- **Durable Workflows** (Node-only): Replay-safe primitives like `ctx.step()`, `ctx.sleep()`, and `ctx.waitForSignal()`. See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md).
+- **HTTP Tunnels**: Expose tasks over HTTP or call remote Runners. See [Tunnels](./readmes/TUNNELS.md).
+- **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](./readmes/SERIALIZER_PROTOCOL.md).
 
 ---
 ## Quick Reference: Cheat Sheet

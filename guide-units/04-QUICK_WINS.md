@@ -1,6 +1,6 @@
 ## Quick Wins: Copy-Paste Solutions
 
-**5 real-world problems, solved in minutes.** Just copy, customize, and ship. 
+**6 real-world problems, solved in minutes.** Just copy, customize, and ship.
 
 ### Add Caching to Any Task (with automatic invalidation)
 
@@ -107,6 +107,30 @@ const sendWelcomeEmail = r
   .build();
 
 // Automatically decoupled - no direct dependencies!
+// Note: createUserInDB and emailService are your own implementations
+```
+
+### Prevent Race Conditions (per-process queue)
+
+The built-in queue provides in-process named locks - no Redis needed, but only works within a single Node.js process.
+
+```typescript
+const writeConfig = r
+  .task("config.write")
+  .dependencies({ queue: globals.resources.queue })
+  .run(async (input: { key: string; value: string }, { queue }) => {
+    // Only one write per key at a time within this process
+    return await queue.run(`config:${input.key}`, async () => {
+      await fs.writeFile(
+        `/config/${input.key}.json`,
+        JSON.stringify(input.value),
+      );
+      return { written: true };
+    });
+  })
+  .build();
+
+// Same key? Queued. Different keys? Parallel.
 ```
 
 ### Add Structured Logging (with context)
@@ -141,7 +165,36 @@ const processPayment = r
 // Perfect for production debugging!
 ```
 
-** That's it!** Each of these patterns is production-ready. No configuration, no extra packages, just works.
+### Wire It All Together
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+// After defining your tasks, events, and hooks...
+const app = r
+  .resource("app")
+  .register([
+    getUser, // cached task
+    callExternalAPI, // retrying task
+    registerUser, // event emitter
+    userRegistered, // event definition
+    sendWelcomeEmail, // hook listener
+    processOrder, // queue-protected task
+    processPayment, // logged task
+  ])
+  .build();
+
+// Start the runtime
+const { runTask, dispose } = await run(app);
+
+// Execute tasks
+const user = await runTask(getUser, { id: "123" });
+const result = await runTask(registerUser, { email: "new@user.com" });
+
+// Shutdown gracefully when done
+await dispose();
+```
+
+**That's it!** Each of these patterns is production-ready. No configuration, no extra packages, just works.
 
 ---
-
