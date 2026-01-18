@@ -109,7 +109,7 @@ Use `.fork(newId)` to clone a resource definition under a new id (handy for mult
 Forks keep the same implementation/types but get separate runtime instances (no shared state).
 Prefer exporting forks so other tasks/resources can depend on them.
 
-### Tasks
+## Tasks
 
 Tasks are your business actions. They are plain async functions with DI, middleware, and validation.
 
@@ -138,7 +138,7 @@ const sendEmail = r
 - `.dependencies()` appends (shallow-merge) by default on resources, tasks, hooks, and middleware; pass `{ override: true }` to replace. Functions and objects are merged consistently.
 - Provide result validation with `.resultSchema()` when the function returns structured data.
 
-### Events and Hooks
+## Events and Hooks
 
 Events are strongly typed signals. Hooks listen to them with predictable execution order.
 
@@ -147,7 +147,7 @@ import { r } from "@bluelibs/runner";
 
 const userRegistered = r
   .event("app.events.userRegistered")
-  .payloadSchema<{ userId: string; email: string }>({ parse: (v) => v })
+  .payloadSchema<{ userId: string; email: string }>({ parse: (v) => v } )
   .build();
 
 // Type-only alternative (no runtime payload validation):
@@ -183,7 +183,7 @@ const sendWelcomeEmail = r
   - Propagation is checked between batches only (not mid-batch since parallel listeners can't be stopped mid-flight)
   - If any listener throws, subsequent batches will not run
 
-### Middleware
+## Middleware
 
 Middleware wraps tasks or resources. Fluent builders live under `r.middleware`.
 
@@ -233,7 +233,7 @@ const auth = r.middleware
   .build();
 ```
 
-### Tags
+## Tags
 
 Tags let you annotate definitions with metadata that can be queried later.
 
@@ -271,7 +271,7 @@ const getUser = r
   .build();
 ```
 
-### Async Context
+## Async Context
 
 Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node). Use the fluent builder under `r.asyncContext` or the classic `asyncContext({ ... })` export.
 
@@ -310,7 +310,7 @@ const whoAmI = r
 const app = r.resource("app").register([requestContext, whoAmI]).build();
 ```
 
-### Errors
+## Errors
 
 Define typed, namespaced errors with a fluent builder. Built helpers expose `throw`, `is`, and `toString`:
 
@@ -335,7 +335,7 @@ try {
 - Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
 
-### Overrides
+## Overrides
 
 Override a task/resource/hook/middleware while preserving `id`. Use the helper or the fluent override builder:
 

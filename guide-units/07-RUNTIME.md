@@ -1,8 +1,8 @@
 ## run() and RunOptions
 
-The `run()` function boots a root `resource` and returns a `RunResult` handle to interact with your system.
+The `run()` function is your application's entry point. It initializes all resources, wires up dependencies, and returns handles for interacting with your system.
 
-Basic usage:
+### Basic usage
 
 ```ts
 import { r, run } from "@bluelibs/runner";
@@ -23,7 +23,7 @@ console.log(result.value); // "ready"
 await result.dispose();
 ```
 
-What `run()` returns:
+### What `run()` returns
 
 | Property                | Description                                                        |
 | ----------------------- | ------------------------------------------------------------------ |

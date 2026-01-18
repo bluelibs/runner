@@ -1,83 +1,136 @@
 ## Testing
 
+Runner's explicit dependency injection makes testing straightforward—no magic mocks, no container hacks. Just pass what you need.
 
+### Two testing approaches
 
-### Unit Testing
+| Approach             | Speed  | What runs      | Best for          |
+| -------------------- | ------ | -------------- | ----------------- |
+| **Unit test**        | Fast   | Just your code | Logic, edge cases |
+| **Integration test** | Slower | Full pipeline  | End-to-end flows  |
 
-Unit testing is straightforward because everything is explicit:
+### Unit testing (fast, isolated)
+
+Call `.run()` directly on any task with mock dependencies. This **bypasses middleware**—you're testing pure business logic.
 
 ```typescript
-describe("registerUser task", () => {
-  it("should create a user and emit event", async () => {
-    const mockUserService = {
-      createUser: jest.fn().mockResolvedValue({ id: "123", name: "John" }),
-    };
-    const mockEvent = jest.fn();
+import { describe, it, expect, vi } from "vitest";
 
+describe("registerUser task", () => {
+  it("creates user and emits event", async () => {
+    // Create mocks
+    const mockDb = {
+      createUser: vi.fn().mockResolvedValue({ id: "user-123", name: "Alice" }),
+    };
+    const mockEvent = vi.fn();
+
+    // Call the task directly - no runtime needed!
     const result = await registerUser.run(
-      { name: "John", email: "john@example.com" },
-      { userService: mockUserService, userRegistered: mockEvent },
+      { name: "Alice", email: "alice@example.com" },
+      { database: mockDb, userCreated: mockEvent }, // Inject mocks
     );
 
-    expect(result.id).toBe("123");
+    // Assert
+    expect(result.id).toBe("user-123");
     expect(mockEvent).toHaveBeenCalledWith({
-      userId: "123",
-      email: "john@example.com",
+      userId: "user-123",
+      email: "alice@example.com",
     });
+  });
+
+  it("handles duplicate email", async () => {
+    const mockDb = {
+      createUser: vi.fn().mockRejectedValue(new Error("Email already exists")),
+    };
+
+    await expect(
+      registerUser.run(
+        { name: "Bob", email: "taken@example.com" },
+        { database: mockDb },
+      ),
+    ).rejects.toThrow("Email already exists");
   });
 });
 ```
 
-### Integration Testing
+### Integration testing (full pipeline)
 
-Spin up your whole app, keep all the middleware/events, and still test like a human. The `run()` function returns a `RunnerResult`.
-
-This contains the classic `value` and `dispose()` but it also exposes `logger`, `runTask()`, `emitEvent()`, and `getResourceValue()` by default.
-
-Note: The default `printThreshold` inside tests is `null` not `info`. This is verified via `process.env.NODE_ENV === 'test'`, if you want to see the logs ensure you set it accordingly.
+Spin up the entire app with real middleware, events, and lifecycle. Use `override()` to swap out infrastructure.
 
 ```typescript
 import { run, r, override } from "@bluelibs/runner";
 
-// Your real app
-const app = r
-  .resource("app")
-  .register([
-    /* tasks, resources, middleware */
-  ])
-  .build();
+describe("User registration flow", () => {
+  it("creates user, sends email, and tracks analytics", async () => {
+    // Create test doubles for infrastructure
+    const testDb = r
+      .resource("app.database")
+      .init(async () => new InMemoryDatabase())
+      .build();
 
-// Optional: overrides for infra (hello, fast tests!)
-const testDb = r
-  .resource("app.database")
-  .init(async () => new InMemoryDb())
-  .build();
-// If you use with override() it will enforce the same interface upon the overriden resource to ensure typesafety
-const mockMailer = override(realMailer, { init: async () => fakeMailer });
+    const mockMailer = override(realMailer, {
+      init: async () => ({ send: vi.fn().mockResolvedValue(true) }),
+    });
 
-// Create the test harness
-const harness = r.resource("test").overrides([mockMailer, testDb]).build();
+    // Build test harness with overrides
+    const testApp = r
+      .resource("test")
+      .overrides([testDb, mockMailer])
+      .register([...productionComponents])
+      .build();
 
-// A task you want to drive in your tests
-const registerUser = r
-  .task("app.tasks.registerUser")
-  .run(async () => ({}))
-  .build();
+    // Run the full app
+    const { runTask, getResourceValue, dispose } = await run(testApp);
 
-// Boom: full ecosystem
-const { value: t, dispose } = await run(harness);
+    try {
+      // Execute through the full pipeline (middleware runs!)
+      const user = await runTask(registerUser, {
+        name: "Charlie",
+        email: "charlie@test.com",
+      });
 
-// You have 3 ways to interact with the system, run tasks, get resource values and emit events
-// You can run them dynamically with just string ids, but using the created objects gives you type-safety.
+      // Verify
+      expect(user.id).toBeDefined();
 
-const result = await t.runTask(registerUser, { email: "x@y.z" });
-const value = t.getResourceValue(testDb); // since the resolution is done by id, this will return the exact same result as t.getResourceValue(actualDb)
-t.emitEvent(event, payload);
-expect(result).toMatchObject({ success: true });
-await dispose();
+      const mailer = await getResourceValue(mockMailer);
+      expect(mailer.send).toHaveBeenCalled();
+    } finally {
+      await dispose();
+    }
+  });
+});
 ```
 
-When you're working with the actual task instances you benefit of autocompletion, if you rely on strings you will not benefit of autocompletion and typesafety for running these tasks.
+### Testing tips
 
-> **runtime:** "Testing: an elaborate puppet show where every string behaves. Then the real world walks in, kicks the stage, and asks for pagination. Still—nice coverage badge."
+**Logs are suppressed in tests** by default (when `NODE_ENV=test`). To see them:
 
+```typescript
+await run(app, { debug: "verbose" });
+```
+
+**Use task references for type safety:**
+
+```typescript
+// Type-safe - autocomplete works
+await runTask(registerUser, { name: "Alice", email: "alice@test.com" });
+
+// Works but no type checking
+await runTask("app.tasks.registerUser", {
+  name: "Alice",
+  email: "alice@test.com",
+});
+```
+
+**Always dispose:**
+
+```typescript
+const { dispose } = await run(app);
+try {
+  // ... tests
+} finally {
+  await dispose(); // Clean up connections, timers, etc.
+}
+```
+
+> **runtime:** "Testing: an elaborate puppet show where every string behaves. Then production walks in, kicks the stage, and asks for pagination. Still—nice coverage badge."

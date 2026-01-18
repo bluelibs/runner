@@ -4,6 +4,12 @@
 
 **Build enterprise applications that are maintainable, testable, and scalable**
 
+Runner is a TypeScript-first framework for building applications out of tasks (functions) and resources
+(singletons), with explicit dependency injection, middleware, events, hooks, and lifecycle management.
+
+For a token-friendly overview of the fluent builder API (`r.*`), see [AI.md](./AI.md).
+Node-only features (durable workflows, tunnels) live under `@bluelibs/runner/node` and in `./readmes/`.
+
 <p align="center">
 <a href="https://github.com/bluelibs/runner/actions/workflows/ci.yml"><img src="https://github.com/bluelibs/runner/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build Status" /></a>
 <a href="https://github.com/bluelibs/runner"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen" alt="Coverage 100% is enforced" /></a>
@@ -14,14 +20,35 @@
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
+import { z } from "zod";
+
+const db = r
+  .resource("app.db")
+  .init(async () => ({
+    users: {
+      insert: async (input: { name: string; email: string }) => ({
+        id: "user-1",
+        ...input,
+      }),
+    },
+  }))
+  .build();
+
+const mailer = r
+  .resource("app.mailer")
+  .init(async () => ({
+    sendWelcome: async (email: string) => {
+      console.log(`Sending welcome email to ${email}`);
+    },
+  }))
+  .build();
 
 // Define a task with dependencies, schema validation, and type-safe input/output
 const createUser = r
   .task("users.create")
   .dependencies({ db, mailer })
-  .inputSchema(z.object({ name: z.string(), email: z.string() }))
+  .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
   .run(async (input, { db, mailer }) => {
-    // type-safety infered from schema
     const user = await db.users.insert(input);
     await mailer.sendWelcome(user.email);
     return user;
@@ -31,9 +58,11 @@ const createUser = r
 // Compose resources and run your application
 const app = r.resource("app").register([db, mailer, createUser]).build();
 const runtime = await run(app);
+await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
+// await runtime.dispose() when you are done.
 ```
 
-**[ Documentation](https://bluelibs.github.io/runner/)** · **[ Examples](https://github.com/bluelibs/runner/tree/main/examples)** · **[ GitHub](https://github.com/bluelibs/runner)**
+**[Documentation](https://bluelibs.github.io/runner/)** · **[AI.md](./AI.md)** · **[Examples](https://github.com/bluelibs/runner/tree/main/examples)** · **[GitHub](https://github.com/bluelibs/runner)**
 
 ---
 
@@ -43,7 +72,7 @@ const runtime = await run(app);
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](https://github.com/bluelibs/runner/blob/main/AI.md)                                              | Docs    | Compact summary (<5000 tokens)      |
+| [AI-Friendly Docs](./AI.md)                                                                                        | Docs    | Compact summary (<5000 tokens)      |
 | [Migration Guide (3.x → 4.x)](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade instructions   |
 | [Design Documents](https://github.com/bluelibs/runner/blob/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
@@ -266,10 +295,10 @@ test("getUser works", async () => {
 
 | Feature               | Runner        | NestJS     | InversifyJS | TypeDI     | tsyringe   |
 | --------------------- | ------------- | ---------- | ----------- | ---------- | ---------- |
-| **Learning Curve**    | Gentle        | ️ Steep     | ️ Steep      | Moderate   | Moderate   |
+| **Learning Curve**    | Gentle        | Steep      | Steep       | Moderate   | Moderate   |
 | **Magic/Decorators**  | None          | Heavy      | Heavy       | Heavy      | Heavy      |
 | **Bundle Size**       | Small         | Large      | Large       | Medium     | Medium     |
-| **Type Safety**       | Perfect       | ️ Runtime   | ️ Runtime    | ️ Runtime   | ️ Runtime   |
+| **Type Safety**       | Perfect       | Runtime    | Runtime     | Runtime    | Runtime    |
 | **Test Speed**        | Instant       | Slow       | Slow        | OK         | OK         |
 | **Built-in Features** | Everything    | Everything | Basic DI    | Basic DI   | Basic DI   |
 | **Framework Lock-in** | None          | Heavy      | Light       | Light      | Light      |
@@ -282,6 +311,8 @@ test("getUser works", async () => {
 | **Debug Experience**  | Crystal clear | Confusing  | Confusing   | Confusing  | Confusing  |
 
 **TL;DR:** Runner gives you the features of NestJS with the simplicity of plain functions.
+
+> **runtime:** "Framework comparison tables: where 'Learning Curve: Gentle' means I ship with documentation and 'Type Safety: Perfect' means TypeScript isn't decorative confetti. The competition brought decorators; I brought functions that actually compile."
 
 ---
 
@@ -573,9 +604,14 @@ Runner auto-detects the platform (Node.js, browser, edge) and adapts behavior at
 ---
 ## Learning Guide
 
-### Common Patterns
+These patterns will save you hours of debugging. Each one addresses a real mistake we've seen developers make when learning Runner.
 
-Here are some patterns that'll help you write clean Runner code. We've seen lots of developers learn these the hard way, so let's save you some time! 
+**What you'll learn:**
+
+- When to use tasks vs regular functions
+- How to properly wire up and execute tasks
+- Two different testing strategies
+- Common gotchas with registration and configuration
 
 ### Pattern 1: Not Everything Needs to Be a Task
 
@@ -721,6 +757,8 @@ See [Quick Wins](#quick-wins-copy-paste-solutions) for ready-to-use examples wit
 
 ---
 
+**Key takeaway**: Define → Register → Run → Execute. That's the rhythm of every Runner application.
+
 ### What's Next?
 
 Now that you know the patterns, here's your learning path:
@@ -730,10 +768,23 @@ Now that you know the patterns, here's your learning path:
 3. **[Events & Hooks](#events)** - Decouple your app with event-driven patterns
 4. **[Middleware](#middleware)** - Add cross-cutting concerns cleanly
 
+> **runtime:** "Six patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
+
 ---
 ## Quick Wins: Copy-Paste Solutions
 
-**6 real-world problems, solved in minutes.** Just copy, customize, and ship.
+Production-ready patterns you can use today. Each example is complete and tested.
+
+| Problem                  | Solution                  | Jump to                                                         |
+| ------------------------ | ------------------------- | --------------------------------------------------------------- |
+| Expensive repeated calls | Add caching               | [Caching](#add-caching-to-any-task-with-automatic-invalidation) |
+| Flaky external APIs      | Auto-retry with backoff   | [Retry](#retry-failed-api-calls-with-exponential-backoff)       |
+| Hanging operations       | Add timeouts              | [Timeouts](#add-request-timeouts-prevent-hanging-operations)    |
+| Tight coupling           | Event-driven architecture | [Events](#set-up-event-driven-architecture-in-30-seconds)       |
+| Race conditions          | Sequential queue          | [Queue](#prevent-race-conditions-per-process-queue)             |
+| Production debugging     | Structured logging        | [Logging](#add-structured-logging-with-context)                 |
+
+---
 
 ### Add Caching to Any Task (with automatic invalidation)
 
@@ -928,7 +979,9 @@ const result = await runTask(registerUser, { email: "new@user.com" });
 await dispose();
 ```
 
-**That's it!** Each of these patterns is production-ready. No configuration, no extra packages, just works.
+**That's it!** Each pattern is production-ready. No configuration, no extra packages, just works.
+
+> **runtime:** "Six production problems, six one-liners. You bolted middleware onto tasks like Lego bricks and called it architecture. I respect the pragmatism. Ship it."
 
 ---
 ## The Big Five
@@ -1879,7 +1932,7 @@ globals.middleware.task.retry.with({
 globals.middleware.task.timeout.with({ ttl: 5000 });
 ```
 
-### ️ Common Patterns
+### Common Patterns
 
 ```typescript
 // Register components
@@ -1929,23 +1982,13 @@ type Value = ResourceValue<typeof myResource>; // Get resource value type
 
 ### Performance Tips
 
-```typescript
-//  Use caching for expensive operations
-.middleware([cache.with({ ttl: 60000 })])
-
-//  Add timeouts to external calls
-.middleware([timeout.with({ ttl: 5000 })])
-
-//  Retry transient failures
-.middleware([retry.with({ retries: 3 })])
-
-//  Use events for decoupling
-await userRegistered({ userId, email });
-
-//  Keep tasks focused (single responsibility)
-const getUserTask = r.task("users.get")...  //  One thing
-const createUserTask = r.task("users.create")... //  One thing
-```
+| Pattern                   | When to Use                        | Code                                         |
+| ------------------------- | ---------------------------------- | -------------------------------------------- |
+| **Caching**               | Expensive computations, DB queries | `.middleware([cache.with({ ttl: 60000 })])`  |
+| **Timeouts**              | External APIs, network calls       | `.middleware([timeout.with({ ttl: 5000 })])` |
+| **Retry**                 | Transient failures, flaky services | `.middleware([retry.with({ retries: 3 })])`  |
+| **Events**                | Decoupling, async side effects     | `await userRegistered({ userId, email })`    |
+| **Single responsibility** | Maintainability                    | One task = one action                        |
 
 ### Debugging
 
@@ -1990,9 +2033,9 @@ await queue.add(async () => {
 ---
 ## run() and RunOptions
 
-The `run()` function boots a root `resource` and returns a `RunResult` handle to interact with your system.
+The `run()` function is your application's entry point. It initializes all resources, wires up dependencies, and returns handles for interacting with your system.
 
-Basic usage:
+### Basic usage
 
 ```ts
 import { r, run } from "@bluelibs/runner";
@@ -2013,7 +2056,7 @@ console.log(result.value); // "ready"
 await result.dispose();
 ```
 
-What `run()` returns:
+### What `run()` returns
 
 | Property                | Description                                                        |
 | ----------------------- | ------------------------------------------------------------------ |
@@ -2127,138 +2170,161 @@ await run(app);
 ```
 
 > **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You’re collapsing the waveform of a task at runtime and I’m Schrödinger’s runtime, praying the cat hasn’t overridden `run()` with `throw new Error('lol')`."
+## Advanced Patterns
+
+This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
+
+---
+
 ## Optional Dependencies
 
-_Making your app resilient when services aren't available_
+What happens when your analytics service is down? Or your email provider is rate-limiting? With optional dependencies, your app keeps running instead of crashing.
 
-Sometimes you want your application to gracefully handle missing dependencies instead of crashing. Optional dependencies let you build resilient systems that degrade gracefully.
+### The problem
 
-Keep in mind that you have full control over dependency registration by functionalising `dependencies(config) => ({ ... })` and `register(config) => []`.
+```typescript
+// Without optional dependencies - if analytics is down, the whole task fails
+const registerUser = r
+  .task("users.register")
+  .dependencies({ database, analytics }) // analytics must be available!
+  .run(async (input, { database, analytics }) => {
+    const user = await database.create(input);
+    await analytics.track("user.registered"); // 💥 Crashes if analytics is down
+    return user;
+  })
+  .build();
+```
+
+### The solution
 
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const emailService = r
-  .resource("app.services.email")
-  .init(async () => new EmailService())
-  .build();
-
-const paymentService = r
-  .resource("app.services.payment")
-  .init(async () => new PaymentService())
-  .build();
-
-const userRegistration = r
-  .task("app.tasks.registerUser")
+const registerUser = r
+  .task("users.register")
   .dependencies({
-    database: userDatabase, // Required - will fail if not available
-    emailService: emailService.optional(), // Optional - won't fail if missing
-    analytics: analyticsService.optional(), // Optional - graceful degradation
+    database, // Required - task fails if missing
+    analytics: analyticsService.optional(), // Optional - undefined if missing
+    email: emailService.optional(), // Optional - graceful degradation
   })
-  .run(async (input, { database, emailService, analytics }) => {
-    // Create user (required)
-    const user = await database.users.create(userData);
+  .run(async (input, { database, analytics, email }) => {
+    // Core logic always runs
+    const user = await database.create(input);
 
-    // Send welcome email (optional)
-    if (emailService) {
-      await emailService.sendWelcome(user.email);
-    }
-
-    // Track analytics (optional)
-    if (analytics) {
-      await analytics.track("user.registered", { userId: user.id });
-    }
+    // Optional services fail silently
+    await analytics?.track("user.registered");
+    await email?.sendWelcome(user.email);
 
     return user;
   })
   .build();
 ```
 
-**When to use optional dependencies:**
+### When to use optional dependencies
 
-- External services that might be down
-- Feature flags and A/B testing services
-- Analytics and monitoring services
-- Non-critical third-party integrations
-- Development vs production service differences
+| Use Case                  | Example                                            |
+| ------------------------- | -------------------------------------------------- |
+| **Non-critical services** | Analytics, metrics, feature flags                  |
+| **External integrations** | Third-party APIs that may be flaky                 |
+| **Development shortcuts** | Skip services not running locally                  |
+| **Feature toggles**       | Conditionally enable functionality                 |
+| **Gradual rollouts**      | New services that might not be deployed everywhere |
 
-**Benefits:**
+### Dynamic dependencies
 
-- Graceful degradation instead of crashes
-- Better resilience in distributed systems
-- Easier testing with partial mocks
-- Smoother development environments
+For more control, you can compute dependencies based on config:
 
-> **runtime:** "Graceful degradation: your app quietly limps with a brave smile. I’ll juggle `undefined` like a street performer while your analytics vendor takes a nap. Please clap when I keep the lights on using the raw power of conditional chaining."
-
-### Serialization
-
-Runner ships with a graph-aware serializer that safely round-trips complex values across HTTP and between Node and the browser.
-
-**Built-in type support:**
-
-- `Date`, `RegExp`, `Map`, `Set`, `Error`, `Uint8Array` work out of the box
-- Handles circular references and shared object identity
-
-**Two modes:**
-
-- `stringify()`/`parse()` — Tree mode (like JSON, throws on circular refs)
-- `serialize()`/`deserialize()` — Graph mode (preserves circular refs and identity)
-
-**Security hardened:**
-
-- ReDoS protection validates RegExp patterns against catastrophic backtracking
-- Prototype pollution blocked (`__proto__`, `constructor`, `prototype` keys filtered)
-- Configurable depth limits prevent stack overflow
-
-```ts
-import { r, globals, getDefaultSerializer } from "@bluelibs/runner";
-
-// Access via DI
-const serializerSetup = r
-  .resource("app.serialization.setup")
-  .dependencies({ serializer: globals.resources.serializer })
-  .init(async (_config, { serializer }) => {
-    // Tree mode (simple)
-    const text = serializer.stringify({ when: new Date() });
-    const obj = serializer.parse<{ when: Date }>(text);
-
-    // Graph mode (preserves refs)
-    const a = { name: "A" };
-    const b = { ref: a, self: null as any };
-    b.self = b; // circular
-    const json = serializer.serialize(b);
-    const restored = serializer.deserialize(json); // refs preserved!
-
-    // Custom types via factory
-    class Distance {
-      constructor(
-        public value: number,
-        public unit: string,
-      ) {}
-      toJSONValue() {
-        return { value: this.value, unit: this.unit };
-      }
-      typeName() {
-        return "Distance";
-      }
-    }
-    serializer.addType("Distance", (j: any) => new Distance(j.value, j.unit));
+```typescript
+const myTask = r
+  .task("app.tasks.flexible")
+  .dependencies((config) => ({
+    database,
+    // Only include analytics in production
+    ...(config.enableAnalytics ? { analytics } : {}),
+  }))
+  .run(async (input, deps) => {
+    // deps.analytics may or may not exist
   })
   .build();
-
-// Standalone (outside DI)
-const serializer = getDefaultSerializer();
 ```
 
-**Configuration options (via `new Serializer(options)`):**
+---
 
-- `maxDepth` — Recursion limit (default: 1000)
-- `allowedTypes` — Whitelist of type IDs for deserialization
-- `maxRegExpPatternLength` — Limit pattern length (default: 1024)
-- `allowUnsafeRegExp` — Skip ReDoS validation (default: false)
+## Serialization
 
-> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. Use `createWebFile`/`createNodeFile` for uploads.
+Ever sent a `Date` over JSON and gotten `"2024-01-15T..."` back as a string? Runner's serializer preserves types across the wire.
+
+### What it handles
+
+| Type          | JSON   | Runner Serializer |
+| ------------- | ------ | ----------------- |
+| `Date`        | String | Date object       |
+| `RegExp`      | Lost   | RegExp object     |
+| `Map`, `Set`  | Lost   | Preserved         |
+| `Uint8Array`  | Lost   | Preserved         |
+| Circular refs | Error  | Preserved         |
+
+### Two modes
+
+```typescript
+import { getDefaultSerializer } from "@bluelibs/runner";
+
+const serializer = getDefaultSerializer();
+
+// Tree mode - like JSON.stringify, but type-aware
+const json = serializer.stringify({ when: new Date(), pattern: /hello/i });
+const obj = serializer.parse(json);
+// obj.when is a Date, obj.pattern is a RegExp
+
+// Graph mode - handles circular references
+const user = { name: "Alice" };
+const team = { members: [user], lead: user }; // shared reference
+user.team = team; // circular reference
+
+const data = serializer.serialize(team);
+const restored = serializer.deserialize(data);
+// restored.members[0] === restored.lead (same object!)
+```
+
+### Custom types
+
+Teach the serializer about your own classes:
+
+```typescript
+class Money {
+  constructor(
+    public amount: number,
+    public currency: string,
+  ) {}
+
+  // Required methods for serialization
+  typeName() {
+    return "Money";
+  }
+  toJSONValue() {
+    return { amount: this.amount, currency: this.currency };
+  }
+}
+
+// Register the type
+serializer.addType("Money", (json) => new Money(json.amount, json.currency));
+
+// Now it round-trips correctly
+const price = new Money(99.99, "USD");
+const json = serializer.stringify({ price });
+const { price: restored } = serializer.parse(json);
+// restored instanceof Money === true
+```
+
+### Security features
+
+The serializer is hardened against common attacks:
+
+- **ReDoS protection**: Validates RegExp patterns against catastrophic backtracking
+- **Prototype pollution blocked**: Filters `__proto__`, `constructor`, `prototype` keys
+- **Depth limits**: Configurable max depth prevents stack overflow
+
+> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](./readmes/TUNNELS.md) for file upload patterns.
 
 ### Tunnels: Bridging Runners
 
@@ -2308,107 +2374,226 @@ This is just a glimpse. With tunnels, you can build microservices, CLIs, and adm
 For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
 ## Async Context
 
-Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node). Use the fluent builder under `r.asyncContext` to create contexts that can be registered and injected as dependencies.
+Ever needed to pass a request ID, user session, or trace ID through your entire call stack without threading it through every function parameter? That's what Async Context does.
 
-> ️ **Platform Note**: `AsyncLocalStorage` is a **Node.js-only** feature. In browsers and edge runtimes, async context is not available. If you need request-scoped state in browsers, consider passing context explicitly through function parameters or using a state management solution.
+It gives you **request-scoped state** that automatically flows through your async operations—no prop drilling required.
 
-```typescript
-import { r } from "@bluelibs/runner";
+> **Platform Note**: Async Context uses Node.js's `AsyncLocalStorage` under the hood, so it's **Node.js-only**. For browsers, pass context explicitly through parameters instead.
 
-const requestContext = r
-  .asyncContext<{ requestId: string }>("app.ctx.request")
-  // below is optional
-  .configSchema(z.object({ ... }))
-  .serialize((data) => JSON.stringify(data))
-  .parse((raw) => JSON.parse(raw))
-  .build();
+### When to use it
 
-// Provide and read within an async boundary
-await requestContext.provide({ requestId: "abc" }, async () => {
-  const ctx = requestContext.use(); // { requestId: "abc" }
-});
+- **Request tracing**: Carry a `requestId` or `traceId` through all operations
+- **User sessions**: Access the current user without passing it everywhere
+- **Database transactions**: Share a transaction across multiple operations
+- **Logging context**: Automatically include request metadata in all logs
 
-// Require middleware for tasks that need the context
-const requireRequestContext = requestContext.require();
-```
-
-- If you don't provide `serialize`/`parse`, Runner uses its default serializer to preserve Dates, RegExp, etc.
-- A legacy `createContext(name?)` exists for backwards compatibility; prefer `r.asyncContext` or `asyncContext({ id })`.
-
-- You can also inject async contexts as dependencies; the injected value is the helper itself. Contexts must be registered to be used.
-
-```typescript
-const whoAmI = r
-  .task("app.tasks.whoAmI")
-  .dependencies({ requestContext })
-  .run(async (_input, { requestContext }) => requestContext.use().requestId)
-  .build();
-
-const app = r.resource("app").register([requestContext, whoAmI]).build();
-```
-## Fluent Builders (`r.*`)
-
-For a more ergonomic and chainable way to define your components, Runner offers a fluent builder API under the `r` namespace. These builders are fully type-safe, improve readability for complex definitions, and compile to the standard Runner definitions with zero runtime overhead.
-
-Here’s a quick taste of how it looks, with and without `zod` for validation:
+### Basic usage
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
-import { z } from "zod";
 
-// With Zod, the config type is inferred automatically
-const emailerConfigSchema = z.object({
-  smtpUrl: z.string().url(),
-  from: z.string().email(),
+// 1. Define your context shape
+const requestContext = r
+  .asyncContext<{ requestId: string; userId?: string }>("app.ctx.request")
+  .build();
+
+// 2. Wrap your request handler
+async function handleRequest(req: Request) {
+  await requestContext.provide({ requestId: crypto.randomUUID() }, async () => {
+    // Everything inside here can access the context
+    await processRequest(req);
+  });
+}
+
+// 3. Read from anywhere in the call stack
+async function processRequest(req: Request) {
+  const ctx = requestContext.use(); // { requestId: "abc-123", userId: undefined }
+  console.log(`Processing request ${ctx.requestId}`);
+}
+```
+
+### Using context in tasks
+
+The real power comes when you inject context into your tasks:
+
+```typescript
+const auditLog = r
+  .task("app.tasks.auditLog")
+  .dependencies({ requestContext, logger: globals.resources.logger })
+  .run(async (message: string, { requestContext, logger }) => {
+    const ctx = requestContext.use();
+    await logger.info(message, {
+      requestId: ctx.requestId,
+      userId: ctx.userId,
+    });
+  })
+  .build();
+
+// Register the context alongside your tasks
+const app = r.resource("app").register([requestContext, auditLog]).build();
+```
+
+### Requiring context with middleware
+
+Force tasks to run only within a context boundary:
+
+```typescript
+const securedTask = r
+  .task("app.tasks.secured")
+  .middleware([requestContext.require()]) // Throws if context not provided
+  .run(async (input) => {
+    const ctx = requestContext.use(); // Guaranteed to exist
+    return { processedBy: ctx.userId };
+  })
+  .build();
+```
+
+### Custom serialization
+
+By default, Runner preserves Dates, RegExp, and other types across async boundaries. For custom serialization:
+
+```typescript
+const sessionContext = r
+  .asyncContext<{ user: User }>("app.ctx.session")
+  .serialize((data) => JSON.stringify(data))
+  .parse((raw) => JSON.parse(raw))
+  .build();
+```
+
+> **runtime:** "Async Context: your data playing hide-and-seek across the event loop. One forgotten `.provide()` and the 'Context not available' error will find you at 3am, exactly where your stack trace is least helpful."
+## Fluent Builders (`r.*`)
+
+The `r` namespace gives you a chainable, discoverable way to build Runner components. Instead of memorizing object shapes, you get autocomplete that guides you through the options.
+
+### Why use fluent builders?
+
+```typescript
+// Classic API - you need to know the shape
+const task = task({
+  id: "users.create",
+  dependencies: { db },
+  inputSchema: userSchema,
+  run: async (input, { db }) => {
+    /* ... */
+  },
 });
 
-const emailer = r
-  .resource("app.emailer")
-  .configSchema(emailerConfigSchema)
-  .init(async ({ config }) => ({
-    send: (to: string, body: string) => {
-      console.log(
-        `Sending from ${config.from} to ${to} via ${config.smtpUrl}: ${body}`,
-      );
-    },
+// Fluent API - autocomplete guides you
+const task = r
+  .task("users.create") // Start here, then...
+  .dependencies({ db }) // ...chain what you need
+  .inputSchema(userSchema)
+  .run(async (input, { db }) => {
+    /* ... */
+  })
+  .build();
+```
+
+Both produce identical runtime definitions. The fluent API just makes discovery easier.
+
+### Building resources
+
+Resources are singletons with lifecycle management. Here's the progression from simple to complete:
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+// Simple: just returns a value
+const config = r
+  .resource("app.config")
+  .init(async () => ({ apiUrl: process.env.API_URL }))
+  .build();
+
+// With config: accepts parameters via .with()
+const database = r
+  .resource<{ connectionString: string }>("app.db")
+  .init(async ({ connectionString }) => createConnection(connectionString))
+  .dispose(async (connection) => connection.close())
+  .build();
+
+// With dependencies: uses other resources
+const userRepo = r
+  .resource("app.repos.user")
+  .dependencies({ database })
+  .init(async (_config, { database }) => ({
+    findById: (id: string) =>
+      database.query("SELECT * FROM users WHERE id = ?", id),
+    create: (data: UserData) => database.query("INSERT INTO users ...", data),
   }))
   .build();
 
-// Without a schema library, you can provide the type explicitly
-const greeter = r
-  .resource("app.greeter")
-  .init(async (cfg: { name: string }) => ({
-    greet: () => `Hello, ${cfg.name}!`,
-  }))
-  .build();
-
+// Wire it all together
 const app = r
   .resource("app")
   .register([
-    emailer.with({
-      smtpUrl: "smtp://example.com",
-      from: "noreply@example.com",
-    }),
-    greeter.with({ name: "World" }),
+    database.with({ connectionString: "postgres://localhost/myapp" }),
+    userRepo,
   ])
-  .dependencies({ emailer, greeter })
-  .init(async (_, { emailer, greeter }) => {
-    console.log(greeter.greet());
-    emailer.send("test@example.com", "This is a test.");
-  })
   .build();
 
 await run(app);
 ```
 
-The builder API provides a clean, step-by-step way to construct everything from simple tasks to complex resources with middleware, tags, and schemas.
+### Building tasks
 
-For a complete guide and more examples, check out the [full Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).
+Tasks are your business logic with DI, middleware, and validation:
+
+```typescript
+const createUser = r
+  .task("users.create")
+  .dependencies({ userRepo, logger: globals.resources.logger })
+  .inputSchema(
+    z.object({
+      name: z.string().min(2),
+      email: z.string().email(),
+    }),
+  )
+  .middleware([globals.middleware.task.retry.with({ retries: 3 })])
+  .run(async (input, { userRepo, logger }) => {
+    await logger.info("Creating user", { email: input.email });
+    return userRepo.create(input);
+  })
+  .build();
+```
+
+### Building events and hooks
+
+```typescript
+// Events are typed signals
+const userCreated = r
+  .event<{ userId: string; email: string }>("users.created")
+  .build();
+
+// Hooks react to events
+const sendWelcome = r
+  .hook("users.sendWelcome")
+  .on(userCreated)
+  .dependencies({ mailer })
+  .run(async (event, { mailer }) => {
+    await mailer.send(event.data.email, "Welcome!");
+  })
+  .build();
+```
+
+### The pattern
+
+Every builder follows the same rhythm:
+
+1. **Start** with `r.task()`, `r.resource()`, `r.event()`, etc.
+2. **Configure** with `.dependencies()`, `.middleware()`, `.tags()`, etc.
+3. **Implement** with `.run()` or `.init()`
+4. **Finish** with `.build()`
+
+For the complete API reference, see the [Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).
+
+> **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."
 ## Type Helpers
 
-These utility types help you extract the generics from tasks, resources, and events without re-declaring them. Import them from `@bluelibs/runner`.
+When you need to reference a task's input type in another function, or pass a resource's value type to a generic, these utility types save you from re-declaring the same shapes.
 
-```ts
+### Extracting types from components
+
+```typescript
 import { r } from "@bluelibs/runner";
 import type {
   ExtractTaskInput,
@@ -2418,154 +2603,189 @@ import type {
   ExtractEventPayload,
 } from "@bluelibs/runner";
 
-// Task example
-const add = r
-  .task("calc.add")
-  .run(async (input: { a: number; b: number }) => input.a + input.b)
+// Define your components
+const createUser = r
+  .task("users.create")
+  .run(async (input: { name: string; email: string }) => ({
+    id: "user-123",
+    ...input,
+  }))
   .build();
 
-type AddInput = ExtractTaskInput<typeof add>; // { a: number; b: number }
-type AddOutput = ExtractTaskOutput<typeof add>; // number
-
-// Resource example
-const config = r
-  .resource("app.config")
-  .init(async (cfg: { baseUrl: string }) => ({ baseUrl: cfg.baseUrl }))
+const database = r
+  .resource<{ connectionString: string }>("app.db")
+  .init(async (cfg) => createConnection(cfg.connectionString))
   .build();
 
-type ConfigInput = ExtractResourceConfig<typeof config>; // { baseUrl: string }
-type ConfigValue = ExtractResourceValue<typeof config>; // { baseUrl: string }
-
-// Event example
-const userRegistered = r
-  .event("app.events.userRegistered")
-  .payloadSchema<{ userId: string; email: string }>({ parse: (v) => v })
+const userCreated = r
+  .event<{ userId: string; email: string }>("users.created")
   .build();
-type UserRegisteredPayload = ExtractEventPayload<typeof userRegistered>; // { userId: string; email: string }
+
+// Extract types without re-declaring them
+type CreateUserInput = ExtractTaskInput<typeof createUser>; // { name: string; email: string }
+type CreateUserOutput = ExtractTaskOutput<typeof createUser>; // { id: string; name: string; email: string }
+type DbConfig = ExtractResourceConfig<typeof database>; // { connectionString: string }
+type DbValue = ExtractResourceValue<typeof database>; // Connection
+type UserCreatedPayload = ExtractEventPayload<typeof userCreated>; // { userId: string; email: string }
 ```
 
-### Context with Middleware
+### Practical use cases
 
-Context shines when combined with middleware for request-scoped data:
+**Building API handlers that match task signatures:**
 
 ```typescript
-import { r } from "@bluelibs/runner";
-import { randomUUID } from "crypto";
-
-const requestContext = r
-  .asyncContext<{
-    requestId: string;
-    startTime: number;
-    userAgent?: string;
-  }>("app.requestContext")
+// Your task defines the contract
+const processOrder = r
+  .task("orders.process")
+  .run(async (input: { orderId: string; priority: "low" | "high" }) => ({
+    status: "processed" as const,
+    orderId: input.orderId,
+  }))
   .build();
 
-const requestMiddleware = r.middleware
-  .task("app.middleware.request")
-  .run(async ({ task, next }) => {
-    // This works even in express middleware if needed.
-    return requestContext.provide(
-      {
-        requestId: randomUUID(),
-        startTime: Date.now(),
-        userAgent: "MyApp/1.0",
-      },
-      async () => {
-        return next(task?.input);
-      },
-    );
-  })
-  .build();
+// Your HTTP handler enforces the same types
+type OrderInput = ExtractTaskInput<typeof processOrder>;
+type OrderOutput = ExtractTaskOutput<typeof processOrder>;
 
-const handleRequest = r
-  .task("app.handleRequest")
-  .middleware([requestMiddleware])
-  .run(async (input: { path: string }) => {
-    const request = requestContext.use();
-    console.log(`Processing ${input.path} (Request ID: ${request.requestId})`);
-    return { success: true, requestId: request.requestId };
-  })
-  .build();
+app.post("/orders", async (req, res) => {
+  const input: OrderInput = req.body; // Type-checked!
+  const result: OrderOutput = await runTask(processOrder, input);
+  res.json(result);
+});
 ```
 
-> **runtime:** "Context: global state with manners. You invented a teleporting clipboard for data and called it 'nice.' Forget to `provide()` once and I’ll unleash the 'Context not available' banshee scream exactly where your logs are least helpful."
-## System Shutdown Hooks
+**Creating wrapper functions:**
 
-_Graceful shutdown and cleanup when your app needs to stop_
+```typescript
+// A logging wrapper that preserves types
+function withLogging<T extends ITask<any, any>>(task: T) {
+  type Input = ExtractTaskInput<T>;
+  type Output = ExtractTaskOutput<T>;
 
-The framework includes built-in support for graceful shutdowns with automatic cleanup and configurable shutdown hooks:
+  return async (input: Input): Promise<Output> => {
+    console.log(`Calling ${task.id}`, input);
+    const result = await task.run(input, dependencies);
+    console.log(`Result from ${task.id}`, result);
+    return result;
+  };
+}
+```
+
+### Quick reference
+
+| Helper                     | Extracts         | From     |
+| -------------------------- | ---------------- | -------- |
+| `ExtractTaskInput<T>`      | Input type       | Task     |
+| `ExtractTaskOutput<T>`     | Return type      | Task     |
+| `ExtractResourceConfig<T>` | Config parameter | Resource |
+| `ExtractResourceValue<T>`  | Init return type | Resource |
+| `ExtractEventPayload<T>`   | Payload type     | Event    |
+
+> **runtime:** "Type helpers: TypeScript's 'I told you so' toolkit. You extract the input type from a task, slap it on an API handler, and suddenly your frontend and backend are sworn blood brothers. Until someone uses `as any`. Then I cry."
+## Lifecycle Management
+
+When your app stops—whether from Ctrl+C, a deployment, or a crash—you need to close database connections, flush logs, and finish in-flight requests. Runner handles this automatically.
+
+### How it works
+
+Resources initialize in dependency order and dispose in **reverse** order. If Resource B depends on Resource A, then:
+
+1. **Startup**: A initializes first, then B
+2. **Shutdown**: B disposes first, then A
+
+This ensures resources always have their dependencies available.
 
 ```mermaid
 sequenceDiagram
     participant App as Application
     participant Runner
-    participant R1 as Resource A
-    participant R2 as Resource B (depends on A)
+    participant R1 as Database
+    participant R2 as Server (needs Database)
 
     Note over App,R2: Startup (dependencies first)
     App->>Runner: run(app)
     Runner->>R1: init()
-    R1-->>Runner: initialized
+    R1-->>Runner: connected
     Runner->>R2: init()
-    R2-->>Runner: initialized
+    R2-->>Runner: listening
     Runner-->>App: { runTask, dispose }
 
     Note over App,R2: Shutdown (reverse order)
     App->>Runner: dispose()
     Runner->>R2: dispose()
-    R2-->>Runner: cleaned up
+    R2-->>Runner: server closed
     Runner->>R1: dispose()
-    R1-->>Runner: cleaned up
-    Runner-->>App: shutdown complete
+    R1-->>Runner: connection closed
 ```
 
+### Basic shutdown handling
+
 ```typescript
-import { run } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 
-// Enable shutdown hooks (default: true in production)
-const { dispose, taskRunner, eventManager } = await run(app, {
-  shutdownHooks: true, // Automatically handle SIGTERM/SIGINT
-  errorBoundary: true, // Catch unhandled errors and rejections
-});
-
-// Manual graceful shutdown
-process.on("SIGTERM", async () => {
-  console.log("Received SIGTERM, shutting down gracefully...");
-  await dispose(); // This calls all resource dispose() methods
-  process.exit(0);
-});
-
-// Resources with cleanup logic
-const databaseResource = r
+const database = r
   .resource("app.database")
   .init(async () => {
-    const connection = await connectToDatabase();
+    const conn = await connectToDatabase();
     console.log("Database connected");
-    return connection;
+    return conn;
   })
-  .dispose(async (connection) => {
-    await connection.close();
-    // console.log("Database connection closed");
+  .dispose(async (conn) => {
+    await conn.close();
+    console.log("Database closed");
   })
   .build();
 
-const serverResource = r
-  .resource("app.server")
-  .dependencies({ database: databaseResource })
-  .init(async (config: { port: number }, { database }) => {
-    const server = express().listen(config.port);
-    console.log(`Server listening on port ${config.port}`);
-    return server;
+const server = r
+  .resource<{ port: number }>("app.server")
+  .dependencies({ database })
+  .init(async ({ port }) => {
+    const app = express().listen(port);
+    console.log(`Server on port ${port}`);
+    return app;
   })
-  .dispose(async (server) => {
-    return new Promise<void>((resolve) => {
-      server.close(() => {
+  .dispose(async (app) => {
+    return new Promise((resolve) => {
+      app.close(() => {
         console.log("Server closed");
         resolve();
       });
     });
   })
   .build();
+
+// Run with automatic shutdown hooks
+const { dispose } = await run(app, {
+  shutdownHooks: true, // Handle SIGTERM/SIGINT automatically
+});
+
+// Or call dispose() manually
+await dispose();
+```
+
+### Automatic signal handling
+
+By default, Runner installs handlers for `SIGTERM` and `SIGINT`:
+
+```typescript
+await run(app, {
+  shutdownHooks: true, // default in production
+});
+
+// Now Ctrl+C or `kill <pid>` triggers graceful shutdown
+// No manual signal handling needed!
+```
+
+To handle signals yourself:
+
+```typescript
+const { dispose } = await run(app, { shutdownHooks: false });
+
+process.on("SIGTERM", async () => {
+  console.log("Shutting down...");
+  await dispose();
+  process.exit(0);
+});
 ```
 
 ### Error Boundary Integration
@@ -4149,7 +4369,19 @@ This pattern allows you to maintain clean, type-safe code while handling the ine
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
 ## Real-World Example: The Complete Package
 
-Here's a more realistic application structure that shows everything working together:
+This example shows everything working together in a realistic Express application:
+
+| Component          | What it demonstrates                         |
+| ------------------ | -------------------------------------------- |
+| `config`           | Environment-based configuration              |
+| `database`         | Resource with lifecycle (connect/disconnect) |
+| `RequestContext`   | Per-request state via async context          |
+| `userRegistered`   | Typed event emission                         |
+| `authMiddleware`   | Role-based access control                    |
+| `userService`      | Business logic as a resource                 |
+| `registerUser`     | Task with dependencies and events            |
+| `sendWelcomeEmail` | Hook reacting to events                      |
+| `server`           | Express integration with graceful shutdown   |
 
 ```typescript
 import { r, run, createContext } from "@bluelibs/runner";
@@ -4306,111 +4538,178 @@ process.on("SIGTERM", async () => {
 > **runtime:** "Ah yes, the 'Real‑World Example'—a terrarium where nothing dies and every request is polite. Release it into production and watch nature document a very different ecosystem."
 ## Testing
 
+Runner's explicit dependency injection makes testing straightforward—no magic mocks, no container hacks. Just pass what you need.
 
+### Two testing approaches
 
-### Unit Testing
+| Approach             | Speed  | What runs      | Best for          |
+| -------------------- | ------ | -------------- | ----------------- |
+| **Unit test**        | Fast   | Just your code | Logic, edge cases |
+| **Integration test** | Slower | Full pipeline  | End-to-end flows  |
 
-Unit testing is straightforward because everything is explicit:
+### Unit testing (fast, isolated)
+
+Call `.run()` directly on any task with mock dependencies. This **bypasses middleware**—you're testing pure business logic.
 
 ```typescript
-describe("registerUser task", () => {
-  it("should create a user and emit event", async () => {
-    const mockUserService = {
-      createUser: jest.fn().mockResolvedValue({ id: "123", name: "John" }),
-    };
-    const mockEvent = jest.fn();
+import { describe, it, expect, vi } from "vitest";
 
+describe("registerUser task", () => {
+  it("creates user and emits event", async () => {
+    // Create mocks
+    const mockDb = {
+      createUser: vi.fn().mockResolvedValue({ id: "user-123", name: "Alice" }),
+    };
+    const mockEvent = vi.fn();
+
+    // Call the task directly - no runtime needed!
     const result = await registerUser.run(
-      { name: "John", email: "john@example.com" },
-      { userService: mockUserService, userRegistered: mockEvent },
+      { name: "Alice", email: "alice@example.com" },
+      { database: mockDb, userCreated: mockEvent }, // Inject mocks
     );
 
-    expect(result.id).toBe("123");
+    // Assert
+    expect(result.id).toBe("user-123");
     expect(mockEvent).toHaveBeenCalledWith({
-      userId: "123",
-      email: "john@example.com",
+      userId: "user-123",
+      email: "alice@example.com",
     });
+  });
+
+  it("handles duplicate email", async () => {
+    const mockDb = {
+      createUser: vi.fn().mockRejectedValue(new Error("Email already exists")),
+    };
+
+    await expect(
+      registerUser.run(
+        { name: "Bob", email: "taken@example.com" },
+        { database: mockDb },
+      ),
+    ).rejects.toThrow("Email already exists");
   });
 });
 ```
 
-### Integration Testing
+### Integration testing (full pipeline)
 
-Spin up your whole app, keep all the middleware/events, and still test like a human. The `run()` function returns a `RunnerResult`.
-
-This contains the classic `value` and `dispose()` but it also exposes `logger`, `runTask()`, `emitEvent()`, and `getResourceValue()` by default.
-
-Note: The default `printThreshold` inside tests is `null` not `info`. This is verified via `process.env.NODE_ENV === 'test'`, if you want to see the logs ensure you set it accordingly.
+Spin up the entire app with real middleware, events, and lifecycle. Use `override()` to swap out infrastructure.
 
 ```typescript
 import { run, r, override } from "@bluelibs/runner";
 
-// Your real app
-const app = r
-  .resource("app")
-  .register([
-    /* tasks, resources, middleware */
-  ])
-  .build();
+describe("User registration flow", () => {
+  it("creates user, sends email, and tracks analytics", async () => {
+    // Create test doubles for infrastructure
+    const testDb = r
+      .resource("app.database")
+      .init(async () => new InMemoryDatabase())
+      .build();
 
-// Optional: overrides for infra (hello, fast tests!)
-const testDb = r
-  .resource("app.database")
-  .init(async () => new InMemoryDb())
-  .build();
-// If you use with override() it will enforce the same interface upon the overriden resource to ensure typesafety
-const mockMailer = override(realMailer, { init: async () => fakeMailer });
+    const mockMailer = override(realMailer, {
+      init: async () => ({ send: vi.fn().mockResolvedValue(true) }),
+    });
 
-// Create the test harness
-const harness = r.resource("test").overrides([mockMailer, testDb]).build();
+    // Build test harness with overrides
+    const testApp = r
+      .resource("test")
+      .overrides([testDb, mockMailer])
+      .register([...productionComponents])
+      .build();
 
-// A task you want to drive in your tests
-const registerUser = r
-  .task("app.tasks.registerUser")
-  .run(async () => ({}))
-  .build();
+    // Run the full app
+    const { runTask, getResourceValue, dispose } = await run(testApp);
 
-// Boom: full ecosystem
-const { value: t, dispose } = await run(harness);
+    try {
+      // Execute through the full pipeline (middleware runs!)
+      const user = await runTask(registerUser, {
+        name: "Charlie",
+        email: "charlie@test.com",
+      });
 
-// You have 3 ways to interact with the system, run tasks, get resource values and emit events
-// You can run them dynamically with just string ids, but using the created objects gives you type-safety.
+      // Verify
+      expect(user.id).toBeDefined();
 
-const result = await t.runTask(registerUser, { email: "x@y.z" });
-const value = t.getResourceValue(testDb); // since the resolution is done by id, this will return the exact same result as t.getResourceValue(actualDb)
-t.emitEvent(event, payload);
-expect(result).toMatchObject({ success: true });
-await dispose();
+      const mailer = await getResourceValue(mockMailer);
+      expect(mailer.send).toHaveBeenCalled();
+    } finally {
+      await dispose();
+    }
+  });
+});
 ```
 
-When you're working with the actual task instances you benefit of autocompletion, if you rely on strings you will not benefit of autocompletion and typesafety for running these tasks.
+### Testing tips
 
-> **runtime:** "Testing: an elaborate puppet show where every string behaves. Then the real world walks in, kicks the stage, and asks for pagination. Still—nice coverage badge."
+**Logs are suppressed in tests** by default (when `NODE_ENV=test`). To see them:
+
+```typescript
+await run(app, { debug: "verbose" });
+```
+
+**Use task references for type safety:**
+
+```typescript
+// Type-safe - autocomplete works
+await runTask(registerUser, { name: "Alice", email: "alice@test.com" });
+
+// Works but no type checking
+await runTask("app.tasks.registerUser", {
+  name: "Alice",
+  email: "alice@test.com",
+});
+```
+
+**Always dispose:**
+
+```typescript
+const { dispose } = await run(app);
+try {
+  // ... tests
+} finally {
+  await dispose(); // Clean up connections, timers, etc.
+}
+```
+
+> **runtime:** "Testing: an elaborate puppet show where every string behaves. Then production walks in, kicks the stage, and asks for pagination. Still—nice coverage badge."
+## Concurrency Utilities
+
+Runner includes two battle-tested primitives for managing concurrent operations:
+
+| Utility       | What it does                 | Use when                           |
+| ------------- | ---------------------------- | ---------------------------------- |
+| **Semaphore** | Limits concurrent operations | Rate limiting, connection pools    |
+| **Queue**     | Serializes operations        | File writes, sequential processing |
+
+Both ship with Runner—no external dependencies.
+
+---
 
 ## Semaphore
 
-Ever had too many database connections competing for resources? Your connection pool under pressure? The `Semaphore` is here to manage concurrent operations like a professional traffic controller.
+Limit how many operations can run at once. Perfect for:
 
-Think of it as a VIP rope at an exclusive venue. Only a limited number of operations can proceed at once. The rest wait in an orderly queue like well-behaved async functions.
+- Database connection pools (don't exceed pool size)
+- API rate limits (max 10 requests/second)
+- Resource-intensive tasks (limit CPU/memory pressure)
+
+### Basic usage
 
 ```typescript
 import { Semaphore } from "@bluelibs/runner";
 
-// Create a semaphore that allows max 5 concurrent operations
+// Allow max 5 concurrent database queries
 const dbSemaphore = new Semaphore(5);
 
-// Basic usage - acquire and release manually
-await dbSemaphore.acquire();
-try {
-  // Do your database magic here
-  const result = await db.query("SELECT * FROM users");
-  console.log(result);
-} finally {
-  dbSemaphore.release(); // Critical: always release to prevent bottlenecks
-}
+// Preferred: automatic acquire/release
+const users = await dbSemaphore.withPermit(async () => {
+  return await db.query("SELECT * FROM users");
+}); // Permit released automatically, even if query throws
 ```
 
-Why manage permits manually when you can let the semaphore do the heavy lifting?
+### Manual acquire/release
+
+When you need more control:
 
 ```typescript
 // The elegant approach - automatic cleanup guaranteed!
@@ -4536,22 +4835,36 @@ class APIClient {
 }
 ```
 
-> **runtime:** "Semaphore: velvet rope for chaos. Five in, the rest practice patience and existential dread. I stamp hands, count permits, and break up race conditions before they form a band."
+> **runtime:** "Semaphore: velvet rope for chaos. Five in, the rest practice patience. I stamp hands, count permits, and break up race conditions before they form a band."
+
+---
 
 ## Queue
 
-_The orderly guardian of chaos, the diplomatic bouncer of async operations._
+Run operations one at a time, in order. Perfect for:
 
-The `Queue` class is your friendly neighborhood task coordinator. Think of it as a very polite but firm British queue-master who ensures everyone waits their turn, prevents cutting in line, and gracefully handles when it's time to close shop.
+- File system writes (prevent corruption)
+- Sequential API calls (maintain order)
+- Database migrations (one at a time)
 
-Tasks execute one after another in first-in, first-out order. No cutting, no exceptions, no drama.
+### Basic usage
 
-Using the clever `AsyncLocalStorage`, our Queue can detect when a task tries to queue another task (the async equivalent of "yo dawg, I heard you like queues..."). When caught red-handed, it politely but firmly rejects with a deadlock error.
+```typescript
+import { Queue } from "@bluelibs/runner";
 
-The Queue provides cooperative cancellation through the Web Standard `AbortController`:
+const queue = new Queue();
 
-- **Patient mode** (default): Waits for all queued tasks to complete naturally
-- **Cancel mode**: Signals running tasks to abort via `AbortSignal`, enabling early termination
+// Tasks run sequentially, even if queued simultaneously
+const [result1, result2] = await Promise.all([
+  queue.run(async () => await writeFile("a.txt", "first")),
+  queue.run(async () => await writeFile("a.txt", "second")),
+]);
+// File contains "second" - no corruption from concurrent writes
+```
+
+### Cancellation support
+
+Each task receives an `AbortSignal` for cooperative cancellation:
 
 ```typescript
 import { Queue } from "@bluelibs/runner";
@@ -4710,22 +5023,58 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 > **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
 ## Why Choose BlueLibs Runner?
 
-### What You Get
+After reading this far, here's what you've learned:
 
-- **Type Safety**: Full TypeScript support with intelligent inference
-- **Testability**: Everything is mockable and testable by design
-- **Flexibility**: Compose your app however you want
-- **Performance**: Built-in caching and optimization
-- **Clarity**: Explicit dependencies, no hidden magic
-- **Developer Experience**: Helpful error messages and clear patterns
+| Concept            | What you can do                                       |
+| ------------------ | ----------------------------------------------------- |
+| **Tasks**          | Write testable business logic with DI                 |
+| **Resources**      | Manage singletons with lifecycle                      |
+| **Events & Hooks** | Decouple your application                             |
+| **Middleware**     | Add caching, retry, timeouts in one line              |
+| **Testing**        | Unit test with mocks, integration test with overrides |
+| **Lifecycle**      | Graceful startup and shutdown                         |
+
+### What sets Runner apart
+
+- **Type Safety**: Full TypeScript support with intelligent inference—not just "any" everywhere
+- **Testability**: Call `.run()` directly with mocks. No container setup, no magic
+- **Clarity**: Dependencies are explicit. No decorators, no reflection, no surprises
+- **Performance**: Middleware overhead is ~0.00026ms. Tests run in milliseconds
+- **Batteries included**: Caching, retry, timeouts, events, logging—all built in
 
 > **runtime:** "Why choose it? The bullets are persuasive. In practice, your 'intelligent inference' occasionally elopes with `any`, and your 'clear patterns' cosplay spaghetti. Still, compared to the alternatives… I've seen worse cults."
 
 ## The Migration Path
 
-Coming from Express? No problem. Coming from NestJS? We feel your pain. Coming from Spring Boot? Welcome to the light side.
+Runner can be adopted incrementally. No big-bang rewrites required.
 
-The beauty of BlueLibs Runner is that you can adopt it incrementally. Start with one task, one resource, and gradually refactor your existing code. No big bang rewrites required - your sanity will thank you.
+**Step 1**: Create one resource for something you need (database, config, service)
+
+```typescript
+const database = r
+  .resource("app.db")
+  .init(async () => yourExistingConnection)
+  .build();
+```
+
+**Step 2**: Create one task for a piece of business logic
+
+```typescript
+const createUser = r
+  .task("users.create")
+  .dependencies({ database })
+  .run(yourExistingFunction)
+  .build();
+```
+
+**Step 3**: Compose them into an app and run
+
+```typescript
+const app = r.resource("app").register([database, createUser]).build();
+await run(app);
+```
+
+Repeat. Gradually, your spaghetti becomes lasagna.
 
 > **runtime:** "'No big bang rewrites.' Only a series of extremely small bangs that echo for six months. You start with one task; next thing, your monolith is wearing microservice eyeliner. It's a look."
 
@@ -4733,7 +5082,7 @@ The beauty of BlueLibs Runner is that you can adopt it incrementally. Start with
 
 This is part of the [BlueLibs](https://www.bluelibs.com) ecosystem. We're not trying to reinvent everything – just the parts that were broken.
 
-- [GitHub Repository](https://github.com/bluelibs/runner) -  if you find this useful
+- [GitHub Repository](https://github.com/bluelibs/runner) - if you find this useful
 - [Documentation](https://bluelibs.github.io/runner/) - When you need the full details
 - [Issues](https://github.com/bluelibs/runner/issues) - When something breaks (or you want to make it better)
 - [Contributing](./CONTRIBUTING.md) - How to file great issues and PRs

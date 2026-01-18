@@ -1,6 +1,18 @@
 ## Real-World Example: The Complete Package
 
-Here's a more realistic application structure that shows everything working together:
+This example shows everything working together in a realistic Express application:
+
+| Component          | What it demonstrates                         |
+| ------------------ | -------------------------------------------- |
+| `config`           | Environment-based configuration              |
+| `database`         | Resource with lifecycle (connect/disconnect) |
+| `RequestContext`   | Per-request state via async context          |
+| `userRegistered`   | Typed event emission                         |
+| `authMiddleware`   | Role-based access control                    |
+| `userService`      | Business logic as a resource                 |
+| `registerUser`     | Task with dependencies and events            |
+| `sendWelcomeEmail` | Hook reacting to events                      |
+| `server`           | Express integration with graceful shutdown   |
 
 ```typescript
 import { r, run, createContext } from "@bluelibs/runner";

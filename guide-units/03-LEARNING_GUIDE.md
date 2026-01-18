@@ -1,8 +1,13 @@
 ## Learning Guide
 
-### Common Patterns
+These patterns will save you hours of debugging. Each one addresses a real mistake we've seen developers make when learning Runner.
 
-Here are some patterns that'll help you write clean Runner code. We've seen lots of developers learn these the hard way, so let's save you some time! 
+**What you'll learn:**
+
+- When to use tasks vs regular functions
+- How to properly wire up and execute tasks
+- Two different testing strategies
+- Common gotchas with registration and configuration
 
 ### Pattern 1: Not Everything Needs to Be a Task
 
@@ -148,6 +153,8 @@ See [Quick Wins](#quick-wins-copy-paste-solutions) for ready-to-use examples wit
 
 ---
 
+**Key takeaway**: Define → Register → Run → Execute. That's the rhythm of every Runner application.
+
 ### What's Next?
 
 Now that you know the patterns, here's your learning path:
@@ -156,5 +163,7 @@ Now that you know the patterns, here's your learning path:
 2. **[The Big Five](#the-big-five)** - Deep dive into Tasks, Resources, Events, Middleware, Tags
 3. **[Events & Hooks](#events)** - Decouple your app with event-driven patterns
 4. **[Middleware](#middleware)** - Add cross-cutting concerns cleanly
+
+> **runtime:** "Six patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
 ---

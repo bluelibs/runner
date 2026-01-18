@@ -1,135 +1,158 @@
+## Advanced Patterns
+
+This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
+
+---
+
 ## Optional Dependencies
 
-_Making your app resilient when services aren't available_
+What happens when your analytics service is down? Or your email provider is rate-limiting? With optional dependencies, your app keeps running instead of crashing.
 
-Sometimes you want your application to gracefully handle missing dependencies instead of crashing. Optional dependencies let you build resilient systems that degrade gracefully.
+### The problem
 
-Keep in mind that you have full control over dependency registration by functionalising `dependencies(config) => ({ ... })` and `register(config) => []`.
+```typescript
+// Without optional dependencies - if analytics is down, the whole task fails
+const registerUser = r
+  .task("users.register")
+  .dependencies({ database, analytics }) // analytics must be available!
+  .run(async (input, { database, analytics }) => {
+    const user = await database.create(input);
+    await analytics.track("user.registered"); // 💥 Crashes if analytics is down
+    return user;
+  })
+  .build();
+```
+
+### The solution
 
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const emailService = r
-  .resource("app.services.email")
-  .init(async () => new EmailService())
-  .build();
-
-const paymentService = r
-  .resource("app.services.payment")
-  .init(async () => new PaymentService())
-  .build();
-
-const userRegistration = r
-  .task("app.tasks.registerUser")
+const registerUser = r
+  .task("users.register")
   .dependencies({
-    database: userDatabase, // Required - will fail if not available
-    emailService: emailService.optional(), // Optional - won't fail if missing
-    analytics: analyticsService.optional(), // Optional - graceful degradation
+    database, // Required - task fails if missing
+    analytics: analyticsService.optional(), // Optional - undefined if missing
+    email: emailService.optional(), // Optional - graceful degradation
   })
-  .run(async (input, { database, emailService, analytics }) => {
-    // Create user (required)
-    const user = await database.users.create(userData);
+  .run(async (input, { database, analytics, email }) => {
+    // Core logic always runs
+    const user = await database.create(input);
 
-    // Send welcome email (optional)
-    if (emailService) {
-      await emailService.sendWelcome(user.email);
-    }
-
-    // Track analytics (optional)
-    if (analytics) {
-      await analytics.track("user.registered", { userId: user.id });
-    }
+    // Optional services fail silently
+    await analytics?.track("user.registered");
+    await email?.sendWelcome(user.email);
 
     return user;
   })
   .build();
 ```
 
-**When to use optional dependencies:**
+### When to use optional dependencies
 
-- External services that might be down
-- Feature flags and A/B testing services
-- Analytics and monitoring services
-- Non-critical third-party integrations
-- Development vs production service differences
+| Use Case                  | Example                                            |
+| ------------------------- | -------------------------------------------------- |
+| **Non-critical services** | Analytics, metrics, feature flags                  |
+| **External integrations** | Third-party APIs that may be flaky                 |
+| **Development shortcuts** | Skip services not running locally                  |
+| **Feature toggles**       | Conditionally enable functionality                 |
+| **Gradual rollouts**      | New services that might not be deployed everywhere |
 
-**Benefits:**
+### Dynamic dependencies
 
-- Graceful degradation instead of crashes
-- Better resilience in distributed systems
-- Easier testing with partial mocks
-- Smoother development environments
+For more control, you can compute dependencies based on config:
 
-> **runtime:** "Graceful degradation: your app quietly limps with a brave smile. I’ll juggle `undefined` like a street performer while your analytics vendor takes a nap. Please clap when I keep the lights on using the raw power of conditional chaining."
-
-### Serialization
-
-Runner ships with a graph-aware serializer that safely round-trips complex values across HTTP and between Node and the browser.
-
-**Built-in type support:**
-
-- `Date`, `RegExp`, `Map`, `Set`, `Error`, `Uint8Array` work out of the box
-- Handles circular references and shared object identity
-
-**Two modes:**
-
-- `stringify()`/`parse()` — Tree mode (like JSON, throws on circular refs)
-- `serialize()`/`deserialize()` — Graph mode (preserves circular refs and identity)
-
-**Security hardened:**
-
-- ReDoS protection validates RegExp patterns against catastrophic backtracking
-- Prototype pollution blocked (`__proto__`, `constructor`, `prototype` keys filtered)
-- Configurable depth limits prevent stack overflow
-
-```ts
-import { r, globals, getDefaultSerializer } from "@bluelibs/runner";
-
-// Access via DI
-const serializerSetup = r
-  .resource("app.serialization.setup")
-  .dependencies({ serializer: globals.resources.serializer })
-  .init(async (_config, { serializer }) => {
-    // Tree mode (simple)
-    const text = serializer.stringify({ when: new Date() });
-    const obj = serializer.parse<{ when: Date }>(text);
-
-    // Graph mode (preserves refs)
-    const a = { name: "A" };
-    const b = { ref: a, self: null as any };
-    b.self = b; // circular
-    const json = serializer.serialize(b);
-    const restored = serializer.deserialize(json); // refs preserved!
-
-    // Custom types via factory
-    class Distance {
-      constructor(
-        public value: number,
-        public unit: string,
-      ) {}
-      toJSONValue() {
-        return { value: this.value, unit: this.unit };
-      }
-      typeName() {
-        return "Distance";
-      }
-    }
-    serializer.addType("Distance", (j: any) => new Distance(j.value, j.unit));
+```typescript
+const myTask = r
+  .task("app.tasks.flexible")
+  .dependencies((config) => ({
+    database,
+    // Only include analytics in production
+    ...(config.enableAnalytics ? { analytics } : {}),
+  }))
+  .run(async (input, deps) => {
+    // deps.analytics may or may not exist
   })
   .build();
-
-// Standalone (outside DI)
-const serializer = getDefaultSerializer();
 ```
 
-**Configuration options (via `new Serializer(options)`):**
+---
 
-- `maxDepth` — Recursion limit (default: 1000)
-- `allowedTypes` — Whitelist of type IDs for deserialization
-- `maxRegExpPatternLength` — Limit pattern length (default: 1024)
-- `allowUnsafeRegExp` — Skip ReDoS validation (default: false)
+## Serialization
 
-> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. Use `createWebFile`/`createNodeFile` for uploads.
+Ever sent a `Date` over JSON and gotten `"2024-01-15T..."` back as a string? Runner's serializer preserves types across the wire.
+
+### What it handles
+
+| Type          | JSON   | Runner Serializer |
+| ------------- | ------ | ----------------- |
+| `Date`        | String | Date object       |
+| `RegExp`      | Lost   | RegExp object     |
+| `Map`, `Set`  | Lost   | Preserved         |
+| `Uint8Array`  | Lost   | Preserved         |
+| Circular refs | Error  | Preserved         |
+
+### Two modes
+
+```typescript
+import { getDefaultSerializer } from "@bluelibs/runner";
+
+const serializer = getDefaultSerializer();
+
+// Tree mode - like JSON.stringify, but type-aware
+const json = serializer.stringify({ when: new Date(), pattern: /hello/i });
+const obj = serializer.parse(json);
+// obj.when is a Date, obj.pattern is a RegExp
+
+// Graph mode - handles circular references
+const user = { name: "Alice" };
+const team = { members: [user], lead: user }; // shared reference
+user.team = team; // circular reference
+
+const data = serializer.serialize(team);
+const restored = serializer.deserialize(data);
+// restored.members[0] === restored.lead (same object!)
+```
+
+### Custom types
+
+Teach the serializer about your own classes:
+
+```typescript
+class Money {
+  constructor(
+    public amount: number,
+    public currency: string,
+  ) {}
+
+  // Required methods for serialization
+  typeName() {
+    return "Money";
+  }
+  toJSONValue() {
+    return { amount: this.amount, currency: this.currency };
+  }
+}
+
+// Register the type
+serializer.addType("Money", (json) => new Money(json.amount, json.currency));
+
+// Now it round-trips correctly
+const price = new Money(99.99, "USD");
+const json = serializer.stringify({ price });
+const { price: restored } = serializer.parse(json);
+// restored instanceof Money === true
+```
+
+### Security features
+
+The serializer is hardened against common attacks:
+
+- **ReDoS protection**: Validates RegExp patterns against catastrophic backtracking
+- **Prototype pollution blocked**: Filters `__proto__`, `constructor`, `prototype` keys
+- **Depth limits**: Configurable max depth prevents stack overflow
+
+> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](./readmes/TUNNELS.md) for file upload patterns.
 
 ### Tunnels: Bridging Runners
 

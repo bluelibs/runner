@@ -105,7 +105,7 @@ globals.middleware.task.retry.with({
 globals.middleware.task.timeout.with({ ttl: 5000 });
 ```
 
-### ️ Common Patterns
+### Common Patterns
 
 ```typescript
 // Register components
@@ -155,23 +155,13 @@ type Value = ResourceValue<typeof myResource>; // Get resource value type
 
 ### Performance Tips
 
-```typescript
-//  Use caching for expensive operations
-.middleware([cache.with({ ttl: 60000 })])
-
-//  Add timeouts to external calls
-.middleware([timeout.with({ ttl: 5000 })])
-
-//  Retry transient failures
-.middleware([retry.with({ retries: 3 })])
-
-//  Use events for decoupling
-await userRegistered({ userId, email });
-
-//  Keep tasks focused (single responsibility)
-const getUserTask = r.task("users.get")...  //  One thing
-const createUserTask = r.task("users.create")... //  One thing
-```
+| Pattern                   | When to Use                        | Code                                         |
+| ------------------------- | ---------------------------------- | -------------------------------------------- |
+| **Caching**               | Expensive computations, DB queries | `.middleware([cache.with({ ttl: 60000 })])`  |
+| **Timeouts**              | External APIs, network calls       | `.middleware([timeout.with({ ttl: 5000 })])` |
+| **Retry**                 | Transient failures, flaky services | `.middleware([retry.with({ retries: 3 })])`  |
+| **Events**                | Decoupling, async side effects     | `await userRegistered({ userId, email })`    |
+| **Single responsibility** | Maintainability                    | One task = one action                        |
 
 ### Debugging
 

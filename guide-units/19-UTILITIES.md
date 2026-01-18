@@ -1,27 +1,41 @@
+## Concurrency Utilities
+
+Runner includes two battle-tested primitives for managing concurrent operations:
+
+| Utility       | What it does                 | Use when                           |
+| ------------- | ---------------------------- | ---------------------------------- |
+| **Semaphore** | Limits concurrent operations | Rate limiting, connection pools    |
+| **Queue**     | Serializes operations        | File writes, sequential processing |
+
+Both ship with Runner—no external dependencies.
+
+---
+
 ## Semaphore
 
-Ever had too many database connections competing for resources? Your connection pool under pressure? The `Semaphore` is here to manage concurrent operations like a professional traffic controller.
+Limit how many operations can run at once. Perfect for:
 
-Think of it as a VIP rope at an exclusive venue. Only a limited number of operations can proceed at once. The rest wait in an orderly queue like well-behaved async functions.
+- Database connection pools (don't exceed pool size)
+- API rate limits (max 10 requests/second)
+- Resource-intensive tasks (limit CPU/memory pressure)
+
+### Basic usage
 
 ```typescript
 import { Semaphore } from "@bluelibs/runner";
 
-// Create a semaphore that allows max 5 concurrent operations
+// Allow max 5 concurrent database queries
 const dbSemaphore = new Semaphore(5);
 
-// Basic usage - acquire and release manually
-await dbSemaphore.acquire();
-try {
-  // Do your database magic here
-  const result = await db.query("SELECT * FROM users");
-  console.log(result);
-} finally {
-  dbSemaphore.release(); // Critical: always release to prevent bottlenecks
-}
+// Preferred: automatic acquire/release
+const users = await dbSemaphore.withPermit(async () => {
+  return await db.query("SELECT * FROM users");
+}); // Permit released automatically, even if query throws
 ```
 
-Why manage permits manually when you can let the semaphore do the heavy lifting?
+### Manual acquire/release
+
+When you need more control:
 
 ```typescript
 // The elegant approach - automatic cleanup guaranteed!
@@ -147,22 +161,36 @@ class APIClient {
 }
 ```
 
-> **runtime:** "Semaphore: velvet rope for chaos. Five in, the rest practice patience and existential dread. I stamp hands, count permits, and break up race conditions before they form a band."
+> **runtime:** "Semaphore: velvet rope for chaos. Five in, the rest practice patience. I stamp hands, count permits, and break up race conditions before they form a band."
+
+---
 
 ## Queue
 
-_The orderly guardian of chaos, the diplomatic bouncer of async operations._
+Run operations one at a time, in order. Perfect for:
 
-The `Queue` class is your friendly neighborhood task coordinator. Think of it as a very polite but firm British queue-master who ensures everyone waits their turn, prevents cutting in line, and gracefully handles when it's time to close shop.
+- File system writes (prevent corruption)
+- Sequential API calls (maintain order)
+- Database migrations (one at a time)
 
-Tasks execute one after another in first-in, first-out order. No cutting, no exceptions, no drama.
+### Basic usage
 
-Using the clever `AsyncLocalStorage`, our Queue can detect when a task tries to queue another task (the async equivalent of "yo dawg, I heard you like queues..."). When caught red-handed, it politely but firmly rejects with a deadlock error.
+```typescript
+import { Queue } from "@bluelibs/runner";
 
-The Queue provides cooperative cancellation through the Web Standard `AbortController`:
+const queue = new Queue();
 
-- **Patient mode** (default): Waits for all queued tasks to complete naturally
-- **Cancel mode**: Signals running tasks to abort via `AbortSignal`, enabling early termination
+// Tasks run sequentially, even if queued simultaneously
+const [result1, result2] = await Promise.all([
+  queue.run(async () => await writeFile("a.txt", "first")),
+  queue.run(async () => await writeFile("a.txt", "second")),
+]);
+// File contains "second" - no corruption from concurrent writes
+```
+
+### Cancellation support
+
+Each task receives an `AbortSignal` for cooperative cancellation:
 
 ```typescript
 import { Queue } from "@bluelibs/runner";

@@ -26,6 +26,7 @@
 - AI.md contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
 - Always run `npm run typecheck` to ensure type safety.
 - Always run `npm run coverage:ai` to ensure coverage.
+- Never revert changes from other files that you did not modify.
 </specifics>
 
 <new_feature>

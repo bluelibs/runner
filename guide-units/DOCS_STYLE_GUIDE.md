@@ -710,6 +710,18 @@ Use blockquotes for important notes and platform warnings:
 
 ## File Organization
 
+### README Composition System
+
+The main `README.md` is not edited directly. It is composed from modular chapters located in `guide-units/`.
+
+- **Manifest**: `guide-units/CORE.md` defines the order and files to include.
+- **Syntax**: Use `!include: filename.md` on a new line to include a chapter.
+- **Generation**: Run `npm run guide:compose` to rebuild the `README.md`.
+- **Guidelines**:
+    - Each chapter should be self-contained.
+    - Use relative markdown anchors for cross-chapter links.
+    - Avoid editing `README.md` manually; changes will be overwritten.
+
 ### Chapter Files (guide-units/)
 
 - **Naming**: `XX-CHAPTER_NAME.md` (e.g., `05-CORE_CONCEPTS.md`)
@@ -741,7 +753,8 @@ Before committing documentation changes:
 - [ ] Code examples are complete and runnable
 - [ ] Cross-references use correct relative paths
 - [ ] Glossary terms are used consistently
-- [ ] Headings follow level conventions
+- [ ] Headings follow level conventions (Level 2 for major sections)
+- [ ] **Community & Policies** used instead of "Community and policies"
 - [ ] **No emojis used in documentation**
 - [ ] Run `npm run guide:compose` to regenerate README.md
 - [ ] Verify composed README looks correct

@@ -1,8 +1,10 @@
 ## Type Helpers
 
-These utility types help you extract the generics from tasks, resources, and events without re-declaring them. Import them from `@bluelibs/runner`.
+When you need to reference a task's input type in another function, or pass a resource's value type to a generic, these utility types save you from re-declaring the same shapes.
 
-```ts
+### Extracting types from components
+
+```typescript
 import { r } from "@bluelibs/runner";
 import type {
   ExtractTaskInput,
@@ -12,74 +14,82 @@ import type {
   ExtractEventPayload,
 } from "@bluelibs/runner";
 
-// Task example
-const add = r
-  .task("calc.add")
-  .run(async (input: { a: number; b: number }) => input.a + input.b)
+// Define your components
+const createUser = r
+  .task("users.create")
+  .run(async (input: { name: string; email: string }) => ({
+    id: "user-123",
+    ...input,
+  }))
   .build();
 
-type AddInput = ExtractTaskInput<typeof add>; // { a: number; b: number }
-type AddOutput = ExtractTaskOutput<typeof add>; // number
-
-// Resource example
-const config = r
-  .resource("app.config")
-  .init(async (cfg: { baseUrl: string }) => ({ baseUrl: cfg.baseUrl }))
+const database = r
+  .resource<{ connectionString: string }>("app.db")
+  .init(async (cfg) => createConnection(cfg.connectionString))
   .build();
 
-type ConfigInput = ExtractResourceConfig<typeof config>; // { baseUrl: string }
-type ConfigValue = ExtractResourceValue<typeof config>; // { baseUrl: string }
-
-// Event example
-const userRegistered = r
-  .event("app.events.userRegistered")
-  .payloadSchema<{ userId: string; email: string }>({ parse: (v) => v })
+const userCreated = r
+  .event<{ userId: string; email: string }>("users.created")
   .build();
-type UserRegisteredPayload = ExtractEventPayload<typeof userRegistered>; // { userId: string; email: string }
+
+// Extract types without re-declaring them
+type CreateUserInput = ExtractTaskInput<typeof createUser>; // { name: string; email: string }
+type CreateUserOutput = ExtractTaskOutput<typeof createUser>; // { id: string; name: string; email: string }
+type DbConfig = ExtractResourceConfig<typeof database>; // { connectionString: string }
+type DbValue = ExtractResourceValue<typeof database>; // Connection
+type UserCreatedPayload = ExtractEventPayload<typeof userCreated>; // { userId: string; email: string }
 ```
 
-### Context with Middleware
+### Practical use cases
 
-Context shines when combined with middleware for request-scoped data:
+**Building API handlers that match task signatures:**
 
 ```typescript
-import { r } from "@bluelibs/runner";
-import { randomUUID } from "crypto";
-
-const requestContext = r
-  .asyncContext<{
-    requestId: string;
-    startTime: number;
-    userAgent?: string;
-  }>("app.requestContext")
+// Your task defines the contract
+const processOrder = r
+  .task("orders.process")
+  .run(async (input: { orderId: string; priority: "low" | "high" }) => ({
+    status: "processed" as const,
+    orderId: input.orderId,
+  }))
   .build();
 
-const requestMiddleware = r.middleware
-  .task("app.middleware.request")
-  .run(async ({ task, next }) => {
-    // This works even in express middleware if needed.
-    return requestContext.provide(
-      {
-        requestId: randomUUID(),
-        startTime: Date.now(),
-        userAgent: "MyApp/1.0",
-      },
-      async () => {
-        return next(task?.input);
-      },
-    );
-  })
-  .build();
+// Your HTTP handler enforces the same types
+type OrderInput = ExtractTaskInput<typeof processOrder>;
+type OrderOutput = ExtractTaskOutput<typeof processOrder>;
 
-const handleRequest = r
-  .task("app.handleRequest")
-  .middleware([requestMiddleware])
-  .run(async (input: { path: string }) => {
-    const request = requestContext.use();
-    console.log(`Processing ${input.path} (Request ID: ${request.requestId})`);
-    return { success: true, requestId: request.requestId };
-  })
-  .build();
+app.post("/orders", async (req, res) => {
+  const input: OrderInput = req.body; // Type-checked!
+  const result: OrderOutput = await runTask(processOrder, input);
+  res.json(result);
+});
 ```
 
-> **runtime:** "Context: global state with manners. You invented a teleporting clipboard for data and called it 'nice.' Forget to `provide()` once and I’ll unleash the 'Context not available' banshee scream exactly where your logs are least helpful."
+**Creating wrapper functions:**
+
+```typescript
+// A logging wrapper that preserves types
+function withLogging<T extends ITask<any, any>>(task: T) {
+  type Input = ExtractTaskInput<T>;
+  type Output = ExtractTaskOutput<T>;
+
+  return async (input: Input): Promise<Output> => {
+    console.log(`Calling ${task.id}`, input);
+    const result = await task.run(input, dependencies);
+    console.log(`Result from ${task.id}`, result);
+    return result;
+  };
+}
+```
+
+### Quick reference
+
+| Helper                     | Extracts         | From     |
+| -------------------------- | ---------------- | -------- |
+| `ExtractTaskInput<T>`      | Input type       | Task     |
+| `ExtractTaskOutput<T>`     | Return type      | Task     |
+| `ExtractResourceConfig<T>` | Config parameter | Resource |
+| `ExtractResourceValue<T>`  | Init return type | Resource |
+| `ExtractEventPayload<T>`   | Payload type     | Event    |
+
+> **runtime:** "Type helpers: TypeScript's 'I told you so' toolkit. You extract the input type from a task, slap it on an API handler, and suddenly your frontend and backend are sworn blood brothers. Until someone uses `as any`. Then I cry."

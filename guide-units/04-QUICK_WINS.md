@@ -1,6 +1,17 @@
 ## Quick Wins: Copy-Paste Solutions
 
-**6 real-world problems, solved in minutes.** Just copy, customize, and ship.
+Production-ready patterns you can use today. Each example is complete and tested.
+
+| Problem                  | Solution                  | Jump to                                                         |
+| ------------------------ | ------------------------- | --------------------------------------------------------------- |
+| Expensive repeated calls | Add caching               | [Caching](#add-caching-to-any-task-with-automatic-invalidation) |
+| Flaky external APIs      | Auto-retry with backoff   | [Retry](#retry-failed-api-calls-with-exponential-backoff)       |
+| Hanging operations       | Add timeouts              | [Timeouts](#add-request-timeouts-prevent-hanging-operations)    |
+| Tight coupling           | Event-driven architecture | [Events](#set-up-event-driven-architecture-in-30-seconds)       |
+| Race conditions          | Sequential queue          | [Queue](#prevent-race-conditions-per-process-queue)             |
+| Production debugging     | Structured logging        | [Logging](#add-structured-logging-with-context)                 |
+
+---
 
 ### Add Caching to Any Task (with automatic invalidation)
 
@@ -195,6 +206,8 @@ const result = await runTask(registerUser, { email: "new@user.com" });
 await dispose();
 ```
 
-**That's it!** Each of these patterns is production-ready. No configuration, no extra packages, just works.
+**That's it!** Each pattern is production-ready. No configuration, no extra packages, just works.
+
+> **runtime:** "Six production problems, six one-liners. You bolted middleware onto tasks like Lego bricks and called it architecture. I respect the pragmatism. Ship it."
 
 ---

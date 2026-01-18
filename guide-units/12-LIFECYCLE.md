@@ -1,80 +1,107 @@
-## System Shutdown Hooks
+## Lifecycle Management
 
-_Graceful shutdown and cleanup when your app needs to stop_
+When your app stops—whether from Ctrl+C, a deployment, or a crash—you need to close database connections, flush logs, and finish in-flight requests. Runner handles this automatically.
 
-The framework includes built-in support for graceful shutdowns with automatic cleanup and configurable shutdown hooks:
+### How it works
+
+Resources initialize in dependency order and dispose in **reverse** order. If Resource B depends on Resource A, then:
+
+1. **Startup**: A initializes first, then B
+2. **Shutdown**: B disposes first, then A
+
+This ensures resources always have their dependencies available.
 
 ```mermaid
 sequenceDiagram
     participant App as Application
     participant Runner
-    participant R1 as Resource A
-    participant R2 as Resource B (depends on A)
+    participant R1 as Database
+    participant R2 as Server (needs Database)
 
     Note over App,R2: Startup (dependencies first)
     App->>Runner: run(app)
     Runner->>R1: init()
-    R1-->>Runner: initialized
+    R1-->>Runner: connected
     Runner->>R2: init()
-    R2-->>Runner: initialized
+    R2-->>Runner: listening
     Runner-->>App: { runTask, dispose }
 
     Note over App,R2: Shutdown (reverse order)
     App->>Runner: dispose()
     Runner->>R2: dispose()
-    R2-->>Runner: cleaned up
+    R2-->>Runner: server closed
     Runner->>R1: dispose()
-    R1-->>Runner: cleaned up
-    Runner-->>App: shutdown complete
+    R1-->>Runner: connection closed
 ```
 
+### Basic shutdown handling
+
 ```typescript
-import { run } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 
-// Enable shutdown hooks (default: true in production)
-const { dispose, taskRunner, eventManager } = await run(app, {
-  shutdownHooks: true, // Automatically handle SIGTERM/SIGINT
-  errorBoundary: true, // Catch unhandled errors and rejections
-});
-
-// Manual graceful shutdown
-process.on("SIGTERM", async () => {
-  console.log("Received SIGTERM, shutting down gracefully...");
-  await dispose(); // This calls all resource dispose() methods
-  process.exit(0);
-});
-
-// Resources with cleanup logic
-const databaseResource = r
+const database = r
   .resource("app.database")
   .init(async () => {
-    const connection = await connectToDatabase();
+    const conn = await connectToDatabase();
     console.log("Database connected");
-    return connection;
+    return conn;
   })
-  .dispose(async (connection) => {
-    await connection.close();
-    // console.log("Database connection closed");
+  .dispose(async (conn) => {
+    await conn.close();
+    console.log("Database closed");
   })
   .build();
 
-const serverResource = r
-  .resource("app.server")
-  .dependencies({ database: databaseResource })
-  .init(async (config: { port: number }, { database }) => {
-    const server = express().listen(config.port);
-    console.log(`Server listening on port ${config.port}`);
-    return server;
+const server = r
+  .resource<{ port: number }>("app.server")
+  .dependencies({ database })
+  .init(async ({ port }) => {
+    const app = express().listen(port);
+    console.log(`Server on port ${port}`);
+    return app;
   })
-  .dispose(async (server) => {
-    return new Promise<void>((resolve) => {
-      server.close(() => {
+  .dispose(async (app) => {
+    return new Promise((resolve) => {
+      app.close(() => {
         console.log("Server closed");
         resolve();
       });
     });
   })
   .build();
+
+// Run with automatic shutdown hooks
+const { dispose } = await run(app, {
+  shutdownHooks: true, // Handle SIGTERM/SIGINT automatically
+});
+
+// Or call dispose() manually
+await dispose();
+```
+
+### Automatic signal handling
+
+By default, Runner installs handlers for `SIGTERM` and `SIGINT`:
+
+```typescript
+await run(app, {
+  shutdownHooks: true, // default in production
+});
+
+// Now Ctrl+C or `kill <pid>` triggers graceful shutdown
+// No manual signal handling needed!
+```
+
+To handle signals yourself:
+
+```typescript
+const { dispose } = await run(app, { shutdownHooks: false });
+
+process.on("SIGTERM", async () => {
+  console.log("Shutting down...");
+  await dispose();
+  process.exit(0);
+});
 ```
 
 ### Error Boundary Integration

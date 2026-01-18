@@ -4,6 +4,12 @@
 
 **Build enterprise applications that are maintainable, testable, and scalable**
 
+Runner is a TypeScript-first framework for building applications out of tasks (functions) and resources
+(singletons), with explicit dependency injection, middleware, events, hooks, and lifecycle management.
+
+For a token-friendly overview of the fluent builder API (`r.*`), see [AI.md](./AI.md).
+Node-only features (durable workflows, tunnels) live under `@bluelibs/runner/node` and in `./readmes/`.
+
 <p align="center">
 <a href="https://github.com/bluelibs/runner/actions/workflows/ci.yml"><img src="https://github.com/bluelibs/runner/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build Status" /></a>
 <a href="https://github.com/bluelibs/runner"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen" alt="Coverage 100% is enforced" /></a>
@@ -14,14 +20,35 @@
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
+import { z } from "zod";
+
+const db = r
+  .resource("app.db")
+  .init(async () => ({
+    users: {
+      insert: async (input: { name: string; email: string }) => ({
+        id: "user-1",
+        ...input,
+      }),
+    },
+  }))
+  .build();
+
+const mailer = r
+  .resource("app.mailer")
+  .init(async () => ({
+    sendWelcome: async (email: string) => {
+      console.log(`Sending welcome email to ${email}`);
+    },
+  }))
+  .build();
 
 // Define a task with dependencies, schema validation, and type-safe input/output
 const createUser = r
   .task("users.create")
   .dependencies({ db, mailer })
-  .inputSchema(z.object({ name: z.string(), email: z.string() }))
+  .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
   .run(async (input, { db, mailer }) => {
-    // type-safety infered from schema
     const user = await db.users.insert(input);
     await mailer.sendWelcome(user.email);
     return user;
@@ -31,9 +58,11 @@ const createUser = r
 // Compose resources and run your application
 const app = r.resource("app").register([db, mailer, createUser]).build();
 const runtime = await run(app);
+await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
+// await runtime.dispose() when you are done.
 ```
 
-**[ Documentation](https://bluelibs.github.io/runner/)** · **[ Examples](https://github.com/bluelibs/runner/tree/main/examples)** · **[ GitHub](https://github.com/bluelibs/runner)**
+**[Documentation](https://bluelibs.github.io/runner/)** · **[AI.md](./AI.md)** · **[Examples](https://github.com/bluelibs/runner/tree/main/examples)** · **[GitHub](https://github.com/bluelibs/runner)**
 
 ---
 
@@ -43,7 +72,7 @@ const runtime = await run(app);
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](https://github.com/bluelibs/runner/blob/main/AI.md)                                              | Docs    | Compact summary (<5000 tokens)      |
+| [AI-Friendly Docs](./AI.md)                                                                                        | Docs    | Compact summary (<5000 tokens)      |
 | [Migration Guide (3.x → 4.x)](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade instructions   |
 | [Design Documents](https://github.com/bluelibs/runner/blob/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |

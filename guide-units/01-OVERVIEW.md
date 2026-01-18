@@ -55,10 +55,10 @@ test("getUser works", async () => {
 
 | Feature               | Runner        | NestJS     | InversifyJS | TypeDI     | tsyringe   |
 | --------------------- | ------------- | ---------- | ----------- | ---------- | ---------- |
-| **Learning Curve**    | Gentle        | ️ Steep     | ️ Steep      | Moderate   | Moderate   |
+| **Learning Curve**    | Gentle        | Steep      | Steep       | Moderate   | Moderate   |
 | **Magic/Decorators**  | None          | Heavy      | Heavy       | Heavy      | Heavy      |
 | **Bundle Size**       | Small         | Large      | Large       | Medium     | Medium     |
-| **Type Safety**       | Perfect       | ️ Runtime   | ️ Runtime    | ️ Runtime   | ️ Runtime   |
+| **Type Safety**       | Perfect       | Runtime    | Runtime     | Runtime    | Runtime    |
 | **Test Speed**        | Instant       | Slow       | Slow        | OK         | OK         |
 | **Built-in Features** | Everything    | Everything | Basic DI    | Basic DI   | Basic DI   |
 | **Framework Lock-in** | None          | Heavy      | Light       | Light      | Light      |
@@ -71,6 +71,8 @@ test("getUser works", async () => {
 | **Debug Experience**  | Crystal clear | Confusing  | Confusing   | Confusing  | Confusing  |
 
 **TL;DR:** Runner gives you the features of NestJS with the simplicity of plain functions.
+
+> **runtime:** "Framework comparison tables: where 'Learning Curve: Gentle' means I ship with documentation and 'Type Safety: Perfect' means TypeScript isn't decorative confetti. The competition brought decorators; I brought functions that actually compile."
 
 ---
 

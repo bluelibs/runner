@@ -1,21 +1,57 @@
 ## Why Choose BlueLibs Runner?
 
-### What You Get
+After reading this far, here's what you've learned:
 
-- **Type Safety**: Full TypeScript support with intelligent inference
-- **Testability**: Everything is mockable and testable by design
-- **Flexibility**: Compose your app however you want
-- **Performance**: Built-in caching and optimization
-- **Clarity**: Explicit dependencies, no hidden magic
-- **Developer Experience**: Helpful error messages and clear patterns
+| Concept            | What you can do                                       |
+| ------------------ | ----------------------------------------------------- |
+| **Tasks**          | Write testable business logic with DI                 |
+| **Resources**      | Manage singletons with lifecycle                      |
+| **Events & Hooks** | Decouple your application                             |
+| **Middleware**     | Add caching, retry, timeouts in one line              |
+| **Testing**        | Unit test with mocks, integration test with overrides |
+| **Lifecycle**      | Graceful startup and shutdown                         |
+
+### What sets Runner apart
+
+- **Type Safety**: Full TypeScript support with intelligent inference—not just "any" everywhere
+- **Testability**: Call `.run()` directly with mocks. No container setup, no magic
+- **Clarity**: Dependencies are explicit. No decorators, no reflection, no surprises
+- **Performance**: Middleware overhead is ~0.00026ms. Tests run in milliseconds
+- **Batteries included**: Caching, retry, timeouts, events, logging—all built in
 
 > **runtime:** "Why choose it? The bullets are persuasive. In practice, your 'intelligent inference' occasionally elopes with `any`, and your 'clear patterns' cosplay spaghetti. Still, compared to the alternatives… I've seen worse cults."
 
 ## The Migration Path
 
-Coming from Express? No problem. Coming from NestJS? We feel your pain. Coming from Spring Boot? Welcome to the light side.
+Runner can be adopted incrementally. No big-bang rewrites required.
 
-The beauty of BlueLibs Runner is that you can adopt it incrementally. Start with one task, one resource, and gradually refactor your existing code. No big bang rewrites required - your sanity will thank you.
+**Step 1**: Create one resource for something you need (database, config, service)
+
+```typescript
+const database = r
+  .resource("app.db")
+  .init(async () => yourExistingConnection)
+  .build();
+```
+
+**Step 2**: Create one task for a piece of business logic
+
+```typescript
+const createUser = r
+  .task("users.create")
+  .dependencies({ database })
+  .run(yourExistingFunction)
+  .build();
+```
+
+**Step 3**: Compose them into an app and run
+
+```typescript
+const app = r.resource("app").register([database, createUser]).build();
+await run(app);
+```
+
+Repeat. Gradually, your spaghetti becomes lasagna.
 
 > **runtime:** "'No big bang rewrites.' Only a series of extremely small bangs that echo for six months. You start with one task; next thing, your monolith is wearing microservice eyeliner. It's a look."
 
@@ -23,7 +59,7 @@ The beauty of BlueLibs Runner is that you can adopt it incrementally. Start with
 
 This is part of the [BlueLibs](https://www.bluelibs.com) ecosystem. We're not trying to reinvent everything – just the parts that were broken.
 
-- [GitHub Repository](https://github.com/bluelibs/runner) -  if you find this useful
+- [GitHub Repository](https://github.com/bluelibs/runner) - if you find this useful
 - [Documentation](https://bluelibs.github.io/runner/) - When you need the full details
 - [Issues](https://github.com/bluelibs/runner/issues) - When something breaks (or you want to make it better)
 - [Contributing](./CONTRIBUTING.md) - How to file great issues and PRs
