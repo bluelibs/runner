@@ -17,12 +17,15 @@
   - [Async Context](#async-context)
   - [Errors](#errors)
   - [Overrides](#overrides)
+  - [Runtime \& Lifecycle](#runtime--lifecycle)
+  - [Reliability \& Performance](#reliability--performance)
   - [HTTP \& Tunnels](#http--tunnels)
     - [HTTP Client Factory (Recommended)](#http-client-factory-recommended)
     - [Direct Client Creation (Legacy)](#direct-client-creation-legacy)
   - [Serialization](#serialization)
   - [Testing](#testing)
   - [Observability \& Debugging](#observability--debugging)
+  - [Metadata \& Namespacing](#metadata--namespacing)
   - [Advanced Patterns](#advanced-patterns)
   - [Interop With Classic APIs](#interop-with-classic-apis)
 
@@ -217,6 +220,19 @@ const cacheResources = r.middleware
 
 Attach middleware using `.middleware([auditTasks])` on the definition that owns it, and register the middleware alongside the target resource or task at the root.
 
+- Contract middleware: middleware can declare `Config`, `Input`, `Output` generics; tasks using it must conform (contracts intersect across `.middleware([...])` and `.tags([...])`). Collisions surface as `InputContractViolationError` / `OutputContractViolationError` in TypeScript; if you add `.inputSchema()`, ensure the schema’s inferred type includes the contract shape.
+
+```ts
+type AuthConfig = { requiredRole: string };
+type AuthInput = { user: { role: string } };
+type AuthOutput = { ok: true };
+
+const auth = r.middleware
+  .task<AuthConfig, AuthInput, AuthOutput>("app.middleware.auth")
+  .run(async ({ task, next }) => next(task.input))
+  .build();
+```
+
 ### Tags
 
 Tags let you annotate definitions with metadata that can be queried later.
@@ -239,6 +255,21 @@ const getHealth = r
 ```
 
 Retrieve tagged items by using `globals.resources.store` inside a hook or resource and calling `store.getTasksWithTag(tag)`.
+
+- Contract tags (a “smart tag”): define type contracts for task input/output (or resource config/value) via `r.tag<TConfig, TInputContract, TOutputContract>(id)`. They don’t change runtime behavior; they shape the inferred types and compose with contract middleware.
+- Smart tags: built-in tags like `globals.tags.system`, `globals.tags.debug`, and `globals.tags.excludeFromGlobalHooks` change framework behavior; use them for per-component debug or to opt out of global hooks.
+
+```ts
+type Input = { id: string };
+type Output = { name: string };
+const userContract = r.tag<void, Input, Output>("contract.user").build();
+
+const getUser = r
+  .task("app.tasks.getUser")
+  .tags([userContract])
+  .run(async (input) => ({ name: input.id }))
+  .build();
+```
 
 ### Async Context
 
@@ -324,6 +355,22 @@ const app = r
 - `r.override(base)` starts from the base definition and applies fluent mutations (dependencies/tags/middleware append by default; use `{ override: true }` to replace).
 - Hook overrides keep the same `.on` target; only behavior/metadata is overridable.
 - The `override(base, patch)` helper remains for direct, shallow patches.
+
+## Runtime & Lifecycle
+
+- `run(root, options)` wires dependencies, initializes resources, and returns helpers: `runTask`, `emitEvent`, `getResourceValue`, `store`, `logger`, and `dispose`.
+- Run options highlights: `debug` (normal/verbose or custom config), `logs` (printThreshold/strategy/buffer), `errorBoundary` and `onUnhandledError`, `shutdownHooks`, `dryRun`.
+- Task interceptors: call `task.intercept(next)` during resource init to wrap behavior at runtime.
+- Shutdown hooks: install signal listeners to call `dispose` (default in `run`).
+- Unhandled errors: `onUnhandledError` receives a structured context (kind and source) for telemetry or controlled shutdown.
+
+## Reliability & Performance
+
+- Caching: `globals.middleware.task.cache` plus `globals.resources.cache` (override cache factory if you need Redis or custom backends).
+- Retry/backoff: `globals.middleware.task.retry` and `globals.middleware.resource.retry` for transient failures.
+- Timeouts: `globals.middleware.task.timeout` / `globals.middleware.resource.timeout` use AbortController and throw `TimeoutError`.
+- Logging: `globals.resources.logger` plus `run(..., { logs })` for print thresholds, format, and buffering.
+- Debug resource: `globals.resources.debug` or `run(..., { debug })` for lifecycle and input/output traces.
 
 ## HTTP & Tunnels
 
@@ -545,12 +592,19 @@ await runtime.dispose();
 - Use middleware for tracing (`r.middleware.task("...").run(...)`) to wrap every task call.
 - `Semaphore` and `Queue` publish local lifecycle events through isolated `EventManager` instances (`on/once`). These are separate from the global EventManager used for business-level application events. Event names: semaphore → `queued/acquired/released/timeout/aborted/disposed`; queue → `enqueue/start/finish/error/cancel/disposed`.
 
+## Metadata & Namespacing
+
+- Meta: `.meta({ title, description })` on tasks/resources/events/middleware for human-friendly docs and tooling; extend meta types via module augmentation when needed.
+- Namespacing: keep ids consistent with `domain.resources.name`, `domain.tasks.name`, `domain.events.name`, `domain.hooks.on-name`, and `domain.middleware.{task|resource}.name`.
+- Runtime validation: `inputSchema`, `resultSchema`, `payloadSchema`, `configSchema` share the same `parse(input)` contract; config validation happens on `.with()`, task/event validation happens on call/emit.
+
 ## Advanced Patterns
 
 - **Optional dependencies:** mark dependencies as optional (`analytics: analyticsService.optional()`) so the builder injects `null` when the resource is absent.
 - **Conditional registration:** `.register((config) => (config.enableFeature ? [featureResource] : []))`.
 - **Async coordination:** `Semaphore` (O(1) linked queue for heavy contention) and `Queue` live in the main package. Both use isolated EventManagers internally for their lifecycle events, separate from the global EventManager used for business-level application events.
 - **Event safety:** Runner detects event emission cycles and throws an `EventCycleError` with the offending chain.
+- **Internal services:** access `globals.resources.store`, `globals.resources.taskRunner`, and `globals.resources.eventManager` for advanced introspection or custom tooling.
 
 ## Interop With Classic APIs
 
