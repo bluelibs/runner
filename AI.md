@@ -22,7 +22,6 @@
   - [Reliability \& Performance](#reliability--performance)
   - [HTTP \& Tunnels](#http--tunnels)
     - [HTTP Client Factory (Recommended)](#http-client-factory-recommended)
-    - [Direct Client Creation (Legacy)](#direct-client-creation-legacy)
   - [Serialization](#serialization)
   - [Testing](#testing)
   - [Observability \& Debugging](#observability--debugging)
@@ -240,7 +239,7 @@ const auth = r.middleware
 
 ### ExecutionJournal
 
-ExecutionJournal is a per-execution registry enabling middleware and tasks to share typed state.
+ExecutionJournal is a per-execution registry enabling middleware and tasks to share typed state. **Fail-fast semantics**: `set()` throws if the key already exists (prevents silent bugs from middleware clobbering each other). Use `{ override: true }` to intentionally update.
 
 ```ts
 import { r, globals, journal } from "@bluelibs/runner";
@@ -254,6 +253,9 @@ const auditMiddleware = r.middleware
   .run(async ({ task, next, journal }) => {
     // Access typed values from journal
     const ctrl = journal.get(abortControllerKey);
+    if (journal.has(abortControllerKey)) {
+      /* ... */
+    }
     return next(task.input);
   })
   .build();
@@ -263,6 +265,7 @@ const myTask = r
   .task("app.tasks.myTask")
   .run(async (input, deps, { journal }) => {
     journal.set(abortControllerKey, new AbortController());
+    // To update existing: journal.set(key, newValue, { override: true });
     return "done";
   })
   .build();
@@ -538,39 +541,6 @@ const nodeTask = r
   })
   .build();
 ```
-
-### Direct Client Creation (Legacy)
-
-You can also create clients directly without DI (manual serializer/error/context passing):
-
-```ts
-import { createHttpClient } from "@bluelibs/runner";
-
-const client = createHttpClient({
-  baseUrl: "/__runner",
-  auth: { token: "secret" },
-  serializer: JSON,
-});
-
-await client.task("app.tasks.getHealth");
-
-// Browser file upload using Blob (works with universal client)
-const file = {
-  $runnerFile: "File" as const,
-  id: "F1",
-  meta: { name: "notes.txt" },
-  _web: { blob: new Blob(["Hello"]) },
-};
-await client.task("app.tasks.upload", { file });
-```
-
-- `createHttpSmartClient` (Node only) supports duplex streams.
-- In Node, prefer `createHttpMixedClient` as the default (it auto-selects JSON vs multipart vs duplex); use `createHttpSmartClient` when you want to force the streaming-capable path.
-- For Node-specific features such as `useExposureContext` for handling aborts and streaming in exposed tasks, see TUNNELS.md.
-- If a task may run both internally and via HTTP exposure, gate access behind `hasExposureContext()` to keep the code portable.
-- Register authentication middleware or rate limiting on the exposure via middleware tags and filters.
-- Single-owner policy: a task may be tunneled by exactly one tunnel resource. Runner enforces exclusivity at init time and throws if two tunnels select the same task. This is tracked via an internal symbol on the task linking it to the owning tunnel.
-- Architecture/testing deep dive: see `readmes/TUNNELS.md` sections 2.1 and 11.
 
 ## Serialization
 

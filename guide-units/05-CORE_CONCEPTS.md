@@ -685,23 +685,118 @@ const myTask = r
   .build();
 ```
 
+**API Reference:**
+
+| Method                              | Description                                                        |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| `journal.createKey<T>(id)`          | Create a typed key for storing values                              |
+| `journal.create()`                  | Create a fresh journal instance for manual forwarding              |
+| `journal.set(key, value, options?)` | Store a typed value (throws if key exists unless `override: true`) |
+| `journal.get(key)`                  | Retrieve a value (returns `T \| undefined`)                        |
+| `journal.has(key)`                  | Check if a key exists (returns `boolean`)                          |
+
+> [!IMPORTANT]
+> **Fail-fast by default**: `set()` throws an error if the key already exists. This prevents silent bugs from middleware accidentally clobbering each other's state. Use `{ override: true }` when you intentionally want to update a value.
+
 **Key features:**
 
-- **Type-safe keys**: use `journal.createKey<T>()`
+- **Fail-fast**: Duplicate key writes throw immediately, catching integration bugs early
+- **Type-safe keys**: Use `journal.createKey<T>()` for compile-time type checking
 - **Per-execution**: Fresh journal for every task run
-- **Forwarding**: You can pass `{ journal }` to nested task calls to share the context
-- **Manual Creation**: Use `journal.create()` to create a fresh journal for root calls
+- **Forwarding**: Pass `{ journal }` to nested task calls to share context across the call tree
+
+#### Cross-Middleware Coordination
+
+The journal shines when middleware need to coordinate. The recommended pattern is to **export your journal keys** so other middleware can access your state:
 
 ```typescript
-// Advanced: Manually creation and passing
+// timeout.middleware.ts
+import { journal } from "@bluelibs/runner";
+
+// Export keys for downstream consumers
+export const journalKeys = {
+  abortController: journal.createKey<AbortController>(
+    "timeout.abortController",
+  ),
+} as const;
+
+export const timeoutMiddleware = r.middleware
+  .task("app.middleware.timeout")
+  .run(async ({ task, next, journal }, _deps, config: { ttl: number }) => {
+    const controller = new AbortController();
+
+    // Store for other middleware to check
+    journal.set(journalKeys.abortController, controller);
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        controller.abort();
+        reject(new Error(`Timeout after ${config.ttl}ms`));
+      }, config.ttl);
+    });
+
+    return Promise.race([next(task.input), timeoutPromise]);
+  })
+  .build();
+```
+
+```typescript
+// retry.middleware.ts
+import { journalKeys as timeoutKeys } from "./timeout.middleware";
+
+export const retryMiddleware = r.middleware
+  .task("app.middleware.retry")
+  .run(async ({ task, next, journal }, _deps, config: { retries: number }) => {
+    let attempts = 0;
+
+    while (true) {
+      try {
+        return await next(task.input);
+      } catch (error) {
+        // Check if timeout middleware aborted - don't retry timeouts!
+        const controller = journal.get(timeoutKeys.abortController);
+        if (controller?.signal.aborted) {
+          throw error; // Timeout - no retry
+        }
+
+        if (attempts >= config.retries) throw error;
+        attempts++;
+        await new Promise((r) => setTimeout(r, 100 * Math.pow(2, attempts)));
+      }
+    }
+  })
+  .build();
+```
+
+This pattern enables loose coupling - middleware don't need direct references, just the exported keys.
+
+#### Manual Journal Management
+
+For advanced scenarios where you need explicit control:
+
+```typescript
+// Create and pre-populate a journal
 const customJournal = journal.create();
 customJournal.set(traceIdKey, "manual-trace-id");
 
-// Pass explicit journal to task
-await myTask({ ... }, { journal: customJournal });
+// Forward explicit journal to a nested task call
+const orchestratorTask = r
+  .task("app.tasks.orchestrator")
+  .dependencies({ myTask })
+  .run(async (input, { myTask }) => {
+    return myTask(input, { journal: customJournal });
+  })
+  .build();
+
+await runTask(orchestratorTask, input);
+
+// Check before accessing
+if (customJournal.has(traceIdKey)) {
+  console.log("Trace ID:", customJournal.get(traceIdKey));
+}
 ```
 
-> **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'. And now you can even create your own wrapper container with `journal.create()`. It's wrappers all the way down."
+> **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'. And now middleware can spy on each other through the journal. `has()` is just asking 'did anyone write here before me?' It's wrappers all the way down."
 
 ### Tags
 

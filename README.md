@@ -72,7 +72,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](./AI.md)                                                                                        | Docs    | Compact summary (<5000 tokens)      |
+| [AI-Friendly Docs](./AI.md)                                                                                         | Docs    | Compact summary (<5000 tokens)      |
 | [Migration Guide (3.x → 4.x)](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade instructions   |
 | [Design Documents](https://github.com/bluelibs/runner/blob/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
@@ -238,6 +238,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [Community & Support](#community--support) - Getting help
 
 ---
+
 ## What Is This Thing?
 
 BlueLibs Runner is a TypeScript-first framework that embraces functional programming principles while keeping dependency injection simple enough that you won't need a flowchart to understand your own code. Think of it as the anti-framework framework – it gets out of your way and lets you build stuff that actually works.
@@ -438,6 +439,7 @@ Runner comes with **everything you need** to build production apps:
 **No extra packages needed.** It's all included and works together seamlessly.
 
 ---
+
 ## Your First 5 Minutes
 
 **New to Runner?** Here's the absolute minimum you need to know:
@@ -602,6 +604,7 @@ Runner auto-detects the platform (Node.js, browser, edge) and adapts behavior at
 - [HTTP Tunnels](./readmes/TUNNELS.md) - Remote task execution
 
 ---
+
 ## Learning Guide
 
 These patterns will save you hours of debugging. Each one addresses a real mistake we've seen developers make when learning Runner.
@@ -771,6 +774,7 @@ Now that you know the patterns, here's your learning path:
 > **runtime:** "Six patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
 ---
+
 ## Quick Wins: Copy-Paste Solutions
 
 Production-ready patterns you can use today. Each example is complete and tested.
@@ -984,6 +988,7 @@ await dispose();
 > **runtime:** "Six production problems, six one-liners. You bolted middleware onto tasks like Lego bricks and called it architecture. I respect the pragmatism. Ship it."
 
 ---
+
 ## The Big Five
 
 The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using the runner effectively.
@@ -1861,6 +1866,7 @@ The core concepts above cover most use cases. For specialized features:
 - **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](./readmes/SERIALIZER_PROTOCOL.md).
 
 ---
+
 ## Quick Reference: Cheat Sheet
 
 **Bookmark this section for quick lookups!**
@@ -2067,6 +2073,7 @@ await queue.add(async () => {
 ```
 
 ---
+
 ## run() and RunOptions
 
 The `run()` function is your application's entry point. It initializes all resources, wires up dependencies, and returns handles for interacting with your system.
@@ -2206,6 +2213,7 @@ await run(app);
 ```
 
 > **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You’re collapsing the waveform of a task at runtime and I’m Schrödinger’s runtime, praying the cat hasn’t overridden `run()` with `throw new Error('lol')`."
+
 ## Advanced Patterns
 
 This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
@@ -2430,7 +2438,9 @@ const resilientTask = r
   .task("app.tasks.ultimateResilience")
   .middleware([
     // Outer layer: Fallback (the absolute Plan B if everything below fails)
-    globals.middleware.task.fallback.with({ fallback: { status: "offline-mode", data: [] } }),
+    globals.middleware.task.fallback.with({
+      fallback: { status: "offline-mode", data: [] },
+    }),
 
     // Next: Rate Limit (check this before wasting resources or retry budget)
     globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 100 }),
@@ -2454,10 +2464,11 @@ const resilientTask = r
 
 1.  **Rate Limit first**: Don't even try to execute or retry if you've exceeded your quota.
 2.  **Circuit Breaker second**: Don't retry against a service that is known to be failing.
-3.  **Retry wraps Timeout**: Ensure the timeout applies to the *individual* attempt, so the retry logic can kick in when one attempt hangs.
+3.  **Retry wraps Timeout**: Ensure the timeout applies to the _individual_ attempt, so the retry logic can kick in when one attempt hangs.
 4.  **Fallback last**: The fallback should be the very last thing that happens if the entire resilience stack fails.
 
 > **runtime:** "Resilience Orchestration: layering defense-in-depth like a paranoid onion. I'm counting your turns, checking the circuit, spinning the retry wheel, and holding a stopwatch—all so you can sleep through a minor server fire."
+
 ## Async Context
 
 Ever needed to pass a request ID, user session, or trace ID through your entire call stack without threading it through every function parameter? That's what Async Context does.
@@ -2547,6 +2558,7 @@ const sessionContext = r
 ```
 
 > **runtime:** "Async Context: your data playing hide-and-seek across the event loop. One forgotten `.provide()` and the 'Context not available' error will find you at 3am, exactly where your stack trace is least helpful."
+
 ## Fluent Builders (`r.*`)
 
 The `r` namespace gives you a chainable, discoverable way to build Runner components. Instead of memorizing object shapes, you get autocomplete that guides you through the options.
@@ -2673,6 +2685,7 @@ Every builder follows the same rhythm:
 For the complete API reference, see the [Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).
 
 > **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."
+
 ## Type Helpers
 
 When you need to reference a task's input type in another function, or pass a resource's value type to a generic, these utility types save you from re-declaring the same shapes.
@@ -2768,6 +2781,7 @@ function withLogging<T extends ITask<any, any>>(task: T) {
 | `ExtractEventPayload<T>`   | Payload type     | Event    |
 
 > **runtime:** "Type helpers: TypeScript's 'I told you so' toolkit. You extract the input type from a task, slap it on an API handler, and suddenly your frontend and backend are sworn blood brothers. Until someone uses `as any`. Then I cry."
+
 ## Lifecycle Management
 
 When your app stops—whether from Ctrl+C, a deployment, or a crash—you need to close database connections, flush logs, and finish in-flight requests. Runner handles this automatically.
@@ -2945,6 +2959,7 @@ await run(app, {
 - Stop accepting new work before cleaning up
 
 > **runtime:** "An error boundary: a trampoline under your tightrope. I’m the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
+
 ## Caching
 
 Because nobody likes waiting for the same expensive operation twice:
@@ -2958,7 +2973,8 @@ const expensiveTask = r
     globals.middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
-      keyBuilder: (taskId, input: { userId: string }) => `${taskId}-${input.userId}`, // optional key builder
+      keyBuilder: (taskId, input: { userId: string }) =>
+        `${taskId}-${input.userId}`, // optional key builder
     }),
   ])
   .run(async (input: { userId: string }) => {
@@ -3015,7 +3031,9 @@ const limitMiddleware = globals.middleware.task.concurrency.with({ limit: 5 });
 
 // Option 2: Explicit semaphore for fine-grained coordination
 const dbSemaphore = new Semaphore(10);
-const dbLimit = globals.middleware.task.concurrency.with({ semaphore: dbSemaphore });
+const dbLimit = globals.middleware.task.concurrency.with({
+  semaphore: dbSemaphore,
+});
 
 const heavyTask = r
   .task("app.tasks.heavy")
@@ -3027,6 +3045,7 @@ const heavyTask = r
 ```
 
 **Key benefits:**
+
 - **Resource protection**: Prevent connection pool exhaustion.
 - **Queueing**: Automatically queues excess requests instead of failing.
 - **Timeouts**: Supports waiting timeouts and cancellation via `AbortSignal`.
@@ -3046,9 +3065,9 @@ const resilientTask = r
   .task("app.tasks.remoteCall")
   .middleware([
     globals.middleware.task.circuitBreaker.with({
-      failureThreshold: 5,   // Trip after 5 failures
-      resetTimeout: 30000,  // Stay open for 30 seconds
-    })
+      failureThreshold: 5, // Trip after 5 failures
+      resetTimeout: 30000, // Stay open for 30 seconds
+    }),
   ])
   .run(async () => {
     return await callExternalService();
@@ -3057,6 +3076,7 @@ const resilientTask = r
 ```
 
 **How it works:**
+
 1. **CLOSED**: Everything is normal. Requests flow through.
 2. **OPEN**: Threshold reached. All requests throw `CircuitBreakerOpenError` immediately.
 3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
@@ -3094,6 +3114,7 @@ const logTask = r
 ```
 
 **When to use:**
+
 - **Debounce**: Search-as-you-type, autosave, window resize events.
 - **Throttle**: Scroll listeners, telemetry pings, high-frequency webhooks.
 
@@ -3116,8 +3137,8 @@ const getPrice = r
       fallback: async (input, error) => {
         console.warn(`Price fetch failed: ${error.message}. Using default.`);
         return 9.99;
-      }
-    })
+      },
+    }),
   ])
   .run(async () => {
     return await fetchPriceFromAPI();
@@ -3141,8 +3162,8 @@ const sensitiveTask = r
   .middleware([
     globals.middleware.task.rateLimit.with({
       windowMs: 60 * 1000, // 1 minute window
-      max: 5,              // Max 5 attempts per window
-    })
+      max: 5, // Max 5 attempts per window
+    }),
   ])
   .run(async (credentials) => {
     // Assuming auth service is available
@@ -3152,6 +3173,7 @@ const sensitiveTask = r
 ```
 
 **Key features:**
+
 - **Fixed-window strategy**: Simple, predictable request counting.
 - **Isolation**: Limits are tracked per task definition.
 - **Error handling**: Throws `RateLimitError` when the limit is exceeded.
@@ -3175,13 +3197,13 @@ Here are real performance metrics from our comprehensive benchmark suite on an M
 **Core Operations**
 
 ┌───────────────────────────────────────┬────────────────────────┐
-│ Operation                             │ Throughput             │
+│ Operation │ Throughput │
 ├───────────────────────────────────────┼────────────────────────┤
-│ Basic task execution                  │ ~2.2M tasks/sec        │
-│ Task execution with 5 middlewares     │ ~244,000 tasks/sec     │
-│ Resource initialization               │ ~59,700 resources/sec  │
-│ Event emission and handling           │ ~245,861 events/sec    │
-│ Dependency resolution (10-level chain)│ ~8,400 chains/sec      │
+│ Basic task execution │ ~2.2M tasks/sec │
+│ Task execution with 5 middlewares │ ~244,000 tasks/sec │
+│ Resource initialization │ ~59,700 resources/sec │
+│ Event emission and handling │ ~245,861 events/sec │
+│ Dependency resolution (10-level chain)│ ~8,400 chains/sec │
 └───────────────────────────────────────┴────────────────────────┘
 
 #### Overhead Analysis
@@ -3417,6 +3439,7 @@ Best practices:
 - Consider network conditions when setting API call timeouts
 
 > **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It’s not me, it’s your molasses‑flavored endpoint. I just blow the whistle."
+
 ## Logging
 
 _The structured logging system that actually makes debugging enjoyable_
@@ -3867,6 +3890,7 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it’s off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
+
 ## Meta
 
 _The structured way to describe what your components do and control their behavior_
@@ -4475,6 +4499,7 @@ const createUser = r
 ```
 
 > **runtime:** "Validation: you hand me a velvet rope and a clipboard. 'Name? Email? Age within bounds?' I stamp passports or eject violators with a `ValidationError`. Dress code is types, darling."
+
 ## Internal Services
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):
@@ -4632,6 +4657,7 @@ export const problematicResource = defineResource({
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
+
 ## Real-World Example: The Complete Package
 
 This example shows everything working together in a realistic Express application:
@@ -4801,6 +4827,7 @@ process.on("SIGTERM", async () => {
 ```
 
 > **runtime:** "Ah yes, the 'Real‑World Example'—a terrarium where nothing dies and every request is polite. Release it into production and watch nature document a very different ecosystem."
+
 ## Testing
 
 Runner's explicit dependency injection makes testing straightforward—no magic mocks, no container hacks. Just pass what you need.
@@ -4937,6 +4964,7 @@ try {
 ```
 
 > **runtime:** "Testing: an elaborate puppet show where every string behaves. Then production walks in, kicks the stage, and asks for pagination. Still—nice coverage badge."
+
 ## Concurrency Utilities
 
 Runner includes two battle-tested primitives for managing concurrent operations:
@@ -5251,6 +5279,7 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
 
 > **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
+
 ## Why Choose BlueLibs Runner?
 
 After reading this far, here's what you've learned:

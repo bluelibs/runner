@@ -1,4 +1,8 @@
-import { ExecutionJournal, JournalKey } from "../types/executionJournal";
+import {
+  ExecutionJournal,
+  JournalKey,
+  JournalSetOptions,
+} from "../types/executionJournal";
 
 /**
  * Implementation of ExecutionJournal.
@@ -7,7 +11,16 @@ import { ExecutionJournal, JournalKey } from "../types/executionJournal";
 export class ExecutionJournalImpl implements ExecutionJournal {
   private readonly store = new Map<string, unknown>();
 
-  set<T>(key: JournalKey<T>, value: T): void {
+  /**
+   * Store a value in the journal.
+   * Throws an error if the key already exists unless { override: true } is passed.
+   */
+  set<T>(key: JournalKey<T>, value: T, options?: JournalSetOptions): void {
+    if (this.store.has(key.id) && !options?.override) {
+      throw new Error(
+        `Journal key "${key.id}" already exists. Use { override: true } to overwrite.`,
+      );
+    }
     this.store.set(key.id, value);
   }
 

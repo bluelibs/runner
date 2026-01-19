@@ -45,12 +45,25 @@ describe("ExecutionJournal", () => {
       expect(journal.get(arrayKey)).toEqual(["a", "b"]);
     });
 
-    it("overwrites existing values", () => {
+    it("throws when setting existing key without override", () => {
       const journal = new ExecutionJournalImpl();
-      const key = journalFactory.createKey<string>("overwrite");
+      const key = journalFactory.createKey<string>("collision.key");
 
       journal.set(key, "first");
-      journal.set(key, "second");
+
+      expect(() => journal.set(key, "second")).toThrow(
+        'Journal key "collision.key" already exists. Use { override: true } to overwrite.',
+      );
+      // Original value preserved
+      expect(journal.get(key)).toBe("first");
+    });
+
+    it("allows overwrite with { override: true }", () => {
+      const journal = new ExecutionJournalImpl();
+      const key = journalFactory.createKey<string>("overwrite.key");
+
+      journal.set(key, "first");
+      journal.set(key, "second", { override: true });
 
       expect(journal.get(key)).toBe("second");
     });
@@ -81,7 +94,7 @@ describe("ExecutionJournal", () => {
         run: async (_input, _deps, context) => {
           const steps = context?.journal.get(traceKey) ?? [];
           steps.push("inner");
-          context?.journal.set(traceKey, steps);
+          context?.journal.set(traceKey, steps, { override: true });
           return "inner-result";
         },
       });
