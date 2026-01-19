@@ -134,3 +134,7 @@ export type * from "./defs";
 
 export { Serializer, getDefaultSerializer } from "./serializer";
 export type { TypeDefinition, SerializerOptions } from "./serializer";
+
+// ExecutionJournal for per-execution state sharing
+export { journal } from "./models/ExecutionJournal";
+export type { ExecutionJournal, JournalKey } from "./types/executionJournal";

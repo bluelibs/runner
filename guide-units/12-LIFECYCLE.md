@@ -18,6 +18,9 @@ sequenceDiagram
     participant R1 as Database
     participant R2 as Server (needs Database)
 
+    style R1 fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
+    style R2 fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
+
     Note over App,R2: Startup (dependencies first)
     App->>Runner: run(app)
     Runner->>R1: init()

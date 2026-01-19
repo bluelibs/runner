@@ -1,4 +1,5 @@
 import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
+import { journal } from "../../models/ExecutionJournal";
 
 export interface TimeoutMiddlewareConfig {
   /**
@@ -19,9 +20,20 @@ export class TimeoutError extends Error {
   }
 }
 
+/**
+ * Journal keys exposed by the timeout middleware.
+ * Use these to access shared state from downstream middleware or tasks.
+ */
+export const journalKeys = {
+  /** The AbortController created by the timeout middleware */
+  abortController: journal.createKey<AbortController>(
+    "globals.middleware.timeout.abortController",
+  ),
+} as const;
+
 export const timeoutTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.timeout.task",
-  async run({ task, next }, _deps, config: TimeoutMiddlewareConfig) {
+  async run({ task, next, journal }, _deps, config: TimeoutMiddlewareConfig) {
     const input = task?.input;
 
     const ttl = Math.max(0, config.ttl);
@@ -33,6 +45,9 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
     }
 
     const controller = new AbortController();
+
+    // Expose controller for downstream middleware/tasks
+    journal.set(journalKeys.abortController, controller);
 
     // Create a timeout promise that rejects when aborted
     const timeoutPromise = new Promise((_, reject) => {

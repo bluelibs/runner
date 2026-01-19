@@ -4,6 +4,7 @@ import {
   IValidationSchema,
 } from "./utilities";
 import type { ITask } from "./task";
+import type { ExecutionJournal } from "./executionJournal";
 import { TagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
 import {
@@ -104,6 +105,8 @@ export interface ITaskMiddlewareExecutionInput<
     input: TTaskInput;
   };
   next: (taskInput?: TTaskInput) => Promise<TTaskOutput>;
+  /** Per-execution registry for sharing state between middleware and task */
+  journal: ExecutionJournal;
 }
 
 export type TaskMiddlewareAttachmentType =

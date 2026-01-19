@@ -1641,6 +1641,42 @@ const adminTask = r
   .build();
 ```
 
+#### Execution Journal
+
+The Execution Journal is a type-safe registry that travels with your task execution. It allows middleware and tasks to share state without polluting the task input/output.
+
+```typescript
+import { r, journal } from "@bluelibs/runner";
+
+// 1. Define a typed key
+const traceIdKey = journal.createKey<string>("app.traceId");
+
+const traceMiddleware = r.middleware
+  .task("app.middleware.trace")
+  .run(async ({ task, next, journal }) => {
+    // 2. Write to the journal
+    journal.set(traceIdKey, "trace-123");
+    return next(task.input);
+  })
+  .build();
+
+const myTask = r
+  .task("app.tasks.myTask")
+  .middleware([traceMiddleware])
+  .run(async (input, deps, { journal }) => {
+    // 3. Read from the journal (fully typed!)
+    const traceId = journal.get(traceIdKey); // string | undefined
+    return { traceId };
+  })
+  .build();
+```
+
+**Key features:**
+
+- **Type-safe keys**: use `journal.createKey<T>()`
+- **Per-execution**: Fresh journal for every task run
+- **Forwarding**: You can pass `{ journal }` to nested task calls to share the context
+
 > **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'."
 
 ### Tags
@@ -2752,6 +2788,9 @@ sequenceDiagram
     participant R1 as Database
     participant R2 as Server (needs Database)
 
+    style R1 fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
+    style R2 fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
+
     Note over App,R2: Startup (dependencies first)
     App->>Runner: run(app)
     Runner->>R1: init()
@@ -2911,7 +2950,7 @@ await run(app, {
 Because nobody likes waiting for the same expensive operation twice:
 
 ```typescript
-import { globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
 const expensiveTask = r
   .task("app.tasks.expensive")
@@ -2919,7 +2958,7 @@ const expensiveTask = r
     globals.middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
-      keyBuilder: (taskId, input: any) => `${taskId}-${input.userId}`, // optional key builder
+      keyBuilder: (taskId, input: { userId: string }) => `${taskId}-${input.userId}`, // optional key builder
     }),
   ])
   .run(async (input: { userId: string }) => {
@@ -2946,11 +2985,11 @@ const app = r
 Want Redis instead of the default LRU cache? No problem, just override the cache factory task:
 
 ```typescript
-import { r } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
 const redisCacheFactory = r
   .task("globals.tasks.cacheFactory") // Same ID as the default task
-  .run(async (input: any) => new RedisCache(input))
+  .run(async (input: unknown) => new RedisCache(input))
   .build();
 
 const app = r
@@ -3039,6 +3078,7 @@ const saveTask = r
   .task("app.tasks.save")
   .middleware([globals.middleware.task.debounce.with({ ms: 500 })])
   .run(async (data) => {
+    // Assuming db is available in the closure
     return await db.save(data);
   })
   .build();
@@ -3105,6 +3145,7 @@ const sensitiveTask = r
     })
   ])
   .run(async (credentials) => {
+    // Assuming auth service is available
     return await auth.validate(credentials);
   })
   .build();
@@ -3131,13 +3172,17 @@ You may see negative middlewareOverheadMs. This is a measurement artifact at mic
 
 Here are real performance metrics from our comprehensive benchmark suite on an M1 Max.
 
-** Core Operations**
+**Core Operations**
 
-- **Basic task execution**: ~2.2M tasks/sec
-- **Task execution with 5 middlewares**: ~244,000 tasks/sec
-- **Resource initialization**: ~59,700 resources/sec
-- **Event emission and handling**: ~245,861 events/sec
-- **Dependency resolution (10-level chain)**: ~8,400 chains/sec
+┌───────────────────────────────────────┬────────────────────────┐
+│ Operation                             │ Throughput             │
+├───────────────────────────────────────┼────────────────────────┤
+│ Basic task execution                  │ ~2.2M tasks/sec        │
+│ Task execution with 5 middlewares     │ ~244,000 tasks/sec     │
+│ Resource initialization               │ ~59,700 resources/sec  │
+│ Event emission and handling           │ ~245,861 events/sec    │
+│ Dependency resolution (10-level chain)│ ~8,400 chains/sec      │
+└───────────────────────────────────────┴────────────────────────┘
 
 #### Overhead Analysis
 
@@ -3148,6 +3193,9 @@ Here are real performance metrics from our comprehensive benchmark suite on an M
 #### Real-World Performance
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
+// Assuming: auth, logging, metrics middleware and database are defined elsewhere
 // This executes in ~0.005ms on average
 const userTask = r
   .task("user.create")
@@ -3182,6 +3230,8 @@ for (let i = 0; i < 1000; i++) {
 **Middleware Ordering**: Place faster middleware first
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const task = r
   .task("app.performance.example")
   .middleware([
@@ -3196,6 +3246,8 @@ const task = r
 **Resource Reuse**: Resources are singletons—perfect for expensive setup
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const database = r
   .resource("app.performance.db")
   .init(async () => {
@@ -3209,6 +3261,8 @@ const database = r
 **Cache Strategically**: Use built-in caching for expensive operations
 
 ```typescript
+import { r, globals } from "@bluelibs/runner";
+
 const expensiveTask = r
   .task("app.performance.expensive")
   .middleware([globals.middleware.task.cache.with({ ttl: 60000 })])
@@ -3278,7 +3332,7 @@ BlueLibs Runner achieves high performance while providing enterprise features:
 For when things go wrong, but you know they'll probably work if you just try again. The built-in retry middleware makes your tasks and resources more resilient to transient failures.
 
 ```typescript
-import { globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
 const flakyApiCall = r
   .task("app.tasks.flakyApiCall")
@@ -3314,7 +3368,7 @@ The built-in timeout middleware prevents operations from hanging indefinitely by
 timeout. Works for resources and tasks.
 
 ```typescript
-import { globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
 const apiTask = r
   .task("app.tasks.externalApi")

@@ -1,4 +1,5 @@
 import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
+import { journalKeys as timeoutJournalKeys } from "./timeout.middleware";
 
 /**
  * Configuration options for the retry middleware
@@ -22,7 +23,7 @@ export interface RetryMiddlewareConfig {
 
 export const retryTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.retry.task",
-  async run({ task, next }, _deps, config: RetryMiddlewareConfig) {
+  async run({ task, next, journal }, _deps, config: RetryMiddlewareConfig) {
     const input = task?.input;
     let attempts = 0;
 
@@ -35,6 +36,14 @@ export const retryTaskMiddleware = defineTaskMiddleware({
         return await next(input);
       } catch (error) {
         const err = error as Error;
+
+        // Check if timeout middleware has set an abort controller (fetch dynamically)
+        const abortController = journal.get(timeoutJournalKeys.abortController);
+
+        // Don't retry if the operation was aborted (timeout triggered)
+        if (abortController?.signal.aborted) {
+          throw error;
+        }
 
         if (shouldStop(err) || attempts >= maxRetries) {
           throw error;

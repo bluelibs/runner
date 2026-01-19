@@ -4,7 +4,7 @@
 - The code should be designed as re-usable without being over-engineered.
 - The code should be human-friendly (descriptive variables, function names, comments that describe the 'why'), code readability are a big plus.
 - Keep functions small, decouple early on. Make code be read like a story.
-- Keep files small (under 300 lines) (including tests). Decouple/destructure early on.
+- Keep non-documentation files small (under 300 lines) (including tests). Decouple/destructure early on.
 - When doing a tasks, first think about the contracts and interfaces, then think about the acceptance criteria, and only then think about implementation.
 - Type-strictness is a must, avoid type casting unless forced to
 - Use `npm run coverage:ai` (not just coverage) to test the full suite and see coverage in a token-friendly way. 
@@ -19,6 +19,7 @@
 - Do not ask the user if you should do something that is likely the user would want to do
 - Strings are forbidden, use enums instead.
 - The tests are in mirror-like structure under ./src/__tests__/ folder.
+- Always think isolation. Each container (r.run()) should be completely isolated from any other parallel r.run(), meaning we have to design for things within the container.
 </general>
 
 <specifics>

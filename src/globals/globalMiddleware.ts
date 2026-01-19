@@ -9,6 +9,7 @@ import {
 import {
   timeoutTaskMiddleware,
   timeoutResourceMiddleware,
+  journalKeys as timeoutJournalKeys,
 } from "./middleware/timeout.middleware";
 import {
   debounceTaskMiddleware,
@@ -32,7 +33,9 @@ export const globalMiddlewares = {
     rateLimit: rateLimitTaskMiddleware,
     // common with resources
     retry: retryTaskMiddleware,
-    timeout: timeoutTaskMiddleware,
+    timeout: Object.assign(timeoutTaskMiddleware, {
+      journalKeys: timeoutJournalKeys,
+    }),
     circuitBreaker: circuitBreakerMiddleware,
   },
   resource: {

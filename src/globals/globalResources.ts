@@ -4,6 +4,10 @@ import { Logger } from "../models/Logger";
 import { Store } from "../models/Store";
 import { TaskRunner } from "../models/TaskRunner";
 import { cacheResource } from "./middleware/cache.middleware";
+import { circuitBreakerResource } from "./middleware/circuitBreaker.middleware";
+import { concurrencyResource } from "./middleware/concurrency.middleware";
+import { rateLimitResource } from "./middleware/rateLimit.middleware";
+import { temporalResource } from "./middleware/temporal.middleware";
 import { queueResource } from "./resources/queue.resource";
 import { globalTags } from "./globalTags";
 import { MiddlewareManager } from "../models/MiddlewareManager";
@@ -74,4 +78,10 @@ export const globalResources = {
   cache: cacheResource,
   queue: queueResource,
   httpClientFactory: httpClientFactory,
+
+  // Middleware State Resources
+  rateLimit: rateLimitResource,
+  circuitBreaker: circuitBreakerResource,
+  temporal: temporalResource,
+  concurrency: concurrencyResource,
 } as const;

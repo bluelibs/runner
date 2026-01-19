@@ -8,6 +8,7 @@ import {
   TaskLocalInterceptor,
   ResourceDependencyValuesType,
   TaskDependencyWithIntercept,
+  TaskCallOptions,
 } from "../defs";
 import { Store } from "./Store";
 import {
@@ -186,11 +187,11 @@ export class DependencyProcessor {
     D extends DependencyMapType,
   >(original: ITask<I, O, D>): TaskDependencyWithIntercept<I, O> {
     const taskId = original.id;
-    const fn: (input: I) => O = (input) => {
+    const fn: (input: I, options?: TaskCallOptions) => O = (input, options) => {
       const storeTask = this.store.tasks.get(taskId)!;
       const effective: ITask<I, O, D> = storeTask.task;
 
-      return this.taskRunner.run(effective, input) as O;
+      return this.taskRunner.run(effective, input, options) as O;
     };
     return Object.assign(fn, {
       intercept: (middleware: TaskLocalInterceptor<I, O>) => {
@@ -376,8 +377,8 @@ export class DependencyProcessor {
       st.isInitialized = true;
     }
 
-    return (input: unknown) => {
-      return this.taskRunner.run(st.task, input);
+    return (input: unknown, options?: TaskCallOptions) => {
+      return this.taskRunner.run(st.task, input, options);
     };
   }
 

@@ -34,14 +34,24 @@ import {
   timeoutTaskMiddleware,
   timeoutResourceMiddleware,
 } from "../globals/middleware/timeout.middleware";
-import { concurrencyTaskMiddleware } from "../globals/middleware/concurrency.middleware";
+import {
+  concurrencyTaskMiddleware,
+  concurrencyResource,
+} from "../globals/middleware/concurrency.middleware";
 import {
   debounceTaskMiddleware,
   throttleTaskMiddleware,
+  temporalResource,
 } from "../globals/middleware/temporal.middleware";
 import { fallbackTaskMiddleware } from "../globals/middleware/fallback.middleware";
-import { rateLimitTaskMiddleware } from "../globals/middleware/rateLimit.middleware";
-import { circuitBreakerMiddleware } from "../globals/middleware/circuitBreaker.middleware";
+import {
+  rateLimitTaskMiddleware,
+  rateLimitResource,
+} from "../globals/middleware/rateLimit.middleware";
+import {
+  circuitBreakerMiddleware,
+  circuitBreakerResource,
+} from "../globals/middleware/circuitBreaker.middleware";
 import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middleware";
 import { OnUnhandledError } from "./UnhandledError";
 import { globalTags } from "../globals/globalTags";
@@ -214,6 +224,12 @@ export class Store {
         isInitialized: false,
       });
     });
+
+    // Register built-in resources that support the middlewares
+    this.registry.storeGenericItem(rateLimitResource);
+    this.registry.storeGenericItem(circuitBreakerResource);
+    this.registry.storeGenericItem(temporalResource);
+    this.registry.storeGenericItem(concurrencyResource);
   }
 
   public setTaskRunner(taskRunner: TaskRunner) {

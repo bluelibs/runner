@@ -8,6 +8,7 @@ import { TaskMiddlewareAttachmentType } from "./taskMiddleware";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
 import type { ThrowsList } from "./error";
+import type { ExecutionJournal } from "./executionJournal";
 import {
   symbolFilePath,
   symbolTask,
@@ -80,6 +81,7 @@ export interface ITaskDefinition<
         : EnsureInputSatisfiesContracts<[...TTags, ...TMiddleware], TInput>
       : TInput,
     dependencies: DependencyValuesType<TDependencies>,
+    context?: { journal: ExecutionJournal },
   ) => HasOutputContracts<[...TTags, ...TMiddleware]> extends true
     ? EnsureOutputSatisfiesContracts<[...TTags, ...TMiddleware], TOutput>
     : TOutput;

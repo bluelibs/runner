@@ -197,13 +197,14 @@ describe("Temporal Middleware", () => {
         next,
       });
 
+      const deps = { state: { throttleStates: new WeakMap() } };
       await expect(
-        throttleTaskMiddleware.run(inputFor("a") as any, {} as any, config),
+        throttleTaskMiddleware.run(inputFor("a") as any, deps as any, config),
       ).resolves.toBe("a");
 
       const pending = throttleTaskMiddleware.run(
         inputFor("b") as any,
-        {} as any,
+        deps as any,
         config,
       );
 
@@ -215,7 +216,7 @@ describe("Temporal Middleware", () => {
       }
 
       await expect(
-        throttleTaskMiddleware.run(inputFor("c") as any, {} as any, config),
+        throttleTaskMiddleware.run(inputFor("c") as any, deps as any, config),
       ).resolves.toBe("c");
 
       // The previously scheduled callers should be resolved by the immediate execution.
@@ -241,13 +242,14 @@ describe("Temporal Middleware", () => {
         next,
       });
 
+      const deps = { state: { throttleStates: new WeakMap() } };
       await expect(
-        throttleTaskMiddleware.run(inputFor("a") as any, {} as any, config),
+        throttleTaskMiddleware.run(inputFor("a") as any, deps as any, config),
       ).resolves.toBe("a");
 
       const pending = throttleTaskMiddleware.run(
         inputFor("b") as any,
-        {} as any,
+        deps as any,
         config,
       );
 
@@ -258,7 +260,7 @@ describe("Temporal Middleware", () => {
 
       const immediate = throttleTaskMiddleware.run(
         inputFor("c") as any,
-        {} as any,
+        deps as any,
         config,
       );
 

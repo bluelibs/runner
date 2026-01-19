@@ -1,4 +1,5 @@
-import { defineTaskMiddleware } from "../../define";
+import { defineResource, defineTaskMiddleware } from "../../define";
+import { globalTags } from "../globalTags";
 
 export interface RateLimitMiddlewareConfig {
   /**
@@ -50,44 +51,51 @@ export class RateLimitError extends Error {
   }
 }
 
-interface RateLimitState {
+export interface RateLimitState {
   count: number;
   resetTime: number;
 }
 
-const rateLimitStates = new WeakMap<
-  RateLimitMiddlewareConfig,
-  RateLimitState
->();
+export const rateLimitResource = defineResource({
+  id: "globals.resources.rateLimit",
+  tags: [globalTags.system],
+  init: async () => {
+    return {
+      states: new WeakMap<RateLimitMiddlewareConfig, RateLimitState>(),
+    };
+  },
+});
 
 /**
  * Rate limit middleware: limits the number of executions within a fixed time window.
  */
 export const rateLimitTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.rateLimit",
-  async run({ task, next }, _deps, config: RateLimitMiddlewareConfig) {
+  dependencies: { state: rateLimitResource },
+  async run({ task, next }, { state }, config: RateLimitMiddlewareConfig) {
     assertRateLimitMiddlewareConfig(config);
 
-    let state = rateLimitStates.get(config);
+    const { states } = state;
+    let limitState = states.get(config);
     const now = Date.now();
 
-    if (!state || now > state.resetTime) {
-      state = {
+    if (!limitState || now > limitState.resetTime) {
+      limitState = {
         count: 0,
         resetTime: now + config.windowMs,
       };
-      rateLimitStates.set(config, state);
+      states.set(config, limitState);
     }
 
-    if (state.count >= config.max) {
+    if (limitState.count >= config.max) {
       throw new RateLimitError(
         `Rate limit exceeded. Try again after ${new Date(
-          state.resetTime,
+          limitState.resetTime,
         ).toISOString()}`,
       );
     }
 
-    state.count++;
+    limitState.count++;
     return await next(task.input);
   },
 });

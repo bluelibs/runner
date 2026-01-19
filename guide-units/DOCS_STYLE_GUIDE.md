@@ -12,33 +12,34 @@ This guide ensures consistency across all documentation. Every contributor shoul
 
 Use these terms consistently throughout all documentation:
 
-| Term | Definition | Usage Example |
-|------|------------|---------------|
-| **Task** | A function with dependency injection, middleware support, and observability. The primary unit for business logic. | `const createUser = r.task("users.create")...` |
-| **Resource** | A singleton with lifecycle management (init/dispose). Represents shared services, connections, or state. | `const database = r.resource("app.db")...` |
-| **Event** | A typed signal for decoupling components. Enables pub/sub patterns. | `const userCreated = r.event("users.created")...` |
-| **Hook** | An event listener. A lightweight function that subscribes to events. | `const onUserCreated = r.hook("onUserCreated").on(userCreated)...` |
-| **Middleware** | A wrapper that adds cross-cutting concerns to tasks or resources (caching, retry, timeouts, logging). | `.middleware([cache.with({ ttl: 60000 })])` |
-| **Tag** | Metadata attached to components for discovery, filtering, or configuration. | `.tags([globals.tags.debug])` |
-| **App** | The root resource that composes all other components. Always named `app`. | `const app = r.resource("app")...` |
-| **Runtime** | The object returned by `run()` containing `runTask`, `runEvent`, `dispose`, etc. | `const { runTask, dispose } = await run(app)` |
-| **Dispose** | The cleanup function that gracefully shuts down all resources. | `await dispose()` |
-| **Config** | The generic type parameter for resources, passed during initialization. | `r.resource<{ port: number }>("server")` |
-| **Input** | The data passed to a task when executed. | `await runTask(createUser, { name: "Alice" })` |
-| **Output** | The return value of a task. | `const user = await runTask(createUser, input)` |
-| **Fluent Builder** | The chainable API pattern using `r.task()`, `r.resource()`, etc. | `r.task("id").dependencies({}).run(...).build()` |
+| Term                 | Definition                                                                                                        | Usage Example                                                      |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
+| **Task**             | A function with dependency injection, middleware support, and observability. The primary unit for business logic. | `const createUser = r.task("users.create")...`                     |
+| **Resource**         | A singleton with lifecycle management (init/dispose). Represents shared services, connections, or state.          | `const database = r.resource("app.db")...`                         |
+| **Event**            | A typed signal for decoupling components. Enables pub/sub patterns.                                               | `const userCreated = r.event("users.created")...`                  |
+| **Hook**             | An event listener. A lightweight function that subscribes to events.                                              | `const onUserCreated = r.hook("onUserCreated").on(userCreated)...` |
+| **Middleware**       | A wrapper that adds cross-cutting concerns to tasks or resources (caching, retry, timeouts, logging).             | `.middleware([cache.with({ ttl: 60000 })])`                        |
+| **ExecutionJournal** | A per-execution registry enabling middleware and tasks to share typed state.                                      | `journal.set(key, value)`                                          |
+| **Tag**              | Metadata attached to components for discovery, filtering, or configuration.                                       | `.tags([globals.tags.debug])`                                      |
+| **App**              | The root resource that composes all other components. Always named `app`.                                         | `const app = r.resource("app")...`                                 |
+| **Runtime**          | The object returned by `run()` containing `runTask`, `runEvent`, `dispose`, etc.                                  | `const { runTask, dispose } = await run(app)`                      |
+| **Dispose**          | The cleanup function that gracefully shuts down all resources.                                                    | `await dispose()`                                                  |
+| **Config**           | The generic type parameter for resources, passed during initialization.                                           | `r.resource<{ port: number }>("server")`                           |
+| **Input**            | The data passed to a task when executed.                                                                          | `await runTask(createUser, { name: "Alice" })`                     |
+| **Output**           | The return value of a task.                                                                                       | `const user = await runTask(createUser, input)`                    |
+| **Fluent Builder**   | The chainable API pattern using `r.task()`, `r.resource()`, etc.                                                  | `r.task("id").dependencies({}).run(...).build()`                   |
 
 ### Terms to Avoid
 
-| Don't Use | Use Instead | Reason |
-|-----------|-------------|--------|
-| `root` | `app` | Consistency |
-| `listener` | `hook` | Modern terminology |
-| `handler` | `hook` or `task` | More specific |
-| `inject` | `dependencies` | Explicit over magical |
-| `module` | `resource` | Runner-specific terminology |
-| `provider` | `resource` | Runner-specific terminology |
-| `container` | `app` or `resource` | Clearer purpose |
+| Don't Use   | Use Instead         | Reason                      |
+| ----------- | ------------------- | --------------------------- |
+| `root`      | `app`               | Consistency                 |
+| `listener`  | `hook`              | Modern terminology          |
+| `handler`   | `hook` or `task`    | More specific               |
+| `inject`    | `dependencies`      | Explicit over magical       |
+| `module`    | `resource`          | Runner-specific terminology |
+| `provider`  | `resource`          | Runner-specific terminology |
+| `container` | `app` or `resource` | Clearer purpose             |
 
 ---
 
@@ -115,6 +116,7 @@ Include sardonic "runtime" quotes at the end of major sections for personality. 
 ```
 
 **Character traits:**
+
 - Sardonic but never mean-spirited
 - References common developer pain points
 - Self-aware about framework quirks
@@ -122,30 +124,38 @@ Include sardonic "runtime" quotes at the end of major sections for personality. 
 - Occasionally breaks the fourth wall
 
 **Quote placement:**
+
 - End of major concept sections (Tasks, Resources, Events, Middleware)
 - End of feature deep-dives (Caching, Retry, Performance)
 - End of "Real-World Example" sections
 - **NOT** in Quick Reference, API docs, or troubleshooting
 
 **Writing style:**
+
 ```markdown
 **Good:**
+
 > **runtime:** "Middleware: the onion pattern. A matryoshka doll made of promises."
 
 **Good:**
+
 > **runtime:** "'Zero magic.' Groundbreaking—like a lightbulb that uses no power when it's off."
 
 **Bad - Too harsh:**
+
 > **runtime:** "Your code is terrible and you should feel bad."
 
 **Bad - Too technical (no humor):**
+
 > **runtime:** "The middleware executes in sequence using the next() pattern."
 
 **Bad - Off-topic:**
+
 > **runtime:** "I prefer coffee over tea."
 ```
 
 **Guidelines:**
+
 - Keep relevant to the section content
 - Use mild, inclusive humor (no put-downs)
 - Reference common developer experiences
@@ -157,35 +167,47 @@ Include sardonic "runtime" quotes at the end of major sections for personality. 
 ### Heading Conventions
 
 ```markdown
-# Document Title          # Level 1 - Only for the main title
-## Major Section          # Level 2 - Top-level sections (Tasks, Resources, Events)
-### Sub-Section           # Level 3 - Detailed topics within a section
-#### Minor Detail         # Level 4 - Rarely used, for deep specifics only
+# Document Title # Level 1 - Only for the main title
+
+## Major Section # Level 2 - Top-level sections (Tasks, Resources, Events)
+
+### Sub-Section # Level 3 - Detailed topics within a section
+
+#### Minor Detail # Level 4 - Rarely used, for deep specifics only
 ```
 
 **Heading style:**
+
 - Use sentence case, not title case: "Core concepts" not "Core Concepts"
 - Exception: Proper nouns and brand names: "BlueLibs Runner", "TypeScript"
 - Use descriptive, action-oriented titles when possible
 - Avoid generic headings like "Overview" or "Introduction"
 
 **No decorative symbols in headings:**
+
 - Use clear, descriptive text only
 - Avoid decorative symbols or emojis
 - Focus on information architecture
 
 ```markdown
 **Good:**
+
 ## Quick Wins: Copy-Paste Solutions
+
 ## Tasks
+
 ### Task Input Validation
 
 **Good:**
+
 ## Quick Reference Cheat Sheet
+
 ## Troubleshooting
 
 **Bad:**
+
 ## Quick Wins!!! (with decorative symbols)
+
 ### Creating Tasks!!!
 ```
 
@@ -206,11 +228,13 @@ The main README follows this high-level structure:
 
 ```markdown
 ## Introduction & Value Proposition
+
 - Hero section with code example
 - Resource links table
 - Why Runner? (Problem/Solution comparison)
 
 ## Getting Started (Ordered for learning)
+
 - What Is This Thing? (conceptual overview)
 - Show Me the Magic (quick wins)
 - How Does It Compare? (framework comparison)
@@ -223,26 +247,32 @@ The main README follows this high-level structure:
 - The Big Five (core concepts)
 
 ## Core Concepts (Alphabetical)
+
 - Tasks, Resources, Events, Hooks, Middleware, Tags, Errors
 
 ## Runtime & Execution
+
 - run() and RunOptions
 - Task Interceptors
 - Error Boundaries
 
 ## Advanced Features (Alphabetical)
+
 - Caching, Retry, Timeouts, Logging, Debug, etc.
 
 ## Architecture Patterns
+
 - Optional Dependencies, Serialization, Tunnels, etc.
 
 ## Developer Experience
+
 - Quick Reference (bookmark this!)
 - Fluent Builders
 - Type Helpers
 - Testing
 
 ## Reference
+
 - Real-World Example
 - Performance
 - Why Choose Runner?
@@ -251,6 +281,7 @@ The main README follows this high-level structure:
 ```
 
 **Guidelines:**
+
 - Keep "Getting Started" sections in learning order, not alphabetical
 - Core concepts can be alphabetical or by importance
 - Advanced features should be alphabetical for easy lookup
@@ -264,14 +295,14 @@ The main README follows this high-level structure:
 
 **Always use these standard names:**
 
-| Purpose | Name | Don't Use |
-|---------|------|-----------|
-| Root application | `app` | `root`, `main`, `container` |
-| Database resource | `db` or `database` | `dbClient`, `dbConnection` |
-| Logger | `logger` | `log`, `logging` |
-| Config | `config` | `settings`, `options` |
-| Server | `server` | `srv`, `httpServer` |
-| Runtime result | `{ runTask, dispose }` | `runtime`, `result` |
+| Purpose           | Name                   | Don't Use                   |
+| ----------------- | ---------------------- | --------------------------- |
+| Root application  | `app`                  | `root`, `main`, `container` |
+| Database resource | `db` or `database`     | `dbClient`, `dbConnection`  |
+| Logger            | `logger`               | `log`, `logging`            |
+| Config            | `config`               | `settings`, `options`       |
+| Server            | `server`               | `srv`, `httpServer`         |
+| Runtime result    | `{ runTask, dispose }` | `runtime`, `result`         |
 
 ### Import Statements
 
@@ -440,11 +471,13 @@ Use bullet points for concepts, numbered lists for sequential steps:
 
 ```markdown
 **Key features:**
+
 - Type-safe dependency injection
 - Automatic cleanup
 - Built-in middleware
 
 **Setup steps:**
+
 1. Install the package
 2. Define your resources
 3. Run your app
@@ -455,6 +488,7 @@ Use bold headings for celebration:
 
 ```markdown
 **What you just built:**
+
 - A full Express API with proper lifecycle management
 - Dependency injection (tasks get what they need automatically)
 - Built-in logging (via `globals.resources.logger`)
@@ -466,10 +500,12 @@ Use clear labels to indicate when to use certain approaches:
 
 ```markdown
 **Make it a task when:**
+
 - It's a core business operation
 - You need dependency injection
 
 **Keep it as a regular function when:**
+
 - It's a simple utility
 - It's a pure function with no dependencies
 ```
@@ -479,10 +515,10 @@ Use clear labels to indicate when to use certain approaches:
 Use tables for comparisons and reference data:
 
 ```markdown
-| Feature | Runner | Other |
-|---------|--------|-------|
-| Type-safe DI | Yes | Partial |
-| No decorators | Yes | No |
+| Feature       | Runner | Other   |
+| ------------- | ------ | ------- |
+| Type-safe DI  | Yes    | Partial |
+| No decorators | Yes    | No      |
 ```
 
 ### Code Blocks
@@ -538,14 +574,15 @@ Use globals.resources.logger for logging.
 Use comparison tables to highlight framework advantages:
 
 ```markdown
-| Feature | Runner | NestJS | InversifyJS | TypeDI |
-|---------|--------|--------|-------------|--------|
-| **Learning Curve** | Gentle | Steep | Steep | Moderate |
-| **Magic/Decorators** | None | Heavy | Heavy | Heavy |
-| **Bundle Size** | Small | Large | Large | Medium |
+| Feature              | Runner | NestJS | InversifyJS | TypeDI   |
+| -------------------- | ------ | ------ | ----------- | -------- |
+| **Learning Curve**   | Gentle | Steep  | Steep       | Moderate |
+| **Magic/Decorators** | None   | Heavy  | Heavy       | Heavy    |
+| **Bundle Size**      | Small  | Large  | Large       | Medium   |
 ```
 
 **Guidelines:**
+
 - Use descriptive text for clarity
 - Bold the left column headers
 - Keep rows focused (max 8-10 rows)
@@ -562,6 +599,7 @@ For comprehensive feature lists, use HTML tables with 3 columns:
 <td width="33%">
 
 **Core Architecture**
+
 - Dependency Injection
 - Lifecycle Management
 - Type-safe Everything
@@ -570,6 +608,7 @@ For comprehensive feature lists, use HTML tables with 3 columns:
 <td width="33%">
 
 **Built-in Features**
+
 - Caching (LRU + Custom)
 - Retry with Backoff
 - Event System
@@ -578,6 +617,7 @@ For comprehensive feature lists, use HTML tables with 3 columns:
 <td width="33%">
 
 **Developer Experience**
+
 - Fluent API
 - Debug Tools
 - Testing Utilities
@@ -588,6 +628,7 @@ For comprehensive feature lists, use HTML tables with 3 columns:
 ```
 
 **Guidelines:**
+
 - Use equal column widths (`33%` for 3 columns, `50%` for 2)
 - Use bold headers for each column
 - Keep lists concise (5-7 items max)
@@ -603,6 +644,7 @@ Use for "Problem vs Solution" or "Before vs After":
 <td width="50%">
 
 ### The Problem
+
 Content describing the problem...
 
 \`\`\`typescript
@@ -613,6 +655,7 @@ Content describing the problem...
 <td width="50%">
 
 ### The Solution
+
 Content describing the solution...
 
 \`\`\`typescript
@@ -634,7 +677,7 @@ graph LR
     T[Tasks] --> |use| R[Resources]
     R --> |emit| E[Events]
     E --> |trigger| H[Hooks]
-    
+
     style T fill:#4CAF50,color:#fff
     style R fill:#2196F3,color:#fff
     style E fill:#FF9800,color:#fff
@@ -642,6 +685,7 @@ graph LR
 ````
 
 **Color palette for diagrams:**
+
 - Tasks: `#4CAF50` (green)
 - Resources: `#2196F3` (blue)
 - Events: `#FF9800` (orange)
@@ -650,6 +694,7 @@ graph LR
 - Tags: `#607D8B` (gray)
 
 **Guidelines:**
+
 - Use flowcharts for relationships
 - Use sequence diagrams for lifecycle
 - Keep diagrams simple (max 10 nodes)
@@ -662,15 +707,16 @@ Format benchmark results in monospace tables:
 ```markdown
 \`\`\`
 ┌─────────────────────────────────────┬───────────────┬──────────────┐
-│ Operation                           │ Ops/Second    │ Time/Op      │
+│ Operation │ Ops/Second │ Time/Op │
 ├─────────────────────────────────────┼───────────────┼──────────────┤
-│ Basic task execution                │ 2.2M          │ ~0.0005 ms   │
-│ Task with 5 middlewares             │ 244K          │ ~0.004 ms    │
+│ Basic task execution │ 2.2M │ ~0.0005 ms │
+│ Task with 5 middlewares │ 244K │ ~0.004 ms │
 └─────────────────────────────────────┴───────────────┴──────────────┘
 \`\`\`
 ```
 
 **Guidelines:**
+
 - Use ASCII box drawing characters
 - Align numbers to the right
 - Include units in headers
@@ -685,6 +731,7 @@ Add "TL;DR" sections after complex comparisons:
 ```
 
 **Guidelines:**
+
 - Use bold for "TL;DR"
 - One sentence maximum
 - Place after comparison tables
@@ -701,6 +748,7 @@ Use blockquotes for important notes and platform warnings:
 ```
 
 **Types of callouts:**
+
 - `> **runtime:**` - Personality quotes (see Runtime Character section)
 - `> **Platform Note:**` - Platform-specific warnings
 - `> **Note:**` - Important clarifications
@@ -718,9 +766,9 @@ The main `README.md` is not edited directly. It is composed from modular chapter
 - **Syntax**: Use `!include: filename.md` on a new line to include a chapter.
 - **Generation**: Run `npm run guide:compose` to rebuild the `README.md`.
 - **Guidelines**:
-    - Each chapter should be self-contained.
-    - Use relative markdown anchors for cross-chapter links.
-    - Avoid editing `README.md` manually; changes will be overwritten.
+  - Each chapter should be self-contained.
+  - Use relative markdown anchors for cross-chapter links.
+  - Avoid editing `README.md` manually; changes will be overwritten.
 
 ### Chapter Files (guide-units/)
 
@@ -798,12 +846,12 @@ The "Quick Wins" section is a special format designed for copy-paste solutions. 
 import { r, globals } from "@bluelibs/runner";
 
 const solution = r
-  .task("solution")
-  .middleware([/* key feature */])
-  .run(async (input) => {
-    // Implementation with inline comments explaining key points
-  })
-  .build();
+.task("solution")
+.middleware([/* key feature */])
+.run(async (input) => {
+// Implementation with inline comments explaining key points
+})
+.build();
 
 // First call: hits database
 // Next 60 seconds: instant from cache
@@ -814,6 +862,7 @@ const solution = r
 ```
 
 **Guidelines:**
+
 - Use numbered headings (1. 2. 3.)
 - Include import statements
 - Add inline comments explaining behavior
@@ -830,12 +879,13 @@ const solution = r
 Use clear, descriptive text:
 
 ```markdown
-| Feature | Runner | NestJS | Other |
-|---------|--------|--------|-------|
-| **Learning Curve** | Gentle | Steep | Moderate |
+| Feature            | Runner | NestJS | Other    |
+| ------------------ | ------ | ------ | -------- |
+| **Learning Curve** | Gentle | Steep  | Moderate |
 ```
 
 **Standard terminology:**
+
 - Learning curve: Gentle, Moderate, Steep
 - Size: Small, Medium, Large
 - Support: Yes/Full, Partial, No/None
@@ -847,12 +897,14 @@ After benchmark data, translate to business value:
 
 ```markdown
 **What this means for you:**
+
 - **Instant feedback** - Tests run in milliseconds, not seconds
 - **Lower cloud costs** - Handle more requests with fewer resources
 - **Production ready** - Battle-tested at scale
 ```
 
 **Guidelines:**
+
 - Use standard bullet points
 - Bold the key phrase
 - Follow with practical explanation
@@ -880,6 +932,7 @@ That's it! Now let's see it in action:
 ```
 
 **Guidelines:**
+
 - Start with "New to X?" question
 - Use numbered list (max 4-5 items)
 - End with forward-looking statement
@@ -906,6 +959,7 @@ const processOrder = r.task("app.processOrder")...
 ```
 
 **Pattern:**
+
 - Use numbered headings (Pattern 1, Pattern 2, etc.)
 - Start with common mistake or question
 - Bold the golden rule or key insight
@@ -923,6 +977,7 @@ Use blockquote warnings for platform limitations:
 ```
 
 **Guidelines:**
+
 - Bold "Platform Note:" or similar
 - Explain limitation clearly
 - Suggest alternative if available
@@ -947,16 +1002,18 @@ Content...
 ```
 
 **When to use dividers:**
+
 - Between major document sections (Getting Started → Core Concepts)
 - After introduction blocks before main content
 - Before community/license sections at end
 - **NOT** between every section (use sparingly)
 
 **When NOT to use dividers:**
+
 - Between subsections (use heading hierarchy instead)
 - In Quick Reference sections (maintain compact layout)
 - In troubleshooting sections (maintain flow)
 
 ---
 
-*Last updated: January 2026 · Version 2.0*
+_Last updated: January 2026 · Version 2.0_

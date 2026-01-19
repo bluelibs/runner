@@ -1,4 +1,5 @@
-import { defineTaskMiddleware } from "../../define";
+import { defineTaskMiddleware, defineResource } from "../../define";
+import { globalTags } from "../globalTags";
 
 /**
  * States of the Circuit Breaker
@@ -35,20 +36,31 @@ export class CircuitBreakerOpenError extends Error {
   }
 }
 
-interface CircuitBreakerStatus {
+export interface CircuitBreakerStatus {
   state: CircuitBreakerState;
   failures: number;
   lastFailureTime: number;
 }
 
-const statusMap = new Map<string, CircuitBreakerStatus>();
+export const circuitBreakerResource = defineResource({
+  id: "globals.resources.circuitBreaker",
+  tags: [globalTags.system],
+  init: async () => {
+    return {
+      statusMap: new Map<string, CircuitBreakerStatus>(),
+    };
+  },
+});
 
 export const circuitBreakerMiddleware = defineTaskMiddleware({
   id: "globals.middleware.circuitBreaker",
-  async run({ task, next }, _deps, config: CircuitBreakerMiddlewareConfig) {
+  dependencies: { state: circuitBreakerResource },
+  async run({ task, next }, { state }, config: CircuitBreakerMiddlewareConfig) {
     const taskId = task!.definition.id;
     const failureThreshold = config.failureThreshold ?? 5;
     const resetTimeout = config.resetTimeout ?? 30000;
+
+    const { statusMap } = state;
 
     let status = statusMap.get(taskId);
     if (!status) {

@@ -8,6 +8,7 @@ import { ITag } from "./tag";
 import { symbolOptionalDependency } from "./symbols";
 import { IErrorHelper } from "./error";
 import type { IAsyncContext } from "./asyncContext";
+import type { ExecutionJournal } from "./executionJournal";
 
 export * from "./symbols";
 
@@ -128,10 +129,24 @@ export type CommonPayload<
   : ExtractEventPayload<T>;
 
 /**
- * Task dependencies transform into callable functions: call with the task input
- * and you receive the task output.
+ * Options that can be passed when calling a task dependency.
+ * Allows forwarding the execution journal to nested task calls.
  */
-type TaskDependency<I, O> = (...args: I extends null | void ? [] : [I]) => O;
+export interface TaskCallOptions {
+  /** Optional journal to forward to the nested task */
+  journal?: ExecutionJournal;
+}
+
+/**
+ * Task dependencies transform into callable functions: call with the task input
+ * and you receive the task output. Optionally accepts TaskCallOptions for journal forwarding.
+ */
+type TaskDependency<I, O> = I extends null | void
+  ? {
+      (options?: TaskCallOptions): O;
+      (input?: I, options?: TaskCallOptions): O;
+    }
+  : (input: I, options?: TaskCallOptions) => O;
 /**
  * Resource dependencies resolve to the resource's value directly.
  */

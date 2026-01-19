@@ -655,7 +655,53 @@ const adminTask = r
   .build();
 ```
 
-> **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'."
+#### Execution Journal
+
+The Execution Journal is a type-safe registry that travels with your task execution. It allows middleware and tasks to share state without polluting the task input/output.
+
+```typescript
+import { r, journal } from "@bluelibs/runner";
+
+// 1. Define a typed key
+const traceIdKey = journal.createKey<string>("app.traceId");
+
+const traceMiddleware = r.middleware
+  .task("app.middleware.trace")
+  .run(async ({ task, next, journal }) => {
+    // 2. Write to the journal
+    journal.set(traceIdKey, "trace-123");
+    return next(task.input);
+  })
+  .build();
+
+const myTask = r
+  .task("app.tasks.myTask")
+  .middleware([traceMiddleware])
+  .run(async (input, deps, { journal }) => {
+    // 3. Read from the journal (fully typed!)
+    const traceId = journal.get(traceIdKey); // string | undefined
+    return { traceId };
+  })
+  .build();
+```
+
+**Key features:**
+
+- **Type-safe keys**: use `journal.createKey<T>()`
+- **Per-execution**: Fresh journal for every task run
+- **Forwarding**: You can pass `{ journal }` to nested task calls to share the context
+- **Manual Creation**: Use `journal.create()` to create a fresh journal for root calls
+
+```typescript
+// Advanced: Manually creation and passing
+const customJournal = journal.create();
+customJournal.set(traceIdKey, "manual-trace-id");
+
+// Pass explicit journal to task
+await myTask({ ... }, { journal: customJournal });
+```
+
+> **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'. And now you can even create your own wrapper container with `journal.create()`. It's wrappers all the way down."
 
 ### Tags
 

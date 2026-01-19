@@ -181,7 +181,6 @@ describe("Circuit Breaker Middleware", () => {
   });
 
   it("should use default config values", async () => {
-    // failureThreshold default 5
     const task = defineTask({
       id: "task.defaults",
       middleware: [circuitBreakerMiddleware],
@@ -198,9 +197,7 @@ describe("Circuit Breaker Middleware", () => {
         for (let i = 0; i < 4; i++) {
           await expect(task()).rejects.toThrow("fail");
         }
-        // Still not open after 4 failures
         await expect(task()).rejects.toThrow("fail");
-        // 5th failure happened in previous call, now it should be open
         await expect(task()).rejects.toThrow(CircuitBreakerOpenError);
       },
     });

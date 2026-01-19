@@ -1,5 +1,6 @@
-import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
+import { defineTaskMiddleware, defineResource } from "../../define";
 import { Semaphore } from "../../models/Semaphore";
+import { globalTags } from "../globalTags";
 
 export interface ConcurrencyMiddlewareConfig {
   /**
@@ -14,17 +15,29 @@ export interface ConcurrencyMiddlewareConfig {
   semaphore?: Semaphore;
 }
 
-const semaphores = new WeakMap<ConcurrencyMiddlewareConfig, Semaphore>();
+export interface ConcurrencyState {
+  semaphores: WeakMap<ConcurrencyMiddlewareConfig, Semaphore>;
+}
+
+export const concurrencyResource = defineResource({
+  id: "globals.resources.concurrency",
+  tags: [globalTags.system],
+  init: async () => ({
+    semaphores: new WeakMap<ConcurrencyMiddlewareConfig, Semaphore>(),
+  }),
+});
 
 /**
  * Middleware that limits concurrency of task executions using a Semaphore.
  */
 export const concurrencyTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.concurrency",
-  async run({ task, next }, _deps, config: ConcurrencyMiddlewareConfig) {
+  dependencies: { state: concurrencyResource },
+  async run({ task, next }, { state }, config: ConcurrencyMiddlewareConfig) {
     let semaphore = config.semaphore;
 
     if (!semaphore && config.limit !== undefined) {
+      const { semaphores } = state;
       semaphore = semaphores.get(config);
       if (!semaphore) {
         semaphore = new Semaphore(config.limit);

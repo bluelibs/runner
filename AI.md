@@ -13,6 +13,7 @@
   - [Tasks](#tasks)
   - [Events and Hooks](#events-and-hooks)
   - [Middleware](#middleware)
+    - [ExecutionJournal](#executionjournal)
   - [Tags](#tags)
   - [Async Context](#async-context)
   - [Errors](#errors)
@@ -147,7 +148,7 @@ import { r } from "@bluelibs/runner";
 
 const userRegistered = r
   .event("app.events.userRegistered")
-  .payloadSchema<{ userId: string; email: string }>({ parse: (v) => v } )
+  .payloadSchema<{ userId: string; email: string }>({ parse: (v) => v })
   .build();
 
 // Type-only alternative (no runtime payload validation):
@@ -168,7 +169,11 @@ const sendWelcomeEmail = r
   .on(userRegistered)
   .dependencies({ mailer: sendEmail })
   .run(async (event, { mailer }) => {
-    await mailer({ to: event.data.email, subject: "Welcome", body: "Welcome!" });
+    await mailer({
+      to: event.data.email,
+      subject: "Welcome",
+      body: "Welcome!",
+    });
   })
   .build();
 ```
@@ -231,6 +236,39 @@ const auth = r.middleware
   .task<AuthConfig, AuthInput, AuthOutput>("app.middleware.auth")
   .run(async ({ task, next }) => next(task.input))
   .build();
+```
+
+### ExecutionJournal
+
+ExecutionJournal is a per-execution registry enabling middleware and tasks to share typed state.
+
+```ts
+import { r, globals, journal } from "@bluelibs/runner";
+
+const abortControllerKey =
+  globals.middleware.task.timeout.journalKeys.abortController;
+
+// Middleware accesses journal via execution input
+const auditMiddleware = r.middleware
+  .task("app.middleware.audit")
+  .run(async ({ task, next, journal }) => {
+    // Access typed values from journal
+    const ctrl = journal.get(abortControllerKey);
+    return next(task.input);
+  })
+  .build();
+
+// Task accesses journal via context
+const myTask = r
+  .task("app.tasks.myTask")
+  .run(async (input, deps, { journal }) => {
+    journal.set(abortControllerKey, new AbortController());
+    return "done";
+  })
+  .build();
+
+// Create custom keys
+const myKey = journal.createKey<{ startedAt: Date }>("app.middleware.timing");
 ```
 
 ## Tags
