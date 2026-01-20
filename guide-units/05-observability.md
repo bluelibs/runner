@@ -111,9 +111,9 @@ const userTask = r
 Create logger instances with bound context for consistent metadata across related operations:
 
 ```typescript
-const RequestContext = createContext<{ requestId: string; userId: string }>(
-  "app.requestContext",
-);
+const RequestContext = r
+  .asyncContext<{ requestId: string; userId: string }>("app.requestContext")
+  .build();
 
 const requestHandler = r
   .task("app.tasks.handleRequest")

@@ -15,7 +15,7 @@ This example shows everything working together in a realistic Express applicatio
 | `server`           | Express integration with graceful shutdown   |
 
 ```typescript
-import { r, run, createContext } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 
 // Configuration
 const config = r
@@ -40,9 +40,9 @@ const database = r
   .build();
 
 // Context for request data
-const RequestContext = createContext<{ userId?: string; role?: string }>(
-  "app.requestContext",
-);
+const RequestContext = r
+  .asyncContext<{ userId?: string; role?: string }>("app.requestContext")
+  .build();
 
 // Events
 const userRegistered = r
@@ -167,6 +167,7 @@ process.on("SIGTERM", async () => {
 ```
 
 > **runtime:** "Ah yes, the 'Real‑World Example'—a terrarium where nothing dies and every request is polite. Release it into production and watch nature document a very different ecosystem."
+
 ## Testing
 
 Runner's explicit dependency injection makes testing straightforward—no magic mocks, no container hacks. Just pass what you need.

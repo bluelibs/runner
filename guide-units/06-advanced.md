@@ -222,7 +222,9 @@ const resilientTask = r
   .task("app.tasks.ultimateResilience")
   .middleware([
     // Outer layer: Fallback (the absolute Plan B if everything below fails)
-    globals.middleware.task.fallback.with({ fallback: { status: "offline-mode", data: [] } }),
+    globals.middleware.task.fallback.with({
+      fallback: { status: "offline-mode", data: [] },
+    }),
 
     // Next: Rate Limit (check this before wasting resources or retry budget)
     globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 100 }),
@@ -246,10 +248,11 @@ const resilientTask = r
 
 1.  **Rate Limit first**: Don't even try to execute or retry if you've exceeded your quota.
 2.  **Circuit Breaker second**: Don't retry against a service that is known to be failing.
-3.  **Retry wraps Timeout**: Ensure the timeout applies to the *individual* attempt, so the retry logic can kick in when one attempt hangs.
+3.  **Retry wraps Timeout**: Ensure the timeout applies to the _individual_ attempt, so the retry logic can kick in when one attempt hangs.
 4.  **Fallback last**: The fallback should be the very last thing that happens if the entire resilience stack fails.
 
 > **runtime:** "Resilience Orchestration: layering defense-in-depth like a paranoid onion. I'm counting your turns, checking the circuit, spinning the retry wheel, and holding a stopwatch—all so you can sleep through a minor server fire."
+
 ## Meta
 
 _The structured way to describe what your components do and control their behavior_
@@ -485,7 +488,7 @@ const userTask = r
 
 ## Factory Pattern
 
-To keep things dead simple, we avoided poluting the D.I. with this concept. Therefore, we recommend using a resource with a factory function to create instances of your classes:
+To keep things dead simple, we avoided polluting the D.I. with this concept. Therefore, we recommend using a resource with a factory function to create instances of your classes:
 
 ```typescript
 // Assume MyClass is defined elsewhere
@@ -858,6 +861,128 @@ const createUser = r
 ```
 
 > **runtime:** "Validation: you hand me a velvet rope and a clipboard. 'Name? Email? Age within bounds?' I stamp passports or eject violators with a `ValidationError`. Dress code is types, darling."
+
+## Type Contracts
+
+TypeScript is powerful, but sometimes you want to enforce that a component adheres to a specific contract in order to use it. For example, you might want to ensure that any Task that has the `@Authenticated` tag also accepts a `userId` in its input.
+
+This is where Type Contracts come in. They allow you to define input/output contracts on **Tags** and **Middleware**, and the framework will enforce them on the Tasks/Resources that use them.
+
+### Concept
+
+A **Tag** or **Middleware** can declare:
+
+- **Input Contract**: "Any task using me MUST accept at least specific properties in its input"
+- **Output Contract**: "Any task using me MUST return at least specific properties"
+
+The enforcement happens at **compile time**. If you try to attach an `@Authenticated` tag to a request that doesn't accept a `userId`, TypeScript will yell at you.
+
+### Example: Enforcing Authentication Identity
+
+Let's say we want to ensure that any task tagged with `@Authorized` receives a `userId`:
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+// 1. Define the Tag with an INPUT contract
+// <Config, InputContract, OutputContract>
+const authorizedTag = r
+  .tag<void, { userId: string }, void>("app.tags.authorized")
+  .build();
+
+// 2. This works: Task accepts userId
+const validTask = r
+  .task("app.tasks.dashboard")
+  .tags([authorizedTag])
+  .run(async (input: { userId: string; view: "full" | "mini" }) => {
+    // We are guaranteed that input has userId
+    return { data: "..." };
+  })
+  .build();
+
+// 3. This fails compilation: Task input is missing userId
+const invalidTask = r
+  .task("app.tasks.public")
+  .tags([authorizedTag])
+  // @ts-expect-error - input doesn't satisfy contract { userId: string }
+  .run(async (input: { view: "full" }) => {
+    return { data: "..." };
+  })
+  .build();
+```
+
+### Example: Enforcing Response Shape
+
+You can also enforce that tasks return specific data. For example, a "Searchable" tag might require tasks to return an `id` and `title`:
+
+```typescript
+// Enforce that output has { id: string; title: string }
+const searchableTag = r
+  .tag<void, void, { id: string; title: string }>("app.tags.searchable")
+  .build();
+
+const productTask = r
+  .task("app.products.get")
+  .tags([searchableTag])
+  .run(async (id: string) => {
+    return {
+      id,
+      title: "Super Gadget",
+      price: 99.99, // Extra fields are fine
+    };
+  })
+  .build();
+```
+
+> **runtime:** "Type Contracts: The pre-nup of code. 'If you want to wear my @Authenticated ring, you _will_ bring a userId to the table.' It's not controlling; it's just... strictly typed love."
+
+### Resource Contracts
+
+For **Resources**, the contracts map slightly differently:
+
+- **Input Contract** → Enforced on the **Resource Configuration** (passed to `.with()` and `init`)
+- **Output Contract** → Enforced on the **Resource Value** (returned from `init`)
+
+This is powerful for enforcing architectural standards. For example, you can create a "Database" tag that requires any database resource to return a specific connection interface.
+
+```typescript
+// Define a tag that expects:
+// - Config: { connectionString: string }
+// - Value: { connect(): Promise<void> }
+const databaseTag = r
+  .tag<
+    void,
+    { connectionString: string },
+    { connect(): Promise<void> }
+  >("app.tags.database")
+  .build();
+
+// ✅ Valid Resource
+const validDb = r
+  .resource("app.db")
+  .tags([databaseTag])
+  // Enforced: config must have connectionString
+  .init(async (config) => {
+    return {
+      // Enforced: must return object with connect()
+      async connect() {
+        /* ... */
+      },
+    };
+  })
+  .build();
+
+// ❌ Invalid Resource - Compilation Error
+const invalidDb = r
+  .resource("app.bad-db")
+  .tags([databaseTag])
+  // Error: Property 'connectionString' is missing in type '{}'
+  .init(async (config: {}) => {
+    return { foo: "bar" }; // Error: Property 'connect' is missing
+  })
+  .build();
+```
+
 ## Internal Services
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):
@@ -974,7 +1099,7 @@ export const cResource = defineResource({
   async init(_, { a }) {
     return `C depends on ${a}`;
   },
-}) as IResource<void, string>; // void because it has no config, string because it returns a string
+}) as IResource<void, Promise<string>>; // void because it has no config, string because it returns a string
 ```
 
 #### Why This Works
