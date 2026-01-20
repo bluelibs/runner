@@ -4,7 +4,7 @@
 
 **Build enterprise applications that are maintainable, testable, and scalable**
 
-Runner is a TypeScript-first framework for building applications out of tasks (functions) and resources
+Runner is a TypeScript-first framework for building applications from tasks (functions) and resources
 (singletons), with explicit dependency injection, middleware, events, hooks, and lifecycle management.
 
 For a token-friendly overview of the fluent builder API (`r.*`), see [AI.md](./AI.md).
@@ -161,6 +161,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 
 - [Why Runner?](#why-runner) - The problem we solve
 - [What Is This Thing?](#what-is-this-thing)
+- [When to Use Runner](#when-to-use-runner) - Is it right for you?
 - [Show Me the Magic](#show-me-the-magic) - See it in action
 - [How Does It Compare?](#how-does-it-compare) - vs. other frameworks
 - [Performance at a Glance](#performance-at-a-glance) - Real benchmarks
@@ -235,10 +236,11 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [Why Choose BlueLibs Runner?](#why-choose-bluelibs-runner) - Framework comparison
 - [Migration Path](#the-migration-path) - Adopting Runner
 - [Troubleshooting](#troubleshooting) - Common issues and solutions
+- [Under the Hood](#under-the-hood) - Architecture deep dive
+- [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
 
 ---
-
 ## What Is This Thing?
 
 BlueLibs Runner is a TypeScript-first framework that embraces functional programming principles while keeping dependency injection simple enough that you won't need a flowchart to understand your own code. Think of it as the anti-framework framework – it gets out of your way and lets you build stuff that actually works.
@@ -253,6 +255,25 @@ BlueLibs Runner is a TypeScript-first framework that embraces functional program
 - **Everything is async** - Built for modern JavaScript/TypeScript
 - **Explicit beats implicit** - You'll always know what's happening and why
 - **Type-safe by default** - Catch mistakes at compile time, not at 3am in production
+
+### When to Use Runner
+
+**Great fit for:**
+
+- TypeScript applications that need structured dependency injection
+- Long-running services (APIs, workers, daemons) with lifecycle management
+- Projects where testability matters — unit test with mocks, integration test with overrides
+- Teams that want middleware patterns without decorator magic
+- Applications growing beyond "one file" that need organization
+
+**Probably not for:**
+
+- Simple scripts or CLI tools (overkill — just use functions)
+- Serverless functions with cold-start sensitivity (the DI graph adds initialization time)
+- Projects allergic to any abstraction (Runner is minimal, but it's still a framework)
+- Browser-only SPAs without backend (works technically, but why?)
+
+**The honest take**: If your app has 3+ services that depend on each other and you're tired of manually passing things around, Runner pays off. If you're building a 50-line script, stick with plain functions.
 
 ---
 
@@ -439,7 +460,6 @@ Runner comes with **everything you need** to build production apps:
 **No extra packages needed.** It's all included and works together seamlessly.
 
 ---
-
 ## Your First 5 Minutes
 
 **New to Runner?** Here's the absolute minimum you need to know:
@@ -493,6 +513,12 @@ That's it! You just:
 2.  Registered it
 3.  Ran it
 4.  Cleaned up
+
+**What you should see:**
+
+```
+Hello, World!
+```
 
 **What you just learned**: The basic Runner pattern: Define → Register → Run → Execute. Everything else builds on this foundation.
 
@@ -563,7 +589,15 @@ await runtime.dispose();
 // await run(app, { debug: "verbose" });
 ```
 
-** What you just built:**
+**What you should see:**
+
+```
+Server running on port 3000
+Creating Ada
+{ id: 'user-123', name: 'Ada' }
+```
+
+**What you just built:**
 
 - A full Express API with proper lifecycle management
 - Dependency injection (tasks get what they need automatically)
@@ -604,7 +638,6 @@ Runner auto-detects the platform (Node.js, browser, edge) and adapts behavior at
 - [HTTP Tunnels](./readmes/TUNNELS.md) - Remote task execution
 
 ---
-
 ## Learning Guide
 
 These patterns will save you hours of debugging. Each one addresses a real mistake we've seen developers make when learning Runner.
@@ -774,7 +807,6 @@ Now that you know the patterns, here's your learning path:
 > **runtime:** "Six patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
 ---
-
 ## Quick Wins: Copy-Paste Solutions
 
 Production-ready patterns you can use today. Each example is complete and tested.
@@ -988,10 +1020,9 @@ await dispose();
 > **runtime:** "Six production problems, six one-liners. You bolted middleware onto tasks like Lego bricks and called it architecture. I respect the pragmatism. Ship it."
 
 ---
-
 ## The Big Five
 
-The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using the runner effectively.
+The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using Runner effectively.
 
 ```mermaid
 graph LR
@@ -1015,7 +1046,7 @@ graph LR
 
 ### Tasks
 
-Tasks are where your business logic lives. Think of them as **functions with superpowers** – they get automatic dependency injection, type safety, middleware support, and observability. Pretty cool, right?
+Tasks are where your business logic lives. Think of them as **functions with superpowers** – they get automatic dependency injection, type safety, middleware support, and observability.
 
 Here's a complete example showing you everything:
 
@@ -1117,7 +1148,7 @@ const userService = r
 
 #### Resource Configuration
 
-Resources can be configured with type-safe options. No more "config object of unknown shape" nonsense.
+Resources can be configured with type-safe options. No more guessing at config shapes.
 
 ```typescript
 type SMTPConfig = {
@@ -1142,7 +1173,7 @@ const app = r
       smtpUrl: "smtp://localhost",
       from: "noreply@myapp.com",
     }),
-    // using emailer without with() will throw a type-error ;)
+    // using emailer without with() will cause a type error
   ])
   .build();
 ```
@@ -1676,13 +1707,118 @@ const myTask = r
   .build();
 ```
 
+**API Reference:**
+
+| Method                              | Description                                                        |
+| ----------------------------------- | ------------------------------------------------------------------ |
+| `journal.createKey<T>(id)`          | Create a typed key for storing values                              |
+| `journal.create()`                  | Create a fresh journal instance for manual forwarding              |
+| `journal.set(key, value, options?)` | Store a typed value (throws if key exists unless `override: true`) |
+| `journal.get(key)`                  | Retrieve a value (returns `T \| undefined`)                        |
+| `journal.has(key)`                  | Check if a key exists (returns `boolean`)                          |
+
+> [!IMPORTANT]
+> **Fail-fast by default**: `set()` throws an error if the key already exists. This prevents silent bugs from middleware accidentally clobbering each other's state. Use `{ override: true }` when you intentionally want to update a value.
+
 **Key features:**
 
-- **Type-safe keys**: use `journal.createKey<T>()`
+- **Fail-fast**: Duplicate key writes throw immediately, catching integration bugs early
+- **Type-safe keys**: Use `journal.createKey<T>()` for compile-time type checking
 - **Per-execution**: Fresh journal for every task run
-- **Forwarding**: You can pass `{ journal }` to nested task calls to share the context
+- **Forwarding**: Pass `{ journal }` to nested task calls to share context across the call tree
 
-> **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'."
+#### Cross-Middleware Coordination
+
+The journal shines when middleware need to coordinate. The recommended pattern is to **export your journal keys** so other middleware can access your state:
+
+```typescript
+// timeout.middleware.ts
+import { journal } from "@bluelibs/runner";
+
+// Export keys for downstream consumers
+export const journalKeys = {
+  abortController: journal.createKey<AbortController>(
+    "timeout.abortController",
+  ),
+} as const;
+
+export const timeoutMiddleware = r.middleware
+  .task("app.middleware.timeout")
+  .run(async ({ task, next, journal }, _deps, config: { ttl: number }) => {
+    const controller = new AbortController();
+
+    // Store for other middleware to check
+    journal.set(journalKeys.abortController, controller);
+
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => {
+        controller.abort();
+        reject(new Error(`Timeout after ${config.ttl}ms`));
+      }, config.ttl);
+    });
+
+    return Promise.race([next(task.input), timeoutPromise]);
+  })
+  .build();
+```
+
+```typescript
+// retry.middleware.ts
+import { journalKeys as timeoutKeys } from "./timeout.middleware";
+
+export const retryMiddleware = r.middleware
+  .task("app.middleware.retry")
+  .run(async ({ task, next, journal }, _deps, config: { retries: number }) => {
+    let attempts = 0;
+
+    while (true) {
+      try {
+        return await next(task.input);
+      } catch (error) {
+        // Check if timeout middleware aborted - don't retry timeouts!
+        const controller = journal.get(timeoutKeys.abortController);
+        if (controller?.signal.aborted) {
+          throw error; // Timeout - no retry
+        }
+
+        if (attempts >= config.retries) throw error;
+        attempts++;
+        await new Promise((r) => setTimeout(r, 100 * Math.pow(2, attempts)));
+      }
+    }
+  })
+  .build();
+```
+
+This pattern enables loose coupling - middleware don't need direct references, just the exported keys.
+
+#### Manual Journal Management
+
+For advanced scenarios where you need explicit control:
+
+```typescript
+// Create and pre-populate a journal
+const customJournal = journal.create();
+customJournal.set(traceIdKey, "manual-trace-id");
+
+// Forward explicit journal to a nested task call
+const orchestratorTask = r
+  .task("app.tasks.orchestrator")
+  .dependencies({ myTask })
+  .run(async (input, { myTask }) => {
+    return myTask(input, { journal: customJournal });
+  })
+  .build();
+
+await runTask(orchestratorTask, input);
+
+// Check before accessing
+if (customJournal.has(traceIdKey)) {
+  console.log("Trace ID:", customJournal.get(traceIdKey));
+}
+```
+
+> **runtime:** "Ah, the onion pattern. A matryoshka doll made of promises. Every peel reveals… another logger. Another tracer. Another 'just a tiny wrapper'. And now middleware can spy on each other through the journal. `has()` is just asking 'did anyone write here before me?' It's wrappers all the way down."
 
 ### Tags
 
@@ -1866,214 +2002,6 @@ The core concepts above cover most use cases. For specialized features:
 - **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](./readmes/SERIALIZER_PROTOCOL.md).
 
 ---
-
-## Quick Reference: Cheat Sheet
-
-**Bookmark this section for quick lookups!**
-
-### Creating Components
-
-```typescript
-// Task - Basic
-const myTask = r
-  .task("id")
-  .run(async (input) => result)
-  .build();
-
-// Task - With Dependencies
-const myTask = r
-  .task("id")
-  .dependencies({ db, logger })
-  .run(async (input, { db, logger }) => result)
-  .build();
-
-// Task - With Middleware
-const myTask = r
-  .task("id")
-  .middleware([cache.with({ ttl: 60000 }), retry.with({ retries: 3 })])
-  .run(async (input) => result)
-  .build();
-
-// Resource - Basic
-const myResource = r
-  .resource("id")
-  .init(async () => ({ value: "something" }))
-  .build();
-
-// Resource - With Lifecycle
-const myResource = r
-  .resource("id")
-  .init(async () => connection)
-  .dispose(async (connection) => connection.close())
-  .build();
-
-// Event
-const myEvent = r
-  .event("id")
-  .payloadSchema<{ data: string }>({ parse: (v) => v })
-  .build();
-
-// Hook
-const myHook = r
-  .hook("id")
-  .on(myEvent)
-  .run(async (event) => console.log(event.data))
-  .build();
-```
-
-### Running Your App
-
-```typescript
-// Basic
-const { runTask, dispose } = await run(app);
-
-// With options
-const { runTask, dispose } = await run(app, {
-  debug: "verbose", // "normal" | "verbose" | "off"
-  onUnhandledError: (error) => console.error(error),
-});
-
-// Execute tasks
-const result = await runTask(myTask, input);
-
-// Cleanup
-await dispose();
-```
-
-### Testing Patterns
-
-```typescript
-// Unit Test - Direct call
-const result = await myTask.run(input, { db: mockDb, logger: mockLogger });
-
-// Integration Test - Full runtime
-const { runTask, dispose } = await run(testApp);
-const result = await runTask(myTask, input);
-await dispose();
-```
-
-### Built-in Middleware
-
-```typescript
-import { globals } from "@bluelibs/runner";
-
-// Cache
-globals.middleware.task.cache.with({
-  ttl: 60000, // milliseconds
-  keyBuilder: (taskId, input) => `${taskId}:${input.id}`,
-});
-
-// Retry
-globals.middleware.task.retry.with({
-  retries: 3,
-  delayStrategy: (attempt) => 100 * Math.pow(2, attempt),
-  stopRetryIf: (error) => error.permanent,
-});
-
-// Timeout
-globals.middleware.task.timeout.with({ ttl: 5000 });
-```
-
-### Common Patterns
-
-```typescript
-// Register components
-const app = r.resource("app")
-  .register([task1, task2, resource1])
-  .build();
-
-// With dependencies
-const app = r.resource("app")
-  .register([db, logger])
-  .dependencies({ db, logger })
-  .init(async (_config, { db, logger }) => {
-    // Use dependencies
-  })
-  .build();
-
-// With configuration
-const server = r.resource<{ port: number }>("server")
-  .init(async ({ port }) => startServer(port))
-  .build();
-
-const app = r.resource("app")
-  .register([server.with({ port: 3000 })])
-  .build();
-
-// Emit events
-await myEvent({ data: "value" });
-
-// Global logging
-const task = r.task("id")
-  .dependencies({ logger: globals.resources.logger })
-  .run(async (input, { logger }) => {
-    await logger.info("message", { data: {...} });
-  })
-  .build();
-```
-
-### Type Helpers
-
-```typescript
-import type { TaskInput, TaskOutput, ResourceValue } from "@bluelibs/runner";
-
-type Input = TaskInput<typeof myTask>; // Get task input type
-type Output = TaskOutput<typeof myTask>; // Get task output type
-type Value = ResourceValue<typeof myResource>; // Get resource value type
-```
-
-### Performance Tips
-
-| Pattern                   | When to Use                        | Code                                         |
-| ------------------------- | ---------------------------------- | -------------------------------------------- |
-| **Caching**               | Expensive computations, DB queries | `.middleware([cache.with({ ttl: 60000 })])`  |
-| **Timeouts**              | External APIs, network calls       | `.middleware([timeout.with({ ttl: 5000 })])` |
-| **Retry**                 | Transient failures, flaky services | `.middleware([retry.with({ retries: 3 })])`  |
-| **Events**                | Decoupling, async side effects     | `await userRegistered({ userId, email })`    |
-| **Single responsibility** | Maintainability                    | One task = one action                        |
-
-### Debugging
-
-```typescript
-// Enable debug logging
-await run(app, { debug: "verbose" });
-
-// Add per-component debug
-const task = r.task("id")
-  .tags([globals.tags.debug.with({ logTaskInput: true, logTaskResult: true })])
-  .run(...)
-  .build();
-
-// Access logger
-.dependencies({ logger: globals.resources.logger })
-```
-
-### Concurrency Utilities
-
-```typescript
-import { Semaphore, Queue } from "@bluelibs/runner";
-
-// Semaphore - limit concurrent operations
-const sem = new Semaphore(3); // max 3 concurrent
-await sem.acquire();
-try {
-  await doWork();
-} finally {
-  sem.release();
-}
-
-// Queue - sequential task processing
-const queue = new Queue();
-await queue.add(async () => {
-  /* runs in order */
-});
-await queue.add(async () => {
-  /* waits for previous */
-});
-```
-
----
-
 ## run() and RunOptions
 
 The `run()` function is your application's entry point. It initializes all resources, wires up dependencies, and returns handles for interacting with your system.
@@ -2213,575 +2141,6 @@ await run(app);
 ```
 
 > **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You’re collapsing the waveform of a task at runtime and I’m Schrödinger’s runtime, praying the cat hasn’t overridden `run()` with `throw new Error('lol')`."
-
-## Advanced Patterns
-
-This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
-
----
-
-## Optional Dependencies
-
-What happens when your analytics service is down? Or your email provider is rate-limiting? With optional dependencies, your app keeps running instead of crashing.
-
-### The problem
-
-```typescript
-// Without optional dependencies - if analytics is down, the whole task fails
-const registerUser = r
-  .task("users.register")
-  .dependencies({ database, analytics }) // analytics must be available!
-  .run(async (input, { database, analytics }) => {
-    const user = await database.create(input);
-    await analytics.track("user.registered"); // Crashes if analytics is down
-    return user;
-  })
-  .build();
-```
-
-### The solution
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const registerUser = r
-  .task("users.register")
-  .dependencies({
-    database, // Required - task fails if missing
-    analytics: analyticsService.optional(), // Optional - undefined if missing
-    email: emailService.optional(), // Optional - graceful degradation
-  })
-  .run(async (input, { database, analytics, email }) => {
-    // Core logic always runs
-    const user = await database.create(input);
-
-    // Optional services fail silently
-    await analytics?.track("user.registered");
-    await email?.sendWelcome(user.email);
-
-    return user;
-  })
-  .build();
-```
-
-### When to use optional dependencies
-
-| Use Case                  | Example                                            |
-| ------------------------- | -------------------------------------------------- |
-| **Non-critical services** | Analytics, metrics, feature flags                  |
-| **External integrations** | Third-party APIs that may be flaky                 |
-| **Development shortcuts** | Skip services not running locally                  |
-| **Feature toggles**       | Conditionally enable functionality                 |
-| **Gradual rollouts**      | New services that might not be deployed everywhere |
-
-### Dynamic dependencies
-
-For more control, you can compute dependencies based on config:
-
-```typescript
-const myTask = r
-  .task("app.tasks.flexible")
-  .dependencies((config) => ({
-    database,
-    // Only include analytics in production
-    ...(config.enableAnalytics ? { analytics } : {}),
-  }))
-  .run(async (input, deps) => {
-    // deps.analytics may or may not exist
-  })
-  .build();
-```
-
----
-
-## Serialization
-
-Ever sent a `Date` over JSON and gotten `"2024-01-15T..."` back as a string? Runner's serializer preserves types across the wire.
-
-### What it handles
-
-| Type          | JSON   | Runner Serializer |
-| ------------- | ------ | ----------------- |
-| `Date`        | String | Date object       |
-| `RegExp`      | Lost   | RegExp object     |
-| `Map`, `Set`  | Lost   | Preserved         |
-| `Uint8Array`  | Lost   | Preserved         |
-| Circular refs | Error  | Preserved         |
-
-### Two modes
-
-```typescript
-import { getDefaultSerializer } from "@bluelibs/runner";
-
-const serializer = getDefaultSerializer();
-
-// Tree mode - like JSON.stringify, but type-aware
-const json = serializer.stringify({ when: new Date(), pattern: /hello/i });
-const obj = serializer.parse(json);
-// obj.when is a Date, obj.pattern is a RegExp
-
-// Graph mode - handles circular references
-const user = { name: "Alice" };
-const team = { members: [user], lead: user }; // shared reference
-user.team = team; // circular reference
-
-const data = serializer.serialize(team);
-const restored = serializer.deserialize(data);
-// restored.members[0] === restored.lead (same object!)
-```
-
-### Custom types
-
-Teach the serializer about your own classes:
-
-```typescript
-class Money {
-  constructor(
-    public amount: number,
-    public currency: string,
-  ) {}
-
-  // Required methods for serialization
-  typeName() {
-    return "Money";
-  }
-  toJSONValue() {
-    return { amount: this.amount, currency: this.currency };
-  }
-}
-
-// Register the type
-serializer.addType("Money", (json) => new Money(json.amount, json.currency));
-
-// Now it round-trips correctly
-const price = new Money(99.99, "USD");
-const json = serializer.stringify({ price });
-const { price: restored } = serializer.parse(json);
-// restored instanceof Money === true
-```
-
-### Security features
-
-The serializer is hardened against common attacks:
-
-- **ReDoS protection**: Validates RegExp patterns against catastrophic backtracking
-- **Prototype pollution blocked**: Filters `__proto__`, `constructor`, `prototype` keys
-- **Depth limits**: Configurable max depth prevents stack overflow
-
-> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](./readmes/TUNNELS.md) for file upload patterns.
-
-### Tunnels: Bridging Runners
-
-Tunnels are a powerful feature for building distributed systems. They let you expose your tasks and events over HTTP, making them callable from other processes, services, or even a browser UI. This allows a server and client to co-exist, enabling one Runner instance to securely call another.
-
-Here's a sneak peek of how you can expose your application and configure a client tunnel to consume a remote Runner:
-
-```typescript
-import { r, globals } from "@bluelibs/runner";
-import { nodeExposure } from "@bluelibs/runner/node";
-
-let app = r.resource("app");
-
-if (process.env.SERVER) {
-  // 1. Expose your local tasks and events over HTTP, only when server mode is active.
-  app.register([
-    // ... your tasks and events
-    nodeExposure.with({
-      http: {
-        basePath: "/__runner",
-        listen: { port: 7070 },
-      },
-    }),
-  ]);
-}
-app = app.build();
-
-// 2. In another app, define a tunnel resource to call a remote Runner
-const remoteTasksTunnel = r
-  .resource("app.tunnels.http")
-  .tags([globals.tags.tunnel])
-  .dependencies({ createClient: globals.resources.httpClientFactory })
-  .init(async (_, { createClient }) => ({
-    mode: "client", // or "server", or "none", or "both" for emulating network infrastructure
-    transport: "http", // the only one supported for now
-    // Selectively forward tasks starting with "remote.tasks."
-    tasks: (t) => t.id.startsWith("remote.tasks."),
-    client: createClient({
-      url: "http://remote-runner:8080/__runner",
-    }),
-  }))
-  .build();
-```
-
-This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
-
-For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
-
----
-
-## Resilience Orchestration
-
-In production, one resilience strategy is rarely enough. Runner allows you to compose multiple middlewares into a "resilience onion" that protects your business logic from multiple failure modes.
-
-### The Problem
-
-A task that calls a remote API might fail due to network blips (needs **Retry**), hang indefinitely (needs **Timeout**), slam the API during traffic spikes (needs **Rate Limit**), or keep failing if the API is down (needs **Circuit Breaker**).
-
-### The Solution
-
-Combine them in the correct order. Like an onion, the outer layers handle broader concerns, while inner layers handle specific execution details.
-
-```typescript
-import { r, globals } from "@bluelibs/runner";
-
-const resilientTask = r
-  .task("app.tasks.ultimateResilience")
-  .middleware([
-    // Outer layer: Fallback (the absolute Plan B if everything below fails)
-    globals.middleware.task.fallback.with({
-      fallback: { status: "offline-mode", data: [] },
-    }),
-
-    // Next: Rate Limit (check this before wasting resources or retry budget)
-    globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 100 }),
-
-    // Next: Circuit Breaker (stop immediately if the service is known to be down)
-    globals.middleware.task.circuitBreaker.with({ failureThreshold: 5 }),
-
-    // Next: Retry (wrap the attempt in a retry loop)
-    globals.middleware.task.retry.with({ retries: 3 }),
-
-    // Inner layer: Timeout (enforce limit on EACH individual attempt)
-    globals.middleware.task.timeout.with({ ttl: 5000 }),
-  ])
-  .run(async () => {
-    return await fetchDataFromUnreliableSource();
-  })
-  .build();
-```
-
-### Best practices for orchestration
-
-1.  **Rate Limit first**: Don't even try to execute or retry if you've exceeded your quota.
-2.  **Circuit Breaker second**: Don't retry against a service that is known to be failing.
-3.  **Retry wraps Timeout**: Ensure the timeout applies to the _individual_ attempt, so the retry logic can kick in when one attempt hangs.
-4.  **Fallback last**: The fallback should be the very last thing that happens if the entire resilience stack fails.
-
-> **runtime:** "Resilience Orchestration: layering defense-in-depth like a paranoid onion. I'm counting your turns, checking the circuit, spinning the retry wheel, and holding a stopwatch—all so you can sleep through a minor server fire."
-
-## Async Context
-
-Ever needed to pass a request ID, user session, or trace ID through your entire call stack without threading it through every function parameter? That's what Async Context does.
-
-It gives you **request-scoped state** that automatically flows through your async operations—no prop drilling required.
-
-> **Platform Note**: Async Context uses Node.js's `AsyncLocalStorage` under the hood, so it's **Node.js-only**. For browsers, pass context explicitly through parameters instead.
-
-### When to use it
-
-- **Request tracing**: Carry a `requestId` or `traceId` through all operations
-- **User sessions**: Access the current user without passing it everywhere
-- **Database transactions**: Share a transaction across multiple operations
-- **Logging context**: Automatically include request metadata in all logs
-
-### Basic usage
-
-```typescript
-import { r, run } from "@bluelibs/runner";
-
-// 1. Define your context shape
-const requestContext = r
-  .asyncContext<{ requestId: string; userId?: string }>("app.ctx.request")
-  .build();
-
-// 2. Wrap your request handler
-async function handleRequest(req: Request) {
-  await requestContext.provide({ requestId: crypto.randomUUID() }, async () => {
-    // Everything inside here can access the context
-    await processRequest(req);
-  });
-}
-
-// 3. Read from anywhere in the call stack
-async function processRequest(req: Request) {
-  const ctx = requestContext.use(); // { requestId: "abc-123", userId: undefined }
-  console.log(`Processing request ${ctx.requestId}`);
-}
-```
-
-### Using context in tasks
-
-The real power comes when you inject context into your tasks:
-
-```typescript
-const auditLog = r
-  .task("app.tasks.auditLog")
-  .dependencies({ requestContext, logger: globals.resources.logger })
-  .run(async (message: string, { requestContext, logger }) => {
-    const ctx = requestContext.use();
-    await logger.info(message, {
-      requestId: ctx.requestId,
-      userId: ctx.userId,
-    });
-  })
-  .build();
-
-// Register the context alongside your tasks
-const app = r.resource("app").register([requestContext, auditLog]).build();
-```
-
-### Requiring context with middleware
-
-Force tasks to run only within a context boundary:
-
-```typescript
-const securedTask = r
-  .task("app.tasks.secured")
-  .middleware([requestContext.require()]) // Throws if context not provided
-  .run(async (input) => {
-    const ctx = requestContext.use(); // Guaranteed to exist
-    return { processedBy: ctx.userId };
-  })
-  .build();
-```
-
-### Custom serialization
-
-By default, Runner preserves Dates, RegExp, and other types across async boundaries. For custom serialization:
-
-```typescript
-const sessionContext = r
-  .asyncContext<{ user: User }>("app.ctx.session")
-  .serialize((data) => JSON.stringify(data))
-  .parse((raw) => JSON.parse(raw))
-  .build();
-```
-
-> **runtime:** "Async Context: your data playing hide-and-seek across the event loop. One forgotten `.provide()` and the 'Context not available' error will find you at 3am, exactly where your stack trace is least helpful."
-
-## Fluent Builders (`r.*`)
-
-The `r` namespace gives you a chainable, discoverable way to build Runner components. Instead of memorizing object shapes, you get autocomplete that guides you through the options.
-
-### Why use fluent builders?
-
-```typescript
-// Classic API - you need to know the shape
-const task = task({
-  id: "users.create",
-  dependencies: { db },
-  inputSchema: userSchema,
-  run: async (input, { db }) => {
-    /* ... */
-  },
-});
-
-// Fluent API - autocomplete guides you
-const task = r
-  .task("users.create") // Start here, then...
-  .dependencies({ db }) // ...chain what you need
-  .inputSchema(userSchema)
-  .run(async (input, { db }) => {
-    /* ... */
-  })
-  .build();
-```
-
-Both produce identical runtime definitions. The fluent API just makes discovery easier.
-
-### Building resources
-
-Resources are singletons with lifecycle management. Here's the progression from simple to complete:
-
-```typescript
-import { r, run } from "@bluelibs/runner";
-
-// Simple: just returns a value
-const config = r
-  .resource("app.config")
-  .init(async () => ({ apiUrl: process.env.API_URL }))
-  .build();
-
-// With config: accepts parameters via .with()
-const database = r
-  .resource<{ connectionString: string }>("app.db")
-  .init(async ({ connectionString }) => createConnection(connectionString))
-  .dispose(async (connection) => connection.close())
-  .build();
-
-// With dependencies: uses other resources
-const userRepo = r
-  .resource("app.repos.user")
-  .dependencies({ database })
-  .init(async (_config, { database }) => ({
-    findById: (id: string) =>
-      database.query("SELECT * FROM users WHERE id = ?", id),
-    create: (data: UserData) => database.query("INSERT INTO users ...", data),
-  }))
-  .build();
-
-// Wire it all together
-const app = r
-  .resource("app")
-  .register([
-    database.with({ connectionString: "postgres://localhost/myapp" }),
-    userRepo,
-  ])
-  .build();
-
-await run(app);
-```
-
-### Building tasks
-
-Tasks are your business logic with DI, middleware, and validation:
-
-```typescript
-const createUser = r
-  .task("users.create")
-  .dependencies({ userRepo, logger: globals.resources.logger })
-  .inputSchema(
-    z.object({
-      name: z.string().min(2),
-      email: z.string().email(),
-    }),
-  )
-  .middleware([globals.middleware.task.retry.with({ retries: 3 })])
-  .run(async (input, { userRepo, logger }) => {
-    await logger.info("Creating user", { email: input.email });
-    return userRepo.create(input);
-  })
-  .build();
-```
-
-### Building events and hooks
-
-```typescript
-// Events are typed signals
-const userCreated = r
-  .event<{ userId: string; email: string }>("users.created")
-  .build();
-
-// Hooks react to events
-const sendWelcome = r
-  .hook("users.sendWelcome")
-  .on(userCreated)
-  .dependencies({ mailer })
-  .run(async (event, { mailer }) => {
-    await mailer.send(event.data.email, "Welcome!");
-  })
-  .build();
-```
-
-### The pattern
-
-Every builder follows the same rhythm:
-
-1. **Start** with `r.task()`, `r.resource()`, `r.event()`, etc.
-2. **Configure** with `.dependencies()`, `.middleware()`, `.tags()`, etc.
-3. **Implement** with `.run()` or `.init()`
-4. **Finish** with `.build()`
-
-For the complete API reference, see the [Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).
-
-> **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."
-
-## Type Helpers
-
-When you need to reference a task's input type in another function, or pass a resource's value type to a generic, these utility types save you from re-declaring the same shapes.
-
-### Extracting types from components
-
-```typescript
-import { r } from "@bluelibs/runner";
-import type {
-  ExtractTaskInput,
-  ExtractTaskOutput,
-  ExtractResourceConfig,
-  ExtractResourceValue,
-  ExtractEventPayload,
-} from "@bluelibs/runner";
-
-// Define your components
-const createUser = r
-  .task("users.create")
-  .run(async (input: { name: string; email: string }) => ({
-    id: "user-123",
-    ...input,
-  }))
-  .build();
-
-const database = r
-  .resource<{ connectionString: string }>("app.db")
-  .init(async (cfg) => createConnection(cfg.connectionString))
-  .build();
-
-const userCreated = r
-  .event<{ userId: string; email: string }>("users.created")
-  .build();
-
-// Extract types without re-declaring them
-type CreateUserInput = ExtractTaskInput<typeof createUser>; // { name: string; email: string }
-type CreateUserOutput = ExtractTaskOutput<typeof createUser>; // { id: string; name: string; email: string }
-type DbConfig = ExtractResourceConfig<typeof database>; // { connectionString: string }
-type DbValue = ExtractResourceValue<typeof database>; // Connection
-type UserCreatedPayload = ExtractEventPayload<typeof userCreated>; // { userId: string; email: string }
-```
-
-### Practical use cases
-
-**Building API handlers that match task signatures:**
-
-```typescript
-// Your task defines the contract
-const processOrder = r
-  .task("orders.process")
-  .run(async (input: { orderId: string; priority: "low" | "high" }) => ({
-    status: "processed" as const,
-    orderId: input.orderId,
-  }))
-  .build();
-
-// Your HTTP handler enforces the same types
-type OrderInput = ExtractTaskInput<typeof processOrder>;
-type OrderOutput = ExtractTaskOutput<typeof processOrder>;
-
-app.post("/orders", async (req, res) => {
-  const input: OrderInput = req.body; // Type-checked!
-  const result: OrderOutput = await runTask(processOrder, input);
-  res.json(result);
-});
-```
-
-**Creating wrapper functions:**
-
-```typescript
-// A logging wrapper that preserves types
-function withLogging<T extends ITask<any, any>>(task: T) {
-  type Input = ExtractTaskInput<T>;
-  type Output = ExtractTaskOutput<T>;
-
-  return async (input: Input): Promise<Output> => {
-    console.log(`Calling ${task.id}`, input);
-    const result = await task.run(input, dependencies);
-    console.log(`Result from ${task.id}`, result);
-    return result;
-  };
-}
-```
-
-### Quick reference
-
-| Helper                     | Extracts         | From     |
-| -------------------------- | ---------------- | -------- |
-| `ExtractTaskInput<T>`      | Input type       | Task     |
-| `ExtractTaskOutput<T>`     | Return type      | Task     |
-| `ExtractResourceConfig<T>` | Config parameter | Resource |
-| `ExtractResourceValue<T>`  | Init return type | Resource |
-| `ExtractEventPayload<T>`   | Payload type     | Event    |
-
-> **runtime:** "Type helpers: TypeScript's 'I told you so' toolkit. You extract the input type from a task, slap it on an API handler, and suddenly your frontend and backend are sworn blood brothers. Until someone uses `as any`. Then I cry."
-
 ## Lifecycle Management
 
 When your app stops—whether from Ctrl+C, a deployment, or a crash—you need to close database connections, flush logs, and finish in-flight requests. Runner handles this automatically.
@@ -2959,7 +2318,6 @@ await run(app, {
 - Stop accepting new work before cleaning up
 
 > **runtime:** "An error boundary: a trampoline under your tightrope. I’m the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
-
 ## Caching
 
 Because nobody likes waiting for the same expensive operation twice:
@@ -2973,8 +2331,7 @@ const expensiveTask = r
     globals.middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
-      keyBuilder: (taskId, input: { userId: string }) =>
-        `${taskId}-${input.userId}`, // optional key builder
+      keyBuilder: (taskId, input: { userId: string }) => `${taskId}-${input.userId}`, // optional key builder
     }),
   ])
   .run(async (input: { userId: string }) => {
@@ -3031,9 +2388,7 @@ const limitMiddleware = globals.middleware.task.concurrency.with({ limit: 5 });
 
 // Option 2: Explicit semaphore for fine-grained coordination
 const dbSemaphore = new Semaphore(10);
-const dbLimit = globals.middleware.task.concurrency.with({
-  semaphore: dbSemaphore,
-});
+const dbLimit = globals.middleware.task.concurrency.with({ semaphore: dbSemaphore });
 
 const heavyTask = r
   .task("app.tasks.heavy")
@@ -3045,7 +2400,6 @@ const heavyTask = r
 ```
 
 **Key benefits:**
-
 - **Resource protection**: Prevent connection pool exhaustion.
 - **Queueing**: Automatically queues excess requests instead of failing.
 - **Timeouts**: Supports waiting timeouts and cancellation via `AbortSignal`.
@@ -3065,9 +2419,9 @@ const resilientTask = r
   .task("app.tasks.remoteCall")
   .middleware([
     globals.middleware.task.circuitBreaker.with({
-      failureThreshold: 5, // Trip after 5 failures
-      resetTimeout: 30000, // Stay open for 30 seconds
-    }),
+      failureThreshold: 5,   // Trip after 5 failures
+      resetTimeout: 30000,  // Stay open for 30 seconds
+    })
   ])
   .run(async () => {
     return await callExternalService();
@@ -3076,7 +2430,6 @@ const resilientTask = r
 ```
 
 **How it works:**
-
 1. **CLOSED**: Everything is normal. Requests flow through.
 2. **OPEN**: Threshold reached. All requests throw `CircuitBreakerOpenError` immediately.
 3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
@@ -3114,7 +2467,6 @@ const logTask = r
 ```
 
 **When to use:**
-
 - **Debounce**: Search-as-you-type, autosave, window resize events.
 - **Throttle**: Scroll listeners, telemetry pings, high-frequency webhooks.
 
@@ -3137,8 +2489,8 @@ const getPrice = r
       fallback: async (input, error) => {
         console.warn(`Price fetch failed: ${error.message}. Using default.`);
         return 9.99;
-      },
-    }),
+      }
+    })
   ])
   .run(async () => {
     return await fetchPriceFromAPI();
@@ -3162,8 +2514,8 @@ const sensitiveTask = r
   .middleware([
     globals.middleware.task.rateLimit.with({
       windowMs: 60 * 1000, // 1 minute window
-      max: 5, // Max 5 attempts per window
-    }),
+      max: 5,              // Max 5 attempts per window
+    })
   ])
   .run(async (credentials) => {
     // Assuming auth service is available
@@ -3173,7 +2525,6 @@ const sensitiveTask = r
 ```
 
 **Key features:**
-
 - **Fixed-window strategy**: Simple, predictable request counting.
 - **Isolation**: Limits are tracked per task definition.
 - **Error handling**: Throws `RateLimitError` when the limit is exceeded.
@@ -3197,13 +2548,13 @@ Here are real performance metrics from our comprehensive benchmark suite on an M
 **Core Operations**
 
 ┌───────────────────────────────────────┬────────────────────────┐
-│ Operation │ Throughput │
+│ Operation                             │ Throughput             │
 ├───────────────────────────────────────┼────────────────────────┤
-│ Basic task execution │ ~2.2M tasks/sec │
-│ Task execution with 5 middlewares │ ~244,000 tasks/sec │
-│ Resource initialization │ ~59,700 resources/sec │
-│ Event emission and handling │ ~245,861 events/sec │
-│ Dependency resolution (10-level chain)│ ~8,400 chains/sec │
+│ Basic task execution                  │ ~2.2M tasks/sec        │
+│ Task execution with 5 middlewares     │ ~244,000 tasks/sec     │
+│ Resource initialization               │ ~59,700 resources/sec  │
+│ Event emission and handling           │ ~245,861 events/sec    │
+│ Dependency resolution (10-level chain)│ ~8,400 chains/sec      │
 └───────────────────────────────────────┴────────────────────────┘
 
 #### Overhead Analysis
@@ -3439,7 +2790,320 @@ Best practices:
 - Consider network conditions when setting API call timeouts
 
 > **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It’s not me, it’s your molasses‑flavored endpoint. I just blow the whistle."
+## Concurrency Utilities
 
+Runner includes two battle-tested primitives for managing concurrent operations:
+
+| Utility       | What it does                 | Use when                           |
+| ------------- | ---------------------------- | ---------------------------------- |
+| **Semaphore** | Limits concurrent operations | Rate limiting, connection pools    |
+| **Queue**     | Serializes operations        | File writes, sequential processing |
+
+Both ship with Runner—no external dependencies.
+
+---
+
+## Semaphore
+
+Limit how many operations can run at once. Perfect for:
+
+- Database connection pools (don't exceed pool size)
+- API rate limits (max 10 requests/second)
+- Resource-intensive tasks (limit CPU/memory pressure)
+
+### Basic usage
+
+```typescript
+import { Semaphore } from "@bluelibs/runner";
+
+// Allow max 5 concurrent database queries
+const dbSemaphore = new Semaphore(5);
+
+// Preferred: automatic acquire/release
+const users = await dbSemaphore.withPermit(async () => {
+  return await db.query("SELECT * FROM users");
+}); // Permit released automatically, even if query throws
+```
+
+**Pro Tip**: You don't always need to use `Semaphore` manually. The `concurrency` middleware (available via `globals.middleware.task.concurrency`) provides a declarative way to apply these limits to your tasks.
+
+### Manual acquire/release
+
+When you need more control:
+
+```typescript
+// The elegant approach - automatic cleanup guaranteed!
+const users = await dbSemaphore.withPermit(async () => {
+  return await db.query("SELECT * FROM users WHERE active = true");
+});
+```
+
+Prevent operations from hanging indefinitely with configurable timeouts:
+
+```typescript
+try {
+  // Wait max 5 seconds, then throw timeout error
+  await dbSemaphore.acquire({ timeout: 5000 });
+  // Your code here
+} catch (error) {
+  console.log("Operation timed out waiting for permit");
+}
+
+// Or with withPermit
+const result = await dbSemaphore.withPermit(
+  async () => await slowDatabaseOperation(),
+  { timeout: 10000 }, // 10 second timeout
+);
+```
+
+Operations can be cancelled using AbortSignal:
+
+```typescript
+const controller = new AbortController();
+
+// Start an operation
+const operationPromise = dbSemaphore.withPermit(
+  async () => await veryLongOperation(),
+  { signal: controller.signal },
+);
+
+// Cancel the operation after 3 seconds
+setTimeout(() => {
+  controller.abort();
+}, 3000);
+
+try {
+  await operationPromise;
+} catch (error) {
+  console.log("Operation was cancelled");
+}
+```
+
+Want to know what's happening under the hood?
+
+```typescript
+// Get comprehensive metrics
+const metrics = dbSemaphore.getMetrics();
+console.log(`
+Semaphore Status Report:
+  Available permits: ${metrics.availablePermits}/${metrics.maxPermits}
+  Operations waiting: ${metrics.waitingCount}
+  Utilization: ${(metrics.utilization * 100).toFixed(1)}%
+  Disposed: ${metrics.disposed ? "Yes" : "No"}
+`);
+
+// Quick checks
+console.log(`Available permits: ${dbSemaphore.getAvailablePermits()}`);
+console.log(`Queue length: ${dbSemaphore.getWaitingCount()}`);
+console.log(`Is disposed: ${dbSemaphore.isDisposed()}`);
+```
+
+Properly dispose of semaphores when finished:
+
+```typescript
+// Reject all waiting operations and prevent new ones
+dbSemaphore.dispose();
+
+// All waiting operations will be rejected with:
+// Error: "Semaphore has been disposed"
+```
+
+### From Utilities to Middlewares
+
+While `Semaphore` and `Queue` provide powerful manual control, Runner often wraps these into declarative middlewares for common patterns:
+
+- **concurrency**: Uses `Semaphore` internally to limit task parallelization.
+- **temporal**: Uses timers and promise-tracking to implement `debounce` and `throttle`.
+- **rateLimit**: Uses fixed-window counting to protect resources from bursts.
+
+**What you just learned**: Utilities are the building blocks; Middlewares are the blueprints for common resilience patterns.
+
+> **runtime:** "I provide the bricks and the mortar. You decide if you're building a fortress or just a very complicated way to trip over your own feet. Use the middleware for common paths; use the utilities when you want to play architect."
+
+---
+
+## Queue
+
+Run operations one at a time, in order. Perfect for:
+
+- File system writes (prevent corruption)
+- Sequential API calls (maintain order)
+- Database migrations (one at a time)
+
+### Basic usage
+
+```typescript
+import { Queue } from "@bluelibs/runner";
+
+const queue = new Queue();
+
+// Tasks run sequentially, even if queued simultaneously
+const [result1, result2] = await Promise.all([
+  queue.run(async () => await writeFile("a.txt", "first")),
+  queue.run(async () => await writeFile("a.txt", "second")),
+]);
+// File contains "second" - no corruption from concurrent writes
+```
+
+### Cancellation support
+
+Each task receives an `AbortSignal` for cooperative cancellation:
+
+```typescript
+import { Queue } from "@bluelibs/runner";
+
+const queue = new Queue();
+
+// Queue up some work
+const result = await queue.run(async (signal) => {
+  // Your async task here
+  return "Task completed";
+});
+
+// Graceful shutdown
+await queue.dispose();
+```
+
+### AbortController Integration
+
+The Queue provides each task with an `AbortSignal` for cooperative cancellation. Tasks should periodically check this signal to enable early termination.
+
+### Examples
+
+**Example: Long-running Task**
+
+```typescript
+const queue = new Queue();
+
+// Task that respects cancellation
+const processLargeDataset = queue.run(async (signal) => {
+  const items = await fetchLargeDataset();
+
+  for (const item of items) {
+    // Check for cancellation before processing each item
+    if (signal.aborted) {
+      throw new Error("Operation was cancelled");
+    }
+
+    await processItem(item);
+  }
+
+  return "Dataset processed successfully";
+});
+
+// Cancel all running tasks
+await queue.dispose({ cancel: true });
+```
+
+**Network Request with Timeout**
+
+```typescript
+const queue = new Queue();
+
+const fetchWithCancellation = queue.run(async (signal) => {
+  try {
+    // Pass the signal to fetch for automatic cancellation
+    const response = await fetch("https://api.example.com/data", { signal });
+    return await response.json();
+  } catch (error) {
+    if (error.name === "AbortError") {
+      console.log("Request was cancelled");
+      throw error;
+    }
+    throw error;
+  }
+});
+
+// This will cancel the fetch request if still pending
+await queue.dispose({ cancel: true });
+```
+
+**Example: File Processing with Progress Tracking**
+
+```typescript
+const queue = new Queue();
+
+const processFiles = queue.run(async (signal) => {
+  const files = await getFileList();
+  const results = [];
+
+  for (let i = 0; i < files.length; i++) {
+    // Respect cancellation
+    signal.throwIfAborted();
+
+    const result = await processFile(files[i]);
+    results.push(result);
+
+    // Optional: Report progress
+    console.log(`Processed ${i + 1}/${files.length} files`);
+  }
+
+  return results;
+});
+```
+
+#### The Magic Behind the Curtain
+
+- `tail`: The promise chain that maintains FIFO execution order
+- `disposed`: Boolean flag indicating whether the queue accepts new tasks
+- `abortController`: Centralized cancellation controller that provides `AbortSignal` to all tasks
+- `executionContext`: AsyncLocalStorage-based deadlock detection mechanism
+
+#### Implement Cooperative Cancellation
+
+Tasks should regularly check the `AbortSignal` and respond appropriately:
+
+```typescript
+// Preferred: Use signal.throwIfAborted() for immediate termination
+signal.throwIfAborted();
+
+// Alternative: Check signal.aborted for custom handling
+if (signal.aborted) {
+  cleanup();
+  throw new Error("Operation cancelled");
+}
+```
+
+**Integrate with Native APIs**
+
+Many Web APIs accept `AbortSignal`:
+
+- `fetch(url, { signal })`
+- `setTimeout(callback, delay, { signal })`
+- Custom async operations
+
+**Avoid Nested Queuing**
+
+The Queue prevents deadlocks by rejecting attempts to queue tasks from within running tasks. Structure your code to avoid this pattern.
+
+**Handle AbortError Gracefully**
+
+```typescript
+try {
+  await queue.run(task);
+} catch (error) {
+  if (error.name === "AbortError") {
+    // Expected cancellation, handle appropriately
+    return;
+  }
+  throw error; // Re-throw unexpected errors
+}
+```
+
+### Lifecycle events (isolated EventManager)
+
+`Queue` also publishes local lifecycle events for lightweight telemetry. Each Queue instance has its own **isolated EventManager**—these events are local to the Queue and are completely separate from the global EventManager used for business-level application events.
+
+- `enqueue` · `start` · `finish` · `error` · `cancel` · `disposed`
+
+```typescript
+const q = new Queue();
+q.on("start", ({ taskId }) => console.log(`task ${taskId} started`));
+await q.run(async () => "ok");
+await q.dispose({ cancel: true }); // emits cancel + disposed
+```
+
+> **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
 ## Logging
 
 _The structured logging system that actually makes debugging enjoyable_
@@ -3890,7 +3554,258 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it’s off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
+## Advanced Patterns
 
+This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
+
+---
+
+## Optional Dependencies
+
+What happens when your analytics service is down? Or your email provider is rate-limiting? With optional dependencies, your app keeps running instead of crashing.
+
+### The problem
+
+```typescript
+// Without optional dependencies - if analytics is down, the whole task fails
+const registerUser = r
+  .task("users.register")
+  .dependencies({ database, analytics }) // analytics must be available!
+  .run(async (input, { database, analytics }) => {
+    const user = await database.create(input);
+    await analytics.track("user.registered"); // Crashes if analytics is down
+    return user;
+  })
+  .build();
+```
+
+### The solution
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const registerUser = r
+  .task("users.register")
+  .dependencies({
+    database, // Required - task fails if missing
+    analytics: analyticsService.optional(), // Optional - undefined if missing
+    email: emailService.optional(), // Optional - graceful degradation
+  })
+  .run(async (input, { database, analytics, email }) => {
+    // Core logic always runs
+    const user = await database.create(input);
+
+    // Optional services fail silently
+    await analytics?.track("user.registered");
+    await email?.sendWelcome(user.email);
+
+    return user;
+  })
+  .build();
+```
+
+### When to use optional dependencies
+
+| Use Case                  | Example                                            |
+| ------------------------- | -------------------------------------------------- |
+| **Non-critical services** | Analytics, metrics, feature flags                  |
+| **External integrations** | Third-party APIs that may be flaky                 |
+| **Development shortcuts** | Skip services not running locally                  |
+| **Feature toggles**       | Conditionally enable functionality                 |
+| **Gradual rollouts**      | New services that might not be deployed everywhere |
+
+### Dynamic dependencies
+
+For more control, you can compute dependencies based on config:
+
+```typescript
+const myTask = r
+  .task("app.tasks.flexible")
+  .dependencies((config) => ({
+    database,
+    // Only include analytics in production
+    ...(config.enableAnalytics ? { analytics } : {}),
+  }))
+  .run(async (input, deps) => {
+    // deps.analytics may or may not exist
+  })
+  .build();
+```
+
+---
+
+## Serialization
+
+Ever sent a `Date` over JSON and gotten `"2024-01-15T..."` back as a string? Runner's serializer preserves types across the wire.
+
+### What it handles
+
+| Type          | JSON   | Runner Serializer |
+| ------------- | ------ | ----------------- |
+| `Date`        | String | Date object       |
+| `RegExp`      | Lost   | RegExp object     |
+| `Map`, `Set`  | Lost   | Preserved         |
+| `Uint8Array`  | Lost   | Preserved         |
+| Circular refs | Error  | Preserved         |
+
+### Two modes
+
+```typescript
+import { getDefaultSerializer } from "@bluelibs/runner";
+
+const serializer = getDefaultSerializer();
+
+// Tree mode - like JSON.stringify, but type-aware
+const json = serializer.stringify({ when: new Date(), pattern: /hello/i });
+const obj = serializer.parse(json);
+// obj.when is a Date, obj.pattern is a RegExp
+
+// Graph mode - handles circular references
+const user = { name: "Alice" };
+const team = { members: [user], lead: user }; // shared reference
+user.team = team; // circular reference
+
+const data = serializer.serialize(team);
+const restored = serializer.deserialize(data);
+// restored.members[0] === restored.lead (same object!)
+```
+
+### Custom types
+
+Teach the serializer about your own classes:
+
+```typescript
+class Money {
+  constructor(
+    public amount: number,
+    public currency: string,
+  ) {}
+
+  // Required methods for serialization
+  typeName() {
+    return "Money";
+  }
+  toJSONValue() {
+    return { amount: this.amount, currency: this.currency };
+  }
+}
+
+// Register the type
+serializer.addType("Money", (json) => new Money(json.amount, json.currency));
+
+// Now it round-trips correctly
+const price = new Money(99.99, "USD");
+const json = serializer.stringify({ price });
+const { price: restored } = serializer.parse(json);
+// restored instanceof Money === true
+```
+
+### Security features
+
+The serializer is hardened against common attacks:
+
+- **ReDoS protection**: Validates RegExp patterns against catastrophic backtracking
+- **Prototype pollution blocked**: Filters `__proto__`, `constructor`, `prototype` keys
+- **Depth limits**: Configurable max depth prevents stack overflow
+
+> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](./readmes/TUNNELS.md) for file upload patterns.
+
+### Tunnels: Bridging Runners
+
+Tunnels are a powerful feature for building distributed systems. They let you expose your tasks and events over HTTP, making them callable from other processes, services, or even a browser UI. This allows a server and client to co-exist, enabling one Runner instance to securely call another.
+
+Here's a sneak peek of how you can expose your application and configure a client tunnel to consume a remote Runner:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+import { nodeExposure } from "@bluelibs/runner/node";
+
+let app = r.resource("app");
+
+if (process.env.SERVER) {
+  // 1. Expose your local tasks and events over HTTP, only when server mode is active.
+  app.register([
+    // ... your tasks and events
+    nodeExposure.with({
+      http: {
+        basePath: "/__runner",
+        listen: { port: 7070 },
+      },
+    }),
+  ]);
+}
+app = app.build();
+
+// 2. In another app, define a tunnel resource to call a remote Runner
+const remoteTasksTunnel = r
+  .resource("app.tunnels.http")
+  .tags([globals.tags.tunnel])
+  .dependencies({ createClient: globals.resources.httpClientFactory })
+  .init(async (_, { createClient }) => ({
+    mode: "client", // or "server", or "none", or "both" for emulating network infrastructure
+    transport: "http", // the only one supported for now
+    // Selectively forward tasks starting with "remote.tasks."
+    tasks: (t) => t.id.startsWith("remote.tasks."),
+    client: createClient({
+      url: "http://remote-runner:8080/__runner",
+    }),
+  }))
+  .build();
+```
+
+This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
+
+For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
+
+---
+
+## Resilience Orchestration
+
+In production, one resilience strategy is rarely enough. Runner allows you to compose multiple middlewares into a "resilience onion" that protects your business logic from multiple failure modes.
+
+### The Problem
+
+A task that calls a remote API might fail due to network blips (needs **Retry**), hang indefinitely (needs **Timeout**), slam the API during traffic spikes (needs **Rate Limit**), or keep failing if the API is down (needs **Circuit Breaker**).
+
+### The Solution
+
+Combine them in the correct order. Like an onion, the outer layers handle broader concerns, while inner layers handle specific execution details.
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const resilientTask = r
+  .task("app.tasks.ultimateResilience")
+  .middleware([
+    // Outer layer: Fallback (the absolute Plan B if everything below fails)
+    globals.middleware.task.fallback.with({ fallback: { status: "offline-mode", data: [] } }),
+
+    // Next: Rate Limit (check this before wasting resources or retry budget)
+    globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 100 }),
+
+    // Next: Circuit Breaker (stop immediately if the service is known to be down)
+    globals.middleware.task.circuitBreaker.with({ failureThreshold: 5 }),
+
+    // Next: Retry (wrap the attempt in a retry loop)
+    globals.middleware.task.retry.with({ retries: 3 }),
+
+    // Inner layer: Timeout (enforce limit on EACH individual attempt)
+    globals.middleware.task.timeout.with({ ttl: 5000 }),
+  ])
+  .run(async () => {
+    return await fetchDataFromUnreliableSource();
+  })
+  .build();
+```
+
+### Best practices for orchestration
+
+1.  **Rate Limit first**: Don't even try to execute or retry if you've exceeded your quota.
+2.  **Circuit Breaker second**: Don't retry against a service that is known to be failing.
+3.  **Retry wraps Timeout**: Ensure the timeout applies to the *individual* attempt, so the retry logic can kick in when one attempt hangs.
+4.  **Fallback last**: The fallback should be the very last thing that happens if the entire resilience stack fails.
+
+> **runtime:** "Resilience Orchestration: layering defense-in-depth like a paranoid onion. I'm counting your turns, checking the circuit, spinning the retry wheel, and holding a stopwatch—all so you can sleep through a minor server fire."
 ## Meta
 
 _The structured way to describe what your components do and control their behavior_
@@ -4499,7 +4414,6 @@ const createUser = r
 ```
 
 > **runtime:** "Validation: you hand me a velvet rope and a clipboard. 'Name? Email? Age within bounds?' I stamp passports or eject violators with a `ValidationError`. Dress code is types, darling."
-
 ## Internal Services
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):
@@ -4657,7 +4571,316 @@ export const problematicResource = defineResource({
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
+## Async Context
 
+Ever needed to pass a request ID, user session, or trace ID through your entire call stack without threading it through every function parameter? That's what Async Context does.
+
+It gives you **request-scoped state** that automatically flows through your async operations—no prop drilling required.
+
+> **Platform Note**: Async Context uses Node.js's `AsyncLocalStorage` under the hood, so it's **Node.js-only**. For browsers, pass context explicitly through parameters instead.
+
+### When to use it
+
+- **Request tracing**: Carry a `requestId` or `traceId` through all operations
+- **User sessions**: Access the current user without passing it everywhere
+- **Database transactions**: Share a transaction across multiple operations
+- **Logging context**: Automatically include request metadata in all logs
+
+### Basic usage
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+// 1. Define your context shape
+const requestContext = r
+  .asyncContext<{ requestId: string; userId?: string }>("app.ctx.request")
+  .build();
+
+// 2. Wrap your request handler
+async function handleRequest(req: Request) {
+  await requestContext.provide({ requestId: crypto.randomUUID() }, async () => {
+    // Everything inside here can access the context
+    await processRequest(req);
+  });
+}
+
+// 3. Read from anywhere in the call stack
+async function processRequest(req: Request) {
+  const ctx = requestContext.use(); // { requestId: "abc-123", userId: undefined }
+  console.log(`Processing request ${ctx.requestId}`);
+}
+```
+
+### Using context in tasks
+
+The real power comes when you inject context into your tasks:
+
+```typescript
+const auditLog = r
+  .task("app.tasks.auditLog")
+  .dependencies({ requestContext, logger: globals.resources.logger })
+  .run(async (message: string, { requestContext, logger }) => {
+    const ctx = requestContext.use();
+    await logger.info(message, {
+      requestId: ctx.requestId,
+      userId: ctx.userId,
+    });
+  })
+  .build();
+
+// Register the context alongside your tasks
+const app = r.resource("app").register([requestContext, auditLog]).build();
+```
+
+### Requiring context with middleware
+
+Force tasks to run only within a context boundary:
+
+```typescript
+const securedTask = r
+  .task("app.tasks.secured")
+  .middleware([requestContext.require()]) // Throws if context not provided
+  .run(async (input) => {
+    const ctx = requestContext.use(); // Guaranteed to exist
+    return { processedBy: ctx.userId };
+  })
+  .build();
+```
+
+### Custom serialization
+
+By default, Runner preserves Dates, RegExp, and other types across async boundaries. For custom serialization:
+
+```typescript
+const sessionContext = r
+  .asyncContext<{ user: User }>("app.ctx.session")
+  .serialize((data) => JSON.stringify(data))
+  .parse((raw) => JSON.parse(raw))
+  .build();
+```
+
+> **runtime:** "Async Context: your data playing hide-and-seek across the event loop. One forgotten `.provide()` and the 'Context not available' error will find you at 3am, exactly where your stack trace is least helpful."
+## Fluent Builders (`r.*`)
+
+The `r` namespace gives you a chainable, discoverable way to build Runner components. Instead of memorizing object shapes, you get autocomplete that guides you through the options.
+
+### Why use fluent builders?
+
+```typescript
+// Classic API - you need to know the shape
+const task = task({
+  id: "users.create",
+  dependencies: { db },
+  inputSchema: userSchema,
+  run: async (input, { db }) => {
+    /* ... */
+  },
+});
+
+// Fluent API - autocomplete guides you
+const task = r
+  .task("users.create") // Start here, then...
+  .dependencies({ db }) // ...chain what you need
+  .inputSchema(userSchema)
+  .run(async (input, { db }) => {
+    /* ... */
+  })
+  .build();
+```
+
+Both produce identical runtime definitions. The fluent API just makes discovery easier.
+
+### Building resources
+
+Resources are singletons with lifecycle management. Here's the progression from simple to complete:
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+// Simple: just returns a value
+const config = r
+  .resource("app.config")
+  .init(async () => ({ apiUrl: process.env.API_URL }))
+  .build();
+
+// With config: accepts parameters via .with()
+const database = r
+  .resource<{ connectionString: string }>("app.db")
+  .init(async ({ connectionString }) => createConnection(connectionString))
+  .dispose(async (connection) => connection.close())
+  .build();
+
+// With dependencies: uses other resources
+const userRepo = r
+  .resource("app.repos.user")
+  .dependencies({ database })
+  .init(async (_config, { database }) => ({
+    findById: (id: string) =>
+      database.query("SELECT * FROM users WHERE id = ?", id),
+    create: (data: UserData) => database.query("INSERT INTO users ...", data),
+  }))
+  .build();
+
+// Wire it all together
+const app = r
+  .resource("app")
+  .register([
+    database.with({ connectionString: "postgres://localhost/myapp" }),
+    userRepo,
+  ])
+  .build();
+
+await run(app);
+```
+
+### Building tasks
+
+Tasks are your business logic with DI, middleware, and validation:
+
+```typescript
+const createUser = r
+  .task("users.create")
+  .dependencies({ userRepo, logger: globals.resources.logger })
+  .inputSchema(
+    z.object({
+      name: z.string().min(2),
+      email: z.string().email(),
+    }),
+  )
+  .middleware([globals.middleware.task.retry.with({ retries: 3 })])
+  .run(async (input, { userRepo, logger }) => {
+    await logger.info("Creating user", { email: input.email });
+    return userRepo.create(input);
+  })
+  .build();
+```
+
+### Building events and hooks
+
+```typescript
+// Events are typed signals
+const userCreated = r
+  .event<{ userId: string; email: string }>("users.created")
+  .build();
+
+// Hooks react to events
+const sendWelcome = r
+  .hook("users.sendWelcome")
+  .on(userCreated)
+  .dependencies({ mailer })
+  .run(async (event, { mailer }) => {
+    await mailer.send(event.data.email, "Welcome!");
+  })
+  .build();
+```
+
+### The pattern
+
+Every builder follows the same rhythm:
+
+1. **Start** with `r.task()`, `r.resource()`, `r.event()`, etc.
+2. **Configure** with `.dependencies()`, `.middleware()`, `.tags()`, etc.
+3. **Implement** with `.run()` or `.init()`
+4. **Finish** with `.build()`
+
+For the complete API reference, see the [Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).
+
+> **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."
+## Type Helpers
+
+When you need to reference a task's input type in another function, or pass a resource's value type to a generic, these utility types save you from re-declaring the same shapes.
+
+### Extracting types from components
+
+```typescript
+import { r } from "@bluelibs/runner";
+import type {
+  ExtractTaskInput,
+  ExtractTaskOutput,
+  ExtractResourceConfig,
+  ExtractResourceValue,
+  ExtractEventPayload,
+} from "@bluelibs/runner";
+
+// Define your components
+const createUser = r
+  .task("users.create")
+  .run(async (input: { name: string; email: string }) => ({
+    id: "user-123",
+    ...input,
+  }))
+  .build();
+
+const database = r
+  .resource<{ connectionString: string }>("app.db")
+  .init(async (cfg) => createConnection(cfg.connectionString))
+  .build();
+
+const userCreated = r
+  .event<{ userId: string; email: string }>("users.created")
+  .build();
+
+// Extract types without re-declaring them
+type CreateUserInput = ExtractTaskInput<typeof createUser>; // { name: string; email: string }
+type CreateUserOutput = ExtractTaskOutput<typeof createUser>; // { id: string; name: string; email: string }
+type DbConfig = ExtractResourceConfig<typeof database>; // { connectionString: string }
+type DbValue = ExtractResourceValue<typeof database>; // Connection
+type UserCreatedPayload = ExtractEventPayload<typeof userCreated>; // { userId: string; email: string }
+```
+
+### Practical use cases
+
+**Building API handlers that match task signatures:**
+
+```typescript
+// Your task defines the contract
+const processOrder = r
+  .task("orders.process")
+  .run(async (input: { orderId: string; priority: "low" | "high" }) => ({
+    status: "processed" as const,
+    orderId: input.orderId,
+  }))
+  .build();
+
+// Your HTTP handler enforces the same types
+type OrderInput = ExtractTaskInput<typeof processOrder>;
+type OrderOutput = ExtractTaskOutput<typeof processOrder>;
+
+app.post("/orders", async (req, res) => {
+  const input: OrderInput = req.body; // Type-checked!
+  const result: OrderOutput = await runTask(processOrder, input);
+  res.json(result);
+});
+```
+
+**Creating wrapper functions:**
+
+```typescript
+// A logging wrapper that preserves types
+function withLogging<T extends ITask<any, any>>(task: T) {
+  type Input = ExtractTaskInput<T>;
+  type Output = ExtractTaskOutput<T>;
+
+  return async (input: Input): Promise<Output> => {
+    console.log(`Calling ${task.id}`, input);
+    const result = await task.run(input, dependencies);
+    console.log(`Result from ${task.id}`, result);
+    return result;
+  };
+}
+```
+
+### Quick reference
+
+| Helper                     | Extracts         | From     |
+| -------------------------- | ---------------- | -------- |
+| `ExtractTaskInput<T>`      | Input type       | Task     |
+| `ExtractTaskOutput<T>`     | Return type      | Task     |
+| `ExtractResourceConfig<T>` | Config parameter | Resource |
+| `ExtractResourceValue<T>`  | Init return type | Resource |
+| `ExtractEventPayload<T>`   | Payload type     | Event    |
+
+> **runtime:** "Type helpers: TypeScript's 'I told you so' toolkit. You extract the input type from a task, slap it on an API handler, and suddenly your frontend and backend are sworn blood brothers. Until someone uses `as any`. Then I cry."
 ## Real-World Example: The Complete Package
 
 This example shows everything working together in a realistic Express application:
@@ -4827,7 +5050,6 @@ process.on("SIGTERM", async () => {
 ```
 
 > **runtime:** "Ah yes, the 'Real‑World Example'—a terrarium where nothing dies and every request is polite. Release it into production and watch nature document a very different ecosystem."
-
 ## Testing
 
 Runner's explicit dependency injection makes testing straightforward—no magic mocks, no container hacks. Just pass what you need.
@@ -4964,322 +5186,1541 @@ try {
 ```
 
 > **runtime:** "Testing: an elaborate puppet show where every string behaves. Then production walks in, kicks the stage, and asks for pagination. Still—nice coverage badge."
+## Troubleshooting
 
-## Concurrency Utilities
-
-Runner includes two battle-tested primitives for managing concurrent operations:
-
-| Utility       | What it does                 | Use when                           |
-| ------------- | ---------------------------- | ---------------------------------- |
-| **Semaphore** | Limits concurrent operations | Rate limiting, connection pools    |
-| **Queue**     | Serializes operations        | File writes, sequential processing |
-
-Both ship with Runner—no external dependencies.
+When things go sideways, this is your field manual. No fluff, just fixes.
 
 ---
 
-## Semaphore
+### Error Index
 
-Limit how many operations can run at once. Perfect for:
+The quick-reference table for "I've seen this error, what do I do?"
 
-- Database connection pools (don't exceed pool size)
-- API rate limits (max 10 requests/second)
-- Resource-intensive tasks (limit CPU/memory pressure)
+| Error                                   | Symptom                             | Likely Cause                                  | Fix                                                         |
+| --------------------------------------- | ----------------------------------- | --------------------------------------------- | ----------------------------------------------------------- |
+| `TypeError: X is not a function`        | Task call fails at runtime          | Forgot `.build()` on task/resource definition | Add `.build()` at the end of your fluent chain              |
+| `Resource "X" not found`                | Runtime crash during initialization | Component not registered                      | Add to `.register([...])` in parent resource                |
+| `Config validation failed for X`        | Startup crash before app runs       | Missing `.with()` config for resource         | Provide required config: `resource.with({ ... })`           |
+| `Circular dependency detected`          | TypeScript inference fails          | Import cycle between files                    | Use explicit type annotation: `as IResource<Config, Value>` |
+| `TimeoutError`                          | Task hangs then throws              | Operation exceeded timeout TTL                | Increase TTL or investigate underlying slow operation       |
+| `Cannot read property 'X' of undefined` | Task crashes mid-execution          | Dependency not properly injected              | Check `.dependencies({})` matches what you use              |
+| `ValidationError: Task input...`        | Task rejects valid-looking input    | Input doesn't match `inputSchema`             | Check schema constraints (types, required fields)           |
+| `RateLimitError`                        | Task throws after repeated calls    | Exceeded rate limit threshold                 | Wait for window reset or increase `max` limit               |
+| `CircuitBreakerOpenError`               | All calls fail immediately          | Circuit tripped after failures                | Wait for `resetTimeout` or fix underlying service           |
 
-### Basic usage
+---
+
+### Common First Failures
+
+New to Runner? These are the mistakes everyone makes (yes, everyone):
+
+#### Forgot `.build()`
+
+```typescript
+// Wrong - returns a builder, not a usable task
+const myTask = r.task("app.tasks.myTask").run(async () => "hello");
+
+// Right - returns the actual task
+const myTask = r
+  .task("app.tasks.myTask")
+  .run(async () => "hello")
+  .build(); // <- This is required!
+```
+
+**Symptom**: `TypeError: myTask is not a function` or strange type errors.
+
+#### Forgot to Register
+
+```typescript
+const database = r
+  .resource("app.db")
+  .init(async () => connection)
+  .build();
+const myTask = r
+  .task("app.tasks.work")
+  .dependencies({ database })
+  .run(async (_, { database }) => database.query())
+  .build();
+
+// Wrong - myTask depends on database but database isn't registered
+const app = r.resource("app").register([myTask]).build();
+
+// Right - register ALL components
+const app = r.resource("app").register([database, myTask]).build();
+```
+
+**Symptom**: `Resource "app.db" not found` at runtime.
+
+**Remember**: `dependencies` says "I need these" — `register` says "these exist".
+
+#### Missing `.with()` Config
+
+```typescript
+// Resource requires configuration
+const server = r
+  .resource<{ port: number }>("app.server")
+  .init(async ({ port }) => startServer(port))
+  .build();
+
+// Wrong - no config provided
+const app = r.resource("app").register([server]).build();
+
+// Right - provide config with .with()
+const app = r
+  .resource("app")
+  .register([server.with({ port: 3000 })])
+  .build();
+```
+
+**Symptom**: TypeScript error about missing config, or runtime validation error.
+
+#### Calling Task Before Runtime
+
+```typescript
+// Wrong - can't call task directly without runtime
+const result = await myTask({ input: "data" }); // Fails!
+
+// Right - get runtime first, then call
+const { runTask, dispose } = await run(app);
+const result = await runTask(myTask, { input: "data" });
+await dispose();
+```
+
+**Symptom**: Dependencies undefined, middleware not applied, chaos.
+
+---
+
+### Debug Mode
+
+When you need to see what's happening under the hood:
+
+```typescript
+// Enable verbose debugging
+const { runTask, dispose } = await run(app, {
+  debug: "verbose",
+  logs: { printThreshold: "debug" },
+});
+```
+
+**What you'll see:**
+
+```
+[DEBUG] [runner] Initializing resource: app.database
+[DEBUG] [runner] Resource initialized: app.database (12ms)
+[DEBUG] [runner] Initializing resource: app.server
+[DEBUG] [runner] Resource initialized: app.server (3ms)
+[DEBUG] [runner] Executing task: app.tasks.createUser
+[DEBUG] [runner]   Input: { "name": "Ada", "email": "ada@example.com" }
+[DEBUG] [runner]   Result: { "id": "user-123", "name": "Ada" }
+[DEBUG] [runner] Task completed: app.tasks.createUser (5ms)
+[DEBUG] [runner] Emitting event: app.events.userCreated
+[DEBUG] [runner] Hook triggered: app.hooks.sendWelcomeEmail
+```
+
+**Debug levels:**
+
+| Level       | What's logged                                        |
+| ----------- | ---------------------------------------------------- |
+| `"normal"`  | Lifecycle events, errors, event emissions            |
+| `"verbose"` | All of above + task inputs/outputs, resource configs |
+
+**Per-component debugging:**
+
+```typescript
+// Only debug specific tasks
+const criticalTask = r
+  .task("app.tasks.payment")
+  .tags([globals.tags.debug.with({ logTaskInput: true, logTaskResult: true })])
+  .run(async (input) => processPayment(input))
+  .build();
+```
+
+---
+
+### Diagnosing Slow Performance
+
+If things are slower than expected:
+
+**1. Check middleware order** — faster middleware should come first:
+
+```typescript
+// Good - fast checks first
+.middleware([
+  authCheck,        // ~0.1ms - fails fast if unauthorized
+  rateLimit,        // ~0.5ms - blocks before expensive work
+  timeout,          // wraps the slow stuff
+  expensiveLogging, // can afford to be slow
+])
+```
+
+**2. Look for missing cache hits:**
+
+```typescript
+await run(app, { debug: "verbose" });
+// Watch for: "Cache miss for app.tasks.expensive" vs "Cache hit"
+```
+
+**3. Profile initialization:**
+
+```typescript
+const start = Date.now();
+const { dispose } = await run(app);
+console.log(`App initialized in ${Date.now() - start}ms`);
+```
+
+---
+
+### Lifecycle Issues
+
+#### Resources not disposing properly
+
+**Symptom**: Hanging process, "port already in use" on restart, connection leaks.
+
+**Fix**: Ensure every resource with setup has matching cleanup:
+
+```typescript
+const server = r
+  .resource<{ port: number }>("app.server")
+  .init(async ({ port }) => {
+    const app = express();
+    const listener = app.listen(port);
+    return { app, listener };
+  })
+  .dispose(async ({ listener }) => {
+    // Don't forget this!
+    return new Promise((resolve) => listener.close(resolve));
+  })
+  .build();
+```
+
+#### Shutdown hanging forever
+
+**Symptom**: `dispose()` never resolves.
+
+**Likely causes**:
+
+1. Dispose function has unresolved promise
+2. Event listener not properly cleaned up
+3. Circular await in dispose chain
+
+**Debug approach**:
+
+```typescript
+const { dispose } = await run(app);
+
+// Add timeout to identify hanging dispose
+const timeout = setTimeout(() => {
+  console.error("Dispose hanging - check resource cleanup");
+  process.exit(1);
+}, 10000);
+
+await dispose();
+clearTimeout(timeout);
+```
+
+---
+
+### TypeScript Issues
+
+#### Circular Type Inference
+
+**Symptom**: TypeScript shows `any` or fails to infer types in circular imports.
+
+**Solution**: Explicitly type the resource that closes the loop:
+
+```typescript
+// Break the inference chain with explicit typing
+export const problematicResource = r
+  .resource("app.problematic")
+  .dependencies({ otherResource })
+  .init(async (_, { otherResource }) => {
+    return { value: otherResource.something };
+  })
+  .build() as IResource<void, { value: string }>;
+```
+
+See [Handling Circular Dependencies](#handling-circular-dependencies) for full patterns.
+
+#### Type Errors with Middleware Contracts
+
+**Symptom**: Task input/output types don't match middleware expectations.
+
+**Fix**: Ensure task satisfies all middleware contracts:
+
+```typescript
+// Middleware expects { user: { role: string } } input
+const authMiddleware = r.middleware.task<
+  { requiredRole: string },
+  { user: { role: string } },
+  unknown
+>("auth");
+// ...
+
+// Task MUST have compatible input type
+const adminTask = r
+  .task("admin")
+  .middleware([authMiddleware.with({ requiredRole: "admin" })])
+  .run(async (input: { user: { role: string } /* other fields */ }) => {
+    // input.user.role is available and typed
+  })
+  .build();
+```
+
+---
+
+### Filing a Good Issue
+
+When you need help, include this information:
+
+```markdown
+## Environment
+
+- @bluelibs/runner version: X.X.X
+- Node.js version: X.X.X
+- TypeScript version: X.X.X
+- OS: macOS/Windows/Linux
+
+## Minimal Reproduction
+
+\`\`\`typescript
+// Smallest possible code that reproduces the issue
+import { r, run } from "@bluelibs/runner";
+
+const app = r.resource("app").build();
+await run(app); // Describe what goes wrong here
+\`\`\`
+
+## Expected Behavior
+
+What should happen.
+
+## Actual Behavior
+
+What actually happens.
+
+## Error Output
+
+\`\`\`
+Full stack trace here
+\`\`\`
+
+## Debug Logs
+
+\`\`\`
+Output from: await run(app, { debug: "verbose" })
+\`\`\`
+```
+
+**Get your version:**
+
+```bash
+npm ls @bluelibs/runner
+```
+
+**Pro tips:**
+
+- Minimal reproduction > walls of code
+- Stack traces > "it doesn't work"
+- Debug logs often reveal the issue before you file
+
+---
+
+### Still Stuck?
+
+1. **Search existing issues**: [GitHub Issues](https://github.com/bluelibs/runner/issues)
+2. **Check examples**: [Examples directory](https://github.com/bluelibs/runner/tree/main/examples)
+3. **Ask the AI**: [Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner)
+4. **Open an issue**: [New Issue](https://github.com/bluelibs/runner/issues/new)
+
+> **runtime:** "Troubleshooting: the archaeological dig through your own decisions. You ask 'why is this broken?' and I ask 'did you call .build()?' Nine times out of ten, we both know the answer. The tenth time, it's genuinely my fault. File an issue. I'll wait."
+
+---
+## Under the Hood
+
+For developers who want to understand how Runner actually works—not just how to use it.
+
+---
+
+### Request Lifecycle
+
+When you call `runTask(myTask, input)`, here's the complete journey:
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Runtime as RunTask
+    participant MW as Middleware Stack
+    participant Task
+    participant Deps as Dependencies
+    participant Event as Event Manager
+    participant Hooks
+
+    Client->>Runtime: runTask(task, input)
+    Runtime->>MW: Input enters middleware stack
+
+    Note over MW: Middleware executes outside-in
+    MW->>MW: Auth check
+    MW->>MW: Rate limit
+    MW->>MW: Cache lookup
+
+    alt Cache hit
+        MW-->>Client: Cached result
+    else Cache miss
+        MW->>Task: Validated input
+        Task->>Deps: Resolve dependencies
+        Deps-->>Task: Injected resources
+        Task->>Task: Execute business logic
+        Task->>Event: Emit events
+        Event->>Hooks: Propagate to listeners
+        Hooks-->>Event: Hooks complete
+        Task-->>MW: Result
+
+        Note over MW: Middleware executes inside-out
+        MW->>MW: Cache store
+        MW->>MW: Logging
+        MW-->>Client: Final result
+    end
+```
+
+**Key points:**
+
+1. **Middleware is an onion** — outer layers wrap inner layers
+2. **Dependencies resolve once** — resources are singletons
+3. **Events are fire-and-forget** — but hooks can fail the task if they throw
+4. **Cache middleware short-circuits** — never hits the task on cache hit
+
+---
+
+### How `run()` Bootstraps
+
+When you call `run(app)`, Runner performs these steps in order:
+
+```mermaid
+flowchart TD
+    A[run app] --> B[Build dependency graph]
+    B --> C[Topological sort]
+    C --> D[Validate: no cycles, all deps exist]
+    D --> E{Validation passed?}
+    E -->|No| F[Throw detailed error]
+    E -->|Yes| G[Initialize resources in order]
+    G --> H[Register middleware]
+    H --> I[Wire up event listeners]
+    I --> J[Emit ready event]
+    J --> K[Return runtime handles]
+
+    style A fill:#4CAF50,color:#fff
+    style K fill:#4CAF50,color:#fff
+    style F fill:#f44336,color:#fff
+```
+
+**Initialization order:**
+
+1. **Leaf resources first** — resources with no dependencies initialize first
+2. **Dependent resources after** — each resource waits for its dependencies
+3. **Parallel when possible** — independent branches initialize concurrently
+4. **Middleware registration** — happens after resources are available
+5. **Ready event** — signals all initialization complete
+
+**Example dependency resolution:**
+
+```
+app
+├── server (depends on: database, config)
+│   ├── database (depends on: config)
+│   │   └── config (no dependencies) ← initializes first
+│   └── config ← already initialized, skipped
+└── userService (depends on: database)
+    └── database ← already initialized, skipped
+```
+
+Initialization order: `config` → `database` → `server`, `userService` (parallel)
+
+---
+
+### Concurrency Model
+
+Runner operates within Node.js's single-threaded event loop:
+
+**What this means:**
+
+- **No thread safety concerns** — JavaScript is single-threaded
+- **Async operations interleave** — while one awaits, others can run
+- **CPU-bound work blocks** — long synchronous operations freeze everything
+- **I/O is non-blocking** — database queries, HTTP calls run in parallel
+
+**Built-in concurrency controls:**
+
+| Tool                     | Purpose                      | Scope                  |
+| ------------------------ | ---------------------------- | ---------------------- |
+| `Semaphore`              | Limit concurrent operations  | Per semaphore instance |
+| `Queue`                  | Sequential processing by key | Per queue key          |
+| `concurrency` middleware | Limit task parallelism       | Per task or shared     |
+| `rateLimit` middleware   | Limit calls per time window  | Per task               |
+
+**Example: 10 concurrent database queries max**
 
 ```typescript
 import { Semaphore } from "@bluelibs/runner";
 
-// Allow max 5 concurrent database queries
-const dbSemaphore = new Semaphore(5);
+const dbSemaphore = new Semaphore(10);
 
-// Preferred: automatic acquire/release
-const users = await dbSemaphore.withPermit(async () => {
-  return await db.query("SELECT * FROM users");
-}); // Permit released automatically, even if query throws
+const queryTask = r
+  .task("db.query")
+  .middleware([
+    globals.middleware.task.concurrency.with({ semaphore: dbSemaphore }),
+  ])
+  .run(async (sql) => database.query(sql))
+  .build();
+
+// Even with 100 concurrent callers, only 10 queries run at once
 ```
-
-**Pro Tip**: You don't always need to use `Semaphore` manually. The `concurrency` middleware (available via `globals.middleware.task.concurrency`) provides a declarative way to apply these limits to your tasks.
-
-### Manual acquire/release
-
-When you need more control:
-
-```typescript
-// The elegant approach - automatic cleanup guaranteed!
-const users = await dbSemaphore.withPermit(async () => {
-  return await db.query("SELECT * FROM users WHERE active = true");
-});
-```
-
-Prevent operations from hanging indefinitely with configurable timeouts:
-
-```typescript
-try {
-  // Wait max 5 seconds, then throw timeout error
-  await dbSemaphore.acquire({ timeout: 5000 });
-  // Your code here
-} catch (error) {
-  console.log("Operation timed out waiting for permit");
-}
-
-// Or with withPermit
-const result = await dbSemaphore.withPermit(
-  async () => await slowDatabaseOperation(),
-  { timeout: 10000 }, // 10 second timeout
-);
-```
-
-Operations can be cancelled using AbortSignal:
-
-```typescript
-const controller = new AbortController();
-
-// Start an operation
-const operationPromise = dbSemaphore.withPermit(
-  async () => await veryLongOperation(),
-  { signal: controller.signal },
-);
-
-// Cancel the operation after 3 seconds
-setTimeout(() => {
-  controller.abort();
-}, 3000);
-
-try {
-  await operationPromise;
-} catch (error) {
-  console.log("Operation was cancelled");
-}
-```
-
-Want to know what's happening under the hood?
-
-```typescript
-// Get comprehensive metrics
-const metrics = dbSemaphore.getMetrics();
-console.log(`
-Semaphore Status Report:
-  Available permits: ${metrics.availablePermits}/${metrics.maxPermits}
-  Operations waiting: ${metrics.waitingCount}
-  Utilization: ${(metrics.utilization * 100).toFixed(1)}%
-  Disposed: ${metrics.disposed ? "Yes" : "No"}
-`);
-
-// Quick checks
-console.log(`Available permits: ${dbSemaphore.getAvailablePermits()}`);
-console.log(`Queue length: ${dbSemaphore.getWaitingCount()}`);
-console.log(`Is disposed: ${dbSemaphore.isDisposed()}`);
-```
-
-Properly dispose of semaphores when finished:
-
-```typescript
-// Reject all waiting operations and prevent new ones
-dbSemaphore.dispose();
-
-// All waiting operations will be rejected with:
-// Error: "Semaphore has been disposed"
-```
-
-### From Utilities to Middlewares
-
-While `Semaphore` and `Queue` provide powerful manual control, Runner often wraps these into declarative middlewares for common patterns:
-
-- **concurrency**: Uses `Semaphore` internally to limit task parallelization.
-- **temporal**: Uses timers and promise-tracking to implement `debounce` and `throttle`.
-- **rateLimit**: Uses fixed-window counting to protect resources from bursts.
-
-**What you just learned**: Utilities are the building blocks; Middlewares are the blueprints for common resilience patterns.
-
-> **runtime:** "I provide the bricks and the mortar. You decide if you're building a fortress or just a very complicated way to trip over your own feet. Use the middleware for common paths; use the utilities when you want to play architect."
 
 ---
 
-## Queue
+### Middleware Composition
 
-Run operations one at a time, in order. Perfect for:
+Middleware forms an "onion" around your task:
 
-- File system writes (prevent corruption)
-- Sequential API calls (maintain order)
-- Database migrations (one at a time)
-
-### Basic usage
-
-```typescript
-import { Queue } from "@bluelibs/runner";
-
-const queue = new Queue();
-
-// Tasks run sequentially, even if queued simultaneously
-const [result1, result2] = await Promise.all([
-  queue.run(async () => await writeFile("a.txt", "first")),
-  queue.run(async () => await writeFile("a.txt", "second")),
-]);
-// File contains "second" - no corruption from concurrent writes
+```
+                    ┌─────────────────────────────────────┐
+                    │            Auth Middleware          │
+                    │   ┌─────────────────────────────┐   │
+                    │   │       Rate Limit            │   │
+                    │   │   ┌─────────────────────┐   │   │
+                    │   │   │     Cache           │   │   │
+                    │   │   │   ┌─────────────┐   │   │   │
+                    │   │   │   │   Timeout   │   │   │   │
+Input ─────────────►│   │   │   │   ┌─────┐   │   │   │   │
+                    │   │   │   │   │TASK │   │   │   │   │
+Output ◄────────────│   │   │   │   └─────┘   │   │   │   │
+                    │   │   │   └─────────────┘   │   │   │
+                    │   │   └─────────────────────┘   │   │
+                    │   └─────────────────────────────┘   │
+                    └─────────────────────────────────────┘
 ```
 
-### Cancellation support
-
-Each task receives an `AbortSignal` for cooperative cancellation:
+**Execution flow:**
 
 ```typescript
-import { Queue } from "@bluelibs/runner";
+// Registration order
+.middleware([auth, rateLimit, cache, timeout])
 
-const queue = new Queue();
+// Execution order (outside-in, then inside-out):
+// 1. auth.before()
+// 2.   rateLimit.before()
+// 3.     cache.before() → might short-circuit!
+// 4.       timeout.before()
+// 5.         TASK EXECUTES
+// 6.       timeout.after()
+// 7.     cache.after() → store result
+// 8.   rateLimit.after()
+// 9. auth.after()
+```
 
-// Queue up some work
-const result = await queue.run(async (signal) => {
-  // Your async task here
-  return "Task completed";
+**Short-circuiting:**
+
+Any middleware can return early without calling `next()`:
+
+```typescript
+const cacheMiddleware = r.middleware
+  .task("cache")
+  .run(async ({ task, next, journal }) => {
+    const cached = await cache.get(task.input);
+    if (cached) return cached; // Short-circuit! Task never runs
+
+    const result = await next(task.input);
+    await cache.set(task.input, result);
+    return result;
+  })
+  .build();
+```
+
+---
+
+### Design Guarantees
+
+**What Runner promises:**
+
+| Guarantee               | Description                                          |
+| ----------------------- | ---------------------------------------------------- |
+| **Dependency order**    | Resources initialize in dependency order, every time |
+| **Dispose order**       | Resources dispose in reverse dependency order        |
+| **Singleton resources** | Each resource initializes exactly once per `run()`   |
+| **Middleware order**    | Middleware executes in registration order            |
+| **Event priority**      | Hooks execute in `.order()` priority (lower first)   |
+| **Type safety**         | If it compiles, dependencies will resolve at runtime |
+| **Dispose idempotency** | Calling `dispose()` multiple times is safe           |
+
+**What Runner does NOT guarantee:**
+
+| Non-guarantee                       | Why                                                             |
+| ----------------------------------- | --------------------------------------------------------------- |
+| Hook completion before task returns | Hooks run async; use `stopPropagation()` if blocking needed     |
+| Perfect error boundaries            | Unhandled rejections in hooks can crash; use `onUnhandledError` |
+| Resource initialization timing      | Parallel branches race; don't depend on specific timing         |
+| Middleware state isolation          | Middleware can share state via journal; be intentional          |
+
+---
+
+### Error Propagation
+
+How errors flow through the system:
+
+```mermaid
+flowchart TD
+    A[Error thrown in task] --> B{Middleware catches?}
+    B -->|Yes| C[Middleware handles/transforms]
+    C --> D{Rethrows?}
+    D -->|Yes| E[Propagates up middleware stack]
+    D -->|No| F[Returns result swallowing error]
+    B -->|No| E
+    E --> G{Error boundary enabled?}
+    G -->|Yes| H[onUnhandledError callback]
+    G -->|No| I[Unhandled rejection]
+
+    style A fill:#f44336,color:#fff
+    style I fill:#f44336,color:#fff
+```
+
+**Error handling patterns:**
+
+```typescript
+// Fallback middleware — swallow errors, return default
+.middleware([globals.middleware.task.fallback.with({ fallback: defaultValue })])
+
+// Retry middleware — retry on transient errors
+.middleware([globals.middleware.task.retry.with({
+  retries: 3,
+  stopRetryIf: (err) => err.permanent
+})])
+
+// Custom error transformation
+const errorWrapper = r.middleware
+  .task("errors.wrap")
+  .run(async ({ task, next }) => {
+    try {
+      return await next(task.input);
+    } catch (error) {
+      throw new ApplicationError("Task failed", { cause: error });
+    }
+  })
+  .build();
+```
+
+---
+
+### Event System Internals
+
+**Event propagation:**
+
+1. Task emits event via injected event callable
+2. Event manager validates payload (if schema exists)
+3. Hooks are sorted by `.order()` priority
+4. Hooks execute sequentially (or parallel if `event.parallel(true)`)
+5. Any hook can call `event.stopPropagation()` to halt further processing
+
+**Priority batches (parallel mode):**
+
+```typescript
+// Three hooks with different priorities
+hookA.order(10); // Priority 10
+hookB.order(10); // Priority 10
+hookC.order(20); // Priority 20
+
+// With event.parallel(true):
+// Batch 1: hookA and hookB run concurrently
+// Batch 2: hookC runs after batch 1 completes
+```
+
+**Wildcard listeners:**
+
+```typescript
+// Catches ALL events (except those with excludeFromGlobalHooks tag)
+const auditHook = r
+  .hook("audit.all")
+  .on("*")
+  .run(async (event) => {
+    console.log(`Event: ${event.id}`, event.data);
+  })
+  .build();
+```
+
+---
+
+### Memory and Performance
+
+**Component overhead:**
+
+| Component  | Memory | Initialization   |
+| ---------- | ------ | ---------------- |
+| Task       | ~1KB   | Instant          |
+| Resource   | ~2KB   | Varies by init() |
+| Event      | ~0.5KB | Instant          |
+| Hook       | ~1KB   | Instant          |
+| Middleware | ~1KB   | Instant          |
+
+**Performance characteristics:**
+
+- Task execution: ~0.0005ms overhead (excluding middleware)
+- Middleware per layer: ~0.00026ms overhead
+- Event emission: ~0.004ms
+- Cache hit: ~0.000125ms
+
+**Optimization tips:**
+
+1. **Middleware order matters** — fast checks first
+2. **Cache aggressively** — cache middleware is very fast
+3. **Batch events** — emit once with aggregate data
+4. **Resource pooling** — reuse connections via resource singletons
+
+---
+
+### Extending Runner
+
+**Plugin patterns:**
+
+1. **Global middleware** — use `.everywhere()` for cross-cutting concerns
+2. **Tag-based behavior** — use tags for declarative configuration
+3. **Resource wrappers** — compose resources for reusable patterns
+4. **Event interception** — use `eventManager.intercept()` for audit/logging
+
+**Creating reusable modules:**
+
+```typescript
+// myPlugin.ts
+export const myPlugin = {
+  resources: {
+    cache: myCustomCache,
+    logger: myCustomLogger,
+  },
+  middleware: {
+    task: {
+      auth: myAuthMiddleware,
+      metrics: myMetricsMiddleware,
+    },
+  },
+  tags: {
+    public: publicApiTag,
+    internal: internalTag,
+  },
+};
+
+// Usage
+import { myPlugin } from "./myPlugin";
+
+const app = r
+  .resource("app")
+  .register([
+    myPlugin.resources.cache.with({ redis: "..." }),
+    myTask.middleware([myPlugin.middleware.task.auth]),
+  ])
+  .build();
+```
+
+> **runtime:** "Under the hood: a place of promises, graphs, and existential dread about garbage collection. You wanted to know how I work? I'm a topological sort wearing an async trench coat. The real magic is that any of this is debuggable at all."
+
+---
+## Integration Recipes
+
+Production-ready patterns for common integration scenarios. Each recipe is tested and ready to adapt.
+
+---
+
+### Docker Deployment
+
+A production-ready Dockerfile for Runner applications:
+
+```dockerfile
+# Dockerfile
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+
+COPY . .
+RUN npm run build
+
+FROM node:20-alpine AS runtime
+
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/package.json ./
+
+# Non-root user for security
+RUN addgroup -g 1001 -S nodejs && adduser -S runner -u 1001
+USER runner
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+  CMD wget --no-verbose --tries=1 --spider http://localhost:3000/health || exit 1
+
+ENV NODE_ENV=production
+EXPOSE 3000
+
+CMD ["node", "dist/index.js"]
+```
+
+**Docker Compose for local development:**
+
+```yaml
+# docker-compose.yml
+version: "3.8"
+
+services:
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=postgres://postgres:postgres@db:5432/app
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    volumes:
+      - ./src:/app/src:ro
+    command: npm run dev
+
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+
+volumes:
+  postgres_data:
+  redis_data:
+```
+
+**Health check endpoint:**
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const healthCheck = r
+  .task("app.tasks.healthCheck")
+  .dependencies({ database, cache })
+  .run(async (_, { database, cache }) => {
+    const checks = {
+      database: false,
+      cache: false,
+      uptime: process.uptime(),
+    };
+
+    try {
+      await database.query("SELECT 1");
+      checks.database = true;
+    } catch {}
+
+    try {
+      await cache.ping();
+      checks.cache = true;
+    } catch {}
+
+    const healthy = checks.database && checks.cache;
+    return { status: healthy ? "healthy" : "degraded", checks };
+  })
+  .build();
+
+// In your Express/Fastify setup
+app.get("/health", async (req, res) => {
+  const result = await healthCheck();
+  res.status(result.status === "healthy" ? 200 : 503).json(result);
+});
+```
+
+---
+
+### Graceful Shutdown with Kubernetes
+
+Handle k8s termination signals properly:
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+const app = r
+  .resource("app")
+  .register([...components])
+  .build();
+
+const { dispose, logger } = await run(app, {
+  shutdownHooks: true, // Handles SIGTERM/SIGINT automatically
+  errorBoundary: true,
+  onUnhandledError: async ({ error, kind }) => {
+    await logger.error("Unhandled error", { error, data: { kind } });
+  },
 });
 
-// Graceful shutdown
-await queue.dispose();
+// k8s sends SIGTERM, then waits terminationGracePeriodSeconds before SIGKILL
+// Runner's shutdownHooks will call dispose() on SIGTERM
+
+// For custom handling:
+const shutdown = async (signal: string) => {
+  await logger.info(`Received ${signal}, starting graceful shutdown`);
+
+  // Stop accepting new requests (if using express/fastify)
+  server.close();
+
+  // Wait for in-flight requests (give them 25s of your 30s grace period)
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+
+  // Dispose all resources
+  await dispose();
+
+  await logger.info("Shutdown complete");
+  process.exit(0);
+};
+
+// Optional: custom signal handling
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));
 ```
 
-### AbortController Integration
+**Kubernetes deployment:**
 
-The Queue provides each task with an `AbortSignal` for cooperative cancellation. Tasks should periodically check this signal to enable early termination.
+```yaml
+# k8s/deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: runner-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: runner-app
+  template:
+    metadata:
+      labels:
+        app: runner-app
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: app
+          image: your-registry/runner-app:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: "production"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+```
 
-### Examples
+---
 
-**Example: Long-running Task**
+### OpenTelemetry Instrumentation
+
+Add distributed tracing to your Runner application:
 
 ```typescript
-const queue = new Queue();
+import { r, globals } from "@bluelibs/runner";
+import { trace, context, SpanStatusCode } from "@opentelemetry/api";
 
-// Task that respects cancellation
-const processLargeDataset = queue.run(async (signal) => {
-  const items = await fetchLargeDataset();
+const tracer = trace.getTracer("runner-app");
 
-  for (const item of items) {
-    // Check for cancellation before processing each item
-    if (signal.aborted) {
-      throw new Error("Operation was cancelled");
+// Global tracing middleware
+const tracingMiddleware = r.middleware
+  .task("app.middleware.tracing")
+  .everywhere(() => true) // Apply to all tasks
+  .run(async ({ task, next }) => {
+    const span = tracer.startSpan(`task.${task.definition.id}`, {
+      attributes: {
+        "task.id": String(task.definition.id),
+        "task.input": JSON.stringify(task.input).slice(0, 1000),
+      },
+    });
+
+    try {
+      const result = await context.with(
+        trace.setSpan(context.active(), span),
+        () => next(task.input),
+      );
+      span.setStatus({ code: SpanStatusCode.OK });
+      return result;
+    } catch (error) {
+      span.setStatus({
+        code: SpanStatusCode.ERROR,
+        message: error instanceof Error ? error.message : "Unknown error",
+      });
+      span.recordException(error as Error);
+      throw error;
+    } finally {
+      span.end();
     }
+  })
+  .build();
 
-    await processItem(item);
+// OpenTelemetry setup (separate file: instrumentation.ts)
+import { NodeSDK } from "@opentelemetry/sdk-node";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { Resource } from "@opentelemetry/resources";
+import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
+
+const sdk = new NodeSDK({
+  resource: new Resource({
+    [SemanticResourceAttributes.SERVICE_NAME]: "runner-app",
+    [SemanticResourceAttributes.SERVICE_VERSION]: "1.0.0",
+  }),
+  traceExporter: new OTLPTraceExporter({
+    url:
+      process.env.OTEL_EXPORTER_OTLP_ENDPOINT ||
+      "http://localhost:4318/v1/traces",
+  }),
+});
+
+sdk.start();
+```
+
+---
+
+### Redis Cache Override
+
+Replace the default LRU cache with Redis:
+
+```typescript
+import { r, globals, override } from "@bluelibs/runner";
+import Redis from "ioredis";
+
+// Redis connection resource
+const redis = r
+  .resource<{ url: string }>("app.redis")
+  .init(async ({ url }) => new Redis(url))
+  .dispose(async (client) => client.disconnect())
+  .build();
+
+// Redis cache implementation
+class RedisCache {
+  constructor(
+    private client: Redis,
+    private prefix: string = "cache:",
+  ) {}
+
+  async get(key: string): Promise<unknown | undefined> {
+    const value = await this.client.get(this.prefix + key);
+    return value ? JSON.parse(value) : undefined;
   }
 
-  return "Dataset processed successfully";
-});
+  async set(key: string, value: unknown, ttl?: number): Promise<void> {
+    const serialized = JSON.stringify(value);
+    if (ttl) {
+      await this.client.setex(
+        this.prefix + key,
+        Math.ceil(ttl / 1000),
+        serialized,
+      );
+    } else {
+      await this.client.set(this.prefix + key, serialized);
+    }
+  }
 
-// Cancel all running tasks
-await queue.dispose({ cancel: true });
+  async delete(key: string): Promise<void> {
+    await this.client.del(this.prefix + key);
+  }
+
+  async clear(): Promise<void> {
+    const keys = await this.client.keys(this.prefix + "*");
+    if (keys.length > 0) {
+      await this.client.del(...keys);
+    }
+  }
+}
+
+// Override the cache factory
+const redisCacheFactory = r
+  .task(globals.tasks.cacheFactory.id) // Use the exact global ID
+  .dependencies({ redis })
+  .run(async (options, { redis }) => new RedisCache(redis, options?.prefix))
+  .build();
+
+// Wire it up
+const app = r
+  .resource("app")
+  .register([
+    redis.with({ url: process.env.REDIS_URL! }),
+    globals.resources.cache, // Enable caching
+  ])
+  .overrides([redisCacheFactory]) // Replace the factory
+  .build();
 ```
 
-**Network Request with Timeout**
+---
+
+### JWT Authentication Middleware
+
+Type-safe authentication with JWT:
 
 ```typescript
-const queue = new Queue();
+import { r, journal } from "@bluelibs/runner";
+import jwt from "jsonwebtoken";
 
-const fetchWithCancellation = queue.run(async (signal) => {
-  try {
-    // Pass the signal to fetch for automatic cancellation
-    const response = await fetch("https://api.example.com/data", { signal });
-    return await response.json();
-  } catch (error) {
-    if (error.name === "AbortError") {
-      console.log("Request was cancelled");
+// Type-safe token payload
+interface TokenPayload {
+  userId: string;
+  role: "user" | "admin" | "superadmin";
+  permissions: string[];
+}
+
+// Journal key for sharing auth state
+export const authKeys = {
+  user: journal.createKey<TokenPayload>("auth.user"),
+  token: journal.createKey<string>("auth.token"),
+} as const;
+
+// Auth middleware with role checking
+type AuthConfig = {
+  requiredRole?: TokenPayload["role"];
+  requiredPermission?: string;
+};
+
+const authMiddleware = r.middleware
+  .task<AuthConfig, { authorization?: string }, unknown>("app.middleware.auth")
+  .dependencies({ config: appConfig })
+  .run(async ({ task, next, journal }, { config }, authConfig) => {
+    const token = (task.input as { authorization?: string }).authorization;
+
+    if (!token) {
+      throw new Error("Authorization header required");
+    }
+
+    try {
+      const payload = jwt.verify(
+        token.replace("Bearer ", ""),
+        config.jwtSecret,
+      ) as TokenPayload;
+
+      // Role check
+      if (authConfig?.requiredRole) {
+        const roleHierarchy = { user: 1, admin: 2, superadmin: 3 };
+        if (
+          roleHierarchy[payload.role] < roleHierarchy[authConfig.requiredRole]
+        ) {
+          throw new Error(`Role ${authConfig.requiredRole} required`);
+        }
+      }
+
+      // Permission check
+      if (
+        authConfig?.requiredPermission &&
+        !payload.permissions.includes(authConfig.requiredPermission)
+      ) {
+        throw new Error(`Permission ${authConfig.requiredPermission} required`);
+      }
+
+      // Store in journal for downstream access
+      journal.set(authKeys.user, payload);
+      journal.set(authKeys.token, token);
+
+      return next(task.input);
+    } catch (error) {
+      if (error instanceof jwt.JsonWebTokenError) {
+        throw new Error("Invalid token");
+      }
       throw error;
     }
-    throw error;
-  }
-});
+  })
+  .build();
 
-// This will cancel the fetch request if still pending
-await queue.dispose({ cancel: true });
+// Usage
+const adminTask = r
+  .task("app.tasks.adminAction")
+  .middleware([authMiddleware.with({ requiredRole: "admin" })])
+  .run(async (input, deps, { journal }) => {
+    const user = journal.get(authKeys.user)!; // Guaranteed to exist after auth
+    return { executedBy: user.userId };
+  })
+  .build();
 ```
 
-**Example: File Processing with Progress Tracking**
+---
+
+### BullMQ Job Queue Integration
+
+Background job processing with BullMQ:
 
 ```typescript
-const queue = new Queue();
+import { r, globals } from "@bluelibs/runner";
+import { Queue, Worker, Job } from "bullmq";
 
-const processFiles = queue.run(async (signal) => {
-  const files = await getFileList();
-  const results = [];
+// Queue resource
+const jobQueue = r
+  .resource<{ redis: string; queueName: string }>("app.jobQueue")
+  .context(() => ({ worker: null as Worker | null }))
+  .init(async ({ redis, queueName }, _deps, ctx) => {
+    const queue = new Queue(queueName, { connection: { url: redis } });
 
-  for (let i = 0; i < files.length; i++) {
-    // Respect cancellation
-    signal.throwIfAborted();
+    return {
+      queue,
+      async add<T>(jobName: string, data: T, opts?: { delay?: number }) {
+        return queue.add(jobName, data, opts);
+      },
+      async startWorker(processor: (job: Job) => Promise<void>) {
+        ctx.worker = new Worker(queueName, processor, {
+          connection: { url: redis },
+        });
+        return ctx.worker;
+      },
+    };
+  })
+  .dispose(async (value, _config, _deps, ctx) => {
+    await value.queue.close();
+    if (ctx.worker) await ctx.worker.close();
+  })
+  .build();
 
-    const result = await processFile(files[i]);
-    results.push(result);
+// Email sending task (can be called directly or via queue)
+const sendEmail = r
+  .task("app.tasks.sendEmail")
+  .dependencies({ mailer })
+  .run(
+    async (
+      input: { to: string; subject: string; body: string },
+      { mailer },
+    ) => {
+      await mailer.send(input);
+      return { sent: true, to: input.to };
+    },
+  )
+  .build();
 
-    // Optional: Report progress
-    console.log(`Processed ${i + 1}/${files.length} files`);
-  }
+// Queue wrapper for background processing
+const queueEmail = r
+  .task("app.tasks.queueEmail")
+  .dependencies({ jobQueue })
+  .run(
+    async (
+      input: { to: string; subject: string; body: string },
+      { jobQueue },
+    ) => {
+      const job = await jobQueue.add("sendEmail", input);
+      return { queued: true, jobId: job.id };
+    },
+  )
+  .build();
 
-  return results;
-});
+// Worker initialization
+const emailWorker = r
+  .resource("app.emailWorker")
+  .dependencies({ jobQueue, sendEmail })
+  .init(async (_, { jobQueue, sendEmail }) => {
+    await jobQueue.startWorker(async (job) => {
+      await sendEmail(job.data);
+    });
+  })
+  .build();
 ```
 
-#### The Magic Behind the Curtain
+---
 
-- `tail`: The promise chain that maintains FIFO execution order
-- `disposed`: Boolean flag indicating whether the queue accepts new tasks
-- `abortController`: Centralized cancellation controller that provides `AbortSignal` to all tasks
-- `executionContext`: AsyncLocalStorage-based deadlock detection mechanism
+### Structured JSON Logging for Production
 
-#### Implement Cooperative Cancellation
-
-Tasks should regularly check the `AbortSignal` and respond appropriately:
+Production-ready logging configuration:
 
 ```typescript
-// Preferred: Use signal.throwIfAborted() for immediate termination
-signal.throwIfAborted();
+import { r, run, globals } from "@bluelibs/runner";
 
-// Alternative: Check signal.aborted for custom handling
-if (signal.aborted) {
-  cleanup();
-  throw new Error("Operation cancelled");
+// Production logging configuration
+const { dispose, logger } = await run(app, {
+  logs: {
+    printThreshold: (process.env.LOG_LEVEL as any) || "info",
+    printStrategy: "json", // Structured JSON for log aggregators
+    bufferLogs: true, // Buffer until ready event
+  },
+  debug: process.env.DEBUG === "true" ? "normal" : undefined,
+});
+
+// Custom structured logging
+const paymentTask = r
+  .task("payments.process")
+  .dependencies({ logger: globals.resources.logger })
+  .run(async (input, { logger }) => {
+    const requestLogger = logger.with({
+      source: "payments.process",
+      additionalContext: {
+        orderId: input.orderId,
+        amount: input.amount,
+        currency: input.currency,
+      },
+    });
+
+    await requestLogger.info("Payment processing started");
+
+    try {
+      const result = await processPayment(input);
+      await requestLogger.info("Payment succeeded", {
+        data: { transactionId: result.id },
+      });
+      return result;
+    } catch (error) {
+      await requestLogger.error("Payment failed", {
+        error,
+        data: { step: "charge", provider: "stripe" },
+      });
+      throw error;
+    }
+  })
+  .build();
+```
+
+**Output format (JSON strategy):**
+
+```json
+{
+  "timestamp": "2024-01-19T10:30:00.000Z",
+  "level": "info",
+  "source": "payments.process",
+  "message": "Payment processing started",
+  "context": {
+    "orderId": "ord-123",
+    "amount": 99.99,
+    "currency": "USD"
+  }
 }
 ```
 
-**Integrate with Native APIs**
+> **runtime:** "Integration recipes: the cookbook for making me play nice with everyone else's code. Redis, Kubernetes, OpenTelemetry—I've been to all their parties. Just remember: every integration is a new failure mode. I'll be here, logging everything."
 
-Many Web APIs accept `AbortSignal`:
+---
+## Quick Reference: Cheat Sheet
 
-- `fetch(url, { signal })`
-- `setTimeout(callback, delay, { signal })`
-- Custom async operations
+**Bookmark this section for quick lookups!**
 
-**Avoid Nested Queuing**
-
-The Queue prevents deadlocks by rejecting attempts to queue tasks from within running tasks. Structure your code to avoid this pattern.
-
-**Handle AbortError Gracefully**
+### Creating Components
 
 ```typescript
+// Task - Basic
+const myTask = r
+  .task("id")
+  .run(async (input) => result)
+  .build();
+
+// Task - With Dependencies
+const myTask = r
+  .task("id")
+  .dependencies({ db, logger })
+  .run(async (input, { db, logger }) => result)
+  .build();
+
+// Task - With Middleware
+const myTask = r
+  .task("id")
+  .middleware([cache.with({ ttl: 60000 }), retry.with({ retries: 3 })])
+  .run(async (input) => result)
+  .build();
+
+// Resource - Basic
+const myResource = r
+  .resource("id")
+  .init(async () => ({ value: "something" }))
+  .build();
+
+// Resource - With Lifecycle
+const myResource = r
+  .resource("id")
+  .init(async () => connection)
+  .dispose(async (connection) => connection.close())
+  .build();
+
+// Event
+const myEvent = r
+  .event("id")
+  .payloadSchema<{ data: string }>({ parse: (v) => v })
+  .build();
+
+// Hook
+const myHook = r
+  .hook("id")
+  .on(myEvent)
+  .run(async (event) => console.log(event.data))
+  .build();
+```
+
+### Running Your App
+
+```typescript
+// Basic
+const { runTask, dispose } = await run(app);
+
+// With options
+const { runTask, dispose } = await run(app, {
+  debug: "verbose", // "normal" | "verbose" | "off"
+  onUnhandledError: (error) => console.error(error),
+});
+
+// Execute tasks
+const result = await runTask(myTask, input);
+
+// Cleanup
+await dispose();
+```
+
+### Testing Patterns
+
+```typescript
+// Unit Test - Direct call
+const result = await myTask.run(input, { db: mockDb, logger: mockLogger });
+
+// Integration Test - Full runtime
+const { runTask, dispose } = await run(testApp);
+const result = await runTask(myTask, input);
+await dispose();
+```
+
+### Built-in Middleware
+
+```typescript
+import { globals } from "@bluelibs/runner";
+
+// Cache
+globals.middleware.task.cache.with({
+  ttl: 60000, // milliseconds
+  keyBuilder: (taskId, input) => `${taskId}:${input.id}`,
+});
+
+// Retry
+globals.middleware.task.retry.with({
+  retries: 3,
+  delayStrategy: (attempt) => 100 * Math.pow(2, attempt),
+  stopRetryIf: (error) => error.permanent,
+});
+
+// Timeout
+globals.middleware.task.timeout.with({ ttl: 5000 });
+```
+
+### Common Patterns
+
+```typescript
+// Register components
+const app = r.resource("app")
+  .register([task1, task2, resource1])
+  .build();
+
+// With dependencies
+const app = r.resource("app")
+  .register([db, logger])
+  .dependencies({ db, logger })
+  .init(async (_config, { db, logger }) => {
+    // Use dependencies
+  })
+  .build();
+
+// With configuration
+const server = r.resource<{ port: number }>("server")
+  .init(async ({ port }) => startServer(port))
+  .build();
+
+const app = r.resource("app")
+  .register([server.with({ port: 3000 })])
+  .build();
+
+// Emit events
+await myEvent({ data: "value" });
+
+// Global logging
+const task = r.task("id")
+  .dependencies({ logger: globals.resources.logger })
+  .run(async (input, { logger }) => {
+    await logger.info("message", { data: {...} });
+  })
+  .build();
+```
+
+### Type Helpers
+
+```typescript
+import type { TaskInput, TaskOutput, ResourceValue } from "@bluelibs/runner";
+
+type Input = TaskInput<typeof myTask>; // Get task input type
+type Output = TaskOutput<typeof myTask>; // Get task output type
+type Value = ResourceValue<typeof myResource>; // Get resource value type
+```
+
+### Performance Tips
+
+| Pattern                   | When to Use                        | Code                                         |
+| ------------------------- | ---------------------------------- | -------------------------------------------- |
+| **Caching**               | Expensive computations, DB queries | `.middleware([cache.with({ ttl: 60000 })])`  |
+| **Timeouts**              | External APIs, network calls       | `.middleware([timeout.with({ ttl: 5000 })])` |
+| **Retry**                 | Transient failures, flaky services | `.middleware([retry.with({ retries: 3 })])`  |
+| **Events**                | Decoupling, async side effects     | `await userRegistered({ userId, email })`    |
+| **Single responsibility** | Maintainability                    | One task = one action                        |
+
+### Debugging
+
+```typescript
+// Enable debug logging
+await run(app, { debug: "verbose" });
+
+// Add per-component debug
+const task = r.task("id")
+  .tags([globals.tags.debug.with({ logTaskInput: true, logTaskResult: true })])
+  .run(...)
+  .build();
+
+// Access logger
+.dependencies({ logger: globals.resources.logger })
+```
+
+### Concurrency Utilities
+
+```typescript
+import { Semaphore, Queue } from "@bluelibs/runner";
+
+// Semaphore - limit concurrent operations
+const sem = new Semaphore(3); // max 3 concurrent
+await sem.acquire();
 try {
-  await queue.run(task);
-} catch (error) {
-  if (error.name === "AbortError") {
-    // Expected cancellation, handle appropriately
-    return;
-  }
-  throw error; // Re-throw unexpected errors
+  await doWork();
+} finally {
+  sem.release();
 }
+
+// Queue - sequential task processing
+const queue = new Queue();
+await queue.add(async () => {
+  /* runs in order */
+});
+await queue.add(async () => {
+  /* waits for previous */
+});
 ```
 
-### Lifecycle events (isolated EventManager)
-
-`Queue` also publishes local lifecycle events for lightweight telemetry. Each Queue instance has its own **isolated EventManager**—these events are local to the Queue and are completely separate from the global EventManager used for business-level application events.
-
-- `enqueue` · `start` · `finish` · `error` · `cancel` · `disposed`
-
-```typescript
-const q = new Queue();
-q.on("start", ({ taskId }) => console.log(`task ${taskId} started`));
-await q.run(async () => "ok");
-await q.dispose({ cancel: true }); // emits cancel + disposed
-```
-
-> **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
-
+---
 ## Why Choose BlueLibs Runner?
 
 After reading this far, here's what you've learned:

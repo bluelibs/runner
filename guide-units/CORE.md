@@ -1,154 +1,53 @@
-# BlueLibs Runner - README Composition
+# BlueLibs Runner Documentation
 
-This directory contains the modular components of the README.md file, split into logical chapters for easier management and AI-friendly editing.
+Consolidated 12-chapter structure for the README.
 
-## How It Works
+## Composition Order
 
-The `compose-readme.mjs` script reads this file and includes all referenced chapters in order to generate the final README.md.
+Chapter filenames are case-sensitive on some filesystems (eg Linux CI). Keep `!include:` values an exact match for the files under `guide-units/`.
 
-## Chapter Manifest
+!include: 00-header.md
+!include: 01-getting-started.md
+!include: 02-core-concepts.md
+!include: 03-runtime-lifecycle.md
+!include: 04-features.md
+!include: 05-observability.md
+!include: 06-advanced.md
+!include: 07-developer-experience.md
+!include: 08-testing.md
+!include: 09-troubleshooting.md
+!include: 10-deep-dives.md
+!include: 11-reference.md
 
-!include: 00-HEADER.md
-!include: 01-OVERVIEW.md
-!include: 02-GETTING_STARTED.md
-!include: 03-LEARNING_GUIDE.md
-!include: 04-QUICK_WINS.md
-!include: 05-CORE_CONCEPTS.md
-!include: 06-QUICK_REFERENCE.md
-!include: 07-RUNTIME.md
-!include: 08-ADVANCED_PATTERNS.md
-!include: 09-ASYNC_CONTEXT.md
-!include: 10-FLUENT_BUILDERS.md
-!include: 11-TYPE_HELPERS.md
-!include: 12-LIFECYCLE.md
-!include: 13-FEATURES.md
-!include: 14-OBSERVABILITY.md
-!include: 15-ARCHITECTURE.md
-!include: 16-INTERNALS.md
-!include: 17-EXAMPLES.md
-!include: 18-TESTING.md
-!include: 19-UTILITIES.md
-!include: 20-CONCLUSION.md
+## Chapter Mapping
 
-## Chapter Descriptions
-
-### 00-HEADER.md
-
-The header, introduction, resources table, and community information. Sets the tone for the entire README.
-
-### 01-OVERVIEW.md
-
-What is Runner, comparison with other frameworks, performance benchmarks, and feature matrix.
-
-### 02-GETTING_STARTED.md
-
-Your first 5 minutes, quick start examples, and basic setup patterns.
-
-### 03-LEARNING_GUIDE.md
-
-Common patterns and learning guide for developers new to Runner.
-
-### 04-QUICK_WINS.md
-
-5 copy-paste solutions for real-world problems (caching, retry, timeouts, events, logging).
-
-### 05-CORE_CONCEPTS.md
-
-The Big Five: Tasks, Resources, Events, Middleware, and Tags - the foundation of Runner. Also covers Errors for typed error handling.
-
-### 06-QUICK_REFERENCE.md
-
-Cheat sheet with quick lookups for common patterns and API usage.
-
-### 07-RUNTIME.md
-
-run() function, RunOptions, Task Interceptors, and error handling.
-
-### 08-ADVANCED_PATTERNS.md
-
-Optional dependencies, Serialization, and Tunnels for distributed systems.
-
-### 09-ASYNC_CONTEXT.md
-
-Request-scoped and thread-local state management.
-
-### 10-FLUENT_BUILDERS.md
-
-The fluent builder API for ergonomic component definition.
-
-### 11-TYPE_HELPERS.md
-
-TypeScript utility types for extracting types from components.
-
-### 12-LIFECYCLE.md
-
-System shutdown hooks, graceful shutdown, error boundaries, and cleanup.
-
-### 13-FEATURES.md
-
-Core features: Caching, Retry, Timeouts, and Performance optimization.
-
-### 14-OBSERVABILITY.md
-
-Logging, Debug resource, and Metadata for observability and documentation.
-
-### 15-ARCHITECTURE.md
-
-Overrides, Namespacing, Factory pattern, and Runtime validation.
-
-### 16-INTERNALS.md
-
-Internal services, Dynamic dependencies, and Handling circular dependencies.
-
-### 17-EXAMPLES.md
-
-Real-world example showing everything working together.
-
-### 18-TESTING.md
-
-Unit and integration testing patterns.
-
-### 19-UTILITIES.md
-
-Semaphore and Queue for concurrency control and task scheduling.
-
-### 20-CONCLUSION.md
-
-Why choose Runner, migration path, community information, and license.
+| New File                   | Combines                                                 |
+| -------------------------- | -------------------------------------------------------- |
+| 00-header.md               | Header (unchanged)                                       |
+| 01-getting-started.md      | Overview + Getting Started + Learning Guide + Quick Wins |
+| 02-core-concepts.md        | Core Concepts (unchanged)                                |
+| 03-runtime-lifecycle.md    | Runtime + Lifecycle                                      |
+| 04-features.md             | Features + Utilities                                     |
+| 05-observability.md        | Observability (unchanged)                                |
+| 06-advanced.md             | Advanced Patterns + Architecture + Internals             |
+| 07-developer-experience.md | Async Context + Fluent Builders + Type Helpers           |
+| 08-testing.md              | Examples + Testing                                       |
+| 09-troubleshooting.md      | Troubleshooting (unchanged)                              |
+| 10-deep-dives.md           | Architecture Deep Dive + Integration Recipes             |
+| 11-reference.md            | Quick Reference + Conclusion                             |
 
 ## Editing Guidelines
 
 When editing chapters:
 
-1. **Maintain the file structure**: Each chapter should be a complete, self-contained markdown file
-2. **Include headers**: Each chapter should start with its main header (##) and content below
-3. **Cross-references**: Use relative markdown links when referencing sections in other chapters
-4. **Keep CORE.md updated**: When adding/removing/reordering chapters, update the manifest and descriptions above
-5. **Test composition**: After editing, run `npm run guide:compose` to regenerate README.md and verify it looks correct
+1. Follow DOCS_STYLE_GUIDE.md for tone, formatting, and structure
+2. Keep sections focused - one concept per section
+3. Use Mermaid diagrams for complex flows
+4. End major sections with runtime quotes
+5. Test code examples for syntax correctness
 
-## AI-Friendly Benefits
-
-This structure enables:
-
-- **Focused editing**: Work on single chapters without dealing with massive 4000+ line files
-- **Parallel work**: Multiple contributors can edit different chapters simultaneously
-- **Better token efficiency**: LLMs can work with smaller, focused contexts
-- **Version control**: Easier to track changes in specific sections
-- **Maintenance**: Easier to find and update specific documentation areas
-
-## Composition Workflow
+## Composition Command
 
 ```bash
-# Make changes to any chapter file (e.g., guide-units/05-CORE_CONCEPTS.md)
-nano guide-units/05-CORE_CONCEPTS.md
-
-# Regenerate the README
 npm run guide:compose
-
-# Verify the output
-git diff README.md
-
-# Commit your changes
-git add guide-units/ README.md
-git commit -m "docs: update core concepts chapter"
 ```

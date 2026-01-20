@@ -4,7 +4,7 @@
 
 **Build enterprise applications that are maintainable, testable, and scalable**
 
-Runner is a TypeScript-first framework for building applications out of tasks (functions) and resources
+Runner is a TypeScript-first framework for building applications from tasks (functions) and resources
 (singletons), with explicit dependency injection, middleware, events, hooks, and lifecycle management.
 
 For a token-friendly overview of the fluent builder API (`r.*`), see [AI.md](./AI.md).
@@ -72,7 +72,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](./AI.md)                                                                                        | Docs    | Compact summary (<5000 tokens)      |
+| [AI-Friendly Docs](./AI.md)                                                                                         | Docs    | Compact summary (<5000 tokens)      |
 | [Migration Guide (3.x → 4.x)](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade instructions   |
 | [Design Documents](https://github.com/bluelibs/runner/blob/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
@@ -161,6 +161,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 
 - [Why Runner?](#why-runner) - The problem we solve
 - [What Is This Thing?](#what-is-this-thing)
+- [When to Use Runner](#when-to-use-runner) - Is it right for you?
 - [Show Me the Magic](#show-me-the-magic) - See it in action
 - [How Does It Compare?](#how-does-it-compare) - vs. other frameworks
 - [Performance at a Glance](#performance-at-a-glance) - Real benchmarks
@@ -235,6 +236,8 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [Why Choose BlueLibs Runner?](#why-choose-bluelibs-runner) - Framework comparison
 - [Migration Path](#the-migration-path) - Adopting Runner
 - [Troubleshooting](#troubleshooting) - Common issues and solutions
+- [Under the Hood](#under-the-hood) - Architecture deep dive
+- [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
 
 ---

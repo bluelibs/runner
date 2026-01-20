@@ -19,10 +19,10 @@ const CORE_PATH = path.join(__dirname, "..", "guide-units", "CORE.md");
 const README_PATH = path.join(__dirname, "..", "README.md");
 const CHAPTERS_DIR = path.join(__dirname, "..", "guide-units");
 
-/**
- * Parse CORE.md to extract chapter references
- * Expected format: lines like "!include: 00-HEADER.md"
- */
+ /**
+  * Parse CORE.md to extract chapter references
+  * Expected format: lines like "!include: 00-header.md"
+  */
 function parseCore() {
   const content = fs.readFileSync(CORE_PATH, "utf-8");
   const lines = content.split("\n");

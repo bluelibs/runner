@@ -1,6 +1,6 @@
 ## The Big Five
 
-The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using the runner effectively.
+The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using Runner effectively.
 
 ```mermaid
 graph LR
@@ -24,7 +24,7 @@ graph LR
 
 ### Tasks
 
-Tasks are where your business logic lives. Think of them as **functions with superpowers** – they get automatic dependency injection, type safety, middleware support, and observability. Pretty cool, right?
+Tasks are where your business logic lives. Think of them as **functions with superpowers** – they get automatic dependency injection, type safety, middleware support, and observability.
 
 Here's a complete example showing you everything:
 
@@ -126,7 +126,7 @@ const userService = r
 
 #### Resource Configuration
 
-Resources can be configured with type-safe options. No more "config object of unknown shape" nonsense.
+Resources can be configured with type-safe options. No more guessing at config shapes.
 
 ```typescript
 type SMTPConfig = {
@@ -151,7 +151,7 @@ const app = r
       smtpUrl: "smtp://localhost",
       from: "noreply@myapp.com",
     }),
-    // using emailer without with() will throw a type-error ;)
+    // using emailer without with() will cause a type error
   ])
   .build();
 ```
