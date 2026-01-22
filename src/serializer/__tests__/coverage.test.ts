@@ -110,9 +110,13 @@ describe("Serializer Coverage Tests", () => {
   });
 
   describe("Primitive Serialization Edge Cases", () => {
-    it("should return null for undefined input", () => {
-      const result = serializer.serialize(undefined);
-      expect(result).toBe("null");
+    it("preserves undefined for primitive input", () => {
+      const serialized = serializer.serialize(undefined);
+      expect(JSON.parse(serialized)).toEqual({
+        __type: "Undefined",
+        value: null,
+      });
+      expect(serializer.deserialize(serialized)).toBeUndefined();
     });
 
     it("should serialize mixed array with supported types", () => {
@@ -368,7 +372,8 @@ describe("Serializer Coverage Tests", () => {
       expect(deserialized.defined).toBe("value");
       expect(
         Object.prototype.hasOwnProperty.call(deserialized.nested, "inner"),
-      ).toBe(false);
+      ).toBe(true);
+      expect(deserialized.nested.inner).toBeUndefined();
     });
 
     it("should handle undefined in nested array values", () => {
@@ -378,10 +383,13 @@ describe("Serializer Coverage Tests", () => {
 
       const serialized = serializer.serialize(obj);
       const deserialized = serializer.deserialize<{
-        values: (number | null)[];
+        values: (number | undefined)[];
       }>(serialized);
 
-      expect(deserialized.values).toEqual([1, null, 3]);
+      expect(deserialized.values).toEqual([1, undefined, 3]);
+      expect(
+        Object.prototype.hasOwnProperty.call(deserialized.values, "1"),
+      ).toBe(true);
     });
   });
 
@@ -728,8 +736,21 @@ describe("Serializer Coverage Tests", () => {
     });
 
     it("stringify handles undefined, Infinity, and circular objects", () => {
-      expect(serializer.stringify(undefined)).toBe("null");
-      expect(serializer.stringify(Number.POSITIVE_INFINITY)).toBe("null");
+      expect(JSON.parse(serializer.stringify(undefined))).toEqual({
+        __type: "Undefined",
+        value: null,
+      });
+      expect(serializer.parse(serializer.stringify(undefined))).toBeUndefined();
+
+      expect(
+        JSON.parse(serializer.stringify(Number.POSITIVE_INFINITY)),
+      ).toEqual({
+        __type: "NonFiniteNumber",
+        value: "Infinity",
+      });
+      expect(
+        serializer.parse(serializer.stringify(Number.POSITIVE_INFINITY)),
+      ).toBe(Number.POSITIVE_INFINITY);
 
       const obj: any = {};
       obj.self = obj;

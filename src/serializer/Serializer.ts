@@ -118,10 +118,6 @@ export class Serializer {
    * Serialize an arbitrary value into a JSON string.
    */
   public serialize<T>(value: T, context?: SerializationContext): string {
-    if (typeof value === "undefined") {
-      return "null";
-    }
-
     const ctx: SerializationContext = context ?? {
       objectIds: new WeakMap(),
       idCounter: 0,
@@ -163,6 +159,7 @@ export class Serializer {
       nodes: toNodeRecord(parsed.nodes, this.unsafeKeys),
       resolved: new Map(),
       resolving: new Set(),
+      resolvingRefs: new Set(),
     };
 
     return deserializeValueFn(

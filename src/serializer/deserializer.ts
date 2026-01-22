@@ -20,6 +20,77 @@ export interface DeserializerOptions {
   typeRegistry: TypeRegistry;
 }
 
+const copyOwnProperties = (
+  target: object,
+  source: object,
+  unsafeKeys: ReadonlySet<string>,
+): void => {
+  const descriptors = Object.getOwnPropertyDescriptors(source);
+  for (const key of Object.keys(descriptors)) {
+    if (isUnsafeKey(key, unsafeKeys)) {
+      continue;
+    }
+    Object.defineProperty(target, key, descriptors[key]);
+  }
+
+  const symbols = Object.getOwnPropertySymbols(source);
+  for (const symbol of symbols) {
+    const descriptor = Object.getOwnPropertyDescriptor(source, symbol);
+    if (!descriptor) {
+      continue;
+    }
+    Object.defineProperty(target, symbol, descriptor);
+  }
+};
+
+const mergeTypePlaceholderWithoutFactory = (
+  placeholder: unknown,
+  result: unknown,
+  unsafeKeys: ReadonlySet<string>,
+  hasCircularReference: boolean,
+): unknown => {
+  if (placeholder === result) {
+    return result;
+  }
+
+  if (result === null || typeof result !== "object") {
+    if (hasCircularReference) {
+      throw new Error(
+        "Cannot preserve circular references for a type without create() that deserializes to a non-object value",
+      );
+    }
+    return result;
+  }
+
+  // Arrays and objects with internal slots cannot be reconstructed by mutating
+  // a plain placeholder object. Require create() in those cases if identity is needed.
+  if (
+    Array.isArray(result) ||
+    result instanceof Map ||
+    result instanceof Set ||
+    result instanceof Date ||
+    result instanceof RegExp
+  ) {
+    if (hasCircularReference) {
+      throw new Error(
+        "Cannot preserve circular references for a type without create(); provide create() for identity-safe placeholders",
+      );
+    }
+    return result;
+  }
+
+  const target = placeholder as object;
+  const source = result as object;
+
+  const sourcePrototype = Object.getPrototypeOf(source);
+  if (Object.getPrototypeOf(target) !== sourcePrototype) {
+    Object.setPrototypeOf(target, sourcePrototype);
+  }
+
+  copyOwnProperties(target, source, unsafeKeys);
+  return target;
+};
+
 /**
  * Deserialize a value from its serialized representation.
  */
@@ -91,6 +162,9 @@ export const resolveReference = (
     throw new Error(`Unresolved reference id "${id}"`);
   }
   if (context.resolved.has(id)) {
+    if (context.resolving.has(id)) {
+      context.resolvingRefs.add(id);
+    }
     return context.resolved.get(id);
   }
 
@@ -162,7 +236,12 @@ export const resolveReference = (
       );
       const finalResult = hasFactory
         ? mergePlaceholder(placeholder, result, options.unsafeKeys)
-        : result;
+        : mergeTypePlaceholderWithoutFactory(
+            placeholder,
+            result,
+            options.unsafeKeys,
+            context.resolvingRefs.has(id),
+          );
 
       context.resolved.set(id, finalResult);
       context.resolving.delete(id);

@@ -1,10 +1,21 @@
 import { Serializer } from "../../serializer";
-import { DateType } from "../../serializer/builtins";
+import {
+  DateType,
+  NonFiniteNumberType,
+  UndefinedType,
+} from "../../serializer/builtins";
+import {
+  assertNonFiniteNumberTag,
+  getNonFiniteNumberTag,
+  NonFiniteNumberTag,
+  serializeNonFiniteNumber,
+  SpecialTypeId,
+} from "../../serializer/special-values";
 
 describe("GraphSerializer coverage", () => {
   const serializer = new Serializer();
 
-  it("skips inherited and undefined properties during serialization", () => {
+  it("skips inherited properties but preserves undefined values during serialization", () => {
     const base = { inherited: "skip-me" };
     const obj = Object.create(base);
     obj.keep = "ok";
@@ -14,9 +25,12 @@ describe("GraphSerializer coverage", () => {
     const rootId = payload.root.__ref;
     const rootNode = payload.nodes[rootId];
 
-    expect(rootNode.value).toEqual({ keep: "ok" });
+    expect(rootNode.value).toEqual({
+      keep: "ok",
+      drop: { __type: "Undefined", value: null },
+    });
     expect(rootNode.value.inherited).toBeUndefined();
-    expect(rootNode.value.drop).toBeUndefined();
+    expect(rootNode.value.drop.__type).toBe("Undefined");
   });
 
   it("handles malformed graph payload nodes defensively", () => {
@@ -48,6 +62,7 @@ describe("GraphSerializer coverage", () => {
       nodes: {},
       resolved: new Map(),
       resolving: new Set(),
+      resolvingRefs: new Set(),
     };
     const protoObj = Object.create({ hidden: true });
     protoObj.visible = 5;
@@ -83,6 +98,7 @@ describe("GraphSerializer coverage", () => {
       },
       resolved: new Map(),
       resolving: new Set(),
+      resolvingRefs: new Set(),
     };
 
     const result = (serializer as any).resolveReference("obj", context);
@@ -120,8 +136,62 @@ describe("GraphSerializer coverage", () => {
     expect(d).toBeInstanceOf(Date);
   });
 
+  it("covers special-values helpers", () => {
+    expect(getNonFiniteNumberTag(Number.NaN)).toBe(NonFiniteNumberTag.NaN);
+    expect(getNonFiniteNumberTag(Number.POSITIVE_INFINITY)).toBe(
+      NonFiniteNumberTag.Infinity,
+    );
+    expect(getNonFiniteNumberTag(Number.NEGATIVE_INFINITY)).toBe(
+      NonFiniteNumberTag.NegativeInfinity,
+    );
+    expect(getNonFiniteNumberTag(123)).toBeNull();
+
+    expect(serializeNonFiniteNumber(Number.POSITIVE_INFINITY)).toEqual({
+      __type: SpecialTypeId.NonFiniteNumber,
+      value: NonFiniteNumberTag.Infinity,
+    });
+    expect(() => serializeNonFiniteNumber(0)).toThrow(
+      "Expected non-finite number",
+    );
+
+    expect(assertNonFiniteNumberTag(NonFiniteNumberTag.NaN)).toBe(
+      NonFiniteNumberTag.NaN,
+    );
+    expect(() => assertNonFiniteNumberTag("nope")).toThrow(
+      "Invalid non-finite number payload",
+    );
+  });
+
+  it("covers built-in special types (Undefined + NonFiniteNumber)", () => {
+    expect(UndefinedType.serialize(undefined)).toBeNull();
+    expect(UndefinedType.deserialize(null)).toBeUndefined();
+
+    expect(NonFiniteNumberType.is("nope")).toBe(false);
+    expect(NonFiniteNumberType.is(1)).toBe(false);
+    expect(NonFiniteNumberType.is(Number.POSITIVE_INFINITY)).toBe(true);
+
+    expect(NonFiniteNumberType.serialize(Number.POSITIVE_INFINITY)).toBe(
+      NonFiniteNumberTag.Infinity,
+    );
+    expect(() => NonFiniteNumberType.serialize(1)).toThrow(
+      "Expected non-finite number",
+    );
+    expect(NonFiniteNumberType.deserialize(NonFiniteNumberTag.NaN)).toBeNaN();
+    expect(NonFiniteNumberType.deserialize(NonFiniteNumberTag.Infinity)).toBe(
+      Number.POSITIVE_INFINITY,
+    );
+    expect(
+      NonFiniteNumberType.deserialize(NonFiniteNumberTag.NegativeInfinity),
+    ).toBe(Number.NEGATIVE_INFINITY);
+  });
+
   it("throws on unknown __type during deserializeValue", () => {
-    const ctx = { nodes: {}, resolved: new Map(), resolving: new Set() };
+    const ctx = {
+      nodes: {},
+      resolved: new Map(),
+      resolving: new Set(),
+      resolvingRefs: new Set(),
+    };
     expect(() =>
       (serializer as any).deserializeValue(
         { __type: "Missing", value: {} },

@@ -56,6 +56,11 @@ export interface DeserializationContext {
   nodes: Record<string, SerializedNode>;
   resolved: Map<string, unknown>;
   resolving: Set<string>;
+  /**
+   * Tracks reference ids that were requested while still being resolved.
+   * Used to detect circular references that rely on placeholders.
+   */
+  resolvingRefs: Set<string>;
 }
 
 /**

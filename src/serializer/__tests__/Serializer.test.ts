@@ -148,16 +148,15 @@ describe("Serializer", () => {
     it("should serialize and deserialize primitive values", () => {
       const testCases = [
         { value: null, expected: null },
-        { value: undefined, expected: null }, // JSON.stringify converts undefined to null
+        { value: undefined, expected: undefined },
         { value: true, expected: true },
         { value: false, expected: false },
         { value: 0, expected: 0 },
         { value: 42, expected: 42 },
         { value: "hello", expected: "hello" },
         { value: "", expected: "" },
-        // Note: JSON converts NaN and Infinity to null during serialization
-        { value: NaN, expected: null },
-        { value: Infinity, expected: null },
+        { value: NaN, expected: NaN },
+        { value: Infinity, expected: Infinity },
       ];
 
       testCases.forEach(({ value, expected }) => {
@@ -469,10 +468,10 @@ describe("Serializer", () => {
 
       expect(deserialized.defined).toBe("value");
       expect(deserialized.null).toBe(null);
-      // Note: JSON.stringify removes undefined values
       expect(
         Object.prototype.hasOwnProperty.call(deserialized, "undefined"),
-      ).toBe(false);
+      ).toBe(true);
+      expect(deserialized.undefined).toBeUndefined();
     });
   });
 

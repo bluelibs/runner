@@ -3,6 +3,12 @@
  */
 
 import type { TypeDefinition } from "./types";
+import {
+  assertNonFiniteNumberTag,
+  NonFiniteNumberTag,
+  SpecialTypeId,
+  getNonFiniteNumberTag,
+} from "./special-values";
 
 /**
  * Built-in type handler for Date objects
@@ -60,6 +66,39 @@ export const SetType: TypeDefinition<Set<unknown>, unknown[]> = {
   create: () => new Set<unknown>(),
 };
 
+export const UndefinedType: TypeDefinition<undefined, null> = {
+  id: SpecialTypeId.Undefined,
+  is: (obj: unknown): obj is undefined => typeof obj === "undefined",
+  serialize: () => null,
+  deserialize: () => undefined,
+  strategy: "value",
+};
+
+export const NonFiniteNumberType: TypeDefinition<number, NonFiniteNumberTag> = {
+  id: SpecialTypeId.NonFiniteNumber,
+  is: (obj: unknown): obj is number =>
+    typeof obj === "number" && !Number.isFinite(obj),
+  serialize: (value: number) => {
+    const tag = getNonFiniteNumberTag(value);
+    if (!tag) {
+      throw new Error("Expected non-finite number");
+    }
+    return tag;
+  },
+  deserialize: (payload: NonFiniteNumberTag) => {
+    const tag = assertNonFiniteNumberTag(payload);
+    switch (tag) {
+      case NonFiniteNumberTag.NaN:
+        return Number.NaN;
+      case NonFiniteNumberTag.Infinity:
+        return Number.POSITIVE_INFINITY;
+      case NonFiniteNumberTag.NegativeInfinity:
+        return Number.NEGATIVE_INFINITY;
+    }
+  },
+  strategy: "value",
+};
+
 /**
  * Array of all built-in type definitions
  */
@@ -68,4 +107,6 @@ export const builtInTypes: Array<TypeDefinition<unknown, unknown>> = [
   RegExpType as TypeDefinition<unknown, unknown>,
   MapType as TypeDefinition<unknown, unknown>,
   SetType as TypeDefinition<unknown, unknown>,
+  UndefinedType as TypeDefinition<unknown, unknown>,
+  NonFiniteNumberType as TypeDefinition<unknown, unknown>,
 ];

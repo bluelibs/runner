@@ -10,6 +10,7 @@ import type {
 } from "./types";
 import { isUnsafeKey, assertDepth } from "./validation";
 import type { TypeRegistry } from "./type-registry";
+import { serializeNonFiniteNumber, serializeUndefined } from "./special-values";
 
 export interface SerializeState {
   serializingValueTypes: WeakSet<object>;
@@ -58,7 +59,7 @@ export const serializeValue = (
   }
 
   if (typeof value === "undefined") {
-    return null;
+    return serializeUndefined();
   }
 
   const valueType = typeof value;
@@ -67,7 +68,7 @@ export const serializeValue = (
     if (valueType === "number") {
       const numericValue = value as number;
       if (!Number.isFinite(numericValue)) {
-        return null;
+        return serializeNonFiniteNumber(numericValue);
       }
       return numericValue;
     }
@@ -198,9 +199,6 @@ export const serializeValue = (
       continue;
     }
     const entryValue = source[key];
-    if (typeof entryValue === "undefined") {
-      continue;
-    }
     record[key] = serializeValue(
       entryValue,
       context,

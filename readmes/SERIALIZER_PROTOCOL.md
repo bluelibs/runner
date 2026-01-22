@@ -155,11 +155,11 @@ For typed nodes with a `create()` factory, the placeholder is the result of `cre
 
 These rules are applied by both formats:
 
-- `undefined` serializes as `null`.
-- non-finite numbers (`NaN`, `Infinity`, `-Infinity`) serialize as `null`.
+- `undefined` is preserved via `{ "__type": "Undefined", "value": null }`.
+- non-finite numbers (`NaN`, `Infinity`, `-Infinity`) are preserved via `{ "__type": "NonFiniteNumber", "value": "NaN" | "Infinity" | "-Infinity" }`.
 - `bigint`, `symbol`, and `function` are rejected (throw).
 
-Tree mode (`stringify`) additionally rejects circular references.
+Previous versions of the protocol serialized these as `null` (matching `JSON.stringify`). Modern versions prefer data integrity.
 
 ---
 

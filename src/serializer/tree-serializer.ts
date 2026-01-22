@@ -6,6 +6,7 @@
 
 import { isUnsafeKey, assertDepth } from "./validation";
 import type { TypeRegistry } from "./type-registry";
+import { serializeNonFiniteNumber, serializeUndefined } from "./special-values";
 
 export interface TreeSerializeContext {
   stack: WeakSet<object>;
@@ -34,7 +35,7 @@ export const serializeTreeValue = (
   }
 
   if (typeof value === "undefined") {
-    return null;
+    return serializeUndefined();
   }
 
   const valueType = typeof value;
@@ -42,7 +43,10 @@ export const serializeTreeValue = (
   if (valueType !== "object") {
     if (valueType === "number") {
       const numericValue = value as number;
-      return Number.isFinite(numericValue) ? numericValue : null;
+      if (!Number.isFinite(numericValue)) {
+        return serializeNonFiniteNumber(numericValue);
+      }
+      return numericValue;
     }
 
     if (
@@ -129,9 +133,6 @@ export const serializeTreeValue = (
         continue;
       }
       const entryValue = source[key];
-      if (typeof entryValue === "undefined") {
-        continue;
-      }
       record[key] = serializeTreeValue(entryValue, context, depth + 1, options);
     }
 
