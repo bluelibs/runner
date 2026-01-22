@@ -8,9 +8,18 @@ import type {
   SerializationContext,
   SerializedNode,
 } from "./types";
-import { isUnsafeKey, assertDepth } from "./validation";
+import { assertDepth } from "./validation";
 import type { TypeRegistry } from "./type-registry";
-import { serializeNonFiniteNumber, serializeUndefined } from "./special-values";
+import {
+  serializeBigInt,
+  serializeNonFiniteNumber,
+  serializeUndefined,
+} from "./special-values";
+import {
+  serializeArrayItems,
+  serializeRecordEntries,
+  serializeSymbolValue,
+} from "./serialize-utils";
 
 export interface SerializeState {
   serializingValueTypes: WeakSet<object>;
@@ -73,12 +82,23 @@ export const serializeValue = (
       return numericValue;
     }
 
-    if (
-      valueType === "bigint" ||
-      valueType === "symbol" ||
-      valueType === "function"
-    ) {
+    if (valueType === "bigint") {
+      return serializeBigInt(value as bigint);
+    }
+
+    // Functions are intentionally non-serializable (code execution risk + non-portable).
+    if (valueType === "function") {
       throw new TypeError(`Cannot serialize value of type "${valueType}"`);
+    }
+
+    // Symbols are non-JSON primitives; the registry provides safe encodings (Symbol.for + well-known).
+    if (valueType === "symbol") {
+      return serializeSymbolValue(
+        value as symbol,
+        state.excludedTypeIds,
+        options.typeRegistry,
+        (nested) => serializeValue(nested, context, state, depth + 1, options),
+      );
     }
 
     return value as SerializedValue;
@@ -174,39 +194,18 @@ export const serializeValue = (
   context.objectIds.set(objectValue, objectId);
 
   if (Array.isArray(objectValue)) {
-    const length = objectValue.length;
-    const items: SerializedValue[] = new Array(length);
-    for (let index = 0; index < length; index += 1) {
-      items[index] = serializeValue(
-        objectValue[index],
-        context,
-        state,
-        depth + 1,
-        options,
-      );
-    }
+    const items = serializeArrayItems(objectValue, (nested) =>
+      serializeValue(nested, context, state, depth + 1, options),
+    );
     storeNode(context, objectId, { kind: "array", value: items });
     return { __ref: objectId };
   }
 
-  const record: Record<string, SerializedValue> = {};
-  const source = objectValue as Record<string, unknown>;
-  for (const key in source) {
-    if (!Object.prototype.hasOwnProperty.call(source, key)) {
-      continue;
-    }
-    if (isUnsafeKey(key, options.unsafeKeys)) {
-      continue;
-    }
-    const entryValue = source[key];
-    record[key] = serializeValue(
-      entryValue,
-      context,
-      state,
-      depth + 1,
-      options,
-    );
-  }
+  const record = serializeRecordEntries(
+    objectValue as Record<string, unknown>,
+    options.unsafeKeys,
+    (nested) => serializeValue(nested, context, state, depth + 1, options),
+  );
 
   storeNode(context, objectId, { kind: "object", value: record });
   return { __ref: objectId };

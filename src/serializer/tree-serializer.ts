@@ -4,9 +4,18 @@
  * Extracted from Serializer.ts as a standalone module.
  */
 
-import { isUnsafeKey, assertDepth } from "./validation";
+import { assertDepth } from "./validation";
 import type { TypeRegistry } from "./type-registry";
-import { serializeNonFiniteNumber, serializeUndefined } from "./special-values";
+import {
+  serializeBigInt,
+  serializeNonFiniteNumber,
+  serializeUndefined,
+} from "./special-values";
+import {
+  serializeArrayItems,
+  serializeRecordEntries,
+  serializeSymbolValue,
+} from "./serialize-utils";
 
 export interface TreeSerializeContext {
   stack: WeakSet<object>;
@@ -49,12 +58,23 @@ export const serializeTreeValue = (
       return numericValue;
     }
 
-    if (
-      valueType === "bigint" ||
-      valueType === "symbol" ||
-      valueType === "function"
-    ) {
+    if (valueType === "bigint") {
+      return serializeBigInt(value as bigint);
+    }
+
+    // Functions are intentionally non-serializable (code execution risk + non-portable).
+    if (valueType === "function") {
       throw new TypeError(`Cannot serialize value of type "${valueType}"`);
+    }
+
+    // Symbols are non-JSON primitives; the registry provides safe encodings (Symbol.for + well-known).
+    if (valueType === "symbol") {
+      return serializeSymbolValue(
+        value as symbol,
+        context.excludedTypeIds,
+        options.typeRegistry,
+        (nested) => serializeTreeValue(nested, context, depth + 1, options),
+      );
     }
 
     return value;
@@ -110,33 +130,16 @@ export const serializeTreeValue = (
 
   try {
     if (Array.isArray(objectValue)) {
-      const length = objectValue.length;
-      const items: unknown[] = new Array(length);
-      for (let index = 0; index < length; index += 1) {
-        items[index] = serializeTreeValue(
-          objectValue[index],
-          context,
-          depth + 1,
-          options,
-        );
-      }
-      return items;
+      return serializeArrayItems(objectValue, (nested) =>
+        serializeTreeValue(nested, context, depth + 1, options),
+      );
     }
 
-    const record: Record<string, unknown> = {};
-    const source = objectValue as Record<string, unknown>;
-    for (const key in source) {
-      if (!Object.prototype.hasOwnProperty.call(source, key)) {
-        continue;
-      }
-      if (isUnsafeKey(key, options.unsafeKeys)) {
-        continue;
-      }
-      const entryValue = source[key];
-      record[key] = serializeTreeValue(entryValue, context, depth + 1, options);
-    }
-
-    return record;
+    return serializeRecordEntries(
+      objectValue as Record<string, unknown>,
+      options.unsafeKeys,
+      (nested) => serializeTreeValue(nested, context, depth + 1, options),
+    );
   } finally {
     context.stack.delete(objectValue);
   }

@@ -3,6 +3,8 @@ import type { SerializedValue } from "./types";
 export enum SpecialTypeId {
   Undefined = "Undefined",
   NonFiniteNumber = "NonFiniteNumber",
+  BigInt = "BigInt",
+  Symbol = "Symbol",
 }
 
 export enum NonFiniteNumberTag {
@@ -14,6 +16,23 @@ export enum NonFiniteNumberTag {
 export const serializeUndefined = (): SerializedValue => ({
   __type: SpecialTypeId.Undefined,
   value: null,
+});
+
+export type BigIntPayload = string;
+
+export const serializeBigIntPayload = (value: bigint): BigIntPayload =>
+  value.toString(10);
+
+export const assertBigIntPayload = (value: unknown): BigIntPayload => {
+  if (typeof value === "string") {
+    return value;
+  }
+  throw new Error("Invalid bigint payload");
+};
+
+export const serializeBigInt = (value: bigint): SerializedValue => ({
+  __type: SpecialTypeId.BigInt,
+  value: serializeBigIntPayload(value),
 });
 
 export const getNonFiniteNumberTag = (

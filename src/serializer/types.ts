@@ -71,7 +71,17 @@ export type JsonValue =
   | JsonPrimitive
   | JsonValue[]
   | { [key: string]: JsonValue };
-export type SerializedValue = JsonValue | ObjectReference;
+
+export interface SerializedTypeRecord {
+  __type: string;
+  value: SerializedValue;
+}
+export type SerializedValue =
+  | JsonPrimitive
+  | ObjectReference
+  | SerializedTypeRecord
+  | SerializedValue[]
+  | { [key: string]: SerializedValue };
 
 /**
  * Envelope saved to disk/wire when serialising a graph payload.

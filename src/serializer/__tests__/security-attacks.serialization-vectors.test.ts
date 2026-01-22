@@ -25,23 +25,36 @@ describe("Serializer Security Attacks", () => {
       );
     });
 
-    it("should not allow serializing symbols", () => {
-      const withSymbol = {
-        sym: Symbol("evil"),
-      };
-
-      expect(() => serializer.serialize(withSymbol)).toThrow(
-        /Cannot serialize value of type "symbol"/,
-      );
-    });
-
-    it("should not allow serializing bigints", () => {
+    it("serializes bigints via a safe string encoding", () => {
       const withBigInt = {
         big: BigInt(9007199254740991),
       };
 
-      expect(() => serializer.serialize(withBigInt)).toThrow(
-        /Cannot serialize value of type "bigint"/,
+      const payload = serializer.serialize(withBigInt);
+      const roundTripped = serializer.deserialize<typeof withBigInt>(payload);
+
+      expect(roundTripped.big).toBe(BigInt(9007199254740991));
+    });
+
+    it("serializes global symbols (Symbol.for)", () => {
+      const sym = Symbol.for("sec.sym.global");
+      const payload = serializer.serialize({ sym });
+      const roundTripped = serializer.deserialize<{ sym: symbol }>(payload);
+
+      expect(roundTripped.sym).toBe(sym);
+    });
+
+    it("serializes well-known symbols (ex: Symbol.iterator)", () => {
+      const sym = Symbol.iterator;
+      const payload = serializer.serialize({ sym });
+      const roundTripped = serializer.deserialize<{ sym: symbol }>(payload);
+
+      expect(roundTripped.sym).toBe(sym);
+    });
+
+    it('rejects unique symbols (Symbol("..."))', () => {
+      expect(() => serializer.serialize({ sym: Symbol("evil") })).toThrow(
+        /unique symbols/i,
       );
     });
 

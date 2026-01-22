@@ -4,11 +4,84 @@
 
 import type { TypeDefinition } from "./types";
 import {
+  assertBigIntPayload,
   assertNonFiniteNumberTag,
+  BigIntPayload,
   NonFiniteNumberTag,
   SpecialTypeId,
   getNonFiniteNumberTag,
+  serializeBigIntPayload,
 } from "./special-values";
+
+export enum SymbolPayloadKind {
+  For = "For",
+  WellKnown = "WellKnown",
+}
+
+const WELL_KNOWN_SYMBOL_KEYS = [
+  "asyncIterator",
+  "hasInstance",
+  "isConcatSpreadable",
+  "iterator",
+  "match",
+  "matchAll",
+  // Widely used (ex: RxJS), not part of the standard well-known list.
+  // We only support it when the runtime defines Symbol.observable.
+  "observable",
+  "replace",
+  "search",
+  "species",
+  "split",
+  "toPrimitive",
+  "toStringTag",
+  "unscopables",
+] as const;
+
+type WellKnownSymbolKey = (typeof WELL_KNOWN_SYMBOL_KEYS)[number];
+
+type SerializedSymbolPayload =
+  | { kind: SymbolPayloadKind.For; key: string }
+  | { kind: SymbolPayloadKind.WellKnown; key: WellKnownSymbolKey };
+
+const getWellKnownSymbolKey = (value: symbol): WellKnownSymbolKey | null => {
+  for (const key of WELL_KNOWN_SYMBOL_KEYS) {
+    const sym = (Symbol as unknown as Record<WellKnownSymbolKey, unknown>)[key];
+    if (typeof sym === "symbol" && sym === value) {
+      return key;
+    }
+  }
+  return null;
+};
+
+const assertSerializedSymbolPayload = (
+  payload: unknown,
+): SerializedSymbolPayload => {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("Invalid symbol payload");
+  }
+  const rec = payload as Record<string, unknown>;
+  if (rec.kind === SymbolPayloadKind.For) {
+    if (typeof rec.key !== "string") {
+      throw new Error("Invalid symbol payload");
+    }
+    return { kind: SymbolPayloadKind.For, key: rec.key };
+  }
+  if (rec.kind === SymbolPayloadKind.WellKnown) {
+    if (typeof rec.key !== "string") {
+      throw new Error("Invalid symbol payload");
+    }
+    if (
+      (WELL_KNOWN_SYMBOL_KEYS as readonly string[]).includes(rec.key) === false
+    ) {
+      throw new Error("Invalid symbol payload");
+    }
+    return {
+      kind: SymbolPayloadKind.WellKnown,
+      key: rec.key as WellKnownSymbolKey,
+    };
+  }
+  throw new Error("Invalid symbol payload");
+};
 
 /**
  * Built-in type handler for Date objects
@@ -99,6 +172,46 @@ export const NonFiniteNumberType: TypeDefinition<number, NonFiniteNumberTag> = {
   strategy: "value",
 };
 
+export const BigIntType: TypeDefinition<bigint, BigIntPayload> = {
+  id: SpecialTypeId.BigInt,
+  is: (obj: unknown): obj is bigint => typeof obj === "bigint",
+  serialize: (value: bigint) => serializeBigIntPayload(value),
+  deserialize: (value: BigIntPayload) => BigInt(assertBigIntPayload(value)),
+  strategy: "value",
+};
+
+export const SymbolType: TypeDefinition<symbol, SerializedSymbolPayload> = {
+  id: SpecialTypeId.Symbol,
+  is: (obj: unknown): obj is symbol => typeof obj === "symbol",
+  serialize: (value: symbol) => {
+    const forKey = Symbol.keyFor(value);
+    if (typeof forKey === "string") {
+      return { kind: SymbolPayloadKind.For, key: forKey };
+    }
+    const wellKnownKey = getWellKnownSymbolKey(value);
+    if (wellKnownKey) {
+      return { kind: SymbolPayloadKind.WellKnown, key: wellKnownKey };
+    }
+    throw new TypeError(
+      "Cannot serialize unique symbols; use Symbol.for(key) or a well-known symbol like Symbol.iterator",
+    );
+  },
+  deserialize: (payload: SerializedSymbolPayload) => {
+    const parsed = assertSerializedSymbolPayload(payload);
+    if (parsed.kind === SymbolPayloadKind.For) {
+      return Symbol.for(parsed.key);
+    }
+    const value = (Symbol as unknown as Record<WellKnownSymbolKey, unknown>)[
+      parsed.key
+    ];
+    if (typeof value !== "symbol") {
+      throw new Error(`Unsupported well-known symbol "${parsed.key}"`);
+    }
+    return value;
+  },
+  strategy: "value",
+};
+
 /**
  * Array of all built-in type definitions
  */
@@ -109,4 +222,6 @@ export const builtInTypes: Array<TypeDefinition<unknown, unknown>> = [
   SetType as TypeDefinition<unknown, unknown>,
   UndefinedType as TypeDefinition<unknown, unknown>,
   NonFiniteNumberType as TypeDefinition<unknown, unknown>,
+  BigIntType as TypeDefinition<unknown, unknown>,
+  SymbolType as TypeDefinition<unknown, unknown>,
 ];
