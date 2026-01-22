@@ -711,7 +711,7 @@ describe("MiddlewareManager", () => {
         async (wrappedNext: any, executionInput: any) => {
           order.push("interceptor:before");
           // Call with undefined to trigger ?? branch
-          const result = await executionInput.next(undefined);
+          const result = await executionInput.next();
           order.push("interceptor:after");
           return result;
         },

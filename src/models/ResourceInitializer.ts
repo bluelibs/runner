@@ -6,7 +6,7 @@ import {
 import { EventManager } from "./EventManager";
 import { Store } from "./Store";
 import { Logger } from "./Logger";
-import { MiddlewareManager } from "./MiddlewareManager";
+import type { MiddlewareManager } from "./MiddlewareManager";
 
 export class ResourceInitializer {
   constructor(
@@ -14,11 +14,7 @@ export class ResourceInitializer {
     protected readonly eventManager: EventManager,
     protected readonly logger: Logger,
   ) {
-    this.middlewareManager = new MiddlewareManager(
-      this.store,
-      this.eventManager,
-      this.logger,
-    );
+    this.middlewareManager = this.store.getMiddlewareManager();
   }
 
   private readonly middlewareManager: MiddlewareManager;

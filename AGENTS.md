@@ -28,6 +28,7 @@
 - AI.md contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
 - Always run `npm run typecheck` and `npm run lint to ensure type safety and linting.
 - Never revert changes from other files that you did not modify.
+- Apply fail-fast principles. If something is not as expected, throw an error immediately.
 </specifics>
 
 <new_feature>

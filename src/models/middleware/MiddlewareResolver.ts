@@ -6,6 +6,7 @@ import {
 } from "../../defs";
 import { Store } from "../Store";
 import { globalTags } from "../../globals/globalTags";
+import { taskNotRegisteredError } from "../../errors";
 
 /**
  * Resolves which middlewares should be applied to tasks and resources.
@@ -19,13 +20,14 @@ export class MiddlewareResolver {
    */
   getApplicableTaskMiddlewares(task: ITask<any, any, any>): ITaskMiddleware[] {
     const local = task.middleware;
+    const globalMiddlewares = this.getEverywhereTaskMiddlewares(task);
     const localIds = new Set(local.map((m) => m.id));
 
-    const global = this.getEverywhereTaskMiddlewares(task).filter(
-      (m) => !localIds.has(m.id),
-    );
+    const globalFiltered = globalMiddlewares.filter((m) => !localIds.has(m.id));
 
-    return [...global, ...local];
+    // Global middlewares run FIRST, then local ones.
+    // This allows global "everywhere" policies (like logging, tracing) to wrap business-specific local middleware.
+    return [...globalFiltered, ...local];
   }
 
   /**
@@ -35,13 +37,12 @@ export class MiddlewareResolver {
     resource: IResource<any, any, any, any>,
   ): IResourceMiddleware[] {
     const local = resource.middleware;
+    const globalMiddlewares = this.getEverywhereResourceMiddlewares(resource);
     const localIds = new Set(local.map((m) => m.id));
 
-    const global = this.getEverywhereResourceMiddlewares(resource).filter(
-      (m) => !localIds.has(m.id),
-    );
+    const globalFiltered = globalMiddlewares.filter((m) => !localIds.has(m.id));
 
-    return [...global, ...local];
+    return [...globalFiltered, ...local];
   }
 
   /**
@@ -52,14 +53,20 @@ export class MiddlewareResolver {
     task: ITask<any, any, any>,
     middlewares: ITaskMiddleware[],
   ): ITaskMiddleware[] {
-    const tDef = this.store.tasks.get(task.id)!.task;
+    const entry = this.store.tasks.get(task.id);
+    if (!entry) {
+      return taskNotRegisteredError.throw({ taskId: task.id });
+    }
+    const tDef = entry.task;
     const isLocallyTunneled = tDef.isTunneled;
 
     if (!isLocallyTunneled || !globalTags.tunnelPolicy.exists(tDef)) {
       return middlewares;
     }
 
-    const cfg = globalTags.tunnelPolicy.extract(task);
+    // Use the Store definition to avoid relying on object-identity.
+    // Consumers can pass a different task object with the same id.
+    const cfg = globalTags.tunnelPolicy.extract(tDef);
     const allowList = cfg?.client;
 
     if (!Array.isArray(allowList)) {

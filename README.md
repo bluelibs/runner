@@ -1815,6 +1815,35 @@ For advanced scenarios, you can intercept framework execution without relying on
 - Task middleware execution: `middlewareManager.intercept("task", (next, input) => Promise<any>)`
 - Resource middleware execution: `middlewareManager.intercept("resource", (next, input) => Promise<any>)`
 - Per-middleware interception: `middlewareManager.interceptMiddleware(mw, interceptor)`
+- Per-task execution (local): inside a resource `init`, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task.
+
+Per-task interceptors must be registered during resource initialization (before the system is locked). They are a good fit when you want a specific task to be adjusted by a specific resource (for example: feature toggles, input shaping, or internal routing) without making it global middleware.
+
+Note that per-task interceptors run *inside* task middleware. If a middleware short-circuits and never calls `next()`, the task (and its per-task interceptors) will not execute.
+
+```typescript
+import { r, run } from "@bluelibs/runner";
+
+const adder = r
+  .task("app.tasks.adder")
+  .run(async (input: { value: number }) => ({ value: input.value + 1 } as const))
+  .build();
+
+const installer = r
+  .resource("app.resources.installer")
+  .register([adder])
+  .dependencies({ adder })
+  .init(async (_config, { adder }) => {
+    adder.intercept(async (next, input) => next({ value: input.value * 2 }));
+    return {};
+  })
+  .build();
+
+const app = r.resource("app").register([installer]).build();
+const runtime = await run(app);
+await runtime.runTask(adder, { value: 10 }); // => { value: 21 }
+await runtime.dispose();
+```
 
 Access `eventManager` via `globals.resources.eventManager` if needed.
 

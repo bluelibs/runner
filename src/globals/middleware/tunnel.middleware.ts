@@ -16,11 +16,6 @@ import type {
 import { symbolTunneledBy } from "../../types/symbols";
 import { tunnelOwnershipConflictError } from "../../errors";
 
-const originalRuns = new WeakMap<
-  ITask<any, any, any, any, any, any>,
-  Function
->();
-
 export const tunnelResourceMiddleware = defineResourceMiddleware<
   void,
   DependencyMapType,
@@ -72,10 +67,9 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
 
     // Override selected tasks' run() to delegate to tunnel runner (reversible)
     for (const t of tasks) {
+      const st = typedStore.tasks.get(t.id)!;
       // Enforce single-owner policy: a task can be tunneled by only one resource
-      const currentOwner = (t as unknown as Record<symbol, string | undefined>)[
-        symbolTunneledBy
-      ];
+      const currentOwner = (st.task as any)[symbolTunneledBy];
       const resourceId = resource.definition.id;
       if (currentOwner && currentOwner !== resourceId) {
         tunnelOwnershipConflictError.throw({
@@ -84,14 +78,15 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
           attemptedOwnerId: resourceId,
         });
       }
-      if (!originalRuns.has(t)) {
-        originalRuns.set(t, t.run);
-      }
-      t.run = (async (input: unknown) => {
-        return value.run!(t as unknown as ITask, input);
-      }) as unknown as ITask["run"];
-      t.isTunneled = true;
-      t[symbolTunneledBy] = resourceId;
+
+      st.task = {
+        ...st.task,
+        run: (async (input: unknown) => {
+          return value.run!(t as unknown as ITask, input);
+        }) as unknown as ITask["run"],
+        isTunneled: true,
+        [symbolTunneledBy]: resourceId,
+      } as any;
     }
 
     if (events.length > 0) {

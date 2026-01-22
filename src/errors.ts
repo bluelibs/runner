@@ -203,6 +203,16 @@ export const phantomTaskNotRoutedError = error<
   )
   .build();
 
+// Task not registered in Store (internal invariant)
+export const taskNotRegisteredError = error<
+  { taskId: string } & DefaultErrorType
+>("runner.errors.taskNotRegistered")
+  .format(
+    ({ taskId }) =>
+      `Task "${taskId}" is not registered in the Store. This is an internal error—ensure the task is registered before execution.`,
+  )
+  .build();
+
 export function isCancellationError(err: unknown): boolean {
   return cancellationError.is(err);
 }
