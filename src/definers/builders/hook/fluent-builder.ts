@@ -1,11 +1,13 @@
 import type {
   DependencyMapType,
   IEventDefinition,
+  IHook,
   IHookDefinition,
   ITaskMeta,
   TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { builderIncompleteError } from "../../../errors";
 import { defineHook } from "../../defineHook";
 import type { HookFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
@@ -17,7 +19,11 @@ import { clone, mergeArray, mergeDependencies } from "./utils";
  */
 export function makeHookBuilder<
   TDeps extends DependencyMapType,
-  TOn extends "*" | IEventDefinition<any> | readonly IEventDefinition<any>[],
+  TOn extends
+    | "*"
+    | IEventDefinition<any>
+    | readonly IEventDefinition<any>[]
+    | undefined,
   TMeta extends ITaskMeta,
 >(
   state: BuilderState<TDeps, TOn, TMeta>,
@@ -90,16 +96,34 @@ export function makeHookBuilder<
     },
 
     run(fn) {
-      const next = clone(state, { run: fn as typeof state.run });
+      const next = clone(state, { run: fn as NonNullable<typeof state.run> });
       return makeHookBuilder<TDeps, TOn, TMeta>(next);
     },
 
     build() {
+      // Fail-fast: validate required fields before creating hook
+      const missingFields: string[] = [];
+      if (state.on === undefined) {
+        missingFields.push("on");
+      }
+      if (state.run === undefined) {
+        missingFields.push("run");
+      }
+      if (missingFields.length > 0) {
+        builderIncompleteError.throw({
+          type: "hook",
+          builderId: state.id,
+          missingFields,
+          message: `Hook "${state.id}" is incomplete`,
+        });
+      }
+
       const hook = defineHook({
-        ...(state as unknown as IHookDefinition<TDeps, TOn, TMeta>),
+        ...(state as unknown as IHookDefinition<TDeps, any, TMeta>),
       });
       (hook as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
-      return hook;
+      // Runtime validation guarantees TOn is valid
+      return hook as IHook<TDeps, any, TMeta>;
     },
   };
 

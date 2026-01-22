@@ -10,13 +10,18 @@ import type { BuilderState } from "./types";
  */
 export function clone<
   TDeps extends DependencyMapType,
-  TOn extends "*" | IEventDefinition<any> | readonly IEventDefinition<any>[],
+  TOn extends
+    | "*"
+    | IEventDefinition<any>
+    | readonly IEventDefinition<any>[]
+    | undefined,
   TMeta extends ITaskMeta,
   TNextDeps extends DependencyMapType = TDeps,
   TNextOn extends
     | "*"
     | IEventDefinition<any>
-    | readonly IEventDefinition<any>[] = TOn,
+    | readonly IEventDefinition<any>[]
+    | undefined = TOn,
   TNextMeta extends ITaskMeta = TMeta,
 >(
   s: BuilderState<TDeps, TOn, TMeta>,

@@ -11,17 +11,20 @@ export * from "./utils";
 
 /**
  * Entry point for creating a hook builder.
+ * Requires calling .on() and .run() before .build().
  */
-export function hookBuilder(id: string): HookFluentBuilder<{}, any, ITaskMeta> {
+export function hookBuilder(
+  id: string,
+): HookFluentBuilder<{}, undefined, ITaskMeta> {
   const filePath = getCallerFile();
-  const initial: BuilderState<{}, any, ITaskMeta> = Object.freeze({
+  const initial: BuilderState<{}, undefined, ITaskMeta> = Object.freeze({
     id,
     filePath,
     dependencies: {} as {},
-    on: "*" as BuilderState<{}, any, ITaskMeta>["on"],
-    order: undefined as unknown as BuilderState<{}, any, ITaskMeta>["order"],
+    on: undefined,
+    order: 0,
     meta: {} as ITaskMeta,
-    run: undefined as unknown as BuilderState<{}, any, ITaskMeta>["run"],
+    run: undefined,
     tags: [] as TagType[],
   });
 

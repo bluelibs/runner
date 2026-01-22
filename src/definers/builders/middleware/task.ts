@@ -6,6 +6,7 @@ import type {
   TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { builderIncompleteError } from "../../../errors";
 import { defineTaskMiddleware } from "../../defineTaskMiddleware";
 import type { TaskMiddlewareFluentBuilder } from "./task.interface";
 import type { TaskMwState } from "./types";
@@ -93,6 +94,16 @@ export function makeTaskMiddlewareBuilder<
     },
 
     build() {
+      // Fail-fast: validate required fields before creating middleware
+      if (state.run === undefined) {
+        builderIncompleteError.throw({
+          type: "task-middleware",
+          builderId: state.id,
+          missingFields: ["run"],
+          message: `Task middleware "${state.id}" is incomplete`,
+        });
+      }
+
       const middleware = defineTaskMiddleware({
         ...(state as unknown as ITaskMiddlewareDefinition<C, In, Out, D>),
       });

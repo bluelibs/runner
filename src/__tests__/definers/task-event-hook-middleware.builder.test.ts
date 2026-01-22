@@ -679,4 +679,78 @@ describe("task/event/hook/middleware builders", () => {
       ],
     ).toBe(true);
   });
+
+  describe("hook builder validation", () => {
+    it("throws when building hook without on()", () => {
+      expect(() =>
+        r
+          .hook("tests.builder.hook.no-on")
+          .run(async () => {})
+          .build(),
+      ).toThrow(/Missing required.*on/);
+    });
+
+    it("throws when building hook without run()", () => {
+      const ev = r.event("tests.builder.hook.no-run.ev").build();
+      expect(() => r.hook("tests.builder.hook.no-run").on(ev).build()).toThrow(
+        /Missing required.*run/,
+      );
+    });
+
+    it("throws when building hook without both on() and run()", () => {
+      expect(() => r.hook("tests.builder.hook.no-both").build()).toThrow(
+        /Missing required.*on.*run/,
+      );
+    });
+
+    it("succeeds when both on() and run() are provided", () => {
+      const ev = r.event("tests.builder.hook.valid.ev").build();
+      const hook = r
+        .hook("tests.builder.hook.valid")
+        .on(ev)
+        .run(async () => {})
+        .build();
+      expect(hook.id).toBe("tests.builder.hook.valid");
+      expect(hook.on).toBe(ev);
+    });
+
+    it("allows global listener with on('*')", () => {
+      const hook = r
+        .hook("tests.builder.hook.global")
+        .on("*")
+        .run(async () => {})
+        .build();
+      expect(hook.on).toBe("*");
+    });
+  });
+
+  describe("middleware builder validation", () => {
+    it("throws when building task middleware without run()", () => {
+      expect(() =>
+        r.middleware.task("tests.builder.tmw.no-run").build(),
+      ).toThrow(/Task middleware.*Missing required.*run/);
+    });
+
+    it("throws when building resource middleware without run()", () => {
+      expect(() =>
+        r.middleware.resource("tests.builder.rmw.no-run").build(),
+      ).toThrow(/Resource middleware.*Missing required.*run/);
+    });
+
+    it("succeeds when task middleware has run()", () => {
+      const mw = r.middleware
+        .task("tests.builder.tmw.valid")
+        .run(async ({ next, task }) => next(task.input))
+        .build();
+      expect(mw.id).toBe("tests.builder.tmw.valid");
+    });
+
+    it("succeeds when resource middleware has run()", () => {
+      const mw = r.middleware
+        .resource("tests.builder.rmw.valid")
+        .run(async ({ next }) => next())
+        .build();
+      expect(mw.id).toBe("tests.builder.rmw.valid");
+    });
+  });
 });

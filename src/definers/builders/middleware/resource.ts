@@ -6,6 +6,7 @@ import type {
   TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import { builderIncompleteError } from "../../../errors";
 import { defineResourceMiddleware } from "../../defineResourceMiddleware";
 import type { ResourceMiddlewareFluentBuilder } from "./resource.interface";
 import type { ResMwState } from "./types";
@@ -93,6 +94,16 @@ export function makeResourceMiddlewareBuilder<
     },
 
     build() {
+      // Fail-fast: validate required fields before creating middleware
+      if (state.run === undefined) {
+        builderIncompleteError.throw({
+          type: "resource-middleware",
+          builderId: state.id,
+          missingFields: ["run"],
+          message: `Resource middleware "${state.id}" is incomplete`,
+        });
+      }
+
       const middleware = defineResourceMiddleware({
         ...(state as unknown as IResourceMiddlewareDefinition<C, In, Out, D>),
       });

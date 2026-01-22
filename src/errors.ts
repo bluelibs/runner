@@ -213,6 +213,28 @@ export const taskNotRegisteredError = error<
   )
   .build();
 
+/** Builder types that require validation before build() */
+export type BuilderType = "hook" | "task-middleware" | "resource-middleware";
+
+// Builder incomplete (missing required fields)
+export const builderIncompleteError = error<
+  {
+    type: BuilderType;
+    builderId: string;
+    missingFields: string[];
+  } & DefaultErrorType
+>("runner.errors.builderIncomplete")
+  .format(({ type, builderId, missingFields }) => {
+    const typeLabel =
+      type === "hook"
+        ? "Hook"
+        : type === "task-middleware"
+          ? "Task middleware"
+          : "Resource middleware";
+    return `${typeLabel} "${builderId}" is incomplete. Missing required: ${missingFields.join(", ")}. Call ${missingFields.map((f) => `.${f}()`).join(" and ")} before .build().`;
+  })
+  .build();
+
 export function isCancellationError(err: unknown): boolean {
   return cancellationError.is(err);
 }

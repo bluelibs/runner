@@ -7,28 +7,29 @@ import type {
   TagType,
 } from "../../../defs";
 
+/** Valid event targets for hook's .on() method */
+type ValidOnTarget =
+  | "*"
+  | IEventDefinition<any>
+  | readonly IEventDefinition<any>[];
+
+/** Resolved TOn when valid, or `any` when undefined (build will throw at runtime) */
+type ResolvedOn<TOn> = TOn extends ValidOnTarget ? TOn : any;
+
 export interface HookFluentBuilder<
   TDeps extends DependencyMapType = {},
-  TOn extends "*" | IEventDefinition<any> | readonly IEventDefinition<any>[] =
-    any,
+  TOn extends ValidOnTarget | undefined = undefined,
   TMeta extends ITaskMeta = ITaskMeta,
 > {
   id: string;
-  on<
-    TNewOn extends
-      | "*"
-      | IEventDefinition<any>
-      | readonly IEventDefinition<any>[],
-  >(
+  on<TNewOn extends ValidOnTarget>(
     on: TNewOn,
   ): HookFluentBuilder<TDeps, TNewOn, TMeta>;
   order(order: number): HookFluentBuilder<TDeps, TOn, TMeta>;
-  // Append signature (default)
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | (() => TNewDeps),
     options?: { override?: false },
   ): HookFluentBuilder<TDeps & TNewDeps, TOn, TMeta>;
-  // Override signature (replace)
   dependencies<TNewDeps extends DependencyMapType>(
     deps: TNewDeps | (() => TNewDeps),
     options: { override: true },
@@ -40,8 +41,13 @@ export interface HookFluentBuilder<
   meta<TNewMeta extends ITaskMeta>(
     m: TNewMeta,
   ): HookFluentBuilder<TDeps, TOn, TNewMeta>;
+  /** Set the hook's run handler. Required before build(). */
   run(
-    fn: IHookDefinition<TDeps, TOn, TMeta>["run"],
+    fn: IHookDefinition<TDeps, ResolvedOn<TOn>, TMeta>["run"],
   ): HookFluentBuilder<TDeps, TOn, TMeta>;
-  build(): IHook<TDeps, TOn, TMeta>;
+  /**
+   * Build the hook definition. Requires .on() and .run() to be called first.
+   * @throws {Error} if on or run are not set
+   */
+  build(): IHook<TDeps, ResolvedOn<TOn>, TMeta>;
 }
