@@ -37,10 +37,17 @@ export class CycleContext {
       if (cycleStart !== -1) {
         const top = currentStack[currentStack.length - 1];
         const currentHookId = this.currentHookIdContext.getStore();
-        const safeReEmitBySameHook =
-          top.id === frame.id && currentHookId && currentHookId === source;
 
-        if (!safeReEmitBySameHook) {
+        // Allow re-emission of the same event by the same hook ("idempotent re-emit"),
+        // BUT ONLY IF the source is changing (e.g. initial->hook).
+        // If the source is unchanged (hook->hook), it means the hook triggered itself, which is an infinite loop.
+        const isSafeReEmit =
+          top.id === frame.id &&
+          currentHookId &&
+          currentHookId === source &&
+          top.source !== source;
+
+        if (!isSafeReEmit) {
           eventCycleError.throw({
             path: [...currentStack.slice(cycleStart), frame],
           });

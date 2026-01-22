@@ -45,7 +45,7 @@ export class ListenerRegistry {
   getListenersForEmit(eventDefinition: IEvent<any>): IListenerStorage[] {
     const excludeGlobal = this.isExcludedFromGlobal(eventDefinition);
     if (excludeGlobal) {
-      return this.listeners.get(eventDefinition.id) || [];
+      return (this.listeners.get(eventDefinition.id) || []).slice();
     }
     return this.getCachedMergedListeners(eventDefinition.id);
   }
@@ -80,9 +80,9 @@ export class ListenerRegistry {
       if (eventListeners.length === 0 && this.globalListeners.length === 0) {
         cached = [];
       } else if (eventListeners.length === 0) {
-        cached = this.globalListeners;
+        cached = this.globalListeners.slice();
       } else if (this.globalListeners.length === 0) {
-        cached = eventListeners;
+        cached = eventListeners.slice();
       } else {
         cached = this.mergeSortedListeners(
           eventListeners,
@@ -91,7 +91,14 @@ export class ListenerRegistry {
       }
       this.cachedMergedListeners.set(eventId, cached);
     }
-    return cached;
+    // Return a slice so that if the cached array is mutated (shouldn't be, but for safety)
+    // or if we returned a direct reference above, we are safe.
+    // However, since we sliced above when creating 'cached', we just need to ensure
+    // we don't return the *same* mutable array reference if we just grabbed it from the map.
+    // Actually, simply slicing the return value is the safest and easiest way to ensure snapshot isolation
+    // for every caller, assuming the caller might iterate.
+    // But 'cached' is the backing store. We want to return a SNAPSHOT.
+    return cached.slice();
   }
 
   private invalidateCache(eventId?: string): void {
