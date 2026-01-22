@@ -22,7 +22,7 @@ Use these terms consistently throughout all documentation:
 | **ExecutionJournal** | A per-execution registry enabling middleware and tasks to share typed state.                                      | `journal.set(key, value)`                                          |
 | **Tag**              | Metadata attached to components for discovery, filtering, or configuration.                                       | `.tags([globals.tags.debug])`                                      |
 | **App**              | The root resource that composes all other components. Always named `app`.                                         | `const app = r.resource("app")...`                                 |
-| **Runtime**          | The object returned by `run()` containing `runTask`, `runEvent`, `dispose`, etc.                                  | `const { runTask, dispose } = await run(app)`                      |
+| **Runtime**          | The object returned by `run()` containing `runTask`, `emitEvent`, `dispose`, etc.                                 | `const { runTask, dispose } = await run(app)`                      |
 | **Dispose**          | The cleanup function that gracefully shuts down all resources.                                                    | `await dispose()`                                                  |
 | **Config**           | The generic type parameter for resources, passed during initialization.                                           | `r.resource<{ port: number }>("server")`                           |
 | **Input**            | The data passed to a task when executed.                                                                          | `await runTask(createUser, { name: "Alice" })`                     |
@@ -772,7 +772,7 @@ The main `README.md` is not edited directly. It is composed from modular chapter
 
 ### Chapter Files (guide-units/)
 
-- **Naming**: `XX-CHAPTER_NAME.md` (e.g., `05-CORE_CONCEPTS.md`)
+- **Naming**: `NN-chapter-name.md` (e.g., `02-core-concepts.md`)
 - **Order**: Numbered for composition order
 - **Size**: Keep under 400 lines when possible; split if larger
 - **Self-contained**: Each chapter should make sense on its own
@@ -813,7 +813,7 @@ Before committing documentation changes:
 
 ```bash
 # 1. Edit the relevant chapter
-nano guide-units/05-CORE_CONCEPTS.md
+nano guide-units/02-core-concepts.md
 
 # 2. Regenerate README
 npm run guide:compose

@@ -40,7 +40,7 @@ async function processRequest(req: Request) {
 
 ### Using context in tasks
 
-The real power comes when you inject context into your tasks:
+The real power comes when you use context inside your tasks:
 
 ```typescript
 const auditLog = r
@@ -124,6 +124,7 @@ Resources are singletons with lifecycle management. Here's the progression from 
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
+// Assuming: createConnection() and UserData are your own implementations
 // Simple: just returns a value
 const config = r
   .resource("app.config")
@@ -165,6 +166,10 @@ await run(app);
 Tasks are your business logic with DI, middleware, and validation:
 
 ```typescript
+import { r, globals } from "@bluelibs/runner";
+import { z } from "zod";
+
+// Assuming: userRepo was defined in the "Building resources" section above
 const createUser = r
   .task("users.create")
   .dependencies({ userRepo, logger: globals.resources.logger })
@@ -185,6 +190,9 @@ const createUser = r
 ### Building events and hooks
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
+// Assuming: mailer is a resource defined elsewhere
 // Events are typed signals
 const userCreated = r
   .event<{ userId: string; email: string }>("users.created")
@@ -273,7 +281,9 @@ const processOrder = r
 type OrderInput = ExtractTaskInput<typeof processOrder>;
 type OrderOutput = ExtractTaskOutput<typeof processOrder>;
 
-app.post("/orders", async (req, res) => {
+// Assuming: expressApp is an Express instance
+// Assuming: runTask is from `const { runTask } = await run(app)`
+expressApp.post("/orders", async (req, res) => {
   const input: OrderInput = req.body; // Type-checked!
   const result: OrderOutput = await runTask(processOrder, input);
   res.json(result);
@@ -283,16 +293,17 @@ app.post("/orders", async (req, res) => {
 **Creating wrapper functions:**
 
 ```typescript
-// A logging wrapper that preserves types
-function withLogging<T extends ITask<any, any>>(task: T) {
-  type Input = ExtractTaskInput<T>;
-  type Output = ExtractTaskOutput<T>;
+import type { ITask } from "@bluelibs/runner";
 
-  return async (input: Input): Promise<Output> => {
+// A logging wrapper that preserves the task's `run()` signature
+function withLogging<T extends ITask<any, Promise<any>, any>>(task: T) {
+  return (...args: Parameters<T["run"]>): ReturnType<T["run"]> => {
+    const [input] = args;
     console.log(`Calling ${task.id}`, input);
-    const result = await task.run(input, dependencies);
-    console.log(`Result from ${task.id}`, result);
-    return result;
+    return task.run(...args).then((value) => {
+      console.log(`Result from ${task.id}`, value);
+      return value;
+    });
   };
 }
 ```

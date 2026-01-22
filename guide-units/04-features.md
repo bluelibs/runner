@@ -330,7 +330,7 @@ const expensiveTask = r
 
 - **Lightweight**: Each component adds ~33KB to memory footprint
 - **Automatic cleanup**: Resources dispose properly to prevent leaks
-- **Event efficiency**: Event listeners are automatically managed
+- **Event efficiency**: Hook subscriptions are automatically managed
 
 #### Benchmarking Your Code
 

@@ -297,17 +297,18 @@ run(app, { debug: "verbose" });
 **Custom Configuration**:
 
 ```typescript
+import { r, globals } from "@bluelibs/runner";
+
 const app = r
   .resource("app")
   .register([
     globals.resources.debug.with({
       logTaskInput: true,
-      logTaskResult: false,
+      logTaskOutput: false,
       logResourceConfig: true,
-      logResourceResult: false,
+      logResourceValue: false,
       logEventEmissionOnRun: true,
       logEventEmissionInput: false,
-      // Hook/middleware lifecycle visibility is available via interceptors
       // ... other fine-grained options
     }),
   ])
@@ -319,7 +320,7 @@ const app = r
 The debug configuration levels can now be accessed through the globals namespace via `globals.debug.levels`:
 
 ```typescript
-import { globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
 // Use in custom configurations
 const customConfig = {
@@ -339,17 +340,11 @@ const app = r
 Use debug tags to configure debugging on individual components, when you're interested in just a few verbose ones.
 
 ```typescript
-import { globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
 const criticalTask = r
   .task("app.tasks.critical")
-  .tags([
-    globals.tags.debug.with({
-      logTaskInput: true,
-      logTaskResult: true,
-      logTaskOnError: true,
-    }),
-  ])
+  .tags([globals.tags.debug.with("verbose")])
   .run(async (input) => {
     // This task will have verbose debug logging
     return await processPayment(input);
@@ -360,14 +355,16 @@ const criticalTask = r
 ### Integration with Run Options
 
 ```typescript
+import { run } from "@bluelibs/runner";
+
 // Debug options at startup
-const { dispose, taskRunner, eventManager } = await run(app, {
+const { store, dispose } = await run(app, {
   debug: "verbose", // Enable debug globally
 });
 
-// Access internals for advanced debugging
-console.log(`Tasks registered: ${taskRunner.getRegisteredTasks().length}`);
-console.log(`Events registered: ${eventManager.getRegisteredEvents().length}`);
+// Access the runtime store for introspection
+console.log(`Tasks registered: ${store.tasks.size}`);
+console.log(`Events registered: ${store.events.size}`);
 ```
 
 ### Performance Impact

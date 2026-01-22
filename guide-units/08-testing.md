@@ -15,6 +15,8 @@ This example shows everything working together in a realistic Express applicatio
 | `server`           | Express integration with graceful shutdown   |
 
 ```typescript
+import express from "express";
+import { MongoClient } from "mongodb";
 import { r, run } from "@bluelibs/runner";
 
 // Configuration
@@ -42,6 +44,16 @@ const database = r
 // Context for request data
 const RequestContext = r
   .asyncContext<{ userId?: string; role?: string }>("app.requestContext")
+  .build();
+
+// Email service (replace with SendGrid/SES/etc in real apps)
+const emailService = r
+  .resource("app.services.email")
+  .init(async () => ({
+    async sendWelcome(email: string) {
+      console.log(`(email) welcome -> ${email}`);
+    },
+  }))
   .build();
 
 // Events
@@ -79,11 +91,16 @@ const userService = r
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userService, userRegistered })
-  .run(async (userData, { userService, userRegistered }) => {
-    const user = await userService.createUser(userData);
-    await userRegistered({ userId: user.id, email: user.email });
-    return user;
-  })
+  .run(
+    async (
+      userData: { name: string; email: string },
+      { userService, userRegistered },
+    ) => {
+      const user = await userService.createUser(userData);
+      await userRegistered({ userId: user.id, email: user.email });
+      return user;
+    },
+  )
   .build();
 
 const adminOnlyTask = r
@@ -92,7 +109,7 @@ const adminOnlyTask = r
   .run(async () => "Top secret admin data")
   .build();
 
-// Event Handlers using hooks
+// Event hooks
 const sendWelcomeEmail = r
   .hook("app.hooks.sendWelcomeEmail")
   .on(userRegistered)
@@ -109,6 +126,10 @@ const server = r
   .register([
     config,
     database,
+    RequestContext,
+    userRegistered,
+    authMiddleware,
+    emailService,
     userService,
     registerUser,
     adminOnlyTask,
@@ -122,7 +143,7 @@ const server = r
     // Middleware to set up request context
     app.use((req, res, next) => {
       RequestContext.provide(
-        { userId: req.headers["user-id"], role: req.headers["user-role"] },
+        { userId: req.get("user-id"), role: req.get("user-role") },
         () => next(),
       );
     });
@@ -132,7 +153,9 @@ const server = r
         const user = await registerUser(req.body);
         res.json({ success: true, user });
       } catch (error) {
-        res.status(400).json({ error: error.message });
+        res.status(400).json({
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     });
 
@@ -141,7 +164,9 @@ const server = r
         const data = await adminOnlyTask();
         res.json({ data });
       } catch (error) {
-        res.status(403).json({ error: error.message });
+        res.status(403).json({
+          error: error instanceof Error ? error.message : String(error),
+        });
       }
     });
 
@@ -149,13 +174,15 @@ const server = r
     console.log(`Server running on port ${config.port}`);
     return server;
   })
-  .dispose(async (server) => server.close())
+  .dispose(
+    async (server) => new Promise<void>((resolve) => server.close(() => resolve())),
+  )
   .build();
 
 // Start the application with enhanced run options
-const { dispose, taskRunner, eventManager } = await run(server, {
+const { dispose } = await run(server, {
   debug: "normal", // Enable debug logging
-  // log: "json", // Use JSON log format
+  // logs: { printStrategy: "json" }, // Use JSON log format
 });
 
 // Graceful shutdown
@@ -166,11 +193,11 @@ process.on("SIGTERM", async () => {
 });
 ```
 
-> **runtime:** "Ah yes, the 'Real‑World Example'—a terrarium where nothing dies and every request is polite. Release it into production and watch nature document a very different ecosystem."
+> **runtime:** "Real‑World Example: the happy path. In production you’ll add validation, auth, observability, and a few weird edge cases. The wiring pattern stays the same."
 
 ## Testing
 
-Runner's explicit dependency injection makes testing straightforward—no magic mocks, no container hacks. Just pass what you need.
+Runner's explicit dependency injection makes testing straightforward—no magic mocks, no framework test harnesses. Just pass what you need.
 
 ### Two testing approaches
 
@@ -181,42 +208,44 @@ Runner's explicit dependency injection makes testing straightforward—no magic 
 
 ### Unit testing (fast, isolated)
 
-Call `.run()` directly on any task with mock dependencies. This **bypasses middleware**—you're testing pure business logic.
+Call `.run()` directly on any task with mock dependencies. This bypasses middleware and runtime validation—you're testing pure business logic.
 
 ```typescript
-import { describe, it, expect, vi } from "vitest";
-
 describe("registerUser task", () => {
   it("creates user and emits event", async () => {
     // Create mocks
-    const mockDb = {
-      createUser: vi.fn().mockResolvedValue({ id: "user-123", name: "Alice" }),
+    const mockUserService = {
+      createUser: jest.fn().mockResolvedValue({
+        id: "user-123",
+        name: "Alice",
+        email: "alice@example.com",
+      }),
     };
-    const mockEvent = vi.fn();
+    const mockUserRegistered = jest.fn().mockResolvedValue(undefined);
 
     // Call the task directly - no runtime needed!
     const result = await registerUser.run(
       { name: "Alice", email: "alice@example.com" },
-      { database: mockDb, userCreated: mockEvent }, // Inject mocks
+      { userService: mockUserService, userRegistered: mockUserRegistered },
     );
 
     // Assert
     expect(result.id).toBe("user-123");
-    expect(mockEvent).toHaveBeenCalledWith({
+    expect(mockUserRegistered).toHaveBeenCalledWith({
       userId: "user-123",
       email: "alice@example.com",
     });
   });
 
   it("handles duplicate email", async () => {
-    const mockDb = {
-      createUser: vi.fn().mockRejectedValue(new Error("Email already exists")),
+    const mockUserService = {
+      createUser: jest.fn().mockRejectedValue(new Error("Email already exists")),
     };
 
     await expect(
       registerUser.run(
         { name: "Bob", email: "taken@example.com" },
-        { database: mockDb },
+        { userService: mockUserService, userRegistered: jest.fn() },
       ),
     ).rejects.toThrow("Email already exists");
   });
@@ -239,7 +268,7 @@ describe("User registration flow", () => {
       .build();
 
     const mockMailer = override(realMailer, {
-      init: async () => ({ send: vi.fn().mockResolvedValue(true) }),
+      init: async () => ({ send: jest.fn().mockResolvedValue(true) }),
     });
 
     // Build test harness with overrides

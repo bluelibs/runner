@@ -1,13 +1,13 @@
 ## What Is This Thing?
 
-BlueLibs Runner is a TypeScript-first framework that embraces functional programming principles while keeping dependency injection simple enough that you won't need a flowchart to understand your own code. Think of it as the anti-framework framework – it gets out of your way and lets you build stuff that actually works.
+BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It’s explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
 
 ### The Core
 
 - **Tasks are functions** - Your business logic, nicely packaged with dependency injection
 - **Resources are singletons** - Database connections, configs, services – things that live for your app's lifetime
 - **Events are just events** - Decouple parts of your app so they can talk without tight coupling
-- **Hooks are lightweight listeners** - React to events without the overhead of full tasks
+- **Hooks are lightweight subscribers** - React to events without the overhead of full tasks
 - **Middleware** - Add cross-cutting concerns (logging, auth, caching) without cluttering your business logic
 - **Everything is async** - Built for modern JavaScript/TypeScript
 - **Explicit beats implicit** - You'll always know what's happening and why
@@ -23,13 +23,6 @@ BlueLibs Runner is a TypeScript-first framework that embraces functional program
 - Teams that want middleware patterns without decorator magic
 - Applications growing beyond "one file" that need organization
 
-**Probably not for:**
-
-- Simple scripts or CLI tools (overkill — just use functions)
-- Serverless functions with cold-start sensitivity (the DI graph adds initialization time)
-- Projects allergic to any abstraction (Runner is minimal, but it's still a framework)
-- Browser-only SPAs without backend (works technically, but why?)
-
 **The honest take**: If your app has 3+ services that depend on each other and you're tired of manually passing things around, Runner pays off. If you're building a 50-line script, stick with plain functions.
 
 ---
@@ -44,6 +37,7 @@ import { r, globals } from "@bluelibs/runner";
 // Built-in middleware from globals
 const { cache, retry } = globals.middleware.task;
 
+// Assuming: db is a resource defined elsewhere, and mockDb is its test double
 // ONE LINE to add caching with TTL
 const getUser = r
   .task("users.get")
@@ -55,7 +49,7 @@ const getUser = r
 // ONE LINE to add retry with exponential backoff
 const callAPI = r
   .task("api.call")
-  .middleware([retry.with({ retries: 3, backoff: "exponential" })]) // ← Auto-retry failures
+  .middleware([retry.with({ retries: 3 })]) // ← Auto-retry failures (default exponential backoff)
   .run(async (url) => fetch(url))
   .build();
 
@@ -72,26 +66,217 @@ test("getUser works", async () => {
 
 ## How Does It Compare?
 
-| Feature               | Runner        | NestJS     | InversifyJS | TypeDI     | tsyringe   |
-| --------------------- | ------------- | ---------- | ----------- | ---------- | ---------- |
-| **Learning Curve**    | Gentle        | Steep      | Steep       | Moderate   | Moderate   |
-| **Magic/Decorators**  | None          | Heavy      | Heavy       | Heavy      | Heavy      |
-| **Bundle Size**       | Small         | Large      | Large       | Medium     | Medium     |
-| **Type Safety**       | Perfect       | Runtime    | Runtime     | Runtime    | Runtime    |
-| **Test Speed**        | Instant       | Slow       | Slow        | OK         | OK         |
-| **Built-in Features** | Everything    | Everything | Basic DI    | Basic DI   | Basic DI   |
-| **Framework Lock-in** | None          | Heavy      | Light       | Light      | Light      |
-| **Functional Style**  | Native        | Awkward    | Awkward     | Class-only | Class-only |
-| **Middleware**        | Built-in      | Built-in   | Manual      | Manual     | Manual     |
-| **Events**            | Built-in      | Built-in   | Manual      | Manual     | Manual     |
-| **Async Context**     | Built-in      | Manual     | Manual      | Manual     | Manual     |
-| **Durable Workflows** | Built-in      | No         | No          | No         | No         |
-| **HTTP Tunnels**      | Built-in      | No         | No          | No         | No         |
-| **Debug Experience**  | Crystal clear | Confusing  | Confusing   | Confusing  | Confusing  |
+### Quick Comparison Matrix
 
-**TL;DR:** Runner gives you the features of NestJS with the simplicity of plain functions.
+| Feature                    | Runner                 | NestJS              | InversifyJS    | TypeDI         | tsyringe       |
+| -------------------------- | ---------------------- | ------------------- | -------------- | -------------- | -------------- |
+| **Programming Paradigm**   | Functional-first       | OOP/Class-based     | OOP/Class-based | OOP/Class-based | OOP/Class-based |
+| **DI Mechanism**           | Explicit, no reflection | Decorators, reflection | Decorators, reflection | Decorators, reflection | Decorators, reflection |
+| **Type Safety**            | Full inference         | Manual typing       | Manual typing  | Manual typing  | Manual typing  |
+| **Learning Curve**         | Gentle                 | Steep               | Moderate       | Moderate       | Moderate       |
+| **Size**                   | Medium (tree-shakable) | Large               | Small          | Small          | Small          |
+| **Built-in Features**      | Broad toolkit          | Full framework      | DI only        | DI only        | DI only        |
+| **Test Isolation**         | Easy                   | Moderate            | Moderate       | Moderate       | Moderate       |
+| **Framework Lock-in**      | Minimal                | High                | Low            | Low            | Low            |
+| **Async Context**          | Yes (Node-only)        | Partial (ecosystem) | No             | No             | No             |
+| **Middleware**             | Composable, type-safe  | Guard/Interceptor system | N/A        | N/A            | N/A            |
+| **Events**                 | First-class support    | EventEmitter2       | N/A            | N/A            | N/A            |
+| **Durable Workflows**      | Yes (Node-only)        | No (external libs)  | No             | No             | No             |
+| **HTTP Tunnels**           | Yes (Node-only)        | No                  | No             | No             | No             |
+| **Ecosystem**              | Growing                | Mature, extensive   | Moderate       | Moderate       | Small          |
 
-> **runtime:** "Framework comparison tables: where 'Learning Curve: Gentle' means I ship with documentation and 'Type Safety: Perfect' means TypeScript isn't decorative confetti. The competition brought decorators; I brought functions that actually compile."
+> **Note:** This table is intentionally qualitative. Runner’s durable workflows and HTTP tunnels are Node-only features (via `@bluelibs/runner/node`).
+
+### Side-by-Side: The Same Feature in Both Frameworks
+
+Let's compare implementing the same user service in both frameworks:
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+**NestJS Approach** (~45 lines)
+
+```typescript
+// user.dto.ts
+import { IsString, IsEmail } from 'class-validator';
+
+export class CreateUserDto {
+  @IsString()
+  name: string;
+
+  @IsEmail()
+  email: string;
+}
+
+// user.service.ts
+import { Injectable } from '@nestjs/common';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
+
+@Injectable()
+export class UserService {
+  constructor(
+    @InjectRepository(User)
+    private userRepo: Repository<User>,
+    private readonly mailer: MailerService,
+    private readonly logger: LoggerService,
+  ) {}
+
+  async createUser(dto: CreateUserDto) {
+    const user = await this.userRepo.save(dto);
+    await this.mailer.sendWelcome(user.email);
+    this.logger.log(`Created user ${user.id}`);
+    return user;
+  }
+}
+
+// user.module.ts
+@Module({
+  imports: [TypeOrmModule.forFeature([User])],
+  providers: [UserService, MailerService],
+  controllers: [UserController],
+})
+export class UserModule {}
+```
+
+</td>
+<td width="50%" valign="top">
+
+**Runner Approach** (~25 lines)
+
+```typescript
+// users.ts
+import { r, globals } from "@bluelibs/runner";
+import { z } from "zod";
+
+const createUser = r
+  .task("users.create")
+  .dependencies({ 
+    db, 
+    mailer, 
+    logger: globals.resources.logger 
+  })
+  .inputSchema(z.object({ 
+    name: z.string(), 
+    email: z.string().email() 
+  }))
+  .run(async (input, { db, mailer, logger }) => {
+    const user = await db.users.insert(input);
+    await mailer.sendWelcome(user.email);
+    await logger.info(`Created user ${user.id}`);
+    return user;
+  })
+  .build();
+
+// Register in app
+const app = r.resource("app")
+  .register([db, mailer, createUser])
+  .build();
+```
+
+</td>
+</tr>
+<tr>
+<td>
+
+**Testing in NestJS:**
+```typescript
+describe('UserService', () => {
+  let service: UserService;
+  let userRepo: MockType<Repository<User>>;
+
+  beforeEach(async () => {
+    const module = await Test.createTestingModule({
+      providers: [
+        UserService,
+        { provide: getRepositoryToken(User), 
+          useFactory: mockRepository },
+        { provide: MailerService, 
+          useValue: mockMailer },
+        { provide: LoggerService, 
+          useValue: mockLogger },
+      ],
+    }).compile();
+
+    service = module.get(UserService);
+  });
+
+  it('creates user', async () => {
+    const result = await service.createUser({
+      name: 'Ada', email: 'ada@test.com'
+    });
+    expect(result.id).toBeDefined();
+  });
+});
+```
+
+</td>
+<td>
+
+**Testing in Runner:**
+```typescript
+describe('createUser', () => {
+  it('creates user', async () => {
+    // Direct call - no app runtime needed
+    const result = await createUser.run(
+      { name: 'Ada', email: 'ada@test.com' },
+      { 
+        db: mockDb, 
+        mailer: mockMailer, 
+        logger: mockLogger 
+      }
+    );
+    expect(result.id).toBeDefined();
+  });
+});
+```
+
+</td>
+</tr>
+</table>
+
+### Honest Assessment: Where Each Shines
+
+**Choose NestJS when:**
+- You want an opinionated, batteries-included web framework (controllers, modules, interceptors, CLI)
+- You're already experienced with Angular and love the decorator patterns
+- Your team prefers strict OOP architectural patterns
+- You need the extensive ecosystem (Swagger, GraphQL, WebSockets all pre-integrated)
+- You're building a large enterprise app with many developers who need guardrails
+- You want established conventions that are widely documented
+
+**Choose Runner when:**
+- You prefer functional programming over OOP
+- You value minimal boilerplate and explicit code
+- Fast test execution matters (no framework testing module setup)
+- You want full type inference without manual typing
+- You need durable workflows or HTTP tunnels in Node.js (`@bluelibs/runner/node`)
+- You're integrating into an existing project gradually
+- You want to understand exactly what's happening (no decorator magic)
+
+**Choose a DI container (InversifyJS / TypeDI / tsyringe) when:**
+- You want class-based DI but you don’t want a higher-level framework/toolkit
+- You’re happy to bring your own patterns for middleware, events, and lifecycle
+- You’re adding DI to an existing architecture and want minimal surface area
+
+**The honest take:**
+
+NestJS is a **batteries-included framework** inspired by Angular – opinionated, structured, and powerful. It's excellent for teams that want clear architectural patterns enforced by the framework.
+
+Runner is a **composition-first application toolkit**: tasks/resources, middleware, events/hooks, and a runtime that wires everything together. It prioritizes type inference, testability, and explicit code over magical conventions.
+
+Neither is universally "better" – they solve the same problem with different philosophies:
+
+| Philosophy        | NestJS                          | Runner                              |
+| ----------------- | ------------------------------- | ----------------------------------- |
+| **Architecture**  | Enforced patterns (MVC, modules)| Bring your own structure            |
+| **Dependencies**  | Injected via decorators         | Explicit via `.dependencies()`      |
+| **Testing**       | Framework test modules          | Direct function calls with mocks    |
+| **Mental Model**  | Classes and decorators          | Functions and composition           |
+| **Onboarding**    | Learn NestJS conventions first  | Use what you know, add DI           |
+
+> **TL;DR:** NestJS says "follow our patterns and we'll handle the complexity." Runner says "write functions, we'll wire them together."
 
 ---
 
@@ -244,10 +429,10 @@ import { r, run } from "@bluelibs/runner";
 // Step 1: Create a simple task (just a function with a name)
 const greet = r
   .task("greet")
-  .run(async (name: string) => `Hello, ${name}! `)
+  .run(async (name: string) => `Hello, ${name}!`)
   .build();
 
-// Step 2: Put it in a resource (think of it as your app container)
+// Step 2: Put it in an app resource (where you register components)
 const app = r
   .resource("app")
   .register([greet]) // Tell the app about your task
@@ -258,7 +443,7 @@ const { runTask, dispose } = await run(app);
 
 // Step 4: Use your task
 const message = await runTask(greet, "World");
-console.log(message); // "Hello, World! "
+console.log(message); // "Hello, World!"
 
 // Step 5: Clean up when done
 await dispose();
@@ -308,7 +493,9 @@ const server = r
         });
       }),
   )
-  .dispose(async ({ listener }) => listener.close())
+  .dispose(
+    async ({ listener }) => new Promise((resolve) => listener.close(resolve)),
+  )
   .build();
 
 // Tasks are your business logic - easily testable functions
@@ -436,7 +623,7 @@ const processOrder = r
 This one trips everyone up at first! Here's the pattern:
 
 ```typescript
-// 1. Create your app container
+// 1. Create your app resource
 const app = r
   .resource("app")
   .register([myTask]) // Register your tasks here
@@ -755,7 +942,7 @@ const app = r
     callExternalAPI, // retrying task
     registerUser, // event emitter
     userRegistered, // event definition
-    sendWelcomeEmail, // hook listener
+    sendWelcomeEmail, // hook
     processOrder, // queue-protected task
     processPayment, // logged task
   ])

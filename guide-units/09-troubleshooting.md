@@ -2,6 +2,8 @@
 
 When things go sideways, this is your field manual. No fluff, just fixes.
 
+> **Note:** Unless shown otherwise, snippets assume `import { r, run, globals } from "@bluelibs/runner";` and any external libraries (Express, database clients) are already set up.
+
 ---
 
 ### Error Index
@@ -142,7 +144,7 @@ const { runTask, dispose } = await run(app, {
 // Only debug specific tasks
 const criticalTask = r
   .task("app.tasks.payment")
-  .tags([globals.tags.debug.with({ logTaskInput: true, logTaskResult: true })])
+  .tags([globals.tags.debug.with({ logTaskInput: true, logTaskOutput: true })])
   .run(async (input) => processPayment(input))
   .build();
 ```
@@ -212,7 +214,7 @@ const server = r
 **Likely causes**:
 
 1. Dispose function has unresolved promise
-2. Event listener not properly cleaned up
+2. A resource left open handles (timers/sockets)
 3. Circular await in dispose chain
 
 **Debug approach**:

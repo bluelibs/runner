@@ -27,30 +27,34 @@ await result.dispose();
 
 | Property                | Description                                                        |
 | ----------------------- | ------------------------------------------------------------------ |
-| `value`                 | Value returned by root resource’s `init()`                         |
+| `value`                 | Value returned by the `app` resource's `init()`                    |
 | `runTask(...)`          | Run a task by reference or string id                               |
 | `emitEvent(...)`        | Emit events                                                        |
-| `getResourceValue(...)` | Read a resource’s value                                            |
+| `getResourceValue(...)` | Read a resource's value                                            |
 | `logger`                | Logger instance                                                    |
 | `store`                 | Runtime store with registered resources, tasks, middleware, events |
-| `dispose()`             | Gracefully dispose resources and unhook listeners                  |
+| `dispose()`             | Gracefully dispose resources and unhook process listeners          |
 
 ### RunOptions
 
-Pass as the second argument to `run(root, options)`.
+Pass as the second argument to `run(app, options)`.
 
 | Option             | Type                    | Description                                                                                                                                                                                                                   |
 | ------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug`            | `"normal" or "verbose"` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. Can also be a partial config object for fine-grained control.                                                |
+| `debug`            | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                          |
 | `logs`             | `object`                | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete. |
 | `errorBoundary`    | `boolean`               | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                        |
 | `shutdownHooks`    | `boolean`               | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                            |
-| `onUnhandledError` | `(err, ctx) => void`    | Custom handler for unhandled errors captured by the boundary.                                                                                                                                                                 |
+| `onUnhandledError` | `(info) => void \| Promise<void>` | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                 |
 | `dryRun`           | `boolean`               | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                          |
+| `runtimeCycleDetection` | `boolean`          | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                 |
+| `mode`             | `"dev" \| "prod" \| "test"` | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                            |
+
+For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
 
 ```ts
 const result = await run(app, { dryRun: true });
-// result.value is undefined (root not initialized)
+// result.value is undefined (app not initialized)
 // You can inspect result.store.resources / result.store.tasks
 await result.dispose();
 ```
@@ -86,7 +90,7 @@ await run(app, { dryRun: true });
 ```ts
 await run(app, {
   errorBoundary: true,
-  onUnhandledError: (err) => report(err),
+  onUnhandledError: ({ error }) => report(error),
 });
 ```
 
@@ -148,7 +152,7 @@ Resources initialize in dependency order and dispose in **reverse** order. If Re
 1. **Startup**: A initializes first, then B
 2. **Shutdown**: B disposes first, then A
 
-This ensures resources always have their dependencies available.
+This ensures a resource can safely use its dependencies during both `init()` and `dispose()`.
 
 ```mermaid
 sequenceDiagram
@@ -156,9 +160,6 @@ sequenceDiagram
     participant Runner
     participant R1 as Database
     participant R2 as Server (needs Database)
-
-    style R1 fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
-    style R2 fill:#2196F3,stroke:#1565C0,stroke-width:2px,color:#fff
 
     Note over App,R2: Startup (dependencies first)
     App->>Runner: run(app)
@@ -178,8 +179,24 @@ sequenceDiagram
 
 ### Basic shutdown handling
 
+> **Platform Note:** This example uses Express and Node.js process signals, so it runs on Node.js.
+
 ```typescript
+import express from "express";
 import { r, run } from "@bluelibs/runner";
+
+type DbConnection = {
+  ping: () => Promise<void>;
+  close: () => Promise<void>;
+};
+
+const connectToDatabase = async (): Promise<DbConnection> => {
+  // Replace with your real DB client initialization
+  return {
+    ping: async () => {},
+    close: async () => {},
+  };
+};
 
 const database = r
   .resource("app.database")
@@ -197,10 +214,12 @@ const database = r
 const server = r
   .resource<{ port: number }>("app.server")
   .dependencies({ database })
-  .init(async ({ port }) => {
-    const app = express().listen(port);
+  .init(async ({ port }, { database }) => {
+    await database.ping(); // Guaranteed to exist: `database` initializes first
+
+    const httpServer = express().listen(port);
     console.log(`Server on port ${port}`);
-    return app;
+    return httpServer;
   })
   .dispose(async (app) => {
     return new Promise((resolve) => {
@@ -210,6 +229,15 @@ const server = r
       });
     });
   })
+  .build();
+
+const app = r
+  .resource("app")
+  .register([
+    database,
+    server.with({ port: 3000 }),
+  ])
+  .init(async () => "ready")
   .build();
 
 // Run with automatic shutdown hooks
@@ -227,7 +255,7 @@ By default, Runner installs handlers for `SIGTERM` and `SIGINT`:
 
 ```typescript
 await run(app, {
-  shutdownHooks: true, // default in production
+  shutdownHooks: true, // default: true
 });
 
 // Now Ctrl+C or `kill <pid>` triggers graceful shutdown

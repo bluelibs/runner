@@ -7,9 +7,6 @@
 Runner is a TypeScript-first framework for building applications from tasks (functions) and resources
 (singletons), with explicit dependency injection, middleware, events, hooks, and lifecycle management.
 
-For a token-friendly overview of the fluent builder API (`r.*`), see [AI.md](./AI.md).
-Node-only features (durable workflows, tunnels) live under `@bluelibs/runner/node` and in `./readmes/`.
-
 <p align="center">
 <a href="https://github.com/bluelibs/runner/actions/workflows/ci.yml"><img src="https://github.com/bluelibs/runner/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build Status" /></a>
 <a href="https://github.com/bluelibs/runner"><img src="https://img.shields.io/badge/coverage-100%25-brightgreen" alt="Coverage 100% is enforced" /></a>
@@ -62,8 +59,6 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 // await runtime.dispose() when you are done.
 ```
 
-**[Documentation](https://bluelibs.github.io/runner/)** · **[AI.md](./AI.md)** · **[Examples](https://github.com/bluelibs/runner/tree/main/examples)** · **[GitHub](https://github.com/bluelibs/runner)**
-
 ---
 
 | Resource                                                                                                            | Type    | Description                         |
@@ -73,17 +68,34 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
 | [AI-Friendly Docs](./AI.md)                                                                                         | Docs    | Compact summary (<5000 tokens)      |
-| [Migration Guide (3.x → 4.x)](https://github.com/bluelibs/runner/blob/main/readmes/MIGRATION.md)                    | Guide   | Step-by-step upgrade instructions   |
-| [Design Documents](https://github.com/bluelibs/runner/blob/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
+| [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
-| [AI Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner)                                       | Chatbot | Interactive Q&A assistant           |
 
 ### Community & Policies
 
 - [Code of Conduct](./CODE_OF_CONDUCT.md)
 - [Contributing](./CONTRIBUTING.md)
 - [Security](./SECURITY.md)
+
+## Choose Your Path
+
+- **New to Runner**: Start with [Your First 5 Minutes](#your-first-5-minutes)
+- **Prefer an end-to-end example**: Jump to [Quick Start](#quick-start) or [Real-World Example](#real-world-example-the-complete-package)
+- **Need Node-only capabilities**: See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
+- **Need remote execution**: See [HTTP Tunnels](./readmes/TUNNELS.md) (expose from Node.js, call from any `fetch` runtime)
+- **Care about portability**: Read [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md)
+- **Want the short version**: Read [AI.md](./AI.md)
+
+## Platform Support (Quick Summary)
+
+| Capability                                    | Node.js | Browser | Edge | Notes |
+| --------------------------------------------- | ------ | ------- | ---- | ----- |
+| Core runtime (tasks/resources/events/hooks)   | Full   | Full    | Full | Platform adapters hide runtime differences |
+| Async Context (`r.asyncContext`)              | Full   | None    | None | Requires Node.js `AsyncLocalStorage` |
+| Durable workflows (`@bluelibs/runner/node`)   | Full   | None    | None | Node-only module |
+| Tunnels client (`createExposureFetch`)        | Full   | Full    | Full | Requires `fetch` |
+| Tunnels server (`@bluelibs/runner/node`)      | Full   | None    | None | Exposes tasks/events over HTTP |
 
 ---
 
@@ -93,34 +105,35 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 <tr>
 <td width="50%" valign="top">
 
-### The Problem
+### Current Way
 
-Modern dependency injection frameworks force difficult trade-offs:
-
-- **Magic-heavy** — Decorators, reflection, and runtime tricks make debugging painful
-- **Boilerplate-heavy** — Manual wiring and factory patterns slow development
-- **Steep learning curves** — Months to become productive
+Modern dependency injection frameworks force difficult trade-offs: decorators, reflection, and runtime tricks make debugging painful.
 
 The result is code that's hard to test, hard to understand, and hard to maintain:
 
 ```typescript
 @Injectable()
-@Transactional()
-@Cacheable({ ttl: 60 })
 export class UserService {
   constructor(
     private readonly db: Database,
-    private readonly cache: Cache,
     private readonly logger: Logger,
     // ... more dependencies
   ) {}
+
+  createUser(input: UserInputType) {
+    const user = await this.db.users.insert(input);
+    this.logger.info("User created", { userId: user.id });
+    return user;
+  }
 }
+
+// Boilerplate to start the application, use the services, etc.
 ```
 
 </td>
 <td width="50%" valign="top">
 
-### The Solution
+### Next-gen way
 
 Runner provides a functional, explicit approach:
 
@@ -128,15 +141,18 @@ Runner provides a functional, explicit approach:
 const createUser = r
   .task("users.create")
   .dependencies({ db, logger })
-  .run(async (input, { db, logger }) => {
+  .run(async (input: UserInputType, { db, logger }) => {
     const user = await db.users.insert(input);
     logger.info("User created", { userId: user.id });
     return user;
   })
   .build();
 
-// Easy to test with mock dependencies
-await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
+const app = r.resource("app")
+  .register([db, logger, createUser])
+  .build();
+
+const runtime = await run(app);
 ```
 
 **Benefits:**
@@ -150,8 +166,6 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 </td>
 </tr>
 </table>
-
-**Design principles:** Functions over classes · Explicit over implicit · Simple over clever
 
 ---
 
@@ -177,7 +191,7 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [Tasks](#tasks) - Functions with superpowers
 - [Resources](#resources) - Singletons and lifecycle management
 - [Events](#events) - Decoupled communication
-- [Hooks](#hooks) - Lightweight event listeners
+- [Hooks](#hooks) - Lightweight event subscribers
 - [Middleware](#middleware) - Cross-cutting concerns
 - [Tags](#tags) - Component discovery and configuration
 - [Errors](#errors) - Typed error handling
@@ -202,10 +216,11 @@ await createUser.run(mockInput, { db: mockDb, logger: mockLogger });
 - [Semaphore](#semaphore) - Concurrency control
 - [Queue](#queue) - Task scheduling
 
-**Node-Specific Features** (see dedicated guides in `./readmes/`)
+**Deployment & Integrations** (see dedicated guides in `./readmes/`)
 
-- [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows
-- [HTTP Tunnels](./readmes/TUNNELS.md) - Remote task execution
+- [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows (Node-only)
+- [HTTP Tunnels](./readmes/TUNNELS.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
+- [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md) - How Runner supports Node, browsers, and edge runtimes
 
 **Architecture Patterns**
 

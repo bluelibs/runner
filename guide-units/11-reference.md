@@ -5,6 +5,11 @@
 ### Creating Components
 
 ```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const { cache, retry } = globals.middleware.task;
+
+// Assuming: db and logger are resources defined elsewhere
 // Task - Basic
 const myTask = r
   .task("id")
@@ -60,8 +65,8 @@ const { runTask, dispose } = await run(app);
 
 // With options
 const { runTask, dispose } = await run(app, {
-  debug: "verbose", // "normal" | "verbose" | "off"
-  onUnhandledError: (error) => console.error(error),
+  debug: "verbose", // "normal" | "verbose"
+  onUnhandledError: ({ error }) => console.error(error),
 });
 
 // Execute tasks
@@ -171,7 +176,7 @@ await run(app, { debug: "verbose" });
 
 // Add per-component debug
 const task = r.task("id")
-  .tags([globals.tags.debug.with({ logTaskInput: true, logTaskResult: true })])
+  .tags([globals.tags.debug.with({ logTaskInput: true, logTaskOutput: true })])
   .run(...)
   .build();
 
@@ -195,10 +200,10 @@ try {
 
 // Queue - sequential task processing
 const queue = new Queue();
-await queue.add(async () => {
+await queue.run(async (_signal) => {
   /* runs in order */
 });
-await queue.add(async () => {
+await queue.run(async (_signal) => {
   /* waits for previous */
 });
 ```
@@ -220,12 +225,12 @@ After reading this far, here's what you've learned:
 ### What sets Runner apart
 
 - **Type Safety**: Full TypeScript support with intelligent inference—not just "any" everywhere
-- **Testability**: Call `.run()` directly with mocks. No container setup, no magic
+- **Testability**: Call `.run()` directly with mocks. No app runtime setup, no magic
 - **Clarity**: Dependencies are explicit. No decorators, no reflection, no surprises
 - **Performance**: Middleware overhead is ~0.00026ms. Tests run in milliseconds
 - **Batteries included**: Caching, retry, timeouts, events, logging—all built in
 
-> **runtime:** "Why choose it? The bullets are persuasive. In practice, your 'intelligent inference' occasionally elopes with `any`, and your 'clear patterns' cosplay spaghetti. Still, compared to the alternatives… I've seen worse cults."
+> **runtime:** "Why choose it? The bullets are persuasive. Keep your tasks small and your dependencies explicit, and the code stays tidy. Ignore the types and I can’t save you—but I’ll still log the crash with impeccable manners."
 
 ## The Migration Path
 
@@ -259,7 +264,7 @@ await run(app);
 
 Repeat. Gradually, your spaghetti becomes lasagna.
 
-> **runtime:** "'No big bang rewrites.' Only a series of extremely small bangs that echo for six months. You start with one task; next thing, your monolith is wearing microservice eyeliner. It's a look."
+> **runtime:** "'No big bang rewrites.' Start with one resource and one task, then migrate incrementally. I’ll keep the wiring honest while you refactor—one small, reversible step at a time."
 
 ## Community & Support
 

@@ -39,7 +39,7 @@ const registerUser = r
     // Core logic always runs
     const user = await database.create(input);
 
-    // Optional services fail silently
+    // Optional dependencies are undefined if missing
     await analytics?.track("user.registered");
     await email?.sendWelcome(user.email);
 
@@ -451,7 +451,7 @@ const testEmailer = override(productionEmailer, {
 });
 ```
 
-Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the root) wins, because it's applied last. Conflicting overrides are allowed; overriding something that wasn't registered throws. Use override() to change behavior safely while preserving the original id.
+Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the top) wins, because it's applied last. Conflicting overrides are allowed; overriding something that wasn't registered throws. Use override() to change behavior safely while preserving the original id.
 
 > **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 
@@ -957,7 +957,7 @@ const databaseTag = r
   >("app.tags.database")
   .build();
 
-// ✅ Valid Resource
+// Valid resource
 const validDb = r
   .resource("app.db")
   .tags([databaseTag])
@@ -972,7 +972,7 @@ const validDb = r
   })
   .build();
 
-// ❌ Invalid Resource - Compilation Error
+// Invalid resource (TypeScript error)
 const invalidDb = r
   .resource("app.bad-db")
   .tags([databaseTag])
@@ -1046,7 +1046,7 @@ The function pattern essentially gives you "just-in-time" dependency resolution 
 
 **Performance note**: Function-based dependencies have minimal overhead - they're only called once during dependency resolution.
 
-> **runtime:** "'Use with caution,' they whisper, tossing you the root credentials to the universe. Yes, reach into the `store`. Rewire fate. When the graph looks like spaghetti art, I'll frame it and label it 'experimental.'"
+> **runtime:** "'Use with caution,' they whisper, tossing you the app credentials to the universe. Yes, reach into the `store`. Rewire fate. When the graph looks like spaghetti art, I'll frame it and label it 'experimental.'"
 
 ## Handling Circular Dependencies
 

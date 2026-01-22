@@ -34,7 +34,7 @@ sequenceDiagram
         Deps-->>Task: Injected resources
         Task->>Task: Execute business logic
         Task->>Event: Emit events
-        Event->>Hooks: Propagate to listeners
+        Event->>Hooks: Propagate to hooks
         Hooks-->>Event: Hooks complete
         Task-->>MW: Result
 
@@ -67,7 +67,7 @@ flowchart TD
     E -->|No| F[Throw detailed error]
     E -->|Yes| G[Initialize resources in order]
     G --> H[Register middleware]
-    H --> I[Wire up event listeners]
+    H --> I[Wire up hooks]
     I --> J[Emit ready event]
     J --> K[Return runtime handles]
 
@@ -295,7 +295,7 @@ hookC.order(20); // Priority 20
 // Batch 2: hookC runs after batch 1 completes
 ```
 
-**Wildcard listeners:**
+**Wildcard hooks:**
 
 ```typescript
 // Catches ALL events (except those with excludeFromGlobalHooks tag)

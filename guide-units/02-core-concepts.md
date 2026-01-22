@@ -287,16 +287,16 @@ By default, hooks run sequentially in priority order. Use `.parallel(true)` on a
 const highVolumeEvent = r
   .event("app.events.highVolume")
   .payloadSchema<{ data: string }>({ parse: (v) => v })
-  .parallel(true) // Listeners with same priority run concurrently
+  .parallel(true) // Hooks with same priority run concurrently
   .build();
 ```
 
 **How parallel execution works:**
 
-- Listeners are grouped by `.order()` priority
-- Within each priority batch, listeners run concurrently
+- Hooks are grouped by `.order()` priority
+- Within each priority batch, hooks run concurrently
 - Batches execute sequentially (lowest priority number first)
-- If any listener throws, subsequent batches don't run
+- If any hook throws, subsequent batches don't run
 - `stopPropagation()` is checked between batches only
 
 ```typescript
@@ -333,21 +333,21 @@ const logAllEventsHook = r
   .build();
 ```
 
-#### Excluding Events from Global Listeners
+#### Excluding Events from Global Hooks
 
-Sometimes you have internal or system events that should not be picked up by wildcard listeners. Use the `excludeFromGlobalHooks` tag to prevent events from being sent to `"*"` listeners:
+Sometimes you have internal or system events that should not be picked up by wildcard hooks. Use the `excludeFromGlobalHooks` tag to prevent events from being sent to `"*"` hooks:
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
 
-// Internal event that won't be seen by global listeners
+// Internal event that won't be seen by global hooks
 const internalEvent = r
   .event("app.events.internal")
   .tags([globals.tags.excludeFromGlobalHooks])
   .build();
 ```
 
-**When to exclude events from global listeners:**
+**When to exclude events from global hooks:**
 
 - High-frequency internal events (performance)
 - System debugging events
@@ -357,11 +357,11 @@ const internalEvent = r
 
 #### Hooks
 
-The modern way to listen to events is through hooks. They are lightweight event listeners, similar to tasks, but with a few key differences.
+Hooks are the modern way to subscribe to events. They are lightweight event subscribers, similar to tasks, but with a few key differences.
 
 ```typescript
 const myHook = r
-  .hook("app.hooks.myEventHandler")
+  .hook("app.hooks.onUserRegistered")
   .on(userRegistered)
   .dependencies({ logger })
   .run(async (event, { logger }) => {
@@ -455,7 +455,7 @@ Available system event:
 
 #### stopPropagation()
 
-Sometimes you need to prevent other event listeners from processing an event. The `stopPropagation()` method gives you fine-grained control over event flow:
+Sometimes you need to prevent other hooks from processing an event. The `stopPropagation()` method gives you fine-grained control over event flow:
 
 ```typescript
 const criticalAlert = r
@@ -469,9 +469,9 @@ const criticalAlert = r
   })
   .build();
 
-// High-priority handler that can stop propagation
-const emergencyHandler = r
-  .hook("app.hooks.emergencyHandler")
+// High-priority hook that can stop propagation
+const emergencyHook = r
+  .hook("app.hooks.onCriticalAlert")
   .on(criticalAlert)
   .order(-100) // Higher priority (lower numbers run first)
   .run(async (event) => {
@@ -480,7 +480,7 @@ const emergencyHandler = r
     if (event.data.severity === "critical") {
       console.log("CRITICAL ALERT - Activating emergency protocols");
 
-      // Stop other handlers from running
+      // Stop other hooks from running
       event.stopPropagation();
       // Notify the on-call team, escalate, etc.
 
@@ -907,7 +907,7 @@ const internalTask = r
 
 const internalEvent = r
   .event("app.events.internal")
-  .tags([globals.tags.excludeFromGlobalHooks]) // Won't trigger wildcard listeners
+  .tags([globals.tags.excludeFromGlobalHooks]) // Won't trigger wildcard hooks
   .build();
 ```
 
