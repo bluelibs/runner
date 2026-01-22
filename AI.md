@@ -9,6 +9,19 @@ See `readmes/DURABLE_WORKFLOWS.md` (full) or `readmes/DURABLE_WORKFLOWS_AI.md` (
 They provide replay-safe primitives like `ctx.step(...)`, `ctx.sleep(...)`, `ctx.emit(...)`, and `ctx.waitForSignal(...)`.
 Use them when you need persistence and recovery across restarts/crashes.
 
+## Serializer Safety
+
+When deserializing untrusted payloads, configure the serializer to restrict
+symbol handling so payloads cannot grow the global Symbol registry.
+
+```ts
+import { Serializer, SymbolPolicy } from "@bluelibs/runner";
+
+const serializer = new Serializer({
+  symbolPolicy: SymbolPolicy.WellKnownOnly,
+});
+```
+
 ## Resources
 
 ```ts

@@ -39,7 +39,7 @@ const WELL_KNOWN_SYMBOL_KEYS = [
 
 type WellKnownSymbolKey = (typeof WELL_KNOWN_SYMBOL_KEYS)[number];
 
-type SerializedSymbolPayload =
+export type SerializedSymbolPayload =
   | { kind: SymbolPayloadKind.For; key: string }
   | { kind: SymbolPayloadKind.WellKnown; key: WellKnownSymbolKey };
 
@@ -53,7 +53,7 @@ const getWellKnownSymbolKey = (value: symbol): WellKnownSymbolKey | null => {
   return null;
 };
 
-const assertSerializedSymbolPayload = (
+export const assertSymbolPayload = (
   payload: unknown,
 ): SerializedSymbolPayload => {
   if (!payload || typeof payload !== "object") {
@@ -197,7 +197,7 @@ export const SymbolType: TypeDefinition<symbol, SerializedSymbolPayload> = {
     );
   },
   deserialize: (payload: SerializedSymbolPayload) => {
-    const parsed = assertSerializedSymbolPayload(payload);
+    const parsed = assertSymbolPayload(payload);
     if (parsed.kind === SymbolPayloadKind.For) {
       return Symbol.for(parsed.key);
     }
