@@ -54,6 +54,9 @@ export const globalResources = {
         "Manages all events and event listeners. This is meant to be used internally for most use-cases.",
     },
     tags: [systemTag],
+    dispose: async (eventManager) => {
+      eventManager.dispose();
+    },
   }),
   taskRunner: defineResource<void, Promise<TaskRunner>>({
     id: "globals.resources.taskRunner",

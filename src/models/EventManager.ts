@@ -330,6 +330,24 @@ export class EventManager {
   }
 
   /**
+   * Clears all listeners and interceptors.
+   * Call this to release references and free memory.
+   */
+  clear(): void {
+    this.registry.clear();
+    this.emissionInterceptors.length = 0;
+    this.hookInterceptors.length = 0;
+  }
+
+  /**
+   * Disposes the EventManager, releasing all listeners and interceptors.
+   * Alias for clear() following the IResource disposal pattern.
+   */
+  dispose(): void {
+    this.clear();
+  }
+
+  /**
    * Retrieves cached merged listeners for an event, or creates them if not cached.
    * Kept for backward compatibility (tests spy on this).
    */

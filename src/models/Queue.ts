@@ -105,6 +105,8 @@ export class Queue {
 
     // wait for everything already chained to settle
     await this.tail.catch(() => {});
+
+    this.eventManager.dispose();
   }
 
   on(type: QueueEventType, handler: (event: QueueEvent) => any): () => void {
@@ -156,16 +158,19 @@ export class Queue {
 
   private emit(type: QueueEventType, taskId: number, error?: Error): void {
     const eventDef = QueueEvents[type];
-    // Fire-and-forget to maintain synchronous behavior
-    void this.eventManager.emit(
-      eventDef,
-      {
-        type,
-        taskId,
-        disposed: this.disposed,
-        error,
-      },
-      "queue",
-    );
+    // Fire-and-forget to maintain synchronous behavior, but always catch to avoid
+    // process-level unhandledRejection if a lifecycle listener throws.
+    void this.eventManager
+      .emit(
+        eventDef,
+        {
+          type,
+          taskId,
+          disposed: this.disposed,
+          error,
+        },
+        "queue",
+      )
+      .catch(() => {});
   }
 }

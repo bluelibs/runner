@@ -68,6 +68,16 @@ export class ListenerRegistry {
    * Cached merge between event-specific and global listeners.
    * Exposed for backward compatibility with existing tests.
    */
+  /**
+   * Clears all listeners and caches.
+   */
+  clear(): void {
+    this.listeners.clear();
+    this.globalListeners.length = 0;
+    this.cachedMergedListeners.clear();
+    this._globalListenersCacheValid = true;
+  }
+
   getCachedMergedListeners(eventId: string): IListenerStorage[] {
     if (!this._globalListenersCacheValid) {
       this.cachedMergedListeners.clear();

@@ -220,6 +220,7 @@ export class Semaphore {
     }
 
     this.emit("disposed");
+    this.eventManager.dispose();
   }
 
   /**
@@ -362,8 +363,11 @@ export class Semaphore {
 
   private emit(type: SemaphoreEventType): void {
     const eventDef = SemaphoreEvents[type];
-    // Fire-and-forget to maintain synchronous behavior
-    void this.eventManager.emit(eventDef, this.buildEvent(type), "semaphore");
+    // Fire-and-forget to maintain synchronous behavior, but always catch to avoid
+    // process-level unhandledRejection if a lifecycle listener throws.
+    void this.eventManager
+      .emit(eventDef, this.buildEvent(type), "semaphore")
+      .catch(() => {});
   }
 
   private buildEvent(type: SemaphoreEventType): SemaphoreEvent {
