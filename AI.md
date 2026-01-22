@@ -1,6 +1,6 @@
 # BlueLibs Runner: Fluent Builder Field Guide
 
-> Token-friendly (<5000 tokens). This guide spotlights the fluent builder API (`r.*`) that ships with Runner 4.x. Classic `defineX` / `resource({...})` remain supported for backwards compatibility, but fluent builders are the default throughout.
+> Token-friendly (<5000 tokens). This guide spotlights the fluent builder API (`r.*`) that ships with Runner 5.x. Classic `defineX` / `resource({...})` remain supported for backwards compatibility, but fluent builders are the default throughout.
 
 ## Table of Contents
 
@@ -116,16 +116,14 @@ Tasks are your business actions. They are plain async functions with DI, middlew
 ```ts
 import { r } from "@bluelibs/runner";
 
+// Assuming: userService, loggingMiddleware, and tracingMiddleware are defined elsewhere
 const sendEmail = r
   .task("app.tasks.sendEmail")
   .inputSchema<{ to: string; subject: string; body: string }>({
     parse: (value) => value,
   })
   .dependencies({ emailer: userService })
-  .middleware((config) => [
-    loggingMiddleware.with({ label: "email" }),
-    tracingMiddleware,
-  ])
+  .middleware([loggingMiddleware.with({ label: "email" }), tracingMiddleware])
   .run(async (input, { emailer }) => {
     await emailer.send(input);
     return { delivered: true };
@@ -153,6 +151,7 @@ const userRegistered = r
 // Type-only alternative (no runtime payload validation):
 // const userRegistered = r.event<{ userId: string; email: string }>("app.events.userRegistered").build();
 
+// Assuming: userService and sendEmail are defined elsewhere
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userRegistered, userService })
@@ -546,6 +545,10 @@ const nodeTask = r
 
 Runner ships with a serializer that round-trips Dates, RegExp, binary, and custom shapes across Node and web.
 
+It also supports:
+- `bigint` (encoded as a decimal string under `__type: "BigInt"`)
+- `symbol` for `Symbol.for(key)` and well-known symbols like `Symbol.iterator` (unique `Symbol("...")` values are rejected because identity cannot be preserved)
+
 ```ts
 import { r, globals } from "@bluelibs/runner";
 
@@ -581,7 +584,7 @@ Note on files: The “File” you see in tunnels is not a custom serializer type
 ## Testing
 
 - Use `npm run coverage:ai` to execute the full Jest suite in a token-friendly format (includes per-file missed statement/branch/line locations when coverage < 100%). Focused tests can run via `npm run test -- some.test.ts`.
-- Durable workflows are included in the normal test suite (`npm test`). For focused runs use `npm run test -- durable` or `npm run coverage:durable:ai`.
+- Durable workflows are included in the normal test suite (`npm test`). For focused runs use `npm run test -- durable`.
 - Durable test helpers: `createDurableTestSetup` and `waitUntil` from `@bluelibs/runner/node` for fast, in-memory durable workflows in tests.
 - The Jest runner has a watchdog (`JEST_WATCHDOG_MS`, default 10 minutes) to avoid “hung test run” situations.
 - In unit tests, prefer running a minimal root resource and call `await run(root)` to get `runTask`, `emitEvent`, or `getResourceValue`.
