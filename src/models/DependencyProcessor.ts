@@ -139,6 +139,10 @@ export class DependencyProcessor {
   protected async processResourceDependencies<TD extends DependencyMapType>(
     resource: ResourceStoreElementType<any, any, TD>,
   ) {
+    if (Object.keys(resource.computedDependencies || {}).length > 0) {
+      return;
+    }
+
     const deps = (resource.resource.dependencies || ({} as TD)) as TD;
     const extracted = await this.extractDependencies(
       deps,
@@ -396,8 +400,17 @@ export class DependencyProcessor {
       // check if it has an initialisation function that provides the value
       if (resource.init) {
         const depMap = (resource.dependencies || {}) as DependencyMapType;
-        const raw = await this.extractDependencies(depMap, resource.id);
-        const wrapped = this.wrapResourceDependencies(depMap, raw);
+
+        let wrapped =
+          sr.computedDependencies as ResourceDependencyValuesType<any>;
+
+        // If not already computed, compute and cache it!
+        if (!wrapped || Object.keys(wrapped).length === 0) {
+          const raw = await this.extractDependencies(depMap, resource.id);
+          wrapped = this.wrapResourceDependencies(depMap, raw);
+          sr.computedDependencies = wrapped;
+        }
+
         const { value, context } =
           await this.resourceInitializer.initializeResource(
             resource,
