@@ -1,5 +1,4 @@
 import { MiddlewareResolver } from "../MiddlewareResolver";
-import { taskNotRegisteredError } from "../../../errors";
 
 describe("MiddlewareResolver.applyTunnelPolicyFilter", () => {
   test("throws when task is not registered", () => {
