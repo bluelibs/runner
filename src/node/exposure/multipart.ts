@@ -25,7 +25,7 @@ const busboyFactory: (cfg: {
 import type { SerializerLike } from "../../serializer";
 // Import with explicit .ts extension to prevent tsup from resolving it
 // via the native-node-modules plugin (which looks for paths ending in .node)
-import { NodeInputFile } from "../inputFile.model";
+import { NodeInputFile } from "../files/inputFile.model";
 import type { InputFileMeta, RunnerFileSentinel } from "../../types/inputFile";
 import { jsonErrorResponse } from "./httpResponse";
 import type { JsonResponse } from "./types";

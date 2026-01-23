@@ -18,7 +18,7 @@ module.exports = {
     "src/**/*.{ts,tsx}",
     "!src/**/*.d.ts",
     "!src/__tests__/**",
-    "!src/node/durable/__tests__/**",
+    "!src/node/__tests__/**",
     "!src/node/durable/dashboard/**",
   ],
   setupFilesAfterEnv: ["<rootDir>/src/__tests__/jest.setup.ts"],

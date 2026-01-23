@@ -7,25 +7,30 @@ import type { RunResult } from "../models/RunResult";
 import type { SerializerLike } from "../serializer";
 import type { IAsyncContext } from "../types/asyncContext";
 
-export { nodeExposure } from "./exposure.resource";
+export { nodeExposure } from "./exposure";
 export {
   hasExposureContext,
   useExposureContext,
 } from "./exposure/requestContext";
-export { createNodeFile } from "./files";
 export type * from "./exposure/resourceTypes";
+export { createNodeFile } from "./files";
+export { readInputFileToBuffer, writeInputFileToPath } from "./files";
 // Important: avoid importing a path that ends with `.node`
 // as tsup's native-node-modules plugin treats it as a native addon.
 // Point explicitly to the TS module to keep bundling happy.
-export { createHttpSmartClient } from "./http-smart-client.model";
-export type * from "./http-smart-client.model";
-export { createHttpMixedClient } from "./http-mixed-client";
-export type * from "./http-mixed-client";
-export { readInputFileToBuffer, writeInputFileToPath } from "./inputFile.utils";
+export { createHttpSmartClient, createHttpMixedClient } from "./http";
+export type {
+  HttpSmartClient,
+  HttpSmartClientAuthConfig,
+  HttpSmartClientConfig,
+  MixedHttpClient,
+  MixedHttpClientAuthConfig,
+  MixedHttpClientConfig,
+  Readable,
+} from "./http";
 export * from "./durable";
 
-import { httpSmartClientFactory } from "./resources/http-smart-client.factory.resource";
-import { httpMixedClientFactory } from "./resources/http-mixed-client.factory.resource";
+import { httpSmartClientFactory, httpMixedClientFactory } from "./http";
 
 // Augmented Node globals: include Node-only factories under resources
 export const globals = {
@@ -57,7 +62,7 @@ export async function run(root: any, config?: any): Promise<RunResult<any>> {
   const smartEntry = store.resources.get(httpSmartClientFactory.id);
   if (smartEntry && !smartEntry.isInitialized) {
     smartEntry.value = (cfg: any) =>
-      require("./http-smart-client.model").createHttpSmartClient({
+      require("./http/http-smart-client.model").createHttpSmartClient({
         ...cfg,
         serializer,
         contexts,
@@ -68,7 +73,7 @@ export async function run(root: any, config?: any): Promise<RunResult<any>> {
   const mixedEntry = store.resources.get(httpMixedClientFactory.id);
   if (mixedEntry && !mixedEntry.isInitialized) {
     mixedEntry.value = (cfg: any) =>
-      require("./http-mixed-client").createHttpMixedClient({
+      require("./http/http-mixed-client").createHttpMixedClient({
         ...cfg,
         serializer,
         contexts,

@@ -15,7 +15,7 @@ import type {
   NodeExposureHttpCorsConfig,
 } from "./resourceTypes";
 import { applyCorsActual, handleCorsPreflight } from "./cors";
-import { computeAllowList } from "../tunnel.allowlist";
+import { computeAllowList } from "../tunnel/allowlist";
 import { createTaskHandler } from "./handlers/taskHandler";
 import { createEventHandler } from "./handlers/eventHandler";
 

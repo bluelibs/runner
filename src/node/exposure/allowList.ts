@@ -1,5 +1,5 @@
-import { computeAllowList } from "../tunnel.allowlist";
-import type { TunnelAllowList } from "../tunnel.allowlist";
+import { computeAllowList } from "../tunnel/allowlist";
+import type { TunnelAllowList } from "../tunnel/allowlist";
 import type { Store } from "../../models/Store";
 
 import { jsonErrorResponse } from "./httpResponse";
