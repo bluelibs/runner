@@ -1,15 +1,13 @@
 import { RedisEventBus } from "../../durable/bus/RedisEventBus";
 import { Serializer } from "../../../serializer";
-
-jest.mock("../../durable/optionalDeps/ioredis", () => ({
-  createIORedisClient: jest.fn(),
-}));
+import * as ioredisOptional from "../../durable/optionalDeps/ioredis";
 
 describe("durable: RedisEventBus Bug Repro", () => {
   let redisMock: any;
   let bus: RedisEventBus;
 
   beforeEach(() => {
+    jest.clearAllMocks();
     redisMock = {
       publish: jest.fn().mockResolvedValue(1),
       subscribe: jest.fn().mockResolvedValue(1),
@@ -18,7 +16,14 @@ describe("durable: RedisEventBus Bug Repro", () => {
       quit: jest.fn().mockResolvedValue("OK"),
       duplicate: jest.fn().mockReturnThis(),
     };
+    jest
+      .spyOn(ioredisOptional, "createIORedisClient")
+      .mockReturnValue(redisMock as any);
     bus = new RedisEventBus({ redis: redisMock });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it("handles Redis subscription failure by cleaning up local state", async () => {

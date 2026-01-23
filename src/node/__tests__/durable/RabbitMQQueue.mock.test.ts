@@ -1,9 +1,5 @@
 import { RabbitMQQueue } from "../../durable/queue/RabbitMQQueue";
-import { connectAmqplib } from "../../durable/optionalDeps/amqplib";
-
-jest.mock("../../durable/optionalDeps/amqplib", () => ({
-  connectAmqplib: jest.fn(),
-}));
+import * as amqplibModule from "../../durable/optionalDeps/amqplib";
 
 type ChannelMock = {
   assertQueue: jest.Mock;
@@ -39,7 +35,9 @@ describe("durable: RabbitMQQueue", () => {
       createChannel: jest.fn().mockResolvedValue(channelMock),
       close: jest.fn().mockResolvedValue({}),
     };
-    (connectAmqplib as unknown as jest.Mock).mockResolvedValue(connMock);
+    jest
+      .spyOn(amqplibModule, "connectAmqplib")
+      .mockResolvedValue(connMock as any);
     queue = new RabbitMQQueue({
       url: "amqp://localhost",
       queue: {
@@ -51,9 +49,13 @@ describe("durable: RabbitMQQueue", () => {
     });
   });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it("initializes and registers consumer", async () => {
     await queue.init();
-    expect(connectAmqplib).toHaveBeenCalled();
+    expect(amqplibModule.connectAmqplib).toHaveBeenCalled();
     expect(channelMock.assertQueue).toHaveBeenCalled();
     expect(channelMock.assertQueue).toHaveBeenCalledWith(
       "dlq",

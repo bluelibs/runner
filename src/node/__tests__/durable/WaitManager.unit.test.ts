@@ -1,15 +1,7 @@
 import { WaitManager } from "../../durable/core/managers/WaitManager";
 import type { Execution } from "../../durable/core/types";
-import { sleepMs } from "../../durable/core/utils";
+import * as utils from "../../durable/core/utils";
 import { MemoryStore } from "../../durable/store/MemoryStore";
-
-jest.mock("../../durable/core/utils", () => {
-  const actual = jest.requireActual("../../durable/core/utils");
-  return {
-    ...actual,
-    sleepMs: jest.fn(async () => {}),
-  };
-});
 
 describe("WaitManager", () => {
   const baseExecution: Execution = {
@@ -25,6 +17,11 @@ describe("WaitManager", () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.spyOn(utils, "sleepMs").mockResolvedValue(undefined as never);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it("uses waitPollIntervalMs from options when provided", async () => {
@@ -49,7 +46,7 @@ describe("WaitManager", () => {
     );
 
     expect(result.value).toBe(42);
-    expect(sleepMs).toHaveBeenCalledWith(123);
+    expect(utils.sleepMs).toHaveBeenCalledWith(123);
   });
 
   it("uses defaultPollIntervalMs from config when option not provided", async () => {
@@ -69,7 +66,7 @@ describe("WaitManager", () => {
     const result = await waitManager.waitForResult<{ value: number }>("exec-1");
 
     expect(result.value).toBe(42);
-    expect(sleepMs).toHaveBeenCalledWith(250);
+    expect(utils.sleepMs).toHaveBeenCalledWith(250);
   });
 
   it("falls back to 500ms when neither options nor config provide an interval", async () => {
@@ -87,6 +84,6 @@ describe("WaitManager", () => {
     const result = await waitManager.waitForResult<{ value: number }>("exec-1");
 
     expect(result.value).toBe(42);
-    expect(sleepMs).toHaveBeenCalledWith(500);
+    expect(utils.sleepMs).toHaveBeenCalledWith(500);
   });
 });

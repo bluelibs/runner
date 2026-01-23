@@ -6,8 +6,13 @@ import {
 } from "../../define";
 import { symbolFilePath } from "../../defs";
 import { getCallerFile } from "../../tools/getCallerFile";
+import * as platformModule from "../../platform";
 
 describe("getCallerFile", () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it("should return the file name of the caller", () => {
     function testFunction() {
       return getCallerFile();
@@ -50,11 +55,8 @@ describe("getCallerFile", () => {
   });
 
   it("returns 'unknown' in non-node environments (mocked)", async () => {
-    jest.resetModules();
-    jest.doMock("../../platform", () => ({ isNode: () => false }));
-    const { getCallerFile: getCallerFileMocked } =
-      await import("../../tools/getCallerFile");
-    const out = getCallerFileMocked();
+    jest.spyOn(platformModule, "isNode").mockReturnValue(false);
+    const out = getCallerFile();
     expect(out).toBe("unknown");
   });
 

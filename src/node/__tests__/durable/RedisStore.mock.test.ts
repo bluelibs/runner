@@ -8,19 +8,16 @@ import type {
 } from "../../durable/core/types";
 import { getDefaultSerializer } from "../../../serializer";
 import type { DurableAuditEntry } from "../../durable/core/audit";
-import { createIORedisClient } from "../../durable/optionalDeps/ioredis";
+import * as ioredisOptional from "../../durable/optionalDeps/ioredis";
 
 const serializer = getDefaultSerializer();
-
-jest.mock("../../durable/optionalDeps/ioredis", () => ({
-  createIORedisClient: jest.fn(),
-}));
 
 describe("durable: RedisStore", () => {
   let redisMock: jest.Mocked<RedisClient>;
   let store: RedisStore;
 
   beforeEach(() => {
+    jest.clearAllMocks();
     redisMock = {
       set: jest.fn().mockResolvedValue("OK"),
       get: jest.fn(),
@@ -44,7 +41,14 @@ describe("durable: RedisStore", () => {
       eval: jest.fn().mockResolvedValue(1),
       quit: jest.fn().mockResolvedValue("OK"),
     };
+    jest
+      .spyOn(ioredisOptional, "createIORedisClient")
+      .mockReturnValue(redisMock as any);
     store = new RedisStore({ redis: redisMock });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it("saves and fetches execution", async () => {
@@ -252,27 +256,27 @@ describe("durable: RedisStore", () => {
   });
 
   it("throws when Redis SCAN returns an unexpected shape", async () => {
-    redisMock.sscan.mockResolvedValueOnce("bad");
+    redisMock.sscan.mockResolvedValueOnce("bad" as any);
     await expect(store.listIncompleteExecutions()).rejects.toThrow("SCAN");
   });
 
   it("throws when Redis SCAN returns an unexpected shape (scanKeys)", async () => {
-    redisMock.scan.mockResolvedValueOnce("bad");
+    redisMock.scan.mockResolvedValueOnce("bad" as any);
     await expect(store.listExecutions()).rejects.toThrow("SCAN");
   });
 
   it("throws when Redis SCAN returns a non-string cursor", async () => {
-    redisMock.sscan.mockResolvedValueOnce([1, []]);
+    redisMock.sscan.mockResolvedValueOnce([1, []] as any);
     await expect(store.listIncompleteExecutions()).rejects.toThrow("SCAN");
   });
 
   it("throws when Redis SCAN returns non-string keys", async () => {
-    redisMock.sscan.mockResolvedValueOnce(["0", [1]]);
+    redisMock.sscan.mockResolvedValueOnce(["0", [1]] as any);
     await expect(store.listIncompleteExecutions()).rejects.toThrow("SCAN");
   });
 
   it("returns null when Redis GET returns a non-string", async () => {
-    redisMock.get.mockResolvedValueOnce(123);
+    redisMock.get.mockResolvedValueOnce(123 as any);
     await expect(store.getExecution("e1")).resolves.toBeNull();
   });
 
@@ -566,7 +570,7 @@ describe("durable: RedisStore", () => {
     redisMock.zrangebyscore.mockResolvedValue([]);
     expect(await store.getReadyTimers()).toEqual([]);
 
-    redisMock.zrangebyscore.mockResolvedValue("bad");
+    redisMock.zrangebyscore.mockResolvedValue("bad" as any);
     expect(await store.getReadyTimers()).toEqual([]);
 
     redisMock.zrangebyscore.mockResolvedValue(["t1"]);
@@ -615,7 +619,7 @@ describe("durable: RedisStore", () => {
   });
 
   it("returns empty schedules when Redis HGETALL returns a non-object", async () => {
-    redisMock.hgetall.mockResolvedValue(null);
+    redisMock.hgetall.mockResolvedValue(null as any);
     await expect(store.listSchedules()).resolves.toEqual([]);
   });
 
@@ -638,7 +642,7 @@ describe("durable: RedisStore", () => {
   });
 
   it("returns null lockId when Redis SET NX fails", async () => {
-    redisMock.set.mockResolvedValue(null);
+    redisMock.set.mockResolvedValue(null as any);
     const lockId = await store.acquireLock("res", 1000);
     expect(lockId).toBeNull();
   });
@@ -647,12 +651,14 @@ describe("durable: RedisStore", () => {
     redisMock.set.mockResolvedValueOnce("OK");
     await expect(store.claimTimer("t1", "worker-1", 1000)).resolves.toBe(true);
 
-    redisMock.set.mockResolvedValueOnce(null);
+    redisMock.set.mockResolvedValueOnce(null as any);
     await expect(store.claimTimer("t1", "worker-2", 1000)).resolves.toBe(false);
   });
 
   it("supports string redis url and default redis in constructor", async () => {
-    (createIORedisClient as unknown as jest.Mock).mockReturnValue(redisMock);
+    (ioredisOptional.createIORedisClient as unknown as jest.Mock).mockReturnValue(
+      redisMock,
+    );
 
     const fromUrl = new RedisStore({ redis: "redis://localhost:6379" });
     expect(fromUrl).toBeDefined();

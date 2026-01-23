@@ -1,10 +1,6 @@
 import { RedisEventBus } from "../../durable/bus/RedisEventBus";
 import { Serializer } from "../../../serializer";
-import { createIORedisClient } from "../../durable/optionalDeps/ioredis";
-
-jest.mock("../../durable/optionalDeps/ioredis", () => ({
-  createIORedisClient: jest.fn(),
-}));
+import * as ioredisOptional from "../../durable/optionalDeps/ioredis";
 
 describe("durable: RedisEventBus", () => {
   let redisMock: any;
@@ -12,6 +8,7 @@ describe("durable: RedisEventBus", () => {
   let onMessage: ((chan: string, msg: string) => void) | undefined;
 
   beforeEach(() => {
+    jest.clearAllMocks();
     onMessage = undefined;
     redisMock = {
       publish: jest.fn().mockResolvedValue(1),
@@ -23,7 +20,14 @@ describe("durable: RedisEventBus", () => {
       quit: jest.fn().mockResolvedValue("OK"),
       duplicate: jest.fn().mockReturnThis(),
     };
+    jest
+      .spyOn(ioredisOptional, "createIORedisClient")
+      .mockReturnValue(redisMock as any);
     bus = new RedisEventBus({ redis: redisMock });
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
   });
 
   it("publishes events", async () => {
@@ -180,7 +184,9 @@ describe("durable: RedisEventBus", () => {
   });
 
   it("supports string redis url and default redis in constructor", async () => {
-    (createIORedisClient as unknown as jest.Mock).mockReturnValue(redisMock);
+    (ioredisOptional.createIORedisClient as unknown as jest.Mock).mockReturnValue(
+      redisMock,
+    );
 
     const busFromUrl = new RedisEventBus({ redis: "redis://localhost:6379" });
     await busFromUrl.publish("chan", {
@@ -196,7 +202,9 @@ describe("durable: RedisEventBus", () => {
       timestamp: new Date(),
     });
 
-    expect(createIORedisClient).toHaveBeenCalledWith("redis://localhost:6379");
-    expect(createIORedisClient).toHaveBeenCalledWith(undefined);
+    expect(ioredisOptional.createIORedisClient).toHaveBeenCalledWith(
+      "redis://localhost:6379",
+    );
+    expect(ioredisOptional.createIORedisClient).toHaveBeenCalledWith(undefined);
   });
 });
