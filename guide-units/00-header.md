@@ -1,8 +1,8 @@
 # BlueLibs Runner
 
-### TypeScript-First Dependency Injection Framework
+### Explicit TypeScript Dependency Injection Toolkit
 
-**Build enterprise applications that are maintainable, testable, and scalable**
+**Compose tasks and resources with predictable lifecycle, testing hooks, and runtime control**
 
 Runner is a TypeScript-first framework for building applications from tasks (functions) and resources
 (singletons), with explicit dependency injection, middleware, events, hooks, and lifecycle management.
@@ -107,9 +107,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 ### Current Way
 
-Modern dependency injection frameworks force difficult trade-offs: decorators, reflection, and runtime tricks make debugging painful.
-
-The result is code that's hard to test, hard to understand, and hard to maintain:
+Decorator-heavy DI frameworks hide work behind reflection. They often require framework-specific testing harnesses, and debugging jumps between generated code and the code you wrote.
 
 ```typescript
 @Injectable()
@@ -135,7 +133,7 @@ export class UserService {
 
 ### Next-gen way
 
-Runner provides a functional, explicit approach:
+Runner keeps everything as plain functions and objects. You declare dependencies up front, wire them once, and get predictable runtime behavior with no hidden reflection.
 
 ```typescript
 const createUser = r
@@ -157,11 +155,11 @@ const runtime = await run(app);
 
 **Benefits:**
 
-- **Zero magic** — Plain functions and objects
-- **Full type safety** — TypeScript inference throughout
-- **Simple testing** — Unit tests run in milliseconds
-- **Clear debugging** — Readable stack traces
-- **Gradual adoption** — Integrate into existing projects
+- **Explicit wiring** — Dependencies are declared in code, not discovered at runtime
+- **Type-driven** — TypeScript inference flows through tasks, resources, and middleware
+- **Testable by default** — Call `.run()` with mocks or run the full app, no special harnesses
+- **Traceable** — Stack traces and debug output stay aligned with your source
+- **Incremental adoption** — Wrap an existing service or task without rewriting the rest
 
 </td>
 </tr>
@@ -176,7 +174,7 @@ const runtime = await run(app);
 - [Why Runner?](#why-runner) - The problem we solve
 - [What Is This Thing?](#what-is-this-thing)
 - [When to Use Runner](#when-to-use-runner) - Is it right for you?
-- [Show Me the Magic](#show-me-the-magic) - See it in action
+- [Show me the wiring](#show-me-the-wiring) - See it in action
 - [How Does It Compare?](#how-does-it-compare) - vs. other frameworks
 - [Performance at a Glance](#performance-at-a-glance) - Real benchmarks
 - [What's in the Box?](#whats-in-the-box) - Feature matrix
@@ -188,7 +186,7 @@ const runtime = await run(app);
 
 **Core Concepts**
 
-- [Tasks](#tasks) - Functions with superpowers
+- [Tasks](#tasks) - Functions with dependency injection and middleware
 - [Resources](#resources) - Singletons and lifecycle management
 - [Events](#events) - Decoupled communication
 - [Hooks](#hooks) - Lightweight event subscribers

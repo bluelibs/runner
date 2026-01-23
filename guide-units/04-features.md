@@ -1,6 +1,6 @@
 ## Caching
 
-Because nobody likes waiting for the same expensive operation twice:
+Avoid recomputing expensive work by caching task results with TTL-based eviction:
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -58,7 +58,7 @@ const app = r
 
 ## Concurrency Control
 
-Stop slamming your database or external APIs. The concurrency middleware ensures that only a specific number of instances of a task (or group of tasks) run at the same time.
+Limit concurrent executions to protect databases and external APIs. The concurrency middleware keeps only a fixed number of task instances running at once.
 
 ```typescript
 import { r, globals, Semaphore } from "@bluelibs/runner";
@@ -90,7 +90,7 @@ const heavyTask = r
 
 ## Circuit Breaker
 
-Prevent cascading failures. If an external service starts failing, the circuit breaker "trips," failing fast for all subsequent calls and giving the service time to recover.
+Trip repeated failures early. When an external service starts failing, the circuit breaker opens so subsequent calls fail fast until a cool-down passes.
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -215,7 +215,7 @@ const sensitiveTask = r
 
 ## Performance
 
-BlueLibs Runner is designed with performance in mind. The framework introduces minimal overhead while providing powerful features like dependency injection, middleware, and event handling.
+Runner keeps the DI and middleware stack lightweight. The numbers below come from the project's benchmark suite; rerun them on your hardware to size real-world overhead.
 
 Test it yourself by cloning @bluelibs/runner and running `npm run benchmark`.
 
@@ -374,7 +374,7 @@ BlueLibs Runner achieves high performance while providing enterprise features:
 | Resource Management  | One-time init        | Singleton pattern, lifecycle  |
 | Built-in Caching     | Variable speedup     | Automatic optimization        |
 
-**Bottom line**: The framework adds minimal overhead (~0.005ms per task) while providing significant architectural benefits.
+**Bottom line**: On the measured hardware, the overhead for a task pipeline stayed around ~0.005ms while still enabling DI, middleware, and events. Validate against your own workload to set budgets.
 
 > **runtime:** "'Millions of tasks per second.' Fantastic—on your lava‑warmed laptop, in a vacuum, with the wind at your back. Add I/O, entropy, and one feral user and watch those numbers molt. I’ll still be here, caffeinated and inevitable."
 

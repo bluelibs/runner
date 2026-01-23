@@ -24,7 +24,7 @@ graph LR
 
 ### Tasks
 
-Tasks are where your business logic lives. Think of them as **functions with superpowers** – they get automatic dependency injection, type safety, middleware support, and observability.
+Tasks are where your business logic lives. They are async functions with explicit dependency injection, type-safe inputs/outputs, middleware support, and observability baked in.
 
 Here's a complete example showing you everything:
 
@@ -254,7 +254,7 @@ const dbResource = r
 
 ### Events
 
-Events let different parts of your app talk to each other without tight coupling. It's like having a really good office messenger who never forgets anything.
+Events let different parts of your app communicate without direct references. They carry typed payloads to hooks so producers stay decoupled from consumers.
 
 ```mermaid
 flowchart LR

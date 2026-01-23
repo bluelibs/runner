@@ -14,6 +14,7 @@ import type {
   SerializedValue,
   SerializedNode,
 } from "./types";
+import { SymbolPolicy } from "./types";
 import { TypeRegistry } from "./type-registry";
 import {
   isGraphPayload,
@@ -81,6 +82,7 @@ export class Serializer {
         maxPatternLength: this.maxRegExpPatternLength,
         allowUnsafe: this.allowUnsafeRegExp,
       },
+      symbolPolicy: options.symbolPolicy ?? SymbolPolicy.AllowAll,
     });
 
     this.runtimeOptions = {

@@ -125,19 +125,22 @@ describe("Serializer Coverage Tests", () => {
       expect(deserialized).toEqual([1, "string", true, null]);
     });
 
-    it("should throw TypeError for BigInt", () => {
-      // Create BigInt (if environment supports it)
-      if (typeof BigInt !== "undefined") {
-        expect(() => {
-          serializer.serialize(BigInt(123));
-        }).toThrow('Cannot serialize value of type "bigint"');
-      }
+    it("serializes bigint primitives", () => {
+      const payload = serializer.serialize(BigInt(123));
+      expect(serializer.deserialize(payload)).toBe(BigInt(123));
     });
 
-    it("should throw TypeError for Symbol", () => {
-      expect(() => {
-        serializer.serialize(Symbol("test"));
-      }).toThrow('Cannot serialize value of type "symbol"');
+    it("serializes global and well-known symbols, rejects unique symbols", () => {
+      const globalSymbol = Symbol.for("coverage.sym");
+      const globalPayload = serializer.serialize(globalSymbol);
+      expect(serializer.deserialize(globalPayload)).toBe(globalSymbol);
+
+      const wellKnownPayload = serializer.serialize(Symbol.iterator);
+      expect(serializer.deserialize(wellKnownPayload)).toBe(Symbol.iterator);
+
+      expect(() => serializer.serialize(Symbol("unique"))).toThrow(
+        /unique symbols/i,
+      );
     });
 
     it("should throw TypeError for Function", () => {
@@ -758,13 +761,16 @@ describe("Serializer Coverage Tests", () => {
     });
 
     it("stringify rejects unsupported JS primitives in tree mode", () => {
-      if (typeof BigInt !== "undefined") {
-        expect(() => serializer.stringify(BigInt(1))).toThrow(
-          'Cannot serialize value of type "bigint"',
-        );
-      }
+      expect(serializer.parse(serializer.stringify(BigInt(1)))).toBe(BigInt(1));
+
+      expect(serializer.parse(serializer.stringify(Symbol.for("x")))).toBe(
+        Symbol.for("x"),
+      );
+      expect(serializer.parse(serializer.stringify(Symbol.iterator))).toBe(
+        Symbol.iterator,
+      );
       expect(() => serializer.stringify(Symbol("x"))).toThrow(
-        'Cannot serialize value of type "symbol"',
+        /unique symbols/i,
       );
       expect(() => serializer.stringify(() => true)).toThrow(
         'Cannot serialize value of type "function"',

@@ -71,7 +71,17 @@ export type JsonValue =
   | JsonPrimitive
   | JsonValue[]
   | { [key: string]: JsonValue };
-export type SerializedValue = JsonValue | ObjectReference;
+
+export interface SerializedTypeRecord {
+  __type: string;
+  value: SerializedValue;
+}
+export type SerializedValue =
+  | JsonPrimitive
+  | ObjectReference
+  | SerializedTypeRecord
+  | SerializedValue[]
+  | { [key: string]: SerializedValue };
 
 /**
  * Envelope saved to disk/wire when serialising a graph payload.
@@ -81,6 +91,18 @@ export interface SerializedGraph {
   version: number;
   root: SerializedValue;
   nodes: Record<string, SerializedNode>;
+}
+
+export enum SymbolPolicy {
+  AllowAll = "AllowAll",
+  WellKnownOnly = "WellKnownOnly",
+  Disabled = "Disabled",
+}
+
+export enum SymbolPolicyErrorMessage {
+  GlobalSymbolsNotAllowed = "Global symbols are not allowed",
+  SymbolsNotAllowed = "Symbols are not allowed",
+  UnsupportedSymbolPolicy = "Unsupported symbol policy",
 }
 
 /**
@@ -93,6 +115,8 @@ export interface SerializerOptions {
   maxDepth?: number;
   /** Restrict deserialization to this list of type IDs */
   allowedTypes?: readonly string[];
+  /** Controls which Symbol payloads may be deserialized */
+  symbolPolicy?: SymbolPolicy;
   /** Maximum accepted RegExp pattern length during deserialization */
   maxRegExpPatternLength?: number;
   /** Allow RegExp patterns that fail the safety heuristic */

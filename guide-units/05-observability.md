@@ -1,8 +1,8 @@
 ## Logging
 
-_The structured logging system that actually makes debugging enjoyable_
+_Structured logging with predictable shape and pluggable transports_
 
-BlueLibs Runner comes with a built-in logging system that's structured, and doesn't make you hate your life when you're trying to debug at 2 AM.
+Runner ships a structured logger with consistent fields, onLog hooks, and multiple print strategies so you can pipe logs to consoles or external transports without custom glue.
 
 ### Basic Logging
 
@@ -268,9 +268,9 @@ interface ILog {
 
 ## Debug Resource
 
-_Professional-grade debugging without sacrificing production performance_
+_Debug hooks for tasks, resources, and events without shipping extra overhead when disabled_
 
-The Debug Resource is a powerful observability suite that hooks into the framework's execution pipeline to provide detailed insights into your application's behavior. It's designed to be zero-overhead when disabled and highly configurable when enabled.
+The Debug Resource instruments the execution pipeline so you can trace task/resource lifecycle, inputs/outputs, and events. When not registered it stays out of the hot path; when enabled you can pick exactly which signals to record.
 
 ### Quick Start with Debug
 

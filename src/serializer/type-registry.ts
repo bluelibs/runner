@@ -4,15 +4,23 @@
  */
 
 import type { TypeDefinition } from "./types";
-import { builtInTypes } from "./builtins";
+import { SymbolPolicy, SymbolPolicyErrorMessage } from "./types";
+import {
+  assertSymbolPayload,
+  builtInTypes,
+  SymbolPayloadKind,
+  type SerializedSymbolPayload,
+} from "./builtins";
 import {
   assertRegExpPayload,
   type RegExpValidatorOptions,
 } from "./regexp-validator";
+import { SpecialTypeId } from "./special-values";
 
 export interface TypeRegistryOptions {
   allowedTypes: ReadonlySet<string> | null;
   regExpValidator: RegExpValidatorOptions;
+  symbolPolicy: SymbolPolicy;
 }
 
 /**
@@ -31,10 +39,13 @@ export class TypeRegistry {
 
   private readonly allowedTypes: ReadonlySet<string> | null;
   private readonly regExpOptions: RegExpValidatorOptions;
+  private readonly symbolPolicy: SymbolPolicy;
 
   constructor(options: TypeRegistryOptions) {
     this.allowedTypes = options.allowedTypes;
     this.regExpOptions = options.regExpValidator;
+    this.symbolPolicy = options.symbolPolicy;
+    this.assertSymbolPolicyValue(this.symbolPolicy);
     this.registerBuiltInTypes();
     this.refreshTypeCache();
   }
@@ -160,6 +171,11 @@ export class TypeRegistry {
     typeId: string,
     data: unknown,
   ): unknown {
+    if (typeId === SpecialTypeId.Symbol) {
+      const payload = assertSymbolPayload(data);
+      this.assertSymbolPolicy(payload);
+      return typeDef.deserialize(payload);
+    }
     if (typeId === "RegExp") {
       const payload = assertRegExpPayload(data, this.regExpOptions);
       return typeDef.deserialize(payload);
@@ -196,5 +212,25 @@ export class TypeRegistry {
       list.push(typeDef);
     }
     this.typeList = list;
+  }
+
+  private assertSymbolPolicyValue(policy: SymbolPolicy): void {
+    if (!Object.values(SymbolPolicy).includes(policy)) {
+      throw new Error(SymbolPolicyErrorMessage.UnsupportedSymbolPolicy);
+    }
+  }
+
+  private assertSymbolPolicy(payload: SerializedSymbolPayload): void {
+    switch (this.symbolPolicy) {
+      case SymbolPolicy.AllowAll:
+        return;
+      case SymbolPolicy.WellKnownOnly:
+        if (payload.kind === SymbolPayloadKind.For) {
+          throw new Error(SymbolPolicyErrorMessage.GlobalSymbolsNotAllowed);
+        }
+        return;
+      case SymbolPolicy.Disabled:
+        throw new Error(SymbolPolicyErrorMessage.SymbolsNotAllowed);
+    }
   }
 }

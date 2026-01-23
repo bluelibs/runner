@@ -11,6 +11,7 @@ export type {
   SerializerLike,
 } from "./types";
 
+export { SymbolPolicy, SymbolPolicyErrorMessage } from "./types";
 export { Serializer } from "./Serializer";
 
 const defaultSerializer = new Serializer();

@@ -27,9 +27,9 @@ BlueLibs Runner is a TypeScript-first dependency injection framework built aroun
 
 ---
 
-## Show Me the Magic
+## Show me the wiring
 
-**Here's what "zero magic" looks like in practice:**
+**Here's what explicit wiring looks like in practice:**
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -53,14 +53,14 @@ const callAPI = r
   .run(async (url) => fetch(url))
   .build();
 
-// Testing is actually pleasant
+// Testing stays direct
 test("getUser works", async () => {
   const result = await getUser.run("user-123", { db: mockDb }); // ← Just call it
   expect(result.name).toBe("John");
 });
 ```
 
-**The magic? There isn't any.** It's just clean, composable functions.
+**Nothing hidden here.** Each step is spelled out so you can trace dependencies, middleware, and tests without guessing.
 
 ---
 
@@ -280,9 +280,9 @@ Neither is universally "better" – they solve the same problem with different p
 
 ---
 
-## Performance at a Glance
+## Performance at a glance
 
-**Runner is FAST.** Here are real benchmarks from an M1 Max:
+Measured numbers on an M1 Max; use them as a feel for overhead, not a guarantee for your hardware:
 
 ```
 ┌─────────────────────────────────────┬───────────────┬──────────────┐
@@ -468,7 +468,7 @@ Hello, World!
 
 ### Building a Real Express Server
 
-Now that you've seen the basics, let's build something real! Here's a complete Express API server with dependency injection, logging, and proper lifecycle management. (And yes, it's less code than most frameworks need for "Hello World" )
+Now that you've seen the basics, let's build something real. Here's a complete Express API server with dependency injection, logging, and lifecycle management. The example keeps all wiring in one place so you can trace setup and teardown.
 
 ```bash
 npm install @bluelibs/runner express zod
@@ -959,7 +959,7 @@ const result = await runTask(registerUser, { email: "new@user.com" });
 await dispose();
 ```
 
-**That's it!** Each pattern is production-ready. No configuration, no extra packages, just works.
+Each pattern here is runnable as-is. They rely only on Runner's built-ins, so you can paste them into a project to prototype quickly and then tune configs (TTL, retries, timeouts) for your workload.
 
 > **runtime:** "Six production problems, six one-liners. You bolted middleware onto tasks like Lego bricks and called it architecture. I respect the pragmatism. Ship it."
 

@@ -1,39 +1,6 @@
 # BlueLibs Runner: Fluent Builder Field Guide
 
-> Token-friendly (<5000 tokens). This guide spotlights the fluent builder API (`r.*`) that ships with Runner 4.x. Classic `defineX` / `resource({...})` remain supported for backwards compatibility, but fluent builders are the default throughout.
-
-## Table of Contents
-
-- [BlueLibs Runner: Fluent Builder Field Guide](#bluelibs-runner-fluent-builder-field-guide)
-  - [Table of Contents](#table-of-contents)
-  - [Install](#install)
-  - [Durable Workflows (Node-only)](#durable-workflows-node-only)
-  - [Resources](#resources)
-    - [Resource Forking](#resource-forking)
-  - [Tasks](#tasks)
-  - [Events and Hooks](#events-and-hooks)
-  - [Middleware](#middleware)
-    - [ExecutionJournal](#executionjournal)
-  - [Tags](#tags)
-  - [Async Context](#async-context)
-  - [Errors](#errors)
-  - [Overrides](#overrides)
-  - [Runtime \& Lifecycle](#runtime--lifecycle)
-  - [Reliability \& Performance](#reliability--performance)
-  - [HTTP \& Tunnels](#http--tunnels)
-    - [HTTP Client Factory (Recommended)](#http-client-factory-recommended)
-  - [Serialization](#serialization)
-  - [Testing](#testing)
-  - [Observability \& Debugging](#observability--debugging)
-  - [Metadata \& Namespacing](#metadata--namespacing)
-  - [Advanced Patterns](#advanced-patterns)
-  - [Interop With Classic APIs](#interop-with-classic-apis)
-
-## Install
-
-```bash
-npm install @bluelibs/runner
-```
+> Token-friendly guide spotlighting the fluent builder API (`r.*`). Classic `defineX` / `resource({...})` remain supported for backwards compatibility.
 
 ## Durable Workflows (Node-only)
 
@@ -41,6 +8,19 @@ Durable workflows are available from `@bluelibs/runner/node` (implemented under 
 See `readmes/DURABLE_WORKFLOWS.md` (full) or `readmes/DURABLE_WORKFLOWS_AI.md` (token-friendly).
 They provide replay-safe primitives like `ctx.step(...)`, `ctx.sleep(...)`, `ctx.emit(...)`, and `ctx.waitForSignal(...)`.
 Use them when you need persistence and recovery across restarts/crashes.
+
+## Serializer Safety
+
+When deserializing untrusted payloads, configure the serializer to restrict
+symbol handling so payloads cannot grow the global Symbol registry.
+
+```ts
+import { Serializer, SymbolPolicy } from "@bluelibs/runner";
+
+const serializer = new Serializer({
+  symbolPolicy: SymbolPolicy.WellKnownOnly,
+});
+```
 
 ## Resources
 
@@ -116,16 +96,14 @@ Tasks are your business actions. They are plain async functions with DI, middlew
 ```ts
 import { r } from "@bluelibs/runner";
 
+// Assuming: userService, loggingMiddleware, and tracingMiddleware are defined elsewhere
 const sendEmail = r
   .task("app.tasks.sendEmail")
   .inputSchema<{ to: string; subject: string; body: string }>({
     parse: (value) => value,
   })
   .dependencies({ emailer: userService })
-  .middleware((config) => [
-    loggingMiddleware.with({ label: "email" }),
-    tracingMiddleware,
-  ])
+  .middleware([loggingMiddleware.with({ label: "email" }), tracingMiddleware])
   .run(async (input, { emailer }) => {
     await emailer.send(input);
     return { delivered: true };
@@ -133,10 +111,13 @@ const sendEmail = r
   .build();
 ```
 
-- `.dependencies()` accepts a literal map or a function `(config) => deps`.
-- `.middleware()` appends by default; pass `{ override: true }` to replace. `.tags()` replaces the list each time.
-- `.dependencies()` appends (shallow-merge) by default on resources, tasks, hooks, and middleware; pass `{ override: true }` to replace. Functions and objects are merged consistently.
-- Provide result validation with `.resultSchema()` when the function returns structured data.
+**Builder composition rules (applies to tasks, resources, hooks, middleware):**
+
+- `.dependencies()` accepts a literal map or function `(config) => deps`; appends (shallow-merge) by default
+- `.middleware()` appends by default
+- `.tags()` replaces the list each time
+- Pass `{ override: true }` to any of these methods to replace instead of append
+- Provide result validation with `.resultSchema()` when the function returns structured data
 
 ## Events and Hooks
 
@@ -153,6 +134,7 @@ const userRegistered = r
 // Type-only alternative (no runtime payload validation):
 // const userRegistered = r.event<{ userId: string; email: string }>("app.events.userRegistered").build();
 
+// Assuming: userService and sendEmail are defined elsewhere
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userRegistered, userService })
@@ -239,7 +221,7 @@ const auth = r.middleware
 
 ### ExecutionJournal
 
-ExecutionJournal is a per-execution registry enabling middleware and tasks to share typed state. **Fail-fast semantics**: `set()` throws if the key already exists (prevents silent bugs from middleware clobbering each other). Use `{ override: true }` to intentionally update.
+**ExecutionJournal** is a typed key-value store scoped to a single task execution, enabling middleware and tasks to share state. It has **fail-fast semantics**: calling `set()` on an existing key throws an error (prevents silent bugs from middleware clobbering each other). Use `{ override: true }` to intentionally update.
 
 ```ts
 import { r, globals, journal } from "@bluelibs/runner";
@@ -393,7 +375,7 @@ const app = r
   .build();
 ```
 
-- `r.override(base)` starts from the base definition and applies fluent mutations (dependencies/tags/middleware append by default; use `{ override: true }` to replace).
+- `r.override(base)` starts from the base definition and applies fluent mutations using the same composition rules as the base builder.
 - Hook overrides keep the same `.on` target; only behavior/metadata is overridable.
 - The `override(base, patch)` helper remains for direct, shallow patches.
 
@@ -546,6 +528,11 @@ const nodeTask = r
 
 Runner ships with a serializer that round-trips Dates, RegExp, binary, and custom shapes across Node and web.
 
+It also supports:
+
+- `bigint` (encoded as a decimal string under `__type: "BigInt"`)
+- `symbol` for `Symbol.for(key)` and well-known symbols like `Symbol.iterator` (unique `Symbol("...")` values are rejected because identity cannot be preserved)
+
 ```ts
 import { r, globals } from "@bluelibs/runner";
 
@@ -580,8 +567,6 @@ Note on files: The “File” you see in tunnels is not a custom serializer type
 
 ## Testing
 
-- Use `npm run coverage:ai` to execute the full Jest suite in a token-friendly format (includes per-file missed statement/branch/line locations when coverage < 100%). Focused tests can run via `npm run test -- some.test.ts`.
-- Durable workflows are included in the normal test suite (`npm test`). For focused runs use `npm run test -- durable` or `npm run coverage:durable:ai`.
 - Durable test helpers: `createDurableTestSetup` and `waitUntil` from `@bluelibs/runner/node` for fast, in-memory durable workflows in tests.
 - The Jest runner has a watchdog (`JEST_WATCHDOG_MS`, default 10 minutes) to avoid “hung test run” situations.
 - In unit tests, prefer running a minimal root resource and call `await run(root)` to get `runTask`, `emitEvent`, or `getResourceValue`.
@@ -660,5 +645,3 @@ import { r, resource as classicResource } from "@bluelibs/runner";
 const classic = classicResource({ id: "legacy", init: async () => "ok" });
 const modern = r.resource("modern").register([classic]).build();
 ```
-
-Fluent builders produce the exact same runtime definitions, so you can mix both styles within one project.

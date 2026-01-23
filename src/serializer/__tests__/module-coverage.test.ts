@@ -7,6 +7,7 @@ import { describe, it, expect } from "@jest/globals";
 import { isUnsafeKey, toNodeRecord } from "../validation";
 import { TypeRegistry } from "../type-registry";
 import { deserializeLegacy } from "../deserializer";
+import { SymbolPolicy } from "../types";
 
 describe("Serializer Module Coverage", () => {
   describe("validation.ts", () => {
@@ -33,6 +34,7 @@ describe("Serializer Module Coverage", () => {
       const registry = new TypeRegistry({
         allowedTypes: null,
         regExpValidator: { maxPatternLength: 1024, allowUnsafe: false },
+        symbolPolicy: SymbolPolicy.AllowAll,
       });
 
       const typeList = registry.getTypeList();
@@ -50,6 +52,7 @@ describe("Serializer Module Coverage", () => {
       const registry = new TypeRegistry({
         allowedTypes: null,
         regExpValidator: { maxPatternLength: 1024, allowUnsafe: false },
+        symbolPolicy: SymbolPolicy.AllowAll,
       });
 
       const source = Object.create({ inherited: 1 }) as Record<string, unknown>;

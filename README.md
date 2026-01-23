@@ -1,8 +1,8 @@
 # BlueLibs Runner
 
-### TypeScript-First Dependency Injection Framework
+### Explicit TypeScript Dependency Injection Toolkit
 
-**Build enterprise applications that are maintainable, testable, and scalable**
+**Compose tasks and resources with predictable lifecycle, testing hooks, and runtime control**
 
 Runner is a TypeScript-first framework for building applications from tasks (functions) and resources
 (singletons), with explicit dependency injection, middleware, events, hooks, and lifecycle management.
@@ -107,9 +107,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 ### Current Way
 
-Modern dependency injection frameworks force difficult trade-offs: decorators, reflection, and runtime tricks make debugging painful.
-
-The result is code that's hard to test, hard to understand, and hard to maintain:
+Decorator-heavy DI frameworks hide work behind reflection. They often require framework-specific testing harnesses, and debugging jumps between generated code and the code you wrote.
 
 ```typescript
 @Injectable()
@@ -135,7 +133,7 @@ export class UserService {
 
 ### Next-gen way
 
-Runner provides a functional, explicit approach:
+Runner keeps everything as plain functions and objects. You declare dependencies up front, wire them once, and get predictable runtime behavior with no hidden reflection.
 
 ```typescript
 const createUser = r
@@ -157,11 +155,11 @@ const runtime = await run(app);
 
 **Benefits:**
 
-- **Zero magic** — Plain functions and objects
-- **Full type safety** — TypeScript inference throughout
-- **Simple testing** — Unit tests run in milliseconds
-- **Clear debugging** — Readable stack traces
-- **Gradual adoption** — Integrate into existing projects
+- **Explicit wiring** — Dependencies are declared in code, not discovered at runtime
+- **Type-driven** — TypeScript inference flows through tasks, resources, and middleware
+- **Testable by default** — Call `.run()` with mocks or run the full app, no special harnesses
+- **Traceable** — Stack traces and debug output stay aligned with your source
+- **Incremental adoption** — Wrap an existing service or task without rewriting the rest
 
 </td>
 </tr>
@@ -176,7 +174,7 @@ const runtime = await run(app);
 - [Why Runner?](#why-runner) - The problem we solve
 - [What Is This Thing?](#what-is-this-thing)
 - [When to Use Runner](#when-to-use-runner) - Is it right for you?
-- [Show Me the Magic](#show-me-the-magic) - See it in action
+- [Show me the wiring](#show-me-the-wiring) - See it in action
 - [How Does It Compare?](#how-does-it-compare) - vs. other frameworks
 - [Performance at a Glance](#performance-at-a-glance) - Real benchmarks
 - [What's in the Box?](#whats-in-the-box) - Feature matrix
@@ -188,7 +186,7 @@ const runtime = await run(app);
 
 **Core Concepts**
 
-- [Tasks](#tasks) - Functions with superpowers
+- [Tasks](#tasks) - Functions with dependency injection and middleware
 - [Resources](#resources) - Singletons and lifecycle management
 - [Events](#events) - Decoupled communication
 - [Hooks](#hooks) - Lightweight event subscribers
@@ -285,9 +283,9 @@ BlueLibs Runner is a TypeScript-first dependency injection framework built aroun
 
 ---
 
-## Show Me the Magic
+## Show me the wiring
 
-**Here's what "zero magic" looks like in practice:**
+**Here's what explicit wiring looks like in practice:**
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -311,14 +309,14 @@ const callAPI = r
   .run(async (url) => fetch(url))
   .build();
 
-// Testing is actually pleasant
+// Testing stays direct
 test("getUser works", async () => {
   const result = await getUser.run("user-123", { db: mockDb }); // ← Just call it
   expect(result.name).toBe("John");
 });
 ```
 
-**The magic? There isn't any.** It's just clean, composable functions.
+**Nothing hidden here.** Each step is spelled out so you can trace dependencies, middleware, and tests without guessing.
 
 ---
 
@@ -538,9 +536,9 @@ Neither is universally "better" – they solve the same problem with different p
 
 ---
 
-## Performance at a Glance
+## Performance at a glance
 
-**Runner is FAST.** Here are real benchmarks from an M1 Max:
+Measured numbers on an M1 Max; use them as a feel for overhead, not a guarantee for your hardware:
 
 ```
 ┌─────────────────────────────────────┬───────────────┬──────────────┐
@@ -726,7 +724,7 @@ Hello, World!
 
 ### Building a Real Express Server
 
-Now that you've seen the basics, let's build something real! Here's a complete Express API server with dependency injection, logging, and proper lifecycle management. (And yes, it's less code than most frameworks need for "Hello World" )
+Now that you've seen the basics, let's build something real. Here's a complete Express API server with dependency injection, logging, and lifecycle management. The example keeps all wiring in one place so you can trace setup and teardown.
 
 ```bash
 npm install @bluelibs/runner express zod
@@ -1217,7 +1215,7 @@ const result = await runTask(registerUser, { email: "new@user.com" });
 await dispose();
 ```
 
-**That's it!** Each pattern is production-ready. No configuration, no extra packages, just works.
+Each pattern here is runnable as-is. They rely only on Runner's built-ins, so you can paste them into a project to prototype quickly and then tune configs (TTL, retries, timeouts) for your workload.
 
 > **runtime:** "Six production problems, six one-liners. You bolted middleware onto tasks like Lego bricks and called it architecture. I respect the pragmatism. Ship it."
 
@@ -1248,7 +1246,7 @@ graph LR
 
 ### Tasks
 
-Tasks are where your business logic lives. Think of them as **functions with superpowers** – they get automatic dependency injection, type safety, middleware support, and observability.
+Tasks are where your business logic lives. They are async functions with explicit dependency injection, type-safe inputs/outputs, middleware support, and observability baked in.
 
 Here's a complete example showing you everything:
 
@@ -1478,7 +1476,7 @@ const dbResource = r
 
 ### Events
 
-Events let different parts of your app talk to each other without tight coupling. It's like having a really good office messenger who never forgets anything.
+Events let different parts of your app communicate without direct references. They carry typed payloads to hooks so producers stay decoupled from consumers.
 
 ```mermaid
 flowchart LR
@@ -2579,7 +2577,7 @@ await run(app, {
 > **runtime:** "An error boundary: a trampoline under your tightrope. I’m the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
 ## Caching
 
-Because nobody likes waiting for the same expensive operation twice:
+Avoid recomputing expensive work by caching task results with TTL-based eviction:
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -2637,7 +2635,7 @@ const app = r
 
 ## Concurrency Control
 
-Stop slamming your database or external APIs. The concurrency middleware ensures that only a specific number of instances of a task (or group of tasks) run at the same time.
+Limit concurrent executions to protect databases and external APIs. The concurrency middleware keeps only a fixed number of task instances running at once.
 
 ```typescript
 import { r, globals, Semaphore } from "@bluelibs/runner";
@@ -2669,7 +2667,7 @@ const heavyTask = r
 
 ## Circuit Breaker
 
-Prevent cascading failures. If an external service starts failing, the circuit breaker "trips," failing fast for all subsequent calls and giving the service time to recover.
+Trip repeated failures early. When an external service starts failing, the circuit breaker opens so subsequent calls fail fast until a cool-down passes.
 
 ```typescript
 import { r, globals } from "@bluelibs/runner";
@@ -2794,7 +2792,7 @@ const sensitiveTask = r
 
 ## Performance
 
-BlueLibs Runner is designed with performance in mind. The framework introduces minimal overhead while providing powerful features like dependency injection, middleware, and event handling.
+Runner keeps the DI and middleware stack lightweight. The numbers below come from the project's benchmark suite; rerun them on your hardware to size real-world overhead.
 
 Test it yourself by cloning @bluelibs/runner and running `npm run benchmark`.
 
@@ -2953,7 +2951,7 @@ BlueLibs Runner achieves high performance while providing enterprise features:
 | Resource Management  | One-time init        | Singleton pattern, lifecycle  |
 | Built-in Caching     | Variable speedup     | Automatic optimization        |
 
-**Bottom line**: The framework adds minimal overhead (~0.005ms per task) while providing significant architectural benefits.
+**Bottom line**: On the measured hardware, the overhead for a task pipeline stayed around ~0.005ms while still enabling DI, middleware, and events. Validate against your own workload to set budgets.
 
 > **runtime:** "'Millions of tasks per second.' Fantastic—on your lava‑warmed laptop, in a vacuum, with the wind at your back. Add I/O, entropy, and one feral user and watch those numbers molt. I’ll still be here, caffeinated and inevitable."
 
@@ -3365,9 +3363,9 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 > **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
 ## Logging
 
-_The structured logging system that actually makes debugging enjoyable_
+_Structured logging with predictable shape and pluggable transports_
 
-BlueLibs Runner comes with a built-in logging system that's structured, and doesn't make you hate your life when you're trying to debug at 2 AM.
+Runner ships a structured logger with consistent fields, onLog hooks, and multiple print strategies so you can pipe logs to consoles or external transports without custom glue.
 
 ### Basic Logging
 
@@ -3633,9 +3631,9 @@ interface ILog {
 
 ## Debug Resource
 
-_Professional-grade debugging without sacrificing production performance_
+_Debug hooks for tasks, resources, and events without shipping extra overhead when disabled_
 
-The Debug Resource is a powerful observability suite that hooks into the framework's execution pipeline to provide detailed insights into your application's behavior. It's designed to be zero-overhead when disabled and highly configurable when enabled.
+The Debug Resource instruments the execution pipeline so you can trace task/resource lifecycle, inputs/outputs, and events. When not registered it stays out of the hot path; when enabled you can pick exactly which signals to record.
 
 ### Quick Start with Debug
 
@@ -5472,7 +5470,7 @@ process.on("SIGTERM", async () => {
 
 ## Testing
 
-Runner's explicit dependency injection makes testing straightforward—no magic mocks, no framework test harnesses. Just pass what you need.
+Runner's explicit dependency injection makes testing straightforward. You can call `.run()` on a task with plain mocks or spin up the full runtime when you need middleware and lifecycle behavior.
 
 ### Two testing approaches
 

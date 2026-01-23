@@ -197,7 +197,7 @@ process.on("SIGTERM", async () => {
 
 ## Testing
 
-Runner's explicit dependency injection makes testing straightforward—no magic mocks, no framework test harnesses. Just pass what you need.
+Runner's explicit dependency injection makes testing straightforward. You can call `.run()` on a task with plain mocks or spin up the full runtime when you need middleware and lifecycle behavior.
 
 ### Two testing approaches
 
