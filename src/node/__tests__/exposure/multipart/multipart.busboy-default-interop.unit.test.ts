@@ -230,7 +230,11 @@ describe("parseMultipartInput - busboy default export interop", () => {
 
     const manifest = JSON.stringify({
       input: {
-        file: { $runnerFile: "File", id: fileId, meta: { name: "from-manifest.txt" } },
+        file: {
+          $runnerFile: "File",
+          id: fileId,
+          meta: { name: "from-manifest.txt" },
+        },
       },
     });
 

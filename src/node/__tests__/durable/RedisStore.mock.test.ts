@@ -6,6 +6,7 @@ import type {
   StepResult,
   Timer,
 } from "../../durable/core/types";
+import { ExecutionStatus } from "../../durable/core/types";
 import { getDefaultSerializer } from "../../../serializer";
 import type { DurableAuditEntry } from "../../durable/core/audit";
 import * as ioredisOptional from "../../durable/optionalDeps/ioredis";
@@ -51,6 +52,56 @@ describe("durable: RedisStore", () => {
     jest.restoreAllMocks();
   });
 
+  it("supports execution idempotency key mapping (get/set)", async () => {
+    redisMock.get.mockResolvedValueOnce("exec-1");
+
+    await expect(
+      store.getExecutionIdByIdempotencyKey({
+        taskId: "t",
+        idempotencyKey: "k",
+      }),
+    ).resolves.toBe("exec-1");
+
+    redisMock.get.mockResolvedValueOnce(123 as any);
+    await expect(
+      store.getExecutionIdByIdempotencyKey({
+        taskId: "t",
+        idempotencyKey: "k",
+      }),
+    ).resolves.toBeNull();
+
+    redisMock.set.mockResolvedValueOnce("OK");
+    await expect(
+      store.setExecutionIdByIdempotencyKey({
+        taskId: "t",
+        idempotencyKey: "k",
+        executionId: "exec-2",
+      }),
+    ).resolves.toBe(true);
+
+    redisMock.set.mockResolvedValueOnce(null);
+    await expect(
+      store.setExecutionIdByIdempotencyKey({
+        taskId: "t",
+        idempotencyKey: "k",
+        executionId: "exec-3",
+      }),
+    ).resolves.toBe(false);
+  });
+
+  it("URI-encodes idempotency mapping keys", async () => {
+    redisMock.get.mockResolvedValueOnce(null);
+
+    await store.getExecutionIdByIdempotencyKey({
+      taskId: "task/with spaces",
+      idempotencyKey: "key:with?chars",
+    });
+
+    expect(redisMock.get).toHaveBeenCalledWith(
+      "durable:idem:task%2Fwith%20spaces:key%3Awith%3Fchars",
+    );
+  });
+
   it("saves and fetches execution", async () => {
     const exec: Execution = {
       id: "1",
@@ -72,6 +123,28 @@ describe("durable: RedisStore", () => {
     redisMock.get.mockResolvedValue(serializer.stringify(exec));
     const fetched = await store.getExecution("1");
     expect(fetched?.id).toBe("1");
+  });
+
+  it("does not track cancelled executions as active", async () => {
+    const exec: Execution = {
+      id: "c1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Cancelled,
+      error: { message: "cancelled" },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      completedAt: new Date(),
+    };
+
+    await store.saveExecution(exec);
+
+    expect(redisMock.srem).toHaveBeenCalledWith(
+      "durable:active_executions",
+      "c1",
+    );
   });
 
   it("updates execution (and handles missing)", async () => {

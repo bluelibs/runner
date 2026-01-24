@@ -133,7 +133,9 @@ export function createMockReqRes(init: CreateMockReqResInit = {}) {
       const buf = getBodyBuffer();
       if (buf.length === 0) return undefined;
       try {
-        return getDefaultSerializer().parse(buf.toString("utf8")) as JsonResponse;
+        return getDefaultSerializer().parse(
+          buf.toString("utf8"),
+        ) as JsonResponse;
       } catch {
         return undefined;
       }

@@ -71,6 +71,16 @@ export class WaitManager {
         );
       }
 
+      if (exec.status === ExecutionStatus.Cancelled) {
+        throw new DurableExecutionError(
+          exec.error?.message || "Execution cancelled",
+          exec.id,
+          exec.taskId,
+          exec.attempt,
+          exec.error,
+        );
+      }
+
       return undefined;
     };
 

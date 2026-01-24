@@ -71,7 +71,11 @@ export function createErroringRequest(
   });
 }
 
-export function part(boundary: string, headers: string[], body: string): string {
+export function part(
+  boundary: string,
+  headers: string[],
+  body: string,
+): string {
   return `--${boundary}${CRLF}${headers.join(
     CRLF,
   )}${CRLF}${CRLF}${body}${CRLF}`;
@@ -104,7 +108,10 @@ export function assertInputFile(
   }
 }
 
-export function expectErrorCode(response: JsonResponse, expected: string): void {
+export function expectErrorCode(
+  response: JsonResponse,
+  expected: string,
+): void {
   const body = response.body;
   if (!body || typeof body !== "object") {
     throw new Error("Error response body is missing");

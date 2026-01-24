@@ -1,5 +1,9 @@
 import type { ServerResponse } from "http";
-import { createMockReqRes, type MockReq, type MockRes } from "./resource.http.testkit";
+import {
+  createMockReqRes,
+  type MockReq,
+  type MockRes,
+} from "./resource.http.testkit";
 
 export type { MockReq, MockRes };
 
@@ -7,7 +11,10 @@ export function createBaseReq(): MockReq {
   return createMockReqRes({ manualPush: true, body: null }).req;
 }
 
-export function makeReqRes(body: Buffer | string, headers: Record<string, string>) {
+export function makeReqRes(
+  body: Buffer | string,
+  headers: Record<string, string>,
+) {
   const ref = createMockReqRes({
     manualPush: true,
     body: null,

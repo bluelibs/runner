@@ -1,13 +1,18 @@
 import { getDashboardBasePath } from "./basePath";
 
+export const ExecutionStatus = {
+  Pending: "pending",
+  Running: "running",
+  Retrying: "retrying",
+  Sleeping: "sleeping",
+  Cancelled: "cancelled",
+  Completed: "completed",
+  CompensationFailed: "compensation_failed",
+  Failed: "failed",
+} as const;
+
 export type ExecutionStatus =
-  | "pending"
-  | "running"
-  | "retrying"
-  | "sleeping"
-  | "completed"
-  | "compensation_failed"
-  | "failed";
+  (typeof ExecutionStatus)[keyof typeof ExecutionStatus];
 
 export interface StepResult {
   executionId: string;
@@ -60,7 +65,8 @@ export const api = {
   executions: {
     list: async (options: ListExecutionsOptions = {}): Promise<Execution[]> => {
       const params = new URLSearchParams();
-      if (options.status?.length) params.set("status", options.status.join(","));
+      if (options.status?.length)
+        params.set("status", options.status.join(","));
       if (options.taskId) params.set("taskId", options.taskId);
       if (options.limit) params.set("limit", String(options.limit));
       if (options.offset) params.set("offset", String(options.offset));
@@ -109,7 +115,11 @@ export const api = {
       });
       if (!res.ok) throw new Error("Failed to force fail");
     },
-    editState: async (executionId: string, stepId: string, newState: unknown) => {
+    editState: async (
+      executionId: string,
+      stepId: string,
+      newState: unknown,
+    ) => {
       const apiBase = getApiBasePath();
       const res = await fetch(`${apiBase}/operator/editState`, {
         method: "POST",

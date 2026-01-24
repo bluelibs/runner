@@ -1,6 +1,10 @@
 import { parseMultipartInput } from "../../../exposure/multipart";
 import { getDefaultSerializer } from "../../../../serializer";
-import { createMultipartRequest, part, assertInputFile } from "./multipart.test.utils";
+import {
+  createMultipartRequest,
+  part,
+  assertInputFile,
+} from "./multipart.test.utils";
 import type { InputFile } from "../../../../types/inputFile";
 
 const serializer = getDefaultSerializer();
@@ -40,10 +44,35 @@ describe("parseMultipartInput - Hydration", () => {
       },
     });
     const req = createMultipartRequest(boundary, [
-      part(boundary, ['Content-Disposition: form-data; name="ignored"'], "noop"),
-      part(boundary, ['Content-Disposition: form-data; name="__manifest"', "Content-Type: application/json; charset=utf-8"], manifest),
-      part(boundary, ['Content-Disposition: form-data; name="file:A"; filename="foo.txt"', "Content-Type: application/octet-stream"], "abc"),
-      part(boundary, ['Content-Disposition: form-data; name="file:B"; filename="bar.bin"', "Content-Type: application/octet-stream"], "xyz"),
+      part(
+        boundary,
+        ['Content-Disposition: form-data; name="ignored"'],
+        "noop",
+      ),
+      part(
+        boundary,
+        [
+          'Content-Disposition: form-data; name="__manifest"',
+          "Content-Type: application/json; charset=utf-8",
+        ],
+        manifest,
+      ),
+      part(
+        boundary,
+        [
+          'Content-Disposition: form-data; name="file:A"; filename="foo.txt"',
+          "Content-Type: application/octet-stream",
+        ],
+        "abc",
+      ),
+      part(
+        boundary,
+        [
+          'Content-Disposition: form-data; name="file:B"; filename="bar.bin"',
+          "Content-Type: application/octet-stream",
+        ],
+        "xyz",
+      ),
     ]);
 
     const parsed = await parseMultipartInput(req, undefined, serializer);

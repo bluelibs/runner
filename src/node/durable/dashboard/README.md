@@ -42,12 +42,12 @@ npm run build
 The dashboard is designed to be served by `createDashboardMiddleware()`:
 
 ```typescript
-import express from 'express';
-import { 
-  createDashboardMiddleware, 
+import express from "express";
+import {
+  createDashboardMiddleware,
   DurableOperator,
-  initDurableService 
-} from '@bluelibs/runner/node';
+  initDurableService,
+} from "@bluelibs/runner/node";
 
 const app = express();
 const service = await initDurableService({ store, eventBus });
@@ -55,9 +55,9 @@ const operator = new DurableOperator(store);
 
 // Mount at /durable-dashboard (or any other prefix)
 app.use(
-  '/durable-dashboard',
+  "/durable-dashboard",
   createDashboardMiddleware(service, operator, {
-    operatorAuth: (req) => req.headers['x-ops-token'] === process.env.OPS_TOKEN,
+    operatorAuth: (req) => req.headers["x-ops-token"] === process.env.OPS_TOKEN,
   }),
 );
 
@@ -68,14 +68,14 @@ app.listen(3000);
 
 The dashboard communicates with these backend endpoints:
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/executions` | GET | List executions (supports filters/pagination) |
-| `/api/executions/:id` | GET | Get execution details |
-| `/api/operator/retryRollback` | POST | Retry a failed rollback |
-| `/api/operator/skipStep` | POST | Skip a stuck step |
-| `/api/operator/forceFail` | POST | Force workflow to fail |
-| `/api/operator/editState` | POST | Manually patch step state |
+| Endpoint                      | Method | Description                                   |
+| ----------------------------- | ------ | --------------------------------------------- |
+| `/api/executions`             | GET    | List executions (supports filters/pagination) |
+| `/api/executions/:id`         | GET    | Get execution details                         |
+| `/api/operator/retryRollback` | POST   | Retry a failed rollback                       |
+| `/api/operator/skipStep`      | POST   | Skip a stuck step                             |
+| `/api/operator/forceFail`     | POST   | Force workflow to fail                        |
+| `/api/operator/editState`     | POST   | Manually patch step state                     |
 
 > [!NOTE]
 > Operator actions are denied unless you provide `operatorAuth`. To opt out, set `dangerouslyAllowUnauthenticatedOperator: true` (not recommended).
@@ -109,15 +109,15 @@ src/node/durable/dashboard/
 
 ## Execution Statuses
 
-| Status | Color | Description |
-|--------|-------|-------------|
-| `pending` | Yellow | Queued for processing |
-| `running` | Blue | Currently executing |
-| `sleeping` | Purple | Waiting for timer/signal |
-| `retrying` | Orange | Retry scheduled |
-| `completed` | Green | Successfully finished |
-| `failed` | Red | Permanently failed |
-| `compensation_failed` | Pink | Rollback crashed - needs intervention |
+| Status                | Color  | Description                           |
+| --------------------- | ------ | ------------------------------------- |
+| `pending`             | Yellow | Queued for processing                 |
+| `running`             | Blue   | Currently executing                   |
+| `sleeping`            | Purple | Waiting for timer/signal              |
+| `retrying`            | Orange | Retry scheduled                       |
+| `completed`           | Green  | Successfully finished                 |
+| `failed`              | Red    | Permanently failed                    |
+| `compensation_failed` | Pink   | Rollback crashed - needs intervention |
 
 ## Building for Production
 

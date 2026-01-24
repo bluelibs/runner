@@ -65,7 +65,7 @@ export type DashboardMiddlewareOptions = {
 
 enum DashboardErrorMessage {
   Forbidden = "Forbidden",
-};
+}
 
 export function createDashboardMiddleware(
   _service: IDurableService,
@@ -97,6 +97,15 @@ export function createDashboardMiddleware(
         offset,
       });
 
+      res.json(executions);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  api.get("/executions-stuck", async (req, res) => {
+    try {
+      const executions = await operator.listStuckExecutions();
       res.json(executions);
     } catch (err: any) {
       res.status(500).json({ error: err.message });

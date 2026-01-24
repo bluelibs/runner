@@ -19,6 +19,7 @@ function createUnusedService(): IDurableService {
 
   return {
     startExecution: async () => unused(),
+    cancelExecution: async () => unused(),
     wait: async () => unused(),
     execute: async () => unused(),
     executeStrict: async () => unused(),

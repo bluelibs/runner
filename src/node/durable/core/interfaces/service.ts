@@ -94,6 +94,11 @@ export interface ExecuteOptions {
   timeout?: number;
   priority?: number;
   waitPollIntervalMs?: number;
+  /**
+   * Optional workflow-level idempotency key.
+   * When supported by the store, multiple concurrent callers using the same key will receive the same executionId.
+   */
+  idempotencyKey?: string;
 }
 
 export interface ScheduleOptions {
@@ -110,6 +115,13 @@ export interface IDurableService {
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<string>;
+
+  /**
+   * Request cancellation for an execution.
+   * Cancellation is cooperative: it marks the execution as cancelled and unblocks waiters,
+   * but cannot preempt arbitrary in-process async work.
+   */
+  cancelExecution(executionId: string, reason?: string): Promise<void>;
 
   wait<TResult>(
     executionId: string,

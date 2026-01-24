@@ -16,6 +16,7 @@ export interface DurableResourceConfig {
 export interface IDurableResource extends Pick<
   IDurableService,
   | "startExecution"
+  | "cancelExecution"
   | "wait"
   | "execute"
   | "executeStrict"
@@ -66,6 +67,10 @@ export class DurableResource implements IDurableResource {
     options?: ExecuteOptions,
   ): Promise<string> {
     return this.service.startExecution(task, input, options);
+  }
+
+  cancelExecution(executionId: string, reason?: string): Promise<void> {
+    return this.service.cancelExecution(executionId, reason);
   }
 
   wait<TResult>(

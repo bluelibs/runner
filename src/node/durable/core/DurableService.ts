@@ -134,6 +134,10 @@ export class DurableService implements IDurableService {
     return this.executionManager.startExecution(task, input, options);
   }
 
+  async cancelExecution(executionId: string, reason?: string): Promise<void> {
+    await this.executionManager.cancelExecution(executionId, reason);
+  }
+
   async execute<TInput, TResult>(
     task: DurableTask<TInput, TResult>,
     input?: TInput,

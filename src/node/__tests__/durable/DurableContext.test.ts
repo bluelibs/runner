@@ -5,6 +5,7 @@ import type { DurableAuditEmitter } from "../../durable/core/audit";
 import { createDurableStepId } from "../../durable/core/ids";
 import { SuspensionSignal } from "../../durable/core/interfaces/context";
 import type { IDurableStore } from "../../durable/core/interfaces/store";
+import { ExecutionStatus } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 
 describe("durable: DurableContext", () => {
@@ -23,6 +24,26 @@ describe("durable: DurableContext", () => {
     const ctx = new DurableContext(store, bus, executionId, attempt, options);
     return { store, bus, ctx };
   };
+
+  it("fails fast when the execution is cancelled (default message)", async () => {
+    const store = new MemoryStore();
+    await store.saveExecution({
+      id: "e1",
+      taskId: "t",
+      input: undefined,
+      status: ExecutionStatus.Cancelled,
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const { ctx } = createContext("e1", 1, store);
+
+    await expect(ctx.sleep(1, { stepId: "stable" })).rejects.toThrow(
+      "Execution cancelled",
+    );
+  });
 
   it("supports explicit compensation via rollback()", async () => {
     const { ctx } = createContext();

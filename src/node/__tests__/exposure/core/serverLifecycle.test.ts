@@ -1,9 +1,16 @@
-import { makeRequestListener, startHttpServer, stopHttpServer } from "../../../exposure/serverLifecycle";
+import {
+  makeRequestListener,
+  startHttpServer,
+  stopHttpServer,
+} from "../../../exposure/serverLifecycle";
 import { Logger } from "../../../../models/Logger";
 
 describe("node exposure - server lifecycle", () => {
   describe("makeRequestListener", () => {
-    const invokeListener = async (listener: ReturnType<typeof makeRequestListener>, res: any) => {
+    const invokeListener = async (
+      listener: ReturnType<typeof makeRequestListener>,
+      res: any,
+    ) => {
       await new Promise<void>((resolve) => {
         listener({} as unknown as import("http").IncomingMessage, res);
         setImmediate(resolve);
@@ -15,11 +22,15 @@ describe("node exposure - server lifecycle", () => {
       writableEnded: false,
       headers: new Map<string, string>(),
       payload: Buffer.alloc(0),
-      setHeader(key: string, value: string) { this.headers.set(key.toLowerCase(), value); },
+      setHeader(key: string, value: string) {
+        this.headers.set(key.toLowerCase(), value);
+      },
       end(payload?: any) {
         this.writableEnded = true;
         if (payload != null) {
-          this.payload = Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload));
+          this.payload = Buffer.isBuffer(payload)
+            ? payload
+            : Buffer.from(String(payload));
         }
       },
     });
@@ -27,7 +38,11 @@ describe("node exposure - server lifecycle", () => {
     it("responds with 404 when handler reports miss", async () => {
       const logger = { error: () => {} } as unknown as Logger;
       const res = createResponse();
-      const listener = makeRequestListener({ handler: async () => false, respondOnMiss: true, logger });
+      const listener = makeRequestListener({
+        handler: async () => false,
+        respondOnMiss: true,
+        logger,
+      });
       await invokeListener(listener, res);
       expect(res.statusCode).toBe(404);
       expect(res.writableEnded).toBe(true);
@@ -36,7 +51,11 @@ describe("node exposure - server lifecycle", () => {
     it("ignores miss when respondOnMiss is disabled", async () => {
       const logger = { error: () => {} } as unknown as Logger;
       const res = createResponse();
-      const listener = makeRequestListener({ handler: async () => false, respondOnMiss: false, logger });
+      const listener = makeRequestListener({
+        handler: async () => false,
+        respondOnMiss: false,
+        logger,
+      });
       await invokeListener(listener, res);
       expect(res.writableEnded).toBe(false);
       expect(res.statusCode).toBe(0);
@@ -46,20 +65,34 @@ describe("node exposure - server lifecycle", () => {
       const logger = { error: () => {} } as unknown as Logger;
       const res = createResponse();
       res.writableEnded = true;
-      const listener = makeRequestListener({ handler: async () => false, respondOnMiss: true, logger });
+      const listener = makeRequestListener({
+        handler: async () => false,
+        respondOnMiss: true,
+        logger,
+      });
       await invokeListener(listener, res);
       expect(res.statusCode).toBe(0);
     });
 
     it("writes 500 when handler throws", async () => {
       const errors: Array<Record<string, unknown>> = [];
-      const logger = { error: (_: string, data: Record<string, unknown>) => errors.push(data) } as unknown as Logger;
+      const logger = {
+        error: (_: string, data: Record<string, unknown>) => errors.push(data),
+      } as unknown as Logger;
       const res = createResponse();
-      const listener = makeRequestListener({ handler: async () => { throw new Error("boom"); }, respondOnMiss: false, logger });
+      const listener = makeRequestListener({
+        handler: async () => {
+          throw new Error("boom");
+        },
+        respondOnMiss: false,
+        logger,
+      });
       await invokeListener(listener, res);
       expect(res.statusCode).toBe(500);
       expect(res.writableEnded).toBe(true);
-      expect(JSON.parse(res.payload.toString()).error.code).toBe("INTERNAL_ERROR");
+      expect(JSON.parse(res.payload.toString()).error.code).toBe(
+        "INTERNAL_ERROR",
+      );
       expect(errors[0]?.error).toBe("boom");
     });
 
@@ -67,7 +100,13 @@ describe("node exposure - server lifecycle", () => {
       const logger = { error: () => {} } as unknown as Logger;
       const res = createResponse();
       res.writableEnded = true;
-      const listener = makeRequestListener({ handler: async () => { throw new Error("late"); }, respondOnMiss: true, logger });
+      const listener = makeRequestListener({
+        handler: async () => {
+          throw new Error("late");
+        },
+        respondOnMiss: true,
+        logger,
+      });
       await invokeListener(listener, res);
       expect(res.statusCode).toBe(0);
       expect(res.payload.length).toBe(0);
@@ -78,7 +117,10 @@ describe("node exposure - server lifecycle", () => {
     it("startHttpServer uses default host when host omitted", async () => {
       const calls: Array<{ port: number; host: string }> = [];
       const fakeServer: any = {
-        listen(port: number, host: string, cb: () => void) { calls.push({ port, host }); cb(); },
+        listen(port: number, host: string, cb: () => void) {
+          calls.push({ port, host });
+          cb();
+        },
       } as unknown as import("net").Server;
       await startHttpServer(fakeServer, { port: 4321 });
       expect(calls).toEqual([{ port: 4321, host: "127.0.0.1" }]);
@@ -88,8 +130,14 @@ describe("node exposure - server lifecycle", () => {
       const calls: Array<{ port: number; host: string }> = [];
       let closed = false;
       const fakeServer: any = {
-        listen(port: number, host: string, cb: () => void) { calls.push({ port, host }); cb(); },
-        close(cb: () => void) { closed = true; cb(); },
+        listen(port: number, host: string, cb: () => void) {
+          calls.push({ port, host });
+          cb();
+        },
+        close(cb: () => void) {
+          closed = true;
+          cb();
+        },
       } as unknown as import("net").Server;
       await startHttpServer(fakeServer, { port: 1234, host: "0.0.0.0" });
       expect(calls).toEqual([{ port: 1234, host: "0.0.0.0" }]);

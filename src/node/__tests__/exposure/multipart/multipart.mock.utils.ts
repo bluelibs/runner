@@ -14,7 +14,9 @@ export const setupBusboyMock = () => {
       }
       once(event: string, cb: Function) {
         const wrapper = (...args: any[]) => {
-          this.handlers[event] = (this.handlers[event] ?? []).filter((f) => f !== wrapper);
+          this.handlers[event] = (this.handlers[event] ?? []).filter(
+            (f) => f !== wrapper,
+          );
           cb(...args);
         };
         (this.handlers[event] ??= []).push(wrapper);
@@ -30,11 +32,16 @@ export const setupBusboyMock = () => {
         }
       }
     }
-    return function busboyFactory() { return new FakeBusboy(); };
+    return function busboyFactory() {
+      return new FakeBusboy();
+    };
   });
 };
 
-export function expectErrorCode(response: JsonResponse, expected: string): void {
+export function expectErrorCode(
+  response: JsonResponse,
+  expected: string,
+): void {
   const body = response.body;
   if (!body || typeof body !== "object") throw new Error("Missing body");
   const error = (body as { error?: any }).error;

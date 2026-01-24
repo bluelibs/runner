@@ -87,7 +87,10 @@ describe("taskHandler", () => {
 
   it("finalizes multipart and reports task errors via handleRequestError", async () => {
     const serializer = getDefaultSerializer();
-    const handleRequestErrorSpy = jest.spyOn(errorHandlers, "handleRequestError");
+    const handleRequestErrorSpy = jest.spyOn(
+      errorHandlers,
+      "handleRequestError",
+    );
     jest.spyOn(multipartModule, "isMultipart").mockReturnValue(true);
     jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
       ok: true,
@@ -103,9 +106,16 @@ describe("taskHandler", () => {
     };
 
     const handler = createTaskHandler({
-      store: { tasks: new Map([[TaskId.T, { task: { id: TaskId.T } }]]), errors: new Map() } as any,
+      store: {
+        tasks: new Map([[TaskId.T, { task: { id: TaskId.T } }]]),
+        errors: new Map(),
+      } as any,
       taskRunner: taskRunner as any,
-      logger: { info: () => undefined, warn: () => undefined, error: () => undefined } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
       authenticator: async () => ({ ok: true as const }),
       allowList: { ensureTask: () => null } as any,
       router: { basePath: RouterBasePath.X },
@@ -137,9 +147,16 @@ describe("taskHandler", () => {
     };
 
     const handler = createTaskHandler({
-      store: { tasks: new Map([[TaskId.T, { task: { id: TaskId.T } }]]), errors: new Map() } as any,
+      store: {
+        tasks: new Map([[TaskId.T, { task: { id: TaskId.T } }]]),
+        errors: new Map(),
+      } as any,
       taskRunner: taskRunner as any,
-      logger: { info: () => undefined, warn: () => undefined, error: () => undefined } as any,
+      logger: {
+        info: () => undefined,
+        warn: () => undefined,
+        error: () => undefined,
+      } as any,
       authenticator: async () => ({ ok: true as const }),
       allowList: { ensureTask: () => null } as any,
       router: { basePath: RouterBasePath.X },

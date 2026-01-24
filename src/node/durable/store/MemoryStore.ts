@@ -15,11 +15,38 @@ import type { DurableAuditEntry } from "../core/audit";
 
 export class MemoryStore implements IDurableStore {
   private executions = new Map<string, Execution>();
+  private executionIdByIdempotencyKey = new Map<string, string>();
   private stepResults = new Map<string, Map<string, StepResult>>();
   private auditEntries = new Map<string, DurableAuditEntry[]>();
   private timers = new Map<string, Timer>();
   private schedules = new Map<string, Schedule>();
   private locks = new Map<string, { id: string; expires: number }>();
+
+  private getIdempotencyMapKey(taskId: string, idempotencyKey: string): string {
+    return `${taskId}::${idempotencyKey}`;
+  }
+
+  async getExecutionIdByIdempotencyKey(params: {
+    taskId: string;
+    idempotencyKey: string;
+  }): Promise<string | null> {
+    return (
+      this.executionIdByIdempotencyKey.get(
+        this.getIdempotencyMapKey(params.taskId, params.idempotencyKey),
+      ) ?? null
+    );
+  }
+
+  async setExecutionIdByIdempotencyKey(params: {
+    taskId: string;
+    idempotencyKey: string;
+    executionId: string;
+  }): Promise<boolean> {
+    const key = this.getIdempotencyMapKey(params.taskId, params.idempotencyKey);
+    if (this.executionIdByIdempotencyKey.has(key)) return false;
+    this.executionIdByIdempotencyKey.set(key, params.executionId);
+    return true;
+  }
 
   async saveExecution(execution: Execution): Promise<void> {
     this.executions.set(execution.id, { ...execution });
@@ -45,7 +72,8 @@ export class MemoryStore implements IDurableStore {
         (e) =>
           e.status !== ExecutionStatus.Completed &&
           e.status !== ExecutionStatus.Failed &&
-          e.status !== ExecutionStatus.CompensationFailed,
+          e.status !== ExecutionStatus.CompensationFailed &&
+          e.status !== ExecutionStatus.Cancelled,
       )
       .map((e) => ({ ...e }));
   }

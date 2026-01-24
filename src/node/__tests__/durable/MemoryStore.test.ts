@@ -1,6 +1,41 @@
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { ExecutionStatus } from "../../durable/core/types";
 
 describe("durable: MemoryStore", () => {
+  it("supports execution idempotency key mapping", async () => {
+    const store = new MemoryStore();
+
+    await expect(
+      store.getExecutionIdByIdempotencyKey({
+        taskId: "t",
+        idempotencyKey: "k",
+      }),
+    ).resolves.toBeNull();
+
+    await expect(
+      store.setExecutionIdByIdempotencyKey({
+        taskId: "t",
+        idempotencyKey: "k",
+        executionId: "e1",
+      }),
+    ).resolves.toBe(true);
+
+    await expect(
+      store.setExecutionIdByIdempotencyKey({
+        taskId: "t",
+        idempotencyKey: "k",
+        executionId: "e2",
+      }),
+    ).resolves.toBe(false);
+
+    await expect(
+      store.getExecutionIdByIdempotencyKey({
+        taskId: "t",
+        idempotencyKey: "k",
+      }),
+    ).resolves.toBe("e1");
+  });
+
   it("supports operator actions (and no-ops when execution is missing)", async () => {
     const store = new MemoryStore();
 
@@ -136,6 +171,19 @@ describe("durable: MemoryStore", () => {
       maxAttempts: 1,
       createdAt: now,
       updatedAt: now,
+    });
+
+    await store.saveExecution({
+      id: "e4",
+      taskId: "t4",
+      input: undefined,
+      status: ExecutionStatus.Cancelled,
+      error: { message: "cancelled" },
+      attempt: 1,
+      maxAttempts: 1,
+      createdAt: now,
+      updatedAt: now,
+      completedAt: now,
     });
 
     expect((await store.listIncompleteExecutions()).map((e) => e.id)).toEqual([

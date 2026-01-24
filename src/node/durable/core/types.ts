@@ -6,6 +6,7 @@ export const ExecutionStatus = {
   Completed: "completed",
   CompensationFailed: "compensation_failed",
   Failed: "failed",
+  Cancelled: "cancelled",
 } as const;
 
 export type ExecutionStatus =
@@ -21,6 +22,9 @@ export interface Execution<TInput = unknown, TResult = unknown> {
     message: string;
     stack?: string;
   };
+  /** Optional cancellation metadata (cooperative cancellation). */
+  cancelledAt?: Date;
+  cancelRequestedAt?: Date;
   attempt: number;
   maxAttempts: number;
   timeout?: number;

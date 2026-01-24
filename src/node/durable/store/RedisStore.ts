@@ -71,6 +71,33 @@ export class RedisStore implements IDurableStore {
     return `${this.prefix}${key}`;
   }
 
+  private encodeKeyPart(value: string): string {
+    return encodeURIComponent(value);
+  }
+
+  async getExecutionIdByIdempotencyKey(params: {
+    taskId: string;
+    idempotencyKey: string;
+  }): Promise<string | null> {
+    const key = this.k(
+      `idem:${this.encodeKeyPart(params.taskId)}:${this.encodeKeyPart(params.idempotencyKey)}`,
+    );
+    const res = await this.redis.get(key);
+    return typeof res === "string" ? res : null;
+  }
+
+  async setExecutionIdByIdempotencyKey(params: {
+    taskId: string;
+    idempotencyKey: string;
+    executionId: string;
+  }): Promise<boolean> {
+    const key = this.k(
+      `idem:${this.encodeKeyPart(params.taskId)}:${this.encodeKeyPart(params.idempotencyKey)}`,
+    );
+    const res = await this.redis.set(key, params.executionId, "NX");
+    return res === "OK";
+  }
+
   private parseRedisString(value: unknown): string | null {
     return typeof value === "string" ? value : null;
   }
@@ -132,7 +159,8 @@ export class RedisStore implements IDurableStore {
     return (
       status !== ExecutionStatus.Completed &&
       status !== ExecutionStatus.Failed &&
-      status !== ExecutionStatus.CompensationFailed
+      status !== ExecutionStatus.CompensationFailed &&
+      status !== ExecutionStatus.Cancelled
     );
   }
 

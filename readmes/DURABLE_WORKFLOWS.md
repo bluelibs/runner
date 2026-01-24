@@ -738,18 +738,23 @@ if (!(await durable.getSchedule('metrics-sync'))) {
 - **Interval**: Fixed delay between executions. Next run = end of previous + interval. Best for polling, health checks.
 - **Cron**: Calendar-based. Next run = next matching time. Best for scheduled reports, daily cleanup.
 
-**Interval Behavior:**
+**Interval Behavior (current implementation):**
+Intervals are currently measured from when the schedule timer fires / execution is kicked off (not from task completion).
+If the task runs longer than the interval, the next run will be scheduled after the interval from *kickoff time*, which can cause overlapping executions unless your task logic (or your infrastructure) prevents it.
+
 ```
-Task starts at t=0, takes 2s to complete
+Task starts at t=0, takes 12s to complete
 Interval = 10s
 
-t=0      t=2      t=12     t=14     t=24
-|--------|--------|--------|--------|
-  task     wait     task     wait
-  runs     10s      runs     10s
+t=0          t=10         t=12
+|------------|------------|
+  task run A   next run B   A completes
 ```
 
-Note: Interval is measured from task **completion**, not start. This prevents task pileup if execution takes longer than the interval.
+If you need "completion-based" intervals (no overlap), implement it explicitly inside the workflow:
+- run the work
+- then `await ctx.sleep(intervalMs)`
+- then loop / re-run (or have the schedule fire less frequently and use durable sleeps inside)
 
 ### Cron Expression Format
 
@@ -1553,7 +1558,7 @@ app.listen(3000);
 
 In addition to `StepResult` records, durable can persist a structured audit trail as the workflow runs:
 
-- execution status transitions (pending/running/sleeping/retrying/completed/failed)
+- execution status transitions (pending/running/sleeping/retrying/completed/failed/cancelled)
 - step completions (with durations)
 - sleep scheduled/completed
 - signal waiting/delivered/timed-out
@@ -1599,7 +1604,40 @@ const mirrorAudit = r
 - **Signals are “deliver to current wait”**: `durableService.signal(executionId, ...)` delivers to the base signal slot if it’s not completed yet (this can buffer the first signal even if the workflow hasn’t reached the wait). Additional signals only deliver to subsequent indexed waits; otherwise they are ignored.
 - **Don’t hang forever**: prefer `durableService.wait(executionId, { timeout: ... })` unless you intentionally want an unbounded wait.
 - **Compensation failures are terminal**: if `ctx.rollback()` fails, execution becomes `compensation_failed` and `wait()` rejects. Use `DurableOperator.retryRollback(executionId)` after fixing the underlying issue.
+- **Intervals can overlap**: interval schedules are currently measured from kickoff time, not completion time. If you need non-overlapping behavior, implement it via `ctx.sleep()` inside the workflow.
 - **Debugging**: inspect step results + timers in the dashboard, or query your `IDurableStore` implementation directly (Redis keys are prefixed by `durable:` by default).
+
+## Idempotency & Deduplication
+
+There are two different "idempotency" problems:
+
+1) **Workflow-level deduplication (start only once)**
+- `startExecution(task, input, { idempotencyKey })` supports a store-backed **"start-or-get"** mode.
+- It returns the same `executionId` for the same `{ taskId, idempotencyKey }` pair, even if multiple callers race.
+- Important: subsequent calls return the existing `executionId` and do **not** overwrite the originally stored `input`.
+- Store support: `MemoryStore` and `RedisStore` implement this. Custom stores must implement `getExecutionIdByIdempotencyKey` / `setExecutionIdByIdempotencyKey`.
+- You should still persist the returned `executionId` in your domain model for observability and to make webhook handling trivial.
+
+2) **Schedule-level deduplication (create schedule only once)**
+- Use `ensureSchedule(...)` with a stable `id`. It is designed to be safe to call on every boot and concurrently across processes.
+
+If you need workflow-level dedupe by business key (for example `orderId`), use it as the `idempotencyKey` (for example `order:${orderId}`), and store the returned `executionId` on the record as well.
+
+## Cancellation (and why it’s tricky)
+
+Durable exposes a first-class cancellation API:
+
+- `durableService.cancelExecution(executionId, reason?)`
+
+Semantics:
+
+- Cancellation is **cooperative**, not preemptive: Node cannot reliably interrupt arbitrary async work.
+- Cancelling marks the execution as terminal (`cancelled`), unblocks `wait()` / `execute()`, and prevents future resumes (timers/signals won't continue it).
+- Already-running code will only stop at the next durable checkpoint (for example the next `ctx.step(...)`, `ctx.sleep(...)`, `ctx.waitForSignal(...)`, or `ctx.emit(...)`).
+
+Administrative alternatives still exist:
+
+- `DurableOperator.forceFail(executionId)` is a blunt instrument to stop and mark `failed`.
 
 ## What This Design Deliberately Excludes
 
@@ -1608,6 +1646,11 @@ const mirrorAudit = r
 3. **Automatic saga orchestration DSLs** – There is no separate workflow language or visual designer. Compensation is regular TypeScript code using `try/catch` and `ctx.step`.
 4. **Built-in dashboards** – While a basic dashboard middleware is now included for developer convenience, the core design focuses on a clean API and store schema; sophisticated observability remains the responsibility of the application.
 5. **Cross-region or multi-tenant sharding logic** – Multi-region replication and advanced topology concerns are out of scope for v1.
+
+Also intentionally minimal in v1:
+6. **Preemptive cancellation** – cancellation is cooperative (checkpoints), not an interrupt/kill mechanism for arbitrary in-flight async work.
+7. **Advanced visibility indexes** – `listExecutions` is dashboard-oriented and not a full-blown search/indexing system.
+8. **Cron timezone & misfire policies** – cron is evaluated using the process environment defaults; DST/timezone/misfire handling is not configurable yet.
 
 These can all be added in future versions if needed, without changing the core `DurableContext` and `DurableService` APIs.
 

@@ -2,7 +2,13 @@ import * as http from "http";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
-import { startExposureServer, request, testTask, testEvent, TOKEN } from "./resource.unit.test.utils";
+import {
+  startExposureServer,
+  request,
+  testTask,
+  testEvent,
+  TOKEN,
+} from "./resource.unit.test.utils";
 
 const D = process.env.RUNNER_TEST_NET === "1" ? describe : describe.skip;
 
@@ -48,15 +54,24 @@ D("nodeExposure - unit core", () => {
 
   it("returns 404 when calling task/event handlers with wrong paths (direct handlers)", async () => {
     const { rr, handlers } = await startExposureServer();
-    const proxyToEvent = http.createServer((req, res) => { void handlers.handleEvent(req, res); });
-    const proxyToTask = http.createServer((req, res) => { void handlers.handleTask(req, res); });
+    const proxyToEvent = http.createServer((req, res) => {
+      void handlers.handleEvent(req, res);
+    });
+    const proxyToTask = http.createServer((req, res) => {
+      void handlers.handleTask(req, res);
+    });
 
-    await new Promise<void>((r) => proxyToEvent.listen(0, "127.0.0.1", () => r()));
-    await new Promise<void>((r) => proxyToTask.listen(0, "127.0.0.1", () => r()));
+    await new Promise<void>((r) =>
+      proxyToEvent.listen(0, "127.0.0.1", () => r()),
+    );
+    await new Promise<void>((r) =>
+      proxyToTask.listen(0, "127.0.0.1", () => r()),
+    );
 
     const a1 = proxyToEvent.address();
     const a2 = proxyToTask.address();
-    if (!a1 || typeof a1 === "string" || !a2 || typeof a2 === "string") throw new Error("No address");
+    if (!a1 || typeof a1 === "string" || !a2 || typeof a2 === "string")
+      throw new Error("No address");
 
     const h = { "x-runner-token": TOKEN };
     const r1 = await request({
@@ -92,32 +107,56 @@ D("nodeExposure - unit core", () => {
     const exposure = nodeExposure.with({
       http: { basePath: "/__runner", listen: { port: 0 } },
     });
-    const app = defineResource({ id: "unit.exposure.noauth.app", register: [testEvent, exposure] });
+    const app = defineResource({
+      id: "unit.exposure.noauth.app",
+      register: [testEvent, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
     const addr = handlers.server?.address();
     if (!addr || typeof addr === "string") throw new Error("No server address");
     const baseUrl = `http://127.0.0.1:${addr.port}${handlers.basePath}`;
-    const r = await request({ method: "POST", url: `${baseUrl}/event/${encodeURIComponent(testEvent.id)}`, body: "{}" });
+    const r = await request({
+      method: "POST",
+      url: `${baseUrl}/event/${encodeURIComponent(testEvent.id)}`,
+      body: "{}",
+    });
     expect(r.status).toBe(200);
     await rr.dispose();
   });
 
   it("supports custom auth header name", async () => {
     const exposure = nodeExposure.with({
-      http: { dangerouslyAllowOpenExposure: true, basePath: "/__runner", listen: { port: 0 }, auth: { header: "authorization", token: "Bearer XYZ" } },
+      http: {
+        dangerouslyAllowOpenExposure: true,
+        basePath: "/__runner",
+        listen: { port: 0 },
+        auth: { header: "authorization", token: "Bearer XYZ" },
+      },
     });
-    const app = defineResource({ id: "unit.exposure.custom-header.app", register: [testEvent, exposure] });
+    const app = defineResource({
+      id: "unit.exposure.custom-header.app",
+      register: [testEvent, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
     const addr = handlers.server?.address();
     if (!addr || typeof addr === "string") throw new Error("No server address");
     const baseUrl = `http://127.0.0.1:${addr.port}${handlers.basePath}`;
 
-    let r = await request({ method: "POST", url: `${baseUrl}/event/${encodeURIComponent(testEvent.id)}`, body: "{}" });
+    let r = await request({
+      method: "POST",
+      url: `${baseUrl}/event/${encodeURIComponent(testEvent.id)}`,
+      body: "{}",
+    });
     expect(r.status).toBe(401);
 
-    r = await request({ method: "POST", url: `${baseUrl}/event/${encodeURIComponent(testEvent.id)}`, headers: { authorization: "Bearer XYZ" }, body: "{}" });
+    r = await request({
+      method: "POST",
+      url: `${baseUrl}/event/${encodeURIComponent(testEvent.id)}`,
+      headers: { authorization: "Bearer XYZ" },
+      body: "{}",
+    });
     expect(r.status).toBe(200);
     await rr.dispose();
   });

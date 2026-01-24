@@ -6,20 +6,37 @@ import { createReqRes } from "./resource.test.utils";
 
 describe("nodeExposure Coverage - Multipart", () => {
   it("multipart success: hydrates files and merges manifest meta", async () => {
-    const fileTask = defineTask<{ file: any }, Promise<{ name: string; type: string }>>({
+    const fileTask = defineTask<
+      { file: any },
+      Promise<{ name: string; type: string }>
+    >({
       id: "ok.file.task",
       run: async ({ file }) => ({ name: file.name, type: file.type }),
     });
     const exposure = nodeExposure.with({
-      http: { dangerouslyAllowOpenExposure: true, server: http.createServer(), basePath: "/__runner", auth: { token: "T" } },
+      http: {
+        dangerouslyAllowOpenExposure: true,
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: "T" },
+      },
     });
-    const app = defineResource({ id: "unit.exposure.coverage.multipart.app3", register: [fileTask, exposure] });
+    const app = defineResource({
+      id: "unit.exposure.coverage.multipart.app3",
+      register: [fileTask, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
     const boundary = "----covboundaryOK";
     const manifest = JSON.stringify({
-      input: { file: { $runnerFile: "File", id: "F1", meta: { name: "override.txt", type: "text/plain" } } },
+      input: {
+        file: {
+          $runnerFile: "File",
+          id: "F1",
+          meta: { name: "override.txt", type: "text/plain" },
+        },
+      },
     });
     const body = [
       `--${boundary}\r\nContent-Disposition: form-data; name="__manifest"\r\nContent-Type: application/json\r\n\r\n${manifest}\r\n`,
@@ -29,13 +46,19 @@ describe("nodeExposure Coverage - Multipart", () => {
 
     const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
-      headers: { "x-runner-token": "T", "content-type": `multipart/form-data; boundary=${boundary}` },
+      headers: {
+        "x-runner-token": "T",
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
       body: Buffer.from(body, "utf8"),
     });
 
     await handlers.handleTask(rrMock.req, rrMock.res);
     expect(rrMock.status).toBe(200);
-    expect(rrMock.json?.result).toEqual({ name: "override.txt", type: "text/plain" });
+    expect(rrMock.json?.result).toEqual({
+      name: "override.txt",
+      type: "text/plain",
+    });
     await rr.dispose();
   });
 
@@ -45,14 +68,30 @@ describe("nodeExposure Coverage - Multipart", () => {
       run: async ({ file }) => ({ extra: file.extra }),
     });
     const exposure = nodeExposure.with({
-      http: { dangerouslyAllowOpenExposure: true, server: http.createServer(), basePath: "/__runner", auth: { token: "T" } },
+      http: {
+        dangerouslyAllowOpenExposure: true,
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: "T" },
+      },
     });
-    const app = defineResource({ id: "unit.exposure.coverage.multipart.app12", register: [fileTask, exposure] });
+    const app = defineResource({
+      id: "unit.exposure.coverage.multipart.app12",
+      register: [fileTask, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
     const boundary = "----covboundaryExtra";
-    const manifest = JSON.stringify({ input: { file: { $runnerFile: "File", id: "F1", meta: { extra: { foo: "bar" } } } } });
+    const manifest = JSON.stringify({
+      input: {
+        file: {
+          $runnerFile: "File",
+          id: "F1",
+          meta: { extra: { foo: "bar" } },
+        },
+      },
+    });
     const body = [
       `--${boundary}\r\nContent-Disposition: form-data; name="__manifest"\r\n\r\n${manifest}\r\n`,
       `--${boundary}\r\nContent-Disposition: form-data; name="file:F1"; filename="x.bin"\r\n\r\ncontent\r\n`,
@@ -61,7 +100,10 @@ describe("nodeExposure Coverage - Multipart", () => {
 
     const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
-      headers: { "x-runner-token": "T", "content-type": `multipart/form-data; boundary=${boundary}` },
+      headers: {
+        "x-runner-token": "T",
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
       body: Buffer.from(body, "utf8"),
     });
 
@@ -71,21 +113,40 @@ describe("nodeExposure Coverage - Multipart", () => {
   });
 
   it("multipart error: missing file part referenced in manifest triggers 500", async () => {
-    const fileTask = defineTask<{ file: any }, Promise<void>>({ id: "missing.file.task", run: async () => {} });
-    const exposure = nodeExposure.with({
-      http: { dangerouslyAllowOpenExposure: true, server: http.createServer(), basePath: "/__runner", auth: { token: "T" } },
+    const fileTask = defineTask<{ file: any }, Promise<void>>({
+      id: "missing.file.task",
+      run: async () => {},
     });
-    const app = defineResource({ id: "unit.exposure.coverage.multipart.app4", register: [fileTask, exposure] });
+    const exposure = nodeExposure.with({
+      http: {
+        dangerouslyAllowOpenExposure: true,
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: "T" },
+      },
+    });
+    const app = defineResource({
+      id: "unit.exposure.coverage.multipart.app4",
+      register: [fileTask, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
     const boundary = "----covboundaryMissing";
-    const manifest = JSON.stringify({ input: { file: { $runnerFile: "File", id: "F1" } } });
-    const body = [`--${boundary}\r\nContent-Disposition: form-data; name="__manifest"\r\n\r\n${manifest}\r\n`, `--${boundary}--\r\n`].join("");
+    const manifest = JSON.stringify({
+      input: { file: { $runnerFile: "File", id: "F1" } },
+    });
+    const body = [
+      `--${boundary}\r\nContent-Disposition: form-data; name="__manifest"\r\n\r\n${manifest}\r\n`,
+      `--${boundary}--\r\n`,
+    ].join("");
 
     const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
-      headers: { "x-runner-token": "T", "content-type": `multipart/form-data; boundary=${boundary}` },
+      headers: {
+        "x-runner-token": "T",
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
       body: Buffer.from(body, "utf8"),
     });
 
@@ -100,14 +161,29 @@ describe("nodeExposure Coverage - Multipart", () => {
       run: async ({ files }) => files.map((f) => f.name),
     });
     const exposure = nodeExposure.with({
-      http: { dangerouslyAllowOpenExposure: true, server: http.createServer(), basePath: "/__runner", auth: { token: "T" } },
+      http: {
+        dangerouslyAllowOpenExposure: true,
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: "T" },
+      },
     });
-    const app = defineResource({ id: "unit.exposure.coverage.multipart.app7", register: [fileTask, exposure] });
+    const app = defineResource({
+      id: "unit.exposure.coverage.multipart.app7",
+      register: [fileTask, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
     const boundary = "----covboundaryArray";
-    const manifest = JSON.stringify({ input: { files: [{ $runnerFile: "File", id: "A", meta: { name: "a.txt" } }, { $runnerFile: "File", id: "B", meta: { name: "b.txt" } }] } });
+    const manifest = JSON.stringify({
+      input: {
+        files: [
+          { $runnerFile: "File", id: "A", meta: { name: "a.txt" } },
+          { $runnerFile: "File", id: "B", meta: { name: "b.txt" } },
+        ],
+      },
+    });
     const body = [
       `--${boundary}\r\nContent-Disposition: form-data; name="__manifest"\r\n\r\n${manifest}\r\n`,
       `--${boundary}\r\nContent-Disposition: form-data; name="file:A"; filename="a.bin"\r\n\r\nabc\r\n`,
@@ -117,7 +193,10 @@ describe("nodeExposure Coverage - Multipart", () => {
 
     const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(fileTask.id)}`,
-      headers: { "x-runner-token": "T", "content-type": `multipart/form-data; boundary=${boundary}` },
+      headers: {
+        "x-runner-token": "T",
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
       body: Buffer.from(body, "utf8"),
     });
 

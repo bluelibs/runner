@@ -59,7 +59,9 @@ describe("requestHandlers - event handling", () => {
         body: JSON.stringify({ payload: { x: 1 } }),
       });
       await handleEvent(req, res);
-      const json = res._buf ? serializer.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+        : undefined;
       expect(res._status).toBe(500);
       expect(json?.error?.id).toBe("tests.errors.app.ev");
       expect(json?.error?.data).toEqual({ code: 9, message: "Ev" });
@@ -101,7 +103,9 @@ describe("requestHandlers - event handling", () => {
         body: JSON.stringify({ payload: { x: 1 } }),
       });
       await handleEvent(req, res);
-      const json = res._buf ? serializer.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+        : undefined;
       expect(res._status).toBe(500);
       expect(json?.error?.id).toBeUndefined();
       expect(json?.error?.data).toEqual({ reason: "ev" });
@@ -109,22 +113,40 @@ describe("requestHandlers - event handling", () => {
 
     it("returns 500 with generic message when hook throws a string (displayMessage fallback)", async () => {
       const deps: any = {
-        store: { events: new Map([["e.str", { event: { id: "e.str" } }]]), errors: new Map() },
+        store: {
+          events: new Map([["e.str", { event: { id: "e.str" } }]]),
+          errors: new Map(),
+        },
         taskRunner: {} as any,
-        eventManager: { emit: async () => { throw "bad string error"; } },
+        eventManager: {
+          emit: async () => {
+            throw "bad string error";
+          },
+        },
         logger: { info: () => {}, warn: () => {}, error: () => {} },
         authenticator: async () => ({ ok: true }),
         allowList: { ensureTask: () => null, ensureEvent: () => null },
-        router: { basePath: "/api", extract: () => ({ kind: "event", id: "e.str" }), isUnderBase: () => true },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "event", id: "e.str" }),
+          isUnderBase: () => true,
+        },
         cors: undefined,
         serializer,
       };
 
       const { handleEvent } = createRequestHandlers(deps);
-      const { req, res } = createReqRes({ method: HttpMethod.Post, url: "/api/event/e.str", headers: { [HeaderName.ContentType]: MimeType.ApplicationJson }, body: "{}" });
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/event/e.str",
+        headers: { [HeaderName.ContentType]: MimeType.ApplicationJson },
+        body: "{}",
+      });
       await handleEvent(req, res);
       expect(res._status).toBe(500);
-      const json = res._buf ? serializer.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+        : undefined;
       expect(json?.error?.message).toBe("Internal Error");
     });
   });
@@ -151,7 +173,11 @@ describe("requestHandlers - event handling", () => {
           asyncContexts: new Map([[ctx.id, ctx]]),
         },
         taskRunner: {} as any,
-        eventManager: { emit: async () => { expect(ctx.use().w).toBe(2); } },
+        eventManager: {
+          emit: async () => {
+            expect(ctx.use().w).toBe(2);
+          },
+        },
         logger: { info: () => {}, warn: () => {}, error: () => {} },
         authenticator: async () => ({ ok: true }),
         allowList: { ensureTask: () => null, ensureEvent: () => null },
@@ -167,7 +193,9 @@ describe("requestHandlers - event handling", () => {
       const { handleEvent } = createRequestHandlers(deps);
       const headers = {
         [HeaderName.ContentType]: MimeType.ApplicationJson,
-        [HeaderName.XRunnerContext]: serializer.stringify({ [ctx.id]: ctx.serialize({ w: 2 }) }),
+        [HeaderName.XRunnerContext]: serializer.stringify({
+          [ctx.id]: ctx.serialize({ w: 2 }),
+        }),
       } satisfies NodeLikeHeaders;
 
       const { req, res } = createReqRes({
@@ -187,30 +215,52 @@ describe("requestHandlers - event handling", () => {
         use: () => current,
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
-        provide: (v: any, fn: any) => { current = v; return fn(); },
+        provide: (v: any, fn: any) => {
+          current = v;
+          return fn();
+        },
         require: () => ({}) as any,
       } as any;
 
       const deps: any = {
-        store: { events: new Map([["e.ctx.arr", { event: { id: "e.ctx.arr" } }]]), errors: new Map(), asyncContexts: new Map([[ctx.id, ctx]]) },
+        store: {
+          events: new Map([["e.ctx.arr", { event: { id: "e.ctx.arr" } }]]),
+          errors: new Map(),
+          asyncContexts: new Map([[ctx.id, ctx]]),
+        },
         taskRunner: {} as any,
-        eventManager: { emit: async () => { expect(ctx.use().w).toBe(7); } },
+        eventManager: {
+          emit: async () => {
+            expect(ctx.use().w).toBe(7);
+          },
+        },
         logger: { info: () => {}, warn: () => {}, error: () => {} },
         authenticator: async () => ({ ok: true }),
         allowList: { ensureTask: () => null, ensureEvent: () => null },
-        router: { basePath: "/api", extract: () => ({ kind: "event", id: "e.ctx.arr" }), isUnderBase: () => true },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "event", id: "e.ctx.arr" }),
+          isUnderBase: () => true,
+        },
         cors: undefined,
         serializer,
       };
 
       const { handleEvent } = createRequestHandlers(deps);
-      const headerText = serializer.stringify({ [ctx.id]: ctx.serialize({ w: 7 }) });
+      const headerText = serializer.stringify({
+        [ctx.id]: ctx.serialize({ w: 7 }),
+      });
       const headers = {
         [HeaderName.ContentType]: MimeType.ApplicationJson,
         [HeaderName.XRunnerContext]: [headerText],
       } satisfies NodeLikeHeaders;
 
-      const { req, res } = createReqRes({ method: HttpMethod.Post, url: "/api/event/e.ctx.arr", headers, body: JSON.stringify({ payload: { a: 1 } }) });
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/event/e.ctx.arr",
+        headers,
+        body: JSON.stringify({ payload: { a: 1 } }),
+      });
       await handleEvent(req, res);
       expect(res._status).toBe(200);
     });
@@ -219,7 +269,11 @@ describe("requestHandlers - event handling", () => {
   describe("Cancellations and Aborts", () => {
     it("responds 499 when readJsonBody rejects with CancellationError (event)", async () => {
       const cancellation = (() => {
-        try { cancellationError.throw({ reason: "Client Closed Request" }); } catch (error) { return error; }
+        try {
+          cancellationError.throw({ reason: "Client Closed Request" });
+        } catch (error) {
+          return error;
+        }
       })();
       jest.spyOn(requestBody, "readJsonBody").mockRejectedValue(cancellation);
 
@@ -249,7 +303,9 @@ describe("requestHandlers - event handling", () => {
       });
       await handleEvent(req, res);
       expect(res._status).toBe(499);
-      const json = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(json?.error?.code).toBe("REQUEST_ABORTED");
     });
 
@@ -280,7 +336,9 @@ describe("requestHandlers - event handling", () => {
       setImmediate(() => (req as any).emit("aborted"));
 
       await handleEvent(req, res);
-      const payload = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const payload = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(payload?.error?.code).toBe("REQUEST_ABORTED");
     });
   });
@@ -289,7 +347,11 @@ describe("requestHandlers - event handling", () => {
     it("responds with result when returnPayload is true", async () => {
       const emitWithResult = jest.fn(async () => ({ x: 2 }));
       const deps: any = {
-        store: { events: new Map([["e.ret", { event: { id: "e.ret" } }]]), errors: new Map(), asyncContexts: new Map() },
+        store: {
+          events: new Map([["e.ret", { event: { id: "e.ret" } }]]),
+          errors: new Map(),
+          asyncContexts: new Map(),
+        },
         taskRunner: {} as any,
         eventManager: { emit: jest.fn(async () => undefined), emitWithResult },
         logger: { info: () => {}, warn: () => {}, error: () => {} },
@@ -312,20 +374,35 @@ describe("requestHandlers - event handling", () => {
         body: serializer.stringify({ payload: { x: 1 }, returnPayload: true }),
       });
       await handleEvent(req, res);
-      const json = res._buf ? serializer.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+        : undefined;
       expect(res._status).toBe(200);
       expect(json?.result).toEqual({ x: 2 });
     });
 
     it("returns 400 when event is parallel and returnPayload is requested", async () => {
       const deps: any = {
-        store: { events: new Map([["e.par", { event: { id: "e.par", parallel: true } }]]), errors: new Map(), asyncContexts: new Map() },
+        store: {
+          events: new Map([
+            ["e.par", { event: { id: "e.par", parallel: true } }],
+          ]),
+          errors: new Map(),
+          asyncContexts: new Map(),
+        },
         taskRunner: {} as any,
-        eventManager: { emit: jest.fn(async () => undefined), emitWithResult: jest.fn() },
+        eventManager: {
+          emit: jest.fn(async () => undefined),
+          emitWithResult: jest.fn(),
+        },
         logger: { info: () => {}, warn: () => {}, error: () => {} },
         authenticator: async () => ({ ok: true }),
         allowList: { ensureTask: () => null, ensureEvent: () => null },
-        router: { basePath: "/api", extract: () => ({ kind: "event", id: "e.par" }), isUnderBase: () => true },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "event", id: "e.par" }),
+          isUnderBase: () => true,
+        },
         cors: undefined,
         serializer,
       };
@@ -339,7 +416,9 @@ describe("requestHandlers - event handling", () => {
       });
       await handleEvent(req, res);
       expect(res._status).toBe(400);
-      const json = res._buf ? serializer.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+        : undefined;
       expect(json?.error?.code).toBe("PARALLEL_EVENT_RETURN_UNSUPPORTED");
     });
   });
@@ -347,9 +426,25 @@ describe("requestHandlers - event handling", () => {
   describe("Integration Tests", () => {
     it("returns 500 when an event hook throws a normal error", async () => {
       const ev = defineEvent<{ payload?: unknown }>({ id: "tests.ev.err" });
-      const hook = defineHook({ id: "tests.ev.err.hook", on: ev, async run() { throw new Error("boom"); } });
-      const exposure = nodeExposure.with({ http: { dangerouslyAllowOpenExposure: true, server: http.createServer(), basePath: "/__runner", auth: { allowAnonymous: true } } });
-      const app = defineResource({ id: "tests.app.ev.err", register: [ev, hook, exposure] });
+      const hook = defineHook({
+        id: "tests.ev.err.hook",
+        on: ev,
+        async run() {
+          throw new Error("boom");
+        },
+      });
+      const exposure = nodeExposure.with({
+        http: {
+          dangerouslyAllowOpenExposure: true,
+          server: http.createServer(),
+          basePath: "/__runner",
+          auth: { allowAnonymous: true },
+        },
+      });
+      const app = defineResource({
+        id: "tests.app.ev.err",
+        register: [ev, hook, exposure],
+      });
       const rr = await run(app);
       try {
         const handlers = await rr.getResourceValue(exposure.resource as any);
@@ -375,21 +470,39 @@ describe("requestHandlers - event handling", () => {
         createEventHandler: () => processEventRequest,
       }));
 
-      const { createRequestHandlers: createHandlersMocked } = require("../../../exposure/requestHandlers");
+      const {
+        createRequestHandlers: createHandlersMocked,
+      } = require("../../../exposure/requestHandlers");
       const deps: any = {
-        store: { tasks: new Map(), events: new Map([["e", { event: { id: "e" } }]]), errors: new Map(), asyncContexts: new Map() },
+        store: {
+          tasks: new Map(),
+          events: new Map([["e", { event: { id: "e" } }]]),
+          errors: new Map(),
+          asyncContexts: new Map(),
+        },
         taskRunner: {} as any,
         eventManager: {} as any,
-        logger: { info: () => undefined, warn: () => undefined, error: () => undefined },
+        logger: {
+          info: () => undefined,
+          warn: () => undefined,
+          error: () => undefined,
+        },
         authenticator: async () => ({ ok: true }),
         allowList: { ensureTask: () => null, ensureEvent: () => null },
-        router: { basePath: "/api", extract: () => ({ kind: "event", id: "e" }), isUnderBase: () => true },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "event", id: "e" }),
+          isUnderBase: () => true,
+        },
         serializer,
         cors: undefined,
       };
 
       const { handleRequest } = createHandlersMocked(deps);
-      const { req, res } = createReqRes({ method: "POST", url: "/api/event/e" });
+      const { req, res } = createReqRes({
+        method: "POST",
+        url: "/api/event/e",
+      });
 
       const handled = await handleRequest(req, res);
       expect(handled).toBe(true);

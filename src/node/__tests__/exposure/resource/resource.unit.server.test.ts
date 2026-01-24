@@ -2,7 +2,13 @@ import * as http from "http";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
-import { startExposureServer, request, testTask, testEvent, TOKEN } from "./resource.unit.test.utils";
+import {
+  startExposureServer,
+  request,
+  testTask,
+  testEvent,
+  TOKEN,
+} from "./resource.unit.test.utils";
 
 const D = process.env.RUNNER_TEST_NET === "1" ? describe : describe.skip;
 
@@ -11,15 +17,24 @@ D("nodeExposure - unit server", () => {
     const { rr, handlers } = await startExposureServer();
     const listener = handlers.createRequestListener();
     const server = http.createServer(listener);
-    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    await new Promise<void>((resolve) =>
+      server.listen(0, "127.0.0.1", resolve),
+    );
     const addr = server.address();
     if (!addr || typeof addr === "string") throw new Error("No server address");
     const origin = `http://127.0.0.1:${addr.port}`;
 
-    const miss = await request({ method: "POST", url: `${origin}/outside`, body: "{}" });
+    const miss = await request({
+      method: "POST",
+      url: `${origin}/outside`,
+      body: "{}",
+    });
     expect(miss.status).toBe(404);
 
-    const headers = { "x-runner-token": TOKEN, "content-type": "application/json" };
+    const headers = {
+      "x-runner-token": TOKEN,
+      "content-type": "application/json",
+    };
     const ok = await request({
       method: "POST",
       url: `${origin}${handlers.basePath}/task/${encodeURIComponent(testTask.id)}`,
@@ -34,13 +49,21 @@ D("nodeExposure - unit server", () => {
 
   it("attachTo mounts and detaches an external server", async () => {
     const { rr, handlers } = await startExposureServer();
-    const external = http.createServer((_req, res) => { res.statusCode = 200; res.end("fallback"); });
-    await new Promise<void>((resolve) => external.listen(0, "127.0.0.1", resolve));
+    const external = http.createServer((_req, res) => {
+      res.statusCode = 200;
+      res.end("fallback");
+    });
+    await new Promise<void>((resolve) =>
+      external.listen(0, "127.0.0.1", resolve),
+    );
     const detach = handlers.attachTo(external);
     const addr = external.address();
     if (!addr || typeof addr === "string") throw new Error("No server address");
     const base = `http://127.0.0.1:${addr.port}${handlers.basePath}`;
-    const headers = { "x-runner-token": TOKEN, "content-type": "application/json" };
+    const headers = {
+      "x-runner-token": TOKEN,
+      "content-type": "application/json",
+    };
 
     const first = await request({
       method: "POST",
@@ -74,7 +97,10 @@ D("nodeExposure - unit server", () => {
     const addr = extra.address();
     if (!addr || typeof addr === "string") throw new Error("No server address");
     const origin = `http://127.0.0.1:${addr.port}`;
-    const headers = { "x-runner-token": TOKEN, "content-type": "application/json" };
+    const headers = {
+      "x-runner-token": TOKEN,
+      "content-type": "application/json",
+    };
 
     const ok = await request({
       method: "POST",
@@ -84,7 +110,11 @@ D("nodeExposure - unit server", () => {
     });
     expect(ok.status).toBe(200);
 
-    const miss = await request({ method: "POST", url: `${origin}/nope`, body: "{}" });
+    const miss = await request({
+      method: "POST",
+      url: `${origin}/nope`,
+      body: "{}",
+    });
     expect(miss.status).toBe(404);
 
     await new Promise<void>((resolve) => extra.close(() => resolve()));
@@ -92,10 +122,20 @@ D("nodeExposure - unit server", () => {
   });
 
   it("auto-attaches to a provided server and detaches on dispose", async () => {
-    const externalServer = http.createServer((req, res) => { res.statusCode = 200; res.end("external"); });
-    await new Promise<void>((resolve) => externalServer.listen(0, "127.0.0.1", resolve));
-    const exposure = nodeExposure.with({ http: { server: externalServer, auth: { token: TOKEN } } });
-    const app = defineResource({ id: "unit.exposure.serverProvided", register: [testTask, testEvent, exposure] });
+    const externalServer = http.createServer((req, res) => {
+      res.statusCode = 200;
+      res.end("external");
+    });
+    await new Promise<void>((resolve) =>
+      externalServer.listen(0, "127.0.0.1", resolve),
+    );
+    const exposure = nodeExposure.with({
+      http: { server: externalServer, auth: { token: TOKEN } },
+    });
+    const app = defineResource({
+      id: "unit.exposure.serverProvided",
+      register: [testTask, testEvent, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
     expect(handlers.server).toBe(externalServer);
@@ -103,13 +143,26 @@ D("nodeExposure - unit server", () => {
     if (!addr || typeof addr === "string") throw new Error("No server address");
     const base = `http://127.0.0.1:${addr.port}${handlers.basePath}`;
 
-    const headers = { "x-runner-token": TOKEN, "content-type": "application/json" };
-    const first = await request({ method: "POST", url: `${base}/task/${encodeURIComponent(testTask.id)}`, headers, body: JSON.stringify({ input: { v: 7 } }) });
+    const headers = {
+      "x-runner-token": TOKEN,
+      "content-type": "application/json",
+    };
+    const first = await request({
+      method: "POST",
+      url: `${base}/task/${encodeURIComponent(testTask.id)}`,
+      headers,
+      body: JSON.stringify({ input: { v: 7 } }),
+    });
     expect(first.status).toBe(200);
 
     await rr.dispose();
 
-    const fallback = await request({ method: "POST", url: `${base}/task/${encodeURIComponent(testTask.id)}`, headers, body: JSON.stringify({ input: { v: 7 } }) });
+    const fallback = await request({
+      method: "POST",
+      url: `${base}/task/${encodeURIComponent(testTask.id)}`,
+      headers,
+      body: JSON.stringify({ input: { v: 7 } }),
+    });
     expect(fallback.text).toBe("external");
     expect(fallback.status).toBe(200);
 

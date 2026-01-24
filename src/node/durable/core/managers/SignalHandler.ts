@@ -217,7 +217,8 @@ export class SignalHandler {
     if (
       execution.status === ExecutionStatus.Completed ||
       execution.status === ExecutionStatus.Failed ||
-      execution.status === ExecutionStatus.CompensationFailed
+      execution.status === ExecutionStatus.CompensationFailed ||
+      execution.status === ExecutionStatus.Cancelled
     )
       return;
 

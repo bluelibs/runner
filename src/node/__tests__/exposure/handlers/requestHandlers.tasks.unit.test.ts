@@ -52,7 +52,9 @@ describe("requestHandlers - task handling", () => {
         body: JSON.stringify({ input: { a: 1 } }),
       });
       await handleTask(req, res);
-      const json = res._buf ? serializer.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+        : undefined;
       expect(res._status).toBe(500);
       expect(json?.error?.id).toBe("tests.errors.app");
       expect(json?.error?.data).toEqual({ code: 7, message: "Nope" });
@@ -69,7 +71,9 @@ describe("requestHandlers - task handling", () => {
           errors: new Map([[helper.id, helper]]),
         },
         taskRunner: {
-          run: async () => { throw { name: 123, data: { reason: "x" } }; },
+          run: async () => {
+            throw { name: 123, data: { reason: "x" } };
+          },
         },
         eventManager: {} as any,
         logger: { info: () => {}, warn: () => {}, error: () => {} },
@@ -92,7 +96,9 @@ describe("requestHandlers - task handling", () => {
         body: JSON.stringify({ input: { a: 1 } }),
       });
       await handleTask(req, res);
-      const json = res._buf ? serializer.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+        : undefined;
       expect(res._status).toBe(500);
       expect(json?.error?.id).toBeUndefined();
       expect(json?.error?.data).toEqual({ reason: "x" });
@@ -142,7 +148,9 @@ describe("requestHandlers - task handling", () => {
       const { handleTask } = createRequestHandlers(deps);
       const headers = {
         [HeaderName.ContentType]: MimeType.ApplicationJson,
-        [HeaderName.XRunnerContext]: serializer.stringify({ [ctx.id]: ctx.serialize({ v: 1 }) }),
+        [HeaderName.XRunnerContext]: serializer.stringify({
+          [ctx.id]: ctx.serialize({ v: 1 }),
+        }),
       } satisfies NodeLikeHeaders;
 
       const { req, res } = createReqRes({
@@ -153,7 +161,9 @@ describe("requestHandlers - task handling", () => {
       });
       await handleTask(req, res);
       expect(res._status).toBe(200);
-      const json = res._buf ? serializer.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+        : undefined;
       expect(json?.result).toBe(123);
     });
 
@@ -164,32 +174,57 @@ describe("requestHandlers - task handling", () => {
         use: () => current,
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
-        provide: (v: any, fn: any) => { current = v; return fn(); },
+        provide: (v: any, fn: any) => {
+          current = v;
+          return fn();
+        },
         require: () => ({}) as any,
       } as any;
 
       const deps: any = {
-        store: { tasks: new Map([["t.ctx.arr", { task: { id: "t.ctx.arr" } }]]), errors: new Map(), asyncContexts: new Map([[ctx.id, ctx]]) },
-        taskRunner: { run: async () => { expect(ctx.use().v).toBe(2); return 321; } },
+        store: {
+          tasks: new Map([["t.ctx.arr", { task: { id: "t.ctx.arr" } }]]),
+          errors: new Map(),
+          asyncContexts: new Map([[ctx.id, ctx]]),
+        },
+        taskRunner: {
+          run: async () => {
+            expect(ctx.use().v).toBe(2);
+            return 321;
+          },
+        },
         eventManager: {} as any,
         logger: { info: () => {}, warn: () => {}, error: () => {} },
         authenticator: async () => ({ ok: true }),
         allowList: { ensureTask: () => null, ensureEvent: () => null },
-        router: { basePath: "/api", extract: () => ({ kind: "task", id: "t.ctx.arr" }), isUnderBase: () => true },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "task", id: "t.ctx.arr" }),
+          isUnderBase: () => true,
+        },
         cors: undefined,
         serializer,
       };
       const { handleTask } = createRequestHandlers(deps);
-      const headerText = serializer.stringify({ [ctx.id]: ctx.serialize({ v: 2 }) });
+      const headerText = serializer.stringify({
+        [ctx.id]: ctx.serialize({ v: 2 }),
+      });
       const headers = {
         [HeaderName.ContentType]: MimeType.ApplicationJson,
         [HeaderName.XRunnerContext]: [headerText],
       } satisfies NodeLikeHeaders;
 
-      const { req, res } = createReqRes({ method: HttpMethod.Post, url: "/api/task/t.ctx.arr", headers, body: JSON.stringify({ input: { a: 1 } }) });
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/task/t.ctx.arr",
+        headers,
+        body: JSON.stringify({ input: { a: 1 } }),
+      });
       await handleTask(req, res);
       expect(res._status).toBe(200);
-      const json = res._buf ? serializer.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+        : undefined;
       expect(json?.result).toBe(321);
     });
   });
@@ -197,7 +232,11 @@ describe("requestHandlers - task handling", () => {
   describe("Cancellations", () => {
     it("responds 499 when readJsonBody rejects with CancellationError (task)", async () => {
       const cancellation = (() => {
-        try { cancellationError.throw({ reason: "Client Closed Request" }); } catch (error) { return error; }
+        try {
+          cancellationError.throw({ reason: "Client Closed Request" });
+        } catch (error) {
+          return error;
+        }
       })();
       jest.spyOn(requestBody, "readJsonBody").mockRejectedValue(cancellation);
 
@@ -227,7 +266,9 @@ describe("requestHandlers - task handling", () => {
       });
       await handleTask(req, res);
       expect(res._status).toBe(499);
-      const json = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(json?.error?.code).toBe("REQUEST_ABORTED");
     });
   });

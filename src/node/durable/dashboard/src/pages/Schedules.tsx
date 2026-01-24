@@ -1,4 +1,4 @@
-import { CalendarClock } from 'lucide-react';
+import { CalendarClock } from "lucide-react";
 
 export function Schedules() {
   return (

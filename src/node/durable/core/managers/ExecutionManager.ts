@@ -19,7 +19,7 @@ import type { AuditLogger } from "./AuditLogger";
 import type { WaitManager } from "./WaitManager";
 import { DurableContext } from "../DurableContext";
 import { SuspensionSignal } from "../interfaces/context";
-import { createExecutionId, withTimeout } from "../utils";
+import { createExecutionId, sleepMs, withTimeout } from "../utils";
 
 export interface ExecutionManagerConfig {
   store: IDurableStore;
@@ -58,6 +58,103 @@ export class ExecutionManager {
       throw new Error(
         "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use `durableResource.fork(...).with(...)` in a Runner runtime, or provide a custom executor in config.",
       );
+    }
+
+    const idempotencyKey = options?.idempotencyKey;
+    if (idempotencyKey) {
+      if (
+        !this.config.store.getExecutionIdByIdempotencyKey ||
+        !this.config.store.setExecutionIdByIdempotencyKey
+      ) {
+        throw new Error(
+          "Durable store does not support execution idempotency keys. Implement getExecutionIdByIdempotencyKey/setExecutionIdByIdempotencyKey on the store to use ExecuteOptions.idempotencyKey.",
+        );
+      }
+
+      const lockTtlMs = 10_000;
+      const lockResource = `idempotency:${task.id}:${idempotencyKey}`;
+      const canLock =
+        !!this.config.store.acquireLock && !!this.config.store.releaseLock;
+
+      let lockId: string | null = null;
+      if (canLock) {
+        const maxAttempts = 50;
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+          lockId = await this.config.store.acquireLock!(
+            lockResource,
+            lockTtlMs,
+          );
+          if (lockId !== null) break;
+          await sleepMs(5);
+        }
+        if (lockId === null) {
+          throw new Error(
+            `Failed to acquire idempotency lock for '${task.id}:${idempotencyKey}'`,
+          );
+        }
+      }
+
+      try {
+        const existing = await this.config.store.getExecutionIdByIdempotencyKey(
+          {
+            taskId: task.id,
+            idempotencyKey,
+          },
+        );
+        if (existing) return existing;
+
+        const executionId = createExecutionId();
+        const setOk = await this.config.store.setExecutionIdByIdempotencyKey({
+          taskId: task.id,
+          idempotencyKey,
+          executionId,
+        });
+
+        if (!setOk) {
+          const raced = await this.config.store.getExecutionIdByIdempotencyKey({
+            taskId: task.id,
+            idempotencyKey,
+          });
+          if (raced) return raced;
+          throw new Error(
+            "Failed to set idempotency mapping but no existing mapping found.",
+          );
+        }
+
+        const execution: Execution<TInput, unknown> = {
+          id: executionId,
+          taskId: task.id,
+          input,
+          status: ExecutionStatus.Pending,
+          attempt: 1,
+          maxAttempts: this.config.execution?.maxAttempts ?? 3,
+          timeout: options?.timeout ?? this.config.execution?.timeout,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        };
+
+        await this.config.store.saveExecution(execution);
+        await this.auditLogger.log({
+          kind: DurableAuditEntryKind.ExecutionStatusChanged,
+          executionId,
+          taskId: task.id,
+          attempt: execution.attempt,
+          from: null,
+          to: ExecutionStatus.Pending,
+          reason: "created",
+        });
+
+        await this.kickoffExecution(executionId);
+        return executionId;
+      } finally {
+        if (canLock && lockId !== null) {
+          try {
+            await this.config.store.releaseLock!(lockResource, lockId);
+          } catch {
+            // best-effort cleanup; ignore
+          }
+        }
+      }
     }
 
     const executionId = createExecutionId();
@@ -117,6 +214,45 @@ export class ExecutionManager {
     return executionId;
   }
 
+  async cancelExecution(executionId: string, reason?: string): Promise<void> {
+    const execution = await this.config.store.getExecution(executionId);
+    if (!execution) return;
+
+    if (
+      execution.status === ExecutionStatus.Completed ||
+      execution.status === ExecutionStatus.Failed ||
+      execution.status === ExecutionStatus.CompensationFailed ||
+      execution.status === ExecutionStatus.Cancelled
+    ) {
+      return;
+    }
+
+    const now = new Date();
+    await this.config.store.updateExecution(executionId, {
+      status: ExecutionStatus.Cancelled,
+      cancelRequestedAt: execution.cancelRequestedAt ?? now,
+      cancelledAt: now,
+      completedAt: now,
+      error: { message: reason ?? "Execution cancelled" },
+    });
+
+    await this.auditLogger.log({
+      kind: DurableAuditEntryKind.ExecutionStatusChanged,
+      executionId,
+      taskId: execution.taskId,
+      attempt: execution.attempt,
+      from: execution.status,
+      to: ExecutionStatus.Cancelled,
+      reason: "cancelled",
+    });
+
+    await this.config.eventBus!.publish(`execution:${executionId}`, {
+      type: "finished",
+      payload: { ...execution, status: ExecutionStatus.Cancelled },
+      timestamp: new Date(),
+    });
+  }
+
   async execute<TInput, TResult>(
     task: DurableTask<TInput, TResult>,
     input?: TInput,
@@ -143,7 +279,9 @@ export class ExecutionManager {
     if (!execution) return;
     if (
       execution.status === ExecutionStatus.Completed ||
-      execution.status === ExecutionStatus.Failed
+      execution.status === ExecutionStatus.Failed ||
+      execution.status === ExecutionStatus.CompensationFailed ||
+      execution.status === ExecutionStatus.Cancelled
     )
       return;
 
@@ -198,6 +336,13 @@ export class ExecutionManager {
     execution: Execution<unknown, unknown>,
     task: DurableTask<unknown, unknown>,
   ): Promise<void> {
+    const isCancelled = async (): Promise<boolean> => {
+      const current = await this.config.store.getExecution(execution.id);
+      return current?.status === ExecutionStatus.Cancelled;
+    };
+
+    if (await isCancelled()) return;
+
     if (!this.config.taskExecutor) {
       throw new Error(
         "DurableService cannot run executions without `taskExecutor` in config.",
@@ -258,6 +403,9 @@ export class ExecutionManager {
         result = await promise;
       }
 
+      // Cancellation wins over completion.
+      if (await isCancelled()) return;
+
       const finishedExecution: Execution = {
         ...execution,
         status: ExecutionStatus.Completed,
@@ -277,6 +425,7 @@ export class ExecutionManager {
       await this.notifyExecutionFinished(finishedExecution);
     } catch (error) {
       if (error instanceof SuspensionSignal) {
+        if (await isCancelled()) return;
         await this.config.store.updateExecution(execution.id, {
           status: ExecutionStatus.Sleeping,
         });
@@ -298,6 +447,9 @@ export class ExecutionManager {
       ) {
         return;
       }
+
+      // Cancellation wins over failure/retry scheduling.
+      if (await isCancelled()) return;
 
       const errorInfo = {
         message: error instanceof Error ? error.message : String(error),

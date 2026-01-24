@@ -110,8 +110,8 @@ describe("parseMultipartInput - unexpected file handler errors", () => {
       },
     );
 
-    await expect(parseMultipartInput(req, undefined, serializer)).rejects.toThrow(
-      ErrorMessage.Boom,
-    );
+    await expect(
+      parseMultipartInput(req, undefined, serializer),
+    ).rejects.toThrow(ErrorMessage.Boom);
   });
 });

@@ -1,4 +1,9 @@
-import { startExposureServer, testTask, TOKEN, request } from "./resource.unit.test.utils";
+import {
+  startExposureServer,
+  testTask,
+  TOKEN,
+  request,
+} from "./resource.unit.test.utils";
 
 const D = process.env.RUNNER_TEST_NET === "1" ? describe : describe.skip;
 
@@ -6,7 +11,9 @@ D("nodeExposure - unit multipart", () => {
   it("multipart: returns 400 INVALID_MULTIPART on bad __manifest JSON", async () => {
     const { rr, baseUrl } = await startExposureServer();
     const boundary = "----unitboundary123";
-    const body = [`--${boundary}\r\nContent-Disposition: form-data; name="__manifest"\r\nContent-Type: application/json; charset=utf-8\r\n\r\n{bad\r\n--${boundary}--\r\n`].join("");
+    const body = [
+      `--${boundary}\r\nContent-Disposition: form-data; name="__manifest"\r\nContent-Type: application/json; charset=utf-8\r\n\r\n{bad\r\n--${boundary}--\r\n`,
+    ].join("");
 
     const res = await request({
       method: "POST",
@@ -28,7 +35,9 @@ D("nodeExposure - unit multipart", () => {
   it("multipart: returns 400 MISSING_MANIFEST when __manifest is omitted", async () => {
     const { rr, baseUrl } = await startExposureServer();
     const boundary = "----unitboundary456";
-    const body = [`--${boundary}\r\nContent-Disposition: form-data; name="file:F1"; filename="x.txt"\r\nContent-Type: text/plain\r\n\r\nabc\r\n--${boundary}--\r\n`].join("");
+    const body = [
+      `--${boundary}\r\nContent-Disposition: form-data; name="file:F1"; filename="x.txt"\r\nContent-Type: text/plain\r\n\r\nabc\r\n--${boundary}--\r\n`,
+    ].join("");
 
     const res = await request({
       method: "POST",
@@ -53,8 +62,13 @@ D("nodeExposure - unit multipart", () => {
     const badId = "F1";
     const body = [
       `--${boundary}\r\nContent-Disposition: form-data; name="__manifest"\r\nContent-Type: application/json; charset=utf-8\r\n\r\n` +
-      JSON.stringify({ input: { file: { $runnerFile: "File", id: badId, meta: { name: "x.txt" } } } }) + "\r\n" +
-      `--${boundary}\r\nContent-Disposition: form-data; name="file:OTHER"; filename="x.txt"\r\nContent-Type: text/plain\r\n\r\nabc\r\n--${boundary}--\r\n`
+        JSON.stringify({
+          input: {
+            file: { $runnerFile: "File", id: badId, meta: { name: "x.txt" } },
+          },
+        }) +
+        "\r\n" +
+        `--${boundary}\r\nContent-Disposition: form-data; name="file:OTHER"; filename="x.txt"\r\nContent-Type: text/plain\r\n\r\nabc\r\n--${boundary}--\r\n`,
     ].join("");
 
     const res = await request({

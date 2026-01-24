@@ -79,6 +79,7 @@
   "scripts": {
     "build": "tsup --config tsup.config.ts --sourcemap",
     "build:dashboard": "node ./scripts/build-dashboard.mjs",
+    "build:dashboard:ci": "node ./scripts/build-dashboard.mjs --install",
     "clean": "rm -rf dist",
     "watch": "tsup --config tsup.config.ts --watch",
     "test": "node ./scripts/run-jest-watchdog.mjs -- --maxWorkers=50% --verbose=false",

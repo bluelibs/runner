@@ -29,7 +29,7 @@ describe("requestHandlers - content-type handling", () => {
     const { handleTask } = createRequestHandlers({
       ...deps,
       serializer: getDefaultSerializer(),
-    });
+    } as any);
     const headers = {
       [HeaderName.ContentType]: [MimeType.ApplicationJson],
     } satisfies NodeLikeHeaders;
@@ -49,7 +49,7 @@ describe("requestHandlers - content-type handling", () => {
     const { handleTask } = createRequestHandlers({
       ...deps,
       serializer: getDefaultSerializer(),
-    });
+    } as any);
     const headers = {
       [HeaderName.ContentType]: [""],
     } satisfies NodeLikeHeaders;

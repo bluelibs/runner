@@ -81,13 +81,19 @@ describe("nodeExposure Coverage - Core Routing", () => {
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
     {
-      const rrMock = createReqRes({ url: "/not-runner", headers: { "x-runner-token": "T" } });
+      const rrMock = createReqRes({
+        url: "/not-runner",
+        headers: { "x-runner-token": "T" },
+      });
       const handled = await handlers.handleRequest(rrMock.req, rrMock.res);
       expect(handled).toBe(false);
     }
 
     {
-      const rrMock = createReqRes({ url: "/__runner/", headers: { "x-runner-token": "T" } });
+      const rrMock = createReqRes({
+        url: "/__runner/",
+        headers: { "x-runner-token": "T" },
+      });
       const handled = await handlers.handleRequest(rrMock.req, rrMock.res);
       expect(handled).toBe(true);
       expect(rrMock.status).toBe(404);
@@ -98,9 +104,17 @@ describe("nodeExposure Coverage - Core Routing", () => {
 
   it("attachTo and detachTo coverage", async () => {
     const exposure = nodeExposure.with({
-      http: { dangerouslyAllowOpenExposure: true, server: http.createServer(), basePath: "/__runner", auth: { token: "DET" } },
+      http: {
+        dangerouslyAllowOpenExposure: true,
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: "DET" },
+      },
     });
-    const app = defineResource({ id: "coverage.detach.app", register: [exposure] });
+    const app = defineResource({
+      id: "coverage.detach.app",
+      register: [exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
 
@@ -131,15 +145,31 @@ describe("nodeExposure Coverage - Core Routing", () => {
   });
 
   it("handleTask handles malformed paths via router guard branches", async () => {
-    const okTask = defineTask<void, Promise<number>>({ id: "coverage.router.task", run: async () => 1 });
-    const exposure = nodeExposure.with({ http: { dangerouslyAllowOpenExposure: true, server: http.createServer(), basePath: "/__runner", auth: { token: "R" } } });
-    const app = defineResource({ id: "coverage.router.app", register: [okTask, exposure] });
+    const okTask = defineTask<void, Promise<number>>({
+      id: "coverage.router.task",
+      run: async () => 1,
+    });
+    const exposure = nodeExposure.with({
+      http: {
+        dangerouslyAllowOpenExposure: true,
+        server: http.createServer(),
+        basePath: "/__runner",
+        auth: { token: "R" },
+      },
+    });
+    const app = defineResource({
+      id: "coverage.router.app",
+      register: [okTask, exposure],
+    });
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
     const headers = { "x-runner-token": "R" };
 
     {
-      const { req, res } = createReqRes({ url: `/something/task/${encodeURIComponent(okTask.id)}`, headers });
+      const { req, res } = createReqRes({
+        url: `/something/task/${encodeURIComponent(okTask.id)}`,
+        headers,
+      });
       await handlers.handleTask(req, res);
       expect(res.statusCode).toBe(404);
     }
@@ -149,7 +179,10 @@ describe("nodeExposure Coverage - Core Routing", () => {
       expect(res.statusCode).toBe(404);
     }
     {
-      const { req, res } = createReqRes({ url: `/__runner/foo/${encodeURIComponent(okTask.id)}`, headers });
+      const { req, res } = createReqRes({
+        url: `/__runner/foo/${encodeURIComponent(okTask.id)}`,
+        headers,
+      });
       await handlers.handleTask(req, res);
       expect(res.statusCode).toBe(404);
     }

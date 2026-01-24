@@ -102,6 +102,13 @@ export class DurableContext implements IDurableContext {
       options.implicitInternalStepIds ?? "allow";
   }
 
+  private async assertNotCancelled(): Promise<void> {
+    const exec = await this.store.getExecution(this.executionId);
+    if (exec?.status === ExecutionStatus.Cancelled) {
+      throw new Error(exec.error?.message || "Execution cancelled");
+    }
+  }
+
   private assertOrWarnImplicitInternalStepId(
     kind: "sleep" | "emit" | "waitForSignal",
   ): void {
@@ -262,6 +269,8 @@ export class DurableContext implements IDurableContext {
     upFn: () => Promise<T>,
     downFn?: (result: T) => Promise<void>,
   ): Promise<T> {
+    await this.assertNotCancelled();
+
     const cached = await this.store.getStepResult(this.executionId, stepId);
     if (cached) {
       const result = cached.result as T;
@@ -366,6 +375,8 @@ export class DurableContext implements IDurableContext {
   }
 
   async sleep(durationMs: number, options?: SleepOptions): Promise<void> {
+    await this.assertNotCancelled();
+
     let sleepStepId: string;
 
     if (options?.stepId) {
@@ -452,6 +463,8 @@ export class DurableContext implements IDurableContext {
     signal: SignalInput<TPayload>,
     options?: SignalOptions,
   ): Promise<TPayload | WaitForSignalOutcome<TPayload>> {
+    await this.assertNotCancelled();
+
     const signalId = getSignalId(signal);
     const hasTimeout = options?.timeoutMs !== undefined;
     const resolveCompleted = (
@@ -609,6 +622,8 @@ export class DurableContext implements IDurableContext {
     payload: TPayload,
     options?: EmitOptions,
   ): Promise<void> {
+    await this.assertNotCancelled();
+
     const eventId = event.id;
 
     let stepId: string;

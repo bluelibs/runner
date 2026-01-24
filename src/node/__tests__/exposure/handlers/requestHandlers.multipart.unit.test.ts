@@ -39,7 +39,9 @@ describe("requestHandlers - multipart and sanitization", () => {
 
   describe("multipart response handling", () => {
     it("responds with parse error when multipart fails", async () => {
-      jest.spyOn(multipartModule, "isMultipart").mockImplementation((ct: string) => /multipart\/form-data/i.test(ct));
+      jest
+        .spyOn(multipartModule, "isMultipart")
+        .mockImplementation((ct: string) => /multipart\/form-data/i.test(ct));
       jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
         ok: false,
         response: {
@@ -62,12 +64,16 @@ describe("requestHandlers - multipart and sanitization", () => {
       });
       await handleTask(req, res);
       expect(res._status).toBe(400);
-      const json = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(json?.error?.code).toBe("INVALID_MULTIPART");
     });
 
     it("normalizes non-object error responses", async () => {
-      jest.spyOn(multipartModule, "isMultipart").mockImplementation(() => true as never);
+      jest
+        .spyOn(multipartModule, "isMultipart")
+        .mockImplementation(() => true as never);
       jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
         ok: false,
         response: { status: 500, error: "STRING_ERR" },
@@ -77,18 +83,24 @@ describe("requestHandlers - multipart and sanitization", () => {
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
         url: "/api/task/t",
-        headers: { [HeaderName.ContentType]: `${MimeType.MultipartFormData}; boundary=abc` },
+        headers: {
+          [HeaderName.ContentType]: `${MimeType.MultipartFormData}; boundary=abc`,
+        },
         body: null,
         autoEnd: true,
       });
       await handleTask(req, res);
       expect(res._status).toBe(500);
-      const json = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(json?.error?.code).toBe("INTERNAL_ERROR");
     });
 
     it("returns body without sanitization when status<500", async () => {
-      jest.spyOn(multipartModule, "isMultipart").mockImplementation(() => true as never);
+      jest
+        .spyOn(multipartModule, "isMultipart")
+        .mockImplementation(() => true as never);
       jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
         ok: false,
         response: {
@@ -101,18 +113,24 @@ describe("requestHandlers - multipart and sanitization", () => {
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
         url: "/api/task/t",
-        headers: { [HeaderName.ContentType]: `${MimeType.MultipartFormData}; boundary=abc` },
+        headers: {
+          [HeaderName.ContentType]: `${MimeType.MultipartFormData}; boundary=abc`,
+        },
         body: null,
         autoEnd: true,
       });
       await handleTask(req, res);
       expect(res._status).toBe(401);
-      const json = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(json?.error?.code).toBe("INVALID_TOKEN");
     });
 
     it("normalizes {statusCode, error} and sanitizes 500 errors", async () => {
-      jest.spyOn(multipartModule, "isMultipart").mockImplementation(() => true as never);
+      jest
+        .spyOn(multipartModule, "isMultipart")
+        .mockImplementation(() => true as never);
       jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
         ok: false,
         response: {
@@ -124,46 +142,62 @@ describe("requestHandlers - multipart and sanitization", () => {
         },
       });
 
-      const { handleTask } = createRequestHandlers(getDeps() as unknown as RequestProcessingDeps);
+      const { handleTask } = createRequestHandlers(
+        getDeps() as unknown as RequestProcessingDeps,
+      );
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
         url: "/api/task/t",
-        headers: { [HeaderName.ContentType]: `${MimeType.MultipartFormData}; boundary=abc` },
+        headers: {
+          [HeaderName.ContentType]: `${MimeType.MultipartFormData}; boundary=abc`,
+        },
         body: null,
         autoEnd: true,
       });
       await handleTask(req, res);
 
       expect(res._status).toBe(500);
-      const json = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(json?.error?.code).toBe("STREAM_ERROR");
       expect(json?.error?.message).toBe("Internal Error");
     });
 
     it("surfaces error via handler when multipart module throws", async () => {
-      jest.spyOn(multipartModule, "isMultipart").mockImplementation(() => true as never);
-      jest.spyOn(multipartModule, "parseMultipartInput").mockImplementation(() => {
-        throw new Error("parse-fail");
-      });
+      jest
+        .spyOn(multipartModule, "isMultipart")
+        .mockImplementation(() => true as never);
+      jest
+        .spyOn(multipartModule, "parseMultipartInput")
+        .mockImplementation(() => {
+          throw new Error("parse-fail");
+        });
 
       const { handleTask } = createRequestHandlers(getDeps() as any);
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
         url: "/api/task/t",
-        headers: { [HeaderName.ContentType]: `${MimeType.MultipartFormData}; boundary=abc` },
+        headers: {
+          [HeaderName.ContentType]: `${MimeType.MultipartFormData}; boundary=abc`,
+        },
         body: null,
         autoEnd: true,
       });
       await handleTask(req, res);
       expect(res._status).toBe(500);
-      const json = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(json?.error?.code).toBe("INTERNAL_ERROR");
     });
   });
 
   describe("sanitization logic", () => {
     it("returns sanitized error on finalize failure", async () => {
-      jest.spyOn(multipartModule, "isMultipart").mockImplementation(() => true as never);
+      jest
+        .spyOn(multipartModule, "isMultipart")
+        .mockImplementation(() => true as never);
       jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
         ok: true,
         value: { a: 1 },
@@ -177,18 +211,24 @@ describe("requestHandlers - multipart and sanitization", () => {
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
         url: "/api/task/t",
-        headers: { [HeaderName.ContentType]: `${MimeType.MultipartFormData}; boundary=abc` },
+        headers: {
+          [HeaderName.ContentType]: `${MimeType.MultipartFormData}; boundary=abc`,
+        },
         body: null,
         autoEnd: true,
       });
       await handleTask(req, res);
       expect(res._status).toBe(400);
-      const json = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(json?.error?.code).toBe("INVALID_DATA");
     });
 
     it("normalizes numeric codes to string in error response", async () => {
-      jest.spyOn(multipartModule, "isMultipart").mockImplementation(() => true as never);
+      jest
+        .spyOn(multipartModule, "isMultipart")
+        .mockImplementation(() => true as never);
       jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
         ok: false,
         response: {
@@ -201,53 +241,93 @@ describe("requestHandlers - multipart and sanitization", () => {
       const { req, res } = createReqRes({
         method: HttpMethod.Post,
         url: "/api/task/t",
-        headers: { [HeaderName.ContentType]: `${MimeType.MultipartFormData}; boundary=abc` },
+        headers: {
+          [HeaderName.ContentType]: `${MimeType.MultipartFormData}; boundary=abc`,
+        },
         body: null,
         autoEnd: true,
       });
       await handleTask(req, res);
       expect(res._status).toBe(500);
-      const json = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(json?.error?.code).toBe("INTERNAL_ERROR");
     });
 
     it("includes id and data in sanitized response when present", async () => {
-      jest.spyOn(multipartModule, "isMultipart").mockImplementation(() => true as never);
+      jest
+        .spyOn(multipartModule, "isMultipart")
+        .mockImplementation(() => true as never);
       jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
         ok: false,
-        response: { status: 500, body: { ok: false, error: { message: "X", id: "MY_ID", data: { foo: 1 } } } }
+        response: {
+          status: 500,
+          body: {
+            ok: false,
+            error: { message: "X", id: "MY_ID", data: { foo: 1 } },
+          },
+        },
       } as any);
       const { handleTask } = createRequestHandlers(getDeps() as any);
-      const { req, res } = createReqRes({ method: HttpMethod.Post, url: "/api/task/t", headers: { [HeaderName.ContentType]: MimeType.MultipartFormData }, body: null, autoEnd: true });
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/task/t",
+        headers: { [HeaderName.ContentType]: MimeType.MultipartFormData },
+        body: null,
+        autoEnd: true,
+      });
       await handleTask(req, res);
-      const json = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(json?.error?.id).toBe("MY_ID");
       expect(json?.error?.data).toEqual({ foo: 1 });
     });
 
     it("includes payload when sanitized error is NOT 500", async () => {
-      jest.spyOn(multipartModule, "isMultipart").mockImplementation(() => true as never);
+      jest
+        .spyOn(multipartModule, "isMultipart")
+        .mockImplementation(() => true as never);
       jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
         ok: false,
-        response: { status: 400, body: { ok: false, custom: "data" } }
+        response: { status: 400, body: { ok: false, custom: "data" } },
       } as any);
       const { handleTask } = createRequestHandlers(getDeps() as any);
-      const { req, res } = createReqRes({ method: HttpMethod.Post, url: "/api/task/t", headers: { [HeaderName.ContentType]: MimeType.MultipartFormData }, body: null, autoEnd: true });
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/task/t",
+        headers: { [HeaderName.ContentType]: MimeType.MultipartFormData },
+        body: null,
+        autoEnd: true,
+      });
       await handleTask(req, res);
-      const json = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(json?.custom).toBe("data");
     });
 
     it("falls back to INTERNAL_ERROR when error code is numeric (pre-sanitization in multipart)", async () => {
-      jest.spyOn(multipartModule, "isMultipart").mockImplementation(() => true as never);
+      jest
+        .spyOn(multipartModule, "isMultipart")
+        .mockImplementation(() => true as never);
       jest.spyOn(multipartModule, "parseMultipartInput").mockResolvedValue({
         ok: false,
-        response: { status: 500, body: { ok: false, error: { code: 123 } } }
+        response: { status: 500, body: { ok: false, error: { code: 123 } } },
       } as any);
       const { handleTask } = createRequestHandlers(getDeps() as any);
-      const { req, res } = createReqRes({ method: HttpMethod.Post, url: "/api/task/t", headers: { [HeaderName.ContentType]: MimeType.MultipartFormData }, body: null, autoEnd: true });
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/task/t",
+        headers: { [HeaderName.ContentType]: MimeType.MultipartFormData },
+        body: null,
+        autoEnd: true,
+      });
       await handleTask(req, res);
-      const json = res._buf ? JSON.parse((res._buf as Buffer).toString("utf8")) : undefined;
+      const json = res._buf
+        ? JSON.parse((res._buf as Buffer).toString("utf8"))
+        : undefined;
       expect(json?.error?.code).toBe("INTERNAL_ERROR");
     });
   });

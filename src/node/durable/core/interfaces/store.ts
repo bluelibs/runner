@@ -20,6 +20,20 @@ export interface IDurableStore {
   updateExecution(id: string, updates: Partial<Execution>): Promise<void>;
   listIncompleteExecutions(): Promise<Execution[]>;
 
+  /**
+   * Optional execution-level idempotency mapping.
+   * If supported, allows `startExecution(..., { idempotencyKey })` to dedupe workflow starts.
+   */
+  getExecutionIdByIdempotencyKey?(params: {
+    taskId: string;
+    idempotencyKey: string;
+  }): Promise<string | null>;
+  setExecutionIdByIdempotencyKey?(params: {
+    taskId: string;
+    idempotencyKey: string;
+    executionId: string;
+  }): Promise<boolean>;
+
   // Enhanced querying for dashboard
   listExecutions?(options?: ListExecutionsOptions): Promise<Execution[]>;
   listStepResults?(executionId: string): Promise<StepResult[]>;
