@@ -159,7 +159,8 @@ export function ExecutionDetail() {
     execution.status === ExecutionStatus.Cancelled
   ) {
     timelineSteps.push({
-      id: execution.status === ExecutionStatus.Cancelled ? "cancelled" : "error",
+      id:
+        execution.status === ExecutionStatus.Cancelled ? "cancelled" : "error",
       name:
         execution.status === ExecutionStatus.Cancelled
           ? "execution-cancelled"
@@ -209,7 +210,7 @@ export function ExecutionDetail() {
                         ? "bg-red-500/10 text-red-500 border-red-500/20"
                         : execution.status === ExecutionStatus.Cancelled
                           ? "bg-slate-500/10 text-slate-300 border-slate-500/20"
-                        : "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                          : "bg-blue-500/10 text-blue-500 border-blue-500/20"
                 }`}
               >
                 {execution.status.toUpperCase()}

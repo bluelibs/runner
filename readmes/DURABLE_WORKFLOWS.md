@@ -72,7 +72,9 @@ const approveOrder = r
       return { ok: true };
     });
 
-    const outcome = await ctx.waitForSignal(Approved, { timeoutMs: 86_400_000 });
+    const outcome = await ctx.waitForSignal(Approved, {
+      timeoutMs: 86_400_000,
+    });
     if (outcome.kind === "timeout") {
       return { status: "timed_out" as const };
     }
@@ -82,7 +84,10 @@ const approveOrder = r
       return { shipped: true };
     });
 
-    return { status: "approved" as const, approvedBy: outcome.payload.approvedBy };
+    return {
+      status: "approved" as const,
+      approvedBy: outcome.payload.approvedBy,
+    };
   })
   .build();
 
@@ -128,13 +133,16 @@ const durable = createDurableResource("app.durable", {
 ```
 
 In a typical deployment:
+
 - API nodes call `startExecution()` / `signal()` / `wait()`.
 - Worker nodes run the durable resource with `worker: true`.
 
 ### 2) Start an execution (store the executionId)
 
 ```ts
-const executionId = await d.startExecution(approveOrder, { orderId: "order-123" });
+const executionId = await d.startExecution(approveOrder, {
+  orderId: "order-123",
+});
 // store executionId on the order record so your webhook can resume the workflow later
 ```
 
@@ -169,29 +177,29 @@ graph TB
         C1[Client 1]
         C2[Client 2]
     end
-    
+
     subgraph DurableInfra[Durable Infrastructure]
         Q[(RabbitMQ - Quorum Queue)]
         R[(Redis - State/PubSub)]
     end
-    
+
     subgraph Workers[Scalable Workers]
         W1[Worker 1]
         W2[Worker 2]
         W3[Worker N]
     end
-    
+
     C1 -->|enqueue| Q
     C2 -->|enqueue| Q
-    
+
     Q -->|consume| W1
     Q -->|consume| W2
     Q -->|consume| W3
-    
+
     W1 <-->|state| R
     W2 <-->|state| R
     W3 <-->|state| R
-    
+
     R -.->|pub/sub| W1
     R -.->|pub/sub| W2
     R -.->|pub/sub| W3
@@ -209,6 +217,7 @@ Persists execution state, step results, timers, and schedules.
 See the **Store Interface** section below for the full TypeScript contract that all store implementations must follow.
 
 **Implementations:**
+
 - `MemoryStore` - Dev/test, no persistence
 - `RedisStore` - Production default, distributed locking
 
@@ -224,13 +233,13 @@ export type EventHandler = (event: BusEvent) => Promise<void>;
 export interface IEventBus {
   // Publish event to all subscribers
   publish(channel: string, event: BusEvent): Promise<void>;
-  
+
   // Subscribe to events on a channel
   subscribe(channel: string, handler: EventHandler): Promise<void>;
-  
+
   // Unsubscribe from a channel
   unsubscribe(channel: string): Promise<void>;
-  
+
   // Lifecycle
   init?(): Promise<void>;
   dispose?(): Promise<void>;
@@ -244,6 +253,7 @@ export interface BusEvent {
 ```
 
 **Implementations:**
+
 - `MemoryEventBus` - Dev/test, single-process only
 - `RedisEventBus` - Production default, uses Redis Pub/Sub
 
@@ -258,28 +268,32 @@ For distributing execution work across multiple workers with durability guarante
 
 export interface QueueMessage<T = unknown> {
   id: string;
-  type: 'execute' | 'resume' | 'schedule';
+  type: "execute" | "resume" | "schedule";
   payload: T;
   attempts: number;
   maxAttempts: number;
   createdAt: Date;
 }
 
-export type MessageHandler<T = unknown> = (message: QueueMessage<T>) => Promise<void>;
+export type MessageHandler<T = unknown> = (
+  message: QueueMessage<T>,
+) => Promise<void>;
 
 export interface IDurableQueue {
   // Send message to queue
-  enqueue<T>(message: Omit<QueueMessage<T>, 'id' | 'createdAt'>): Promise<string>;
-  
+  enqueue<T>(
+    message: Omit<QueueMessage<T>, "id" | "createdAt">,
+  ): Promise<string>;
+
   // Start consuming messages (calls handler for each)
   consume<T>(handler: MessageHandler<T>): Promise<void>;
-  
+
   // Acknowledge successful processing
   ack(messageId: string): Promise<void>;
-  
+
   // Negative acknowledge (requeue or dead-letter)
   nack(messageId: string, requeue?: boolean): Promise<void>;
-  
+
   // Lifecycle
   init?(): Promise<void>;
   dispose?(): Promise<void>;
@@ -289,6 +303,7 @@ export interface IDurableQueue {
 **Message types note:** Runner currently enqueues `execute` and `resume`. `schedule` is accepted by `DurableWorker` as an alias of `resume` (an execution hint) so custom adapters can use it, but built-in cron/interval scheduling is driven by timers + `resume`.
 
 **Implementations:**
+
 - `MemoryQueue` - Dev/test, no persistence
 - `RabbitMQQueue` - Production default, quorum queues for durability
 
@@ -309,42 +324,42 @@ graph TB
         DS[DurableService]
         DC[DurableContext]
         DW[DurableWorker]
-        
+
         subgraph Interfaces[Abstract Interfaces]
             IS[IDurableStore]
             IB[IEventBus]
             IQ[IDurableQueue]
         end
-        
+
         subgraph StoreImpl[Store Implementations]
             MS[MemoryStore]
             RS[RedisStore]
         end
-        
+
         subgraph BusImpl[EventBus Implementations]
             MB[MemoryEventBus]
             RB[RedisEventBus]
         end
-        
+
         subgraph QueueImpl[Queue Implementations]
             MQ[MemoryQueue]
             RQ[RabbitMQQueue]
         end
     end
-    
+
     DS --> IS
     DS --> IB
     DS --> IQ
     DW --> IQ
     DC --> IS
-    
+
     IS -.-> MS
     IS -.-> RS
     IB -.-> MB
     IB -.-> RB
     IQ -.-> MQ
     IQ -.-> RQ
-    
+
     T -.->|uses| DC
 ```
 
@@ -357,65 +372,64 @@ graph TB
 Durable workflows are **normal Runner tasks** that inject a **durable resource** (created via `createDurableResource(...)`) and call `ctx.step(...)` / `ctx.sleep(...)` from inside their `run` function.
 
 ```typescript
-import { r, run } from '@bluelibs/runner';
-import { createDurableResource, MemoryStore } from '@bluelibs/runner/node';
+import { r, run } from "@bluelibs/runner";
+import { createDurableResource, MemoryStore } from "@bluelibs/runner/node";
 
 // 1. Create store
 const store = new MemoryStore();
 
 // 2. Create durable resource
-const durable = createDurableResource('app.durable', { 
+const durable = createDurableResource("app.durable", {
   store,
-  polling: { enabled: true, interval: 1000 },  // Timer polling interval
+  polling: { enabled: true, interval: 1000 }, // Timer polling interval
 });
 
 // 3. Define a task that uses durable context
-const processOrder = r.task('app.tasks.processOrder')
+const processOrder = r
+  .task("app.tasks.processOrder")
   .inputSchema<{ orderId: string; customerId: string }>()
   .dependencies({ durable })
   .run(async (input, { durable }) => {
     const ctx = durable.use();
-    
+
     // Step 1: Validate order (checkpointed)
-    const order = await ctx.step('validate', async () => {
+    const order = await ctx.step("validate", async () => {
       const o = await db.orders.find(input.orderId);
-      if (!o) throw new Error('Order not found');
+      if (!o) throw new Error("Order not found");
       return o;
     });
-    
+
     // Step 2: Process payment (checkpointed)
-    const payment = await ctx.step('charge-payment', async () => {
+    const payment = await ctx.step("charge-payment", async () => {
       return await payments.charge(order.customerId, order.total);
     });
-    
+
     // Durable sleep - survives restart
     await ctx.sleep(5000);
-    
+
     // Step 3: Ship order (checkpointed)
-    const shipment = await ctx.step('create-shipment', async () => {
+    const shipment = await ctx.step("create-shipment", async () => {
       return await shipping.create(order.id);
     });
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       orderId: order.id,
-      trackingId: shipment.trackingId 
+      trackingId: shipment.trackingId,
     };
   })
   .build();
 
 // 4. Wire up and run
-const app = r.resource('app')
-  .register([durable, processOrder])
-  .build();
+const app = r.resource("app").register([durable, processOrder]).build();
 
 const runtime = await run(app);
 
 // 5. Execute durably
 const d = runtime.getResourceValue(durable);
-const result = await d.execute(processOrder, { 
-  orderId: 'order-123',
-  customerId: 'cust-456'
+const result = await d.execute(processOrder, {
+  orderId: "order-123",
+  customerId: "cust-456",
 });
 ```
 
@@ -448,7 +462,7 @@ sequenceDiagram
     DS->>S: createExecution(id, task, input)
     DS->>DC: create context for execution
     DS->>T: run task with context
-    
+
     T->>DC: step('validate', fn)
     DC->>S: getStepResult(execId, 'validate')
     alt Step not cached
@@ -456,22 +470,22 @@ sequenceDiagram
         DC->>S: saveStepResult(execId, 'validate', result)
     end
     DC-->>T: return result
-    
+
     T->>DC: sleep(5000)
     DC->>S: createTimer(execId, fireAt)
     Note over DC,T: Execution suspends
-    
+
     Note over DS: Timer polling...
     DS->>S: getReadyTimers()
     S-->>DS: timer ready!
     DS->>DC: resume execution
-    
+
     T->>DC: step('ship', fn)
     DC->>S: getStepResult(execId, 'ship')
     DC->>DC: execute fn()
     DC->>S: saveStepResult(execId, 'ship', result)
     DC-->>T: return result
-    
+
     T-->>DS: return final result
     DS->>S: markExecutionComplete(id, result)
     DS-->>C: return result
@@ -486,18 +500,18 @@ This section summarizes the safety guarantees and expectations of the durable wo
 - **Store is the source of truth**  
   All durable state (executions, steps, timers, schedules) lives in `IDurableStore`. Queues and pub/sub are optimizations on top; correctness must not rely solely on in-memory state or transient messages.
 
-- **At-least-once execution, effectively-once steps**  
-  - Executions are retried on failure, so the same logical workflow may run more than once.  
-  - `ctx.step(stepId, fn)` ensures each step function is *observably* executed at most once per execution: results are memoized in the store and returned on replay.  
+- **At-least-once execution, effectively-once steps**
+  - Executions are retried on failure, so the same logical workflow may run more than once.
+  - `ctx.step(stepId, fn)` ensures each step function is _observably_ executed at most once per execution: results are memoized in the store and returned on replay.
   - External side effects inside a step must still be designed to be idempotent or safely repeatable (for example, idempotent payment/refund APIs).
 
-- **Sleep and resumption**  
-  - `ctx.sleep(ms)` persists a timer and marks the execution as `sleeping`.  
-  - When the timer fires, execution is resumed from the code *after* `sleep`, and all previous steps are replayed via cached results (no re‑issuing of side effects wrapped in `step`).
+- **Sleep and resumption**
+  - `ctx.sleep(ms)` persists a timer and marks the execution as `sleeping`.
+  - When the timer fires, execution is resumed from the code _after_ `sleep`, and all previous steps are replayed via cached results (no re‑issuing of side effects wrapped in `step`).
 
-- **Event emission without duplicates**  
-  - `ctx.emit(event, data)` is implemented as one or more internal `step`s under the hood.  
-  - Each call is assigned a deterministic internal id like `__emit:<eventId>:<index>` so you can emit the same event type multiple times in one workflow.  
+- **Event emission without duplicates**
+  - `ctx.emit(event, data)` is implemented as one or more internal `step`s under the hood.
+  - Each call is assigned a deterministic internal id like `__emit:<eventId>:<index>` so you can emit the same event type multiple times in one workflow.
   - On replay, memoization prevents duplicates for each individual emission.
   - **Determinism note:** those internal `:<index>` suffixes are derived from call order within the workflow. If you change the workflow structure (branching / adding/removing calls), the internal step ids may shift and past executions may no longer replay cleanly.
 
@@ -508,17 +522,17 @@ This section summarizes the safety guarantees and expectations of the durable wo
   - Repeated waits use `__signal:<id>:<index>` and are resolved by the first available slot; payloads can be buffered for future waits.
   - **Determinism note:** like `emit`, the `:<index>` suffixes are derived from call order within the workflow; code changes can shift indexes on replay.
 
-- **Retries and timeouts**  
-  - `StepOptions.retries` and `DurableServiceConfig.execution.maxAttempts` control step‑level and execution‑level retries respectively.  
+- **Retries and timeouts**
+  - `StepOptions.retries` and `DurableServiceConfig.execution.maxAttempts` control step‑level and execution‑level retries respectively.
   - `StepOptions.timeout` and `execution.timeout` bound how long a single step or the whole execution may run.
   - **Global Timeouts**: `execution.timeout` measures the total time from the very first attempt (`createdAt`) and is not reset on retries or resumptions.
 
-- **Queue and worker semantics**  
-  - `IDurableQueue` provides **at-least-once** delivery: messages may be delivered more than once but will not be silently dropped.  
+- **Queue and worker semantics**
+  - `IDurableQueue` provides **at-least-once** delivery: messages may be delivered more than once but will not be silently dropped.
   - Workers must treat queue messages as hints to load state from the store, apply `DurableContext` logic, and then `ack` or `nack` the message. Idempotency is achieved by reading/writing through `IDurableStore`, not by trusting the queue alone.
 
-- **Multi-node coordination**  
-  - `IEventBus` is used to reduce `wait()` latency (publish `execution:<id>` completion events) but does not replace the store.  
+- **Multi-node coordination**
+  - `IEventBus` is used to reduce `wait()` latency (publish `execution:<id>` completion events) but does not replace the store.
   - Timers (`sleep`, signal timeouts, schedules) are driven by the durable poller (`DurableService` polling loop). In multi-process setups, run a single poller (`polling: { enabled: true }`) or implement atomic timer claiming in your store.
 
 - **Reserved step ids**
@@ -533,6 +547,7 @@ These semantics intentionally favor **safety and debuggability** over perfect �
 Durable workflows often need to pause until the outside world confirms something (eg. payment provider callbacks). Use `ctx.waitForSignal()` inside the workflow, and `durable.signal()` from the outside.
 
 Signal summary:
+
 - `stepId` is a stable key only; it does not change return types.
 - `waitForSignal({ stepId })` requires a store that supports listing step results (`listStepResults`) so `durable.signal(...)` can find the waiter.
 - `timeoutMs` changes the return value to a `{ kind: "signal" | "timeout" }` outcome.
@@ -540,11 +555,11 @@ Signal summary:
 
 Return shapes:
 
-| Call | Returns |
-| --- | --- |
-| `waitForSignal(signal)` | `payload` (throws on timeout) |
-| `waitForSignal(signal, { stepId })` | `payload` (throws on timeout) |
-| `waitForSignal(signal, { timeoutMs })` | `{ kind: "signal", payload }` or `{ kind: "timeout" }` |
+| Call                                           | Returns                                                |
+| ---------------------------------------------- | ------------------------------------------------------ |
+| `waitForSignal(signal)`                        | `payload` (throws on timeout)                          |
+| `waitForSignal(signal, { stepId })`            | `payload` (throws on timeout)                          |
+| `waitForSignal(signal, { timeoutMs })`         | `{ kind: "signal", payload }` or `{ kind: "timeout" }` |
 | `waitForSignal(signal, { timeoutMs, stepId })` | `{ kind: "signal", payload }` or `{ kind: "timeout" }` |
 
 ### Example: `waitUntilPaid()`
@@ -554,7 +569,9 @@ import { event, r } from "@bluelibs/runner";
 import { createDurableResource, MemoryStore } from "@bluelibs/runner/node";
 
 const Paid = event<{ paidAt: number }>({ id: "app.signals.paid" });
-const durable = createDurableResource("app.durable", { store: new MemoryStore() });
+const durable = createDurableResource("app.durable", {
+  store: new MemoryStore(),
+});
 
 export const processOrder = r
   .task("app.tasks.processOrder")
@@ -617,24 +634,27 @@ const payment = await ctx.waitForSignal(Paid, { stepId: "stable-paid" });
 Instead of a complex saga orchestrator, users implement compensation explicitly:
 
 ```typescript
-const processOrderWithRollback = r.task('app.tasks.processOrder')
+const processOrderWithRollback = r
+  .task("app.tasks.processOrder")
   .dependencies({ durable })
   .run(async (input, { durable }) => {
     const ctx = durable.use();
-    
+
     // Reserve inventory
-    const reservation = await ctx.step('reserve-inventory')
+    const reservation = await ctx
+      .step("reserve-inventory")
       .up(async () => inventory.reserve(input.items))
       .down(async (res) => inventory.release(res.reservationId));
-    
+
     // Charge payment
-    const payment = await ctx.step('charge-payment')
+    const payment = await ctx
+      .step("charge-payment")
       .up(async () => payments.charge(input.customerId, input.amount))
       .down(async (p) => payments.refund(p.chargeId));
-    
+
     try {
       // Ship order - might fail
-      const shipment = await ctx.step('ship-order', async () => {
+      const shipment = await ctx.step("ship-order", async () => {
         return await shipping.ship(input.orderId);
       });
       return { success: true, shipment };
@@ -663,15 +683,15 @@ Run a task at a specific future time:
 // Schedule a task to run in 1 hour
 const executionId = await durable.schedule(
   processReport,
-  { reportId: 'daily-sales' },
-  { at: new Date(Date.now() + 3600000) }
+  { reportId: "daily-sales" },
+  { at: new Date(Date.now() + 3600000) },
 );
 
 // Or use delay helper
 const executionId = await durable.schedule(
   sendReminder,
-  { userId: 'user-123' },
-  { delay: 24 * 60 * 60 * 1000 } // 24 hours from now
+  { userId: "user-123" },
+  { delay: 24 * 60 * 60 * 1000 }, // 24 hours from now
 );
 ```
 
@@ -681,32 +701,45 @@ Define tasks that run on a schedule using cron expressions:
 
 ```typescript
 // Define a scheduled task
-const dailyCleanup = r.task('app.tasks.dailyCleanup')
+const dailyCleanup = r
+  .task("app.tasks.dailyCleanup")
   .dependencies({ durable, db })
   .run(async (input, { durable, db }) => {
     const ctx = durable.use();
-    
-    await ctx.step('cleanup-old-sessions', async () => {
-      await db.sessions.deleteOlderThan(7, 'days');
+
+    await ctx.step("cleanup-old-sessions", async () => {
+      await db.sessions.deleteOlderThan(7, "days");
     });
-    
-    await ctx.step('cleanup-temp-files', async () => {
-      await fs.rm('./tmp/*', { recursive: true });
+
+    await ctx.step("cleanup-temp-files", async () => {
+      await fs.rm("./tmp/*", { recursive: true });
     });
-    
+
     return { cleaned: true };
   })
   .build();
 
 // Create schedules once at startup (in a bootstrap resource/task)
-if (!(await durable.getSchedule('daily-cleanup'))) {
-  await durable.schedule(dailyCleanup, {}, { id: 'daily-cleanup', cron: '0 3 * * *' });
+if (!(await durable.getSchedule("daily-cleanup"))) {
+  await durable.schedule(
+    dailyCleanup,
+    {},
+    { id: "daily-cleanup", cron: "0 3 * * *" },
+  );
 }
-if (!(await durable.getSchedule('hourly-sync'))) {
-  await durable.schedule(syncInventory, { full: false }, { id: 'hourly-sync', cron: '0 * * * *' });
+if (!(await durable.getSchedule("hourly-sync"))) {
+  await durable.schedule(
+    syncInventory,
+    { full: false },
+    { id: "hourly-sync", cron: "0 * * * *" },
+  );
 }
-if (!(await durable.getSchedule('weekly-report'))) {
-  await durable.schedule(generateWeeklyReport, { type: 'weekly' }, { id: 'weekly-report', cron: '0 9 * * MON' });
+if (!(await durable.getSchedule("weekly-report"))) {
+  await durable.schedule(
+    generateWeeklyReport,
+    { type: "weekly" },
+    { id: "weekly-report", cron: "0 9 * * MON" },
+  );
 }
 ```
 
@@ -715,32 +748,37 @@ if (!(await durable.getSchedule('weekly-report'))) {
 Run tasks at fixed intervals (e.g., every 30 seconds):
 
 ```typescript
-if (!(await durable.getSchedule('health-check'))) {
+if (!(await durable.getSchedule("health-check"))) {
   await durable.schedule(
     healthCheckTask,
-    { endpoints: ['api', 'db'] },
-    { id: 'health-check', interval: 30_000 },
+    { endpoints: ["api", "db"] },
+    { id: "health-check", interval: 30_000 },
   );
 }
-if (!(await durable.getSchedule('poll-external-api'))) {
+if (!(await durable.getSchedule("poll-external-api"))) {
   await durable.schedule(
     pollExternalApi,
     {},
-    { id: 'poll-external-api', interval: 5 * 60 * 1000 },
+    { id: "poll-external-api", interval: 5 * 60 * 1000 },
   );
 }
-if (!(await durable.getSchedule('metrics-sync'))) {
-  await durable.schedule(metricsSync, { flush: true }, { id: 'metrics-sync', interval: 60_000 });
+if (!(await durable.getSchedule("metrics-sync"))) {
+  await durable.schedule(
+    metricsSync,
+    { flush: true },
+    { id: "metrics-sync", interval: 60_000 },
+  );
 }
 ```
 
 **Interval vs Cron:**
+
 - **Interval**: Fixed delay between executions. Next run = end of previous + interval. Best for polling, health checks.
 - **Cron**: Calendar-based. Next run = next matching time. Best for scheduled reports, daily cleanup.
 
 **Interval Behavior (current implementation):**
 Intervals are currently measured from when the schedule timer fires / execution is kicked off (not from task completion).
-If the task runs longer than the interval, the next run will be scheduled after the interval from *kickoff time*, which can cause overlapping executions unless your task logic (or your infrastructure) prevents it.
+If the task runs longer than the interval, the next run will be scheduled after the interval from _kickoff time_, which can cause overlapping executions unless your task logic (or your infrastructure) prevents it.
 
 ```
 Task starts at t=0, takes 12s to complete
@@ -752,6 +790,7 @@ t=0          t=10         t=12
 ```
 
 If you need "completion-based" intervals (no overlap), implement it explicitly inside the workflow:
+
 - run the work
 - then `await ctx.sleep(intervalMs)`
 - then loop / re-run (or have the schedule fire less frequently and use durable sleeps inside)
@@ -759,6 +798,7 @@ If you need "completion-based" intervals (no overlap), implement it explicitly i
 ### Cron Expression Format
 
 Standard 5-field cron format:
+
 ```
 ┌───────────── minute (0-59)
 │ ┌─────────── hour (0-23)
@@ -770,6 +810,7 @@ Standard 5-field cron format:
 ```
 
 Common patterns:
+
 - `* * * * *` - Every minute
 - `0 * * * *` - Every hour
 - `0 0 * * *` - Every day at midnight
@@ -780,23 +821,23 @@ Common patterns:
 
 ```typescript
 // Pause a schedule
-await durable.pauseSchedule('daily-cleanup');
+await durable.pauseSchedule("daily-cleanup");
 
 // Resume a schedule
-await durable.resumeSchedule('daily-cleanup');
+await durable.resumeSchedule("daily-cleanup");
 
 // Get schedule status
-const status = await durable.getSchedule('daily-cleanup');
+const status = await durable.getSchedule("daily-cleanup");
 // { id, cron, lastRun, nextRun, status: 'active' | 'paused' }
 
 // List all schedules
 const schedules = await durable.listSchedules();
 
 // Update schedule cron
-await durable.updateSchedule('daily-cleanup', { cron: '0 4 * * *' });
+await durable.updateSchedule("daily-cleanup", { cron: "0 4 * * *" });
 
 // Remove schedule
-await durable.removeSchedule('daily-cleanup');
+await durable.removeSchedule("daily-cleanup");
 ```
 
 ### How Scheduling Works
@@ -808,11 +849,11 @@ sequenceDiagram
     participant T as Task
 
     Note over DS: Timer polling loop
-    
+
     loop Every polling interval
         DS->>S: getReadyTimers
         S-->>DS: timers ready to fire
-        
+
         alt Schedule timer
             DS->>S: getSchedule by scheduleId
             DS->>DS: execute task with input
@@ -833,7 +874,14 @@ sequenceDiagram
 ```typescript
 // types.ts
 
-export type ExecutionStatus = 'pending' | 'running' | 'retrying' | 'sleeping' | 'completed' | 'failed' | 'compensation_failed';
+export type ExecutionStatus =
+  | "pending"
+  | "running"
+  | "retrying"
+  | "sleeping"
+  | "completed"
+  | "failed"
+  | "compensation_failed";
 
 export interface Execution<TInput = unknown, TResult = unknown> {
   id: string;
@@ -860,27 +908,33 @@ export interface StepResult<T = unknown> {
   completedAt: Date;
 }
 
-export type TimerType = 'sleep' | 'timeout' | 'scheduled' | 'cron' | 'retry' | 'signal_timeout';
+export type TimerType =
+  | "sleep"
+  | "timeout"
+  | "scheduled"
+  | "cron"
+  | "retry"
+  | "signal_timeout";
 
 export interface Timer {
   id: string;
-  executionId?: string;      // For sleep/timeout timers
-  stepId?: string;           // For step-specific timers
-  scheduleId?: string;       // For cron timers
+  executionId?: string; // For sleep/timeout timers
+  stepId?: string; // For step-specific timers
+  scheduleId?: string; // For cron timers
   type: TimerType;
   fireAt: Date;
-  status: 'pending' | 'fired';
+  status: "pending" | "fired";
 }
 
-export type ScheduleType = 'cron' | 'interval';
+export type ScheduleType = "cron" | "interval";
 
 export interface Schedule<TInput = unknown> {
   id: string;
   taskId: string;
   type: ScheduleType;
-  pattern: string;           // Cron expression or interval (ms)
+  pattern: string; // Cron expression or interval (ms)
   input: TInput | undefined;
-  status: 'active' | 'paused';
+  status: "active" | "paused";
   lastRun?: Date;
   nextRun?: Date;
   createdAt: Date;
@@ -911,17 +965,20 @@ export interface IDurableStore {
   getExecution(id: string): Promise<Execution | null>;
   updateExecution(id: string, updates: Partial<Execution>): Promise<void>;
   listIncompleteExecutions(): Promise<Execution[]>;
-  
+
   // Steps
-  getStepResult(executionId: string, stepId: string): Promise<StepResult | null>;
+  getStepResult(
+    executionId: string,
+    stepId: string,
+  ): Promise<StepResult | null>;
   saveStepResult(result: StepResult): Promise<void>;
-  
+
   // Timers
   createTimer(timer: Timer): Promise<void>;
   getReadyTimers(now?: Date): Promise<Timer[]>;
   markTimerFired(timerId: string): Promise<void>;
   deleteTimer(timerId: string): Promise<void>;
-  
+
   // Schedules
   createSchedule(schedule: Schedule): Promise<void>;
   getSchedule(id: string): Promise<Schedule | null>;
@@ -934,7 +991,7 @@ export interface IDurableStore {
   listExecutions?(options?: ListExecutionsOptions): Promise<Execution[]>;
   listStepResults?(executionId: string): Promise<StepResult[]>;
   listStuckExecutions?(): Promise<Execution[]>;
-  
+
   // Lifecycle
   init?(): Promise<void>;
   dispose?(): Promise<void>;
@@ -951,18 +1008,22 @@ export interface IDurableStore {
 export interface IDurableContext {
   readonly executionId: string;
   readonly attempt: number;
-  
+
   /**
    * Execute a step with memoization. On replay, returns cached result.
    */
   step<T>(stepId: string, fn: () => Promise<T>): Promise<T>;
-  step<T>(stepId: string, options: StepOptions, fn: () => Promise<T>): Promise<T>;
-  
+  step<T>(
+    stepId: string,
+    options: StepOptions,
+    fn: () => Promise<T>,
+  ): Promise<T>;
+
   /**
    * Durable sleep that survives process restarts.
    */
   sleep(durationMs: number): Promise<void>;
-  
+
   /**
    * Emit an event durably (as a step).
    */
@@ -985,8 +1046,8 @@ export interface StepOptions {
 export interface ScheduleConfig<TInput = unknown> {
   id: string;
   task: ITask<TInput, any>;
-  cron?: string;          // Cron expression (e.g., '0 3 * * *')
-  interval?: number;      // Interval in ms (e.g., 30000 for 30 seconds)
+  cron?: string; // Cron expression (e.g., '0 3 * * *')
+  interval?: number; // Interval in ms (e.g., 30000 for 30 seconds)
   input: TInput;
 }
 // Must specify either cron OR interval, not both
@@ -996,22 +1057,22 @@ export interface DurableServiceConfig {
   queue?: IDurableQueue;
   eventBus?: IEventBus;
   audit?: {
-    enabled?: boolean;  // Default: false
+    enabled?: boolean; // Default: false
   };
   polling?: {
-    enabled?: boolean;  // Default: true
-    interval?: number;  // Default: 1000ms
+    enabled?: boolean; // Default: true
+    interval?: number; // Default: 1000ms
   };
   execution?: {
-    maxAttempts?: number;  // Default: 3
-    timeout?: number;      // Default: no timeout
+    maxAttempts?: number; // Default: 3
+    timeout?: number; // Default: no timeout
   };
-  schedules?: ScheduleConfig[];  // Cron schedules to register
+  schedules?: ScheduleConfig[]; // Cron schedules to register
 }
 
 export interface ScheduleOptions {
-  at?: Date;        // Run at specific time
-  delay?: number;   // Run after delay (ms)
+  at?: Date; // Run at specific time
+  delay?: number; // Run after delay (ms)
 }
 
 export interface IDurableService {
@@ -1021,7 +1082,7 @@ export interface IDurableService {
   execute<TInput, TResult>(
     task: DurableTask<TInput, TResult>,
     input?: TInput,
-    options?: ExecuteOptions
+    options?: ExecuteOptions,
   ): Promise<TResult>;
 
   /**
@@ -1049,37 +1110,40 @@ export interface IDurableService {
     signal: string | IEventDefinition<TPayload>,
     payload: TPayload,
   ): Promise<void>;
-  
+
   /**
    * Schedule a one-time task execution.
    */
   schedule<TInput>(
     task: DurableTask<TInput, any>,
     input: TInput,
-    options: ScheduleOptions
+    options: ScheduleOptions,
   ): Promise<string>;
-  
+
   /**
    * Recover incomplete executions on startup.
    */
   recover(): Promise<void>;
-  
+
   /**
    * Start timer polling (called automatically on init).
    */
   start(): void;
-  
+
   /**
    * Stop timer polling (called on dispose).
    */
   stop(): Promise<void>;
-  
+
   // Schedule management
   pauseSchedule(scheduleId: string): Promise<void>;
   resumeSchedule(scheduleId: string): Promise<void>;
   getSchedule(scheduleId: string): Promise<Schedule | null>;
   listSchedules(): Promise<Schedule[]>;
-  updateSchedule(scheduleId: string, updates: { cron?: string; interval?: number; input?: unknown }): Promise<void>;
+  updateSchedule(
+    scheduleId: string,
+    updates: { cron?: string; interval?: number; input?: unknown },
+  ): Promise<void>;
   removeSchedule(scheduleId: string): Promise<void>;
 }
 ```
@@ -1141,29 +1205,29 @@ import {
   RedisStore,
   RedisEventBus,
   RabbitMQQueue,
-} from '@bluelibs/runner/node';
+} from "@bluelibs/runner/node";
 
 // State storage with Redis
 const store = new RedisStore({
-  redis: process.env.REDIS_URL || 'redis://localhost:6379',
-  prefix: 'durable:',
+  redis: process.env.REDIS_URL || "redis://localhost:6379",
+  prefix: "durable:",
 });
 
 // Pub/Sub with Redis
 const eventBus = new RedisEventBus({
-  redis: process.env.REDIS_URL || 'redis://localhost:6379',
-  prefix: 'durable:bus:',
+  redis: process.env.REDIS_URL || "redis://localhost:6379",
+  prefix: "durable:bus:",
 });
 
 // Work distribution with RabbitMQ quorum queues
 const queue = new RabbitMQQueue({
-  url: process.env.RABBITMQ_URL || 'amqp://localhost',
+  url: process.env.RABBITMQ_URL || "amqp://localhost",
   queue: {
-    name: 'durable-executions',
-    quorum: true,  // Use quorum queue for durability
-    deadLetter: 'durable-dlq',  // Dead letter queue for failed messages
+    name: "durable-executions",
+    quorum: true, // Use quorum queue for durability
+    deadLetter: "durable-dlq", // Dead letter queue for failed messages
   },
-  prefetch: 10,  // Process up to 10 messages concurrently
+  prefetch: 10, // Process up to 10 messages concurrently
 });
 
 // Create durable service
@@ -1193,6 +1257,7 @@ Make sure at least one worker process runs with polling enabled, otherwise sleep
 ### RabbitMQ Quorum Queues
 
 **Why quorum queues?**
+
 - **Durability** - Messages survive broker restarts
 - **Replication** - Messages replicated across nodes
 - **Consistency** - Strong guarantees vs classic mirrored queues
@@ -1205,16 +1270,16 @@ export interface RabbitMQQueueConfig {
   url: string;
   queue: {
     name: string;
-    quorum?: boolean;      // Use quorum queue (default: true)
-    deadLetter?: string;   // Dead letter exchange
-    messageTtl?: number;   // Message TTL in ms
+    quorum?: boolean; // Use quorum queue (default: true)
+    deadLetter?: string; // Dead letter exchange
+    messageTtl?: number; // Message TTL in ms
   };
-  prefetch?: number;       // Consumer prefetch (default: 10)
+  prefetch?: number; // Consumer prefetch (default: 10)
 }
 
 export class RabbitMQQueue implements IDurableQueue {
   constructor(config: RabbitMQQueueConfig);
-  
+
   async init(): Promise<void> {
     // Creates quorum queue with:
     // - x-queue-type: quorum
@@ -1245,42 +1310,43 @@ graph TB
         A1[API 1]
         A2[API 2]
     end
-    
+
     subgraph RabbitMQ[RabbitMQ Cluster]
         Q[(Quorum Queue)]
         DLQ[(Dead Letter Queue)]
     end
-    
+
     subgraph Redis[Redis Cluster]
         RS[(State Store)]
         RP[(Pub/Sub)]
     end
-    
+
     subgraph Workers[Worker Pool - Auto-Scaling]
         W1[Worker 1]
         W2[Worker 2]
         W3[Worker N]
     end
-    
+
     A1 -->|enqueue| Q
     A2 -->|enqueue| Q
-    
+
     Q -->|consume| W1
     Q -->|consume| W2
     Q -->|consume| W3
-    
+
     W1 <-->|state| RS
     W2 <-->|state| RS
     W3 <-->|state| RS
-    
+
     RP -.->|notify| W1
     RP -.->|notify| W2
     RP -.->|notify| W3
-    
+
     Q -->|failed| DLQ
 ```
 
 **Scaling characteristics:**
+
 - **Workers** - Add more worker instances to increase throughput
 - **Queue** - RabbitMQ handles work distribution automatically
 - **State** - All workers share state via Redis
@@ -1294,20 +1360,20 @@ sequenceDiagram
     participant Q as RabbitMQ
     participant W as Worker
     participant R as Redis
-    
+
     C->>R: Create execution record
     C->>Q: Enqueue execution message
     C-->>C: Return execution ID
-    
+
     Note over Q,W: Workers consuming queue
-    
+
     Q->>W: Deliver message
     W->>R: Acquire lock on execution
-    
+
     alt Lock acquired
         W->>R: Load execution state
         W->>W: Execute task with DurableContext
-        
+
         loop For each step
             W->>R: Check step result cache
             alt Cache hit
@@ -1317,7 +1383,7 @@ sequenceDiagram
                 W->>R: Cache step result
             end
         end
-        
+
         W->>R: Mark execution complete
         W->>R: Release lock
         W->>Q: Ack message
@@ -1360,7 +1426,10 @@ const recoverDurable = r
   })
   .build();
 
-const app = r.resource("app").register([durable, processOrder, recoverDurable]).build();
+const app = r
+  .resource("app")
+  .register([durable, processOrder, recoverDurable])
+  .build();
 await run(app);
 ```
 
@@ -1381,22 +1450,23 @@ const durable = createDurableResource("app.durable", { store });
 Expose durable task execution over HTTP using Runner's tunnel pattern:
 
 ```typescript
-import { nodeExposure } from '@bluelibs/runner/node';
+import { nodeExposure } from "@bluelibs/runner/node";
 
-const app = r.resource('app')
+const app = r
+  .resource("app")
   .register([
     durable,
     processOrder,
     // Expose tasks over HTTP
     nodeExposure.with({
-      http: { basePath: '/__runner', listen: { port: 7070 } },
+      http: { basePath: "/__runner", listen: { port: 7070 } },
     }),
   ])
   .build();
 
 // Remote clients can now call durable tasks via HTTP
-const client = createHttpClient({ baseUrl: 'http://worker:7070/__runner' });
-await client.task('app.tasks.processOrder', { orderId: '123' });
+const client = createHttpClient({ baseUrl: "http://worker:7070/__runner" });
+await client.task("app.tasks.processOrder", { orderId: "123" });
 ```
 
 ## Recovery on Startup
@@ -1410,10 +1480,14 @@ const recoverDurable = r
   })
   .build();
 
-const app = r.resource("app").register([durable, processOrder, recoverDurable]).build();
+const app = r
+  .resource("app")
+  .register([durable, processOrder, recoverDurable])
+  .build();
 ```
 
 The recovery process:
+
 1. Load all executions with status `running` or `sleeping`
 2. For each, re-execute the task within a new DurableContext
 3. The task replays through cached steps automatically
@@ -1470,14 +1544,14 @@ when you need an explicit timeout outcome.
 
 ## Comparison with Previous Design
 
-| Aspect | Previous Design | New Design |
-|--------|----------------|------------|
-| Components | 8+ (EventManager, WorkflowEngine, TimerManager, Saga, etc.) | 3 (DurableService, DurableContext, Store) |
-| Files | ~30 | ~12 |
-| New concepts | Workflows, Sagas, Compensation, DLQ | Just `step()` and `sleep()` |
-| Changes to core | EventBuilder, TaskBuilder modifications | None - pure node extension |
-| Learning curve | High | Low |
-| Implementation time | 12 weeks | 2-3 weeks |
+| Aspect              | Previous Design                                             | New Design                                |
+| ------------------- | ----------------------------------------------------------- | ----------------------------------------- |
+| Components          | 8+ (EventManager, WorkflowEngine, TimerManager, Saga, etc.) | 3 (DurableService, DurableContext, Store) |
+| Files               | ~30                                                         | ~12                                       |
+| New concepts        | Workflows, Sagas, Compensation, DLQ                         | Just `step()` and `sleep()`               |
+| Changes to core     | EventBuilder, TaskBuilder modifications                     | None - pure node extension                |
+| Learning curve      | High                                                        | Low                                       |
+| Implementation time | 12 weeks                                                    | 2-3 weeks                                 |
 
 ## Dashboard & Observability
 
@@ -1489,7 +1563,10 @@ The dashboard UI is **pre-built and included** in the published npm package — 
 > **Working from source?** If you've cloned this repo and are developing locally, run `npm run build:dashboard` once to build the UI assets into `dist/ui/`.
 
 ```typescript
-import { createDashboardMiddleware, DurableOperator } from '@bluelibs/runner/node';
+import {
+  createDashboardMiddleware,
+  DurableOperator,
+} from "@bluelibs/runner/node";
 
 // Create operator
 const operator = new DurableOperator(store);
@@ -1497,10 +1574,10 @@ const operator = new DurableOperator(store);
 // Expose dashboard on /durable-dashboard
 const d = runtime.getResourceValue(durable);
 app.use(
-  '/durable-dashboard',
+  "/durable-dashboard",
   createDashboardMiddleware(d.service, operator, {
     // Require explicit auth for operator actions
-    operatorAuth: (req) => req.headers['x-ops-token'] === process.env.OPS_TOKEN,
+    operatorAuth: (req) => req.headers["x-ops-token"] === process.env.OPS_TOKEN,
   }),
 );
 ```
@@ -1531,11 +1608,14 @@ The dashboard middleware uses `DurableOperator` to power its `/api/*` endpoints.
 
 ### End-to-End: run the dashboard locally (Express)
 
-1) Mount the dashboard middleware (you can mount under any prefix):
+1. Mount the dashboard middleware (you can mount under any prefix):
 
 ```ts
 import express from "express";
-import { DurableOperator, createDashboardMiddleware } from "@bluelibs/runner/node";
+import {
+  DurableOperator,
+  createDashboardMiddleware,
+} from "@bluelibs/runner/node";
 
 const app = express();
 app.use(
@@ -1550,7 +1630,7 @@ app.listen(3000);
 > [!NOTE]
 > Operator actions are denied by default unless you provide `operatorAuth`. You can opt out with `dangerouslyAllowUnauthenticatedOperator: true` (not recommended).
 
-2) Start a few executions (so you have something to look at), then open:
+2. Start a few executions (so you have something to look at), then open:
 
 - `http://localhost:3000/durable-dashboard`
 
@@ -1611,14 +1691,16 @@ const mirrorAudit = r
 
 There are two different "idempotency" problems:
 
-1) **Workflow-level deduplication (start only once)**
+1. **Workflow-level deduplication (start only once)**
+
 - `startExecution(task, input, { idempotencyKey })` supports a store-backed **"start-or-get"** mode.
 - It returns the same `executionId` for the same `{ taskId, idempotencyKey }` pair, even if multiple callers race.
 - Important: subsequent calls return the existing `executionId` and do **not** overwrite the originally stored `input`.
 - Store support: `MemoryStore` and `RedisStore` implement this. Custom stores must implement `getExecutionIdByIdempotencyKey` / `setExecutionIdByIdempotencyKey`.
 - You should still persist the returned `executionId` in your domain model for observability and to make webhook handling trivial.
 
-2) **Schedule-level deduplication (create schedule only once)**
+2. **Schedule-level deduplication (create schedule only once)**
+
 - Use `ensureSchedule(...)` with a stable `id`. It is designed to be safe to call on every boot and concurrently across processes.
 
 If you need workflow-level dedupe by business key (for example `orderId`), use it as the `idempotencyKey` (for example `order:${orderId}`), and store the returned `executionId` on the record as well.
@@ -1647,10 +1729,7 @@ Administrative alternatives still exist:
 4. **Built-in dashboards** – While a basic dashboard middleware is now included for developer convenience, the core design focuses on a clean API and store schema; sophisticated observability remains the responsibility of the application.
 5. **Cross-region or multi-tenant sharding logic** – Multi-region replication and advanced topology concerns are out of scope for v1.
 
-Also intentionally minimal in v1:
-6. **Preemptive cancellation** – cancellation is cooperative (checkpoints), not an interrupt/kill mechanism for arbitrary in-flight async work.
-7. **Advanced visibility indexes** – `listExecutions` is dashboard-oriented and not a full-blown search/indexing system.
-8. **Cron timezone & misfire policies** – cron is evaluated using the process environment defaults; DST/timezone/misfire handling is not configurable yet.
+Also intentionally minimal in v1: 6. **Preemptive cancellation** – cancellation is cooperative (checkpoints), not an interrupt/kill mechanism for arbitrary in-flight async work. 7. **Advanced visibility indexes** – `listExecutions` is dashboard-oriented and not a full-blown search/indexing system. 8. **Cron timezone & misfire policies** – cron is evaluated using the process environment defaults; DST/timezone/misfire handling is not configurable yet.
 
 These can all be added in future versions if needed, without changing the core `DurableContext` and `DurableService` APIs.
 

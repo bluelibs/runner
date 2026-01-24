@@ -80,9 +80,7 @@ export function Dashboard() {
   // Compute stats
   const stats = {
     total: executions.length,
-    active: executions.filter((e) =>
-      activeStatuses.includes(e.status),
-    ).length,
+    active: executions.filter((e) => activeStatuses.includes(e.status)).length,
     completed: executions.filter((e) => e.status === ExecutionStatus.Completed)
       .length,
     critical: executions.filter(
@@ -282,7 +280,7 @@ export function Dashboard() {
                               ? "text-pink-500 border-pink-500/20 bg-pink-500/10"
                               : e.status === ExecutionStatus.Cancelled
                                 ? "bg-slate-500/10 text-slate-300 border-slate-500/20"
-                              : "bg-blue-500/10 text-blue-500 border-blue-500/20"
+                                : "bg-blue-500/10 text-blue-500 border-blue-500/20"
                       }`}
                     >
                       {e.status}

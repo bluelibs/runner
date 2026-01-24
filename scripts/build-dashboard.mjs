@@ -62,14 +62,18 @@ async function ensureDashboardDependenciesInstalled() {
   if (fs.existsSync(nodeModules)) return;
 
   const npm = getNpmCommand();
-  const hasLockfile = fs.existsSync(path.join(DASHBOARD_DIR, "package-lock.json"));
+  const hasLockfile = fs.existsSync(
+    path.join(DASHBOARD_DIR, "package-lock.json"),
+  );
   const installArgs = hasLockfile ? ["ci"] : ["install"];
 
   const exitCode = await run(npm, installArgs, { cwd: DASHBOARD_DIR });
   if (exitCode !== 0) process.exit(exitCode);
 
   if (!fs.existsSync(nodeModules)) {
-    console.error("Dashboard dependency installation finished but node_modules is still missing.");
+    console.error(
+      "Dashboard dependency installation finished but node_modules is still missing.",
+    );
     process.exit(1);
   }
 }
@@ -110,4 +114,3 @@ main().catch((err) => {
   console.error(err);
   process.exit(1);
 });
-
