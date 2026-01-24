@@ -1,5 +1,4 @@
-import * as http from "http";
-import { startExposureServer, testTask, TOKEN } from "./resource.unit.test.utils";
+import { startExposureServer, testTask, TOKEN, request } from "./resource.unit.test.utils";
 
 const D = process.env.RUNNER_TEST_NET === "1" ? describe : describe.skip;
 
@@ -9,17 +8,15 @@ D("nodeExposure - unit multipart", () => {
     const boundary = "----unitboundary123";
     const body = [`--${boundary}\r\nContent-Disposition: form-data; name="__manifest"\r\nContent-Type: application/json; charset=utf-8\r\n\r\n{bad\r\n--${boundary}--\r\n`].join("");
 
-    const res = await new Promise<{ status: number; text: string }>((resolve, reject) => {
-      const req = http.request(`${baseUrl}/task/${encodeURIComponent(testTask.id)}`, {
-        method: "POST",
-        headers: { "x-runner-token": TOKEN, "content-type": `multipart/form-data; boundary=${boundary}`, "content-length": String(Buffer.byteLength(body)) },
-      }, (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
-        res.on("end", () => resolve({ status: res.statusCode || 0, text: Buffer.concat(chunks as readonly Uint8Array[]).toString("utf8") }));
-      });
-      req.on("error", reject);
-      req.end(body);
+    const res = await request({
+      method: "POST",
+      url: `${baseUrl}/task/${encodeURIComponent(testTask.id)}`,
+      headers: {
+        "x-runner-token": TOKEN,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+        "content-length": String(Buffer.byteLength(body)),
+      },
+      body,
     });
 
     expect(res.status).toBe(400);
@@ -33,17 +30,15 @@ D("nodeExposure - unit multipart", () => {
     const boundary = "----unitboundary456";
     const body = [`--${boundary}\r\nContent-Disposition: form-data; name="file:F1"; filename="x.txt"\r\nContent-Type: text/plain\r\n\r\nabc\r\n--${boundary}--\r\n`].join("");
 
-    const res = await new Promise<{ status: number; text: string }>((resolve, reject) => {
-      const req = http.request(`${baseUrl}/task/${encodeURIComponent(testTask.id)}`, {
-        method: "POST",
-        headers: { "x-runner-token": TOKEN, "content-type": `multipart/form-data; boundary=${boundary}`, "content-length": String(Buffer.byteLength(body)) },
-      }, (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
-        res.on("end", () => resolve({ status: res.statusCode || 0, text: Buffer.concat(chunks as readonly Uint8Array[]).toString("utf8") }));
-      });
-      req.on("error", reject);
-      req.end(body);
+    const res = await request({
+      method: "POST",
+      url: `${baseUrl}/task/${encodeURIComponent(testTask.id)}`,
+      headers: {
+        "x-runner-token": TOKEN,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+        "content-length": String(Buffer.byteLength(body)),
+      },
+      body,
     });
 
     expect(res.status).toBe(400);
@@ -62,17 +57,15 @@ D("nodeExposure - unit multipart", () => {
       `--${boundary}\r\nContent-Disposition: form-data; name="file:OTHER"; filename="x.txt"\r\nContent-Type: text/plain\r\n\r\nabc\r\n--${boundary}--\r\n`
     ].join("");
 
-    const res = await new Promise<{ status: number; text: string }>((resolve, reject) => {
-      const req = http.request(`${baseUrl}/task/${encodeURIComponent(testTask.id)}`, {
-        method: "POST",
-        headers: { "x-runner-token": TOKEN, "content-type": `multipart/form-data; boundary=${boundary}`, "content-length": String(Buffer.byteLength(body)) },
-      }, (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (c) => chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c)));
-        res.on("end", () => resolve({ status: res.statusCode || 0, text: Buffer.concat(chunks as readonly Uint8Array[]).toString("utf8") }));
-      });
-      req.on("error", reject);
-      req.end(body);
+    const res = await request({
+      method: "POST",
+      url: `${baseUrl}/task/${encodeURIComponent(testTask.id)}`,
+      headers: {
+        "x-runner-token": TOKEN,
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+        "content-length": String(Buffer.byteLength(body)),
+      },
+      body,
     });
 
     expect(res.status).toBe(500);

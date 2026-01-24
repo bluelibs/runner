@@ -184,9 +184,9 @@ describe("durable: RedisEventBus", () => {
   });
 
   it("supports string redis url and default redis in constructor", async () => {
-    (ioredisOptional.createIORedisClient as unknown as jest.Mock).mockReturnValue(
-      redisMock,
-    );
+    (
+      ioredisOptional.createIORedisClient as unknown as jest.Mock
+    ).mockReturnValue(redisMock);
 
     const busFromUrl = new RedisEventBus({ redis: "redis://localhost:6379" });
     await busFromUrl.publish("chan", {

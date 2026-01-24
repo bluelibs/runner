@@ -656,9 +656,9 @@ describe("durable: RedisStore", () => {
   });
 
   it("supports string redis url and default redis in constructor", async () => {
-    (ioredisOptional.createIORedisClient as unknown as jest.Mock).mockReturnValue(
-      redisMock,
-    );
+    (
+      ioredisOptional.createIORedisClient as unknown as jest.Mock
+    ).mockReturnValue(redisMock);
 
     const fromUrl = new RedisStore({ redis: "redis://localhost:6379" });
     expect(fromUrl).toBeDefined();

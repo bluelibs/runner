@@ -44,6 +44,7 @@ import {
 } from "../../../exposure/multipart";
 import { getDefaultSerializer } from "../../../../serializer";
 import { PassThrough } from "node:stream";
+import { NodeInputFile } from "../../../files/inputFile.model";
 
 const serializer = getDefaultSerializer();
 
@@ -66,6 +67,9 @@ function createMockRequest(
   };
   return req;
 }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  !!value && typeof value === "object";
 
 describe("parseMultipartInput - busboy default export interop", () => {
   it("uses busboy.default when present", async () => {
@@ -218,5 +222,133 @@ describe("parseMultipartInput - busboy default export interop", () => {
       (finalized.response.body as unknown as { error: { code: string } }).error
         .code,
     ).toBe("PAYLOAD_TOO_LARGE");
+  });
+
+  it("applies size/lastModified/extra from file info when missing in manifest", async () => {
+    const boundary = "----unit-busboy-default-boundary-file-meta-merge";
+    const fileId = "F1";
+
+    const manifest = JSON.stringify({
+      input: {
+        file: { $runnerFile: "File", id: fileId, meta: { name: "from-manifest.txt" } },
+      },
+    });
+
+    const req = createMockRequest(
+      {
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      (busboy) => {
+        busboy.emit("field", "__manifest", manifest, {
+          nameTruncated: false,
+          valueTruncated: false,
+          encoding: "7bit",
+          mimeType: "text/plain",
+        });
+
+        const upstream = new PassThrough();
+        busboy.emit("file", `file:${fileId}`, upstream, {
+          filename: "from-stream.txt",
+          mimeType: "text/plain",
+          encoding: "7bit",
+          size: 123,
+          lastModified: 456,
+          extra: { a: 1 },
+        });
+        upstream.end();
+        busboy.emit("finish");
+      },
+    );
+
+    const parsed = await parseMultipartInput(req, undefined, serializer);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      throw new Error("Expected multipart parsing to succeed");
+    }
+
+    await expect(parsed.finalize).resolves.toEqual({ ok: true });
+
+    const value = parsed.value;
+    if (!isRecord(value)) {
+      throw new Error("Expected parsed.value to be an object");
+    }
+    const file = value.file;
+    if (!(file instanceof NodeInputFile)) {
+      throw new Error("Expected parsed.value.file to be a NodeInputFile");
+    }
+    expect(file.name).toBe("from-manifest.txt");
+    expect(file.size).toBe(123);
+    expect(file.lastModified).toBe(456);
+    expect(file.extra).toEqual({ a: 1 });
+  });
+
+  it("does not override manifest meta with file info", async () => {
+    const boundary = "----unit-busboy-default-boundary-file-meta-no-override";
+    const fileId = "F1";
+
+    const manifest = JSON.stringify({
+      input: {
+        file: {
+          $runnerFile: "File",
+          id: fileId,
+          meta: {
+            name: "manifest-name.txt",
+            type: "text/plain",
+            size: 111,
+            lastModified: 222,
+            extra: { k: "v" },
+          },
+        },
+      },
+    });
+
+    const req = createMockRequest(
+      {
+        "content-type": `multipart/form-data; boundary=${boundary}`,
+      },
+      (busboy) => {
+        busboy.emit("field", "__manifest", manifest, {
+          nameTruncated: false,
+          valueTruncated: false,
+          encoding: "7bit",
+          mimeType: "text/plain",
+        });
+
+        const upstream = new PassThrough();
+        busboy.emit("file", `file:${fileId}`, upstream, {
+          filename: "stream-name.txt",
+          mimeType: "application/octet-stream",
+          encoding: "7bit",
+          size: 999,
+          lastModified: 888,
+          extra: { k: "override" },
+        });
+        upstream.end();
+        busboy.emit("finish");
+      },
+    );
+
+    const parsed = await parseMultipartInput(req, undefined, serializer);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) {
+      throw new Error("Expected multipart parsing to succeed");
+    }
+
+    await expect(parsed.finalize).resolves.toEqual({ ok: true });
+
+    const value = parsed.value;
+    if (!isRecord(value)) {
+      throw new Error("Expected parsed.value to be an object");
+    }
+    const file = value.file;
+    if (!(file instanceof NodeInputFile)) {
+      throw new Error("Expected parsed.value.file to be a NodeInputFile");
+    }
+
+    expect(file.name).toBe("manifest-name.txt");
+    expect(file.size).toBe(111);
+    expect(file.lastModified).toBe(222);
+    expect(file.extra).toEqual({ k: "v" });
+    expect(file.type).toBe("text/plain");
   });
 });

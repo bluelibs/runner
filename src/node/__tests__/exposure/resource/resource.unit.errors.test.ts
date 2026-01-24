@@ -1,5 +1,6 @@
 import * as http from "http";
 import { startExposureServer, request, testTask, testEvent, noInputTask, TOKEN } from "./resource.unit.test.utils";
+import { createReqRes } from "./resource.test.utils";
 
 const D = process.env.RUNNER_TEST_NET === "1" ? describe : describe.skip;
 
@@ -16,20 +17,21 @@ D("nodeExposure - unit errors", () => {
 
   it("treats aborted JSON bodies as internal errors", async () => {
     const { rr, handlers } = await startExposureServer();
-    const { Readable } = require("stream");
-    const req: any = new Readable({ read() {} });
-    req.method = "POST";
-    req.url = `/__runner/task/${encodeURIComponent(testTask.id)}`;
-    req.headers = { "x-runner-token": TOKEN, "content-type": "application/json" };
-    const res: any = {
-      statusCode: 0,
-      headers: new Map(),
-      setHeader(key: string, value: string) { this.headers.set(key, value); },
-      end(payload?: any) { this.payload = payload; },
-    };
-    setImmediate(() => { req.emit("aborted"); req.push(null); });
-    await handlers.handleTask(req, res);
-    expect(res.statusCode).toBe(500);
+    const rrMock = createReqRes({
+      url: `/__runner/task/${encodeURIComponent(testTask.id)}`,
+      headers: {
+        "x-runner-token": TOKEN,
+        "content-type": "application/json",
+      },
+      manualPush: true,
+      body: null,
+    });
+    setImmediate(() => {
+      rrMock.req.emit("aborted");
+      rrMock.req.push(null);
+    });
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.resStatus).toBe(500);
     await rr.dispose();
   });
 

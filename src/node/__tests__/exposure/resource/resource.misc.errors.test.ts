@@ -3,6 +3,7 @@ import { z } from "zod";
 import { defineResource, defineTask, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
+import { createReqRes } from "./resource.test.utils";
 
 describe("nodeExposure - misc error branches", () => {
   const TOKEN = "unit-secret";
@@ -15,25 +16,21 @@ describe("nodeExposure - misc error branches", () => {
     const rr = await run(app);
     const handlers = await rr.getResourceValue(exposure.resource as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
-    const req: any = {
-      method: "POST",
+
+    const rrMock = createReqRes({
       url: `/__runner/task/${encodeURIComponent(noInputTask.id)}`,
       headers,
-      _listeners: new Map<string, Function[]>(),
-      on(event: string, cb: Function) {
-        const arr = this._listeners.get(event) ?? [];
-        arr.push(cb);
-        this._listeners.set(event, arr);
-        if (event === "end") setImmediate(() => { for (const d of this._listeners.get("data") ?? []) d("{}"); for (const e of this._listeners.get("end") ?? []) e(); });
-        return this;
-      },
-    };
-    let statusCode = 0;
-    const resBody: Buffer[] = [];
-    const res: any = { setHeader() {}, getHeader() { return undefined; }, statusCode: 0, end(payload?: any) { statusCode = this.statusCode; if (payload != null) resBody.push(Buffer.isBuffer(payload) ? payload : Buffer.from(String(payload))); } };
-    await handlers.handleTask(req, res);
-    expect(statusCode).toBe(200);
-    const parsed = JSON.parse(Buffer.concat(resBody as readonly Uint8Array[]).toString("utf8"));
+      manualPush: true,
+      body: null,
+    });
+    setImmediate(() => {
+      rrMock.req.push("{}");
+      rrMock.req.push(null);
+    });
+
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.status).toBe(200);
+    const parsed = JSON.parse(rrMock.text);
     expect(parsed.ok).toBe(true);
     await rr.dispose();
   });
@@ -46,11 +43,14 @@ describe("nodeExposure - misc error branches", () => {
     (rr.logger as any).error = () => { throw new Error("logger-fail"); };
     const handlers = await rr.getResourceValue(exposure.resource as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
-    const req: any = { method: "POST", url: `/__runner/task/${encodeURIComponent(badTask.id)}`, headers, on(event: string, cb: Function) { if (event === "end") setImmediate(() => cb()); return this; } };
-    let status = 0;
-    const res: any = { setHeader() {}, statusCode: 0, end() { status = this.statusCode; } };
-    await handlers.handleTask(req, res);
-    expect(status).toBe(500);
+
+    const rrMock = createReqRes({
+      url: `/__runner/task/${encodeURIComponent(badTask.id)}`,
+      headers,
+      body: null,
+    });
+    await handlers.handleTask(rrMock.req, rrMock.res);
+    expect(rrMock.status).toBe(500);
     await rr.dispose();
   });
 

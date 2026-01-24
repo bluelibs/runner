@@ -1,6 +1,6 @@
 import * as http from "http";
-import * as lifecycle from "../../exposure/serverLifecycle";
-import { createExposureServer } from "../../exposure/exposureServer";
+import * as lifecycle from "../../../exposure/serverLifecycle";
+import { createExposureServer } from "../../../exposure/exposureServer";
 
 describe("createExposureServer - idempotent close", () => {
   const logger = {
@@ -68,5 +68,22 @@ describe("createExposureServer - idempotent close", () => {
 
     expect(onCount).toBe(1);
     expect(offCount).toBe(1);
+  });
+
+  it("exposes createRequestListener() and createServer() factories", async () => {
+    const controls = await createExposureServer({
+      httpConfig: { server: http.createServer() },
+      handler,
+      logger,
+      basePath: "/x",
+    });
+
+    const listener = controls.createRequestListener();
+    expect(typeof listener).toBe("function");
+
+    const server = controls.createServer();
+    expect(typeof (server as any).on).toBe("function");
+
+    await controls.close();
   });
 });

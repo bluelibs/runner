@@ -1,61 +1,29 @@
 import * as http from "http";
-import type { IncomingMessage, ServerResponse } from "http";
-import { Socket } from "net";
-import { Readable } from "stream";
 import { defineResource, defineTask, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
 import { globalTags } from "../../../../globals/globalTags";
 import type { TunnelRunner } from "../../../../globals/resources/tunnel/types";
+import { createMockReqRes } from "./resource.http.testkit";
 
 describe("nodeExposure auto-discovery (server-mode http)", () => {
-  type MockReq = Readable & IncomingMessage;
-  type MockRes = ServerResponse;
-
-  function makeReq(body: string, url: string): MockReq {
-    const req = new Readable({ read() {} }) as MockReq;
-    Object.assign(req, {
-      aborted: false,
-      httpVersion: "1.1",
-      httpVersionMajor: 1,
-      httpVersionMinor: 1,
-      complete: true,
-      rawHeaders: [] as string[],
-      trailers: {} as Record<string, string>,
-      rawTrailers: [] as string[],
-      setTimeout(_msecs: number, _callback?: () => void) {
-        return req;
+  function makeJsonReqRes(body: string, url: string) {
+    const rrMock = createMockReqRes({
+      method: "POST",
+      url,
+      headers: {
+        "x-runner-token": "T",
+        "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(body)),
       },
-      socket: new Socket(),
+      manualPush: true,
+      body: null,
     });
-    req.method = "POST";
-    req.url = url;
-    req.headers = {
-      "x-runner-token": "T",
-      "content-type": "application/json",
-      "content-length": String(Buffer.byteLength(body)),
-    };
     setImmediate(() => {
-      req.push(Buffer.from(body));
-      req.push(null);
+      rrMock.req.push(Buffer.from(body));
+      rrMock.req.push(null);
     });
-    return req;
-  }
-
-  function makeRes(): MockRes {
-    const res = {
-      statusCode: 0,
-      setHeader(
-        _name: string,
-        _value: number | string | ReadonlyArray<string>,
-      ) {
-        return res as unknown as ServerResponse;
-      },
-      end() {
-        return res as unknown as ServerResponse;
-      },
-    } as unknown as MockRes;
-    return res;
+    return rrMock;
   }
 
   it("allows only server-tunnel-allowlisted ids and uses store.resources.get() values", async () => {
@@ -101,37 +69,34 @@ describe("nodeExposure auto-discovery (server-mode http)", () => {
     // Allowed task -> 200
     {
       const body = JSON.stringify({ input: { v: 1 } });
-      const req = makeReq(
+      const rrMock = makeJsonReqRes(
         body,
         `/__runner/task/${encodeURIComponent(allowed.id)}`,
       );
-      const res = makeRes();
-      await handlers.handleTask(req, res);
-      expect(res.statusCode).toBe(200);
+      await handlers.handleTask(rrMock.req, rrMock.res);
+      expect(rrMock.resStatus).toBe(200);
     }
 
     // Not allowed task -> 403 (forbidden when not allowlisted)
     {
       const body = JSON.stringify({ input: { v: 1 } });
-      const req = makeReq(
+      const rrMock = makeJsonReqRes(
         body,
         `/__runner/task/${encodeURIComponent(notAllowed.id)}`,
       );
-      const res = makeRes();
-      await handlers.handleTask(req, res);
-      expect(res.statusCode).toBe(403);
+      await handlers.handleTask(rrMock.req, rrMock.res);
+      expect(rrMock.resStatus).toBe(403);
     }
 
     // Allowed event -> 200
     {
       const body = JSON.stringify({ payload: { n: 1 } });
-      const req = makeReq(
+      const rrMock = makeJsonReqRes(
         body,
         `/__runner/event/${encodeURIComponent(allowedEvent.id)}`,
       );
-      const res = makeRes();
-      await handlers.handleEvent(req, res);
-      expect(res.statusCode).toBe(200);
+      await handlers.handleEvent(rrMock.req, rrMock.res);
+      expect(rrMock.resStatus).toBe(200);
     }
 
     await rr.dispose();

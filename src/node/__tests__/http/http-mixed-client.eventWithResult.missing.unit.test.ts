@@ -4,13 +4,11 @@ import { getDefaultSerializer } from "../../../serializer";
 
 describe("createMixedHttpClient (unit) - eventWithResult missing", () => {
   beforeEach(() => {
-    jest
-      .spyOn(exposureFetchModule, "createExposureFetch")
-      .mockReturnValue({
-        task: jest.fn(async () => undefined),
-        event: jest.fn(async () => undefined),
-        // Intentionally omit eventWithResult to cover guard branch in mixed client
-      } as any);
+    jest.spyOn(exposureFetchModule, "createExposureFetch").mockReturnValue({
+      task: jest.fn(async () => undefined),
+      event: jest.fn(async () => undefined),
+      // Intentionally omit eventWithResult to cover guard branch in mixed client
+    } as any);
   });
 
   afterEach(() => {

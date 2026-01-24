@@ -35,6 +35,9 @@ describe("errorHandlers", () => {
     return error as Record<string, unknown>;
   };
 
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    !!value && typeof value === "object";
+
   it("sanitizes unsafe fields for non-500 errors", () => {
     const response = {
       status: 400,
@@ -124,5 +127,42 @@ describe("errorHandlers", () => {
     const error = getErrorRecord(json);
     expect(error?.code).toBe(ErrorCode.Internal);
     expect(error?.message).toBe(ErrorMessage.Internal);
+  });
+
+  it("returns ok:true bodies unchanged", () => {
+    const response = {
+      statusCode: 200,
+      body: { ok: true, result: { value: 1 } },
+    };
+
+    const sanitized = sanitizeErrorResponse(response);
+    expect(sanitized.status).toBe(200);
+    expect(sanitized.body.ok).toBe(true);
+    if (!isRecord(sanitized.body)) {
+      throw new Error("Expected sanitized.body to be a record");
+    }
+    expect(sanitized.body.result).toEqual({ value: 1 });
+  });
+
+  it("defaults to 500 when response is not a record", () => {
+    const sanitized = sanitizeErrorResponse(123);
+    expect(sanitized.status).toBe(500);
+    expect(sanitized.body.ok).toBe(false);
+    const error = getErrorRecord(sanitized.body);
+    expect(error?.code).toBe(ErrorCode.Internal);
+    expect(error?.message).toBe(ErrorMessage.Internal);
+  });
+
+  it("defaults to 500 when status/statusCode is invalid", () => {
+    const response = {
+      status: Number.POSITIVE_INFINITY,
+      body: {
+        ok: false,
+        error: { message: ErrorMessage.Bad, code: ErrorCode.Bad },
+      },
+    };
+
+    const sanitized = sanitizeErrorResponse(response);
+    expect(sanitized.status).toBe(500);
   });
 });

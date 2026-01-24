@@ -1,9 +1,11 @@
+import { Readable } from "stream";
 import { createHttpClient } from "../../http-client";
 import { createWebFile } from "../../platform/createWebFile";
 import { createFile as createNodeFile } from "../../node/platform/createFile";
 import { getDefaultSerializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
 import * as exposureFetchModule from "../../http-fetch-tunnel.resource";
+import { TunnelError } from "../../globals/resources/tunnel/protocol";
 
 type ExposureFetchState = {
   lastCfg?: any;
@@ -104,7 +106,6 @@ describe("http-client (universal)", () => {
   });
 
   it("eventWithResult: rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
-    const { TunnelError } = require("../../globals/resources/tunnel/protocol");
     exposureState.eventWithResult.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
         id: "tests.errors.evret",
@@ -243,7 +244,6 @@ describe("http-client (universal)", () => {
   });
 
   it("event: rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
-    const { TunnelError } = require("../../globals/resources/tunnel/protocol");
     exposureState.event.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
         id: "tests.errors.ev",
@@ -267,7 +267,6 @@ describe("http-client (universal)", () => {
   });
 
   it("JSON fallback rethrows TunnelError when no registry present", async () => {
-    const { TunnelError } = require("../../globals/resources/tunnel/protocol");
     exposureState.task.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "json-raw");
     });
@@ -281,7 +280,6 @@ describe("http-client (universal)", () => {
   });
 
   it("event rethrows TunnelError when no registry present", async () => {
-    const { TunnelError } = require("../../globals/resources/tunnel/protocol");
     exposureState.event.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "ev-raw");
     });
@@ -312,7 +310,6 @@ describe("http-client (universal)", () => {
   });
 
   it("throws helpful error when input is a Node Readable stream", async () => {
-    const { Readable } = require("stream");
     const client = createHttpClient({
       baseUrl,
       serializer: getDefaultSerializer(),
@@ -361,7 +358,6 @@ describe("http-client (universal)", () => {
   });
 
   it("rethrows typed app error via errorRegistry when TunnelError carries id+data", async () => {
-    const { TunnelError } = require("../../globals/resources/tunnel/protocol");
     // Make the mocked exposure fetch throw a TunnelError
     exposureState.task.mockImplementationOnce(async () => {
       throw new TunnelError("INTERNAL_ERROR", "boom", undefined, {
