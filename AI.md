@@ -2,6 +2,8 @@
 
 > Token-friendly guide spotlighting the fluent builder API (`r.*`). Classic `defineX` / `resource({...})` remain supported for backwards compatibility.
 
+For the landing overview, see [README.md](./README.md). For the complete guide, see [GUIDE.md](./GUIDE.md).
+
 ## Durable Workflows (Node-only)
 
 Durable workflows are available from `@bluelibs/runner/node` (implemented under `src/node/durable/`).

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 /**
- * Compose README.md from individual chapter files
+ * Compose documentation outputs from guide-units.
  * Usage: node compose-readme.mjs
  *
- * This script reads guide-units/CORE.md which lists all chapters
- * in order, then concatenates them to create the final README.md
+ * Outputs:
+ * - README.md: landing page (short)
+ * - GUIDE.md: full guide (composed from chapters)
  */
 
 import fs from "fs";
@@ -15,16 +16,33 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const CORE_PATH = path.join(__dirname, "..", "guide-units", "CORE.md");
+const INDEX_GUIDE_PATH = path.join(
+  __dirname,
+  "..",
+  "guide-units",
+  "INDEX_GUIDE.md",
+);
+const INDEX_README_PATH = path.join(
+  __dirname,
+  "..",
+  "guide-units",
+  "INDEX_README.md",
+);
+
 const README_PATH = path.join(__dirname, "..", "README.md");
+const GUIDE_PATH = path.join(__dirname, "..", "GUIDE.md");
 const CHAPTERS_DIR = path.join(__dirname, "..", "guide-units");
 
- /**
-  * Parse CORE.md to extract chapter references
-  * Expected format: lines like "!include: 00-header.md"
-  */
-function parseCore() {
-  const content = fs.readFileSync(CORE_PATH, "utf-8");
+/**
+ * Parse a core file to extract chapter references
+ * Expected format: lines like "!include: 00-header.md"
+ */
+function parseCore(corePath) {
+  if (!fs.existsSync(corePath)) {
+    throw new Error(`Missing core file: ${corePath}`);
+  }
+
+  const content = fs.readFileSync(corePath, "utf-8");
   const lines = content.split("\n");
   const chapters = [];
 
@@ -44,48 +62,58 @@ function parseCore() {
 function loadChapter(filename) {
   const filepath = path.join(CHAPTERS_DIR, filename);
   if (!fs.existsSync(filepath)) {
-    console.warn(`⚠️  Warning: Chapter file not found: ${filename}`);
-    return "";
+    throw new Error(`Missing chapter file: ${filename}`);
   }
   return fs.readFileSync(filepath, "utf-8");
 }
 
 /**
- * Compose the final README
+ * Compose an output file from a core include list.
  */
-function compose() {
-  try {
-    console.log("📖 Parsing CORE.md...");
-    const chapters = parseCore();
+function composeOutput({ corePath, outputPath, label }) {
+  console.log(`[compose] Parsing ${path.basename(corePath)} (${label})...`);
+  const chapters = parseCore(corePath);
 
-    if (chapters.length === 0) {
-      console.error("❌ No chapters found in CORE.md");
-      process.exit(1);
-    }
-
-    console.log(`📚 Found ${chapters.length} chapters`);
-
-    let readme = "";
-    for (const chapter of chapters) {
-      console.log(`   📄 Loading ${chapter}...`);
-      const content = loadChapter(chapter);
-      readme += content;
-
-      // Add newline between chapters if the chapter doesn't end with one
-      if (!readme.endsWith("\n")) {
-        readme += "\n";
-      }
-    }
-
-    // Write the final README
-    fs.writeFileSync(README_PATH, readme, "utf-8");
-
-    const lineCount = readme.split("\n").length;
-    console.log(`\n✅ Successfully composed README.md (${lineCount} lines)`);
-  } catch (error) {
-    console.error("❌ Error composing README:", error.message);
-    process.exit(1);
+  if (chapters.length === 0) {
+    throw new Error(`No chapters found in ${corePath}`);
   }
+
+  console.log(`[compose] Found ${chapters.length} chapters for ${label}`);
+
+  let output = "";
+  for (const chapter of chapters) {
+    console.log(`[compose] Loading ${chapter}...`);
+    const content = loadChapter(chapter);
+    output += content;
+
+    if (!output.endsWith("\n")) {
+      output += "\n";
+    }
+  }
+
+  fs.writeFileSync(outputPath, output, "utf-8");
+
+  const lineCount = output.split("\n").length;
+  console.log(`[compose] Wrote ${path.basename(outputPath)} (${lineCount} lines)`);
 }
 
-compose();
+function composeAll() {
+  composeOutput({
+    corePath: INDEX_README_PATH,
+    outputPath: README_PATH,
+    label: "landing README",
+  });
+
+  composeOutput({
+    corePath: INDEX_GUIDE_PATH,
+    outputPath: GUIDE_PATH,
+    label: "full guide",
+  });
+}
+
+try {
+  composeAll();
+} catch (error) {
+  console.error(`[compose] Failed: ${error.message}`);
+  process.exit(1);
+}

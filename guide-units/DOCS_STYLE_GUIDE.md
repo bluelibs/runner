@@ -760,15 +760,17 @@ Use blockquotes for important notes and platform warnings:
 
 ### README Composition System
 
-The main `README.md` is not edited directly. It is composed from modular chapters located in `guide-units/`.
+The main `README.md` and `GUIDE.md` are not edited directly. They are composed from modular chapters located in `guide-units/`.
 
-- **Manifest**: `guide-units/CORE.md` defines the order and files to include.
+- **Manifests**:
+  - `guide-units/INDEX_README.md` composes the short landing `README.md`
+  - `guide-units/INDEX_GUIDE.md` composes the full `GUIDE.md`
 - **Syntax**: Use `!include: filename.md` on a new line to include a chapter.
-- **Generation**: Run `npm run guide:compose` to rebuild the `README.md`.
+- **Generation**: Run `npm run guide:compose` to rebuild `README.md` and `GUIDE.md`.
 - **Guidelines**:
   - Each chapter should be self-contained.
   - Use relative markdown anchors for cross-chapter links.
-  - Avoid editing `README.md` manually; changes will be overwritten.
+  - Avoid editing `README.md` and `GUIDE.md` manually; changes will be overwritten.
 
 ### Chapter Files (guide-units/)
 
@@ -788,7 +790,7 @@ The main `README.md` is not edited directly. It is composed from modular chapter
 - **Token limit**: Keep under 5000 tokens
 - **No personality**: Omit runtime quotes, keep concise
 - **Essential only**: Core concepts, minimal examples
-- **Sync with README**: Update when README changes significantly
+- **Sync with docs**: Update when `README.md` or `GUIDE.md` changes significantly
 
 ---
 
@@ -804,8 +806,8 @@ Before committing documentation changes:
 - [ ] Headings follow level conventions (Level 2 for major sections)
 - [ ] **Community & Policies** used instead of "Community and policies"
 - [ ] **No emojis used in documentation**
-- [ ] Run `npm run guide:compose` to regenerate README.md
-- [ ] Verify composed README looks correct
+- [ ] Run `npm run guide:compose` to regenerate `README.md` and `GUIDE.md`
+- [ ] Verify composed outputs look correct
 
 ---
 
@@ -815,17 +817,17 @@ Before committing documentation changes:
 # 1. Edit the relevant chapter
 nano guide-units/02-core-concepts.md
 
-# 2. Regenerate README
+# 2. Regenerate docs
 npm run guide:compose
 
 # 3. Verify output
-git diff README.md
+git diff README.md GUIDE.md
 
 # 4. If AI.md needs updates, edit it directly
 nano AI.md
 
 # 5. Commit
-git add guide-units/ README.md AI.md
+git add guide-units/ README.md GUIDE.md AI.md
 git commit -m "docs: your change description"
 ```
 

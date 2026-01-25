@@ -29,13 +29,12 @@
 - Always run `npm run typecheck` and `npm run lint to ensure type safety and linting.
 - Never revert changes from other files that you did not modify.
 - Apply fail-fast principles. If something is not as expected, throw an error immediately.
+- This is a framework, it's documentation is compsoed dynamically, read guide-units/DOCS_STYLE_GUIDE.md for more info, useful when we make changes or new features.
 </specifics>
 
 <new_feature>
-
-- When building new features/enhancements/changes
-- Must be implemented with care without affecting the system and not over-polute files.
-- Must retain 100% test coverage.
+- When building new features/enhancements/changes, must be implemented with care without affecting the system and not over-polute files.
+- Code retain 100% test coverage.
 - Ensure AI.md (minimal version of README)
-- Read guide-units/CORE.md to understand how we compose the main documentation.
+- Read guide-units/DOCS_STYLE_GUIDE.md to understand how we compose the main documentation.
   </new_feature>
