@@ -1,0 +1,22 @@
+{
+  "name": "@runner-examples/tunnel-app",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Runner tunnel app example (package)",
+  "type": "commonjs",
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "npm run build && node dist/index.js",
+    "check": "npm run start",
+    "test": "npm run build && node --test dist/tunnel-app-example.test.js",
+    "test:net": "RUNNER_TEST_NET=1 npm run test"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.6.2"
+  },
+  "dependencies": {
+    "@bluelibs/runner": "file:../../.."
+  }
+}
