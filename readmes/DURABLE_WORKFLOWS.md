@@ -1540,6 +1540,21 @@ await runtime.dispose();
 Tip: Use `stepId` for stability in tests without changing behavior, and use `timeoutMs`
 when you need an explicit timeout outcome.
 
+### Running tests against real backends (Redis + RabbitMQ)
+
+Runner also ships an integration suite that exercises the durable service with real backends
+(Redis for store + pub/sub and RabbitMQ for queue). This suite is part of the normal Jest
+test discovery, but it is **skipped by default** to keep local runs hermetic.
+
+To enable it, set `DURABLE_INTEGRATION=1` and provide connection URLs (defaults point to localhost):
+
+```bash
+DURABLE_INTEGRATION=1 \
+DURABLE_TEST_REDIS_URL=redis://127.0.0.1:6379 \
+DURABLE_TEST_RABBIT_URL=amqp://127.0.0.1:5672 \
+npm run coverage:ai
+```
+
 ---
 
 ## Comparison with Previous Design

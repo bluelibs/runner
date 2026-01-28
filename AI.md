@@ -11,6 +11,9 @@ See `readmes/DURABLE_WORKFLOWS.md` (full) or `readmes/DURABLE_WORKFLOWS_AI.md` (
 They provide replay-safe primitives like `ctx.step(...)`, `ctx.sleep(...)`, `ctx.emit(...)`, and `ctx.waitForSignal(...)`.
 Use them when you need persistence and recovery across restarts/crashes.
 
+Note: the durable "real backends" integration suite (Redis + RabbitMQ) is env-gated and will
+skip unless `DURABLE_INTEGRATION=1` is set (see `readmes/DURABLE_WORKFLOWS.md`).
+
 ## Serializer Safety
 
 When deserializing untrusted payloads, configure the serializer to restrict
