@@ -112,6 +112,89 @@ describe("Concurrency Middleware", () => {
     expect(maxActiveTasks).toBe(1);
   });
 
+  it("should share semaphore across tasks when explicit 'key' is provided", async () => {
+    let activeTasks = 0;
+    let maxActiveTasks = 0;
+    // Two distinct middleware instances, but with same key -> should share semaphore
+    const middleware1 = concurrencyTaskMiddleware.with({
+      limit: 1,
+      key: "shared-lock",
+    });
+    const middleware2 = concurrencyTaskMiddleware.with({
+      limit: 1,
+      key: "shared-lock",
+    });
+
+    const runTask = async () => {
+      activeTasks++;
+      maxActiveTasks = Math.max(maxActiveTasks, activeTasks);
+      await sleep(10);
+      activeTasks--;
+    };
+
+    const taskA = defineTask({
+      id: "concurrency.keyedA",
+      middleware: [middleware1],
+      run: runTask,
+    });
+
+    const taskB = defineTask({
+      id: "concurrency.keyedB",
+      middleware: [middleware2],
+      run: runTask,
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [taskA, taskB],
+      dependencies: { taskA, taskB },
+      async init(_, { taskA, taskB }) {
+        await Promise.all([taskA(), taskB(), taskA(), taskB()]);
+      },
+    });
+
+    await run(app);
+
+    expect(maxActiveTasks).toBe(1);
+  });
+
+  it("should throw when same key is reused with different limits", async () => {
+    const middleware1 = concurrencyTaskMiddleware.with({
+      limit: 1,
+      key: "shared-lock-mismatch",
+    });
+    const middleware2 = concurrencyTaskMiddleware.with({
+      limit: 2,
+      key: "shared-lock-mismatch",
+    });
+
+    const taskA = defineTask({
+      id: "concurrency.keyedMismatchA",
+      middleware: [middleware1],
+      run: async () => {},
+    });
+
+    const taskB = defineTask({
+      id: "concurrency.keyedMismatchB",
+      middleware: [middleware2],
+      run: async () => {},
+    });
+
+    const app = defineResource({
+      id: "app",
+      register: [taskA, taskB],
+      dependencies: { taskA, taskB },
+      async init(_, { taskA, taskB }) {
+        await taskA();
+        await taskB();
+      },
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      'Concurrency middleware key "shared-lock-mismatch" is already registered with limit 1, but got 2',
+    );
+  });
+
   it("should proceed normally if no limit or semaphore is provided", async () => {
     let activeTasks = 0;
     let maxActiveTasks = 0;

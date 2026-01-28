@@ -60,6 +60,25 @@ describe("durable: RedisEventBus", () => {
     expect(received).toEqual({ ok: true, timestampIsDate: true });
   });
 
+  it("logs handler errors instead of throwing", async () => {
+    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const serializer = new Serializer();
+
+    try {
+      await bus.subscribe("chan", async () => {
+        throw new Error("boom");
+      });
+
+      const event = { type: "t", payload: {}, timestamp: new Date() };
+      onMessage?.("durable:bus:chan", serializer.stringify(event));
+
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(spy).toHaveBeenCalledWith(expect.any(Error));
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
   it("supports tree-encoded Date timestamps (Serializer path)", async () => {
     let received: Date | undefined;
     await bus.subscribe("chan", async (evt) => {

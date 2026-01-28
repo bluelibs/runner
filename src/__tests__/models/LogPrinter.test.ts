@@ -109,4 +109,20 @@ describe("LogPrinter", () => {
       spyErr.mockRestore();
     }
   });
+
+  it("does not throw when console is missing", () => {
+    const savedConsole = globalThis.console;
+
+    try {
+      (globalThis as any).console = undefined;
+      LogPrinter.resetWriters();
+
+      const p = new LogPrinter({ strategy: "pretty", useColors: false });
+      expect(() => p.print({ ...baseLog, level: "info" })).not.toThrow();
+      expect(() => p.print({ ...baseLog, level: "error" })).not.toThrow();
+    } finally {
+      (globalThis as any).console = savedConsole;
+      LogPrinter.resetWriters();
+    }
+  });
 });

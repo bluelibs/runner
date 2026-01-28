@@ -10,20 +10,28 @@ export interface ConcurrencyMiddlewareConfig {
   limit?: number;
 
   /**
+   * Optional key to identify a shared semaphore.
+   * If provided, the semaphore will be shared across all tasks using the same key.
+   */
+  key?: string;
+
+  /**
    * An existing Semaphore instance to use.
    */
   semaphore?: Semaphore;
 }
 
 export interface ConcurrencyState {
-  semaphores: WeakMap<ConcurrencyMiddlewareConfig, Semaphore>;
+  semaphoresByConfig: WeakMap<ConcurrencyMiddlewareConfig, Semaphore>;
+  semaphoresByKey: Map<string, { semaphore: Semaphore; limit: number }>;
 }
 
 export const concurrencyResource = defineResource({
   id: "globals.resources.concurrency",
   tags: [globalTags.system],
   init: async () => ({
-    semaphores: new WeakMap<ConcurrencyMiddlewareConfig, Semaphore>(),
+    semaphoresByConfig: new WeakMap<ConcurrencyMiddlewareConfig, Semaphore>(),
+    semaphoresByKey: new Map<string, { semaphore: Semaphore; limit: number }>(),
   }),
 });
 
@@ -37,11 +45,28 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
     let semaphore = config.semaphore;
 
     if (!semaphore && config.limit !== undefined) {
-      const { semaphores } = state;
-      semaphore = semaphores.get(config);
-      if (!semaphore) {
-        semaphore = new Semaphore(config.limit);
-        semaphores.set(config, semaphore);
+      if (config.key !== undefined) {
+        const existing = state.semaphoresByKey.get(config.key);
+        if (existing) {
+          if (existing.limit !== config.limit) {
+            throw new Error(
+              `Concurrency middleware key "${config.key}" is already registered with limit ${existing.limit}, but got ${config.limit}`,
+            );
+          }
+          semaphore = existing.semaphore;
+        } else {
+          semaphore = new Semaphore(config.limit);
+          state.semaphoresByKey.set(config.key, {
+            semaphore,
+            limit: config.limit,
+          });
+        }
+      } else {
+        semaphore = state.semaphoresByConfig.get(config);
+        if (!semaphore) {
+          semaphore = new Semaphore(config.limit);
+          state.semaphoresByConfig.set(config, semaphore);
+        }
       }
     }
 

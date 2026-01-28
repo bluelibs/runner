@@ -263,14 +263,26 @@ export class LogPrinter {
     gray: "",
   } as const;
 
+  private static readonly DEFAULT_WRITERS = {
+    log: (msg: any) => {
+      if (typeof console !== "undefined" && typeof console.log === "function") {
+        console.log(msg);
+      }
+    },
+    error: (msg: any) => {
+      if (
+        typeof console !== "undefined" &&
+        typeof console.error === "function"
+      ) {
+        console.error(msg);
+      }
+    },
+  };
+
   private static writers: {
     log: (msg: any) => void;
     error?: (msg: any) => void;
-  } = {
-    log: (msg: any) => console.log(msg),
-
-    error: (msg: any) => console.error?.(msg),
-  };
+  } = { ...LogPrinter.DEFAULT_WRITERS };
 
   public static setWriters(
     writers: Partial<{ log: (msg: any) => void; error?: (msg: any) => void }>,
@@ -279,9 +291,6 @@ export class LogPrinter {
   }
 
   public static resetWriters() {
-    LogPrinter.writers = {
-      log: (msg: any) => console.log(msg),
-      error: (msg: any) => console.error?.(msg),
-    };
+    LogPrinter.writers = { ...LogPrinter.DEFAULT_WRITERS };
   }
 }
