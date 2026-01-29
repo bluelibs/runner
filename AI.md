@@ -261,6 +261,24 @@ const myTask = r
 const myKey = journal.createKey<{ startedAt: Date }>("app.middleware.timing");
 ```
 
+**Built-in Middleware Journal Keys**: Several global middlewares expose their runtime state via journal keys:
+
+| Middleware | Key | Type | Description |
+|---|---|---|---|
+| `retry` | `globals.middleware.task.retry.journalKeys.attempt` | `number` | Current retry attempt (0-indexed) |
+| `retry` | `globals.middleware.task.retry.journalKeys.lastError` | `Error \| undefined` | Error from previous attempt |
+| `cache` | `globals.middleware.task.cache.journalKeys.hit` | `boolean` | Whether the cache middleware returned a cached result |
+| `circuitBreaker` | `globals.middleware.task.circuitBreaker.journalKeys.state` | `"CLOSED" \| "OPEN" \| "HALF_OPEN"` | Current circuit state |
+| `circuitBreaker` | `globals.middleware.task.circuitBreaker.journalKeys.failures` | `number` | Current failure count |
+| `rateLimit` | `globals.middleware.task.rateLimit.journalKeys.remaining` | `number` | Remaining requests in window |
+| `rateLimit` | `globals.middleware.task.rateLimit.journalKeys.resetTime` | `number` | Timestamp when window resets |
+| `rateLimit` | `globals.middleware.task.rateLimit.journalKeys.limit` | `number` | Configured limit |
+| `fallback` | `globals.middleware.task.fallback.journalKeys.active` | `boolean` | Whether fallback was activated |
+| `fallback` | `globals.middleware.task.fallback.journalKeys.error` | `Error \| undefined` | Error that triggered fallback |
+| `timeout` | `globals.middleware.task.timeout.journalKeys.abortController` | `AbortController` | Controller for aborting the task |
+
+Note: these keys are available via `globals` (no deep imports required).
+
 ## Tags
 
 Tags let you annotate definitions with metadata that can be queried later.

@@ -52,6 +52,30 @@ const app = r
   .build();
 ```
 
+**Journal Introspection**: On cache hits the task `run()` isn't executed, but you can still detect cache hits from a wrapping middleware:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const cacheJournalKeys = globals.middleware.task.cache.journalKeys;
+
+const cacheLogger = r
+  .middleware.task("app.middleware.cacheLogger")
+  .run(async ({ task, next, journal }) => {
+    const result = await next(task.input);
+    const wasHit = journal.get(cacheJournalKeys.hit);
+    if (wasHit) console.log("Served from cache");
+    return result;
+  })
+  .build();
+
+const myTask = r
+  .task("app.tasks.cached")
+  .middleware([cacheLogger, globals.middleware.task.cache.with({ ttl: 60000 })])
+  .run(async () => "result")
+  .build();
+```
+
 > **runtime:** "Because nobody likes waiting. Correct. You keep asking the same question like a parrot with Wi‑Fi, so I built a memory palace. Now you get instant answers until you change one variable and whisper 'cache invalidation' like a curse."
 
 ---
@@ -114,6 +138,31 @@ const resilientTask = r
 2. **OPEN**: Threshold reached. All requests throw `CircuitBreakerOpenError` immediately.
 3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
 4. **RECOVERY**: If the trial succeeds, it goes back to **CLOSED**. Otherwise, it returns to **OPEN**.
+
+**Journal Introspection**: Access the circuit breaker's state and failure count within your task (when it runs):
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const circuitBreakerJournalKeys =
+  globals.middleware.task.circuitBreaker.journalKeys;
+
+const myTask = r
+  .task("app.tasks.monitored")
+  .middleware([
+    globals.middleware.task.circuitBreaker.with({
+      failureThreshold: 5,
+      resetTimeout: 30000,
+    }),
+  ])
+  .run(async (_input, _deps, context) => {
+    const state = context?.journal.get(circuitBreakerJournalKeys.state);
+    const failures = context?.journal.get(circuitBreakerJournalKeys.failures); // number
+    console.log(`Circuit state: ${state}, failures: ${failures}`);
+    return "result";
+  })
+  .build();
+```
 
 > **runtime:** "Circuit Breaker: because 'hope' is not a resilience strategy. If the database is on fire, I stop sending you there to pour gasoline on it. I'll check back in thirty seconds to see if the smoke has cleared."
 
@@ -178,6 +227,36 @@ const getPrice = r
   .build();
 ```
 
+**Journal Introspection**: The original task that throws won't continue execution, but you can detect fallback activation from a wrapping middleware:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const fallbackJournalKeys = globals.middleware.task.fallback.journalKeys;
+
+const fallbackLogger = r
+  .middleware.task("app.middleware.fallbackLogger")
+  .run(async ({ task, next, journal }) => {
+    const result = await next(task.input);
+    const wasActivated = journal.get(fallbackJournalKeys.active);
+    const err = journal.get(fallbackJournalKeys.error);
+    if (wasActivated) console.log(`Fallback used after: ${err?.message}`);
+    return result;
+  })
+  .build();
+
+const myTask = r
+  .task("app.tasks.withFallback")
+  .middleware([
+    fallbackLogger,
+    globals.middleware.task.fallback.with({ fallback: "default" }),
+  ])
+  .run(async () => {
+    throw new Error("Primary failed");
+  })
+  .build();
+```
+
 > **runtime:** "Fallback: the 'parachute' pattern. If your primary logic decides to take a nap mid-flight, I'll make sure we land on a soft pile of default values instead of a stack trace."
 
 ---
@@ -208,6 +287,26 @@ const sensitiveTask = r
 - **Fixed-window strategy**: Simple, predictable request counting.
 - **Isolation**: Limits are tracked per task definition.
 - **Error handling**: Throws `RateLimitError` when the limit is exceeded.
+
+**Journal Introspection**: When the task runs (request allowed), you can read the rate limit state from the execution journal:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const rateLimitJournalKeys = globals.middleware.task.rateLimit.journalKeys;
+
+const myTask = r
+  .task("app.tasks.rateLimited")
+  .middleware([globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 10 })])
+  .run(async (_input, _deps, context) => {
+    const remaining = context?.journal.get(rateLimitJournalKeys.remaining); // number
+    const resetTime = context?.journal.get(rateLimitJournalKeys.resetTime); // timestamp (ms)
+    const limit = context?.journal.get(rateLimitJournalKeys.limit); // number
+    console.log(`${remaining}/${limit} requests remaining, resets at ${new Date(resetTime)}`);
+    return "result";
+  })
+  .build();
+```
 
 > **runtime:** "Rate limiting: counting beans so you don't have to. You've had five turns this minute; come back when the clock says so."
 
@@ -410,6 +509,25 @@ The retry middleware can be configured with:
 - `retries`: The maximum number of retry attempts (default: 3).
 - `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
+
+**Journal Introspection**: Access the current retry attempt and the last error within your task:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const retryJournalKeys = globals.middleware.task.retry.journalKeys;
+
+const myTask = r
+  .task("app.tasks.retryable")
+  .middleware([globals.middleware.task.retry.with({ retries: 5 })])
+  .run(async (_input, _deps, context) => {
+    const attempt = context?.journal.get(retryJournalKeys.attempt); // 0-indexed attempt number
+    const lastError = context?.journal.get(retryJournalKeys.lastError); // Error from previous attempt, if any
+    if ((attempt ?? 0) > 0) console.log(`Retry attempt ${attempt} after: ${lastError?.message}`);
+    return "result";
+  })
+  .build();
+```
 
 > **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it’ll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I’ll keep the attempts ledger while your API cosplays a coin toss."
 

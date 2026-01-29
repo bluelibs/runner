@@ -1,4 +1,5 @@
 import { defineResource, defineTaskMiddleware } from "../../define";
+import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 
 export interface RateLimitMiddlewareConfig {
@@ -56,6 +57,23 @@ export interface RateLimitState {
   resetTime: number;
 }
 
+/**
+ * Journal keys exposed by the rate limit middleware.
+ * Use these to access shared state from downstream middleware or tasks.
+ */
+export const journalKeys = {
+  /** Number of remaining requests in the current window */
+  remaining: journalHelper.createKey<number>(
+    "globals.middleware.rateLimit.remaining",
+  ),
+  /** Timestamp when the current window resets */
+  resetTime: journalHelper.createKey<number>(
+    "globals.middleware.rateLimit.resetTime",
+  ),
+  /** Maximum requests allowed per window */
+  limit: journalHelper.createKey<number>("globals.middleware.rateLimit.limit"),
+} as const;
+
 export const rateLimitResource = defineResource({
   id: "globals.resources.rateLimit",
   tags: [globalTags.system],
@@ -72,7 +90,11 @@ export const rateLimitResource = defineResource({
 export const rateLimitTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.rateLimit",
   dependencies: { state: rateLimitResource },
-  async run({ task, next }, { state }, config: RateLimitMiddlewareConfig) {
+  async run(
+    { task, next, journal },
+    { state },
+    config: RateLimitMiddlewareConfig,
+  ) {
     assertRateLimitMiddlewareConfig(config);
 
     const { states } = state;
@@ -87,6 +109,14 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware({
       states.set(config, limitState);
     }
 
+    // Set journal values before checking limits
+    const remaining = Math.max(0, config.max - limitState.count);
+    journal.set(journalKeys.remaining, remaining, { override: true });
+    journal.set(journalKeys.resetTime, limitState.resetTime, {
+      override: true,
+    });
+    journal.set(journalKeys.limit, config.max, { override: true });
+
     if (limitState.count >= config.max) {
       throw new RateLimitError(
         `Rate limit exceeded. Try again after ${new Date(
@@ -96,6 +126,10 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware({
     }
 
     limitState.count++;
+    // Update remaining after incrementing count
+    journal.set(journalKeys.remaining, config.max - limitState.count, {
+      override: true,
+    });
     return await next(task.input);
   },
 });

@@ -1,10 +1,17 @@
-import { cacheMiddleware } from "./middleware/cache.middleware";
+import {
+  cacheMiddleware,
+  journalKeys as cacheJournalKeys,
+} from "./middleware/cache.middleware";
 import { concurrencyTaskMiddleware } from "./middleware/concurrency.middleware";
-import { circuitBreakerMiddleware } from "./middleware/circuitBreaker.middleware";
+import {
+  circuitBreakerMiddleware,
+  journalKeys as circuitBreakerJournalKeys,
+} from "./middleware/circuitBreaker.middleware";
 import { requireContextTaskMiddleware } from "./middleware/requireContext.middleware";
 import {
   retryTaskMiddleware,
   retryResourceMiddleware,
+  journalKeys as retryJournalKeys,
 } from "./middleware/retry.middleware";
 import {
   timeoutTaskMiddleware,
@@ -15,8 +22,14 @@ import {
   debounceTaskMiddleware,
   throttleTaskMiddleware,
 } from "./middleware/temporal.middleware";
-import { fallbackTaskMiddleware } from "./middleware/fallback.middleware";
-import { rateLimitTaskMiddleware } from "./middleware/rateLimit.middleware";
+import {
+  fallbackTaskMiddleware,
+  journalKeys as fallbackJournalKeys,
+} from "./middleware/fallback.middleware";
+import {
+  rateLimitTaskMiddleware,
+  journalKeys as rateLimitJournalKeys,
+} from "./middleware/rateLimit.middleware";
 
 /**
  * Global middlewares
@@ -25,18 +38,28 @@ export const globalMiddlewares = {
   requireContext: requireContextTaskMiddleware,
   task: {
     requireContext: requireContextTaskMiddleware,
-    cache: cacheMiddleware,
+    cache: Object.assign(cacheMiddleware, {
+      journalKeys: cacheJournalKeys,
+    }),
     concurrency: concurrencyTaskMiddleware,
     debounce: debounceTaskMiddleware,
     throttle: throttleTaskMiddleware,
-    fallback: fallbackTaskMiddleware,
-    rateLimit: rateLimitTaskMiddleware,
+    fallback: Object.assign(fallbackTaskMiddleware, {
+      journalKeys: fallbackJournalKeys,
+    }),
+    rateLimit: Object.assign(rateLimitTaskMiddleware, {
+      journalKeys: rateLimitJournalKeys,
+    }),
     // common with resources
-    retry: retryTaskMiddleware,
+    retry: Object.assign(retryTaskMiddleware, {
+      journalKeys: retryJournalKeys,
+    }),
     timeout: Object.assign(timeoutTaskMiddleware, {
       journalKeys: timeoutJournalKeys,
     }),
-    circuitBreaker: circuitBreakerMiddleware,
+    circuitBreaker: Object.assign(circuitBreakerMiddleware, {
+      journalKeys: circuitBreakerJournalKeys,
+    }),
   },
   resource: {
     retry: retryResourceMiddleware,

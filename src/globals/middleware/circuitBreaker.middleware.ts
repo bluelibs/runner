@@ -1,4 +1,5 @@
 import { defineTaskMiddleware, defineResource } from "../../define";
+import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
 
 /**
@@ -42,6 +43,21 @@ export interface CircuitBreakerStatus {
   lastFailureTime: number;
 }
 
+/**
+ * Journal keys exposed by the circuit breaker middleware.
+ * Use these to access shared state from downstream middleware or tasks.
+ */
+export const journalKeys = {
+  /** Current state of the circuit breaker (CLOSED, OPEN, or HALF_OPEN) */
+  state: journalHelper.createKey<CircuitBreakerState>(
+    "globals.middleware.circuitBreaker.state",
+  ),
+  /** Current failure count */
+  failures: journalHelper.createKey<number>(
+    "globals.middleware.circuitBreaker.failures",
+  ),
+} as const;
+
 export const circuitBreakerResource = defineResource({
   id: "globals.resources.circuitBreaker",
   tags: [globalTags.system],
@@ -55,7 +71,11 @@ export const circuitBreakerResource = defineResource({
 export const circuitBreakerMiddleware = defineTaskMiddleware({
   id: "globals.middleware.circuitBreaker",
   dependencies: { state: circuitBreakerResource },
-  async run({ task, next }, { state }, config: CircuitBreakerMiddlewareConfig) {
+  async run(
+    { task, next, journal },
+    { state },
+    config: CircuitBreakerMiddlewareConfig,
+  ) {
     const taskId = task!.definition.id;
     const failureThreshold = config.failureThreshold ?? 5;
     const resetTimeout = config.resetTimeout ?? 30000;
@@ -79,11 +99,18 @@ export const circuitBreakerMiddleware = defineTaskMiddleware({
       if (now - status.lastFailureTime >= resetTimeout) {
         status.state = CircuitBreakerState.HALF_OPEN;
       } else {
+        // Set journal values before throwing
+        journal.set(journalKeys.state, status.state, { override: true });
+        journal.set(journalKeys.failures, status.failures, { override: true });
         throw new CircuitBreakerOpenError(
           `Circuit is OPEN for task "${taskId}"`,
         );
       }
     }
+
+    // Set journal values before executing
+    journal.set(journalKeys.state, status.state, { override: true });
+    journal.set(journalKeys.failures, status.failures, { override: true });
 
     try {
       const result = await next(task!.input);

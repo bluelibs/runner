@@ -1,4 +1,5 @@
 import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
+import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { journalKeys as timeoutJournalKeys } from "./timeout.middleware";
 
 /**
@@ -21,6 +22,19 @@ export interface RetryMiddlewareConfig {
   delayStrategy?: (attempt: number, error: Error) => number;
 }
 
+/**
+ * Journal keys exposed by the retry middleware.
+ * Use these to access shared state from downstream middleware or tasks.
+ */
+export const journalKeys = {
+  /** Current retry attempt number (0 = first attempt, 1 = first retry, etc.) */
+  attempt: journalHelper.createKey<number>("globals.middleware.retry.attempt"),
+  /** The last error that caused a retry */
+  lastError: journalHelper.createKey<Error>(
+    "globals.middleware.retry.lastError",
+  ),
+} as const;
+
 export const retryTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.retry.task",
   async run({ task, next, journal }, _deps, config: RetryMiddlewareConfig) {
@@ -30,6 +44,9 @@ export const retryTaskMiddleware = defineTaskMiddleware({
     // Set defaults for required parameters
     const maxRetries = config.retries ?? 3;
     const shouldStop = config.stopRetryIf ?? (() => false);
+
+    // Set initial attempt count
+    journal.set(journalKeys.attempt, attempts, { override: true });
 
     while (true) {
       try {
@@ -59,6 +76,9 @@ export const retryTaskMiddleware = defineTaskMiddleware({
         }
 
         attempts++;
+        // Update journal with current attempt and last error
+        journal.set(journalKeys.attempt, attempts, { override: true });
+        journal.set(journalKeys.lastError, err, { override: true });
       }
     }
   },
