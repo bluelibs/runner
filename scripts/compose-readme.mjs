@@ -5,8 +5,8 @@
  * Usage: node compose-readme.mjs
  *
  * Outputs:
- * - README.md: landing page (short)
- * - GUIDE.md: full guide (composed from chapters)
+ * - README.md: landing page (short) - at repository root
+ * - readmes/FULL_GUIDE.md: full guide (composed from chapters) - inside readmes/
  */
 
 import fs from "fs";
@@ -30,7 +30,7 @@ const INDEX_README_PATH = path.join(
 );
 
 const README_PATH = path.join(__dirname, "..", "README.md");
-const GUIDE_PATH = path.join(__dirname, "..", "GUIDE.md");
+const GUIDE_PATH = path.join(__dirname, "..", "readmes", "FULL_GUIDE.md");
 const CHAPTERS_DIR = path.join(__dirname, "..", "guide-units");
 
 /**
@@ -68,9 +68,31 @@ function loadChapter(filename) {
 }
 
 /**
+ * Adjust relative paths for files inside readmes/ directory.
+ * Converts paths like ./readmes/X.md to ./X.md when the output is inside readmes/
+ */
+function adjustPathsForReadmesDir(content) {
+  // Adjust markdown links: [text](./readmes/FILE.md) -> [text](./FILE.md)
+  content = content.replace(/\]\(\.\/readmes\/([^)]+)\)/g, "](./$1)");
+
+  // Adjust paths to root-level files: [text](./FILE.md) -> [text](../FILE.md)
+  // But only for specific known root files (README.md, LICENSE.md)
+  content = content.replace(/\]\(\.\/README\.md\)/g, "](../README.md)");
+  content = content.replace(/\]\(\.\/LICENSE\.md\)/g, "](../LICENSE.md)");
+
+  // Adjust .github paths: [text](./.github/X) -> [text](../.github/X)
+  content = content.replace(/\]\(\.\/.github\//g, "](../.github/");
+
+  // Adjust examples paths: [text](./examples/X) -> [text](../examples/X)
+  content = content.replace(/\]\(\.\/examples\//g, "](../examples/");
+
+  return content;
+}
+
+/**
  * Compose an output file from a core include list.
  */
-function composeOutput({ corePath, outputPath, label }) {
+function composeOutput({ corePath, outputPath, label, adjustPaths }) {
   console.log(`[compose] Parsing ${path.basename(corePath)} (${label})...`);
   const chapters = parseCore(corePath);
 
@@ -91,10 +113,18 @@ function composeOutput({ corePath, outputPath, label }) {
     }
   }
 
+  // Apply path adjustments if needed (for files inside readmes/)
+  if (adjustPaths) {
+    console.log(`[compose] Adjusting relative paths for ${label}...`);
+    output = adjustPathsForReadmesDir(output);
+  }
+
   fs.writeFileSync(outputPath, output, "utf-8");
 
   const lineCount = output.split("\n").length;
-  console.log(`[compose] Wrote ${path.basename(outputPath)} (${lineCount} lines)`);
+  console.log(
+    `[compose] Wrote ${path.basename(outputPath)} (${lineCount} lines)`,
+  );
 }
 
 function composeAll() {
@@ -102,12 +132,14 @@ function composeAll() {
     corePath: INDEX_README_PATH,
     outputPath: README_PATH,
     label: "landing README",
+    adjustPaths: false,
   });
 
   composeOutput({
     corePath: INDEX_GUIDE_PATH,
     outputPath: GUIDE_PATH,
     label: "full guide",
+    adjustPaths: true,
   });
 }
 

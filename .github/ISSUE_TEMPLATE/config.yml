@@ -4,6 +4,5 @@ contact_links:
     url: https://github.com/bluelibs/runner/discussions
     about: Ask how-to questions, share ideas, or discuss usage.
   - name: Security reports
-    url: https://github.com/bluelibs/runner/blob/main/SECURITY.md
+    url: https://github.com/bluelibs/runner/blob/main/.github/SECURITY.md
     about: Please follow our security policy for reporting vulnerabilities.
-

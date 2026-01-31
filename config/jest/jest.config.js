@@ -2,9 +2,16 @@ const os = require("os");
 const path = require("path");
 
 module.exports = {
+  rootDir: path.join(__dirname, "../.."),
   preset: "ts-jest",
   transform: {
-    "^.+\\.(ts|tsx)$": ["ts-jest", { isolatedModules: true }],
+    "^.+\\.(ts|tsx)$": [
+      "ts-jest",
+      {
+        isolatedModules: true,
+        tsconfig: "<rootDir>/config/ts/tsconfig.jest.json",
+      },
+    ],
   },
   testEnvironment: "node",
   testTimeout: 10000,

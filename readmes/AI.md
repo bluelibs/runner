@@ -2,9 +2,9 @@
 
 > Token-friendly guide spotlighting the fluent builder API (`r.*`). Classic `defineX` / `resource({...})` remain supported for backwards compatibility.
 
-For the landing overview, see [README.md](./README.md). For the complete guide, see [GUIDE.md](./GUIDE.md).
+For the landing overview, see [README.md](../README.md). For the complete guide, see [FULL_GUIDE.md](./FULL_GUIDE.md).
 
-**Durable Workflows (Node-only):** For persistence and crash recovery, see `readmes/DURABLE_WORKFLOWS.md`.
+**Durable Workflows (Node-only):** For persistence and crash recovery, see `DURABLE_WORKFLOWS.md`.
 
 ## Serializer Safety
 
@@ -438,12 +438,12 @@ Run Node exposures and connect to remote Runners with fluent resources.
 
 ```mermaid
 flowchart LR
-  App[App code\n(caller runtime)] --> Task[Task call\n(phantom or real)]
-  Task --> MW[Tunnel middleware\n(patches selected tasks)]
-  MW --> Client[Tunnel client\n(HTTP)]
-  Client --> Expo[nodeExposure\nHTTP server]
+  App[App code<br>(caller runtime)] --> Task[Task call<br>(phantom or real)]
+  Task --> MW[Tunnel middleware<br>(patches selected tasks)]
+  MW --> Client[Tunnel client<br>(HTTP)]
+  Client --> Expo[nodeExposure<br>HTTP server]
   Expo --> Gate{Auth + allow-list}
-  Gate --> Runner[Server runtime\n(DI + middleware + task runner)]
+  Gate --> Runner[Server runtime<br>(DI + middleware + task runner)]
   Runner --> Expo
   Expo --> Client
   Client --> App

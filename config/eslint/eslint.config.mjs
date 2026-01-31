@@ -4,6 +4,11 @@ import jestPlugin from "eslint-plugin-jest";
 import unusedImports from "eslint-plugin-unused-imports";
 import prettierPluginRecommended from "eslint-plugin-prettier/recommended";
 import globals from "globals";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const ESLINT_CONFIG_DIR = path.dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT_DIR = path.resolve(ESLINT_CONFIG_DIR, "../..");
 
 export default tseslint.config(
   // Global ignores
@@ -46,6 +51,9 @@ export default tseslint.config(
   {
     files: ["**/*.ts"],
     languageOptions: {
+      parserOptions: {
+        tsconfigRootDir: REPO_ROOT_DIR,
+      },
       globals: {
         ...globals.node,
         ...globals.jest,

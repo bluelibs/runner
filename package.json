@@ -77,31 +77,31 @@
     "node": ">=18"
   },
   "scripts": {
-    "build": "tsup --config tsup.config.ts --sourcemap",
+    "build": "tsup --config config/tsup/tsup.config.ts --sourcemap",
     "build:dashboard": "node ./scripts/build-dashboard.mjs",
     "build:dashboard:ci": "node ./scripts/build-dashboard.mjs --install",
     "clean": "rm -rf dist",
-    "watch": "tsup --config tsup.config.ts --watch",
-    "test": "node ./scripts/run-jest-watchdog.mjs -- --maxWorkers=50% --verbose=false",
-    "test:serial": "node ./scripts/run-jest-watchdog.mjs -- --verbose --runInBand",
-    "test:dev": "jest --verbose --watch",
-    "coverage": "jest --verbose --coverage",
+    "watch": "tsup --config config/tsup/tsup.config.ts --watch",
+    "test": "node ./scripts/run-jest-watchdog.mjs -- --config config/jest/jest.config.js --maxWorkers=50% --verbose=false",
+    "test:serial": "node ./scripts/run-jest-watchdog.mjs -- --config config/jest/jest.config.js --verbose --runInBand",
+    "test:dev": "jest --config config/jest/jest.config.js --verbose --watch",
+    "coverage": "jest --config config/jest/jest.config.js --verbose --coverage",
     "coverage:ai": "node ./scripts/run-coverage-ai.mjs",
-    "verbose:coverage": "jest --verbose --coverage --verbose=false --silent --noStackTrace --bail=1",
-    "test:clean": "jest --clearCache",
+    "verbose:coverage": "jest --config config/jest/jest.config.js --verbose --coverage --verbose=false --silent --noStackTrace --bail=1",
+    "test:clean": "jest --config config/jest/jest.config.js --clearCache",
     "testonly": "npm test",
-    "test:ci": "node ./scripts/run-jest-watchdog.mjs -- --verbose --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
-    "test:security": "jest --verbose --runInBand --testPathPattern=src/__tests__/security",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "lint": "eslint ./src",
-    "lint:fix": "eslint ./src --fix",
-    "qa": "npm run coverage:ai && npm run lint:fix && npm run typecheck",
+    "test:ci": "node ./scripts/run-jest-watchdog.mjs -- --config config/jest/jest.config.js --verbose --coverage --ci --maxWorkers=2 --reporters=default --reporters=jest-junit",
+    "test:security": "jest --config config/jest/jest.config.js --verbose --runInBand --testPathPattern=src/__tests__/security",
+    "typecheck": "tsc -p config/ts/tsconfig.json --noEmit",
+    "lint": "eslint --config config/eslint/eslint.config.mjs ./src",
+    "lint:fix": "eslint --config config/eslint/eslint.config.mjs ./src --fix",
+    "qa": "npm run coverage:ai && npm run lint:fix && npm run typecheck && npm run build",
     "prepublishOnly": "npm run clean && npm run build && npm run build:dashboard",
     "postbuild": "npm run guide:compose",
-    "typedoc": "typedoc --options typedoc.json",
-    "benchmark": "jest --config jest.bench.config.js --verbose --runInBand",
-    "benchmark:json": "BENCHMARK_OUTPUT=./benchmark-results.json NODE_OPTIONS=--expose-gc npm run benchmark",
-    "benchmark:compare": "node ./scripts/compare-benchmarks.mjs ./baseline.json ./benchmark-results.json ./benchmarks.config.json",
+    "typedoc": "typedoc --options config/typedoc/typedoc.json",
+    "benchmark": "jest --config config/jest/jest.bench.config.js --verbose --runInBand",
+    "benchmark:json": "BENCHMARK_OUTPUT=./benchmarks/benchmark-results.json NODE_OPTIONS=--expose-gc npm run benchmark",
+    "benchmark:compare": "node ./scripts/compare-benchmarks.mjs ./benchmarks/baseline.json ./benchmarks/benchmark-results.json ./benchmarks/benchmarks.config.json",
     "guide:compose": "node ./scripts/compose-readme.mjs"
   },
   "devDependencies": {
@@ -150,7 +150,7 @@
     "index.d.ts",
     "node",
     "README.md",
-    "AI.md",
+    "readmes/AI.md",
     "LICENSE.md"
   ],
   "license": "MIT",
@@ -162,5 +162,21 @@
     "busboy": "^1.6.0",
     "cron-parser": "^5.4.0",
     "ioredis": "^5.7.0"
+  },
+  "prettier": {
+    "trailingComma": "all",
+    "tabWidth": 2,
+    "singleQuote": false,
+    "endOfLine": "auto",
+    "overrides": [
+      {
+        "files": [
+          "*.ts"
+        ],
+        "options": {
+          "parser": "babel-ts"
+        }
+      }
+    ]
   }
 }

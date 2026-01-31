@@ -67,40 +67,39 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](./AI.md)                                                                                         | Docs    | Compact summary (<5000 tokens)      |
-| [Full Guide](./GUIDE.md)                                                                                            | Docs    | Complete documentation (composed)   |
+| [AI-Friendly Docs](./readmes/AI.md)                                                                                 | Docs    | Compact summary (<5000 tokens)      |
+| [Full Guide](./readmes/FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
 
 ### Community & Policies
 
-- [Code of Conduct](./CODE_OF_CONDUCT.md)
-- [Contributing](./CONTRIBUTING.md)
-- [Security](./SECURITY.md)
+- [Code of Conduct](./.github/CODE_OF_CONDUCT.md)
+- [Contributing](./.github/CONTRIBUTING.md)
+- [Security](./.github/SECURITY.md)
 
 ## Choose Your Path
 
 - **New to Runner**: Start with [Your First 5 Minutes](#your-first-5-minutes)
-- **Prefer an end-to-end example**: Jump to [Quick Start](#quick-start) or the [Real-World Example](./GUIDE.md#real-world-example-the-complete-package)
+- **Prefer an end-to-end example**: Jump to [Quick Start](#quick-start) or the [Real-World Example](./readmes/FULL_GUIDE.md#real-world-example-the-complete-package)
 - **Need Node-only capabilities**: See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
 - **Need remote execution**: See [HTTP Tunnels](./readmes/TUNNELS.md) (expose from Node.js, call from any `fetch` runtime)
 - **Care about portability**: Read [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md)
-- **Want the complete guide**: Read [GUIDE.md](./GUIDE.md)
-- **Want the short version**: Read [AI.md](./AI.md)
+- **Want the complete guide**: Read [FULL_GUIDE.md](./readmes/FULL_GUIDE.md)
+- **Want the short version**: Read [AI.md](./readmes/AI.md)
 
 ## Platform Support (Quick Summary)
 
-| Capability                                    | Node.js | Browser | Edge | Notes |
-| --------------------------------------------- | ------ | ------- | ---- | ----- |
-| Core runtime (tasks/resources/events/hooks)   | Full   | Full    | Full | Platform adapters hide runtime differences |
-| Async Context (`r.asyncContext`)              | Full   | None    | None | Requires Node.js `AsyncLocalStorage` |
-| Durable workflows (`@bluelibs/runner/node`)   | Full   | None    | None | Node-only module |
-| Tunnels client (`createExposureFetch`)        | Full   | Full    | Full | Requires `fetch` |
-| Tunnels server (`@bluelibs/runner/node`)      | Full   | None    | None | Exposes tasks/events over HTTP |
+| Capability                                  | Node.js | Browser | Edge | Notes                                      |
+| ------------------------------------------- | ------- | ------- | ---- | ------------------------------------------ |
+| Core runtime (tasks/resources/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
+| Async Context (`r.asyncContext`)            | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
+| Durable workflows (`@bluelibs/runner/node`) | Full    | None    | None | Node-only module                           |
+| Tunnels client (`createExposureFetch`)      | Full    | Full    | Full | Requires `fetch`                           |
+| Tunnels server (`@bluelibs/runner/node`)    | Full    | None    | None | Exposes tasks/events over HTTP             |
 
 ---
-
 ## Your First 5 Minutes
 
 **New to Runner?** Here's the absolute minimum you need to know:
@@ -147,15 +146,15 @@ npx tsx index.ts
 
 ## Where To Go Next
 
-- **Complete guide**: Read [GUIDE.md](./GUIDE.md) (the full reference, composed from `guide-units/`)
+- **Complete guide**: Read [FULL_GUIDE.md](./readmes/FULL_GUIDE.md) (the full reference, composed from `guide-units/`)
 - **Popular guide sections**:
-  - [Tasks](./GUIDE.md#tasks)
-  - [Resources](./GUIDE.md#resources)
-  - [Middleware](./GUIDE.md#middleware)
-  - [Testing](./GUIDE.md#testing)
-  - [Troubleshooting](./GUIDE.md#troubleshooting)
+  - [Tasks](./readmes/FULL_GUIDE.md#tasks)
+  - [Resources](./readmes/FULL_GUIDE.md#resources)
+  - [Middleware](./readmes/FULL_GUIDE.md#middleware)
+  - [Testing](./readmes/FULL_GUIDE.md#testing)
+  - [Troubleshooting](./readmes/FULL_GUIDE.md#troubleshooting)
 - **API reference**: Browse the [TypeDoc documentation](https://bluelibs.github.io/runner/)
-- **Token-friendly overview**: Read [AI.md](./AI.md)
+- **Token-friendly overview**: Read [AI.md](./readmes/AI.md)
 - **Node-only features**:
   - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
   - [HTTP Tunnels](./readmes/TUNNELS.md)

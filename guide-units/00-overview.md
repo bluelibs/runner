@@ -1,5 +1,3 @@
-← [Back to README](./README.md)
-
 ## Why Runner?
 
 <table>
@@ -47,9 +45,7 @@ const createUser = r
   })
   .build();
 
-const app = r.resource("app")
-  .register([db, logger, createUser])
-  .build();
+const app = r.resource("app").register([db, logger, createUser]).build();
 
 const runtime = await run(app);
 ```

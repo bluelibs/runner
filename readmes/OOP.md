@@ -6,7 +6,7 @@
 
 _Or: How to Keep Your Classes and Have Runner Too_
 
-Runner is excellent for wiring systems together (see `AI.md`), but that doesn't mean you shouldn't write classes. It means you don't need framework-specific classes. Keep your domain modeled with plain, testable classes, and let Runner handle lifecycle, wiring, configuration, and cross-cutting concerns.
+Runner is excellent for wiring systems together (see `readmes/AI.md`), but that doesn't mean you shouldn't write classes. It means you don't need framework-specific classes. Keep your domain modeled with plain, testable classes, and let Runner handle lifecycle, wiring, configuration, and cross-cutting concerns.
 
 ## Table of Contents
 

@@ -292,7 +292,7 @@ Response: `{"ok": true}`
 
 ## References
 
-- [AI.md](../AI.md): High-level fluent API.
+- [AI.md](./AI.md): High-level fluent API.
 - [TUNNELS.md](TUNNELS.md): Usage, examples, troubleshooting.
 - Code: `src/node/exposure/` (server), `src/node/http-smart-client.model.ts` (clients).
 - Standards: HTTP/1.1 (RFC 7230), Multipart (RFC 7578), JSON.

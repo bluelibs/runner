@@ -35,7 +35,9 @@ function computeCounts(map) {
 
 function computeBranchCounts(branchHits) {
   const entries =
-    branchHits && typeof branchHits === "object" ? Object.values(branchHits) : [];
+    branchHits && typeof branchHits === "object"
+      ? Object.values(branchHits)
+      : [];
   let total = 0;
   let hit = 0;
   for (const arr of entries) {
@@ -92,6 +94,8 @@ async function main() {
   const reporterSummaryPath = path.join(coverageDir, "ai-jest-summary.json");
 
   const jestArgs = [
+    "--config",
+    "config/jest/jest.config.js",
     "--coverage",
     "--reporters=./scripts/jest-ai-reporter.js",
     "--coverageReporters=json-summary",
@@ -114,7 +118,9 @@ async function main() {
     },
   );
 
-  const coverageCode = await run("node", ["./scripts/print-fresh-coverage.mjs"]);
+  const coverageCode = await run("node", [
+    "./scripts/print-fresh-coverage.mjs",
+  ]);
 
   const reporterSummary = readJson(reporterSummaryPath);
   const failedTests =

@@ -67,42 +67,39 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](./AI.md)                                                                                         | Docs    | Compact summary (<5000 tokens)      |
-| [Full Guide](./GUIDE.md)                                                                                            | Docs    | Complete documentation (composed)   |
+| [AI-Friendly Docs](./AI.md)                                                                                 | Docs    | Compact summary (<5000 tokens)      |
+| [Full Guide](./FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
 
 ### Community & Policies
 
-- [Code of Conduct](./CODE_OF_CONDUCT.md)
-- [Contributing](./CONTRIBUTING.md)
-- [Security](./SECURITY.md)
+- [Code of Conduct](../.github/CODE_OF_CONDUCT.md)
+- [Contributing](../.github/CONTRIBUTING.md)
+- [Security](../.github/SECURITY.md)
 
 ## Choose Your Path
 
 - **New to Runner**: Start with [Your First 5 Minutes](#your-first-5-minutes)
-- **Prefer an end-to-end example**: Jump to [Quick Start](#quick-start) or the [Real-World Example](./GUIDE.md#real-world-example-the-complete-package)
-- **Need Node-only capabilities**: See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
-- **Need remote execution**: See [HTTP Tunnels](./readmes/TUNNELS.md) (expose from Node.js, call from any `fetch` runtime)
-- **Care about portability**: Read [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md)
-- **Want the complete guide**: Read [GUIDE.md](./GUIDE.md)
+- **Prefer an end-to-end example**: Jump to [Quick Start](#quick-start) or the [Real-World Example](./FULL_GUIDE.md#real-world-example-the-complete-package)
+- **Need Node-only capabilities**: See [Durable Workflows](./DURABLE_WORKFLOWS.md)
+- **Need remote execution**: See [HTTP Tunnels](./TUNNELS.md) (expose from Node.js, call from any `fetch` runtime)
+- **Care about portability**: Read [Multi-Platform Architecture](./MULTI_PLATFORM.md)
+- **Want the complete guide**: Read [FULL_GUIDE.md](./FULL_GUIDE.md)
 - **Want the short version**: Read [AI.md](./AI.md)
 
 ## Platform Support (Quick Summary)
 
-| Capability                                    | Node.js | Browser | Edge | Notes |
-| --------------------------------------------- | ------ | ------- | ---- | ----- |
-| Core runtime (tasks/resources/events/hooks)   | Full   | Full    | Full | Platform adapters hide runtime differences |
-| Async Context (`r.asyncContext`)              | Full   | None    | None | Requires Node.js `AsyncLocalStorage` |
-| Durable workflows (`@bluelibs/runner/node`)   | Full   | None    | None | Node-only module |
-| Tunnels client (`createExposureFetch`)        | Full   | Full    | Full | Requires `fetch` |
-| Tunnels server (`@bluelibs/runner/node`)      | Full   | None    | None | Exposes tasks/events over HTTP |
+| Capability                                  | Node.js | Browser | Edge | Notes                                      |
+| ------------------------------------------- | ------- | ------- | ---- | ------------------------------------------ |
+| Core runtime (tasks/resources/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
+| Async Context (`r.asyncContext`)            | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
+| Durable workflows (`@bluelibs/runner/node`) | Full    | None    | None | Node-only module                           |
+| Tunnels client (`createExposureFetch`)      | Full    | Full    | Full | Requires `fetch`                           |
+| Tunnels server (`@bluelibs/runner/node`)    | Full    | None    | None | Exposes tasks/events over HTTP             |
 
 ---
-
-← [Back to README](./README.md)
-
 ## Why Runner?
 
 <table>
@@ -150,9 +147,7 @@ const createUser = r
   })
   .build();
 
-const app = r.resource("app")
-  .register([db, logger, createUser])
-  .build();
+const app = r.resource("app").register([db, logger, createUser]).build();
 
 const runtime = await run(app);
 ```
@@ -220,9 +215,9 @@ const runtime = await run(app);
 
 **Deployment & Integrations** (see dedicated guides in `./readmes/`)
 
-- [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows (Node-only)
-- [HTTP Tunnels](./readmes/TUNNELS.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
-- [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md) - How Runner supports Node, browsers, and edge runtimes
+- [Durable Workflows](./DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows (Node-only)
+- [HTTP Tunnels](./TUNNELS.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
+- [Multi-Platform Architecture](./MULTI_PLATFORM.md) - How Runner supports Node, browsers, and edge runtimes
 
 **Architecture Patterns**
 
@@ -838,8 +833,8 @@ Runner auto-detects the platform (Node.js, browser, edge) and adapts behavior at
 **Node-specific features:**
 
 - [Async Context](#async-context) - Request-scoped state via `AsyncLocalStorage`
-- [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows
-- [HTTP Tunnels](./readmes/TUNNELS.md) - Remote task execution
+- [Durable Workflows](./DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows
+- [HTTP Tunnels](./TUNNELS.md) - Remote task execution
 
 ---
 ## Learning Guide
@@ -2230,9 +2225,9 @@ try {
 The core concepts above cover most use cases. For specialized features:
 
 - **Async Context**: Per-request/thread-local state via `r.asyncContext()`. See [Async Context](#async-context) for Node.js `AsyncLocalStorage` patterns.
-- **Durable Workflows** (Node-only): Replay-safe primitives like `ctx.step()`, `ctx.sleep()`, and `ctx.waitForSignal()`. See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md).
-- **HTTP Tunnels**: Expose tasks over HTTP or call remote Runners. See [Tunnels](./readmes/TUNNELS.md).
-- **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](./readmes/SERIALIZER_PROTOCOL.md).
+- **Durable Workflows** (Node-only): Replay-safe primitives like `ctx.step()`, `ctx.sleep()`, and `ctx.waitForSignal()`. See [Durable Workflows](./DURABLE_WORKFLOWS.md).
+- **HTTP Tunnels**: Expose tasks over HTTP or call remote Runners. See [Tunnels](./TUNNELS.md).
+- **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](./SERIALIZER_PROTOCOL.md).
 
 ---
 ## run() and RunOptions
@@ -4084,7 +4079,7 @@ The serializer is hardened against common attacks:
 - **Prototype pollution blocked**: Filters `__proto__`, `constructor`, `prototype` keys
 - **Depth limits**: Configurable max depth prevents stack overflow
 
-> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](./readmes/TUNNELS.md) for file upload patterns.
+> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](./TUNNELS.md) for file upload patterns.
 
 ### Tunnels: Bridging Runners
 
@@ -4131,7 +4126,7 @@ const remoteTasksTunnel = r
 
 This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
 
-For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
+For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./TUNNELS.md).
 
 ---
 
@@ -5292,7 +5287,7 @@ Every builder follows the same rhythm:
 3. **Implement** with `.run()` or `.init()`
 4. **Finish** with `.build()`
 
-For the complete API reference, see the [Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).
+For the complete API reference, see the [Fluent Builders documentation](./FLUENT_BUILDERS.md).
 
 > **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."
 ## Type Helpers
@@ -7271,6 +7266,7 @@ await queue.run(async (_signal) => {
 ```
 
 ---
+
 ## Why Choose BlueLibs Runner?
 
 After reading this far, here's what you've learned:
@@ -7335,7 +7331,7 @@ This is part of the [BlueLibs](https://www.bluelibs.com) ecosystem. We're not tr
 - [GitHub Repository](https://github.com/bluelibs/runner) - if you find this useful
 - [Documentation](https://bluelibs.github.io/runner/) - When you need the full details
 - [Issues](https://github.com/bluelibs/runner/issues) - When something breaks (or you want to make it better)
-- [Contributing](./CONTRIBUTING.md) - How to file great issues and PRs
+- [Contributing](../.github/CONTRIBUTING.md) - How to file great issues and PRs
 
 _P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still different._
 

@@ -5,15 +5,15 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "emitDeclarationOnly": false,
-    "outDir": "dist",
+    "outDir": "../../dist",
     "types": ["node"]
   },
-  "include": ["src"],
+  "include": ["../../src"],
   "exclude": [
-    "examples/**",
-    "src/__tests__/**",
-    "src/**/__tests__/**",
-    "src/**/*.test.ts",
-    "src/node/durable/dashboard/**"
+    "../../examples/**",
+    "../../src/__tests__/**",
+    "../../src/**/__tests__/**",
+    "../../src/**/*.test.ts",
+    "../../src/node/durable/dashboard/**"
   ]
 }

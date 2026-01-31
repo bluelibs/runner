@@ -59,21 +59,21 @@ sequenceDiagram
   autonumber
   participant App as App Code (caller runtime)
   participant Task as Task Function (phantom or real)
-  participant TM as Tunnel Middleware\n(patches tasks at init)
-  participant TRes as Tunnel Resource\n(mode: "client")
+  participant TM as Tunnel Middleware<br>(patches tasks at init)
+  participant TRes as Tunnel Resource<br>(mode: "client")
   participant Client as HTTP Tunnel Client
   participant Expo as nodeExposure HTTP Server
-  participant Policy as Exposure Policy\n(mode: "server" allow-list)
-  participant Runner as Server Runtime\n(Task Runner + DI)
+  participant Policy as Exposure Policy<br>(mode: "server" allow-list)
+  participant Runner as Server Runtime<br>(Task Runner + DI)
 
-  Note over TM,TRes: Init time: tunnel resources are inspected\nSelected tasks get patched to delegate remotely
+  Note over TM,TRes: Init time: tunnel resources are inspected<br>Selected tasks get patched to delegate remotely
 
   App->>Task: await add({ a, b })
 
   alt Task id is selected by a client tunnel
     Task->>TM: patched run() invoked
     TM->>TRes: tunnel.run(task, input)
-    TRes->>Client: POST /task/{taskId}\n+ x-runner-token\n+ x-runner-context
+    TRes->>Client: POST /task/{taskId}<br>+ x-runner-token<br>+ x-runner-context
     Client->>Expo: HTTP request
 
     Expo->>Expo: Parse body (JSON/multipart/octet-stream)
@@ -90,7 +90,7 @@ sequenceDiagram
     Expo-->>Client: JSON envelope / stream
     Client-->>App: result (or rethrow typed error)
   else No tunnel route found
-    Note over Task: Phantom resolves to undefined (remote-only)\nor real task runs locally
+    Note over Task: Phantom resolves to undefined (remote-only)<br>or real task runs locally
     Task-->>App: undefined or local result
   end
 ```
