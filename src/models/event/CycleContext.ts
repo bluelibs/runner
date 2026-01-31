@@ -7,9 +7,9 @@ export class CycleContext {
   private readonly currentHookIdContext: IAsyncLocalStorage<string> | null;
   readonly isEnabled: boolean;
 
-  constructor(runtimeCycleDetection: boolean) {
+  constructor(runtimeEventCycleDetection: boolean) {
     const platform = getPlatform();
-    if (platform.hasAsyncLocalStorage() && runtimeCycleDetection) {
+    if (platform.hasAsyncLocalStorage() && runtimeEventCycleDetection) {
       this.emissionStack = platform.createAsyncLocalStorage<IEmissionFrame[]>();
       this.currentHookIdContext = platform.createAsyncLocalStorage<string>();
       this.isEnabled = true;

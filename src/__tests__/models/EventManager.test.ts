@@ -8,7 +8,7 @@ describe("EventManager", () => {
   let eventDefinition: IEvent<string>;
 
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeCycleDetection: true });
+    eventManager = new EventManager({ runtimeEventCycleDetection: true });
     eventDefinition = defineEvent<string>({ id: "testEvent" });
   });
 
@@ -1129,8 +1129,8 @@ describe("EventManager", () => {
       expect(mockHook.run).toHaveBeenCalled();
     });
 
-    it("executes hook directly when runtimeCycleDetection is false", async () => {
-      const em = new EventManager({ runtimeCycleDetection: false });
+    it("executes hook directly when runtimeEventCycleDetection is false", async () => {
+      const em = new EventManager({ runtimeEventCycleDetection: false });
       const mockHook = {
         id: "noContextHook",
         run: jest.fn().mockResolvedValue("ok-no-context"),
@@ -1365,7 +1365,7 @@ describe("EventManager", () => {
   // Hook lifecycle events are no longer emitted by EventManager; related tests removed
 
   describe("cycle detection", () => {
-    it("constructor default enables runtimeCycleDetection and throws on self-cycle", async () => {
+    it("constructor default enables runtimeEventCycleDetection and throws on self-cycle", async () => {
       const em = new EventManager();
       const A = defineEvent<string>({ id: "A_default" });
       em.addListener(A, async () => {
@@ -1376,7 +1376,7 @@ describe("EventManager", () => {
     });
 
     it("safe re-emit by same hook does not throw", async () => {
-      const em = new EventManager({ runtimeCycleDetection: true });
+      const em = new EventManager({ runtimeEventCycleDetection: true });
       const A = defineEvent<string>({ id: "A_hook" });
 
       const hook = {
@@ -1445,13 +1445,13 @@ describe("EventManager", () => {
       expect(calls).toEqual(["A", "B", "C"]);
     });
 
-    it("does not throw when runtimeCycleDetection is false (A -> B -> A)", async () => {
+    it("does not throw when runtimeEventCycleDetection is false (A -> B -> A)", async () => {
       const calls: string[] = [];
       const max = 2;
       const A = defineEvent<{ count: number }>({ id: "A_disabled" });
       const B = defineEvent<{ count: number }>({ id: "B_disabled" });
 
-      const em = new EventManager({ runtimeCycleDetection: false });
+      const em = new EventManager({ runtimeEventCycleDetection: false });
 
       em.addListener(A, async (event) => {
         calls.push("A");

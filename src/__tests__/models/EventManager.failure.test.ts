@@ -7,7 +7,7 @@ describe("EventManager Parallel Failure Behavior", () => {
   let parallelEvent: IEvent<string>;
 
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeCycleDetection: true });
+    eventManager = new EventManager({ runtimeEventCycleDetection: true });
     parallelEvent = defineEvent<string>({
       id: "parallelEvent",
       parallel: true,

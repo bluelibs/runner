@@ -12,7 +12,7 @@ describe("TaskRunner", () => {
   let logger: Logger;
 
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeCycleDetection: true });
+    eventManager = new EventManager({ runtimeEventCycleDetection: true });
     logger = new Logger({
       printThreshold: "info",
       printStrategy: "pretty",

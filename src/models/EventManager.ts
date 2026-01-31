@@ -43,12 +43,13 @@ export class EventManager {
   #isLocked = false;
 
   // Feature flags
-  private readonly runtimeCycleDetection: boolean;
+  private readonly runtimeEventCycleDetection: boolean;
 
-  constructor(options?: { runtimeCycleDetection?: boolean }) {
-    this.runtimeCycleDetection = options?.runtimeCycleDetection ?? true;
+  constructor(options?: { runtimeEventCycleDetection?: boolean }) {
+    this.runtimeEventCycleDetection =
+      options?.runtimeEventCycleDetection ?? true;
     this.registry = new ListenerRegistry();
-    this.cycleContext = new CycleContext(this.runtimeCycleDetection);
+    this.cycleContext = new CycleContext(this.runtimeEventCycleDetection);
 
     // expose registry collections for backward-compatibility (tests reach into these)
     this.listeners = this.registry.listeners;
