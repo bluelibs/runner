@@ -102,9 +102,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 ---
 ## Why Runner?
 
-<table>
-<tr>
-<td width="50%" valign="top">
+Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
 
 ### Current Way
 
@@ -159,10 +157,6 @@ const runtime = await run(app);
 - **Testable by default** — Call `.run()` with mocks or run the full app, no special harnesses
 - **Traceable** — Stack traces and debug output stay aligned with your source
 - **Incremental adoption** — Wrap an existing service or task without rewriting the rest
-
-</td>
-</tr>
-</table>
 
 ---
 
@@ -251,8 +245,6 @@ const runtime = await run(app);
 - [Under the Hood](#under-the-hood) - Architecture deep dive
 - [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
-
----
 ## What Is This Thing?
 
 BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It’s explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
@@ -1305,7 +1297,7 @@ Here's a friendly guideline (not a strict rule!):
 - Multiple parts of your app need to use it
 - You want observability (logging, monitoring, debugging)
 
-  **Keep it as a regular function when:**
+**Keep it as a regular function when:**
 
 - It's a simple utility (date formatting, string manipulation, calculations)
 - It's a pure function with no dependencies
@@ -1816,14 +1808,16 @@ For advanced scenarios, you can intercept framework execution without relying on
 
 Per-task interceptors must be registered during resource initialization (before the system is locked). They are a good fit when you want a specific task to be adjusted by a specific resource (for example: feature toggles, input shaping, or internal routing) without making it global middleware.
 
-Note that per-task interceptors run *inside* task middleware. If a middleware short-circuits and never calls `next()`, the task (and its per-task interceptors) will not execute.
+Note that per-task interceptors run _inside_ task middleware. If a middleware short-circuits and never calls `next()`, the task (and its per-task interceptors) will not execute.
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
 const adder = r
   .task("app.tasks.adder")
-  .run(async (input: { value: number }) => ({ value: input.value + 1 } as const))
+  .run(
+    async (input: { value: number }) => ({ value: input.value + 1 }) as const,
+  )
   .build();
 
 const installer = r
