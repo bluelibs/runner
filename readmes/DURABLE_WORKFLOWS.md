@@ -485,7 +485,10 @@ const processOrder = r
   .build();
 
 // 4. Wire up and run
-const app = r.resource("app").register([durableRegistration, processOrder]).build();
+const app = r
+  .resource("app")
+  .register([durableRegistration, processOrder])
+  .build();
 
 const runtime = await run(app);
 
