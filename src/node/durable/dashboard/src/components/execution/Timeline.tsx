@@ -13,7 +13,12 @@ type TimelineProps = {
   steps: TimelineStep[];
 };
 
-const StatusIcon = ({ status, className }: any) => {
+type StatusIconProps = {
+  status: ExecutionStatus;
+  className?: string;
+};
+
+function StatusIcon({ status, className = "" }: StatusIconProps) {
   switch (status) {
     case ExecutionStatus.Completed:
       return <CheckCircle2 className={`text-green-500 ${className}`} />;
@@ -34,7 +39,7 @@ const StatusIcon = ({ status, className }: any) => {
         />
       );
   }
-};
+}
 
 export function Timeline({ steps }: TimelineProps) {
   return (

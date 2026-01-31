@@ -61,6 +61,18 @@ function getApiBasePath(): string {
   return `${basePath}/api`;
 }
 
+async function extractErrorMessage(
+  res: Response,
+  fallbackMessage: string,
+): Promise<string> {
+  try {
+    const body = await res.json();
+    return body.error || fallbackMessage;
+  } catch {
+    return fallbackMessage;
+  }
+}
+
 export const api = {
   executions: {
     list: async (options: ListExecutionsOptions = {}): Promise<Execution[]> => {
@@ -77,13 +89,21 @@ export const api = {
         : `${apiBase}/executions`;
 
       const res = await fetch(url);
-      if (!res.ok) throw new Error("Failed to fetch executions");
+      if (!res.ok) {
+        throw new Error(
+          await extractErrorMessage(res, "Failed to fetch executions"),
+        );
+      }
       return res.json();
     },
     get: async (id: string): Promise<Execution> => {
       const apiBase = getApiBasePath();
       const res = await fetch(`${apiBase}/executions/${id}`);
-      if (!res.ok) throw new Error("Failed to fetch execution");
+      if (!res.ok) {
+        throw new Error(
+          await extractErrorMessage(res, "Failed to fetch execution"),
+        );
+      }
       return res.json();
     },
   },
@@ -95,7 +115,11 @@ export const api = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ executionId }),
       });
-      if (!res.ok) throw new Error("Failed to retry rollback");
+      if (!res.ok) {
+        throw new Error(
+          await extractErrorMessage(res, "Failed to retry rollback"),
+        );
+      }
     },
     skipStep: async (executionId: string, stepId: string) => {
       const apiBase = getApiBasePath();
@@ -104,7 +128,9 @@ export const api = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ executionId, stepId }),
       });
-      if (!res.ok) throw new Error("Failed to skip step");
+      if (!res.ok) {
+        throw new Error(await extractErrorMessage(res, "Failed to skip step"));
+      }
     },
     forceFail: async (executionId: string, reason: string) => {
       const apiBase = getApiBasePath();
@@ -113,7 +139,9 @@ export const api = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ executionId, reason }),
       });
-      if (!res.ok) throw new Error("Failed to force fail");
+      if (!res.ok) {
+        throw new Error(await extractErrorMessage(res, "Failed to force fail"));
+      }
     },
     editState: async (
       executionId: string,
@@ -126,7 +154,9 @@ export const api = {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ executionId, stepId, state: newState }),
       });
-      if (!res.ok) throw new Error("Failed to edit state");
+      if (!res.ok) {
+        throw new Error(await extractErrorMessage(res, "Failed to edit state"));
+      }
     },
   },
 };

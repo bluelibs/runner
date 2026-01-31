@@ -1,10 +1,18 @@
 import { useForm } from "react-hook-form";
-import { Play, SkipForward, AlertOctagon, Terminal, Save } from "lucide-react";
-import { api } from "@/api";
+import {
+  Play,
+  SkipForward,
+  AlertOctagon,
+  Terminal,
+  Save,
+  CheckCircle2,
+} from "lucide-react";
+import { api, ExecutionStatus } from "@/api";
 import { useState } from "react";
 
 type CrashControlProps = {
   executionId: string;
+  status: ExecutionStatus;
 };
 
 type EditStateForm = {
@@ -12,7 +20,12 @@ type EditStateForm = {
   stepId: string;
 };
 
-export function CrashControl({ executionId }: CrashControlProps) {
+const TERMINAL_STATUSES: ExecutionStatus[] = [
+  ExecutionStatus.Completed,
+  ExecutionStatus.Cancelled,
+];
+
+export function CrashControl({ executionId, status }: CrashControlProps) {
   const [loading, setLoading] = useState(false);
   const {
     register,
@@ -26,6 +39,8 @@ export function CrashControl({ executionId }: CrashControlProps) {
     },
   });
 
+  const isTerminal = TERMINAL_STATUSES.includes(status);
+
   const handleAction = async (
     action: () => Promise<void>,
     successMessage: string,
@@ -36,8 +51,9 @@ export function CrashControl({ executionId }: CrashControlProps) {
       await action();
       alert(successMessage);
       window.location.reload(); // Simple refresh to show new state
-    } catch (e: any) {
-      alert(`Error: ${e.message}`);
+    } catch (e: unknown) {
+      const message = e instanceof Error ? e.message : String(e);
+      alert(`Error: ${message}`);
     } finally {
       setLoading(false);
     }
@@ -77,6 +93,38 @@ export function CrashControl({ executionId }: CrashControlProps) {
       await api.operator.editState(executionId, data.stepId, parsed);
     }, "State patched successfully");
   };
+
+  // Show a simpler panel for completed/cancelled executions
+  if (isTerminal) {
+    return (
+      <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col h-full">
+        <div className="p-4 border-b border-slate-800 bg-slate-950/50 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-slate-400">
+            <CheckCircle2 className="w-5 h-5" />
+            <h3 className="font-bold">Execution Info</h3>
+          </div>
+          <span className="text-xs font-mono text-slate-500">
+            {executionId}
+          </span>
+        </div>
+        <div className="p-6 flex-1 flex items-center justify-center">
+          <div className="text-center text-slate-500">
+            <CheckCircle2 className="w-12 h-12 mx-auto mb-3 opacity-30" />
+            <p className="text-sm">
+              This execution has{" "}
+              {status === ExecutionStatus.Completed
+                ? "completed"
+                : "been cancelled"}
+              .
+            </p>
+            <p className="text-xs mt-1 text-slate-600">
+              No operator actions available.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden flex flex-col h-full">
