@@ -190,34 +190,11 @@ Now `GET {basePath}/discovery` (auth required) tells you exactly what’s reacha
 
 You have two common styles. Pick one per boundary.
 
-#### Style A — Explicit client calls (simple and explicit)
-
-Use the universal factory (browser-safe, Node-safe) and call by id:
-
-```ts
-import { r, globals } from "@bluelibs/runner";
-
-export const callRemote = r
-  .task("app.tasks.callRemote")
-  .dependencies({ clientFactory: globals.resources.httpClientFactory })
-  .run(async (_input, { clientFactory }) => {
-    const client = clientFactory({
-      baseUrl: "http://127.0.0.1:7070/__runner",
-      auth: { token: "dev-secret" },
-    });
-    return await client.task<{ a: number; b: number }, number>(
-      "app.tasks.add",
-      { a: 1, b: 2 },
-    );
-  })
-  .build();
-```
-
-This is great when you want the boundary to be obvious in code.
-
-#### Style B — Transparent routing via a tunnel resource (feels “local”)
+#### Style A — Transparent routing via a tunnel resource (feels “local”)
 
 If you want your code to call `add(...)` directly and let the tunnel decide where it runs, register a **client-mode** tunnel resource.
+
+This is the “no call-site changes” style: your application code still calls `await add({ a, b })`. The only thing that changes is **runtime composition** (server registers the real task; client registers a phantom task with the same id + a tunnel resource).
 
 The key trick is: the _caller runtime_ must also have a task definition with the same id — but it shouldn’t contain the real implementation. That’s what **phantom tasks** are for.
 
@@ -231,7 +208,8 @@ The tunnel middleware will:
 import { r, globals } from "@bluelibs/runner";
 
 // In the caller runtime, define a phantom with the same id as the server task.
-const addRemote = r.task
+// Your app code can keep calling `await add(...)`.
+export const add = r.task
   .phantom<{ a: number; b: number }, number>("app.tasks.add")
   .build();
 
@@ -248,7 +226,8 @@ const tunnelClient = r
     return {
       transport: "http" as const,
       mode: "client" as const,
-      tasks: [addRemote.id],
+      tasks: [add.id],
+      // Important: create the client once (in init) and reuse it.
       run: async (task, input) => await client.task(task.id, input),
       // events + emit are optional; see “Events” below.
     };
@@ -257,12 +236,46 @@ const tunnelClient = r
 
 export const app = r
   .resource("app")
-  .register([addRemote, tunnelClient])
+  .register([add, tunnelClient])
   .build();
 ```
 
-Now calling `await addRemote({ a: 1, b: 2 })` will execute the server’s `app.tasks.add` over HTTP.
+Now calling `await add({ a: 1, b: 2 })` will execute the server’s `app.tasks.add` over HTTP.
 If the tunnel isn’t registered (or doesn’t select this id), the phantom resolves to `undefined`.
+
+This is great when you want “remote” to be a configuration concern rather than a call-site concern.
+
+#### Style B — Explicit client calls (simple and explicit)
+
+If you want the boundary to be obvious in code, call the client directly — but **don’t create a client for every call**.
+
+Instead, create it once in a resource and inject it where needed:
+
+```ts
+import { r, globals } from "@bluelibs/runner";
+
+const remoteClient = r
+  .resource("app.remote.client")
+  .dependencies({ clientFactory: globals.resources.httpClientFactory })
+  .init(async (_cfg, { clientFactory }) => {
+    return clientFactory({
+      baseUrl: "http://127.0.0.1:7070/__runner",
+      auth: { token: "dev-secret" },
+    });
+  })
+  .build();
+
+export const callRemote = r
+  .task("app.tasks.callRemote")
+  .dependencies({ remoteClient })
+  .run(async (_input, { remoteClient }) => {
+    return await remoteClient.task<{ a: number; b: number }, number>(
+      "app.tasks.add",
+      { a: 1, b: 2 },
+    );
+  })
+  .build();
+```
 
 ---
 

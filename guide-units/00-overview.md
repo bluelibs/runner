@@ -1,8 +1,6 @@
 ## Why Runner?
 
-<table>
-<tr>
-<td width="50%" valign="top">
+Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
 
 ### Current Way
 
@@ -57,10 +55,6 @@ const runtime = await run(app);
 - **Testable by default** — Call `.run()` with mocks or run the full app, no special harnesses
 - **Traceable** — Stack traces and debug output stay aligned with your source
 - **Incremental adoption** — Wrap an existing service or task without rewriting the rest
-
-</td>
-</tr>
-</table>
 
 ---
 
@@ -149,5 +143,3 @@ const runtime = await run(app);
 - [Under the Hood](#under-the-hood) - Architecture deep dive
 - [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
-
----
