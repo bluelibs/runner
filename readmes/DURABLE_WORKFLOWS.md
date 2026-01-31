@@ -42,10 +42,10 @@ The recommended integration is a **single durable resource** that:
 ```ts
 import { event, r, run } from "@bluelibs/runner";
 import {
+  durableResource,
   MemoryStore,
   MemoryQueue,
   MemoryEventBus,
-  createDurableResource,
 } from "@bluelibs/runner/node";
 
 const Approved = event<{ approvedBy: string }>({ id: "app.signals.approved" });
@@ -54,7 +54,9 @@ const store = new MemoryStore();
 const queue = new MemoryQueue();
 const eventBus = new MemoryEventBus();
 
-const durable = createDurableResource("app.durable", {
+const durable = durableResource.fork("app.durable");
+
+const durableRegistration = durable.with({
   store,
   queue,
   eventBus,
@@ -91,7 +93,10 @@ const approveOrder = r
   })
   .build();
 
-const app = r.resource("app").register([durable, approveOrder]).build();
+const app = r
+  .resource("app")
+  .register([durableRegistration, approveOrder])
+  .build();
 
 await run(app, { logs: { printThreshold: null } });
 ```
@@ -102,17 +107,19 @@ For production, swap the in-memory backends:
 
 ```ts
 import {
+  durableResource,
   RabbitMQQueue,
   RedisEventBus,
   RedisStore,
-  createDurableResource,
 } from "@bluelibs/runner/node";
 
 const store = new RedisStore({ redis: process.env.REDIS_URL });
 const queue = new RabbitMQQueue({ url: process.env.RABBITMQ_URL });
 const eventBus = new RedisEventBus({ redis: process.env.REDIS_URL });
 
-const durable = createDurableResource("app.durable", {
+const durable = durableResource.fork("app.durable");
+
+const durableRegistration = durable.with({
   store,
   queue,
   eventBus,
@@ -123,7 +130,8 @@ const durable = createDurableResource("app.durable", {
 API nodes typically **disable polling and the embedded worker**:
 
 ```ts
-const durable = createDurableResource("app.durable", {
+const durable = durableResource.fork("app.durable");
+const durableRegistration = durable.with({
   store,
   queue,
   eventBus,
@@ -136,6 +144,59 @@ In a typical deployment:
 
 - API nodes call `startExecution()` / `signal()` / `wait()`.
 - Worker nodes run the durable resource with `worker: true`.
+
+### Scaling in production (recommended topology)
+
+Durable workflows are designed to scale **horizontally**.
+The core idea is: **the store is the source of truth**, and the queue distributes work.
+
+**Recommended split:**
+
+- **API nodes** (stateless): accept HTTP/webhooks, call `startExecution()` / `signal()` / `wait()`.
+- **Worker nodes** (scalable): consume the durable queue and run executions.
+
+**API node config (no background work):**
+
+```ts
+const durable = durableResource.fork("app.durable");
+const durableRegistration = durable.with({
+  store,
+  queue,
+  eventBus,
+  worker: false,
+  polling: { enabled: false },
+});
+```
+
+**Worker node config (does background work):**
+
+```ts
+const durable = durableResource.fork("app.durable");
+const durableRegistration = durable.with({
+  store,
+  queue,
+  eventBus,
+  worker: true,
+  polling: { enabled: true, interval: 1000 },
+});
+```
+
+**How it scales:**
+
+- Increase worker replicas: each one consumes from the queue, so throughput scales with workers.
+- Crash/redeploy safety: a worker can die at any time; the next worker resumes from the last checkpoint.
+- Multi-worker correctness: executions/steps are coordinated through the store, not through in-memory state.
+
+**Timers, sleeps, and schedules (important):**
+
+Timers (used by `ctx.sleep(...)`, signal timeouts, and scheduling) are driven by the durable polling loop.
+In multi-process setups you typically either:
+
+- run a **single poller** (one worker replica with `polling.enabled: true`), or
+- use a store implementation that provides **atomic timer claiming** so multiple pollers are safe.
+
+If you enable polling in multiple processes without atomic claiming, you may get duplicate resume attempts.
+This is still designed to be safe (at-least-once), but it can increase load/noise.
 
 ### 2) Start an execution (store the executionId)
 
@@ -369,17 +430,20 @@ graph TB
 
 ### Basic Usage
 
-Durable workflows are **normal Runner tasks** that inject a **durable resource** (created via `createDurableResource(...)`) and call `ctx.step(...)` / `ctx.sleep(...)` from inside their `run` function.
+Durable workflows are **normal Runner tasks** that inject a **durable resource** (created via `durableResource.fork(id)` and registered via `.with(config)`) and call `ctx.step(...)` / `ctx.sleep(...)` from inside their `run` function.
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
-import { createDurableResource, MemoryStore } from "@bluelibs/runner/node";
+import { durableResource, MemoryStore } from "@bluelibs/runner/node";
 
 // 1. Create store
 const store = new MemoryStore();
 
-// 2. Create durable resource
-const durable = createDurableResource("app.durable", {
+// 2. Create durable resource definition
+const durable = durableResource.fork("app.durable");
+
+// 3. Register durable resource with config
+const durableRegistration = durable.with({
   store,
   polling: { enabled: true, interval: 1000 }, // Timer polling interval
 });
@@ -421,7 +485,7 @@ const processOrder = r
   .build();
 
 // 4. Wire up and run
-const app = r.resource("app").register([durable, processOrder]).build();
+const app = r.resource("app").register([durableRegistration, processOrder]).build();
 
 const runtime = await run(app);
 
@@ -566,12 +630,11 @@ Return shapes:
 
 ```typescript
 import { event, r } from "@bluelibs/runner";
-import { createDurableResource, MemoryStore } from "@bluelibs/runner/node";
+import { durableResource, MemoryStore } from "@bluelibs/runner/node";
 
 const Paid = event<{ paidAt: number }>({ id: "app.signals.paid" });
-const durable = createDurableResource("app.durable", {
-  store: new MemoryStore(),
-});
+const durable = durableResource.fork("app.durable");
+const durableRegistration = durable.with({ store: new MemoryStore() });
 
 export const processOrder = r
   .task("app.tasks.processOrder")
@@ -1201,7 +1264,7 @@ npm install ioredis amqplib cron-parser
 
 ```typescript
 import {
-  createDurableResource,
+  durableResource,
   RedisStore,
   RedisEventBus,
   RabbitMQQueue,
@@ -1230,8 +1293,9 @@ const queue = new RabbitMQQueue({
   prefetch: 10, // Process up to 10 messages concurrently
 });
 
-// Create durable service
-const durable = createDurableResource("app.durable", {
+// Create durable resource definition + registration
+const durable = durableResource.fork("app.durable");
+const durableRegistration = durable.with({
   store,
   eventBus,
   queue,
@@ -1243,7 +1307,8 @@ const durable = createDurableResource("app.durable", {
 If you want API-only nodes to call `startExecution()` / `signal()` / `wait()` **without running the timer poller**, disable polling:
 
 ```ts
-const durable = createDurableResource("app.durable", {
+const durable = durableResource.fork("app.durable");
+const durableRegistration = durable.with({
   store,
   eventBus,
   queue,
@@ -1402,9 +1467,10 @@ The durable module integrates seamlessly with Runner's resource pattern:
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
-import { createDurableResource, MemoryStore } from "@bluelibs/runner/node";
+import { durableResource, MemoryStore } from "@bluelibs/runner/node";
 
-const durable = createDurableResource("app.durable", {
+const durable = durableResource.fork("app.durable");
+const durableRegistration = durable.with({
   store: new MemoryStore(),
   worker: true, // single-process: also consumes the queue if configured
 });
@@ -1428,7 +1494,7 @@ const recoverDurable = r
 
 const app = r
   .resource("app")
-  .register([durable, processOrder, recoverDurable])
+  .register([durableRegistration, processOrder, recoverDurable])
   .build();
 await run(app);
 ```
@@ -1442,7 +1508,8 @@ const store = process.env.REDIS_URL
   ? new RedisStore({ redis: process.env.REDIS_URL })
   : new MemoryStore();
 
-const durable = createDurableResource("app.durable", { store });
+const durable = durableResource.fork("app.durable");
+const durableRegistration = durable.with({ store });
 ```
 
 ### Integration with HTTP Exposure
@@ -1661,7 +1728,7 @@ In addition to `StepResult` records, durable can persist a structured audit trai
 
 This is implemented via optional `IDurableStore` capabilities:
 
-- Enable it via `createDurableResource("app.durable", { audit: { enabled: true }, ... })` (default: off).
+- Enable it via `durableResource.fork("app.durable").with({ audit: { enabled: true }, ... })` (default: off).
 - `appendAuditEntry(entry)`
 - `listAuditEntries(executionId)`
 
