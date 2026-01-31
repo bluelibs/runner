@@ -95,7 +95,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "eslint ./src",
     "lint:fix": "eslint ./src --fix",
-    "qa": "npm run coverage:ai && npm run lint && npm run typecheck",
+    "qa": "npm run coverage:ai && npm run lint:fix && npm run typecheck",
     "prepublishOnly": "npm run clean && npm run build && npm run build:dashboard",
     "postbuild": "npm run guide:compose",
     "typedoc": "typedoc --options typedoc.json",

@@ -50,6 +50,51 @@ Then you hit the “now it has to run somewhere else” moment:
 Your app keeps calling `await tasks.processPayment(input)`.  
 Only the **execution location** changes.
 
+### Tunnel call flow (diagram)
+
+This diagram shows the “transparent routing” path (phantom task + client-mode tunnel resource), plus the server-side auth + allow-list gates.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant App as App Code (caller runtime)
+  participant Task as Task Function (phantom or real)
+  participant TM as Tunnel Middleware\n(patches tasks at init)
+  participant TRes as Tunnel Resource\n(mode: "client")
+  participant Client as HTTP Tunnel Client
+  participant Expo as nodeExposure HTTP Server
+  participant Policy as Exposure Policy\n(mode: "server" allow-list)
+  participant Runner as Server Runtime\n(Task Runner + DI)
+
+  Note over TM,TRes: Init time: tunnel resources are inspected\nSelected tasks get patched to delegate remotely
+
+  App->>Task: await add({ a, b })
+
+  alt Task id is selected by a client tunnel
+    Task->>TM: patched run() invoked
+    TM->>TRes: tunnel.run(task, input)
+    TRes->>Client: POST /task/{taskId}\n+ x-runner-token\n+ x-runner-context
+    Client->>Expo: HTTP request
+
+    Expo->>Expo: Parse body (JSON/multipart/octet-stream)
+    Expo->>Expo: Authenticate (token and/or validator tasks)
+
+    alt Allow-lists enabled (server tunnel resource exists)
+      Expo->>Policy: Is taskId allow-listed?
+      Policy-->>Expo: yes/no
+      Policy-->>Client: 403 if not allow-listed
+    end
+
+    Expo->>Runner: Execute task inside DI + middleware
+    Runner-->>Expo: Result or typed error
+    Expo-->>Client: JSON envelope / stream
+    Client-->>App: result (or rethrow typed error)
+  else No tunnel route found
+    Note over Task: Phantom resolves to undefined (remote-only)\nor real task runs locally
+    Task-->>App: undefined or local result
+  end
+```
+
 ---
 
 ## The happy path (an end-to-end walkthrough)

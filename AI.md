@@ -4,15 +4,7 @@
 
 For the landing overview, see [README.md](./README.md). For the complete guide, see [GUIDE.md](./GUIDE.md).
 
-## Durable Workflows (Node-only)
-
-Durable workflows are available from `@bluelibs/runner/node` (implemented under `src/node/durable/`).
-See `readmes/DURABLE_WORKFLOWS.md` (full) or `readmes/DURABLE_WORKFLOWS_AI.md` (token-friendly).
-They provide replay-safe primitives like `ctx.step(...)`, `ctx.sleep(...)`, `ctx.emit(...)`, and `ctx.waitForSignal(...)`.
-Use them when you need persistence and recovery across restarts/crashes.
-
-Note: the durable "real backends" integration suite (Redis + RabbitMQ) is env-gated and will
-skip unless `DURABLE_INTEGRATION=1` is set (see `readmes/DURABLE_WORKFLOWS.md`).
+**Durable Workflows (Node-only):** For persistence and crash recovery, see `readmes/DURABLE_WORKFLOWS.md`.
 
 ## Serializer Safety
 
@@ -261,23 +253,7 @@ const myTask = r
 const myKey = journal.createKey<{ startedAt: Date }>("app.middleware.timing");
 ```
 
-**Built-in Middleware Journal Keys**: Several global middlewares expose their runtime state via journal keys:
-
-| Middleware | Key | Type | Description |
-|---|---|---|---|
-| `retry` | `globals.middleware.task.retry.journalKeys.attempt` | `number` | Current retry attempt (0-indexed) |
-| `retry` | `globals.middleware.task.retry.journalKeys.lastError` | `Error \| undefined` | Error from previous attempt |
-| `cache` | `globals.middleware.task.cache.journalKeys.hit` | `boolean` | Whether the cache middleware returned a cached result |
-| `circuitBreaker` | `globals.middleware.task.circuitBreaker.journalKeys.state` | `"CLOSED" \| "OPEN" \| "HALF_OPEN"` | Current circuit state |
-| `circuitBreaker` | `globals.middleware.task.circuitBreaker.journalKeys.failures` | `number` | Current failure count |
-| `rateLimit` | `globals.middleware.task.rateLimit.journalKeys.remaining` | `number` | Remaining requests in window |
-| `rateLimit` | `globals.middleware.task.rateLimit.journalKeys.resetTime` | `number` | Timestamp when window resets |
-| `rateLimit` | `globals.middleware.task.rateLimit.journalKeys.limit` | `number` | Configured limit |
-| `fallback` | `globals.middleware.task.fallback.journalKeys.active` | `boolean` | Whether fallback was activated |
-| `fallback` | `globals.middleware.task.fallback.journalKeys.error` | `Error \| undefined` | Error that triggered fallback |
-| `timeout` | `globals.middleware.task.timeout.journalKeys.abortController` | `AbortController` | Controller for aborting the task |
-
-Note: these keys are available via `globals` (no deep imports required).
+**Built-in Middleware Journal Keys**: Global middlewares (`retry`, `cache`, `circuitBreaker`, `rateLimit`, `fallback`, `timeout`) expose runtime state via typed journal keys at `globals.middleware.task.<name>.journalKeys`. For example, `retry` exposes `attempt` and `lastError`; `cache` exposes `hit`; `circuitBreaker` exposes `state` and `failures`. Access these via `journal.get(key)` without deep imports.
 
 ## Tags
 
@@ -460,6 +436,19 @@ Run Node exposures and connect to remote Runners with fluent resources.
 
 `nodeExposure` is a Runner **resource** that starts an HTTP server and exposes a controlled surface for executing tasks and emitting events over HTTP (under a `basePath` like `/__runner`).
 
+```mermaid
+flowchart LR
+  App[App code\n(caller runtime)] --> Task[Task call\n(phantom or real)]
+  Task --> MW[Tunnel middleware\n(patches selected tasks)]
+  MW --> Client[Tunnel client\n(HTTP)]
+  Client --> Expo[nodeExposure\nHTTP server]
+  Expo --> Gate{Auth + allow-list}
+  Gate --> Runner[Server runtime\n(DI + middleware + task runner)]
+  Runner --> Expo
+  Expo --> Client
+  Client --> App
+```
+
 ```ts
 	import { r, globals } from "@bluelibs/runner";
 	import { nodeExposure } from "@bluelibs/runner/node";
@@ -590,12 +579,9 @@ Note on files: The “File” you see in tunnels is not a custom serializer type
 
 ## Testing
 
-- Durable test helpers: `createDurableTestSetup` and `waitUntil` from `@bluelibs/runner/node` for fast, in-memory durable workflows in tests.
-- The Jest runner has a watchdog (`JEST_WATCHDOG_MS`, default 10 minutes) to avoid “hung test run” situations.
 - In unit tests, prefer running a minimal root resource and call `await run(root)` to get `runTask`, `emitEvent`, or `getResourceValue`.
-- `createTestResource` is available for legacy suites but new code should compose fluent resources directly.
-
-Example:
+- The Jest runner has a watchdog (`JEST_WATCHDOG_MS`, default 10 minutes) to avoid "hung test run" situations.
+- For durable workflow tests, use `createDurableTestSetup` from `@bluelibs/runner/node` for fast, in-memory execution.
 
 ```ts
 import { run } from "@bluelibs/runner";
@@ -609,31 +595,6 @@ test("sends welcome email", async () => {
   await runtime.runTask(registerUser, { email: "user@example.com" });
   await runtime.dispose();
 });
-```
-
-Durable test setup example:
-
-```ts
-import { r, run } from "@bluelibs/runner";
-import { createDurableTestSetup } from "@bluelibs/runner/node";
-
-const { durable } = createDurableTestSetup();
-
-const task = r
-  .task("spec.durable.hello")
-  .dependencies({ durable })
-  .run(async (_input: undefined, { durable }) => {
-    const ctx = durable.use();
-    await ctx.step("hello", async () => "ok");
-    return { ok: true };
-  })
-  .build();
-
-const app = r.resource("spec.app").register([durable, task]).build();
-const runtime = await run(app);
-const durableRuntime = runtime.getResourceValue(durable);
-await durableRuntime.execute(task);
-await runtime.dispose();
 ```
 
 ## Observability & Debugging
