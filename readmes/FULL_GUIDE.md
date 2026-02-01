@@ -104,51 +104,68 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
 
-### Current Way
-
-Decorator-heavy DI frameworks hide work behind reflection. They often require framework-specific testing harnesses, and debugging jumps between generated code and the code you wrote.
-
-```typescript
-@Injectable()
-export class UserService {
-  constructor(
-    private readonly db: Database,
-    private readonly logger: Logger,
-    // ... more dependencies
-  ) {}
-
-  createUser(input: UserInputType) {
-    const user = await this.db.users.insert(input);
-    this.logger.info("User created", { userId: user.id });
-    return user;
-  }
-}
-
-// Boilerplate to start the application, use the services, etc.
-```
-
-</td>
-<td width="50%" valign="top">
-
-### Next-gen way
+### Functional Composition with Clarity
 
 Runner keeps everything as plain functions and objects. You declare dependencies up front, wire them once, and get predictable runtime behavior with no hidden reflection.
 
 ```typescript
-const createUser = r
-  .task("users.create")
-  .dependencies({ db, logger })
-  .run(async (input: UserInputType, { db, logger }) => {
-    const user = await db.users.insert(input);
-    logger.info("User created", { userId: user.id });
-    return user;
+import { r, run, globals } from "@bluelibs/runner";
+const logger = globals.resources.logger;
+
+// resources are singletons with lifecycle management
+const db = r
+  .resource("app.db")
+  .init(async () => ({
+    users: {
+      insert: async (input: { name: string; email: string }) => ({
+        id: "user-1",
+        ...input,
+      }),
+    },
+  }))
+  .build();
+
+// events are signals that something happened, often used for decoupling
+const userCreated = r
+  .event("users.created")
+  .payloadSchema(z.object({ userId: z.string() })) // runtime and compile-time validation
+  .build();
+
+// notifications module
+const onUserCreatedHook = r
+  .hook("users.welcomeEmail")
+  .on(userCreated)
+  .dependencies({ mailer, logger })
+  .run(async (event, { mailer, logger }) => {
+    await mailer.sendWelcome(event.userId);
+    logger.info("Welcome email sent", { userId: event.userId });
   })
   .build();
 
-const app = r.resource("app").register([db, logger, createUser]).build();
+// tasks are functions with explicit dependencies and input/output schemas
+const createUser = r
+  .task("users.create")
+  .dependencies({ db, logger, emitUserCreated: userCreated })
+  .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
+  .run(async (user, { db, logger, emitUserCreated }) => {
+    const createdUser = await db.users.insert(user);
+    await emitUserCreated({ userId: createdUser.id });
+    logger.info("User created", { userId: createdUser.id });
 
-const runtime = await run(app);
+    return createdUser;
+  })
+  .build();
+
+// wire everything into the app resource
+const app = r
+  .resource("app")
+  .register([db, userCreated, createUser, onUserCreatedHook]) // lets the runtime know about it
+  .build(); // close the builder
+
+const { runTask, emitEvent, dispose } = await run(app);
 ```
+
+Any resource can be 'run' independently, giving you incredible freedom of testing and composition. Stay tuned because we have lots of goodies.
 
 **Benefits:**
 

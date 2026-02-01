@@ -12,6 +12,7 @@ Use tunnels when you want:
 
 - a tiny, controlled HTTP surface (`/__runner/*`) instead of ad-hoc endpoints,
 - task semantics preserved (validation, middleware, typed errors, async context),
+- the parts that cross the wire (input/output, async context values, typed error payloads) to be encoded/decoded via Runner’s `Serializer`,
 - the option to switch between local execution and remote execution by configuration.
 
 ---
@@ -52,47 +53,32 @@ Only the **execution location** changes.
 
 ### Tunnel call flow (diagram)
 
-This diagram shows the “transparent routing” path (phantom task + client-mode tunnel resource), plus the server-side auth + allow-list gates.
+There are two phases:
+
+1. **Init time (client runtime)**: tunnel resources in `mode: "client"` select tasks/events and patch them to delegate remotely.
+2. **Call time**: your code calls the task; it either routes through the tunnel client or runs locally. On the server, `nodeExposure` parses + authenticates and (optionally) applies allow-lists before executing the task.
 
 ```mermaid
-sequenceDiagram
-  autonumber
-  participant App as App Code (caller runtime)
-  participant Task as Task Function (phantom or real)
-  participant TM as Tunnel Middleware<br>(patches tasks at init)
-  participant TRes as Tunnel Resource<br>(mode: "client")
-  participant Client as HTTP Tunnel Client
-  participant Expo as nodeExposure HTTP Server
-  participant Policy as Exposure Policy<br>(mode: "server" allow-list)
-  participant Runner as Server Runtime<br>(Task Runner + DI)
+graph TD
+  App[App code] --> Call["Call task: add(input)"]
+  Call --> Route{Tunnel route?}
+  Route -- "no" --> Local["Runs locally<br/>or returns undefined"]
+  Route -- "yes" --> Client[HTTP tunnel client]
+  Client --> Expo["nodeExposure<br/>/__runner/*"]
+  Expo --> Guard["Parse + authenticate<br/>+ allow-list gate"]
+  Guard --> Run["Execute task<br/>in server runtime"]
+  Run --> Reply["Result / typed error"]
+  Reply --> App
 
-  Note over TM,TRes: Init time: tunnel resources are inspected<br>Selected tasks get patched to delegate remotely
+  classDef task fill:#4CAF50,color:#fff;
+  classDef resource fill:#2196F3,color:#fff;
+  classDef middleware fill:#9C27B0,color:#fff;
+  classDef external fill:#607D8B,color:#fff;
 
-  App->>Task: await add({ a, b })
-
-  alt Task id is selected by a client tunnel
-    Task->>TM: patched run() invoked
-    TM->>TRes: tunnel.run(task, input)
-    TRes->>Client: POST /task/{taskId}<br>+ x-runner-token<br>+ x-runner-context
-    Client->>Expo: HTTP request
-
-    Expo->>Expo: Parse body (JSON/multipart/octet-stream)
-    Expo->>Expo: Authenticate (token and/or validator tasks)
-
-    alt Allow-lists enabled (server tunnel resource exists)
-      Expo->>Policy: Is taskId allow-listed?
-      Policy-->>Expo: yes/no
-      Policy-->>Client: 403 if not allow-listed
-    end
-
-    Expo->>Runner: Execute task inside DI + middleware
-    Runner-->>Expo: Result or typed error
-    Expo-->>Client: JSON envelope / stream
-    Client-->>App: result (or rethrow typed error)
-  else No tunnel route found
-    Note over Task: Phantom resolves to undefined (remote-only)<br>or real task runs locally
-    Task-->>App: undefined or local result
-  end
+  class Run task;
+  class Expo resource;
+  class Route middleware;
+  class App,Client,Guard external;
 ```
 
 ---
@@ -571,13 +557,14 @@ Delivery modes (set via `eventDeliveryMode` on the tunnel value):
 
 On the server:
 
-- if an error matches a Runner-registered error helper (`store.errors`), exposure includes `{ id, data }` in the response envelope
+- if an error matches a Runner-registered error helper (for example built via `r.error("...").build()`), exposure includes `{ id, data }` in the response envelope
 - 500 errors that are not app-defined are sanitized (message becomes `"Internal Error"`)
 
 On the client:
 
 - if the client has an `errorRegistry`, it can rethrow typed errors locally using `{ id, data }`
 - the factories (`globals.resources.httpClientFactory` and Node mixed factory) auto-inject the registry from the runtime
+- `{ id, data }` is transported through the tunnel using the configured `Serializer`, so `data` can be any Serializer-supported value (not just plain JSON)
 
 ---
 
@@ -589,6 +576,8 @@ If you use Runner async contexts (via `defineAsyncContext` / `r.asyncContext(...
 - the server hydrates known contexts for the duration of the task/event execution
 
 The header contains a serializer-encoded map: `{ [contextId]: serializedValue }`.
+
+This uses the same `Serializer` as your tunnel client (defaults to `getDefaultSerializer()`), so context values can be any Serializer-supported value.
 
 ---
 
