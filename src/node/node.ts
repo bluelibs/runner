@@ -66,6 +66,7 @@ export async function run(root: any, config?: any): Promise<RunResult<any>> {
         ...cfg,
         serializer,
         contexts,
+        errorRegistry,
       });
     smartEntry.isInitialized = true;
   }

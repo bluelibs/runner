@@ -333,10 +333,22 @@ Use when:
 - you want Node multipart uploads (streams/buffers),
 - you want “auto-switch” based on input shape.
 
+Why there are two:
+
+- **Smart** is the “full power” Node client (uses `http.request`): it supports
+  - raw-body duplex (`Content-Type: application/octet-stream`),
+  - Node multipart streaming uploads (manifest + streams/buffers),
+  - streamed responses (server returns a readable stream).
+- **Mixed** is a convenience wrapper: it uses the fast **serialized JSON** path (Runner `Serializer` over `fetch`) when it can, and falls back to Smart when it must.
+  - The auto-switch is based on **input shape**: it detects **stream inputs** and **Node File sentinels**.
+  - It cannot infer “this task will return a stream” when the input is plain JSON — use `forceSmart` (or Smart directly) for those tasks.
+
 Recommendation:
 
-- use **Mixed** as the default Node client (JSON when possible, Smart when needed).
-- use **Smart** when you want to always use the Node streaming-capable path.
+- use **Mixed** as the default Node client (serialized JSON when possible, Smart when needed).
+- if you have tasks that may **return a stream even for plain JSON inputs** (ex: downloads), either:
+  - set `forceSmart: true` (or a predicate) on Mixed, or
+  - use **Smart** directly.
 
 ### Pure fetch (`globals.tunnels.http.createClient`, `createExposureFetch`)
 

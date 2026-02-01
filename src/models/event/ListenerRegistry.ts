@@ -68,9 +68,6 @@ export class ListenerRegistry {
    * Cached merge between event-specific and global listeners.
    * Exposed for backward compatibility with existing tests.
    */
-  /**
-   * Clears all listeners and caches.
-   */
   clear(): void {
     this.listeners.clear();
     this.globalListeners.length = 0;
@@ -101,13 +98,7 @@ export class ListenerRegistry {
       }
       this.cachedMergedListeners.set(eventId, cached);
     }
-    // Return a slice so that if the cached array is mutated (shouldn't be, but for safety)
-    // or if we returned a direct reference above, we are safe.
-    // However, since we sliced above when creating 'cached', we just need to ensure
-    // we don't return the *same* mutable array reference if we just grabbed it from the map.
-    // Actually, simply slicing the return value is the safest and easiest way to ensure snapshot isolation
-    // for every caller, assuming the caller might iterate.
-    // But 'cached' is the backing store. We want to return a SNAPSHOT.
+    // Return a shallow copy to ensure snapshot isolation.
     return cached.slice();
   }
 

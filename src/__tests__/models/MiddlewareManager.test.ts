@@ -159,7 +159,7 @@ describe("MiddlewareManager", () => {
 
     const runner = manager.composeTaskRunner(task);
     const result = await runner(2);
-    // ((2) * 2) + 3 = 7 (dedup ensures global "shared" is ignored; local "shared" runs once)
+    // Dedup ensures global "shared" is ignored; local "shared" runs once.
     expect(result).toBe(7);
 
     // Ensure event-specific listeners called twice (two middlewares), global listener not called
@@ -191,7 +191,6 @@ describe("MiddlewareManager", () => {
     });
 
     const result = await manager.runResourceInit(resource, { n: 5 }, {}, {});
-    // base = 10, middleware adds 10 => 20
     expect(result).toBe(20);
   });
 

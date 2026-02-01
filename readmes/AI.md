@@ -436,6 +436,8 @@ Tunnels let you call Runner tasks/events across a process boundary over a small 
 
 For “no call-site changes”, register a client-mode tunnel resource tagged with `globals.tags.tunnel` plus phantom tasks for the remote ids; the tunnel middleware auto-routes selected tasks/events to an HTTP client. For explicit boundaries, create a client once and call `client.task(id, input)` / `client.event(id, payload)` directly. Full guide: `readmes/TUNNELS.md`.
 
+Node client note: prefer `createHttpMixedClient` (it uses the serialized-JSON path via Runner `Serializer` + `fetch` when possible and switches to the streaming-capable Smart path when needed). If a task may return a stream even for plain JSON inputs (ex: downloads), set `forceSmart` on Mixed (or use `createHttpSmartClient` directly).
+
 ## Serialization
 
 Runner ships with a serializer that round-trips Dates, RegExp, binary, and custom shapes across Node and web.

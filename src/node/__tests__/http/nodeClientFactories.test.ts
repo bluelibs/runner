@@ -1,7 +1,33 @@
+import * as http from "http";
+import { Readable, Writable } from "stream";
 import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
 import { r, globals as coreGlobals } from "../../..";
 import { globals as nodeGlobals, run as runNode } from "../../node";
 import type { RunResult } from "../../../models/RunResult";
+
+function asIncoming(
+  res: Readable,
+  headers: Record<string, string>,
+): http.IncomingMessage {
+  (res as unknown as { headers: Record<string, string> }).headers = headers;
+  return res as unknown as http.IncomingMessage;
+}
+
+function makeSink(): http.ClientRequest {
+  const sink = new Writable({
+    write(_c, _e, n) {
+      n();
+    },
+    final(n) {
+      n();
+    },
+  }) as unknown as http.ClientRequest;
+
+  (sink as unknown as { on: any }).on = (_: any, __: any) => sink;
+  (sink as unknown as { setTimeout: any }).setTimeout = () => sink;
+  (sink as unknown as { destroy: any }).destroy = () => undefined;
+  return sink;
+}
 
 describe("node client factories (DI)", () => {
   let runtime: RunResult<void>;
@@ -69,6 +95,55 @@ describe("node client factories (DI)", () => {
     });
     expect(client).toBeDefined();
 
+    await rt.dispose();
+  });
+
+  it("httpSmartClientFactory should rethrow typed errors (auto-injected errorRegistry)", async () => {
+    const SmartError = r
+      .error<{ code: number }>("test.errors.NodeSmartFactory")
+      .build();
+    const app = r
+      .resource("test.smartFactoryTypedErrors")
+      .register([SmartError])
+      .build();
+    const rt = await runNode(app);
+
+    const factory = await rt.getResourceValue(
+      nodeGlobals.resources.httpSmartClientFactory,
+    );
+
+    const reqSpy = jest
+      .spyOn(http, "request")
+      .mockImplementation((_opts: unknown, cb: unknown) => {
+        const callback = cb as (res: http.IncomingMessage) => void;
+        const env = {
+          ok: false,
+          error: {
+            code: "APP",
+            message: "boom",
+            id: SmartError.id,
+            data: { code: 7 },
+          },
+        };
+        const body = Buffer.from(JSON.stringify(env), "utf8");
+        callback(
+          asIncoming(Readable.from([body]), {
+            "content-type": "application/json",
+          }),
+        );
+        return makeSink();
+      });
+
+    const client = factory({ baseUrl: "http://127.0.0.1:9999/__runner" });
+
+    await expect(client.task("t.json", { a: 1 } as any)).rejects.toMatchObject({
+      name: SmartError.id,
+      id: SmartError.id,
+      data: { code: 7 },
+    });
+    expect(reqSpy).toHaveBeenCalled();
+
+    jest.restoreAllMocks();
     await rt.dispose();
   });
 });

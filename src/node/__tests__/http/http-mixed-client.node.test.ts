@@ -102,12 +102,7 @@ describe("createMixedHttpClient (unit)", () => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "OK" };
         const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
-        const res = Readable.from([body]); // Correction: was [body] in previous view, but let's check carefully.
-        // Wait, original was:
-        // const res = Readable.from([body]);
-        // The previous tool output showed I replaced it with... nothing changed in body logic, just indentation.
-        // But my tool call above replaced lines 98-116.
-        // Let's use the content I know is there.
+        const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
         callback(im);
         const sink = new Writable({
