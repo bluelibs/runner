@@ -2,17 +2,9 @@
 
 > Token-friendly guide spotlighting the fluent builder API (`r.*`). Classic `defineX` / `resource({...})` remain supported for backwards compatibility.
 
-For the landing overview, see [README.md](./README.md). For the complete guide, see [GUIDE.md](./GUIDE.md).
+For the landing overview, see [README.md](../README.md). For the complete guide, see [FULL_GUIDE.md](./FULL_GUIDE.md).
 
-## Durable Workflows (Node-only)
-
-Durable workflows are available from `@bluelibs/runner/node` (implemented under `src/node/durable/`).
-See `readmes/DURABLE_WORKFLOWS.md` (full) or `readmes/DURABLE_WORKFLOWS_AI.md` (token-friendly).
-They provide replay-safe primitives like `ctx.step(...)`, `ctx.sleep(...)`, `ctx.emit(...)`, and `ctx.waitForSignal(...)`.
-Use them when you need persistence and recovery across restarts/crashes.
-
-Note: the durable "real backends" integration suite (Redis + RabbitMQ) is env-gated and will
-skip unless `DURABLE_INTEGRATION=1` is set (see `readmes/DURABLE_WORKFLOWS.md`).
+**Durable Workflows (Node-only):** For persistence and crash recovery, see `DURABLE_WORKFLOWS.md`.
 
 ## Serializer Safety
 
@@ -261,23 +253,7 @@ const myTask = r
 const myKey = journal.createKey<{ startedAt: Date }>("app.middleware.timing");
 ```
 
-**Built-in Middleware Journal Keys**: Several global middlewares expose their runtime state via journal keys:
-
-| Middleware | Key | Type | Description |
-|---|---|---|---|
-| `retry` | `globals.middleware.task.retry.journalKeys.attempt` | `number` | Current retry attempt (0-indexed) |
-| `retry` | `globals.middleware.task.retry.journalKeys.lastError` | `Error \| undefined` | Error from previous attempt |
-| `cache` | `globals.middleware.task.cache.journalKeys.hit` | `boolean` | Whether the cache middleware returned a cached result |
-| `circuitBreaker` | `globals.middleware.task.circuitBreaker.journalKeys.state` | `"CLOSED" \| "OPEN" \| "HALF_OPEN"` | Current circuit state |
-| `circuitBreaker` | `globals.middleware.task.circuitBreaker.journalKeys.failures` | `number` | Current failure count |
-| `rateLimit` | `globals.middleware.task.rateLimit.journalKeys.remaining` | `number` | Remaining requests in window |
-| `rateLimit` | `globals.middleware.task.rateLimit.journalKeys.resetTime` | `number` | Timestamp when window resets |
-| `rateLimit` | `globals.middleware.task.rateLimit.journalKeys.limit` | `number` | Configured limit |
-| `fallback` | `globals.middleware.task.fallback.journalKeys.active` | `boolean` | Whether fallback was activated |
-| `fallback` | `globals.middleware.task.fallback.journalKeys.error` | `Error \| undefined` | Error that triggered fallback |
-| `timeout` | `globals.middleware.task.timeout.journalKeys.abortController` | `AbortController` | Controller for aborting the task |
-
-Note: these keys are available via `globals` (no deep imports required).
+**Built-in Middleware Journal Keys**: Global middlewares (`retry`, `cache`, `circuitBreaker`, `rateLimit`, `fallback`, `timeout`) expose runtime state via typed journal keys at `globals.middleware.task.<name>.journalKeys`. For example, `retry` exposes `attempt` and `lastError`; `cache` exposes `hit`; `circuitBreaker` exposes `state` and `failures`. Access these via `journal.get(key)` without deep imports.
 
 ## Tags
 
@@ -456,96 +432,11 @@ const app = r
 
 ## HTTP & Tunnels
 
-Run Node exposures and connect to remote Runners with fluent resources.
+Tunnels let you call Runner tasks/events across a process boundary over a small HTTP surface (Node-only exposure via `nodeExposure`), while preserving task ids, middleware, validation, typed errors, and async context.
 
-`nodeExposure` is a Runner **resource** that starts an HTTP server and exposes a controlled surface for executing tasks and emitting events over HTTP (under a `basePath` like `/__runner`).
+For “no call-site changes”, register a client-mode tunnel resource tagged with `globals.tags.tunnel` plus phantom tasks for the remote ids; the tunnel middleware auto-routes selected tasks/events to an HTTP client. For explicit boundaries, create a client once and call `client.task(id, input)` / `client.event(id, payload)` directly. Full guide: `readmes/TUNNELS.md`.
 
-```ts
-	import { r, globals } from "@bluelibs/runner";
-	import { nodeExposure } from "@bluelibs/runner/node";
-
-const httpExposure = nodeExposure.with({
-  http: {
-    basePath: "/__runner",
-    listen: { host: "0.0.0.0", port: 7070 },
-    auth: { token: process.env.RUNNER_TOKEN },
-    // Configurable security limits (optional)
-    limits: {
-      json: { maxSize: 1024 * 1024 * 5 }, // 5MB
-      multipart: { fileSize: 1024 * 1024 * 50 }, // 50MB
-    }
-  },
-});
-
-> [!NOTE]
-> **Security & DoS Protection**: The HTTP tunnel provides built-in protections including timing-safe authentication, request body size limits (default 2MB for JSON, 20MB for multipart files), and internal error masking (500 errors are sanitized to prevent information leakage).
->
-> **Fail-closed exposure**: `nodeExposure` requires a server-mode HTTP tunnel resource to enable task/event execution. For legacy/dev usage, set `http.dangerouslyAllowOpenExposure: true`.
-
-const tunnelClient = r
-  .resource("app.tunnels.http")
-  .tags([globals.tags.tunnel])
-  .dependencies({ serializer: globals.resources.serializer })
-  .init(async (_config, { serializer }) => ({
-    mode: "client" as const,
-    transport: "http" as const,
-    tasks: (task) => task.id.startsWith("remote.tasks."),
-    client: globals.tunnels.http.createClient({
-      url: process.env.REMOTE_URL ?? "http://127.0.0.1:7070/__runner",
-      auth: { token: process.env.RUNNER_TOKEN },
-      serializer,
-    }),
-  }))
-  .build();
-
-const root = r
-  .resource("app")
-  .register([httpExposure, tunnelClient, getHealth])
-  .build();
-```
-
-### HTTP Client Factory (Recommended)
-
-The `globals.resources.httpClientFactory` automatically injects serializer, error registry, and async contexts from the store:
-
-```ts
-import { r, globals } from "@bluelibs/runner";
-
-const myTask = r
-  .task("app.tasks.callRemote")
-  .dependencies({ clientFactory: globals.resources.httpClientFactory })
-  .run(async (input, { clientFactory }) => {
-    // Client automatically has serializer, errors, and contexts injected
-    const client = clientFactory({
-      baseUrl: process.env.API_URL,
-      auth: { token: process.env.API_TOKEN },
-    });
-
-    return await client.task("remote.task", input);
-  })
-  .build();
-
-// Events: default is ack-only
-// await client.event("remote.event", { message: "hi" });
-//
-// If you need the final (potentially mutated) payload back (requires server support):
-// const finalPayload = await client.eventWithResult?.("remote.event", { message: "hi" });
-
-// Node streaming clients via Node DI factories
-import { globals as nodeGlobals } from "@bluelibs/runner/node";
-
-const nodeTask = r
-  .task("app.tasks.streamingCall")
-  .dependencies({ smartFactory: nodeGlobals.resources.httpSmartClientFactory })
-  .run(async (input, { smartFactory }) => {
-    const client = smartFactory({
-      baseUrl: process.env.API_URL,
-    });
-    // Supports duplex streams and multipart uploads
-    return await client.task("remote.streaming.task", input);
-  })
-  .build();
-```
+Node client note: prefer `createHttpMixedClient` (it uses the serialized-JSON path via Runner `Serializer` + `fetch` when possible and switches to the streaming-capable Smart path when needed). If a task may return a stream even for plain JSON inputs (ex: downloads), set `forceSmart` on Mixed (or use `createHttpSmartClient` directly).
 
 ## Serialization
 
@@ -590,12 +481,9 @@ Note on files: The “File” you see in tunnels is not a custom serializer type
 
 ## Testing
 
-- Durable test helpers: `createDurableTestSetup` and `waitUntil` from `@bluelibs/runner/node` for fast, in-memory durable workflows in tests.
-- The Jest runner has a watchdog (`JEST_WATCHDOG_MS`, default 10 minutes) to avoid “hung test run” situations.
 - In unit tests, prefer running a minimal root resource and call `await run(root)` to get `runTask`, `emitEvent`, or `getResourceValue`.
-- `createTestResource` is available for legacy suites but new code should compose fluent resources directly.
-
-Example:
+- The Jest runner has a watchdog (`JEST_WATCHDOG_MS`, default 10 minutes) to avoid "hung test run" situations.
+- For durable workflow tests, use `createDurableTestSetup` from `@bluelibs/runner/node` for fast, in-memory execution.
 
 ```ts
 import { run } from "@bluelibs/runner";
@@ -609,31 +497,6 @@ test("sends welcome email", async () => {
   await runtime.runTask(registerUser, { email: "user@example.com" });
   await runtime.dispose();
 });
-```
-
-Durable test setup example:
-
-```ts
-import { r, run } from "@bluelibs/runner";
-import { createDurableTestSetup } from "@bluelibs/runner/node";
-
-const { durable } = createDurableTestSetup();
-
-const task = r
-  .task("spec.durable.hello")
-  .dependencies({ durable })
-  .run(async (_input: undefined, { durable }) => {
-    const ctx = durable.use();
-    await ctx.step("hello", async () => "ok");
-    return { ok: true };
-  })
-  .build();
-
-const app = r.resource("spec.app").register([durable, task]).build();
-const runtime = await run(app);
-const durableRuntime = runtime.getResourceValue(durable);
-await durableRuntime.execute(task);
-await runtime.dispose();
 ```
 
 ## Observability & Debugging

@@ -7,10 +7,10 @@
 - Keep non-documentation files small (under 300 lines) (including tests). Decouple/destructure early on.
 - When doing a tasks, first think about the contracts and interfaces, then think about the acceptance criteria, and only then think about implementation.
 - Type-strictness is a must, avoid type casting unless forced to
-- Use `npm run coverage:ai` (not just coverage) to test the full suite and see coverage in a token-friendly way. 
+- Use `npm run qa` to test the full suite and see coverage in a token-friendly way, run lint and typecheck. 
 - You can speed up process by running individual/focused tests instead of the full suite. For those (`npm run test -- searchKey`) is fine
 - If there's global under 100% coverage on files/concerns you didn't work on, ignore those files.
-- Always run the tests, don't assume that you're fixed work.
+- Always run the tests, don't assume that you're fix worked.
 - When running commands, don't run them with bash -lc, or zsh -lc, run the commands directly.
 - Use only relative imports
 - Be truthful and avoid ignoring files in test configs as a way to achieve 100%.
@@ -25,16 +25,17 @@
 <specifics>
 - Node specific code goes under ./src/node/ folder. It is exported only for node.
 - This package is multi-platform (readmes/MULTIPLATFORM.md) be sure to take this into account when implementing changes
-- AI.md contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
-- Always run `npm run typecheck` and `npm run lint to ensure type safety and linting.
+- AI.md (readmes/AI.md) contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
+- Always run `npm run qa` to ensure type safety and linting.
 - Never revert changes from other files that you did not modify.
 - Apply fail-fast principles. If something is not as expected, throw an error immediately.
 - This is a framework, it's documentation is compsoed dynamically, read guide-units/DOCS_STYLE_GUIDE.md for more info, useful when we make changes or new features.
 </specifics>
 
 <new_feature>
+
 - When building new features/enhancements/changes, must be implemented with care without affecting the system and not over-polute files.
 - Code retain 100% test coverage.
-- Ensure AI.md (minimal version of README)
+- Ensure readmes/AI.md (minimal version of README)
 - Read guide-units/DOCS_STYLE_GUIDE.md to understand how we compose the main documentation.
   </new_feature>

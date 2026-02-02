@@ -15,6 +15,12 @@ describe("Compliance: repository policy files", () => {
   it("has SECURITY.md", () => {
     // SECURITY.md describes supported versions, reporting channels,
     // and CI/automation related security measures.
-    expect(fs.existsSync(path.join(root, "SECURITY.md"))).toBe(true);
+    const possiblePaths = [
+      path.join(root, "SECURITY.md"),
+      path.join(root, ".github", "SECURITY.md"),
+    ];
+    expect(possiblePaths.some((filePath) => fs.existsSync(filePath))).toBe(
+      true,
+    );
   });
 });

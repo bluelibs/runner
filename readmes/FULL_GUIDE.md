@@ -67,95 +67,105 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](./AI.md)                                                                                         | Docs    | Compact summary (<5000 tokens)      |
-| [Full Guide](./GUIDE.md)                                                                                            | Docs    | Complete documentation (composed)   |
+| [AI-Friendly Docs](./AI.md)                                                                                 | Docs    | Compact summary (<5000 tokens)      |
+| [Full Guide](./FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
 
 ### Community & Policies
 
-- [Code of Conduct](./CODE_OF_CONDUCT.md)
-- [Contributing](./CONTRIBUTING.md)
-- [Security](./SECURITY.md)
+- [Code of Conduct](../.github/CODE_OF_CONDUCT.md)
+- [Contributing](../.github/CONTRIBUTING.md)
+- [Security](../.github/SECURITY.md)
 
 ## Choose Your Path
 
 - **New to Runner**: Start with [Your First 5 Minutes](#your-first-5-minutes)
-- **Prefer an end-to-end example**: Jump to [Quick Start](#quick-start) or the [Real-World Example](./GUIDE.md#real-world-example-the-complete-package)
-- **Need Node-only capabilities**: See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
-- **Need remote execution**: See [HTTP Tunnels](./readmes/TUNNELS.md) (expose from Node.js, call from any `fetch` runtime)
-- **Care about portability**: Read [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md)
-- **Want the complete guide**: Read [GUIDE.md](./GUIDE.md)
+- **Prefer an end-to-end example**: Jump to [Quick Start](#quick-start) or the [Real-World Example](./FULL_GUIDE.md#real-world-example-the-complete-package)
+- **Need Node-only capabilities**: See [Durable Workflows](./DURABLE_WORKFLOWS.md)
+- **Need remote execution**: See [HTTP Tunnels](./TUNNELS.md) (expose from Node.js, call from any `fetch` runtime)
+- **Care about portability**: Read [Multi-Platform Architecture](./MULTI_PLATFORM.md)
+- **Want the complete guide**: Read [FULL_GUIDE.md](./FULL_GUIDE.md)
 - **Want the short version**: Read [AI.md](./AI.md)
 
 ## Platform Support (Quick Summary)
 
-| Capability                                    | Node.js | Browser | Edge | Notes |
-| --------------------------------------------- | ------ | ------- | ---- | ----- |
-| Core runtime (tasks/resources/events/hooks)   | Full   | Full    | Full | Platform adapters hide runtime differences |
-| Async Context (`r.asyncContext`)              | Full   | None    | None | Requires Node.js `AsyncLocalStorage` |
-| Durable workflows (`@bluelibs/runner/node`)   | Full   | None    | None | Node-only module |
-| Tunnels client (`createExposureFetch`)        | Full   | Full    | Full | Requires `fetch` |
-| Tunnels server (`@bluelibs/runner/node`)      | Full   | None    | None | Exposes tasks/events over HTTP |
+| Capability                                  | Node.js | Browser | Edge | Notes                                      |
+| ------------------------------------------- | ------- | ------- | ---- | ------------------------------------------ |
+| Core runtime (tasks/resources/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
+| Async Context (`r.asyncContext`)            | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
+| Durable workflows (`@bluelibs/runner/node`) | Full    | None    | None | Node-only module                           |
+| Tunnels client (`createExposureFetch`)      | Full    | Full    | Full | Requires `fetch`                           |
+| Tunnels server (`@bluelibs/runner/node`)    | Full    | None    | None | Exposes tasks/events over HTTP             |
 
 ---
-
-← [Back to README](./README.md)
-
 ## Why Runner?
 
-<table>
-<tr>
-<td width="50%" valign="top">
+Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
 
-### Current Way
-
-Decorator-heavy DI frameworks hide work behind reflection. They often require framework-specific testing harnesses, and debugging jumps between generated code and the code you wrote.
-
-```typescript
-@Injectable()
-export class UserService {
-  constructor(
-    private readonly db: Database,
-    private readonly logger: Logger,
-    // ... more dependencies
-  ) {}
-
-  createUser(input: UserInputType) {
-    const user = await this.db.users.insert(input);
-    this.logger.info("User created", { userId: user.id });
-    return user;
-  }
-}
-
-// Boilerplate to start the application, use the services, etc.
-```
-
-</td>
-<td width="50%" valign="top">
-
-### Next-gen way
+### Functional Composition with Clarity
 
 Runner keeps everything as plain functions and objects. You declare dependencies up front, wire them once, and get predictable runtime behavior with no hidden reflection.
 
 ```typescript
-const createUser = r
-  .task("users.create")
-  .dependencies({ db, logger })
-  .run(async (input: UserInputType, { db, logger }) => {
-    const user = await db.users.insert(input);
-    logger.info("User created", { userId: user.id });
-    return user;
+import { r, run, globals } from "@bluelibs/runner";
+const logger = globals.resources.logger;
+
+// resources are singletons with lifecycle management
+const db = r
+  .resource("app.db")
+  .init(async () => ({
+    users: {
+      insert: async (input: { name: string; email: string }) => ({
+        id: "user-1",
+        ...input,
+      }),
+    },
+  }))
+  .build();
+
+// events are signals that something happened, often used for decoupling
+const userCreated = r
+  .event("users.created")
+  .payloadSchema(z.object({ userId: z.string() })) // runtime and compile-time validation
+  .build();
+
+// notifications module
+const onUserCreatedHook = r
+  .hook("users.welcomeEmail")
+  .on(userCreated)
+  .dependencies({ mailer, logger })
+  .run(async (event, { mailer, logger }) => {
+    await mailer.sendWelcome(event.userId);
+    logger.info("Welcome email sent", { userId: event.userId });
   })
   .build();
 
-const app = r.resource("app")
-  .register([db, logger, createUser])
+// tasks are functions with explicit dependencies and input/output schemas
+const createUser = r
+  .task("users.create")
+  .dependencies({ db, logger, emitUserCreated: userCreated })
+  .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
+  .run(async (user, { db, logger, emitUserCreated }) => {
+    const createdUser = await db.users.insert(user);
+    await emitUserCreated({ userId: createdUser.id });
+    logger.info("User created", { userId: createdUser.id });
+
+    return createdUser;
+  })
   .build();
 
-const runtime = await run(app);
+// wire everything into the app resource
+const app = r
+  .resource("app")
+  .register([db, userCreated, createUser, onUserCreatedHook]) // lets the runtime know about it
+  .build(); // close the builder
+
+const { runTask, emitEvent, dispose } = await run(app);
 ```
+
+Any resource can be 'run' independently, giving you incredible freedom of testing and composition. Stay tuned because we have lots of goodies.
 
 **Benefits:**
 
@@ -164,10 +174,6 @@ const runtime = await run(app);
 - **Testable by default** — Call `.run()` with mocks or run the full app, no special harnesses
 - **Traceable** — Stack traces and debug output stay aligned with your source
 - **Incremental adoption** — Wrap an existing service or task without rewriting the rest
-
-</td>
-</tr>
-</table>
 
 ---
 
@@ -220,9 +226,9 @@ const runtime = await run(app);
 
 **Deployment & Integrations** (see dedicated guides in `./readmes/`)
 
-- [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows (Node-only)
-- [HTTP Tunnels](./readmes/TUNNELS.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
-- [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md) - How Runner supports Node, browsers, and edge runtimes
+- [Durable Workflows](./DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows (Node-only)
+- [HTTP Tunnels](./TUNNELS.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
+- [Multi-Platform Architecture](./MULTI_PLATFORM.md) - How Runner supports Node, browsers, and edge runtimes
 
 **Architecture Patterns**
 
@@ -256,8 +262,6 @@ const runtime = await run(app);
 - [Under the Hood](#under-the-hood) - Architecture deep dive
 - [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
-
----
 ## What Is This Thing?
 
 BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It’s explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
@@ -838,8 +842,8 @@ Runner auto-detects the platform (Node.js, browser, edge) and adapts behavior at
 **Node-specific features:**
 
 - [Async Context](#async-context) - Request-scoped state via `AsyncLocalStorage`
-- [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows
-- [HTTP Tunnels](./readmes/TUNNELS.md) - Remote task execution
+- [Durable Workflows](./DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows
+- [HTTP Tunnels](./TUNNELS.md) - Remote task execution
 
 ---
 ## Learning Guide
@@ -1310,7 +1314,7 @@ Here's a friendly guideline (not a strict rule!):
 - Multiple parts of your app need to use it
 - You want observability (logging, monitoring, debugging)
 
-  **Keep it as a regular function when:**
+**Keep it as a regular function when:**
 
 - It's a simple utility (date formatting, string manipulation, calculations)
 - It's a pure function with no dependencies
@@ -1821,14 +1825,16 @@ For advanced scenarios, you can intercept framework execution without relying on
 
 Per-task interceptors must be registered during resource initialization (before the system is locked). They are a good fit when you want a specific task to be adjusted by a specific resource (for example: feature toggles, input shaping, or internal routing) without making it global middleware.
 
-Note that per-task interceptors run *inside* task middleware. If a middleware short-circuits and never calls `next()`, the task (and its per-task interceptors) will not execute.
+Note that per-task interceptors run _inside_ task middleware. If a middleware short-circuits and never calls `next()`, the task (and its per-task interceptors) will not execute.
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
 const adder = r
   .task("app.tasks.adder")
-  .run(async (input: { value: number }) => ({ value: input.value + 1 } as const))
+  .run(
+    async (input: { value: number }) => ({ value: input.value + 1 }) as const,
+  )
   .build();
 
 const installer = r
@@ -2230,9 +2236,9 @@ try {
 The core concepts above cover most use cases. For specialized features:
 
 - **Async Context**: Per-request/thread-local state via `r.asyncContext()`. See [Async Context](#async-context) for Node.js `AsyncLocalStorage` patterns.
-- **Durable Workflows** (Node-only): Replay-safe primitives like `ctx.step()`, `ctx.sleep()`, and `ctx.waitForSignal()`. See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md).
-- **HTTP Tunnels**: Expose tasks over HTTP or call remote Runners. See [Tunnels](./readmes/TUNNELS.md).
-- **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](./readmes/SERIALIZER_PROTOCOL.md).
+- **Durable Workflows** (Node-only): Replay-safe primitives like `ctx.step()`, `ctx.sleep()`, and `ctx.waitForSignal()`. See [Durable Workflows](./DURABLE_WORKFLOWS.md).
+- **HTTP Tunnels**: Expose tasks over HTTP or call remote Runners. See [Tunnels](./TUNNELS.md).
+- **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](./SERIALIZER_PROTOCOL.md).
 
 ---
 ## run() and RunOptions
@@ -2276,16 +2282,16 @@ await result.dispose();
 
 Pass as the second argument to `run(app, options)`.
 
-| Option             | Type                    | Description                                                                                                                                                                                                                   |
-| ------------------ | ----------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug`            | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                          |
-| `logs`             | `object`                | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete. |
-| `errorBoundary`    | `boolean`               | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                        |
-| `shutdownHooks`    | `boolean`               | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                            |
-| `onUnhandledError` | `(info) => void \| Promise<void>` | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                 |
-| `dryRun`           | `boolean`               | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                          |
-| `runtimeCycleDetection` | `boolean`          | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                 |
-| `mode`             | `"dev" \| "prod" \| "test"` | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                            |
+| Option                       | Type                                            | Description                                                                                                                                                                                                                   |
+| ---------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug`                      | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                          |
+| `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete. |
+| `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                        |
+| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                            |
+| `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                 |
+| `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                          |
+| `runtimeEventCycleDetection` | `boolean`                                       | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                  |
+| `mode`                       | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                             |
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
 
@@ -2378,6 +2384,7 @@ await run(app);
 ```
 
 > **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You’re collapsing the waveform of a task at runtime and I’m Schrödinger’s runtime, praying the cat hasn’t overridden `run()` with `throw new Error('lol')`."
+
 ## Lifecycle Management
 
 When your app stops—whether from Ctrl+C, a deployment, or a crash—you need to close database connections, flush logs, and finish in-flight requests. Runner handles this automatically.
@@ -2470,10 +2477,7 @@ const server = r
 
 const app = r
   .resource("app")
-  .register([
-    database,
-    server.with({ port: 3000 }),
-  ])
+  .register([database, server.with({ port: 3000 })])
   .init(async () => "ready")
   .build();
 
@@ -2633,6 +2637,30 @@ const app = r
   .build();
 ```
 
+**Journal Introspection**: On cache hits the task `run()` isn't executed, but you can still detect cache hits from a wrapping middleware:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const cacheJournalKeys = globals.middleware.task.cache.journalKeys;
+
+const cacheLogger = r
+  .middleware.task("app.middleware.cacheLogger")
+  .run(async ({ task, next, journal }) => {
+    const result = await next(task.input);
+    const wasHit = journal.get(cacheJournalKeys.hit);
+    if (wasHit) console.log("Served from cache");
+    return result;
+  })
+  .build();
+
+const myTask = r
+  .task("app.tasks.cached")
+  .middleware([cacheLogger, globals.middleware.task.cache.with({ ttl: 60000 })])
+  .run(async () => "result")
+  .build();
+```
+
 > **runtime:** "Because nobody likes waiting. Correct. You keep asking the same question like a parrot with Wi‑Fi, so I built a memory palace. Now you get instant answers until you change one variable and whisper 'cache invalidation' like a curse."
 
 ---
@@ -2695,6 +2723,31 @@ const resilientTask = r
 2. **OPEN**: Threshold reached. All requests throw `CircuitBreakerOpenError` immediately.
 3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
 4. **RECOVERY**: If the trial succeeds, it goes back to **CLOSED**. Otherwise, it returns to **OPEN**.
+
+**Journal Introspection**: Access the circuit breaker's state and failure count within your task (when it runs):
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const circuitBreakerJournalKeys =
+  globals.middleware.task.circuitBreaker.journalKeys;
+
+const myTask = r
+  .task("app.tasks.monitored")
+  .middleware([
+    globals.middleware.task.circuitBreaker.with({
+      failureThreshold: 5,
+      resetTimeout: 30000,
+    }),
+  ])
+  .run(async (_input, _deps, context) => {
+    const state = context?.journal.get(circuitBreakerJournalKeys.state);
+    const failures = context?.journal.get(circuitBreakerJournalKeys.failures); // number
+    console.log(`Circuit state: ${state}, failures: ${failures}`);
+    return "result";
+  })
+  .build();
+```
 
 > **runtime:** "Circuit Breaker: because 'hope' is not a resilience strategy. If the database is on fire, I stop sending you there to pour gasoline on it. I'll check back in thirty seconds to see if the smoke has cleared."
 
@@ -2759,6 +2812,36 @@ const getPrice = r
   .build();
 ```
 
+**Journal Introspection**: The original task that throws won't continue execution, but you can detect fallback activation from a wrapping middleware:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const fallbackJournalKeys = globals.middleware.task.fallback.journalKeys;
+
+const fallbackLogger = r
+  .middleware.task("app.middleware.fallbackLogger")
+  .run(async ({ task, next, journal }) => {
+    const result = await next(task.input);
+    const wasActivated = journal.get(fallbackJournalKeys.active);
+    const err = journal.get(fallbackJournalKeys.error);
+    if (wasActivated) console.log(`Fallback used after: ${err?.message}`);
+    return result;
+  })
+  .build();
+
+const myTask = r
+  .task("app.tasks.withFallback")
+  .middleware([
+    fallbackLogger,
+    globals.middleware.task.fallback.with({ fallback: "default" }),
+  ])
+  .run(async () => {
+    throw new Error("Primary failed");
+  })
+  .build();
+```
+
 > **runtime:** "Fallback: the 'parachute' pattern. If your primary logic decides to take a nap mid-flight, I'll make sure we land on a soft pile of default values instead of a stack trace."
 
 ---
@@ -2789,6 +2872,26 @@ const sensitiveTask = r
 - **Fixed-window strategy**: Simple, predictable request counting.
 - **Isolation**: Limits are tracked per task definition.
 - **Error handling**: Throws `RateLimitError` when the limit is exceeded.
+
+**Journal Introspection**: When the task runs (request allowed), you can read the rate limit state from the execution journal:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const rateLimitJournalKeys = globals.middleware.task.rateLimit.journalKeys;
+
+const myTask = r
+  .task("app.tasks.rateLimited")
+  .middleware([globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 10 })])
+  .run(async (_input, _deps, context) => {
+    const remaining = context?.journal.get(rateLimitJournalKeys.remaining); // number
+    const resetTime = context?.journal.get(rateLimitJournalKeys.resetTime); // timestamp (ms)
+    const limit = context?.journal.get(rateLimitJournalKeys.limit); // number
+    console.log(`${remaining}/${limit} requests remaining, resets at ${new Date(resetTime)}`);
+    return "result";
+  })
+  .build();
+```
 
 > **runtime:** "Rate limiting: counting beans so you don't have to. You've had five turns this minute; come back when the clock says so."
 
@@ -2991,6 +3094,25 @@ The retry middleware can be configured with:
 - `retries`: The maximum number of retry attempts (default: 3).
 - `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
+
+**Journal Introspection**: Access the current retry attempt and the last error within your task:
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const retryJournalKeys = globals.middleware.task.retry.journalKeys;
+
+const myTask = r
+  .task("app.tasks.retryable")
+  .middleware([globals.middleware.task.retry.with({ retries: 5 })])
+  .run(async (_input, _deps, context) => {
+    const attempt = context?.journal.get(retryJournalKeys.attempt); // 0-indexed attempt number
+    const lastError = context?.journal.get(retryJournalKeys.lastError); // Error from previous attempt, if any
+    if ((attempt ?? 0) > 0) console.log(`Retry attempt ${attempt} after: ${lastError?.message}`);
+    return "result";
+  })
+  .build();
+```
 
 > **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it’ll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I’ll keep the attempts ledger while your API cosplays a coin toss."
 
@@ -3966,7 +4088,7 @@ The serializer is hardened against common attacks:
 - **Prototype pollution blocked**: Filters `__proto__`, `constructor`, `prototype` keys
 - **Depth limits**: Configurable max depth prevents stack overflow
 
-> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](./readmes/TUNNELS.md) for file upload patterns.
+> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](./TUNNELS.md) for file upload patterns.
 
 ### Tunnels: Bridging Runners
 
@@ -4013,7 +4135,7 @@ const remoteTasksTunnel = r
 
 This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
 
-For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./readmes/TUNNELS.md).
+For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./TUNNELS.md).
 
 ---
 
@@ -5174,7 +5296,7 @@ Every builder follows the same rhythm:
 3. **Implement** with `.run()` or `.init()`
 4. **Finish** with `.build()`
 
-For the complete API reference, see the [Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).
+For the complete API reference, see the [Fluent Builders documentation](./FLUENT_BUILDERS.md).
 
 > **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."
 ## Type Helpers
@@ -6049,7 +6171,7 @@ flowchart TD
 
 **Example dependency resolution:**
 
-```
+```typescript
 app
 ├── server (depends on: database, config)
 │   ├── database (depends on: config)
@@ -6107,22 +6229,22 @@ const queryTask = r
 
 Middleware forms an "onion" around your task:
 
-```
-                    ┌─────────────────────────────────────┐
-                    │            Auth Middleware          │
-                    │   ┌─────────────────────────────┐   │
-                    │   │       Rate Limit            │   │
-                    │   │   ┌─────────────────────┐   │   │
-                    │   │   │     Cache           │   │   │
-                    │   │   │   ┌─────────────┐   │   │   │
-                    │   │   │   │   Timeout   │   │   │   │
-Input ─────────────►│   │   │   │   ┌─────┐   │   │   │   │
-                    │   │   │   │   │TASK │   │   │   │   │
-Output ◄────────────│   │   │   │   └─────┘   │   │   │   │
-                    │   │   │   └─────────────┘   │   │   │
-                    │   │   └─────────────────────┘   │   │
-                    │   └─────────────────────────────┘   │
-                    └─────────────────────────────────────┘
+```mermaid
+flowchart LR
+  In([Input])
+  Out([Output])
+
+  subgraph Onion[Middleware onion]
+    direction LR
+    Auth[Auth middleware]
+    Rate[Rate limit middleware]
+    Cache[Cache middleware]
+    Timeout[Timeout middleware]
+    Task[[Task]]
+  end
+
+  In --> Auth --> Rate --> Cache --> Timeout --> Task
+  Task -. result .-> Timeout -.-> Cache -.-> Rate -.-> Auth --> Out
 ```
 
 **Execution flow:**
@@ -6346,6 +6468,7 @@ const app = r
 > **runtime:** "Under the hood: a place of promises, graphs, and existential dread about garbage collection. You wanted to know how I work? I'm a topological sort wearing an async trench coat. The real magic is that any of this is debuggable at all."
 
 ---
+
 ## Integration Recipes
 
 Production-ready patterns for common integration scenarios. Each recipe is tested and ready to adapt.
@@ -7152,6 +7275,7 @@ await queue.run(async (_signal) => {
 ```
 
 ---
+
 ## Why Choose BlueLibs Runner?
 
 After reading this far, here's what you've learned:
@@ -7216,7 +7340,7 @@ This is part of the [BlueLibs](https://www.bluelibs.com) ecosystem. We're not tr
 - [GitHub Repository](https://github.com/bluelibs/runner) - if you find this useful
 - [Documentation](https://bluelibs.github.io/runner/) - When you need the full details
 - [Issues](https://github.com/bluelibs/runner/issues) - When something breaks (or you want to make it better)
-- [Contributing](./CONTRIBUTING.md) - How to file great issues and PRs
+- [Contributing](../.github/CONTRIBUTING.md) - How to file great issues and PRs
 
 _P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still different._
 

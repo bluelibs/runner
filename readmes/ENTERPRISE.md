@@ -13,19 +13,16 @@ Build reliable, observable, and compliant services with a TypeScript-first frame
 ## Why Enterprises Choose BlueLibs Runner
 
 - Reliability by design
-
   - Validated dependency graph at boot (dry-run option)
   - Error boundaries and graceful shutdown
   - Resilience patterns: retries, timeouts, caching
 
 - Operability out of the box
-
   - Structured logging with configurable formats
   - System lifecycle events for orchestration
   - Task- and event-level observability hooks
 
 - Performance at scale
-
   - Minimal-overhead DI and middleware
   - Async-first, highly concurrent execution
   - Benchmark guidance and tuning tips
@@ -42,13 +39,11 @@ Build reliable, observable, and compliant services with a TypeScript-first frame
 We align with enterprise change management: stability, predictability, and controlled upgrades.
 
 - Semantic Versioning
-
   - Patch: bug/security fixes, no breaking changes
   - Minor: backward-compatible improvements
   - Major: planned, documented changes with migration guides
 
 - LTS Policy (current)
-
   - Version 4.x LTS (current)
     - Released: August 2025
     - Active support until: January 2027
@@ -66,19 +61,16 @@ We align with enterprise change management: stability, predictability, and contr
 Operate confidently under security review and audit.
 
 - Security posture
-
   - No telemetry by default
   - Small, explicit surface area (functional DI, no hidden globals)
   - Error boundary and controlled shutdown hooks
 
 - Vulnerability management
-
   - Rapid triage and patching for reported issues
   - Coordinated disclosure process (contact below)
   - Clear security advisories and release notes
 
 - Supply chain considerations
-
   - Deterministic builds via lockfiles
   - Compatible with private registries/proxies
   - Supports Node.js LTS releases
@@ -94,13 +86,11 @@ Security contact: theodor@bluelibs.com
 ## Operability: Observability, Resilience, and Lifecycle
 
 - Observability
-
   - Structured logger with multiple output strategies
   - System-ready event to coordinate startup
   - Debug modes for local/incident analysis
 
 - Resilience
-
   - Retry middleware with configurable strategies
   - Timeout middleware (AbortController-based)
   - Caching middleware for expensive operations
@@ -126,14 +116,12 @@ Security contact: theodor@bluelibs.com
 ## Support Plans
 
 - Professional Support
-
   - 4-hour response for urgent issues (business hours)
   - Guidance on configuration, debugging, and best practices
   - Covers one production application
   - Up to 25 developers
 
 - Enterprise Support
-
   - 1-hour response for urgent issues, 24/7 for critical incidents
   - Dedicated support engineer familiar with your setup
   - Architecture reviews and performance guidance
@@ -160,17 +148,14 @@ Severity targets (typical):
 Extend the framework for your environment without bespoke debt.
 
 - Framework Extensions
-
   - Custom middleware (security, compliance, integrations)
   - Observability adapters
 
 - Migration Tooling
-
   - From legacy frameworks/systems
   - Data/config transformations and compatibility shims
 
 - Integration Adapters
-
   - Message queues, proprietary protocols, legacy services
 
 - Performance Engineering

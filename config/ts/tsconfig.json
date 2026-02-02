@@ -6,9 +6,8 @@
     "moduleResolution": "node",
     "sourceMap": true,
     "noImplicitAny": true,
-    "rootDir": "./src",
-    "outDir": "./dist",
     "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
     "pretty": true,
     "declaration": true,
     "strict": true,
@@ -17,12 +16,16 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "skipLibCheck": true,
-    "baseUrl": "./src",
+    "baseUrl": "../..",
     "paths": {
       "#/*": ["src/*"]
     }
   },
 
-  "include": ["src/**/*.ts"],
-  "exclude": ["examples/**", "web/**", "src/node/durable/dashboard/**"]
+  "include": ["../../src/**/*.ts"],
+  "exclude": [
+    "../../examples/**",
+    "../../web/**",
+    "../../src/node/durable/dashboard/**"
+  ]
 }

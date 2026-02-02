@@ -28,7 +28,7 @@ If you can’t isolate it, share what you tried — we’ll help.
 
 Please do NOT open a public issue. Follow the steps in SECURITY.md:
 
-- https://github.com/bluelibs/runner/blob/main/SECURITY.md
+- ./SECURITY.md
 
 ## Pull Requests (optional but welcome)
 

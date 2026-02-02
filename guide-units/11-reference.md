@@ -209,6 +209,7 @@ await queue.run(async (_signal) => {
 ```
 
 ---
+
 ## Why Choose BlueLibs Runner?
 
 After reading this far, here's what you've learned:
@@ -273,7 +274,7 @@ This is part of the [BlueLibs](https://www.bluelibs.com) ecosystem. We're not tr
 - [GitHub Repository](https://github.com/bluelibs/runner) - if you find this useful
 - [Documentation](https://bluelibs.github.io/runner/) - When you need the full details
 - [Issues](https://github.com/bluelibs/runner/issues) - When something breaks (or you want to make it better)
-- [Contributing](./CONTRIBUTING.md) - How to file great issues and PRs
+- [Contributing](./.github/CONTRIBUTING.md) - How to file great issues and PRs
 
 _P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still different._
 

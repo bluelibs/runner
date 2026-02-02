@@ -219,7 +219,7 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
 Here's where it gets clever. We don't just detect at runtime - we also **optimize at build time** using different bundles:
 
 ```typescript
-// tsup.config.ts creates different bundles with __TARGET__ defined
+// config/tsup/tsup.config.ts creates different bundles with __TARGET__ defined
 
 // In factory.ts:
 export function createPlatformAdapter(): IPlatformAdapter {

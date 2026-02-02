@@ -27,9 +27,7 @@ import {
 import { Logger } from "./Logger";
 
 /**
- * This class is responsible of setting up dependencies with their respective computedValues.
- * Note that all elements must have been previously registered otherwise errors will be thrown
- * when trying to depend on something not in the store.
+ * Resolves and caches computed dependencies for store items (resources, tasks, middleware, hooks).
  */
 export class DependencyProcessor {
   protected readonly resourceInitializer: ResourceInitializer;
@@ -49,7 +47,7 @@ export class DependencyProcessor {
   }
 
   /**
-   * This function is going to go through all the resources, tasks and middleware to compute their required dependencies.
+   * Computes and caches dependencies for all registered store items.
    */
   async computeAllDependencies() {
     for (const middleware of this.store.resourceMiddlewares.values()) {
@@ -108,8 +106,7 @@ export class DependencyProcessor {
     task.isInitialized = true;
   }
 
-  // Most likely these are resources that no-one has dependencies towards
-  // We need to ensure they work too!
+  // Initialize non-root resources that are registered but not depended upon (side effects/disposers).
   public async initializeUninitializedResources() {
     for (const resource of this.store.resources.values()) {
       if (
@@ -133,8 +130,7 @@ export class DependencyProcessor {
   }
 
   /**
-   * Processes dependencies and hooks
-   * @param resource
+   * Computes and caches dependencies for a resource (if not already computed).
    */
   protected async processResourceDependencies<TD extends DependencyMapType>(
     resource: ResourceStoreElementType<any, any, TD>,
@@ -164,7 +160,6 @@ export class DependencyProcessor {
     for (const key of Object.keys(deps) as Array<keyof TD>) {
       const original = deps[key];
       const value = (extracted as Record<string, unknown>)[key as string];
-      // Handle optional wrappers
       if (utils.isOptional(original)) {
         const inner = (original as { inner: unknown }).inner;
         if (utils.isTask(inner)) {
@@ -226,7 +221,7 @@ export class DependencyProcessor {
   }
 
   /**
-   * Processes all hooks, should run before emission of any event.
+   * Attaches listeners for all hooks. Must run before emitting events.
    */
   public attachListeners() {
     // Attach listeners for dedicated hooks map

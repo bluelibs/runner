@@ -1,9 +1,4 @@
-import {
-  LayoutDashboard,
-  Activity,
-  CalendarClock,
-  Settings,
-} from "lucide-react";
+import { LayoutDashboard, Activity, CalendarClock } from "lucide-react";
 import { NavLink } from "react-router-dom";
 
 // Inline utility for now to save a file creation step, or can create lib/utils.ts
@@ -50,13 +45,6 @@ export function Sidebar() {
           </NavLink>
         ))}
       </nav>
-
-      <div className="p-4 border-t border-slate-800">
-        <button className="flex items-center text-slate-400 hover:text-slate-100 transition-colors w-full px-4 py-2">
-          <Settings className="w-5 h-5" />
-          <span className="ml-3 hidden md:block">Settings</span>
-        </button>
-      </div>
     </aside>
   );
 }

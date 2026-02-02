@@ -12,6 +12,7 @@ Use tunnels when you want:
 
 - a tiny, controlled HTTP surface (`/__runner/*`) instead of ad-hoc endpoints,
 - task semantics preserved (validation, middleware, typed errors, async context),
+- the parts that cross the wire (input/output, async context values, typed error payloads) to be encoded/decoded via Runner’s `Serializer`,
 - the option to switch between local execution and remote execution by configuration.
 
 ---
@@ -49,6 +50,36 @@ Then you hit the “now it has to run somewhere else” moment:
 
 Your app keeps calling `await tasks.processPayment(input)`.  
 Only the **execution location** changes.
+
+### Tunnel call flow (diagram)
+
+There are two phases:
+
+1. **Init time (client runtime)**: tunnel resources in `mode: "client"` select tasks/events and patch them to delegate remotely.
+2. **Call time**: your code calls the task; it either routes through the tunnel client or runs locally. On the server, `nodeExposure` parses + authenticates and (optionally) applies allow-lists before executing the task.
+
+```mermaid
+graph TD
+  App[App code] --> Call["Call task: add(input)"]
+  Call --> Route{Tunnel route?}
+  Route -- "no" --> Local["Runs locally<br/>or returns undefined"]
+  Route -- "yes" --> Client[HTTP tunnel client]
+  Client --> Expo["nodeExposure<br/>/__runner/*"]
+  Expo --> Guard["Parse + authenticate<br/>+ allow-list gate"]
+  Guard --> Run["Execute task<br/>in server runtime"]
+  Run --> Reply["Result / typed error"]
+  Reply --> App
+
+  classDef task fill:#4CAF50,color:#fff;
+  classDef resource fill:#2196F3,color:#fff;
+  classDef middleware fill:#9C27B0,color:#fff;
+  classDef external fill:#607D8B,color:#fff;
+
+  class Run task;
+  class Expo resource;
+  class Route middleware;
+  class App,Client,Guard external;
+```
 
 ---
 
@@ -145,34 +176,11 @@ Now `GET {basePath}/discovery` (auth required) tells you exactly what’s reacha
 
 You have two common styles. Pick one per boundary.
 
-#### Style A — Explicit client calls (simple and explicit)
-
-Use the universal factory (browser-safe, Node-safe) and call by id:
-
-```ts
-import { r, globals } from "@bluelibs/runner";
-
-export const callRemote = r
-  .task("app.tasks.callRemote")
-  .dependencies({ clientFactory: globals.resources.httpClientFactory })
-  .run(async (_input, { clientFactory }) => {
-    const client = clientFactory({
-      baseUrl: "http://127.0.0.1:7070/__runner",
-      auth: { token: "dev-secret" },
-    });
-    return await client.task<{ a: number; b: number }, number>(
-      "app.tasks.add",
-      { a: 1, b: 2 },
-    );
-  })
-  .build();
-```
-
-This is great when you want the boundary to be obvious in code.
-
-#### Style B — Transparent routing via a tunnel resource (feels “local”)
+#### Style A — Transparent routing via a tunnel resource (feels “local”)
 
 If you want your code to call `add(...)` directly and let the tunnel decide where it runs, register a **client-mode** tunnel resource.
+
+This is the “no call-site changes” style: your application code still calls `await add({ a, b })`. The only thing that changes is **runtime composition** (server registers the real task; client registers a phantom task with the same id + a tunnel resource).
 
 The key trick is: the _caller runtime_ must also have a task definition with the same id — but it shouldn’t contain the real implementation. That’s what **phantom tasks** are for.
 
@@ -186,7 +194,8 @@ The tunnel middleware will:
 import { r, globals } from "@bluelibs/runner";
 
 // In the caller runtime, define a phantom with the same id as the server task.
-const addRemote = r.task
+// Your app code can keep calling `await add(...)`.
+export const add = r.task
   .phantom<{ a: number; b: number }, number>("app.tasks.add")
   .build();
 
@@ -203,7 +212,8 @@ const tunnelClient = r
     return {
       transport: "http" as const,
       mode: "client" as const,
-      tasks: [addRemote.id],
+      tasks: [add.id],
+      // Important: create the client once (in init) and reuse it.
       run: async (task, input) => await client.task(task.id, input),
       // events + emit are optional; see “Events” below.
     };
@@ -212,12 +222,46 @@ const tunnelClient = r
 
 export const app = r
   .resource("app")
-  .register([addRemote, tunnelClient])
+  .register([add, tunnelClient])
   .build();
 ```
 
-Now calling `await addRemote({ a: 1, b: 2 })` will execute the server’s `app.tasks.add` over HTTP.
+Now calling `await add({ a: 1, b: 2 })` will execute the server’s `app.tasks.add` over HTTP.
 If the tunnel isn’t registered (or doesn’t select this id), the phantom resolves to `undefined`.
+
+This is great when you want “remote” to be a configuration concern rather than a call-site concern.
+
+#### Style B — Explicit client calls (simple and explicit)
+
+If you want the boundary to be obvious in code, call the client directly — but **don’t create a client for every call**.
+
+Instead, create it once in a resource and inject it where needed:
+
+```ts
+import { r, globals } from "@bluelibs/runner";
+
+const remoteClient = r
+  .resource("app.remote.client")
+  .dependencies({ clientFactory: globals.resources.httpClientFactory })
+  .init(async (_cfg, { clientFactory }) => {
+    return clientFactory({
+      baseUrl: "http://127.0.0.1:7070/__runner",
+      auth: { token: "dev-secret" },
+    });
+  })
+  .build();
+
+export const callRemote = r
+  .task("app.tasks.callRemote")
+  .dependencies({ remoteClient })
+  .run(async (_input, { remoteClient }) => {
+    return await remoteClient.task<{ a: number; b: number }, number>(
+      "app.tasks.add",
+      { a: 1, b: 2 },
+    );
+  })
+  .build();
+```
 
 ---
 
@@ -275,10 +319,22 @@ Use when:
 - you want Node multipart uploads (streams/buffers),
 - you want “auto-switch” based on input shape.
 
+Why there are two:
+
+- **Smart** is the “full power” Node client (uses `http.request`): it supports
+  - raw-body duplex (`Content-Type: application/octet-stream`),
+  - Node multipart streaming uploads (manifest + streams/buffers),
+  - streamed responses (server returns a readable stream).
+- **Mixed** is a convenience wrapper: it uses the fast **serialized JSON** path (Runner `Serializer` over `fetch`) when it can, and falls back to Smart when it must.
+  - The auto-switch is based on **input shape**: it detects **stream inputs** and **Node File sentinels**.
+  - It cannot infer “this task will return a stream” when the input is plain JSON — use `forceSmart` (or Smart directly) for those tasks.
+
 Recommendation:
 
-- use **Mixed** as the default Node client (JSON when possible, Smart when needed).
-- use **Smart** when you want to always use the Node streaming-capable path.
+- use **Mixed** as the default Node client (serialized JSON when possible, Smart when needed).
+- if you have tasks that may **return a stream even for plain JSON inputs** (ex: downloads), either:
+  - set `forceSmart: true` (or a predicate) on Mixed, or
+  - use **Smart** directly.
 
 ### Pure fetch (`globals.tunnels.http.createClient`, `createExposureFetch`)
 
@@ -501,13 +557,14 @@ Delivery modes (set via `eventDeliveryMode` on the tunnel value):
 
 On the server:
 
-- if an error matches a Runner-registered error helper (`store.errors`), exposure includes `{ id, data }` in the response envelope
+- if an error matches a Runner-registered error helper (for example built via `r.error("...").build()`), exposure includes `{ id, data }` in the response envelope
 - 500 errors that are not app-defined are sanitized (message becomes `"Internal Error"`)
 
 On the client:
 
 - if the client has an `errorRegistry`, it can rethrow typed errors locally using `{ id, data }`
 - the factories (`globals.resources.httpClientFactory` and Node mixed factory) auto-inject the registry from the runtime
+- `{ id, data }` is transported through the tunnel using the configured `Serializer`, so `data` can be any Serializer-supported value (not just plain JSON)
 
 ---
 
@@ -519,6 +576,8 @@ If you use Runner async contexts (via `defineAsyncContext` / `r.asyncContext(...
 - the server hydrates known contexts for the duration of the task/event execution
 
 The header contains a serializer-encoded map: `{ [contextId]: serializedValue }`.
+
+This uses the same `Serializer` as your tunnel client (defaults to `getDefaultSerializer()`), so context values can be any Serializer-supported value.
 
 ---
 

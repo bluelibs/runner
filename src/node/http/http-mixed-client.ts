@@ -16,6 +16,18 @@ export interface MixedHttpClientConfig {
   timeoutMs?: number;
   // Only used by the JSON path
   fetchImpl?: typeof fetch;
+  /**
+   * Forces the Smart client path even for plain JSON inputs.
+   *
+   * Use this when a task may return a stream even when its input is not a stream
+   * and does not include Node File sentinels (ex: download endpoints).
+   *
+   * - `true`: always use Smart for tasks
+   * - predicate: use Smart for selected task ids/inputs
+   */
+  forceSmart?:
+    | boolean
+    | ((ctx: { id: string; input: unknown }) => boolean | Promise<boolean>);
   serializer: SerializerLike;
   // Propagated to both JSON and Smart client paths
   onRequest?: (ctx: {
@@ -71,6 +83,16 @@ function hasNodeFile(value: unknown): boolean {
   return visit(value);
 }
 
+async function shouldForceSmart(
+  cfg: MixedHttpClientConfig,
+  id: string,
+  input: unknown,
+): Promise<boolean> {
+  if (!cfg.forceSmart) return false;
+  if (cfg.forceSmart === true) return true;
+  return await cfg.forceSmart({ id, input });
+}
+
 /**
  * Unified Node client that mixes JSON fetch for standard calls and
  * Smart client for streaming/multipart. Keeps transport details out of app code.
@@ -108,7 +130,11 @@ export function createHttpMixedClient(
       input?: I,
     ): Promise<O | Readable | ReadableStream<Uint8Array>> {
       // Prefer Smart path only when needed (streams or Node file sentinels)
-      if (isReadable(input) || hasNodeFile(input)) {
+      if (
+        isReadable(input) ||
+        hasNodeFile(input) ||
+        (await shouldForceSmart(cfg, id, input))
+      ) {
         return await smartClient.task<I, O>(id, input as I);
       }
       // Otherwise, lean JSON path

@@ -261,9 +261,9 @@ export function ExecutionDetail() {
           </div>
         </div>
 
-        {/* Right: Crash Control */}
+        {/* Right: Crash Control - only show for executions that need intervention */}
         <div>
-          <CrashControl executionId={execution.id} />
+          <CrashControl executionId={execution.id} status={execution.status} />
         </div>
       </div>
     </div>

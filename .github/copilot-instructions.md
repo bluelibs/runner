@@ -24,7 +24,7 @@ Always reference these instructions first and fallback to search or bash command
 
 - Write elegant code
 - Coverage 100% is enforced.
-- Adapt README.md and AI.md after a feature is done or a change.
+- Adapt README.md and readmes/AI.md after a feature is done or a change.
 
 ### Known Limitations
 
@@ -39,4 +39,4 @@ Always reference these instructions first and fallback to search or bash command
 npm install @bluelibs/runner
 ```
 
-Read AI.md before beginning any task because it contains a minimal token-friendly version of the entire README.md.
+Read readmes/AI.md before beginning any task because it contains a minimal token-friendly version of the entire README.md.

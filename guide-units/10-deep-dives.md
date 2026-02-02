@@ -86,7 +86,7 @@ flowchart TD
 
 **Example dependency resolution:**
 
-```
+```typescript
 app
 ├── server (depends on: database, config)
 │   ├── database (depends on: config)
@@ -144,22 +144,22 @@ const queryTask = r
 
 Middleware forms an "onion" around your task:
 
-```
-                    ┌─────────────────────────────────────┐
-                    │            Auth Middleware          │
-                    │   ┌─────────────────────────────┐   │
-                    │   │       Rate Limit            │   │
-                    │   │   ┌─────────────────────┐   │   │
-                    │   │   │     Cache           │   │   │
-                    │   │   │   ┌─────────────┐   │   │   │
-                    │   │   │   │   Timeout   │   │   │   │
-Input ─────────────►│   │   │   │   ┌─────┐   │   │   │   │
-                    │   │   │   │   │TASK │   │   │   │   │
-Output ◄────────────│   │   │   │   └─────┘   │   │   │   │
-                    │   │   │   └─────────────┘   │   │   │
-                    │   │   └─────────────────────┘   │   │
-                    │   └─────────────────────────────┘   │
-                    └─────────────────────────────────────┘
+```mermaid
+flowchart LR
+  In([Input])
+  Out([Output])
+
+  subgraph Onion[Middleware onion]
+    direction LR
+    Auth[Auth middleware]
+    Rate[Rate limit middleware]
+    Cache[Cache middleware]
+    Timeout[Timeout middleware]
+    Task[[Task]]
+  end
+
+  In --> Auth --> Rate --> Cache --> Timeout --> Task
+  Task -. result .-> Timeout -.-> Cache -.-> Rate -.-> Auth --> Out
 ```
 
 **Execution flow:**
@@ -383,6 +383,7 @@ const app = r
 > **runtime:** "Under the hood: a place of promises, graphs, and existential dread about garbage collection. You wanted to know how I work? I'm a topological sort wearing an async trench coat. The real magic is that any of this is debuggable at all."
 
 ---
+
 ## Integration Recipes
 
 Production-ready patterns for common integration scenarios. Each recipe is tested and ready to adapt.

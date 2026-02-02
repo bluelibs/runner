@@ -4,7 +4,7 @@ set -e
 echo "Updating benchmark baseline..."
 
 # Run full benchmarks and output to temporary file
-BENCHMARK_OUTPUT=temp-baseline.json npx jest --config=jest.bench.config.js
+BENCHMARK_OUTPUT=benchmarks/baseline.json npx jest --config=config/jest/jest.bench.config.js
 
 # Check if benchmarks completed successfully
 if [ -f "temp-baseline.json" ]; then

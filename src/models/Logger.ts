@@ -41,9 +41,8 @@ export class Logger {
   private useColors: boolean = true;
   private printer: LogPrinter;
   private source?: string;
-  // This is used for when we use .with() .with() and we want access to local listeners
+  // Points to the top-level logger so child loggers share buffering, listeners, and printing.
   private rootLogger?: Logger;
-  // Observable why not?
   public localListeners: Array<(log: ILog) => void | Promise<void>> = [];
 
   public static Severity = {

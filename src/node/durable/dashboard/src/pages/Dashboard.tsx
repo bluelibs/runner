@@ -6,6 +6,7 @@ import {
   Clock,
   RefreshCw,
   Power,
+  LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { api, Execution, ExecutionStatus } from "@/api";
@@ -24,17 +25,26 @@ const COLORS: Record<string, string> = {
 
 const POLLING_INTERVAL = 5000; // 5 seconds
 
-const StatCard = ({ title, value, icon: Icon, color }: any) => (
-  <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex items-start justify-between">
-    <div>
-      <p className="text-slate-400 text-sm font-medium">{title}</p>
-      <h3 className="text-3xl font-bold mt-2 text-slate-100">{value}</h3>
+type StatCardProps = {
+  title: string;
+  value: number;
+  icon: LucideIcon;
+  color: string;
+};
+
+function StatCard({ title, value, icon: Icon, color }: StatCardProps) {
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex items-start justify-between">
+      <div>
+        <p className="text-slate-400 text-sm font-medium">{title}</p>
+        <h3 className="text-3xl font-bold mt-2 text-slate-100">{value}</h3>
+      </div>
+      <div className={`p-3 rounded-lg bg-opacity-10 ${color}`}>
+        <Icon className={`w-6 h-6 ${color.replace("bg-", "text-")}`} />
+      </div>
     </div>
-    <div className={`p-3 rounded-lg bg-opacity-10 ${color}`}>
-      <Icon className={`w-6 h-6 ${color.replace("bg-", "text-")}`} />
-    </div>
-  </div>
-);
+  );
+}
 
 export function Dashboard() {
   const [executions, setExecutions] = useState<Execution[]>([]);

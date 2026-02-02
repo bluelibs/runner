@@ -6,7 +6,7 @@ const COMMON = {
   sourcemap: true,
   treeshake: true,
   minify: false,
-  tsconfig: "tsconfig.build.json",
+  tsconfig: "config/ts/tsconfig.build.json",
   external: ["async_hooks", "node:async_hooks"],
   dts: true,
   target: "es2022",

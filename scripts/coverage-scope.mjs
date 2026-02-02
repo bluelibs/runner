@@ -5,7 +5,7 @@ export function toPosixPath(filePath) {
 }
 
 export function isInCoverageScope(relPosix) {
-  // Keep this aligned with `jest.config.js` -> `collectCoverageFrom`.
+  // Keep this aligned with `config/jest/jest.config.js` -> `collectCoverageFrom`.
   // This is used only for *display/counting* coverage output, so it should
   // mirror what Jest instruments and enforces thresholds for.
   if (!relPosix.startsWith("src/")) return false;

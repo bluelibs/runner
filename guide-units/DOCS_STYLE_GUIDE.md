@@ -760,17 +760,17 @@ Use blockquotes for important notes and platform warnings:
 
 ### README Composition System
 
-The main `README.md` and `GUIDE.md` are not edited directly. They are composed from modular chapters located in `guide-units/`.
+The main `README.md` and `FULL_GUIDE.md` are not edited directly. They are composed from modular chapters located in `guide-units/`.
 
 - **Manifests**:
   - `guide-units/INDEX_README.md` composes the short landing `README.md`
-  - `guide-units/INDEX_GUIDE.md` composes the full `GUIDE.md`
+  - `guide-units/INDEX_GUIDE.md` composes the full `readmes/FULL_GUIDE.md`
 - **Syntax**: Use `!include: filename.md` on a new line to include a chapter.
-- **Generation**: Run `npm run guide:compose` to rebuild `README.md` and `GUIDE.md`.
+- **Generation**: Run `npm run guide:compose` to rebuild `README.md` and `readmes/FULL_GUIDE.md`.
 - **Guidelines**:
   - Each chapter should be self-contained.
   - Use relative markdown anchors for cross-chapter links.
-  - Avoid editing `README.md` and `GUIDE.md` manually; changes will be overwritten.
+  - Avoid editing `README.md` and `readmes/FULL_GUIDE.md` manually; changes will be overwritten.
 
 ### Chapter Files (guide-units/)
 
@@ -785,12 +785,12 @@ The main `README.md` and `GUIDE.md` are not edited directly. They are composed f
 - **Purpose**: Deep dives that don't fit in main README
 - **Back-links**: Always link back to main README
 
-### AI.md
+### AI.md (readmes/AI.md)
 
 - **Token limit**: Keep under 5000 tokens
 - **No personality**: Omit runtime quotes, keep concise
 - **Essential only**: Core concepts, minimal examples
-- **Sync with docs**: Update when `README.md` or `GUIDE.md` changes significantly
+- **Sync with docs**: Update when `README.md` or `FULL_GUIDE.md` changes significantly
 
 ---
 
@@ -806,7 +806,7 @@ Before committing documentation changes:
 - [ ] Headings follow level conventions (Level 2 for major sections)
 - [ ] **Community & Policies** used instead of "Community and policies"
 - [ ] **No emojis used in documentation**
-- [ ] Run `npm run guide:compose` to regenerate `README.md` and `GUIDE.md`
+- [ ] Run `npm run guide:compose` to regenerate `README.md` and `readmes/FULL_GUIDE.md`
 - [ ] Verify composed outputs look correct
 
 ---
@@ -821,13 +821,13 @@ nano guide-units/02-core-concepts.md
 npm run guide:compose
 
 # 3. Verify output
-git diff README.md GUIDE.md
+git diff README.md readmes/FULL_GUIDE.md
 
 # 4. If AI.md needs updates, edit it directly
-nano AI.md
+nano readmes/AI.md
 
 # 5. Commit
-git add guide-units/ README.md GUIDE.md AI.md
+git add guide-units/ README.md readmes/FULL_GUIDE.md readmes/AI.md
 git commit -m "docs: your change description"
 ```
 

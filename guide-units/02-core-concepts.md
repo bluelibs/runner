@@ -84,7 +84,7 @@ Here's a friendly guideline (not a strict rule!):
 - Multiple parts of your app need to use it
 - You want observability (logging, monitoring, debugging)
 
-  **Keep it as a regular function when:**
+**Keep it as a regular function when:**
 
 - It's a simple utility (date formatting, string manipulation, calculations)
 - It's a pure function with no dependencies
@@ -595,14 +595,16 @@ For advanced scenarios, you can intercept framework execution without relying on
 
 Per-task interceptors must be registered during resource initialization (before the system is locked). They are a good fit when you want a specific task to be adjusted by a specific resource (for example: feature toggles, input shaping, or internal routing) without making it global middleware.
 
-Note that per-task interceptors run *inside* task middleware. If a middleware short-circuits and never calls `next()`, the task (and its per-task interceptors) will not execute.
+Note that per-task interceptors run _inside_ task middleware. If a middleware short-circuits and never calls `next()`, the task (and its per-task interceptors) will not execute.
 
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
 const adder = r
   .task("app.tasks.adder")
-  .run(async (input: { value: number }) => ({ value: input.value + 1 } as const))
+  .run(
+    async (input: { value: number }) => ({ value: input.value + 1 }) as const,
+  )
   .build();
 
 const installer = r

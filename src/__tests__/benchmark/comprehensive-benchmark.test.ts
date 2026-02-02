@@ -61,6 +61,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     if (outputPath) {
       try {
         const fs = require("fs");
+        const path = require("path");
         const os = require("os");
         const meta = {
           timestamp: new Date().toISOString(),
@@ -72,6 +73,12 @@ describe("Comprehensive Performance Benchmarks", () => {
           runs: BENCHMARK_CONFIG.runs,
           warmupRuns: BENCHMARK_CONFIG.warmupRuns,
         };
+
+        const outputDir = path.dirname(outputPath);
+        if (outputDir && outputDir !== ".") {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
+
         fs.writeFileSync(
           outputPath,
           JSON.stringify({ meta, results }, null, 2),
