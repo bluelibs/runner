@@ -1,6 +1,6 @@
 # Runner Tunnel HTTP Protocol Policy (v1.0)
 
-> **Status**: Draft spec derived from Runner 4.x implementation. This document formalizes the wire protocol for HTTP tunnels, enabling interoperability, debugging, and future extensions. It is not a normative standard but reflects the current behavior of `nodeExposure` and clients like `createHttpClient`. For usage, see [TUNNELS.md](TUNNELS.md).
+> **Status**: Draft spec derived from Runner implementation. This document formalizes the wire protocol for HTTP tunnels, enabling interoperability, debugging, and future extensions. It is not a normative standard but reflects the current behavior of `nodeExposure` and clients like `createExposureFetch` / `createHttpClient`. For usage, see [TUNNELS.md](TUNNELS.md).
 
 ## Table of Contents
 
@@ -45,7 +45,7 @@ The Runner tunnel HTTP protocol enables remote invocation of tasks and emission 
 
 - **Simplicity**: Minimal overhead; leverages HTTP/1.1+ with serialized JSON for structured data.
 - **Cross-Platform**: Works in Node (streams/files) and browsers (fetch/FormData).
-- **Security**: Mandatory auth, allow-lists, CORS, abort handling.
+- **Security**: Auth (fail-closed by default), allow-lists, CORS, abort handling.
 - **Efficiency**: Supports streaming (duplex/raw) and files (manifest-based multipart) without buffering.
 - **Observability**: Logs, context propagation, discovery endpoint.
 
@@ -62,12 +62,13 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 
 ```json
 { "ok": true, "result": <output> }  // Success
-{ "ok": false, "error": { "code": 200, "message": "Description", "codeName": "OK" } }  // Error
+{ "ok": false, "error": { "code": "FORBIDDEN", "message": "Description" } }  // Error
 ```
 
 - `ok`: Boolean.
 - `result`: Task output (serialized; omitted for events).
-- `error`: Details on failure (HTTP status maps to `code`).
+- `error`: Details on failure (HTTP status is provided by the HTTP response status code; `error.code` is a string).
+- `meta` (optional/reserved): Present in the shared `ProtocolEnvelope` shape but currently not emitted by `nodeExposure`.
 
 ## Common Elements
 
@@ -80,38 +81,48 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 
 ### Authentication
 
-- **Header**: Default `x-runner-token: <token>` (configurable via `header` in exposure/client config).
-- **Alternatives**: `Authorization: Bearer <token>` (via `onRequest` callback).
-- **Dynamic**: Clients can override per-request via `onRequest({ headers })`.
-- **Failure**: 401 Unauthorized + JSON error.
+- **Header**: Default `x-runner-token: <token>` (configurable via `auth.header` in `nodeExposure` and in clients).
+- **Token**: `auth.token` supports a string or string[] (any match is accepted).
+- **Validators**: If tasks tagged with `globals.tags.authValidator` exist, they are executed (OR logic); any validator returning `{ ok: true }` authenticates the request.
+- **Anonymous access**: If no token and no validators exist, `nodeExposure` fails closed by default with `500 AUTH_NOT_CONFIGURED`. Set `auth.allowAnonymous: true` to explicitly allow unauthenticated access.
+- **Dynamic headers**: Clients can override per-request via `onRequest({ headers })`.
 - **Allow-Lists**: Server restricts to tagged resources (`globals.tags.tunnel`, `mode: "server"`, `transport: "http"`). Unknown IDs → 403 Forbidden.
-- **Exposure disabled**: If no server-mode HTTP tunnel is registered, task/event requests return 403 (fail-closed).
+- **Exposure disabled**: If no server-mode HTTP tunnel is registered, task/event requests return 403 (fail-closed), unless `http.dangerouslyAllowOpenExposure: true` is set.
 
 ### Error Handling
 
 - **HTTP Status**: 200 (OK/success), 4xx (client errors), 5xx (server errors).
-- **JSON Errors**: Always enveloped (even on streams, if possible).
+- **JSON Errors**: Enveloped when the response has not started yet; once a stream/response is written, subsequent errors are best-effort only.
+- **Sanitization**: For `500` errors, `nodeExposure` sanitizes the payload to avoid leaking sensitive internals:
+  - `error.message` becomes `"Internal Error"` unless the server recognized a typed error.
+  - typed errors may preserve `error.id`, `error.data`, and the typed error message.
 - **Common Codes**:
-  | Code | HTTP | codeName | Description |
-  |------|------|----------|-------------|
-  | 400 | 400 | INVALID_JSON | Malformed JSON body. |
-  | 400 | 400 | INVALID_MULTIPART | Multipart missing/invalid manifest or parts. |
-  | 401 | 401 | UNAUTHORIZED | Invalid/missing token. |
-  | 403 | 403 | FORBIDDEN | ID not in allow-list. |
-  | 404 | 404 | NOT_FOUND | Task/event missing. |
-  | 405 | 405 | METHOD_NOT_ALLOWED | Non-POST (except discovery). |
-  | 499 | 499 | REQUEST_ABORTED | Client abort/timeout. |
-  | 500 | 500 | INTERNAL_ERROR | Task exception or server error. |
-  | 500 | 500 | STREAM_ERROR | Multipart stream failure. |
-  | 500 | 500 | MISSING_FILE_PART | Expected file not in multipart. |
+  | HTTP | error.code | Description |
+  |------|------------|-------------|
+  | 400 | INVALID_JSON | Malformed JSON body. |
+  | 400 | INVALID_MULTIPART | Invalid multipart payload or manifest. |
+  | 400 | MISSING_MANIFEST | Multipart missing `__manifest`. |
+  | 400 | PARALLEL_EVENT_RETURN_UNSUPPORTED | Event is `parallel`, so `returnPayload` is not supported. |
+  | 401 | UNAUTHORIZED | Invalid token or failed auth validators. |
+  | 403 | FORBIDDEN | Exposure not enabled or id not in allow-list. |
+  | 404 | NOT_FOUND | Task/event not found (after allow-list checks). |
+  | 405 | METHOD_NOT_ALLOWED | Non-POST (except discovery). |
+  | 413 | PAYLOAD_TOO_LARGE | JSON/multipart exceeded configured limits. |
+  | 499 | REQUEST_ABORTED | Client aborted/closed the request. |
+  | 500 | INTERNAL_ERROR | Task exception or server error (sanitized). |
+  | 500 | STREAM_ERROR | Multipart stream error (sanitized). |
+  | 500 | MISSING_FILE_PART | Expected file not in multipart. |
+  | 500 | AUTH_NOT_CONFIGURED | No auth is configured and `allowAnonymous` is not enabled. |
 - **Logging**: Server logs errors via `globals.resources.logger` (e.g., "exposure.task.error").
+- **Security headers**: `nodeExposure` sets `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` on responses.
 
 ### CORS
 
 - Configurable via exposure (`http.cors`).
-- Defaults: Permissive (`Access-Control-Allow-Origin: *`; echoes for credentials).
-- Preflight (OPTIONS): Auto-handled.
-- Headers: `Access-Control-Allow-Methods: POST, OPTIONS`; `Vary: Origin` if echoing.
+- Defaults: If `http.cors` is omitted, `nodeExposure` sets `Access-Control-Allow-Origin: *`.
+- Credentials: If `credentials: true`, you must also set an explicit `origin`; otherwise no `Access-Control-Allow-Origin` is sent (browsers will block cross-origin access).
+- Preflight (OPTIONS): Auto-handled with `204`.
+- Headers: Defaults `Access-Control-Allow-Methods: POST, OPTIONS`; allowed headers echo `Access-Control-Request-Headers` unless `allowedHeaders` is provided; `Vary: Origin` is appended when needed.
 
 ## Endpoints
 
@@ -131,8 +142,10 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - **Purpose**: Emit a remote event with payload; fire-and-forget (no result).
 - **Auth**: Required.
 - **Allow-List**: Checked.
-- **Body**: Always JSON mode: `{ payload: <any> }` (serialized).
-- **Response**: 200 + `{ ok: true }` or error envelope.
+- **Body**: Always JSON mode: `{ payload?: <any>, returnPayload?: boolean }` (serialized).
+- **Response**:
+  - default: 200 + `{ ok: true }`
+  - if `returnPayload: true`: 200 + `{ ok: true, result: <payload> }` (not supported when the event is marked `parallel`).
 - **No Context**: Events don't provide `useExposureContext()`.
 
 ### Discovery (`GET|POST /discovery`)
@@ -163,8 +176,9 @@ Server routes by `Content-Type`.
 
 - **When**: No files/streams (default fallback).
 - **Content-Type**: `application/json; charset=utf-8`
-- **Body**: JSON `{ input: <any> }` (or bare `<input>` if simple).
+- **Body**: JSON `{ input: <any> }` (or bare `<input>`; the server treats non-object bodies as the input directly).
 - **Handling**: Server parses JSON (via Runner serializer), runs task with input, serializes result.
+- **Limits**: Default max body size is 2MB (`http.limits.json.maxSize`); over-limit returns 413/PAYLOAD_TOO_LARGE.
 - **Limitations**: No files (use multipart); no raw streams (use octet).
 
 ### Multipart Mode
@@ -172,7 +186,8 @@ Server routes by `Content-Type`.
 - **When**: Input contains File sentinels (client-detected).
 - **Content-Type**: `multipart/form-data; boundary=<boundary>` (RFC 7578).
 - **Body Parts**:
-  - `__manifest` (text/plain): JSON string of `{ input: <obj> }`.
+  - `__manifest` (field): JSON string of `{ input?: <obj> }`.
+    - The server treats this as a plain field value; the per-part `Content-Type` is not enforced (some clients send `application/json; charset=utf-8`).
     - File placeholders: `{"$runnerFile": "File", "id": "<uuid>", "meta": { "name": string, "type"?: string, "size"?: number, "lastModified"?: number, "extra"?: object }}`
     - `<uuid>`: Client-generated (unique per request).
   - `file:<id>` (binary): File bytes for each sentinel.
@@ -183,6 +198,7 @@ Server routes by `Content-Type`.
   - Meta Precedence: Manifest overrides part headers (e.g., name/type).
   - All expected files must arrive; unconnected → 500/MISSING_FILE_PART.
   - Single-use streams: `resolve()` consumes once.
+- **Limits**: Defaults are 20MB per file, 10 files, 100 fields, 1MB per field (`http.limits.multipart`); over-limit returns 413/PAYLOAD_TOO_LARGE.
 - **Client Prep**: Use `buildUniversalManifest` (clones input, collects sources).
 - **Limitations**: Browser: Blobs/FormData. Node: Buffers/streams.
 
@@ -191,7 +207,8 @@ Server routes by `Content-Type`.
 - **When**: Input is raw `Readable` (Node duplex, client-detected).
 - **Content-Type**: `application/octet-stream`
 - **Body**: Raw binary (piped stream).
-- **Handling**: No parsing; task accesses via `useExposureContext().req` (IncomingMessage stream).
+- **Handling**: No parsing; request body is not pre-consumed and the task accesses bytes via `useExposureContext().req` (IncomingMessage stream).
+- **Async context**: `x-runner-context` still applies (it is a header, independent of body mode).
 - **Limitations**: Node-only; no JSON input (wrap in File sentinel + multipart if needed).
 
 ## Response Modes
@@ -216,19 +233,15 @@ Server routes by `Content-Type`.
 
 ### Compression
 
-- **Request**: Client optional (gzip via `onRequest`); server decompresses if `Content-Encoding`.
-- **Response**: Server negotiates via `Accept-Encoding` (gzip/br); compresses JSON/streams.
-- **Status**: Not implemented in core (use proxy like nginx); future: zlib integration.
+- **Status**: Not implemented in core (use a proxy like nginx for compression); future: zlib integration.
 - **Security**: Avoid BREACH risks (no secrets near user data).
 
 ### Context Propagation (Node-Only)
 
 - **Mechanism**: Snapshots `AsyncLocalStorage` (created via `createContext(id: string)`).
-- **Transport**:
-  - JSON/Multipart: Serialized map sent in `x-runner-context` header.
-  - Octet: Headers for small values; envelope prefix (length + serialized) for full.
+- **Transport**: A Serializer-encoded map sent in `x-runner-context` header (applies to JSON, multipart, and octet-stream).
 - **Rules**: Stable IDs; optional `serialize`/`parse` hooks. Filtered for size/serializability.
-- **Security**: Server validates before restore; caps size.
+- **Security**: Server only restores known registered contexts; invalid headers/entries are ignored.
 
 ### Streaming
 
@@ -284,7 +297,7 @@ Response: `{"ok": true}`
 
 ## Versioning
 
-- **v1.0**: Current (Runner 4.x). Base: `/__runner`, serialized envelopes, modes as above.
+- **v1.0**: Current (Runner 5.x). Base: `/__runner`, serialized envelopes, modes as above.
 - **Future**:
   - v2: Binary protocol (e.g., Protocol Buffers over HTTP/2).
   - Headers: `X-Runner-Protocol-Version: 1.0`.
@@ -294,9 +307,9 @@ Response: `{"ok": true}`
 
 - [AI.md](./AI.md): High-level fluent API.
 - [TUNNELS.md](TUNNELS.md): Usage, examples, troubleshooting.
-- Code: `src/node/exposure/` (server), `src/node/http-smart-client.model.ts` (clients).
+- Code: `src/node/exposure/` (server), `src/node/http/http-smart-client.model.ts` (clients).
 - Standards: HTTP/1.1 (RFC 7230), Multipart (RFC 7578), JSON.
 
 ---
 
-_Last Updated: September 24, 2025_
+_Last Updated: February 2, 2026_
