@@ -1,9 +1,6 @@
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
-import {
-  rateLimitTaskMiddleware,
-  RateLimitError,
-} from "../../../globals/middleware/rateLimit.middleware";
+import { rateLimitTaskMiddleware } from "../../../globals/middleware/rateLimit.middleware";
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -51,7 +48,7 @@ describe("Rate Limit Middleware", () => {
       },
     });
 
-    await expect(run(app)).rejects.toThrow(RateLimitError);
+    await expect(run(app)).rejects.toThrow(/Rate limit exceeded/i);
   });
 
   it("should reset after window expires", async () => {
@@ -72,7 +69,7 @@ describe("Rate Limit Middleware", () => {
       dependencies: { task },
       async init(_, { task }) {
         await task();
-        await expect(task()).rejects.toThrow(RateLimitError);
+        await expect(task()).rejects.toThrow(/Rate limit exceeded/i);
         await sleep(150);
         await task();
       },
@@ -80,6 +77,18 @@ describe("Rate Limit Middleware", () => {
 
     await run(app);
     expect(callCount).toBe(2);
+  });
+
+  it("should validate config on with()", () => {
+    const configured = rateLimitTaskMiddleware.with({
+      windowMs: 1000,
+      max: 1,
+    });
+
+    expect(configured.config).toEqual({
+      windowMs: 1000,
+      max: 1,
+    });
   });
 
   it("should throw a clear error when used without .with(config)", async () => {
@@ -101,145 +110,46 @@ describe("Rate Limit Middleware", () => {
     });
 
     const runPromise = run(app);
-    await expect(runPromise).rejects.toThrow(TypeError);
     await expect(runPromise).rejects.toThrow(
       /requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i,
     );
   });
 
-  it("should throw when config is null", async () => {
-    const task = defineTask({
-      id: "rateLimit.invalidConfig.null",
+  it("should throw when config is null", () => {
+    expect(() => {
       // @ts-expect-error - runtime guard should reject invalid config.
-      middleware: [rateLimitTaskMiddleware.with(null)],
-      run: async () => "ok",
-    });
-
-    const app = defineResource({
-      id: "app",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        await task();
-      },
-    });
-
-    const runPromise = run(app);
-    await expect(runPromise).rejects.toThrow(TypeError);
-    await expect(runPromise).rejects.toThrow(
-      /requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i,
-    );
+      rateLimitTaskMiddleware.with(null);
+    }).toThrow(/requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i);
   });
 
-  it("should throw when config is a non-object", async () => {
-    const task = defineTask({
-      id: "rateLimit.invalidConfig.nonObject",
+  it("should throw when config is a non-object", () => {
+    expect(() => {
       // @ts-expect-error - runtime guard should reject invalid config.
-      middleware: [rateLimitTaskMiddleware.with(5)],
-      run: async () => "ok",
-    });
-
-    const app = defineResource({
-      id: "app",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        await task();
-      },
-    });
-
-    const runPromise = run(app);
-    await expect(runPromise).rejects.toThrow(TypeError);
-    await expect(runPromise).rejects.toThrow(
-      /requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i,
-    );
+      rateLimitTaskMiddleware.with(5);
+    }).toThrow(/requires \.with\(\{\s*windowMs,\s*max\s*\}\s*\)/i);
   });
 
-  it("should throw when windowMs is not finite", async () => {
-    const task = defineTask({
-      id: "rateLimit.invalidConfig.windowMsNotFinite",
-      middleware: [
-        rateLimitTaskMiddleware.with({ windowMs: Infinity, max: 1 }),
-      ],
-      run: async () => "ok",
-    });
-
-    const app = defineResource({
-      id: "app",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        await task();
-      },
-    });
-
-    await expect(run(app)).rejects.toThrow(TypeError);
-    await expect(run(app)).rejects.toThrow(
-      /positive number for config\.windowMs/i,
-    );
+  it("should throw when windowMs is not finite", () => {
+    expect(() => {
+      rateLimitTaskMiddleware.with({ windowMs: Infinity, max: 1 });
+    }).toThrow(/positive number for config\.windowMs/i);
   });
 
-  it("should throw when windowMs is not positive", async () => {
-    const task = defineTask({
-      id: "rateLimit.invalidConfig.windowMsNotPositive",
-      middleware: [rateLimitTaskMiddleware.with({ windowMs: 0, max: 1 })],
-      run: async () => "ok",
-    });
-
-    const app = defineResource({
-      id: "app",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        await task();
-      },
-    });
-
-    await expect(run(app)).rejects.toThrow(TypeError);
-    await expect(run(app)).rejects.toThrow(
-      /positive number for config\.windowMs/i,
-    );
+  it("should throw when windowMs is not positive", () => {
+    expect(() => {
+      rateLimitTaskMiddleware.with({ windowMs: 0, max: 1 });
+    }).toThrow(/positive number for config\.windowMs/i);
   });
 
-  it("should throw when max is not finite", async () => {
-    const task = defineTask({
-      id: "rateLimit.invalidConfig.maxNotFinite",
-      middleware: [
-        rateLimitTaskMiddleware.with({ windowMs: 1000, max: Infinity }),
-      ],
-      run: async () => "ok",
-    });
-
-    const app = defineResource({
-      id: "app",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        await task();
-      },
-    });
-
-    await expect(run(app)).rejects.toThrow(TypeError);
-    await expect(run(app)).rejects.toThrow(/positive number for config\.max/i);
+  it("should throw when max is not finite", () => {
+    expect(() => {
+      rateLimitTaskMiddleware.with({ windowMs: 1000, max: Infinity });
+    }).toThrow(/positive number for config\.max/i);
   });
 
-  it("should throw when max is not positive", async () => {
-    const task = defineTask({
-      id: "rateLimit.invalidConfig.maxNotPositive",
-      middleware: [rateLimitTaskMiddleware.with({ windowMs: 1000, max: 0 })],
-      run: async () => "ok",
-    });
-
-    const app = defineResource({
-      id: "app",
-      register: [task],
-      dependencies: { task },
-      async init(_, { task }) {
-        await task();
-      },
-    });
-
-    await expect(run(app)).rejects.toThrow(TypeError);
-    await expect(run(app)).rejects.toThrow(/positive number for config\.max/i);
+  it("should throw when max is not positive", () => {
+    expect(() => {
+      rateLimitTaskMiddleware.with({ windowMs: 1000, max: 0 });
+    }).toThrow(/positive number for config\.max/i);
   });
 });

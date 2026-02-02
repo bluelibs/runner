@@ -1,5 +1,14 @@
 import { CycleContext } from "../../../models/event/CycleContext";
 
+enum EventId {
+  Sample = "evt",
+}
+
+enum EventSource {
+  Initial = "initial",
+  Hook = "hook-A",
+}
+
 describe("CycleContext", () => {
   it("runHook executes directly when disabled", async () => {
     const ctx = new CycleContext(false);
@@ -9,6 +18,23 @@ describe("CycleContext", () => {
 
     expect(result).toBe("ok");
     expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("runEmission executes directly when disabled", async () => {
+    const ctx = new CycleContext(false);
+    const frame = { id: EventId.Sample, source: EventSource.Initial };
+    let calls = 0;
+
+    await ctx.runEmission(frame, EventSource.Initial, async () => {
+      calls++;
+      if (calls === 1) {
+        await ctx.runEmission(frame, EventSource.Hook, async () => {
+          calls++;
+        });
+      }
+    });
+
+    expect(calls).toBe(2);
   });
 
   it("detects emission cycles and throws", async () => {

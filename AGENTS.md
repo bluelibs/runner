@@ -17,7 +17,7 @@
 - Work with agent-enabled TODO lists! TODO lists help you remain on-track.
 - All imports should be put on top, unless an optimization or something specific, default to top imports as preference instead of inline.
 - Do not ask the user if you should do something that is likely the user would want to do
-- Strings are forbidden, use enums instead.
+- Make use of enums when dealing with a set of values for things like statuses, types, etc.
 - The tests are in mirror-like structure under ./src/__tests__/ folder.
 - Always think isolation. Each container (r.run()) should be completely isolated from any other parallel r.run(), meaning we have to design for things within the container.
 </general>
@@ -26,7 +26,7 @@
 - Node specific code goes under ./src/node/ folder. It is exported only for node.
 - This package is multi-platform (readmes/MULTIPLATFORM.md) be sure to take this into account when implementing changes
 - AI.md (readmes/AI.md) contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
-- Always run `npm run qa` to ensure type safety and linting.
+- Always run `npm run qa` to ensure type safety and linting. (Expected to take around 30 seconds)
 - Never revert changes from other files that you did not modify.
 - Apply fail-fast principles. If something is not as expected, throw an error immediately.
 - This is a framework, it's documentation is compsoed dynamically, read guide-units/DOCS_STYLE_GUIDE.md for more info, useful when we make changes or new features.

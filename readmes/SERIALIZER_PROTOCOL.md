@@ -1,5 +1,7 @@
 # Serializer Protocol (Internal)
 
+← [Back to main README](../README.md)
+
 This document describes the JSON wire format produced and accepted by `Serializer`.
 
 Scope:

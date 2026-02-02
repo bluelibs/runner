@@ -16,13 +16,13 @@ PORT=31337 npm run test # (integration tests)
 
 A complete Express.js application demonstrating the full power of BlueLibs Runner with:
 
-- 🏷️ **Custom Tags (httpTag)** for route decoration
-- 🎯 **Event-driven Architecture** using `afterInit` for automatic route registration
-- 🔐 **Authentication** with Passport and JWT
-- 📊 **SQLite Database** with user management
-- 🧵 **Context System** for request-scoped data using `createContext()`
-- 📚 **OpenAPI/Swagger** documentation
-- 🧪 **Comprehensive Integration Tests**
+- **Custom Tags (httpTag)** for route decoration
+- **Event-driven Architecture** using `afterInit` for automatic route registration
+- **Authentication** with Passport and JWT
+- **SQLite Database** with user management
+- **Context System** for request-scoped data using `createContext()`
+- **OpenAPI/Swagger** documentation
+- **Comprehensive Integration Tests**
 
 ## Features Demonstrated
 

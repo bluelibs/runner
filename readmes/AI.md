@@ -334,7 +334,7 @@ const app = r.resource("app").register([requestContext, whoAmI]).build();
 
 ## Errors
 
-Define typed, namespaced errors with a fluent builder. Built helpers expose `throw`, `is`, and `toString`:
+Define typed, namespaced errors with a fluent builder. Built helpers expose `throw` and `is`:
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -342,7 +342,7 @@ import { r } from "@bluelibs/runner";
 // Fluent builder
 const AppError = r
   .error<{ code: number; message: string }>("app.errors.AppError")
-  .dataSchema(zod) // or { parse(obj) => obj }
+  .dataSchema({ parse: (value) => value })
   .build();
 
 try {
@@ -354,7 +354,8 @@ try {
 }
 ```
 
-- Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.
+- The thrown `Error` has `name = id` and `message = format(data)`. If you don’t provide `.format(...)`, the default is `JSON.stringify(data)`.
+- `message` is not required in the data unless your custom formatter expects it.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
 
 ## Overrides

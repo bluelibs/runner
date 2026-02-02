@@ -17,7 +17,7 @@ Use these terms consistently throughout all documentation:
 | **Task**             | A function with dependency injection, middleware support, and observability. The primary unit for business logic. | `const createUser = r.task("users.create")...`                     |
 | **Resource**         | A singleton with lifecycle management (init/dispose). Represents shared services, connections, or state.          | `const database = r.resource("app.db")...`                         |
 | **Event**            | A typed signal for decoupling components. Enables pub/sub patterns.                                               | `const userCreated = r.event("users.created")...`                  |
-| **Hook**             | An event listener. A lightweight function that subscribes to events.                                              | `const onUserCreated = r.hook("onUserCreated").on(userCreated)...` |
+| **Hook**             | A lightweight function subscribed to an event.                                                                    | `const onUserCreated = r.hook("onUserCreated").on(userCreated)...` |
 | **Middleware**       | A wrapper that adds cross-cutting concerns to tasks or resources (caching, retry, timeouts, logging).             | `.middleware([cache.with({ ttl: 60000 })])`                        |
 | **ExecutionJournal** | A per-execution registry enabling middleware and tasks to share typed state.                                      | `journal.set(key, value)`                                          |
 | **Tag**              | Metadata attached to components for discovery, filtering, or configuration.                                       | `.tags([globals.tags.debug])`                                      |
@@ -34,10 +34,10 @@ Use these terms consistently throughout all documentation:
 | Don't Use   | Use Instead         | Reason                      |
 | ----------- | ------------------- | --------------------------- |
 | `root`      | `app`               | Consistency                 |
-| `listener`  | `hook`              | Modern terminology          |
+| `listener`  | `hook`              | Use `hook` for Runner event subscriptions (but `listener` is fine for servers/process events) |
 | `handler`   | `hook` or `task`    | More specific               |
 | `inject`    | `dependencies`      | Explicit over magical       |
-| `module`    | `resource`          | Runner-specific terminology |
+| `module`    | `resource`          | Use `resource` when referring to Runner building blocks (but `module` is fine for npm/Node modules) |
 | `provider`  | `resource`          | Runner-specific terminology |
 | `container` | `app` or `resource` | Clearer purpose             |
 
@@ -178,7 +178,7 @@ Include sardonic "runtime" quotes at the end of major sections for personality. 
 
 **Heading style:**
 
-- Use sentence case, not title case: "Core concepts" not "Core Concepts"
+- Prefer Title Case for headings (match `README.md`): "Core Concepts" not "Core concepts"
 - Exception: Proper nouns and brand names: "BlueLibs Runner", "TypeScript"
 - Use descriptive, action-oriented titles when possible
 - Avoid generic headings like "Overview" or "Introduction"

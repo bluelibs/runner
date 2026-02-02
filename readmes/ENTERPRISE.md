@@ -1,5 +1,7 @@
 # BlueLibs Runner — Enterprise
 
+← [Back to main README](../README.md)
+
 Build reliable, observable, and compliant services with a TypeScript-first framework designed for governed environments.
 
 - Strong typing and explicit dependency graphs

@@ -1,10 +1,17 @@
-import { defineResource, defineTask } from "../../define";
+import { defineResource, defineTask, defineTaskMiddleware } from "../../define";
 import { run } from "../../run";
 import {
   cacheResource,
   cacheMiddleware,
   ICacheInstance,
+  journalKeys as cacheJournalKeys,
 } from "../../globals/middleware/cache.middleware";
+
+enum CacheNoHasId {
+  App = "cache.nohas.app",
+  CacheFactory = "globals.tasks.cacheFactory",
+  Task = "cache.nohas.task",
+}
 
 describe("Caching System", () => {
   describe("Cache Resource", () => {
@@ -201,6 +208,55 @@ describe("Caching System", () => {
       await run(app);
     });
 
+    it("should use cachedValue when cache lacks has()", async () => {
+      class NoHasCache implements ICacheInstance {
+        private store = new Map<string, number>();
+
+        get(key: string) {
+          return this.store.get(key);
+        }
+
+        set(key: string, value: number) {
+          this.store.set(key, value);
+        }
+
+        clear() {
+          this.store.clear();
+        }
+      }
+
+      const cacheFactoryTask = defineTask({
+        id: CacheNoHasId.CacheFactory,
+        run: async () => new NoHasCache(),
+      });
+
+      let callCount = 0;
+      const testTask = defineTask({
+        id: CacheNoHasId.Task,
+        middleware: [cacheMiddleware],
+        run: async () => {
+          callCount += 1;
+          return callCount;
+        },
+      });
+
+      const app = defineResource({
+        id: CacheNoHasId.App,
+        register: [cacheResource, cacheMiddleware, testTask],
+        overrides: [cacheFactoryTask],
+        dependencies: { testTask },
+        async init(_, { testTask }) {
+          const first = await testTask();
+          const second = await testTask();
+
+          expect(first).toBe(second);
+          expect(callCount).toBe(1);
+        },
+      });
+
+      await run(app);
+    });
+
     it("should respect TTL configuration", async () => {
       let callCount = 0;
       const testTask = defineTask({
@@ -260,6 +316,53 @@ describe("Caching System", () => {
 
           expect(result1).toEqual(input1);
           expect(result2).toEqual(input1); // Same ID should cache
+        },
+      });
+
+      await run(app);
+    });
+
+    it("should cache falsy values and record hit flag", async () => {
+      let callCount = 0;
+      const capturedHits: Array<boolean | undefined> = [];
+
+      const hitCaptureMiddleware = defineTaskMiddleware({
+        id: "cache.hit.capture",
+        async run({ task, journal, next }) {
+          const result = await next(task.input);
+          capturedHits.push(journal.get(cacheJournalKeys.hit));
+          return result;
+        },
+      });
+
+      const testTask = defineTask({
+        id: "falsy.cache.task",
+        middleware: [hitCaptureMiddleware, cacheMiddleware],
+        run: async (input: any) => {
+          callCount++;
+          return input;
+        },
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [
+          cacheResource,
+          cacheMiddleware,
+          hitCaptureMiddleware,
+          testTask,
+        ],
+        dependencies: { testTask },
+        async init(_, { testTask }) {
+          const zeroFirst = await testTask(0);
+          const zeroSecond = await testTask(0);
+          const falseFirst = await testTask(false);
+
+          expect(zeroFirst).toBe(0);
+          expect(zeroSecond).toBe(0);
+          expect(falseFirst).toBe(false);
+          expect(callCount).toBe(2);
+          expect(capturedHits).toEqual([false, true, false]);
         },
       });
 

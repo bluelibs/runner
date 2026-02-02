@@ -8,13 +8,17 @@ export interface ICacheInstance {
   set(key: string, value: any): void;
   get(key: string): any;
   clear(): void;
+  /** Optional presence check to disambiguate cached undefined values */
+  has?(key: string): boolean;
 }
 
 // Default cache factory task that can be overridden
 export const cacheFactoryTask = defineTask({
   id: "globals.tasks.cacheFactory",
-  run: async (options: any) => {
-    return new LRUCache(options) as ICacheInstance;
+  run: async (
+    options: LRUCache.Options<any, any, any>,
+  ): Promise<ICacheInstance> => {
+    return new LRUCache(options);
   },
 });
 
@@ -95,8 +99,12 @@ export const cacheMiddleware = defineTaskMiddleware({
     const key = config.keyBuilder!(taskId, task!.input);
 
     const cachedValue = await cacheHolderForTask.get(key);
+    const hasCachedEntry =
+      typeof cacheHolderForTask.has === "function"
+        ? cacheHolderForTask.has(key)
+        : cachedValue !== undefined;
 
-    if (cachedValue) {
+    if (hasCachedEntry) {
       journal.set(journalKeys.hit, true, { override: true });
       return cachedValue;
     }

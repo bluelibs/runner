@@ -42,6 +42,13 @@ function assertRateLimitMiddlewareConfig(
   }
 }
 
+const rateLimitConfigSchema = {
+  parse: (config: unknown) => {
+    assertRateLimitMiddlewareConfig(config);
+    return config;
+  },
+};
+
 /**
  * Custom error class for rate limit errors.
  */
@@ -89,6 +96,7 @@ export const rateLimitResource = defineResource({
  */
 export const rateLimitTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.rateLimit",
+  configSchema: rateLimitConfigSchema,
   dependencies: { state: rateLimitResource },
   async run(
     { task, next, journal },

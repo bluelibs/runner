@@ -33,7 +33,7 @@ export class ResourceInitializer {
     config: TConfig,
     dependencies: ResourceDependencyValuesType<TDeps>,
   ): Promise<{ value: TValue | undefined; context: TContext }> {
-    const context = resource.context?.() as TContext;
+    const context = resource.context ? resource.context() : ({} as TContext);
 
     const value = await this.initWithMiddleware(
       resource,

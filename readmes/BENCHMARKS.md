@@ -1,5 +1,7 @@
 # Benchmark System
 
+← [Back to main README](../README.md)
+
 This project includes a comprehensive benchmark system to track performance regressions over time.
 
 ## Overview
@@ -68,7 +70,7 @@ When performance characteristics legitimately change (new features, architectura
 ./scripts/update-baseline.sh
 ```
 
-**⚠️ Important:** Only update baselines when:
+**Important:** Only update baselines when:
 
 - You've made intentional performance changes
 - The current environment is representative

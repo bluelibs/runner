@@ -166,7 +166,7 @@ export class StoreRegistry {
       config: item.config,
       value: undefined,
       isInitialized: false,
-      context: {},
+      context: undefined,
     });
 
     this.computeRegistrationDeeply(prepared, item.config);
@@ -205,7 +205,7 @@ export class StoreRegistry {
       config: {},
       value: undefined,
       isInitialized: false,
-      context: prepared.context?.() || {},
+      context: undefined,
     });
 
     this.computeRegistrationDeeply(prepared, {});

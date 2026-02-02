@@ -320,7 +320,7 @@ Every event listener registration returns a cleanup function:
 ```typescript
 onUncaughtException(handler) {
   process.on("uncaughtException", handler);
-  return () => process.off("uncaughtException", handler); // ✨
+  return () => process.off("uncaughtException", handler); // Clean cleanup.
 }
 ```
 

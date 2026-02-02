@@ -78,7 +78,7 @@ async function postSerialized<T = any>(options: {
 export function createExposureFetch(
   cfg: ExposureFetchConfig,
 ): ExposureFetchClient {
-  const baseUrl = (cfg?.baseUrl).replace(/\/$/, "");
+  const baseUrl = cfg?.baseUrl?.replace(/\/$/, "");
   if (!baseUrl) throw new Error("createExposureFetch requires baseUrl");
 
   const headerName = (cfg?.auth?.header ?? "x-runner-token").toLowerCase();

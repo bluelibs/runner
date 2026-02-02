@@ -1,6 +1,6 @@
 # Runner Tunnels (v2)
 
-← [Back to main README](../README.md) | [Tunnels section in README](../README.md#tunnels-bridging-runners)
+← [Back to main README](../README.md) | [Tunnels section in FULL_GUIDE](./FULL_GUIDE.md#tunnels-bridging-runners)
 
 ---
 

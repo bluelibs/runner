@@ -39,11 +39,11 @@ describe("ResourceInitializer", () => {
       mockDependencies,
     );
 
-    expect(result).toEqual({ value: "initialized value", context: undefined });
+    expect(result).toEqual({ value: "initialized value", context: {} });
     expect(mockResource.init).toHaveBeenCalledWith(
       mockConfig,
       mockDependencies,
-      undefined,
+      {},
     );
 
     // No lifecycle events anymore
@@ -69,7 +69,7 @@ describe("ResourceInitializer", () => {
     expect(mockResource.init).toHaveBeenCalledWith(
       mockConfig,
       mockDependencies,
-      undefined,
+      {},
     );
   });
 
@@ -87,7 +87,7 @@ describe("ResourceInitializer", () => {
       mockDependencies,
     );
 
-    expect(result).toEqual({ value: undefined, context: undefined });
+    expect(result).toEqual({ value: undefined, context: {} });
     // No lifecycle events anymore
   });
 });

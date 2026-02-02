@@ -682,12 +682,7 @@ describe("run", () => {
       const result = await run(app);
       expect(result.value).toBe("Resource Value");
       await result.dispose();
-      expect(disposeFn).toHaveBeenCalledWith(
-        "Resource Value",
-        {},
-        {},
-        undefined,
-      );
+      expect(disposeFn).toHaveBeenCalledWith("Resource Value", {}, {}, {});
     });
 
     it("should work with primitive return values", async () => {
@@ -951,7 +946,6 @@ describe("run", () => {
         // This resource only has dispose, testing the private context in dispose scenario
         dispose: async function (_value, _config, _deps, _context) {
           // When there's no init, dispose still gets called but private context should be available
-          // Note: This won't have private context since init wasn't called
           disposeFn();
         },
       });

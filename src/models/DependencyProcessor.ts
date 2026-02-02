@@ -114,19 +114,47 @@ export class DependencyProcessor {
         // The root is the last one to be initialized and is done in a separate process.
         resource.resource.id !== this.store.root.resource.id
       ) {
-        await this.processResourceDependencies(resource);
-        const { value, context } =
-          await this.resourceInitializer.initializeResource(
-            resource.resource,
-            resource.config,
-            resource.computedDependencies!,
-          );
-        resource.context = context;
-        resource.value = value;
-        resource.isInitialized = true;
-        this.store.recordResourceInitialized(resource.resource.id);
+        try {
+          await this.processResourceDependencies(resource);
+          const { value, context } =
+            await this.resourceInitializer.initializeResource(
+              resource.resource,
+              resource.config,
+              resource.computedDependencies!,
+            );
+          resource.context = context;
+          resource.value = value;
+          resource.isInitialized = true;
+          this.store.recordResourceInitialized(resource.resource.id);
+        } catch (error: unknown) {
+          this.rethrowResourceInitError(resource.resource.id, error);
+        }
       }
     }
+  }
+
+  private rethrowResourceInitError(resourceId: string, error: unknown): never {
+    const prefix = `Resource "${resourceId}" initialization failed`;
+    if (error instanceof Error) {
+      if (!error.message.includes(resourceId)) {
+        error.message = `${prefix}: ${error.message}`;
+      }
+      if (!Object.prototype.hasOwnProperty.call(error, "resourceId")) {
+        Object.defineProperty(error, "resourceId", {
+          value: resourceId,
+          configurable: true,
+        });
+      }
+      if (!Object.prototype.hasOwnProperty.call(error, "cause")) {
+        Object.defineProperty(error, "cause", {
+          value: { resourceId },
+          configurable: true,
+        });
+      }
+      throw error;
+    }
+
+    throw new Error(`${prefix}: ${String(error)}`);
   }
 
   /**
@@ -392,30 +420,27 @@ export class DependencyProcessor {
     const { resource, config } = sr;
 
     if (!sr.isInitialized) {
-      // check if it has an initialisation function that provides the value
-      if (resource.init) {
-        const depMap = (resource.dependencies || {}) as DependencyMapType;
+      const depMap = (resource.dependencies || {}) as DependencyMapType;
 
-        let wrapped =
-          sr.computedDependencies as ResourceDependencyValuesType<any>;
+      let wrapped =
+        sr.computedDependencies as ResourceDependencyValuesType<any>;
 
-        // If not already computed, compute and cache it!
-        if (!wrapped || Object.keys(wrapped).length === 0) {
-          const raw = await this.extractDependencies(depMap, resource.id);
-          wrapped = this.wrapResourceDependencies(depMap, raw);
-          sr.computedDependencies = wrapped;
-        }
-
-        const { value, context } =
-          await this.resourceInitializer.initializeResource(
-            resource,
-            config,
-            wrapped,
-          );
-
-        sr.context = context;
-        sr.value = value;
+      // If not already computed, compute and cache it!
+      if (!wrapped || Object.keys(wrapped).length === 0) {
+        const raw = await this.extractDependencies(depMap, resource.id);
+        wrapped = this.wrapResourceDependencies(depMap, raw);
+        sr.computedDependencies = wrapped;
       }
+
+      const { value, context } =
+        await this.resourceInitializer.initializeResource(
+          resource,
+          config,
+          wrapped,
+        );
+
+      sr.context = context;
+      sr.value = value;
 
       // we need to initialize the resource
       sr.isInitialized = true;

@@ -34,7 +34,7 @@ Runner is excellent for wiring systems together (see `readmes/AI.md`), but that 
 Think of Runner as your **object lifecycle manager** and **dependency coordinator**, not your class framework. Your classes remain pure, portable, and testable. Runner just makes sure they get created with the right dependencies at the right time.
 
 ```ts
-// ❌ Framework-heavy approach
+// Bad: Framework-heavy approach
 @Injectable()
 class UserService {
   constructor(
@@ -43,7 +43,7 @@ class UserService {
   ) {}
 }
 
-// ✅ Runner approach
+// Good: Runner approach
 class UserService {
   constructor(
     private readonly db: Database,
@@ -454,7 +454,7 @@ class DatabaseService {
 
   constructor(private readonly connectionString: string) {}
 
-  // ❌ Constructor can't be async
+  // Bad: Constructor can't be async
   // constructor(connectionString: string) {
   //   await MongoClient.connect(connectionString); // Won't work!
   // }
@@ -486,13 +486,13 @@ class DatabaseService {
 const databaseService = r
   .resource("app.services.database")
   id: "app.services.database",
-  // ✅ init() can be async - perfect for setup
+  // Good: init() can be async - perfect for setup
   init: async (config: { connectionString: string }) => {
     const service = new DatabaseService(config.connectionString);
     await service.connect(); // Async initialization
     return service;
   }
-  // ✅ dispose() ensures cleanup
+  // Good: dispose() ensures cleanup
   .dispose(async (service) => {
     await service.close();
   })
@@ -1183,7 +1183,7 @@ const userRepository = resource({
 ### Keep Classes Framework-Free
 
 ```ts
-// ✅ Good - no framework dependencies
+// Good - no framework dependencies
 class PricingEngine {
   constructor(
     private readonly taxService: ITaxService,
@@ -1205,7 +1205,7 @@ class PricingEngine {
   }
 }
 
-// ❌ Bad - tightly coupled to framework
+// Bad - tightly coupled to framework
 @Component
 class PricingEngine {
   @Inject("TAX_SERVICE") taxService: ITaxService;
@@ -1218,7 +1218,7 @@ class PricingEngine {
 ### Use Resources for Lifecycle
 
 ```ts
-// ✅ Good - let Runner manage lifecycle
+// Good - let Runner manage lifecycle
 const cacheService = resource({
   id: "app.services.cache",
   init: async (config: CacheConfig) => {
@@ -1233,7 +1233,7 @@ const cacheService = resource({
   },
 });
 
-// ❌ Bad - manual lifecycle management scattered throughout app
+// Bad - manual lifecycle management scattered throughout app
 const cacheService = new RedisCache(config);
 // Who calls connect()? When? Who handles errors?
 // Who calls disconnect()? What if it's forgotten?
@@ -1242,7 +1242,7 @@ const cacheService = new RedisCache(config);
 ### Explicit Dependencies
 
 ```ts
-// ✅ Good - explicit, testable dependencies
+// Good - explicit, testable dependencies
 class OrderProcessor {
   constructor(
     private readonly paymentService: IPaymentService,
@@ -1252,7 +1252,7 @@ class OrderProcessor {
   ) {}
 }
 
-// ❌ Bad - hidden, hard-to-test dependencies
+// Bad - hidden, hard-to-test dependencies
 class OrderProcessor {
   async processOrder(order: Order) {
     // Hidden dependencies - where do these come from?
@@ -1267,7 +1267,7 @@ class OrderProcessor {
 ### Leverage Middleware for Policies
 
 ```ts
-// ✅ Good - policies in middleware
+// Good - policies in middleware
 const paymentService = resource({
   id: "app.services.payment",
   middleware: [
@@ -1278,7 +1278,7 @@ const paymentService = resource({
   init: async (config) => new PaymentService(config),
 });
 
-// ❌ Bad - policies baked into class
+// Bad - policies baked into class
 class PaymentService {
   async processPayment(amount: number) {
     let attempt = 0;
@@ -1373,4 +1373,4 @@ const healthChecker = resource({
 
 In short: **write great classes; let Runner do the wiring**. You gain strong lifecycle guarantees, composability, and zero-magic ergonomics without sacrificing OOP design principles.
 
-_"The best frameworks get out of your way. The second best frameworks make the way obvious."_ 🚀
+_"The best frameworks get out of your way. The second best frameworks make the way obvious."_

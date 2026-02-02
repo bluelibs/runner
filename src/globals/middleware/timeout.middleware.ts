@@ -1,6 +1,10 @@
 import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
 import { journal } from "../../models/ExecutionJournal";
 
+enum AbortSignalEventType {
+  Abort = "abort",
+}
+
 export interface TimeoutMiddlewareConfig {
   /**
    * Maximum time in milliseconds before the wrapped operation is aborted
@@ -38,10 +42,11 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
 
     const ttl = Math.max(0, config.ttl);
     const message = `Operation timed out after ${ttl}ms`;
+    const timeoutError = new TimeoutError(message);
 
     // Fast-path: immediate timeout
     if (ttl === 0) {
-      throw new TimeoutError(message);
+      throw timeoutError;
     }
 
     const controller = new AbortController();
@@ -49,22 +54,45 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
     // Expose controller for downstream middleware/tasks
     journal.set(journalKeys.abortController, controller);
 
-    // Create a timeout promise that rejects when aborted
-    const timeoutPromise = new Promise((_, reject) => {
+    return await new Promise((resolve, reject) => {
+      let settled = false;
+
+      const abortHandler = () => settle("reject", timeoutError);
+
+      const settle = (kind: "resolve" | "reject", value?: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        controller.signal.removeEventListener(
+          AbortSignalEventType.Abort,
+          abortHandler,
+        );
+        if (kind === "resolve") {
+          resolve(value);
+        } else {
+          reject(value);
+        }
+      };
+
       const timeoutId = setTimeout(() => {
         controller.abort();
-        reject(new TimeoutError(message));
+        settle("reject", timeoutError);
       }, ttl);
 
-      // Clean up timeout if abort signal fires for other reasons
-      controller.signal.addEventListener("abort", () => {
-        clearTimeout(timeoutId);
-      });
-    });
+      controller.signal.addEventListener(
+        AbortSignalEventType.Abort,
+        abortHandler,
+      );
 
-    // Race between the actual operation and the timeout
-    // Input type is unknown at compile time for generic middleware
-    return Promise.race([next(input as unknown), timeoutPromise]);
+      const finish = (cb: () => Promise<unknown>) => {
+        cb().then(
+          (result) => settle("resolve", result),
+          (error) => settle("reject", error),
+        );
+      };
+
+      finish(() => next(input as unknown));
+    });
   },
 });
 
@@ -74,20 +102,49 @@ export const timeoutResourceMiddleware = defineResourceMiddleware({
     const input = resource?.config;
     const ttl = Math.max(0, config.ttl);
     const message = `Operation timed out after ${ttl}ms`;
+    const timeoutError = new TimeoutError(message);
     if (ttl === 0) {
-      throw new TimeoutError(message);
+      throw timeoutError;
     }
     const controller = new AbortController();
-    const timeoutPromise = new Promise((_, reject) => {
+    return await new Promise((resolve, reject) => {
+      let settled = false;
+
+      const abortHandler = () => settle("reject", timeoutError);
+
+      const settle = (kind: "resolve" | "reject", value?: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        controller.signal.removeEventListener(
+          AbortSignalEventType.Abort,
+          abortHandler,
+        );
+        if (kind === "resolve") {
+          resolve(value);
+        } else {
+          reject(value);
+        }
+      };
+
       const timeoutId = setTimeout(() => {
         controller.abort();
-        reject(new TimeoutError(message));
+        settle("reject", timeoutError);
       }, ttl);
-      controller.signal.addEventListener("abort", () => {
-        clearTimeout(timeoutId);
-      });
+
+      controller.signal.addEventListener(
+        AbortSignalEventType.Abort,
+        abortHandler,
+      );
+
+      const finish = (cb: () => Promise<unknown>) => {
+        cb().then(
+          (result) => settle("resolve", result),
+          (error) => settle("reject", error),
+        );
+      };
+
+      finish(() => next(input as unknown));
     });
-    // Input type is unknown at compile time for generic middleware
-    return Promise.race([next(input as unknown), timeoutPromise]);
   },
 });

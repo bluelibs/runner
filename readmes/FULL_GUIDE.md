@@ -100,6 +100,10 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | Tunnels server (`@bluelibs/runner/node`)    | Full    | None    | None | Exposes tasks/events over HTTP             |
 
 ---
+← [Back to main README](../README.md)
+
+---
+
 ## Why Runner?
 
 Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
@@ -208,8 +212,8 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 
 - [run() and RunOptions](#run-and-runoptions) - Starting your application
 - [Task Interceptors](#task-interceptors) - Advanced task control
-- [Error Boundaries](#error-boundaries) - Fault isolation
-- [Lifecycle Hooks](#lifecycle-hooks) - Graceful shutdown and cleanup
+- [Error Boundaries](#error-boundary-integration) - Fault isolation
+- [Lifecycle Management](#lifecycle-management) - Graceful shutdown and cleanup
 
 **Advanced Features**
 
@@ -217,14 +221,14 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Retry](#retrying-failed-operations) - Resilience patterns
 - [Timeouts](#timeouts) - Operation time limits
 - [Logging](#logging) - Structured observability
-- [Debug](#debug) - Development tooling
+- [Debug](#debug-resource) - Development tooling
 
 **Concurrency & Scheduling**
 
 - [Semaphore](#semaphore) - Concurrency control
 - [Queue](#queue) - Task scheduling
 
-**Deployment & Integrations** (see dedicated guides in `./readmes/`)
+**Deployment & Integrations** (see dedicated guides in this folder)
 
 - [Durable Workflows](./DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows (Node-only)
 - [HTTP Tunnels](./TUNNELS.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)
@@ -476,7 +480,7 @@ describe('UserService', () => {
 ```
 
 </td>
-<td>
+<td valign="top">
 
 **Testing in Runner:**
 ```typescript
@@ -500,47 +504,35 @@ describe('createUser', () => {
 </tr>
 </table>
 
-### Honest Assessment: Where Each Shines
-
-**Choose NestJS when:**
-- You want an opinionated, batteries-included web framework (controllers, modules, interceptors, CLI)
-- You're already experienced with Angular and love the decorator patterns
-- Your team prefers strict OOP architectural patterns
-- You need the extensive ecosystem (Swagger, GraphQL, WebSockets all pre-integrated)
-- You're building a large enterprise app with many developers who need guardrails
-- You want established conventions that are widely documented
 
 **Choose Runner when:**
-- You prefer functional programming over OOP
-- You value minimal boilerplate and explicit code
-- Fast test execution matters (no framework testing module setup)
-- You want full type inference without manual typing
-- You need durable workflows or HTTP tunnels in Node.js (`@bluelibs/runner/node`)
-- You're integrating into an existing project gradually
-- You want to understand exactly what's happening (no decorator magic)
+- You need **built-in reliability primitives** – circuit breakers, rate limiting, retry with backoff, caching, timeouts, fallbacks, and concurrency control are first-class, not bolted on
+- You want **full type inference** – dependencies, middleware configs, and task I/O are inferred, not manually typed
+- **Testing speed matters** – call `task.run(input, { mockDep })` directly; no framework test modules, no DI container setup
+- You're building **any TypeScript application** (CLI tools, workers, services, serverless) – Runner isn't web-specific
+- You need **durable workflows** or **HTTP tunnels** for distributed task execution (Node.js)
+- You want **middleware introspection** – the ExecutionJournal exposes cache hits, retry attempts, circuit state, and more at runtime
+- You're integrating into an existing project gradually – no "rewrite in our style" requirement
 
 **Choose a DI container (InversifyJS / TypeDI / tsyringe) when:**
-- You want class-based DI but you don’t want a higher-level framework/toolkit
-- You’re happy to bring your own patterns for middleware, events, and lifecycle
-- You’re adding DI to an existing architecture and want minimal surface area
+- You only need class-based dependency injection
+- You're happy to bring your own middleware, events, lifecycle management, and reliability patterns
+- You want minimal surface area and will build the rest yourself
 
-**The honest take:**
+**The concrete differences:**
 
-NestJS is a **batteries-included framework** inspired by Angular – opinionated, structured, and powerful. It's excellent for teams that want clear architectural patterns enforced by the framework.
+| Capability              | NestJS                                           | Runner                                              |
+| ----------------------- | ------------------------------------------------ | --------------------------------------------------- |
+| **Reliability**         | Add external libs (e.g., `nestjs-retry`)         | Built-in: retry, circuit breaker, rate limit, cache, timeout, fallback |
+| **Type Safety**         | Manual typing for DI tokens                      | Full inference from `.dependencies()` and `.with()` |
+| **Test Setup**          | `Test.createTestingModule()` boilerplate         | `task.run(input, mocks)` – one line                 |
+| **Scope**               | Web framework (HTTP-centric)                     | Application toolkit (any TypeScript app)            |
+| **Middleware**          | Guards, interceptors, pipes (HTTP lifecycle)     | Composable, type-safe, with journal introspection   |
+| **Concurrency**         | Bring your own                                   | Built-in Semaphore and Queue primitives             |
+| **Bundle Size**         | Large (full framework)                           | Tree-shakable (import what you use)                 |
 
-Runner is a **composition-first application toolkit**: tasks/resources, middleware, events/hooks, and a runtime that wires everything together. It prioritizes type inference, testability, and explicit code over magical conventions.
+> **TL;DR:** NestJS gives you a structured web framework with conventions. Runner gives you a composable toolkit with **production-ready reliability built in** – you bring the structure that fits your app.
 
-Neither is universally "better" – they solve the same problem with different philosophies:
-
-| Philosophy        | NestJS                          | Runner                              |
-| ----------------- | ------------------------------- | ----------------------------------- |
-| **Architecture**  | Enforced patterns (MVC, modules)| Bring your own structure            |
-| **Dependencies**  | Injected via decorators         | Explicit via `.dependencies()`      |
-| **Testing**       | Framework test modules          | Direct function calls with mocks    |
-| **Mental Model**  | Classes and decorators          | Functions and composition           |
-| **Onboarding**    | Learn NestJS conventions first  | Use what you know, add DI           |
-
-> **TL;DR:** NestJS says "follow our patterns and we'll handle the complexity." Runner says "write functions, we'll wire them together."
 
 ---
 
@@ -7348,6 +7340,6 @@ _P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still 
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+This project is licensed under the MIT License - see the [LICENSE.md](../LICENSE.md) file for details.
 
 > **runtime:** "MIT License: do cool stuff, don't blame us. A dignified bow. Now if you'll excuse me, I have sockets to tuck in and tasks to shepherd."

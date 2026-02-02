@@ -1,6 +1,6 @@
-### Rollback and Shutdown/Process Hooks
+# Graceful Shutdown & Process Hooks
 
-← [Back to main README](../README.md) | [Lifecycle section in README](../README.md#system-shutdown-hooks)
+← [Back to main README](../README.md) | [RunOptions section in FULL_GUIDE](./FULL_GUIDE.md#run-and-runoptions)
 
 ---
 

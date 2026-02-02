@@ -1,6 +1,6 @@
-## Advanced Design Patterns with Runner
+# Advanced Design Patterns with Runner
 
-← [Back to main README](../README.md) | [Factory Pattern in README](../README.md#factory-pattern)
+← [Back to main README](../README.md) | [Factory Pattern in FULL_GUIDE](./FULL_GUIDE.md#factory-pattern)
 
 ---
 

@@ -1,3 +1,7 @@
+← [Back to main README](../README.md)
+
+---
+
 ## Why Runner?
 
 Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
@@ -106,8 +110,8 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 
 - [run() and RunOptions](#run-and-runoptions) - Starting your application
 - [Task Interceptors](#task-interceptors) - Advanced task control
-- [Error Boundaries](#error-boundaries) - Fault isolation
-- [Lifecycle Hooks](#lifecycle-hooks) - Graceful shutdown and cleanup
+- [Error Boundaries](#error-boundary-integration) - Fault isolation
+- [Lifecycle Management](#lifecycle-management) - Graceful shutdown and cleanup
 
 **Advanced Features**
 
@@ -115,14 +119,14 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Retry](#retrying-failed-operations) - Resilience patterns
 - [Timeouts](#timeouts) - Operation time limits
 - [Logging](#logging) - Structured observability
-- [Debug](#debug) - Development tooling
+- [Debug](#debug-resource) - Development tooling
 
 **Concurrency & Scheduling**
 
 - [Semaphore](#semaphore) - Concurrency control
 - [Queue](#queue) - Task scheduling
 
-**Deployment & Integrations** (see dedicated guides in `./readmes/`)
+**Deployment & Integrations** (see dedicated guides in this folder)
 
 - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md) - Replay-safe, persistent workflows (Node-only)
 - [HTTP Tunnels](./readmes/TUNNELS.md) - Expose tasks/events over HTTP (server: Node, client: any `fetch` runtime)

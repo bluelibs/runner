@@ -139,8 +139,8 @@ npx tsx index.ts
 
 ## Real-World Examples
 
-- [Express + OpenAPI + SQLite](./examples/express-openapi-sqlite)
-- [Fastify + MikroORM + PostgreSQL](./examples/fastify-mikroorm)
+- [Express + OpenAPI + SQLite](./examples/express-openapi-sqlite/README.md)
+- [Fastify + MikroORM + PostgreSQL](./examples/fastify-mikroorm/README.md)
 
 ---
 
