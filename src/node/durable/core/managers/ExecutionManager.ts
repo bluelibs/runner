@@ -287,9 +287,27 @@ export class ExecutionManager {
 
     const task = this.taskRegistry.find(execution.taskId);
     if (!task) {
+      const error = { message: `Task not registered: ${execution.taskId}` };
+      const completedAt = new Date();
       await this.config.store.updateExecution(execution.id, {
         status: ExecutionStatus.Failed,
-        error: { message: `Task not registered: ${execution.taskId}` },
+        error,
+        completedAt,
+      });
+      await this.auditLogger.log({
+        kind: DurableAuditEntryKind.ExecutionStatusChanged,
+        executionId: execution.id,
+        taskId: execution.taskId,
+        attempt: execution.attempt,
+        from: execution.status,
+        to: ExecutionStatus.Failed,
+        reason: "task_not_registered",
+      });
+      await this.notifyExecutionFinished({
+        ...execution,
+        status: ExecutionStatus.Failed,
+        error,
+        completedAt,
       });
       return;
     }

@@ -8,6 +8,7 @@ export class MemoryQueue implements IDurableQueue {
   private queue: QueueMessage<unknown>[] = [];
   private handler: MessageHandler<unknown> | null = null;
   private isProcessing = false;
+  private readonly inFlight = new Map<string, QueueMessage<unknown>>();
 
   async enqueue<T>(
     message: Omit<QueueMessage<T>, "id" | "createdAt" | "attempts">,
@@ -30,10 +31,19 @@ export class MemoryQueue implements IDurableQueue {
   }
 
   async ack(_messageId: string): Promise<void> {
+    this.inFlight.delete(_messageId);
     setImmediate(() => void this.processNext());
   }
 
   async nack(_messageId: string, _requeue: boolean = true): Promise<void> {
+    const msg = this.inFlight.get(_messageId);
+    this.inFlight.delete(_messageId);
+
+    if (_requeue && msg) {
+      if (msg.attempts < msg.maxAttempts) {
+        this.queue.push(msg);
+      }
+    }
     setImmediate(() => void this.processNext());
   }
 
@@ -43,10 +53,19 @@ export class MemoryQueue implements IDurableQueue {
     this.isProcessing = true;
     try {
       while (this.queue.length > 0) {
-        const msg = this.queue.shift();
-        if (msg) {
-          await this.handler(msg);
+        const msg = this.queue.shift()!;
+
+        const next: QueueMessage<unknown> = {
+          ...msg,
+          attempts: msg.attempts + 1,
+        };
+
+        if (next.attempts > next.maxAttempts) {
+          continue;
         }
+
+        this.inFlight.set(next.id, next);
+        await this.handler(next);
       }
     } finally {
       this.isProcessing = false;

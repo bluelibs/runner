@@ -119,6 +119,7 @@ describe("durable: memory backends", () => {
 
       await queue.consume(async (msg) => {
         receivedPayload = msg.payload;
+        await queue.ack(msg.id);
       });
 
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -137,6 +138,7 @@ describe("durable: memory backends", () => {
       let received: unknown;
       await queue.consume(async (msg) => {
         received = msg.payload;
+        await queue.ack(msg.id);
       });
 
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -145,15 +147,69 @@ describe("durable: memory backends", () => {
 
     it("handles ack/nack safely", async () => {
       await queue.enqueue({ type: "execute", payload: {}, maxAttempts: 1 });
-      let msgId = "";
       await queue.consume(async (msg) => {
-        msgId = msg.id;
+        await queue.ack(msg.id);
       });
 
-      await queue.consume(async () => {});
-      await queue.ack(msgId);
-      await queue.nack(msgId);
+      await queue.ack("missing");
+      await queue.nack("missing");
       await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+
+    it("requeues on nack when requested", async () => {
+      await queue.enqueue({ type: "execute", payload: {}, maxAttempts: 2 });
+      const attempts: number[] = [];
+
+      await queue.consume(async (msg) => {
+        attempts.push(msg.attempts);
+        if (msg.attempts === 1) {
+          await queue.nack(msg.id, true);
+          return;
+        }
+        await queue.ack(msg.id);
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(attempts).toEqual([1, 2]);
+    });
+
+    it("does not requeue when nack requeue=false", async () => {
+      await queue.enqueue({ type: "execute", payload: {}, maxAttempts: 2 });
+      let calls = 0;
+
+      await queue.consume(async (msg) => {
+        calls += 1;
+        await queue.nack(msg.id, false);
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(calls).toBe(1);
+    });
+
+    it("does not requeue after maxAttempts is reached", async () => {
+      await queue.enqueue({ type: "execute", payload: {}, maxAttempts: 1 });
+      let calls = 0;
+
+      await queue.consume(async (msg) => {
+        calls += 1;
+        await queue.nack(msg.id, true);
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(calls).toBe(1);
+    });
+
+    it("drops messages that exceed maxAttempts", async () => {
+      await queue.enqueue({ type: "execute", payload: {}, maxAttempts: 0 });
+      const handler = jest.fn();
+
+      await queue.consume(async (msg) => {
+        handler(msg);
+        await queue.ack(msg.id);
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(handler).not.toHaveBeenCalled();
     });
   });
 
