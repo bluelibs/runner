@@ -95,22 +95,19 @@ export class PollingManager {
 
   /** @internal - public for testing */
   async handleTimer(timer: Timer): Promise<void> {
-    // Distributed timer coordination
+    // Distributed timer coordination. Failures must not drop timers (at-least-once).
     if (this.store.claimTimer) {
-      const claimTtlMs = this.config.claimTtlMs ?? 30_000;
+      const defaultClaimTtlMs = this.queue ? 5_000 : 30_000;
+      const claimTtlMs = this.config.claimTtlMs ?? defaultClaimTtlMs;
       const claimed = await this.store.claimTimer(
         timer.id,
         this.workerId,
         claimTtlMs,
       );
-      if (!claimed) {
-        return; // Another worker is handling this timer
-      }
+      if (!claimed) return; // Another worker is handling this timer
     }
 
     try {
-      await this.store.markTimerFired(timer.id);
-
       if (timer.type === TimerType.Sleep && timer.executionId && timer.stepId) {
         await this.store.saveStepResult({
           executionId: timer.executionId,
@@ -175,26 +172,43 @@ export class PollingManager {
         } else {
           await this.callbacks.processExecution(timer.executionId);
         }
+
+        await this.store.markTimerFired(timer.id);
+        await this.store.deleteTimer(timer.id);
         return;
       }
 
-      if (!timer.taskId) return;
+      if (!timer.taskId) {
+        await this.store.markTimerFired(timer.id);
+        await this.store.deleteTimer(timer.id);
+        return;
+      }
 
       if (timer.scheduleId) {
         const schedule = await this.store.getSchedule(timer.scheduleId);
         // If the schedule no longer exists, or is paused, don't execute.
-        if (!schedule || schedule.status !== ScheduleStatus.Active) return;
+        if (!schedule || schedule.status !== ScheduleStatus.Active) {
+          await this.store.markTimerFired(timer.id);
+          await this.store.deleteTimer(timer.id);
+          return;
+        }
         // If schedule.nextRun exists, treat mismatched timers as stale (race/updates).
         if (
           schedule.nextRun &&
           timer.fireAt.getTime() !== schedule.nextRun.getTime()
         ) {
+          await this.store.markTimerFired(timer.id);
+          await this.store.deleteTimer(timer.id);
           return;
         }
       }
 
       const task = this.taskRegistry.find(timer.taskId);
-      if (!task) return;
+      if (!task) {
+        await this.store.markTimerFired(timer.id);
+        await this.store.deleteTimer(timer.id);
+        return;
+      }
 
       const executionId = createExecutionId();
       const execution: Execution<unknown, unknown> = {
@@ -220,12 +234,12 @@ export class PollingManager {
           });
         }
       }
-    } finally {
-      try {
-        await this.store.deleteTimer(timer.id);
-      } catch {
-        // best-effort cleanup; ignore
-      }
+
+      await this.store.markTimerFired(timer.id);
+      await this.store.deleteTimer(timer.id);
+    } catch (error) {
+      // Keep the timer pending so it can be retried by the poller.
+      console.error("DurableService timer handling error:", error);
     }
   }
 }
