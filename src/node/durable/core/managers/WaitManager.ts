@@ -113,6 +113,8 @@ export class WaitManager {
       return new Promise<TResult>((resolve, reject) => {
         const channel = `execution:${executionId}`;
         let timer: ReturnType<typeof setTimeout> | null = null;
+        let pollTimer: ReturnType<typeof setTimeout> | null = null;
+        let done = false;
 
         const safeUnsubscribe = async (): Promise<void> => {
           try {
@@ -125,9 +127,15 @@ export class WaitManager {
         const finalize = async (
           out: { ok: true; value: TResult } | { ok: false; error: unknown },
         ): Promise<void> => {
+          if (done) return;
+          done = true;
           if (timer) {
             clearTimeout(timer);
             timer = null;
+          }
+          if (pollTimer) {
+            clearTimeout(pollTimer);
+            pollTimer = null;
           }
           await safeUnsubscribe();
 
@@ -171,6 +179,24 @@ export class WaitManager {
           }
         };
 
+        const pollOnce = async (): Promise<void> => {
+          if (done) return;
+          try {
+            const result = await check();
+            if (result !== undefined) {
+              await finalize({ ok: true, value: result });
+              return;
+            }
+          } catch (err) {
+            await finalize({ ok: false, error: err });
+            return;
+          }
+
+          if (done) return;
+          pollTimer = setTimeout(() => void pollOnce(), pollEveryMs);
+          pollTimer.unref();
+        };
+
         void (async () => {
           try {
             await eventBus.subscribe(channel, handler);
@@ -179,6 +205,7 @@ export class WaitManager {
               payload: null,
               timestamp: new Date(),
             });
+            await pollOnce();
           } catch {
             // Fallback to polling if subscription fails
             if (timer) {
