@@ -320,7 +320,11 @@ describe("MiddlewareManager", () => {
 
     const task = defineTask({
       id: "task.tunneled",
-      tags: [globalTags.tunnelPolicy.with({ client: [mw.id] })],
+      tags: [
+        globalTags.tunnelPolicy.with({
+          client: { middlewareAllowList: [mw.id] },
+        }),
+      ],
       middleware: [mw],
       run: async () => 0,
     });

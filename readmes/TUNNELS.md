@@ -17,6 +17,66 @@ Use tunnels when you want:
 
 ---
 
+## TL;DR (Node backend devs)
+
+If you're building Node services and want to call tasks remotely while keeping the code “as if local”:
+
+- **Default Node client**: use `createHttpMixedClient` (fast serialized JSON when it can, Smart when it must).
+- **You keep Runner semantics over the wire**:
+  - **typed errors**: `{ id, data }` round-trip and can be rethrown locally (with an `errorRegistry`)
+  - **async context**: active contexts are shipped in `x-runner-context` (Serializer-encoded) and hydrated on the server for the execution
+- **Production defaults**:
+  - configure `http.auth` (token and/or validator tasks)
+  - enable server allow-lists via a `globals.tags.tunnel` resource in `mode: "server"` (or `"both"`)
+
+### Quick start (Node to Node)
+
+Server runtime (expose a small HTTP surface):
+
+```ts
+import { r, run } from "@bluelibs/runner";
+import { nodeExposure } from "@bluelibs/runner/node";
+
+export const add = r
+  .task("app.tasks.add")
+  .run(async (input: { a: number; b: number }) => input.a + input.b)
+  .build();
+
+export const app = r
+  .resource("app")
+  .register([
+    add,
+    nodeExposure.with({
+      http: {
+        basePath: "/__runner",
+        listen: { port: 7070 },
+        auth: { token: "dev-secret" },
+      },
+    }),
+  ])
+  .build();
+
+await run(app);
+```
+
+Client runtime (call remote tasks directly):
+
+```ts
+import { getDefaultSerializer } from "@bluelibs/runner";
+import { createHttpMixedClient } from "@bluelibs/runner/node";
+
+const client = createHttpMixedClient({
+  baseUrl: "http://127.0.0.1:7070/__runner",
+  auth: { token: "dev-secret" },
+  serializer: getDefaultSerializer(),
+});
+
+const sum = await client.task<{ a: number; b: number }, number>(
+  "app.tasks.add",
+  { a: 1, b: 2 },
+);
+```
+
 ## The story (the mental model)
 
 You already have Runner tasks:
@@ -299,6 +359,16 @@ For each request:
 
 ## Choosing the right client
 
+If you're in Node and you’re unsure, start with **Mixed**.
+
+| You need… | Use | Notes |
+| --- | --- | --- |
+| Fast JSON task calls (default) | `createHttpMixedClient` | Uses `Serializer` over `fetch` when possible |
+| Node streams / duplex (`application/octet-stream`) | `createHttpSmartClient` (or Mixed with `forceSmart`) | Smart uses `http.request` and supports duplex |
+| Node multipart uploads (streams/buffers) | `createHttpSmartClient` (or Mixed) | Universal client can’t send Node streams |
+| Browser/edge calls (plus browser `FormData`) | `createHttpClient` | Works in any `fetch` runtime |
+| Smallest JSON-only surface | `createExposureFetch` | No universal multipart helpers |
+
 ### Universal client (`createHttpClient`, `globals.resources.httpClientFactory`)
 
 Use when:
@@ -374,6 +444,13 @@ Authorization rule:
 - otherwise, a request is allowed if **either** the static token matches **or** **any** validator approves
 
 Validator input includes `{ headers, method, url, path }`.
+
+Production checklist:
+
+- set `http.auth` (token and/or validators) and treat exposure as a real API surface
+- enable server allow-lists (next section) so you only expose the task/event ids you intend to support
+- configure body limits (`http.limits`) to match your payload expectations
+- keep `/discovery` behind auth (and avoid exposing it publicly if you don’t need it)
 
 ---
 
@@ -583,16 +660,20 @@ This uses the same `Serializer` as your tunnel client (defaults to `getDefaultSe
 
 ## Tunnel middleware policy (`globals.tags.tunnelPolicy`)
 
-By default, a tunneled task still goes through the caller-side middleware chain.
+By default, a tunneled task **does not** run caller-side task middleware.
 
-If you need a strict whitelist (for example, “only auth + tracing should run on the caller”), add a tunnel policy tag to the task:
+If you want specific middleware to still run on the caller (for example, “only auth + tracing”), add a tunnel policy tag to the task:
 
 ```ts
 import { r, globals } from "@bluelibs/runner";
 
 export const riskyTask = r
   .task("app.tasks.risky")
-  .tags([globals.tags.tunnelPolicy.with({ client: ["app.middleware.auth"] })])
+  .tags([
+    globals.tags.tunnelPolicy.with({
+      client: { middlewareAllowList: ["app.middleware.auth"] },
+    }),
+  ])
   .run(async () => "ok")
   .build();
 ```
@@ -601,6 +682,7 @@ Notes:
 
 - the **client** side whitelist is enforced by the local runtime when the task is tunneled
 - the **server** side whitelist is declarative (it’s included for symmetry, but a remote executor must choose to enforce it)
+- for backwards compatibility, `{ client: [...] }` (legacy) and `{ middlewareAllowList: { client: [...] } }` (previous) are accepted forms
 
 ---
 
