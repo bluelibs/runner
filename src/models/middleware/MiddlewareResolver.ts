@@ -7,6 +7,10 @@ import {
 import { Store } from "../Store";
 import { globalTags } from "../../globals/globalTags";
 import { taskNotRegisteredError } from "../../errors";
+import type {
+  TunnelMiddlewareId,
+  TunnelTaskMiddlewarePolicyConfig,
+} from "../../globals/resources/tunnel/tunnel.policy.tag";
 
 /**
  * Resolves which middlewares should be applied to tasks and resources.
@@ -46,8 +50,8 @@ export class MiddlewareResolver {
   }
 
   /**
-   * Applies tunnel policy filter to middlewares if task is tunneled
-   * Only allows whitelisted middlewares when tunnel policy is set
+   * For tunneled tasks, controls caller-side task middleware execution.
+   * Caller-side middleware is skipped by default and can be re-enabled via allowlist.
    */
   applyTunnelPolicyFilter(
     task: ITask<any, any, any>,
@@ -60,23 +64,31 @@ export class MiddlewareResolver {
     const tDef = entry.task;
     const isLocallyTunneled = tDef.isTunneled;
 
-    if (!isLocallyTunneled || !globalTags.tunnelPolicy.exists(tDef)) {
+    if (!isLocallyTunneled) {
       return middlewares;
+    }
+
+    // Tunneled tasks skip caller-side middleware by default.
+    // Only explicitly allowlisted middleware runs locally.
+    if (!globalTags.tunnelPolicy.exists(tDef)) {
+      return [];
     }
 
     // Use the Store definition to avoid relying on object-identity.
     // Consumers can pass a different task object with the same id.
-    const cfg = globalTags.tunnelPolicy.extract(tDef);
-    const allowList = cfg?.client;
+    const cfg = globalTags.tunnelPolicy.extract(tDef) as
+      | TunnelTaskMiddlewarePolicyConfig
+      | undefined;
+    const clientAllowList = getClientMiddlewareAllowList(cfg);
 
-    if (!Array.isArray(allowList)) {
-      return middlewares;
+    if (!Array.isArray(clientAllowList)) {
+      return [];
     }
 
     const toId = (x: string | { id: string }) =>
       typeof x === "string" ? x : x?.id;
     const allowed = new Set(
-      allowList.map(toId).filter((id): id is string => !!id),
+      clientAllowList.map(toId).filter((id): id is string => !!id),
     );
 
     return middlewares.filter((m) => allowed.has(m.id));
@@ -115,4 +127,28 @@ export class MiddlewareResolver {
       })
       .map((x) => x.middleware);
   }
+}
+
+function getClientMiddlewareAllowList(
+  cfg: TunnelTaskMiddlewarePolicyConfig | undefined,
+): TunnelMiddlewareId[] | undefined {
+  if (!cfg) {
+    return;
+  }
+
+  const preferred = cfg.client;
+  if (Array.isArray(preferred)) {
+    return preferred;
+  }
+  if (preferred && typeof preferred === "object") {
+    const allowList = preferred.middlewareAllowList;
+    if (Array.isArray(allowList)) return allowList;
+  }
+
+  const grouped = cfg.middlewareAllowList?.client;
+  if (Array.isArray(grouped)) {
+    return grouped;
+  }
+
+  return;
 }
