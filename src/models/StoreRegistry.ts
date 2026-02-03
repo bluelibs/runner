@@ -1,6 +1,4 @@
 import {
-  DependencyMapType,
-  IEventDefinition,
   IResource,
   ITask,
   IResourceWithConfig,
@@ -10,8 +8,6 @@ import {
   IEvent,
   ITag,
   IHook,
-  symbolTaskMiddleware,
-  symbolResourceMiddleware,
 } from "../defs";
 import * as utils from "../define";
 import { unknownItemTypeError } from "../errors";
@@ -25,7 +21,6 @@ import {
 } from "../defs";
 import { StoreValidator } from "./StoreValidator";
 import { Store } from "./Store";
-import { task } from "..";
 import { IDependentNode } from "./utils/findCircularDependencies";
 import { IErrorHelper } from "../types/error";
 import type { IAsyncContext } from "../types/asyncContext";
@@ -54,25 +49,25 @@ export class StoreRegistry {
     return this.validator;
   }
 
-  storeGenericItem<C>(item: RegisterableItems) {
+  storeGenericItem<_C>(item: RegisterableItems) {
     if (utils.isTask(item)) {
-      this.storeTask<C>(item);
+      this.storeTask<_C>(item);
     } else if (utils.isError(item)) {
-      this.storeError<C>(item as IErrorHelper<any>);
+      this.storeError<_C>(item as IErrorHelper<any>);
     } else if (utils.isHook && utils.isHook(item)) {
-      this.storeHook<C>(item as IHook);
+      this.storeHook<_C>(item as IHook);
     } else if (utils.isResource(item)) {
-      this.storeResource<C>(item);
+      this.storeResource<_C>(item);
     } else if (utils.isEvent(item)) {
-      this.storeEvent<C>(item);
+      this.storeEvent<_C>(item);
     } else if (utils.isAsyncContext(item)) {
-      this.storeAsyncContext<C>(item as IAsyncContext<any>);
+      this.storeAsyncContext<_C>(item as IAsyncContext<any>);
     } else if (utils.isTaskMiddleware(item)) {
-      this.storeTaskMiddleware<C>(item as ITaskMiddleware<any>);
+      this.storeTaskMiddleware<_C>(item as ITaskMiddleware<any>);
     } else if (utils.isResourceMiddleware(item)) {
-      this.storeResourceMiddleware<C>(item as IResourceMiddleware<any>);
+      this.storeResourceMiddleware<_C>(item as IResourceMiddleware<any>);
     } else if (utils.isResourceWithConfig(item)) {
-      this.storeResourceWithConfig<C>(item);
+      this.storeResourceWithConfig<_C>(item);
     } else if (utils.isTag(item)) {
       this.storeTag(item);
     } else {
@@ -80,12 +75,12 @@ export class StoreRegistry {
     }
   }
 
-  storeError<C>(item: IErrorHelper<any>) {
+  storeError<_C>(item: IErrorHelper<any>) {
     this.validator.checkIfIDExists(item.id);
     this.errors.set(item.id, item);
   }
 
-  storeAsyncContext<C>(item: IAsyncContext<any>) {
+  storeAsyncContext<_C>(item: IAsyncContext<any>) {
     this.validator.checkIfIDExists(item.id);
     this.asyncContexts.set(item.id, item);
   }
@@ -95,7 +90,7 @@ export class StoreRegistry {
     this.tags.set(item.id, item);
   }
 
-  storeHook<C>(item: IHook<any, any>, overrideMode: StoringMode = "normal") {
+  storeHook<_C>(item: IHook<any, any>, overrideMode: StoringMode = "normal") {
     overrideMode === "normal" && this.validator.checkIfIDExists(item.id);
 
     const hook = this.getFreshValue(item, this.hooks, "hook", overrideMode);
@@ -107,7 +102,7 @@ export class StoreRegistry {
     });
   }
 
-  storeTaskMiddleware<C>(
+  storeTaskMiddleware<_C>(
     item: ITaskMiddleware<any>,
     storingMode: StoringMode = "normal",
   ) {
@@ -127,7 +122,7 @@ export class StoreRegistry {
     });
   }
 
-  storeResourceMiddleware<C>(
+  storeResourceMiddleware<_C>(
     item: IResourceMiddleware<any>,
     overrideMode: StoringMode = "normal",
   ) {
@@ -146,12 +141,12 @@ export class StoreRegistry {
     });
   }
 
-  storeEvent<C>(item: IEvent<void>) {
+  storeEvent<_C>(item: IEvent<void>) {
     this.validator.checkIfIDExists(item.id);
     this.events.set(item.id, { event: item });
   }
 
-  storeResourceWithConfig<C>(
+  storeResourceWithConfig<_C>(
     item: IResourceWithConfig<any, any, any>,
     storingMode: StoringMode = "normal",
   ) {
@@ -171,28 +166,28 @@ export class StoreRegistry {
       config: item.config,
       value: undefined,
       isInitialized: false,
-      context: {},
+      context: undefined,
     });
 
     this.computeRegistrationDeeply(prepared, item.config);
     return prepared;
   }
 
-  computeRegistrationDeeply<C>(element: IResource<C>, config?: C) {
+  computeRegistrationDeeply<_C>(element: IResource<_C>, config?: _C) {
     const items =
       typeof element.register === "function"
-        ? element.register(config as C)
+        ? element.register(config as _C)
         : element.register;
 
     element.register = items;
 
     for (const item of items) {
       // will call registration if it detects another resource.
-      this.storeGenericItem<C>(item);
+      this.storeGenericItem<_C>(item);
     }
   }
 
-  storeResource<C>(
+  storeResource<_C>(
     item: IResource<any, any, any>,
     overrideMode: StoringMode = "normal",
   ) {
@@ -210,14 +205,17 @@ export class StoreRegistry {
       config: {},
       value: undefined,
       isInitialized: false,
-      context: prepared.context?.() || {},
+      context: undefined,
     });
 
     this.computeRegistrationDeeply(prepared, {});
     return prepared;
   }
 
-  storeTask<C>(item: ITask<any, any, {}>, storingMode: StoringMode = "normal") {
+  storeTask<_C>(
+    item: ITask<any, any, {}>,
+    storingMode: StoringMode = "normal",
+  ) {
     storingMode === "normal" && this.validator.checkIfIDExists(item.id);
 
     const task = this.getFreshValue(item, this.tasks, "task", storingMode);
@@ -394,17 +392,21 @@ export class StoreRegistry {
     // For each hook, if it listens to concrete event(s) and depends on events, add edges listenedEvent -> depEvent
     for (const h of this.hooks.values()) {
       const listened: string[] = [];
-      const on = h.hook.on as any;
+      const on = h.hook.on;
       if (on === "*") continue; // avoid over-reporting for global hooks
-      if (Array.isArray(on)) listened.push(...on.map((e: IEvent) => e.id));
-      else listened.push(on.id);
+      if (Array.isArray(on))
+        listened.push(...(on as IEvent[]).map((e: IEvent) => e.id));
+      else listened.push((on as IEvent).id);
 
       // Collect event dependencies from the hook
       const depEvents: string[] = [];
-      const deps = h.hook.dependencies as any;
+      const deps = h.hook.dependencies;
       if (deps) {
         for (const value of Object.values(deps)) {
-          const candidate = utils.isOptional(value) ? value.inner : value;
+          // For optional wrappers, extract the inner value
+          const candidate: { id?: string } = utils.isOptional(value)
+            ? (value as { inner: { id?: string } }).inner
+            : (value as { id?: string });
           if (candidate && utils.isEvent(candidate)) {
             depEvents.push(candidate.id);
           }

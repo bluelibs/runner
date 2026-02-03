@@ -3,10 +3,15 @@
  * - Namespace: users
  * - File: src/users/resources/auth.resource.ts
  */
-import { r, globals } from '@bluelibs/runner';
-import { env } from '../../general/resources/env.resource';
-import { randomBytes, scrypt as _scrypt, timingSafeEqual, createHmac } from 'crypto';
-import { promisify } from 'util';
+import { r, globals } from "@bluelibs/runner";
+import { env } from "../../general/resources/env.resource";
+import {
+  randomBytes,
+  scrypt as _scrypt,
+  timingSafeEqual,
+  createHmac,
+} from "crypto";
+import { promisify } from "util";
 
 const scrypt = promisify(_scrypt);
 
@@ -23,7 +28,11 @@ export interface AuthTokenPayload {
 
 export interface AuthValue {
   hashPassword: (password: string) => Promise<{ hash: string; salt: string }>;
-  verifyPassword: (password: string, hash: string, salt: string) => Promise<boolean>;
+  verifyPassword: (
+    password: string,
+    hash: string,
+    salt: string,
+  ) => Promise<boolean>;
   signToken: (payload: AuthTokenPayload) => string;
   verifyToken: (token: string) => AuthTokenPayload | null;
   createSessionToken: (userId: string, expiresInSeconds?: number) => string;
@@ -35,54 +44,61 @@ export interface AuthValue {
 // Base64url helpers
 function b64url(input: Buffer | string): string {
   return Buffer.from(input)
-    .toString('base64')
-    .replace(/=/g, '')
-    .replace(/\+/g, '-')
-    .replace(/\//g, '_');
+    .toString("base64")
+    .replace(/=/g, "")
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_");
 }
 
 function b64urlDecode(input: string): Buffer {
-  input = input.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = input.length % 4 === 0 ? '' : '='.repeat(4 - (input.length % 4));
-  return Buffer.from(input + pad, 'base64');
+  input = input.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = input.length % 4 === 0 ? "" : "=".repeat(4 - (input.length % 4));
+  return Buffer.from(input + pad, "base64");
 }
 
 export const auth = r
-  .resource<AuthConfig>('users.resources.auth')
+  .resource<AuthConfig>("users.resources.auth")
   .meta({
     title: "Authentication Service",
-    description: "JWT token-based authentication with password hashing using scrypt and HMAC signing",
+    description:
+      "JWT token-based authentication with password hashing using scrypt and HMAC signing",
   })
   .dependencies({
     logger: globals.resources.logger,
     env,
   })
   .init(async (cfg, { logger, env }): Promise<AuthValue> => {
-    const secret = cfg.secret || process.env.AUTH_SECRET || 'dev-secret-change-me';
-    const cookieName = cfg.cookieName || 'auth';
+    const secret =
+      cfg.secret || process.env.AUTH_SECRET || "dev-secret-change-me";
+    const cookieName = cfg.cookieName || "auth";
     const defaultExpiry = cfg.tokenExpiresInSeconds ?? 60 * 60 * 24 * 7; // 7 days
-    const isProd = (env?.NODE_ENV || process.env.NODE_ENV) === 'production';
+    const isProd = (env?.NODE_ENV || process.env.NODE_ENV) === "production";
 
     const hashPassword = async (password: string) => {
-      const salt = randomBytes(16).toString('hex');
+      const salt = randomBytes(16).toString("hex");
       const derived = (await scrypt(password, salt, 32)) as Buffer;
-      return { hash: derived.toString('hex'), salt };
+      return { hash: derived.toString("hex"), salt };
     };
 
-    const verifyPassword = async (password: string, hash: string, salt: string) => {
+    const verifyPassword = async (
+      password: string,
+      hash: string,
+      salt: string,
+    ) => {
       if (!hash || !salt) return false;
       const derived = (await scrypt(password, salt, 32)) as Buffer;
       try {
-        return timingSafeEqual(Buffer.from(hash, 'hex'), derived);
+        return timingSafeEqual(Buffer.from(hash, "hex"), derived);
       } catch {
         return false;
       }
     };
 
-    const sign = (data: string) => createHmac('sha256', secret).update(data).digest();
+    const sign = (data: string) =>
+      createHmac("sha256", secret).update(data).digest();
 
     const signToken = (payload: AuthTokenPayload) => {
-      const header = { alg: 'HS256', typ: 'JWT' };
+      const header = { alg: "HS256", typ: "JWT" };
       const h = b64url(JSON.stringify(header));
       const p = b64url(JSON.stringify(payload));
       const sig = b64url(sign(`${h}.${p}`));
@@ -91,48 +107,57 @@ export const auth = r
 
     const verifyToken = (token: string): AuthTokenPayload | null => {
       if (!token) return null;
-      const parts = token.split('.');
+      const parts = token.split(".");
       if (parts.length !== 3) return null;
       const [h, p, s] = parts;
       const expected = b64url(sign(`${h}.${p}`));
       if (expected !== s) return null;
       try {
-        const payload = JSON.parse(b64urlDecode(p).toString('utf8')) as AuthTokenPayload;
-        if (typeof payload.exp === 'number' && Date.now() / 1000 > payload.exp) {
+        const payload = JSON.parse(
+          b64urlDecode(p).toString("utf8"),
+        ) as AuthTokenPayload;
+        if (
+          typeof payload.exp === "number" &&
+          Date.now() / 1000 > payload.exp
+        ) {
           return null;
         }
         return payload;
       } catch (e) {
-        logger.warn('Failed to parse token payload');
+        logger.warn("Failed to parse token payload");
         return null;
       }
     };
 
     const createSessionToken = (userId: string, expiresInSeconds?: number) => {
-      const exp = Math.floor(Date.now() / 1000) + (expiresInSeconds ?? defaultExpiry);
+      const exp =
+        Math.floor(Date.now() / 1000) + (expiresInSeconds ?? defaultExpiry);
       return signToken({ sub: userId, exp });
     };
 
     const buildAuthCookie = (token: string, maxAgeSeconds: number) => {
       const attrs = [
         `${cookieName}=${token}`,
-        'Path=/',
+        "Path=/",
         `Max-Age=${maxAgeSeconds}`,
-        'HttpOnly',
-        'SameSite=Lax',
+        "HttpOnly",
+        "SameSite=Lax",
       ];
-      if (isProd) attrs.push('Secure');
-      return attrs.join('; ');
+      if (isProd) attrs.push("Secure");
+      return attrs.join("; ");
     };
 
-    const clearAuthCookie = () => [
-      `${cookieName}=`,
-      'Path=/',
-      'Max-Age=0',
-      'HttpOnly',
-      'SameSite=Lax',
-      isProd ? 'Secure' : '',
-    ].filter(Boolean).join('; ');
+    const clearAuthCookie = () =>
+      [
+        `${cookieName}=`,
+        "Path=/",
+        "Max-Age=0",
+        "HttpOnly",
+        "SameSite=Lax",
+        isProd ? "Secure" : "",
+      ]
+        .filter(Boolean)
+        .join("; ");
 
     return {
       hashPassword,

@@ -4,7 +4,6 @@ import { globalTags } from "../../globalTags";
 import { hasSystemTag } from "./utils";
 import { debugConfig } from "./debugConfig.resource";
 import { getConfig } from "./types";
-import { globalEvents } from "../../globalEvents";
 
 export const globalEventListener = defineHook({
   id: "globals.debug.hooks.onAnyEvent",

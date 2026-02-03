@@ -2,24 +2,39 @@ import { createAuthenticator } from "./authenticator";
 import { createAllowListGuard } from "./allowList";
 import { createExposureServer } from "./exposureServer";
 import { createRequestHandlers } from "./requestHandlers";
-import type { Serializer } from "../../globals/resources/tunnel/serializer";
 import { resolveBasePath, createRouter } from "./router";
 import type {
   NodeExposureConfig,
   NodeExposureDeps,
   NodeExposureHandlers,
 } from "./resourceTypes";
+import type { AuthValidatorInput, AuthValidatorResult } from "./types";
+import { globalTags } from "../../globals/globalTags";
+import type { ITask } from "../../defs";
 
 export async function createNodeExposure(
   cfg: NodeExposureConfig | undefined,
   deps: NodeExposureDeps,
 ): Promise<NodeExposureHandlers> {
-  const { store, taskRunner, eventManager, logger } = deps;
+  const { store, taskRunner, eventManager, logger, serializer } = deps;
   const httpConfig = cfg?.http;
   const basePath = resolveBasePath(httpConfig?.basePath);
-  const authenticator = createAuthenticator(httpConfig?.auth);
   const router = createRouter(basePath);
-  const allowList = createAllowListGuard(store);
+  const allowList = createAllowListGuard(
+    store,
+    !!httpConfig?.dangerouslyAllowOpenExposure,
+  );
+
+  // Discover auth validator tasks
+  const validatorTasks = store.getTasksWithTag(
+    globalTags.authValidator,
+  ) as ITask<AuthValidatorInput, Promise<AuthValidatorResult>, any>[];
+
+  const authenticator = createAuthenticator(
+    httpConfig?.auth,
+    taskRunner,
+    validatorTasks,
+  );
 
   const { handleTask, handleEvent, handleDiscovery, handleRequest } =
     createRequestHandlers({
@@ -31,7 +46,8 @@ export async function createNodeExposure(
       allowList,
       router,
       cors: httpConfig?.cors,
-      serializer: (deps as any).serializer as Serializer,
+      serializer,
+      limits: httpConfig?.limits,
     });
 
   const serverControls = await createExposureServer({

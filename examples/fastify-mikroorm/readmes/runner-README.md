@@ -392,7 +392,7 @@ const systemReadyHook = hook({
   id: "app.hooks.systemReady",
   on: globals.events.ready,
   run: async () => {
-    console.log("🚀 System is ready and operational!");
+    console.log("System is ready and operational!");
   },
 });
 ```
@@ -427,16 +427,16 @@ const emergencyHandler = hook({
   run: async (event) => {
     console.log(`Alert received: ${event.data.severity}`);
 
-    if (event.data.severity === "critical") {
-      console.log("🚨 CRITICAL ALERT - Activating emergency protocols");
+	    if (event.data.severity === "critical") {
+	      console.log("CRITICAL ALERT - Activating emergency protocols");
 
       // Stop other handlers from running
       event.stopPropagation();
       // Notify the on-call team, escalate, etc.
 
-      console.log("🛑 Event propagation stopped - emergency protocols active");
-    }
-  },
+	      console.log("Event propagation stopped - emergency protocols active");
+	    }
+	  },
 });
 ```
 
@@ -719,7 +719,7 @@ const userContract = tag<void, void, { name: string }>({
 const profileTask = task({
   id: "app.tasks.getProfile",
   tags: [userContract], // Must return { name: string }
-  run: async () => ({ name: "Ada" }), // ✅ Satisfies contract
+  run: async () => ({ name: "Ada" }), // Satisfies contract
 });
 ```
 
@@ -1448,14 +1448,14 @@ const app = resource({
     logger: globals.resources.logger;
   },
   init: async () => {
-    logger.info("Starting business process"); // ✅ Visible by default
-    logger.warn("This might take a while"); // ✅ Visible by default
+    logger.info("Starting business process"); // Visible by default
+    logger.warn("This might take a while"); // Visible by default
     logger.error("Oops, something went wrong", {
-      // ✅ Visible by default
+      // Visible by default
       error: new Error("Database connection failed"),
     });
     logger.critical("System is on fire", {
-      // ✅ Visible by default
+      // Visible by default
       data: { temperature: "9000°C" },
     });
     logger.debug("Debug information"); // ❌ Hidden by default
@@ -3212,6 +3212,6 @@ _P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still 
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details.
+This project is licensed under the MIT License - see the [LICENSE.md](../../../LICENSE.md) file for details.
 
 > **runtime:** "MIT License: do cool stuff, don’t blame us. A dignified bow. Now if you’ll excuse me, I have sockets to tuck in and tasks to shepherd."

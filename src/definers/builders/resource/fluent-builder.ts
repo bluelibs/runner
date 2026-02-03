@@ -9,15 +9,11 @@ import type {
   TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 import { defineResource } from "../../defineResource";
 import type { ResourceFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState, ResolveConfig } from "./types";
-import {
-  clone,
-  mergeArray,
-  mergeDependencies,
-  mergeRegister,
-} from "./utils";
+import { clone, mergeArray, mergeDependencies, mergeRegister } from "./utils";
 
 /**
  * Creates a ResourceFluentBuilder from the given state.
@@ -78,53 +74,27 @@ export function makeResourceBuilder<
         TMiddleware,
         TConfig,
         TValue,
-        any,
+        TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
         TContext,
         TMeta,
         TTags,
         TMiddleware
       >(state, {
-        dependencies: mergeDependencies<TConfig, TDeps, TNewDeps>(
-          state.dependencies as any,
-          deps as any,
+        dependencies: mergeDependencies(
+          state.dependencies,
+          deps,
           override,
-        ) as any,
+        ) as unknown as TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
       });
-      if (override) {
-        return makeResourceBuilder<
-          TConfig,
-          TValue,
-          TNewDeps,
-          TContext,
-          TMeta,
-          TTags,
-          TMiddleware
-        >(next as any);
-      }
-      return makeResourceBuilder<
-        TConfig,
-        TValue,
-        TDeps & TNewDeps,
-        TContext,
-        TMeta,
-        TTags,
-        TMiddleware
-      >(next as any);
+
+      return makeResourceBuilder(next);
     },
     register(items, options) {
       const override = options?.override ?? false;
       const next = clone(state, {
         register: mergeRegister(state.register, items, override),
       });
-      return makeResourceBuilder<
-        TConfig,
-        TValue,
-        TDeps,
-        TContext,
-        TMeta,
-        TTags,
-        TMiddleware
-      >(next);
+      return makeResourceBuilder(next);
     },
     middleware<TNewMw extends ResourceMiddlewareAttachmentType[]>(
       mw: TNewMw,
@@ -147,19 +117,14 @@ export function makeResourceBuilder<
         TTags,
         TNewMw
       >(state, {
-        middleware: mergeArray(state.middleware, mw, override) as any,
+        middleware: mergeArray(state.middleware, mw, override) as TNewMw,
       });
-      return makeResourceBuilder<
-        TConfig,
-        TValue,
-        TDeps,
-        TContext,
-        TMeta,
-        TTags,
-        TNewMw
-      >(next);
+      return makeResourceBuilder(next);
     },
-    tags<TNewTags extends TagType[]>(tags: TNewTags, options?: { override?: boolean }) {
+    tags<TNewTags extends TagType[]>(
+      tags: TNewTags,
+      options?: { override?: boolean },
+    ) {
       const override = options?.override ?? false;
       const next = clone<
         TConfig,
@@ -176,9 +141,13 @@ export function makeResourceBuilder<
         TMeta,
         [...TTags, ...TNewTags],
         TMiddleware
-      >(state, { tags: mergeArray(state.tags, tags, override) as any });
-      // Implementation is compatible with both overloads; cast to satisfy TS.
-      return makeResourceBuilder(next as any) as any;
+      >(state, {
+        tags: mergeArray(state.tags, tags, override) as unknown as [
+          ...TTags,
+          ...TNewTags,
+        ],
+      });
+      return makeResourceBuilder(next);
     },
     context<TNewCtx>(factory: () => TNewCtx) {
       const next = clone<
@@ -366,6 +335,18 @@ export function makeResourceBuilder<
         TMiddleware
       >(next);
     },
+    throws(list: ThrowsList) {
+      const next = clone(state, { throws: list });
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(next);
+    },
     build() {
       const definition: IResourceDefinition<
         TConfig,
@@ -390,9 +371,11 @@ export function makeResourceBuilder<
         resultSchema: state.resultSchema,
         meta: state.meta,
         overrides: state.overrides,
+        throws: state.throws,
       };
       const resource = defineResource(definition);
-      (resource as any)[symbolFilePath] = state.filePath;
+      (resource as { [symbolFilePath]?: string })[symbolFilePath] =
+        state.filePath;
       return resource;
     },
   };

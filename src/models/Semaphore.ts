@@ -1,8 +1,40 @@
+import { EventManager } from "./EventManager";
+import { defineEvent } from "../definers/defineEvent";
+import { IEventEmission } from "../defs";
+
+// Event definitions for Semaphore
+const SemaphoreEvents = {
+  queued: defineEvent<SemaphoreEvent>({ id: "semaphore.queued" }),
+  acquired: defineEvent<SemaphoreEvent>({ id: "semaphore.acquired" }),
+  released: defineEvent<SemaphoreEvent>({ id: "semaphore.released" }),
+  timeout: defineEvent<SemaphoreEvent>({ id: "semaphore.timeout" }),
+  aborted: defineEvent<SemaphoreEvent>({ id: "semaphore.aborted" }),
+  disposed: defineEvent<SemaphoreEvent>({ id: "semaphore.disposed" }),
+} as const;
+
+type SemaphoreEventType = keyof typeof SemaphoreEvents;
+
+type SemaphoreEvent = {
+  type: SemaphoreEventType;
+  permits: number;
+  waiting: number;
+  maxPermits: number;
+  disposed: boolean;
+};
+
 interface WaitingOperation {
   resolve: () => void;
   reject: (error: Error) => void;
   timeout?: NodeJS.Timeout;
   abortController?: AbortController;
+  node?: WaitingNode;
+  onPermit?: () => void;
+}
+
+interface WaitingNode {
+  op: WaitingOperation;
+  next: WaitingNode | null;
+  prev: WaitingNode | null;
 }
 
 /**
@@ -12,9 +44,14 @@ interface WaitingOperation {
  */
 export class Semaphore {
   private permits: number;
-  private readonly waitingQueue: Array<WaitingOperation> = [];
+  private waitingHead: WaitingNode | null = null;
+  private waitingTail: WaitingNode | null = null;
+  private waitingCount = 0;
   private disposed = false;
   private readonly maxPermits: number;
+  private readonly eventManager = new EventManager();
+  private listenerId = 0;
+  private activeListeners = new Set<number>();
 
   constructor(maxPermits: number) {
     if (maxPermits <= 0) {
@@ -41,17 +78,23 @@ export class Semaphore {
 
     if (this.permits > 0) {
       this.permits--;
+      this.emit("acquired");
       return;
     }
 
     // No permits available, wait in queue
     return new Promise<void>((resolve, reject) => {
-      const operation: WaitingOperation = { resolve, reject };
+      const operation: WaitingOperation = {
+        resolve,
+        reject,
+        onPermit: () => this.emit("acquired"),
+      };
 
       // Set up timeout if provided
       if (options?.timeout && options.timeout > 0) {
         operation.timeout = setTimeout(() => {
           this.removeFromQueue(operation);
+          this.emit("timeout");
           reject(
             new Error(`Semaphore acquire timeout after ${options.timeout}ms`),
           );
@@ -62,6 +105,7 @@ export class Semaphore {
       if (options?.signal) {
         const abortHandler = () => {
           this.removeFromQueue(operation);
+          this.emit("aborted");
           reject(new Error("Operation was aborted"));
         };
         options.signal.addEventListener("abort", abortHandler, { once: true });
@@ -81,7 +125,8 @@ export class Semaphore {
         };
       }
 
-      this.waitingQueue.push(operation);
+      this.enqueue(operation);
+      this.emit("queued");
     });
   }
 
@@ -93,31 +138,47 @@ export class Semaphore {
       return;
     }
 
-    if (this.waitingQueue.length > 0) {
+    const nextOperation = this.dequeue();
+    if (nextOperation) {
       // Give permit directly to next waiting operation
-      const nextOperation = this.waitingQueue.shift()!;
 
       // Clear timeout if it exists
       if (nextOperation.timeout) {
         clearTimeout(nextOperation.timeout);
       }
 
+      nextOperation.onPermit?.();
       nextOperation.resolve();
     } else {
       // No one waiting, increment available permits (but don't exceed max)
       this.permits = Math.min(this.permits + 1, this.maxPermits);
     }
+
+    this.emit("released");
   }
 
   private removeFromQueue(operation: WaitingOperation): void {
-    const index = this.waitingQueue.indexOf(operation);
-    if (index !== -1) {
-      this.waitingQueue.splice(index, 1);
+    const node = operation.node;
+    if (!node) return;
 
-      // Clear timeout if it exists
-      if (operation.timeout) {
-        clearTimeout(operation.timeout);
-      }
+    if (node.prev) {
+      node.prev.next = node.next;
+    } else {
+      this.waitingHead = node.next;
+    }
+
+    if (node.next) {
+      node.next.prev = node.prev;
+    } else {
+      this.waitingTail = node.prev;
+    }
+
+    operation.node = undefined;
+    this.waitingCount = Math.max(0, this.waitingCount - 1);
+
+    // Clear timeout if it exists
+    if (operation.timeout) {
+      clearTimeout(operation.timeout);
     }
   }
 
@@ -147,8 +208,8 @@ export class Semaphore {
     this.disposed = true;
 
     // Reject all waiting operations
-    while (this.waitingQueue.length > 0) {
-      const operation = this.waitingQueue.shift()!;
+    while (this.waitingHead) {
+      const operation = this.dequeue()!;
 
       // Clear timeout if it exists
       if (operation.timeout) {
@@ -157,6 +218,9 @@ export class Semaphore {
 
       operation.reject(new Error("Semaphore has been disposed"));
     }
+
+    this.emit("disposed");
+    this.eventManager.dispose();
   }
 
   /**
@@ -170,7 +234,7 @@ export class Semaphore {
    * Get current number of waiting operations (for debugging)
    */
   getWaitingCount(): number {
-    return this.waitingQueue.length;
+    return this.waitingCount;
   }
 
   /**
@@ -199,9 +263,119 @@ export class Semaphore {
   } {
     return {
       availablePermits: this.permits,
-      waitingCount: this.waitingQueue.length,
+      waitingCount: this.waitingCount,
       maxPermits: this.maxPermits,
       utilization: (this.maxPermits - this.permits) / this.maxPermits,
+      disposed: this.disposed,
+    };
+  }
+
+  on(
+    type: SemaphoreEventType,
+    handler: (event: SemaphoreEvent) => any,
+  ): () => void {
+    const id = ++this.listenerId;
+    this.activeListeners.add(id);
+    const eventDef = SemaphoreEvents[type];
+
+    this.eventManager.addListener(
+      eventDef,
+      (emission: IEventEmission<SemaphoreEvent>) => {
+        if (this.activeListeners.has(id)) {
+          handler(emission.data);
+        }
+      },
+      {
+        id: `semaphore-listener-${id}`,
+        filter: () => this.activeListeners.has(id),
+      },
+    );
+
+    return () => {
+      this.activeListeners.delete(id);
+    };
+  }
+
+  once(
+    type: SemaphoreEventType,
+    handler: (event: SemaphoreEvent) => any,
+  ): () => void {
+    const id = ++this.listenerId;
+    this.activeListeners.add(id);
+    const eventDef = SemaphoreEvents[type];
+
+    this.eventManager.addListener(
+      eventDef,
+      (emission: IEventEmission<SemaphoreEvent>) => {
+        if (this.activeListeners.has(id)) {
+          this.activeListeners.delete(id);
+          handler(emission.data);
+        }
+      },
+      {
+        id: `semaphore-listener-once-${id}`,
+        filter: () => this.activeListeners.has(id),
+      },
+    );
+
+    return () => {
+      this.activeListeners.delete(id);
+    };
+  }
+
+  private enqueue(operation: WaitingOperation): void {
+    const node: WaitingNode = {
+      op: operation,
+      next: null,
+      prev: this.waitingTail,
+    };
+
+    if (this.waitingTail) {
+      this.waitingTail.next = node;
+    } else {
+      this.waitingHead = node;
+    }
+
+    this.waitingTail = node;
+    operation.node = node;
+    this.waitingCount++;
+  }
+
+  private dequeue(): WaitingOperation | null {
+    const node = this.waitingHead;
+    if (!node) return null;
+
+    const next = node.next;
+    if (next) {
+      next.prev = null;
+    } else {
+      this.waitingTail = null;
+    }
+
+    this.waitingHead = next;
+    node.next = null;
+    node.prev = null;
+    node.op.node = undefined;
+    this.waitingCount = Math.max(0, this.waitingCount - 1);
+
+    return node.op;
+  }
+
+  private emit(type: SemaphoreEventType): void {
+    const eventDef = SemaphoreEvents[type];
+    // Fire-and-forget to maintain synchronous behavior, but always catch to avoid
+    // process-level unhandledRejection if a lifecycle listener throws.
+    void this.eventManager
+      .emit(eventDef, this.buildEvent(type), "semaphore")
+      .catch(() => {});
+  }
+
+  private buildEvent(type: SemaphoreEventType): SemaphoreEvent {
+    return {
+      type,
+      permits: this.permits,
+      waiting: this.waitingCount,
+      maxPermits: this.maxPermits,
       disposed: this.disposed,
     };
   }

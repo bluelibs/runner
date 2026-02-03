@@ -1,4 +1,8 @@
-### Rollback and Shutdown/Process Hooks
+# Graceful Shutdown & Process Hooks
+
+← [Back to main README](../README.md) | [RunOptions section in FULL_GUIDE](./FULL_GUIDE.md#run-and-runoptions)
+
+---
 
 - When initialization fails, the runner now performs a rollback: it disposes every resource that was successfully initialized up to the failure point.
 - Process listeners are singletons:

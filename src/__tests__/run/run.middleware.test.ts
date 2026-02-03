@@ -7,12 +7,8 @@ import {
   defineResourceMiddleware,
 } from "../../define";
 import { run } from "../../run";
-import { globalEvents } from "../../globals/globalEvents";
 // error helpers migrated to message-based checks
 import z from "zod";
-import { globalResources } from "../../globals/globalResources";
-import { Logger } from "../../models";
-import { resourceMiddleware } from "../..";
 
 describe("Middleware", () => {
   it("should be able to register the middleware and execute it", async () => {
@@ -141,7 +137,7 @@ describe("Middleware", () => {
       run: async () => "Task executed",
     });
 
-    let allSolved = jest.fn();
+    const allSolved = jest.fn();
     const app = defineResource({
       id: "app",
       register: [testMiddleware, testTask, task],
@@ -260,7 +256,7 @@ describe("Middleware", () => {
       register: [mw, task],
     });
 
-    expect(run(app)).rejects.toThrowError(/Circular dependencies detected/);
+    await expect(run(app)).rejects.toThrow(/Circular dependencies detected/);
   });
 });
 
@@ -760,7 +756,7 @@ describe("Middleware.everywhere()", () => {
     expect(calls).not.toContain("task:test.task2");
   });
 
-  it("should throw if there is another middleware with the same id", () => {
+  it("should throw if there is another middleware with the same id", async () => {
     const mw = defineTaskMiddleware({
       id: "everywhere.middleware",
       run: async ({ next }) => next(),
@@ -782,16 +778,16 @@ describe("Middleware.everywhere()", () => {
       id: "app",
       register: [mw, m2w],
     });
-    expect(run(app)).rejects.toThrow(
-      "Middleware \"everywhere.middleware\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
+    await expect(run(app)).rejects.toThrow(
+      "Middleware \"everywhere.middleware\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
 
     const app2 = defineResource({
       id: "app2",
       register: [mwr, mwr2],
     });
-    expect(run(app2)).rejects.toThrow(
-      "Middleware \"everywhere.defineResourceMiddleware\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice."
+    await expect(run(app2)).rejects.toThrow(
+      "Middleware \"everywhere.defineResourceMiddleware\" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.",
     );
   });
 
@@ -867,9 +863,9 @@ describe("Middleware.everywhere()", () => {
         run: async ({ next }) => next(),
       });
       // @ts-expect-error
-      expect(() => mwt.with({ name: 123 })).toThrowError();
+      expect(() => mwt.with({ name: 123 })).toThrow();
       // @ts-expect-error
-      expect(() => mwr.with({ name: 123 })).toThrowError();
+      expect(() => mwr.with({ name: 123 })).toThrow();
     });
   });
 

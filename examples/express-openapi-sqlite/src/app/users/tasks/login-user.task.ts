@@ -39,42 +39,44 @@ export const loginUserTask = r
       }),
     }),
   ])
-  .run(async (
-    loginData: LoginRequest,
-    { config, verifyPasswordTask },
-  ): Promise<ApiResponse<LoginResponse>> => {
-    try {
-      // Verify credentials
-      const user = await verifyPasswordTask({
-        email: loginData.email,
-        password: loginData.password,
-      });
+  .run(
+    async (
+      loginData: LoginRequest,
+      { config, verifyPasswordTask },
+    ): Promise<ApiResponse<LoginResponse>> => {
+      try {
+        // Verify credentials
+        const user = await verifyPasswordTask({
+          email: loginData.email,
+          password: loginData.password,
+        });
 
-      if (!user) {
+        if (!user) {
+          return {
+            success: false,
+            error: "Invalid email or password",
+          };
+        }
+
+        // Generate JWT token
+        const token = jwt.sign({ userId: user.id }, config.jwtSecret, {
+          expiresIn: "24h",
+        });
+
+        return {
+          success: true,
+          data: {
+            token,
+            user,
+          },
+          message: "Login successful",
+        };
+      } catch (error) {
         return {
           success: false,
-          error: "Invalid email or password",
+          error: error instanceof Error ? error.message : "Login failed",
         };
       }
-
-      // Generate JWT token
-      const token = jwt.sign({ userId: user.id }, config.jwtSecret, {
-        expiresIn: "24h",
-      });
-
-      return {
-        success: true,
-        data: {
-          token,
-          user,
-        },
-        message: "Login successful",
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Login failed",
-      };
-    }
-  })
+    },
+  )
   .build();

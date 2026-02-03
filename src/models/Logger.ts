@@ -1,7 +1,4 @@
-import { globalEvents } from "../globals/globalEvents";
-import { EventManager } from "./EventManager";
 import { LogPrinter, PrintStrategy as PrinterStrategy } from "./LogPrinter";
-import { safeStringify } from "./utils/safeStringify";
 
 export type LogLevels =
   | "trace"
@@ -44,9 +41,8 @@ export class Logger {
   private useColors: boolean = true;
   private printer: LogPrinter;
   private source?: string;
-  // This is used for when we use .with() .with() and we want access to local listeners
+  // Points to the top-level logger so child loggers share buffering, listeners, and printing.
   private rootLogger?: Logger;
-  // Observable why not?
   public localListeners: Array<(log: ILog) => void | Promise<void>> = [];
 
   public static Severity = {
@@ -90,10 +86,10 @@ export class Logger {
 
   private detectColorSupport(): boolean {
     // Respect NO_COLOR convention
-    // eslint-disable-next-line no-undef
+
     const noColor = typeof process !== "undefined" && !!process.env.NO_COLOR;
     if (noColor) return false;
-    // eslint-disable-next-line no-undef
+
     const isTty =
       typeof process !== "undefined" &&
       !!process.stdout &&

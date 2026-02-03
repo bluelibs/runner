@@ -1,5 +1,4 @@
 import { requireContextTaskMiddleware } from "../../globals/middleware/requireContext.middleware";
-import { ContextError } from "../../definers/defineAsyncContext";
 
 /**
  * Utility function to build a fake Context implementation that allows us to
@@ -14,7 +13,7 @@ function createFakeContext<T>(useImplementation: () => T) {
     // The following members are not used by the middleware but are required
     // to satisfy the `Context` interface.
     provide: jest.fn(),
-    // eslint-disable-next-line @typescript-eslint/explicit-module-boundary-types
+
     require: jest.fn() as any,
   } as any;
 }

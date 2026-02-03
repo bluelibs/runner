@@ -1,5 +1,5 @@
 /**
- * Streaming append over HTTP using Runner exposure + EJSON.
+ * Streaming append over HTTP using Runner exposure + Runner serializer.
  *
  * - Server: nodeExposure HTTP
  * - Client: Node smart client that auto-detects File sentinels and streams via multipart
@@ -45,7 +45,7 @@ function tap(label: string): Transform {
         ? chunk.toString("utf8")
         : String(chunk);
       // Required demo log: "send" / "receive"
-      // eslint-disable-next-line no-console
+
       console.log(label, text);
       cb(null, chunk);
     },
@@ -82,7 +82,11 @@ const appendTask = task({
 });
 
 const exposure = nodeExposure.with({
-  http: { basePath: "/__runner", listen: { port: 0 } },
+  http: {
+    dangerouslyAllowOpenExposure: true,
+    basePath: "/__runner",
+    listen: { port: 0 },
+  },
 });
 const app = resource({
   id: "examples.streaming.append.app",

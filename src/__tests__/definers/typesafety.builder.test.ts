@@ -5,6 +5,7 @@ import { isOneOf, onAnyOf } from "../../types/event";
 
 // This suite mirrors src/__tests__/typesafety.test.ts but uses ONLY builders (r.*)
 // It is skipped because it primarily asserts compile-time TypeScript behavior via @ts-expect-error.
+// eslint-disable-next-line jest/no-disabled-tests
 describe.skip("builders typesafety", () => {
   it("tasks, resources: should have proper type safety for dependencies", async () => {
     type InputTask = {
@@ -298,7 +299,7 @@ describe.skip("builders typesafety", () => {
         tag2.with({ value: "123" }),
         tag3,
       ])
-      .meta({} as any)
+      .meta({} as Record<string, any>)
       .run(async (input) => {
         return input;
       })
@@ -374,7 +375,8 @@ describe.skip("builders typesafety", () => {
       .tags([tag3WithInputContract])
       .init(async (config) => {
         config.a;
-        (config as any).b;
+        // @ts-expect-error
+        config.b;
       })
       .build();
 
@@ -404,7 +406,8 @@ describe.skip("builders typesafety", () => {
       .resultSchema(z.object({ name: z.string() }))
       .run(async (input) => {
         input.name;
-        (input as any).age;
+        // @ts-expect-error
+        input.age;
 
         return {
           name: "123",
@@ -417,7 +420,8 @@ describe.skip("builders typesafety", () => {
       .configSchema(z.object({ ttl: z.number().positive() }))
       .run(async ({ next }, deps, config) => {
         config.ttl;
-        (config as any).ttl2;
+        // @ts-expect-error
+        config.ttl2;
       })
       .build();
 
@@ -426,7 +430,8 @@ describe.skip("builders typesafety", () => {
       .configSchema(z.object({ ttl: z.number().positive() }))
       .init(async (cfg) => {
         cfg.ttl;
-        (cfg as any).ttl2;
+        // @ts-expect-error
+        cfg.ttl2;
       })
       .build();
 

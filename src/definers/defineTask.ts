@@ -1,18 +1,21 @@
-import {
+import type {
   ITask,
   ITaskDefinition,
   DependencyMapType,
   ITaskMeta,
   TagType,
+  IOptionalDependency,
+  TaskMiddlewareAttachmentType,
+  IPhantomTask,
+} from "../types/task";
+import {
   symbolTask,
   symbolFilePath,
   symbolOptionalDependency,
-  IOptionalDependency,
-  TaskMiddlewareAttachmentType,
   symbolPhantomTask,
-  IPhantomTask,
-} from "../defs";
+} from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
+import { normalizeThrows } from "../tools/throws";
 
 /**
  * Define a task.
@@ -33,7 +36,8 @@ export function defineTask<
   Deps extends DependencyMapType = any,
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] =
+    TaskMiddlewareAttachmentType[],
 >(
   taskConfig: ITaskDefinition<Input, Output, Deps, TMeta, TTags, TMiddleware>,
 ): ITask<Input, Output, Deps, TMeta, TTags, TMiddleware> {
@@ -50,6 +54,7 @@ export function defineTask<
     resultSchema: taskConfig.resultSchema,
     meta: taskConfig.meta || ({} as TMeta),
     tags: taskConfig.tags || ([] as unknown as TTags),
+    throws: normalizeThrows({ kind: "task", id }, taskConfig.throws),
     // autorun,
     optional() {
       return {
@@ -67,7 +72,7 @@ defineTask.phantom = <Input = undefined, Output extends Promise<any> = any>(
 ) => {
   const taskDef = defineTask({
     ...taskConfig,
-    run: async (input: any): Promise<any> => {
+    run: async (_input: any): Promise<any> => {
       return undefined;
     },
   });

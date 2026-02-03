@@ -4,10 +4,12 @@ describe("Semaphore", () => {
   let semaphore: Semaphore;
 
   beforeEach(() => {
+    jest.useFakeTimers();
     semaphore = new Semaphore(2);
   });
 
   afterEach(() => {
+    jest.useRealTimers();
     if (!semaphore.isDisposed()) {
       semaphore.dispose();
     }
@@ -170,15 +172,14 @@ describe("Semaphore", () => {
       await semaphore.acquire();
       await semaphore.acquire();
 
-      const startTime = Date.now();
+      const acquirePromise = semaphore.acquire({ timeout: 100 });
 
-      await expect(semaphore.acquire({ timeout: 100 })).rejects.toThrow(
+      jest.advanceTimersByTime(110);
+      await Promise.resolve();
+
+      await expect(acquirePromise).rejects.toThrow(
         "Semaphore acquire timeout after 100ms",
       );
-
-      const elapsed = Date.now() - startTime;
-      expect(elapsed).toBeGreaterThanOrEqual(100);
-      expect(elapsed).toBeLessThan(300); // Should not wait much longer
     });
 
     it("should timeout withPermit operation", async () => {
@@ -186,9 +187,16 @@ describe("Semaphore", () => {
       await semaphore.acquire();
       await semaphore.acquire();
 
-      await expect(
-        semaphore.withPermit(async () => "never executed", { timeout: 100 }),
-      ).rejects.toThrow("Semaphore acquire timeout after 100ms");
+      const permitPromise = semaphore.withPermit(async () => "never executed", {
+        timeout: 100,
+      });
+
+      jest.advanceTimersByTime(110);
+      await Promise.resolve();
+
+      await expect(permitPromise).rejects.toThrow(
+        "Semaphore acquire timeout after 100ms",
+      );
     });
 
     it("should clear timeout when operation succeeds", async () => {
@@ -200,7 +208,14 @@ describe("Semaphore", () => {
       const operationPromise = semaphore.acquire({ timeout: 1000 });
 
       // Release permit quickly - should not timeout
-      setTimeout(() => semaphore.release(), 50);
+      // Advance less than timeout
+      jest.advanceTimersByTime(50);
+      await Promise.resolve();
+      semaphore.release();
+
+      // Advance past timeout to ensure it didn't trigger
+      jest.advanceTimersByTime(1000);
+      await Promise.resolve();
 
       await expect(operationPromise).resolves.toBeUndefined();
     });
@@ -224,6 +239,9 @@ describe("Semaphore", () => {
       // Start operation that will timeout
       const timeoutPromise = semaphore.acquire({ timeout: 50 });
       expect(semaphore.getWaitingCount()).toBe(1);
+
+      jest.advanceTimersByTime(60);
+      await Promise.resolve();
 
       await expect(timeoutPromise).rejects.toThrow("timeout");
       expect(semaphore.getWaitingCount()).toBe(0);
@@ -318,6 +336,8 @@ describe("Semaphore", () => {
       expect(semaphore.getWaitingCount()).toBe(1);
 
       // Let timeout occur - should trigger reject path with cleanup
+      jest.advanceTimersByTime(60);
+      await Promise.resolve();
       await expect(queuedOperation).rejects.toThrow("timeout");
 
       expect(semaphore.getWaitingCount()).toBe(0);
@@ -335,7 +355,12 @@ describe("Semaphore", () => {
       });
 
       // Cancel before timeout
-      setTimeout(() => controller.abort(), 50);
+      jest.advanceTimersByTime(50);
+      await Promise.resolve();
+      controller.abort();
+      // Advance time but not enough for timeout
+      jest.advanceTimersByTime(100);
+      await Promise.resolve();
 
       await expect(operationPromise).rejects.toThrow("Operation was aborted");
     });
@@ -496,14 +521,14 @@ describe("Semaphore", () => {
 
   describe("edge cases and error handling", () => {
     it("should handle rapid acquire/release cycles", async () => {
-      const operations: any[] = [];
+      const operations: Promise<number>[] = [];
 
       // Rapid fire operations
       for (let i = 0; i < 100; i++) {
         operations.push(
           semaphore.withPermit(async () => {
             // Simulate quick work
-            await new Promise((resolve) => setTimeout(resolve, 1));
+            await Promise.resolve();
             return i;
           }),
         );
@@ -528,7 +553,8 @@ describe("Semaphore", () => {
       ];
 
       // Dispose concurrently
-      setTimeout(() => semaphore.dispose(), 10);
+      // Use microtask to ensure operation is triggered after setup
+      Promise.resolve().then(() => semaphore.dispose());
 
       // All should be rejected
       for (const op of operations) {
@@ -549,6 +575,8 @@ describe("Semaphore", () => {
       expect(semaphore.getWaitingCount()).toBe(3);
 
       // Wait for timeout
+      jest.advanceTimersByTime(110);
+      await Promise.resolve();
       await expect(op2).rejects.toThrow("timeout");
       expect(semaphore.getWaitingCount()).toBe(2);
 
@@ -561,7 +589,7 @@ describe("Semaphore", () => {
 
     it("should maintain consistency under stress", async () => {
       const concurrentOps = 50;
-      const operations: any[] = [];
+      const operations: Promise<number>[] = [];
 
       // Start many concurrent operations
       for (let i = 0; i < concurrentOps; i++) {
@@ -569,7 +597,8 @@ describe("Semaphore", () => {
           semaphore.withPermit(async () => {
             // Random delay to create timing variations
             await new Promise((resolve) =>
-              setTimeout(resolve, Math.random() * 10),
+              // Just use immediate resolution as random delays with fake timers in a loop is complex
+              resolve(true),
             );
             return i;
           }),
@@ -581,6 +610,15 @@ describe("Semaphore", () => {
       // Verify all operations completed
       expect(results).toHaveLength(concurrentOps);
       expect(semaphore.getAvailablePermits()).toBe(2);
+      expect(semaphore.getWaitingCount()).toBe(0);
+    });
+
+    it("ignores redundant queue removals defensively", () => {
+      expect(() =>
+        (
+          semaphore as unknown as { removeFromQueue: (item: unknown) => void }
+        ).removeFromQueue({}),
+      ).not.toThrow();
       expect(semaphore.getWaitingCount()).toBe(0);
     });
   });
@@ -599,7 +637,8 @@ describe("Semaphore", () => {
             );
 
             // Simulate query time
-            await new Promise((resolve) => setTimeout(resolve, 10));
+            jest.advanceTimersByTime(10);
+            await Promise.resolve();
 
             this.activeConnections--;
             return `Result for: ${sql}`;
@@ -631,7 +670,8 @@ describe("Semaphore", () => {
               expect(activeCalls).toBeLessThanOrEqual(2);
 
               // Simulate API call
-              await new Promise((resolve) => setTimeout(resolve, 20));
+              jest.advanceTimersByTime(20);
+              await Promise.resolve();
 
               activeCalls--;
               return { id, name: `User ${id}` };
@@ -676,13 +716,14 @@ describe("Semaphore", () => {
         id: i,
         data: `item-${i}`,
       }));
-      const processed: any[] = [];
+      const processed: { id: number; data: string; processed: boolean }[] = [];
 
       const processBatch = async () => {
         const promises = items.map((item) =>
           batchSemaphore.withPermit(async () => {
             // Simulate processing time
-            await new Promise((resolve) => setTimeout(resolve, 5));
+            jest.advanceTimersByTime(5);
+            await Promise.resolve();
 
             const result = { ...item, processed: true };
             processed.push(result);
@@ -708,6 +749,118 @@ describe("Semaphore", () => {
       expect(batchSemaphore.getWaitingCount()).toBe(0);
 
       batchSemaphore.dispose();
+    });
+  });
+
+  describe("performance", () => {
+    it("handles large queued workloads without starving", async () => {
+      const permits = 8;
+      const total = 2000;
+      const sem = new Semaphore(permits);
+
+      let maxWaiting = 0;
+
+      const operations = Array.from({ length: total }, (_, i) =>
+        sem.withPermit(async () => {
+          maxWaiting = Math.max(maxWaiting, sem.getWaitingCount());
+          if (i % 50 === 0) {
+            await Promise.resolve();
+          }
+          return i;
+        }),
+      );
+
+      const results = await Promise.all(operations);
+
+      expect(results).toHaveLength(total);
+      expect(sem.getAvailablePermits()).toBe(permits);
+      expect(sem.getWaitingCount()).toBe(0);
+      expect(maxWaiting).toBeGreaterThan(0);
+    });
+  });
+
+  describe("events", () => {
+    it("emits lifecycle events", async () => {
+      const events: string[] = [];
+      const sem = new Semaphore(1);
+
+      sem.on("acquired", () => events.push("acquired"));
+      sem.on("released", () => events.push("released"));
+      sem.on("queued", () => events.push("queued"));
+      sem.on("timeout", () => events.push("timeout"));
+      sem.on("aborted", () => events.push("aborted"));
+      sem.on("disposed", () => events.push("disposed"));
+
+      await sem.acquire();
+
+      const controller = new AbortController();
+      const waitPromise = sem.acquire({ signal: controller.signal });
+      controller.abort();
+      await expect(waitPromise).rejects.toThrow("aborted");
+
+      const timeoutPromise = sem.acquire({ timeout: 1 });
+      jest.advanceTimersByTime(2);
+      await Promise.resolve();
+      await expect(timeoutPromise).rejects.toThrow("timeout");
+
+      sem.release();
+      sem.dispose();
+
+      expect(events).toEqual(
+        expect.arrayContaining([
+          "acquired",
+          "queued",
+          "aborted",
+          "timeout",
+          "released",
+          "disposed",
+        ]),
+      );
+    });
+
+    it("supports once listeners", async () => {
+      const sem = new Semaphore(1);
+      const seen: string[] = [];
+
+      sem.once("released", (event) => seen.push(event.type));
+
+      await sem.acquire();
+      sem.release();
+      sem.release(); // second release should not trigger the once listener
+
+      expect(seen).toEqual(["released"]);
+    });
+
+    it("supports unsubscribing from on() listeners", async () => {
+      const sem = new Semaphore(1);
+      const seen: string[] = [];
+
+      const unsubscribe = sem.on("released", () => seen.push("released"));
+
+      await sem.acquire();
+      sem.release();
+      expect(seen).toEqual(["released"]);
+
+      // Unsubscribe and verify no more events are received
+      unsubscribe();
+
+      await sem.acquire();
+      sem.release();
+      expect(seen).toEqual(["released"]); // Still only one "released"
+    });
+
+    it("supports unsubscribing from once() listeners before event fires", async () => {
+      const sem = new Semaphore(1);
+      const seen: string[] = [];
+
+      const unsubscribe = sem.once("released", () => seen.push("released"));
+
+      // Unsubscribe before any release
+      unsubscribe();
+
+      await sem.acquire();
+      sem.release();
+      expect(seen).toEqual([]); // No events received because we unsubscribed
     });
   });
 });

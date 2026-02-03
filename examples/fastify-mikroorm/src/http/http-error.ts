@@ -9,4 +9,3 @@ export class HTTPError extends Error {
     this.details = details;
   }
 }
-

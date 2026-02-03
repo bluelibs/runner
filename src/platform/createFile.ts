@@ -1,4 +1,4 @@
-import type { InputFileMeta, EjsonFileSentinel } from "../types/inputFile";
+import type { InputFileMeta, RunnerFileSentinel } from "../types/inputFile";
 import { createWebFile } from "./createWebFile";
 
 /**
@@ -8,8 +8,8 @@ export function createFile(
   meta: InputFileMeta,
   blob: Blob,
   id: string = "F1",
-): EjsonFileSentinel & { _web: { blob: Blob } } {
+): RunnerFileSentinel & { _web: { blob: Blob } } {
   return createWebFile(meta, blob, id);
 }
 
-export type { EjsonFileSentinel };
+export type { RunnerFileSentinel };

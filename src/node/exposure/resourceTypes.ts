@@ -4,8 +4,11 @@ import type { IncomingMessage, ServerResponse } from "http";
 import { globalResources } from "../../globals/globalResources";
 import type { ResourceDependencyValuesType } from "../../defs";
 import type { NodeExposureHttpAuthConfig } from "./authenticator";
-import type { RequestHandler } from "./types";
-import type { Serializer } from "../../globals/resources/tunnel/serializer";
+import type { MultipartLimits } from "./multipart";
+
+export interface JsonLimits {
+  maxSize?: number;
+}
 
 export type NodeExposureDependencyMap = {
   store: typeof globalResources.store;
@@ -24,6 +27,15 @@ export interface NodeExposureHttpConfig {
   listen?: { port: number; host?: string };
   auth?: NodeExposureHttpAuthConfig;
   cors?: NodeExposureHttpCorsConfig;
+  limits?: {
+    json?: JsonLimits;
+    multipart?: MultipartLimits;
+  };
+  /**
+   * Opt out of fail-closed exposure (not recommended).
+   * When true and no server-mode tunnel is registered, exposure is open.
+   */
+  dangerouslyAllowOpenExposure?: boolean;
 }
 
 export interface NodeExposureConfig {

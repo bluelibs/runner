@@ -1,7 +1,11 @@
 import * as http from "http";
 
 import { safeLogInfo } from "./logging";
-import { makeRequestListener, startHttpServer, stopHttpServer } from "./serverLifecycle";
+import {
+  makeRequestListener,
+  startHttpServer,
+  stopHttpServer,
+} from "./serverLifecycle";
 import type { RequestHandler } from "./types";
 import type { NodeExposureDeps, NodeExposureHttpConfig } from "./resourceTypes";
 

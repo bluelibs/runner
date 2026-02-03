@@ -1,5 +1,4 @@
 import z from "zod";
-import { usersRepository } from "../resources/users-repository.resource";
 import { r } from "@bluelibs/runner";
 import { httpRoute } from "../../http/tags/http.tag";
 import {
@@ -42,32 +41,34 @@ export const registerUserTask = r
     }),
   ])
   .inputSchema(registerSchema)
-  .run(async (
-    userData: RegisterRequest,
-    { appConfig, createUserTask },
-  ): Promise<ApiResponse<LoginResponse>> => {
-    try {
-      // Create user
-      const user = await createUserTask(userData);
+  .run(
+    async (
+      userData: RegisterRequest,
+      { appConfig, createUserTask },
+    ): Promise<ApiResponse<LoginResponse>> => {
+      try {
+        // Create user
+        const user = await createUserTask(userData);
 
-      // Generate JWT token
-      const token = jwt.sign({ userId: user.id }, appConfig.jwtSecret, {
-        expiresIn: "24h",
-      });
+        // Generate JWT token
+        const token = jwt.sign({ userId: user.id }, appConfig.jwtSecret, {
+          expiresIn: "24h",
+        });
 
-      return {
-        success: true,
-        data: {
-          token,
-          user,
-        },
-        message: "User registered successfully",
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : "Registration failed",
-      };
-    }
-  })
+        return {
+          success: true,
+          data: {
+            token,
+            user,
+          },
+          message: "User registered successfully",
+        };
+      } catch (error) {
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Registration failed",
+        };
+      }
+    },
+  )
   .build();

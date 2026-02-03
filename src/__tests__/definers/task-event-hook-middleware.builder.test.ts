@@ -26,7 +26,9 @@ describe("task/event/hook/middleware builders", () => {
     const task = r
       .task("tests.builder.task")
       .dependencies({ svc })
-      .inputSchema<{ a: number; b: number }>({ parse: (x: any) => x })
+      .inputSchema<{ a: number; b: number }>({
+        parse: (x: unknown) => x as { a: number; b: number },
+      })
       .run(
         async (
           input: { a: number; b: number },
@@ -35,7 +37,11 @@ describe("task/event/hook/middleware builders", () => {
       )
       .build();
 
-    expect((task as any)[definitions.symbolTask]).toBe(true);
+    expect(
+      (task as unknown as { [definitions.symbolTask]: boolean })[
+        definitions.symbolTask
+      ],
+    ).toBe(true);
     const app = resource({ id: "tests.app.task", register: [svc, task] });
     const rr = await run(app);
     const out = await rr.runTask(task, { a: 2, b: 3 });
@@ -56,7 +62,7 @@ describe("task/event/hook/middleware builders", () => {
 
     const app = resource({ id: "tests.app.ev", register: [ev, listener] });
     const rr = await run(app);
-    await rr.emitEvent(ev, undefined as any);
+    await rr.emitEvent(ev, undefined);
     expect(calls).toEqual([ev.id]);
     await rr.dispose();
   });
@@ -70,8 +76,16 @@ describe("task/event/hook/middleware builders", () => {
       .resource("tests.builder.rm")
       .run(async ({ next, resource }) => next(resource.config))
       .build();
-    expect((tmw as any)[definitions.symbolTaskMiddleware]).toBe(true);
-    expect((rmw as any)[definitions.symbolResourceMiddleware]).toBe(true);
+    expect(
+      (tmw as unknown as { [definitions.symbolTaskMiddleware]: boolean })[
+        definitions.symbolTaskMiddleware
+      ],
+    ).toBe(true);
+    expect(
+      (rmw as unknown as { [definitions.symbolResourceMiddleware]: boolean })[
+        definitions.symbolResourceMiddleware
+      ],
+    ).toBe(true);
   });
 
   it("tags append and override on event, hook, and middlewares", () => {
@@ -187,9 +201,13 @@ describe("task/event/hook/middleware builders", () => {
       .event("tests.builder.event.meta")
       .payloadSchema<{ foo: number }>({ parse: (x: any) => x })
       .tags([])
-      .meta({ title: "E" } as any)
+      .meta({ title: "E" } as unknown as any)
       .build();
-    expect((ev as any)[definitions.symbolEvent]).toBe(true);
+    expect(
+      (ev as unknown as { [definitions.symbolEvent]: boolean })[
+        definitions.symbolEvent
+      ],
+    ).toBe(true);
   });
 
   it("hook builder supports order, dependencies, tags, meta", async () => {
@@ -205,7 +223,7 @@ describe("task/event/hook/middleware builders", () => {
       .order(5)
       .dependencies({ svc })
       .tags([])
-      .meta({ title: "H" } as any)
+      .meta({ title: "H" } as unknown as any)
       .run(async (em) => {
         calls.push(em.id);
       })
@@ -215,7 +233,7 @@ describe("task/event/hook/middleware builders", () => {
       register: [svc, ev, hk],
     });
     const rr = await run(app);
-    await rr.emitEvent(ev, undefined as any);
+    await rr.emitEvent(ev, undefined);
     expect(calls).toEqual([ev.id]);
     await rr.dispose();
   });
@@ -227,7 +245,7 @@ describe("task/event/hook/middleware builders", () => {
       .tags([])
       .middleware([])
       .resultSchema<number>({ parse: (x: any) => x })
-      .meta({ title: "T" } as any)
+      .meta({ title: "T" } as unknown as any)
       .run(async (input: number) => Promise.resolve(input + 1))
       .build();
     const app = resource({ id: "tests.app.task.more", register: [task] });
@@ -237,9 +255,38 @@ describe("task/event/hook/middleware builders", () => {
     await rr.dispose();
   });
 
+  it("task builder supports throws contracts without DI", () => {
+    const errA = r.error("tests.builder.task.throws.errA").build();
+    const errB = r.error("tests.builder.task.throws.errB").build();
+
+    const t = r
+      .task("tests.builder.task.throws")
+      .throws([errA, errB.id, errA])
+      .run(async () => Promise.resolve("ok"))
+      .build();
+
+    expect(t.throws).toEqual([errA.id, errB.id]);
+  });
+
+  it("task builder throws on invalid throws entries", () => {
+    expect(() =>
+      r
+        .task("tests.builder.task.throws.invalid")
+        .throws([{} as unknown as string])
+        .run(async () => Promise.resolve("ok"))
+        .build(),
+    ).toThrow(/Invalid throws entry/);
+  });
+
   it("task dependencies append by default and can override", async () => {
-    const a = resource({ id: "tests.builder.task.deps.a", init: async () => 2 });
-    const b = resource({ id: "tests.builder.task.deps.b", init: async () => 3 });
+    const a = resource({
+      id: "tests.builder.task.deps.a",
+      init: async () => 2,
+    });
+    const b = resource({
+      id: "tests.builder.task.deps.b",
+      init: async () => 3,
+    });
 
     const t1 = r
       .task("tests.builder.task.deps.append")
@@ -248,9 +295,12 @@ describe("task/event/hook/middleware builders", () => {
       .run(async (_: void, deps: { a: number; b: number }) => deps.a + deps.b)
       .build();
 
-    const app1 = resource({ id: "tests.app.task.deps.append", register: [a, b, t1] });
+    const app1 = resource({
+      id: "tests.app.task.deps.append",
+      register: [a, b, t1],
+    });
     const rr1 = await run(app1);
-    expect(await rr1.runTask(t1, undefined as any)).toBe(5);
+    expect(await rr1.runTask(t1)).toBe(5);
     await rr1.dispose();
 
     const t2 = r
@@ -259,15 +309,24 @@ describe("task/event/hook/middleware builders", () => {
       .dependencies({ b }, { override: true })
       .run(async (_: void, deps: { b: number }) => deps.b)
       .build();
-    const app2 = resource({ id: "tests.app.task.deps.override", register: [a, b, t2] });
+    const app2 = resource({
+      id: "tests.app.task.deps.override",
+      register: [a, b, t2],
+    });
     const rr2 = await run(app2);
-    expect(await rr2.runTask(t2, undefined as any)).toBe(3);
+    expect(await rr2.runTask(t2)).toBe(3);
     await rr2.dispose();
   });
 
   it("task dependencies function+function merge branch", async () => {
-    const a = resource({ id: "tests.builder.task.deps.ff.a", init: async () => 4 });
-    const b = resource({ id: "tests.builder.task.deps.ff.b", init: async () => 6 });
+    const a = resource({
+      id: "tests.builder.task.deps.ff.a",
+      init: async () => 4,
+    });
+    const b = resource({
+      id: "tests.builder.task.deps.ff.b",
+      init: async () => 6,
+    });
 
     const t = r
       .task("tests.builder.task.deps.ff")
@@ -278,14 +337,20 @@ describe("task/event/hook/middleware builders", () => {
 
     const app = resource({ id: "tests.app.task.deps.ff", register: [a, b, t] });
     const rr = await run(app);
-    expect(await rr.runTask(t, undefined as any)).toBe(10);
+    expect(await rr.runTask(t)).toBe(10);
     await rr.dispose();
   });
 
   it("hook dependencies function+function merge branch", async () => {
     const ev = r.event("tests.builder.hook.deps.ff.ev").build();
-    const a = resource({ id: "tests.builder.hook.deps.ff.a", init: async () => 1 });
-    const b = resource({ id: "tests.builder.hook.deps.ff.b", init: async () => 2 });
+    const a = resource({
+      id: "tests.builder.hook.deps.ff.a",
+      init: async () => 1,
+    });
+    const b = resource({
+      id: "tests.builder.hook.deps.ff.b",
+      init: async () => 2,
+    });
     const seen: number[] = [];
     const hk = r
       .hook("tests.builder.hook.deps.ff")
@@ -296,16 +361,25 @@ describe("task/event/hook/middleware builders", () => {
         seen.push(deps.a + deps.b);
       })
       .build();
-    const app = resource({ id: "tests.app.hook.deps.ff", register: [a, b, ev, hk] });
+    const app = resource({
+      id: "tests.app.hook.deps.ff",
+      register: [a, b, ev, hk],
+    });
     const rr = await run(app);
-    await rr.emitEvent(ev, undefined as any);
+    await rr.emitEvent(ev, undefined);
     expect(seen).toEqual([3]);
     await rr.dispose();
   });
 
   it("resource middleware dependencies object+function branch", () => {
-    const a = resource({ id: "tests.builder.rmw.deps.of.a", init: async () => 1 });
-    const b = resource({ id: "tests.builder.rmw.deps.of.b", init: async () => 2 });
+    const a = resource({
+      id: "tests.builder.rmw.deps.of.a",
+      init: async () => 1,
+    });
+    const b = resource({
+      id: "tests.builder.rmw.deps.of.b",
+      init: async () => 2,
+    });
     const rmw = r.middleware
       .resource("tests.builder.rmw.deps.of")
       .dependencies({ a })
@@ -314,14 +388,20 @@ describe("task/event/hook/middleware builders", () => {
       .build();
     const depsObj =
       typeof rmw.dependencies === "function"
-        ? (rmw.dependencies as any)()
+        ? (rmw.dependencies as unknown as () => any)()
         : rmw.dependencies;
     expect(Object.keys(depsObj)).toEqual(["a", "b"]);
   });
 
   it("resource middleware dependencies function+object branch", () => {
-    const a = resource({ id: "tests.builder.rmw.deps.fo.a", init: async () => 1 });
-    const b = resource({ id: "tests.builder.rmw.deps.fo.b", init: async () => 2 });
+    const a = resource({
+      id: "tests.builder.rmw.deps.fo.a",
+      init: async () => 1,
+    });
+    const b = resource({
+      id: "tests.builder.rmw.deps.fo.b",
+      init: async () => 2,
+    });
     const rmw = r.middleware
       .resource("tests.builder.rmw.deps.fo")
       .dependencies(() => ({ a }))
@@ -338,8 +418,14 @@ describe("task/event/hook/middleware builders", () => {
   it("hook and middleware dependencies append by default", async () => {
     // Hook dependencies append
     const ev = r.event("tests.builder.deps.event").build();
-    const a = resource({ id: "tests.builder.deps.hook.a", init: async () => 1 });
-    const b = resource({ id: "tests.builder.deps.hook.b", init: async () => 2 });
+    const a = resource({
+      id: "tests.builder.deps.hook.a",
+      init: async () => 1,
+    });
+    const b = resource({
+      id: "tests.builder.deps.hook.b",
+      init: async () => 2,
+    });
     const calls: number[] = [];
     const hk = r
       .hook("tests.builder.deps.hook")
@@ -365,17 +451,26 @@ describe("task/event/hook/middleware builders", () => {
       })
       .build();
 
-    const app = resource({ id: "tests.builder.deps.app", register: [a, b, ev, hk, tmw] });
+    const app = resource({
+      id: "tests.builder.deps.app",
+      register: [a, b, ev, hk, tmw],
+    });
     const rr = await run(app);
-    await rr.emitEvent(ev, undefined as any);
+    await rr.emitEvent(ev, undefined);
     expect(calls).toEqual([3]);
     await rr.dispose();
   });
 
   it("hook dependencies override branch", async () => {
     const ev = r.event("tests.builder.deps.ev2").build();
-    const a = resource({ id: "tests.builder.deps.hook2.a", init: async () => 1 });
-    const b = resource({ id: "tests.builder.deps.hook2.b", init: async () => 2 });
+    const a = resource({
+      id: "tests.builder.deps.hook2.a",
+      init: async () => 1,
+    });
+    const b = resource({
+      id: "tests.builder.deps.hook2.b",
+      init: async () => 2,
+    });
     const seen: number[] = [];
     const hk = r
       .hook("tests.builder.deps.hook2")
@@ -387,9 +482,12 @@ describe("task/event/hook/middleware builders", () => {
       })
       .build();
 
-    const app = resource({ id: "tests.builder.deps.app2", register: [a, b, ev, hk] });
+    const app = resource({
+      id: "tests.builder.deps.app2",
+      register: [a, b, ev, hk],
+    });
     const rr = await run(app);
-    await rr.emitEvent(ev, undefined as any);
+    await rr.emitEvent(ev, undefined);
     expect(seen).toEqual([2]);
     await rr.dispose();
   });
@@ -407,7 +505,7 @@ describe("task/event/hook/middleware builders", () => {
     // dependencies is function; call to get merged object
     const depsObj =
       typeof tmw.dependencies === "function"
-        ? (tmw.dependencies as any)()
+        ? (tmw.dependencies as unknown as () => any)()
         : tmw.dependencies;
     expect(Object.keys(depsObj)).toEqual(["a", "b"]);
 
@@ -419,7 +517,7 @@ describe("task/event/hook/middleware builders", () => {
       .build();
     const depsObj2 =
       typeof tmw2.dependencies === "function"
-        ? (tmw2.dependencies as any)()
+        ? (tmw2.dependencies as unknown as () => any)()
         : tmw2.dependencies;
     expect(Object.keys(depsObj2)).toEqual(["b"]);
   });
@@ -435,7 +533,7 @@ describe("task/event/hook/middleware builders", () => {
       .build();
     const depsObj =
       typeof rmw.dependencies === "function"
-        ? (rmw.dependencies as any)()
+        ? (rmw.dependencies as unknown as () => any)()
         : rmw.dependencies;
     expect(Object.keys(depsObj)).toEqual(["a", "b"]);
 
@@ -447,7 +545,7 @@ describe("task/event/hook/middleware builders", () => {
       .build();
     const depsObj2 =
       typeof rmw2.dependencies === "function"
-        ? (rmw2.dependencies as any)()
+        ? (rmw2.dependencies as unknown as () => any)()
         : rmw2.dependencies;
     expect(Object.keys(depsObj2)).toEqual(["b"]);
   });
@@ -554,11 +652,15 @@ describe("task/event/hook/middleware builders", () => {
       .dependencies({})
       .configSchema<{ retry: number }>({ parse: (x: any) => x })
       .tags([])
-      .meta({ title: "TM" } as any)
+      .meta({ title: "TM" } as unknown as any)
       .everywhere(() => true)
       .run(async ({ next, task }) => next(task.input))
       .build();
-    expect((tmw as any)[definitions.symbolTaskMiddleware]).toBe(true);
+    expect(
+      (tmw as unknown as { [definitions.symbolTaskMiddleware]: boolean })[
+        definitions.symbolTaskMiddleware
+      ],
+    ).toBe(true);
   });
 
   it("resource middleware builder supports configSchema, tags, meta, everywhere", () => {
@@ -567,10 +669,88 @@ describe("task/event/hook/middleware builders", () => {
       .dependencies({})
       .configSchema<{ timeout: number }>({ parse: (x: any) => x })
       .tags([])
-      .meta({ title: "RM" } as any)
+      .meta({ title: "RM" } as unknown as any)
       .everywhere(() => true)
       .run(async ({ next, resource }) => next(resource.config))
       .build();
-    expect((rmw as any)[definitions.symbolResourceMiddleware]).toBe(true);
+    expect(
+      (rmw as unknown as { [definitions.symbolResourceMiddleware]: boolean })[
+        definitions.symbolResourceMiddleware
+      ],
+    ).toBe(true);
+  });
+
+  describe("hook builder validation", () => {
+    it("throws when building hook without on()", () => {
+      expect(() =>
+        r
+          .hook("tests.builder.hook.no-on")
+          .run(async () => {})
+          .build(),
+      ).toThrow(/Missing required.*on/);
+    });
+
+    it("throws when building hook without run()", () => {
+      const ev = r.event("tests.builder.hook.no-run.ev").build();
+      expect(() => r.hook("tests.builder.hook.no-run").on(ev).build()).toThrow(
+        /Missing required.*run/,
+      );
+    });
+
+    it("throws when building hook without both on() and run()", () => {
+      expect(() => r.hook("tests.builder.hook.no-both").build()).toThrow(
+        /Missing required.*on.*run/,
+      );
+    });
+
+    it("succeeds when both on() and run() are provided", () => {
+      const ev = r.event("tests.builder.hook.valid.ev").build();
+      const hook = r
+        .hook("tests.builder.hook.valid")
+        .on(ev)
+        .run(async () => {})
+        .build();
+      expect(hook.id).toBe("tests.builder.hook.valid");
+      expect(hook.on).toBe(ev);
+    });
+
+    it("allows global listener with on('*')", () => {
+      const hook = r
+        .hook("tests.builder.hook.global")
+        .on("*")
+        .run(async () => {})
+        .build();
+      expect(hook.on).toBe("*");
+    });
+  });
+
+  describe("middleware builder validation", () => {
+    it("throws when building task middleware without run()", () => {
+      expect(() =>
+        r.middleware.task("tests.builder.tmw.no-run").build(),
+      ).toThrow(/Task middleware.*Missing required.*run/);
+    });
+
+    it("throws when building resource middleware without run()", () => {
+      expect(() =>
+        r.middleware.resource("tests.builder.rmw.no-run").build(),
+      ).toThrow(/Resource middleware.*Missing required.*run/);
+    });
+
+    it("succeeds when task middleware has run()", () => {
+      const mw = r.middleware
+        .task("tests.builder.tmw.valid")
+        .run(async ({ next, task }) => next(task.input))
+        .build();
+      expect(mw.id).toBe("tests.builder.tmw.valid");
+    });
+
+    it("succeeds when resource middleware has run()", () => {
+      const mw = r.middleware
+        .resource("tests.builder.rmw.valid")
+        .run(async ({ next }) => next())
+        .build();
+      expect(mw.id).toBe("tests.builder.rmw.valid");
+    });
   });
 });

@@ -23,7 +23,8 @@ export class ValidationHelper {
       return validationError.throw({
         subject: `${type} input`,
         id,
-        originalError: error instanceof Error ? error : new Error(String(error)),
+        originalError:
+          error instanceof Error ? error : new Error(String(error)),
       });
     }
   }
@@ -46,7 +47,8 @@ export class ValidationHelper {
       return validationError.throw({
         subject: `${type} result`,
         id,
-        originalError: error instanceof Error ? error : new Error(String(error)),
+        originalError:
+          error instanceof Error ? error : new Error(String(error)),
       });
     }
   }

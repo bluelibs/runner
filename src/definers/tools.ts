@@ -39,7 +39,9 @@ export function isTask(definition: any): definition is ITask {
 /** Type guard: checks if a definition is a Phantom Task. */
 export function isPhantomTask(definition: any): definition is IPhantomTask {
   return (
-    definition && definition[symbolTask] && Boolean(definition[symbolPhantomTask])
+    definition &&
+    definition[symbolTask] &&
+    Boolean(definition[symbolPhantomTask])
   );
 }
 
@@ -116,6 +118,8 @@ export function isError(definition: any): definition is IErrorHelper<any> {
 }
 
 /** Type guard: checks if a definition is an Async Context. */
-export function isAsyncContext(definition: any): definition is IAsyncContext<any> {
+export function isAsyncContext(
+  definition: any,
+): definition is IAsyncContext<any> {
   return Boolean(definition && definition[symbolAsyncContext]);
 }

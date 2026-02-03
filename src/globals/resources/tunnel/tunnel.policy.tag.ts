@@ -5,19 +5,32 @@ export type TunnelPolicySide = "client" | "server";
 
 export type TunnelMiddlewareId = string | ITaskMiddleware<any, any, any, any>;
 
+export interface TunnelTaskMiddlewareSidePolicy {
+  /**
+   * Middleware ids/definitions allowed to run on this side when the task is tunneled.
+   * If omitted, defaults to allowing none (caller-side middleware is skipped by default).
+   */
+  middlewareAllowList?: TunnelMiddlewareId[];
+}
+
+export type TunnelTaskMiddlewarePolicySideConfig =
+  | TunnelTaskMiddlewareSidePolicy
+  | TunnelMiddlewareId[];
+
 export interface TunnelTaskMiddlewarePolicyConfig {
   /**
-   * Whitelist of middleware ids/definitions allowed to run on the caller side
-   * when the task is tunneled (mode: "client"). If omitted, defaults to
-   * allowing all (the framework default remains "both").
+   * Preferred configuration shape: explicit per-side allowlist.
    */
-  client?: TunnelMiddlewareId[];
+  client?: TunnelTaskMiddlewarePolicySideConfig;
+  server?: TunnelTaskMiddlewarePolicySideConfig;
+
   /**
-   * Whitelist of middleware ids/definitions intended to run on the executor side.
-   * Note: The local runner cannot enforce server-side policy; this is a declarative
-   * contract that a Runner-based executor can consume to apply a symmetric filter.
+   * Backwards-compatible configuration shape (previous): grouped allowlists.
    */
-  server?: TunnelMiddlewareId[];
+  middlewareAllowList?: {
+    client?: TunnelMiddlewareId[];
+    server?: TunnelMiddlewareId[];
+  };
 }
 
 export const tunnelPolicyTag = defineTag<TunnelTaskMiddlewarePolicyConfig>({
@@ -28,4 +41,3 @@ export const tunnelPolicyTag = defineTag<TunnelTaskMiddlewarePolicyConfig>({
       "Controls which middlewares run on caller vs executor when a task is tunneled (whitelist).",
   },
 });
-

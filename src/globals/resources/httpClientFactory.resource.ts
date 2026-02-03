@@ -2,10 +2,12 @@ import { defineResource } from "../../define";
 import { createHttpClient, type HttpClient } from "../../http-client";
 import type { HttpClientConfig } from "../../http-client";
 import { serializer, store } from "../globalResources";
+import type { IErrorHelper } from "../../types/error";
+import type { IAsyncContext } from "../../types/asyncContext";
 
 /**
  * Factory for creating HTTP clients with automatic injection of:
- * - serializer (EJSON-compatible)
+ * - serializer
  * - error registry (from Store)
  * - async contexts (from Store)
  *
@@ -39,13 +41,15 @@ export const httpClientFactory = defineResource({
   }),
   init: async (_, { serializer, store }) => {
     // Build error registry from store.errors
-    const errorRegistry = new Map<string, any>();
+    const errorRegistry = new Map<string, IErrorHelper<any>>();
     for (const [id, helper] of store.errors) {
       errorRegistry.set(id, helper);
     }
 
     // Collect contexts from store.asyncContexts
-    const contexts = Array.from(store.asyncContexts.values()) as any[];
+    const contexts = Array.from(
+      store.asyncContexts.values(),
+    ) as unknown as IAsyncContext<any>[];
 
     const create: HttpClientFactory = (config: HttpClientFactoryConfig) =>
       createHttpClient({

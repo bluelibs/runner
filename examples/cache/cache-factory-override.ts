@@ -1,4 +1,4 @@
-import { task, resource, run, middleware, globals } from "@bluelibs/runner";
+import { task, resource, run, globals } from "@bluelibs/runner";
 
 // Custom cache implementation (could be Redis, Memcached, etc.)
 class CustomCache {

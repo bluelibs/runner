@@ -14,35 +14,39 @@ import {
  * @param patch - Properties to override (except `id`).
  * @returns A definition of the same kind with overrides applied.
  */
-// Narrowed helper types for better inference and diagnostics
 type AnyTask = ITask<any, any, any, any, any, any>;
 type AnyResource = IResource<any, any, any, any, any, any, any>;
 type AnyTaskMiddleware = ITaskMiddleware<any, any, any, any>;
 type AnyResourceMiddleware = IResourceMiddleware<any, any, any, any>;
 type AnyHook = IHook<any, any, any>;
 
-// Conditional patch type that maps the required/allowed fields based on base kind
-type OverridePatch<T> = T extends AnyTask
-  ? Omit<Partial<T>, "id"> & Pick<T, "run">
-  : T extends AnyResource
-  ? Omit<Partial<T>, "id"> & Pick<T, "init">
-  : T extends AnyTaskMiddleware
-  ? Omit<Partial<T>, "id">
-  : T extends AnyResourceMiddleware
-  ? Omit<Partial<T>, "id"> & Pick<T, "run">
-  : T extends AnyHook
-  ? Omit<Partial<T>, "id" | "on"> & Pick<T, "run">
-  : never;
+type AnyOverrideable =
+  | AnyTask
+  | AnyResource
+  | AnyTaskMiddleware
+  | AnyResourceMiddleware
+  | AnyHook;
 
-export function defineOverride<T extends AnyTask | AnyResource | AnyTaskMiddleware | AnyResourceMiddleware | AnyHook>(
-  base: T,
-  patch: OverridePatch<T>,
-): T {
-  // Ensure we never change the id, and merge overrides last
-  const rest = patch as any;
-  return {
-    ...(base as any),
-    ...rest,
-    id: (base as any).id,
-  } as T;
+type OverridePatch<TBase extends AnyOverrideable> = Readonly<
+  TBase extends AnyHook
+    ? Omit<Partial<TBase>, "id" | "on">
+    : Omit<Partial<TBase>, "id">
+>;
+
+export function defineOverride<TBase extends AnyOverrideable>(
+  base: TBase,
+  patch: OverridePatch<TBase>,
+): TBase {
+  const overridden = {
+    ...base,
+    ...patch,
+    id: base.id,
+  } as TBase;
+
+  // Hooks should preserve the event binding identity as well.
+  if ((base as AnyHook).on !== undefined) {
+    (overridden as unknown as AnyHook).on = (base as AnyHook).on;
+  }
+
+  return overridden;
 }

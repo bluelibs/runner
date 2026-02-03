@@ -7,9 +7,9 @@ export function safeStringify(
   const holderDepth = new WeakMap<object, number>();
 
   const maxDepth =
-    typeof options?.maxDepth === "number" ? options!.maxDepth! : Infinity;
+    typeof options?.maxDepth === "number" ? options.maxDepth : Infinity;
 
-  const replacer = function (this: any, _key: string, val: any) {
+  const replacer = function (this: unknown, _key: string, val: unknown) {
     // Normalize functions to a readable placeholder
     if (typeof val === "function") {
       return "function()";
@@ -37,10 +37,16 @@ export function safeStringify(
       holderDepth.set(val, currentDepth);
     }
     return val;
-  } as (this: any, key: string, value: any) => any;
+  } as (this: unknown, key: string, value: unknown) => unknown;
 
   try {
-    return JSON.stringify(value as any, replacer, space);
+    // JSON.stringify's replacer type is complex (overloaded). Our replacer satisfies
+    // the (key: string, value: unknown) => unknown signature used at runtime.
+    return JSON.stringify(
+      value,
+      replacer as (key: string, value: unknown) => unknown,
+      space,
+    );
   } catch {
     try {
       return String(value);

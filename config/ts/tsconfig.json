@@ -1,0 +1,31 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020", "DOM"],
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "noImplicitAny": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "pretty": true,
+    "declaration": true,
+    "strict": true,
+    "strictNullChecks": true,
+    "noImplicitThis": false,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "skipLibCheck": true,
+    "baseUrl": "../..",
+    "paths": {
+      "#/*": ["src/*"]
+    }
+  },
+
+  "include": ["../../src/**/*.ts"],
+  "exclude": [
+    "../../examples/**",
+    "../../web/**",
+    "../../src/node/durable/dashboard/**"
+  ]
+}

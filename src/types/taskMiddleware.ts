@@ -2,8 +2,9 @@ import {
   DependencyMapType,
   DependencyValuesType,
   IValidationSchema,
-  ITask,
-} from "../defs";
+} from "./utilities";
+import type { ITask } from "./task";
+import type { ExecutionJournal } from "./executionJournal";
 import { TagType } from "./tag";
 import { IMiddlewareMeta } from "./meta";
 import {
@@ -12,6 +13,10 @@ import {
   symbolTaskMiddleware,
 } from "./symbols";
 import { IContractable } from "./contracts";
+
+export type { DependencyMapType, DependencyValuesType } from "./utilities";
+export type { TagType } from "./tag";
+export type { IMiddlewareMeta } from "./meta";
 
 export interface ITaskMiddlewareDefinition<
   TConfig = any,
@@ -48,7 +53,9 @@ export interface ITaskMiddleware<
   TEnforceInputContract = void,
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
-> extends ITaskMiddlewareDefinition<
+>
+  extends
+    ITaskMiddlewareDefinition<
       TConfig,
       TEnforceInputContract,
       TEnforceOutputContract,
@@ -58,7 +65,7 @@ export interface ITaskMiddleware<
   [symbolTaskMiddleware]: true;
   [symbolFilePath]: string;
   id: string;
-  dependencies: TDependencies | (() => TDependencies);
+  dependencies: TDependencies | ((config: TConfig) => TDependencies);
   /** Current configuration object (empty by default). */
   config: TConfig;
   /** Configure the middleware and return a marked, configured instance. */
@@ -79,11 +86,11 @@ export interface ITaskMiddlewareConfigured<
   TEnforceOutputContract = void,
   TDependencies extends DependencyMapType = any,
 > extends ITaskMiddleware<
-    TConfig,
-    TEnforceInputContract,
-    TEnforceOutputContract,
-    TDependencies
-  > {
+  TConfig,
+  TEnforceInputContract,
+  TEnforceOutputContract,
+  TDependencies
+> {
   [symbolMiddlewareConfigured]: true;
   config: TConfig;
 }
@@ -98,6 +105,8 @@ export interface ITaskMiddlewareExecutionInput<
     input: TTaskInput;
   };
   next: (taskInput?: TTaskInput) => Promise<TTaskOutput>;
+  /** Per-execution registry for sharing state between middleware and task */
+  journal: ExecutionJournal;
 }
 
 export type TaskMiddlewareAttachmentType =

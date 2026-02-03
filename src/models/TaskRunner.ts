@@ -1,15 +1,15 @@
-import { DependencyMapType, ITask, IHook, IEventEmission } from "../defs";
+import { DependencyMapType, ITask } from "../defs";
 import { EventManager } from "./EventManager";
 import { Store } from "./Store";
 import { Logger } from "./Logger";
-import { globalEvents } from "../globals/globalEvents";
-import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
+import type { ExecutionJournal } from "../types/executionJournal";
+import type { TaskCallOptions } from "../types/utilities";
 
 export class TaskRunner {
   protected readonly runnerStore = new Map<
     string | symbol,
-    (input: any) => Promise<any>
+    (input: any, journal?: ExecutionJournal) => Promise<any>
   >();
 
   constructor(
@@ -29,6 +29,7 @@ export class TaskRunner {
    * This function can throw only if any of the event listeners or run function throws
    * @param task the task to be run
    * @param input the input to be passed to the task
+   * @param options optional call options including journal for forwarding
    */
   public async run<
     TInput,
@@ -37,6 +38,7 @@ export class TaskRunner {
   >(
     task: ITask<TInput, TOutput, TDeps>,
     input?: TInput,
+    options?: TaskCallOptions,
   ): Promise<TOutput | undefined> {
     let runner = this.runnerStore.get(task.id);
     if (!runner) {
@@ -46,7 +48,8 @@ export class TaskRunner {
     }
 
     try {
-      return await runner(input);
+      // Pass journal if provided; composer will use it or create new
+      return await runner(input, options?.journal);
     } catch (error) {
       try {
         await this.store.onUnhandledError({

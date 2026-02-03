@@ -1,15 +1,17 @@
-import {
+import type {
   ITaskMiddleware,
   ITaskMiddlewareDefinition,
   DependencyMapType,
-  ITask,
-  symbolFilePath,
-  symbolTaskMiddleware,
-  symbolMiddlewareConfigured,
   ITaskMiddlewareConfigured,
-} from "../defs";
+} from "../types/taskMiddleware";
+import {
+  symbolTaskMiddleware,
+  symbolFilePath,
+  symbolMiddlewareConfigured,
+} from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { mergeMiddlewareConfig } from "./middlewareConfig";
 
 export function defineTaskMiddleware<
   TConfig = any,
@@ -36,8 +38,7 @@ export function defineTaskMiddleware<
     config: {} as TConfig,
     configSchema: middlewareDef.configSchema,
     ...middlewareDef,
-    dependencies:
-      (middlewareDef.dependencies as TDependencies) || ({} as TDependencies),
+    dependencies: middlewareDef.dependencies || ({} as TDependencies),
   } as ITaskMiddleware<
     TConfig,
     TEnforceInputContract,
@@ -78,11 +79,13 @@ export function defineTaskMiddleware<
         return wrap({
           ...obj,
           [symbolMiddlewareConfigured]: true,
-          config: {
-            ...(obj.config as TConfig),
-            ...config,
-          },
-        } satisfies ITaskMiddlewareConfigured<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
+          config: mergeMiddlewareConfig(obj.config as TConfig, config),
+        } satisfies ITaskMiddlewareConfigured<
+          TConfig,
+          TEnforceInputContract,
+          TEnforceOutputContract,
+          TDependencies
+        >);
       },
     } as ITaskMiddleware<
       TConfig,

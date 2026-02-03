@@ -1,6 +1,5 @@
 import { safeStringify } from "./utils/safeStringify";
 
-// eslint-disable-next-line no-control-regex
 const ansiRegex =
   /[][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nqry=><]/g;
 function stripAnsi(str: string): string {
@@ -222,8 +221,7 @@ export class LogPrinter {
     indentation = "  ",
   ): string[] {
     if (!context) return [];
-    const filtered = { ...context };
-    delete (filtered as any).source;
+    const { source: _source, ...filtered } = context;
     if (Object.keys(filtered).length === 0) return [];
     const lines: string[] = [];
     const formatted = safeStringify(filtered, 2, { maxDepth: 3 }).split("\n");
@@ -237,8 +235,8 @@ export class LogPrinter {
     return lines;
   }
 
-  private normalizeForJson(log: PrintableLog) {
-    const normalized: any = { ...log };
+  private normalizeForJson(log: PrintableLog): PrintableLog {
+    const normalized = { ...log };
     if (typeof log.message === "object") {
       const text = safeStringify(log.message);
       try {
@@ -265,15 +263,26 @@ export class LogPrinter {
     gray: "",
   } as const;
 
+  private static readonly DEFAULT_WRITERS = {
+    log: (msg: any) => {
+      if (typeof console !== "undefined" && typeof console.log === "function") {
+        console.log(msg);
+      }
+    },
+    error: (msg: any) => {
+      if (
+        typeof console !== "undefined" &&
+        typeof console.error === "function"
+      ) {
+        console.error(msg);
+      }
+    },
+  };
+
   private static writers: {
     log: (msg: any) => void;
     error?: (msg: any) => void;
-  } = {
-    // eslint-disable-next-line no-console
-    log: (msg: any) => console.log(msg),
-    // eslint-disable-next-line no-console
-    error: (msg: any) => console.error?.(msg),
-  };
+  } = { ...LogPrinter.DEFAULT_WRITERS };
 
   public static setWriters(
     writers: Partial<{ log: (msg: any) => void; error?: (msg: any) => void }>,
@@ -282,10 +291,6 @@ export class LogPrinter {
   }
 
   public static resetWriters() {
-    // eslint-disable-next-line no-console
-    LogPrinter.writers = {
-      log: (msg: any) => console.log(msg),
-      error: (msg: any) => console.error?.(msg),
-    };
+    LogPrinter.writers = { ...LogPrinter.DEFAULT_WRITERS };
   }
 }

@@ -11,8 +11,9 @@ import {
   defineResourceMiddleware,
 } from "../../define";
 import { OnUnhandledError } from "../../index";
-import { globalEvents } from "../../globals/globalEvents";
 import { RunnerMode } from "../../types/runner";
+import { TaskStoreElementType } from "../../types/storeTypes";
+import { ITaskMiddleware, IResource } from "../../defs";
 
 describe("MiddlewareManager", () => {
   let store: Store;
@@ -21,7 +22,7 @@ describe("MiddlewareManager", () => {
   let manager: MiddlewareManager;
   let onUnhandledError: OnUnhandledError;
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeCycleDetection: true });
+    eventManager = new EventManager({ runtimeEventCycleDetection: true });
     logger = new Logger({
       printThreshold: null,
       printStrategy: "pretty",
@@ -30,7 +31,8 @@ describe("MiddlewareManager", () => {
     onUnhandledError = jest.fn();
     store = new Store(eventManager, logger, onUnhandledError, RunnerMode.TEST);
     // Get the store's existing middleware manager
-    manager = (store as any).middlewareManager;
+    manager = (store as unknown as { middlewareManager: MiddlewareManager })
+      .middlewareManager;
   });
 
   it("composes task runner with interceptors inside middleware and preserves order", async () => {
@@ -142,11 +144,13 @@ describe("MiddlewareManager", () => {
     store.taskMiddlewares.set(mLocal.id, {
       middleware: mLocal,
       computedDependencies: {},
-    } as any);
+      isInitialized: true,
+    });
     store.taskMiddlewares.set(mOther.id, {
       middleware: mOther,
       computedDependencies: {},
-    } as any);
+      isInitialized: true,
+    });
 
     // Stub global middleware provider to return one with same id as local; manager should dedupe it
     const spy = jest
@@ -155,7 +159,7 @@ describe("MiddlewareManager", () => {
 
     const runner = manager.composeTaskRunner(task);
     const result = await runner(2);
-    // ((2) * 2) + 3 = 7 (dedup ensures global "shared" is ignored; local "shared" runs once)
+    // Dedup ensures global "shared" is ignored; local "shared" runs once.
     expect(result).toBe(7);
 
     // Ensure event-specific listeners called twice (two middlewares), global listener not called
@@ -184,18 +188,17 @@ describe("MiddlewareManager", () => {
       middleware: m,
       computedDependencies: {},
       isInitialized: true,
-    } as any);
+    });
 
     const result = await manager.runResourceInit(resource, { n: 5 }, {}, {});
-    // base = 10, middleware adds 10 => 20
     expect(result).toBe(20);
   });
 
   it("returns undefined when resource has no init", async () => {
     const resource = defineResource({ id: "r2" });
     const result = await manager.runResourceInit(
-      resource as any,
-      undefined as any,
+      resource as unknown as IResource<any>,
+      undefined as unknown,
       {},
       {},
     );
@@ -242,7 +245,9 @@ describe("MiddlewareManager", () => {
 
   it("should access resourceMiddlewareInterceptors getter", () => {
     // Access the deprecated getter for coverage
-    const interceptors = (manager as any).resourceMiddlewareInterceptors;
+    const interceptors = (
+      manager as unknown as { resourceMiddlewareInterceptors: any[] }
+    ).resourceMiddlewareInterceptors;
     expect(Array.isArray(interceptors)).toBe(true);
   });
 
@@ -298,7 +303,7 @@ describe("MiddlewareManager", () => {
       task,
       computedDependencies: {},
       isInitialized: true,
-    } as any);
+    } as unknown as TaskStoreElementType<any, any, any>);
 
     const runner = manager.composeTaskRunner(task);
     await expect(runner(undefined)).rejects.toThrow();
@@ -315,7 +320,11 @@ describe("MiddlewareManager", () => {
 
     const task = defineTask({
       id: "task.tunneled",
-      tags: [globalTags.tunnelPolicy.with({ client: [mw.id] })],
+      tags: [
+        globalTags.tunnelPolicy.with({
+          client: { middlewareAllowList: [mw.id] },
+        }),
+      ],
       middleware: [mw],
       run: async () => 0,
     });
@@ -351,7 +360,10 @@ describe("MiddlewareManager", () => {
       }).not.toThrow();
       expect(manager.isLocked).toBe(false);
       // Check that interceptor was added
-      expect((manager as any).taskMiddlewareInterceptors.length).toBe(1);
+      expect(
+        (manager as unknown as { taskMiddlewareInterceptors: any[] })
+          .taskMiddlewareInterceptors.length,
+      ).toBe(1);
     });
 
     it("should add resource middleware interceptor", () => {
@@ -370,7 +382,7 @@ describe("MiddlewareManager", () => {
       }).toThrow("Cannot modify the MiddlewareManager when it is locked.");
     });
 
-    it("should apply task middleware interceptors in reverse order", async () => {
+    it("should apply task middleware interceptors in registration order", async () => {
       const order: string[] = [];
 
       // Add interceptors
@@ -407,15 +419,59 @@ describe("MiddlewareManager", () => {
 
       expect(result).toBe(6);
       expect(order).toEqual([
-        "interceptor2:before", // Last added runs first
         "interceptor1:before",
+        "interceptor2:before",
         "task:run",
-        "interceptor1:after",
         "interceptor2:after",
+        "interceptor1:after",
       ]);
     });
 
-    it("should apply resource middleware interceptors in reverse order", async () => {
+    it("should propagate journal when global interceptor uses executionInput.next", async () => {
+      const order: string[] = [];
+
+      // Add global interceptor that uses executionInput.next
+      manager.intercept(
+        "task",
+        async (wrappedNext: any, executionInput: any) => {
+          order.push("global-interceptor:before");
+          // Verify journal is on executionInput
+          expect(executionInput.journal).toBeDefined();
+          // Use executionInput.next directly (not wrappedNext)
+          const result = await executionInput.next(executionInput.task.input);
+          order.push("global-interceptor:after");
+          return result;
+        },
+      );
+
+      const task = defineTask({
+        id: "task_global_next",
+        run: async (input: number, _deps, context) => {
+          order.push("task:run");
+          // Verify journal passed to task
+          expect(context?.journal).toBeDefined();
+          return input + 1;
+        },
+      });
+
+      store.tasks.set(task.id, {
+        task,
+        computedDependencies: {},
+        isInitialized: true,
+      });
+
+      const runner = manager.composeTaskRunner(task);
+      const result = await runner(5);
+
+      expect(result).toBe(6);
+      expect(order).toEqual([
+        "global-interceptor:before",
+        "task:run",
+        "global-interceptor:after",
+      ]);
+    });
+
+    it("should apply resource middleware interceptors in registration order", async () => {
       const order: string[] = [];
 
       // Add interceptors
@@ -445,11 +501,11 @@ describe("MiddlewareManager", () => {
 
       expect(result).toBe(6);
       expect(order).toEqual([
-        "interceptor2:before", // Last added runs first
         "interceptor1:before",
+        "interceptor2:before",
         "resource:init",
-        "interceptor1:after",
         "interceptor2:after",
+        "interceptor1:after",
       ]);
     });
 
@@ -568,11 +624,128 @@ describe("MiddlewareManager", () => {
         middleware: taskMiddleware,
         computedDependencies: {},
         isInitialized: true,
-      } as any);
+      });
 
       const runner = manager.composeTaskRunner(task);
       const result = await runner(10);
 
+      expect(result).toBe(11);
+      expect(order).toEqual([
+        "interceptor:before",
+        "middleware:run",
+        "task:run",
+        "interceptor:after",
+      ]);
+    });
+
+    it("should allow interceptor to use executionInput.next directly for journal propagation", async () => {
+      const order: string[] = [];
+      const taskMiddleware = defineTaskMiddleware({
+        id: "test_task_middleware_next",
+        run: async ({ next, task, journal }) => {
+          order.push("middleware:run");
+          // Verify journal is available
+          expect(journal).toBeDefined();
+          return next(task?.input);
+        },
+      });
+
+      // This interceptor uses executionInput.next instead of the wrappedNext
+      manager.interceptMiddleware(
+        taskMiddleware,
+        async (wrappedNext: any, executionInput: any) => {
+          order.push("interceptor:before");
+          // Use executionInput.next directly to cover that code path
+          const result = await executionInput.next(executionInput.task.input);
+          order.push("interceptor:after");
+          return result;
+        },
+      );
+
+      const task = defineTask({
+        id: "task_with_next_interceptor",
+        middleware: [taskMiddleware],
+        run: async (input: number, _deps, context) => {
+          order.push("task:run");
+          // Verify journal is passed to task
+          expect(context?.journal).toBeDefined();
+          return input + 1;
+        },
+      });
+
+      store.tasks.set(task.id, {
+        task,
+        computedDependencies: {},
+        isInitialized: true,
+      });
+
+      store.taskMiddlewares.set(taskMiddleware.id, {
+        middleware: taskMiddleware,
+        computedDependencies: {},
+        isInitialized: true,
+      });
+
+      const runner = manager.composeTaskRunner(task);
+      const result = await runner(10);
+
+      expect(result).toBe(11);
+      expect(order).toEqual([
+        "interceptor:before",
+        "middleware:run",
+        "task:run",
+        "interceptor:after",
+      ]);
+    });
+
+    it("should use original input when executionInput.next is called with undefined", async () => {
+      const order: string[] = [];
+      const taskMiddleware = defineTaskMiddleware({
+        id: "test_task_middleware_undefined",
+        run: async ({ next, task, journal }) => {
+          order.push("middleware:run");
+          expect(journal).toBeDefined();
+          return next(task?.input);
+        },
+      });
+
+      // This interceptor calls next with undefined, triggering the ?? fallback
+      manager.interceptMiddleware(
+        taskMiddleware,
+        async (wrappedNext: any, executionInput: any) => {
+          order.push("interceptor:before");
+          // Call with undefined to trigger ?? branch
+          const result = await executionInput.next();
+          order.push("interceptor:after");
+          return result;
+        },
+      );
+
+      const task = defineTask({
+        id: "task_with_undefined_next",
+        middleware: [taskMiddleware],
+        run: async (input: number, _deps, context) => {
+          order.push("task:run");
+          expect(context?.journal).toBeDefined();
+          return input + 1;
+        },
+      });
+
+      store.tasks.set(task.id, {
+        task,
+        computedDependencies: {},
+        isInitialized: true,
+      });
+
+      store.taskMiddlewares.set(taskMiddleware.id, {
+        middleware: taskMiddleware,
+        computedDependencies: {},
+        isInitialized: true,
+      });
+
+      const runner = manager.composeTaskRunner(task);
+      const result = await runner(10);
+
+      // Should still get 11 because original input (10) is used via ??
       expect(result).toBe(11);
       expect(order).toEqual([
         "interceptor:before",
@@ -629,7 +802,7 @@ describe("MiddlewareManager", () => {
         middleware: resourceMiddleware,
         computedDependencies: {},
         isInitialized: true,
-      } as any);
+      });
 
       const result = await manager.runResourceInit(resource, { n: 3 }, {}, {});
 
@@ -646,7 +819,10 @@ describe("MiddlewareManager", () => {
     });
 
     it("should throw when interceptMiddleware receives an unknown middleware type", () => {
-      const bogusMiddleware = { id: "bogus" } as any;
+      const bogusMiddleware = { id: "bogus" } as unknown as ITaskMiddleware<
+        any,
+        any
+      >;
       expect(() =>
         manager.interceptMiddleware(
           bogusMiddleware,

@@ -1,4 +1,4 @@
-import type { Serializer } from "../resources/tunnel/serializer";
+import type { SerializerLike } from "../../serializer";
 import { createExposureFetch } from "../../http-fetch-tunnel.resource";
 import type { ExposureFetchClient } from "../../http-fetch-tunnel.resource";
 
@@ -12,7 +12,7 @@ export interface HttpCreateClientConfig {
   auth?: HttpClientAuthConfig;
   timeoutMs?: number;
   fetchImpl?: typeof fetch;
-  serializer: Serializer;
+  serializer: SerializerLike;
   onRequest?: (ctx: {
     url: string;
     headers: Record<string, string>;

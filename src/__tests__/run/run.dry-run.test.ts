@@ -41,7 +41,7 @@ describe("run (dry-run)", () => {
       // Throw during registration so error surfaces during run() (dry run still executes registration)
       register: () => {
         throw new Error("Registration failed");
-        // eslint-disable-next-line no-unreachable
+
         return [inner];
       },
     });

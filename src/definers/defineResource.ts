@@ -1,19 +1,22 @@
-import {
+import type {
   IResource,
   IResourceDefinition,
   DependencyMapType,
   IResourceMeta,
   TagType,
-  symbolResource,
-  symbolFilePath,
-  symbolResourceWithConfig,
-  symbolOptionalDependency,
   IOptionalDependency,
   ResourceMiddlewareAttachmentType,
   IResourceWithConfig,
-} from "../defs";
+} from "../types/resource";
+import {
+  symbolResource,
+  symbolFilePath,
+  symbolOptionalDependency,
+  symbolResourceWithConfig,
+} from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { normalizeThrows } from "../tools/throws";
 
 export function defineResource<
   TConfig = void,
@@ -22,7 +25,8 @@ export function defineResource<
   TPrivate = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
 >(
   constConfig: IResourceDefinition<
     TConfig,
@@ -68,6 +72,7 @@ export function defineResource<
     configSchema: constConfig.configSchema,
     resultSchema: constConfig.resultSchema,
     tags: constConfig.tags || ([] as unknown as TTags),
+    throws: normalizeThrows({ kind: "resource", id }, constConfig.throws),
     with: function (config: TConfig) {
       // Validate config with schema if provided (fail fast)
       if (constConfig.configSchema) {
@@ -108,6 +113,13 @@ export function defineResource<
       } as IOptionalDependency<
         IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>
       >;
+    },
+    fork(newId: string) {
+      return defineResource({
+        ...constConfig,
+        id: newId,
+        [symbolFilePath]: filePath,
+      });
     },
   };
 }

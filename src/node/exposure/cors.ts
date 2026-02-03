@@ -7,10 +7,11 @@ interface ResolvedOrigin {
 }
 
 function getRequestOrigin(req: IncomingMessage): string | undefined {
-  const originHeader = (req.headers as any)["origin"];
+  const headers = req.headers as Record<string, string | string[] | undefined>;
+  const originHeader = headers["origin"];
   if (Array.isArray(originHeader)) return originHeader[0];
   if (typeof originHeader === "string") return originHeader;
-  const OriginHeader = (req.headers as any)["Origin"];
+  const OriginHeader = headers["Origin"];
   if (Array.isArray(OriginHeader)) return OriginHeader[0];
   if (typeof OriginHeader === "string") return OriginHeader;
 }
@@ -19,15 +20,19 @@ function resolveOrigin(
   cfg: NodeExposureHttpCorsConfig | undefined,
   requestOrigin: string | undefined,
 ): ResolvedOrigin {
-  // Defaults: allow all unless credentials requires echoing
+  // Defaults: allow all unless credentials requires explicit origin
   if (!cfg || cfg.origin === undefined || cfg.origin === null) {
     if (cfg && cfg.credentials) {
-      return { value: requestOrigin ? requestOrigin : "null", vary: true };
+      // SECURITY: credentials=true without explicit origin is a misconfiguration.
+      // Echoing the request origin is effectively "allow any origin with credentials",
+      // which bypasses CORS protections. Deny by default for safety.
+      // To allow specific origins with credentials, explicitly set cfg.origin.
+      return { value: null, vary: true };
     }
     return { value: "*", vary: false };
   }
 
-  const spec: any = (cfg as any).origin;
+  const spec = cfg.origin;
   if (typeof spec === "string") {
     return { value: spec, vary: false };
   }
@@ -107,14 +112,13 @@ export function handleCorsPreflight(
       : ["POST", "OPTIONS"];
   res.setHeader("Access-Control-Allow-Methods", methods.join(", "));
 
-  const rawReqHeaders: any = (req.headers as any)[
-    "access-control-request-headers"
-  ];
+  const headers = req.headers as Record<string, string | string[] | undefined>;
+  const rawReqHeaders = headers["access-control-request-headers"];
   const requested = Array.isArray(rawReqHeaders)
     ? rawReqHeaders.join(", ")
     : rawReqHeaders
-    ? String(rawReqHeaders)
-    : "";
+      ? String(rawReqHeaders)
+      : "";
   const allowHeaders =
     cfg && Array.isArray(cfg.allowedHeaders) && cfg.allowedHeaders.length > 0
       ? cfg.allowedHeaders.join(", ")
@@ -128,7 +132,6 @@ export function handleCorsPreflight(
 
   res.statusCode = 204;
   res.setHeader("content-length", "0");
-  const end = (res as any).end;
-  if (typeof end === "function") end.call(res);
+  if (typeof res.end === "function") res.end();
   return true;
 }

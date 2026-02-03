@@ -1,10 +1,8 @@
 import { r, globals } from "@bluelibs/runner";
 import express, { Express, Request, Response } from "express";
 import cors from "cors";
-import swaggerJSDoc from "swagger-jsdoc";
-import swaggerUi from "swagger-ui-express";
 import { httpTag } from "../tags/http.tag";
-import { RequestContext, RequestData } from "../contexts/request.context";
+import { RequestData } from "../contexts/request.context";
 import { appConfig } from "../../app.config";
 // Simple UUID generator (for demo purposes)
 const generateId = () =>
@@ -43,7 +41,7 @@ export const expressServerResource = r
       };
 
       // Store request data for use in tasks
-      (req as any).requestData = requestData;
+      (req as unknown as { requestData: RequestData }).requestData = requestData;
       next();
     });
 

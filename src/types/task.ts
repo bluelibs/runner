@@ -2,13 +2,19 @@ import {
   DependencyMapType,
   DependencyValuesType,
   IOptionalDependency,
-  ITaskMiddleware,
   IValidationSchema,
-  TaskMiddlewareAttachmentType,
-} from "../defs";
+} from "./utilities";
+import { TaskMiddlewareAttachmentType } from "./taskMiddleware";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
-import { symbolFilePath, symbolTask, symbolPhantomTask, symbolTunneledBy } from "./symbols";
+import type { ThrowsList } from "./error";
+import type { ExecutionJournal } from "./executionJournal";
+import {
+  symbolFilePath,
+  symbolTask,
+  symbolPhantomTask,
+  symbolTunneledBy,
+} from "./symbols";
 import {
   EnsureInputSatisfiesContracts,
   EnsureOutputSatisfiesContracts,
@@ -17,13 +23,23 @@ import {
   InferInputOrViolationFromContracts,
 } from "./contracts";
 
+export type {
+  DependencyMapType,
+  DependencyValuesType,
+  IOptionalDependency,
+} from "./utilities";
+export type { TaskMiddlewareAttachmentType } from "./taskMiddleware";
+export type { TagType } from "./tag";
+export type { ITaskMeta } from "./meta";
+
 export interface ITaskDefinition<
   TInput = undefined,
   TOutput extends Promise<any> = any,
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] =
+    TaskMiddlewareAttachmentType[],
 > {
   id: string;
   /**
@@ -48,6 +64,16 @@ export interface ITaskDefinition<
   resultSchema?: IValidationSchema<
     TOutput extends Promise<infer U> ? U : never
   >;
+  /**
+   * Declares which typed errors are part of this task's contract.
+   *
+   * This is a declarative contract only:
+   * - It does not imply dependency injection
+   * - It does not enforce that only these errors can be thrown
+   *
+   * Use string ids or Error helpers.
+   */
+  throws?: ThrowsList;
   run: (
     input: HasInputContracts<[...TTags, ...TMiddleware]> extends true
       ? [TInput] extends [undefined]
@@ -55,6 +81,7 @@ export interface ITaskDefinition<
         : EnsureInputSatisfiesContracts<[...TTags, ...TMiddleware], TInput>
       : TInput,
     dependencies: DependencyValuesType<TDependencies>,
+    context?: { journal: ExecutionJournal },
   ) => HasOutputContracts<[...TTags, ...TMiddleware]> extends true
     ? EnsureOutputSatisfiesContracts<[...TTags, ...TMiddleware], TOutput>
     : TOutput;
@@ -70,15 +97,16 @@ export interface ITask<
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] =
+    TaskMiddlewareAttachmentType[],
 > extends ITaskDefinition<
-    TInput,
-    TOutput,
-    TDependencies,
-    TMeta,
-    TTags,
-    TMiddleware
-  > {
+  TInput,
+  TOutput,
+  TDependencies,
+  TMeta,
+  TTags,
+  TMiddleware
+> {
   [symbolFilePath]: string;
   [symbolTask]: true;
   /** Present only for phantom tasks. */
@@ -91,6 +119,8 @@ export interface ITask<
   dependencies: TDependencies | (() => TDependencies);
   computedDependencies?: DependencyValuesType<TDependencies>;
   middleware: TMiddleware;
+  /** Normalized list of error ids declared via `throws`. */
+  throws?: readonly string[];
   /** Return an optional dependency wrapper for this task. */
   optional: () => IOptionalDependency<
     ITask<TInput, TOutput, TDependencies, TMeta, TTags, TMiddleware>
@@ -105,7 +135,8 @@ export type IPhantomTask<
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] =
+    TaskMiddlewareAttachmentType[],
 > = ITask<
   TInput,
   Promise<TResolved>,

@@ -6,7 +6,7 @@ import {
 import { EventManager } from "./EventManager";
 import { Store } from "./Store";
 import { Logger } from "./Logger";
-import { MiddlewareManager } from "./MiddlewareManager";
+import type { MiddlewareManager } from "./MiddlewareManager";
 
 export class ResourceInitializer {
   constructor(
@@ -14,11 +14,7 @@ export class ResourceInitializer {
     protected readonly eventManager: EventManager,
     protected readonly logger: Logger,
   ) {
-    this.middlewareManager = new MiddlewareManager(
-      this.store,
-      this.eventManager,
-      this.logger,
-    );
+    this.middlewareManager = this.store.getMiddlewareManager();
   }
 
   private readonly middlewareManager: MiddlewareManager;
@@ -36,25 +32,17 @@ export class ResourceInitializer {
     resource: IResource<TConfig, TValue, TDeps>,
     config: TConfig,
     dependencies: ResourceDependencyValuesType<TDeps>,
-  ): Promise<{ value: TValue; context: TContext }> {
-    const context = resource.context?.();
+  ): Promise<{ value: TValue | undefined; context: TContext }> {
+    const context = resource.context ? resource.context() : ({} as TContext);
 
-    let value: TValue | undefined;
-    // Create a no-op init function if it doesn't exist
-    if (!resource.init) {
-      resource.init = (async () => undefined) as any;
-    }
+    const value = await this.initWithMiddleware(
+      resource,
+      config,
+      dependencies,
+      context,
+    );
 
-    if (resource.init) {
-      value = await this.initWithMiddleware(
-        resource,
-        config,
-        dependencies,
-        context,
-      );
-    }
-
-    return { value: value as TValue, context };
+    return { value, context };
   }
 
   // Lifecycle emissions removed

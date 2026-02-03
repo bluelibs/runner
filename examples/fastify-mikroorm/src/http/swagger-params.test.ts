@@ -34,7 +34,9 @@ describe("swagger route params and meta", () => {
 
       // Params should include required path param `id`
       const params = op.parameters || [];
-      const idParam = params.find((p: any) => p.name === "id" && p.in === "path");
+      const idParam = params.find(
+        (p: any) => p.name === "id" && p.in === "path",
+      );
       expect(idParam).toBeTruthy();
       expect(idParam.required).toBe(true);
       expect(idParam.schema?.type).toBe("string");

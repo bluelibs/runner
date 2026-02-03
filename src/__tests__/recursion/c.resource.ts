@@ -1,6 +1,6 @@
 import { defineResource } from "../../define";
 import { IResource } from "../../defs";
-import { aResource, aTask } from "./a.resource";
+import { aTask } from "./a.resource";
 import { b1Resource, b2Resource } from "./b.resource";
 
 const value = Math.random() > 0.5 ? b1Resource : b2Resource;

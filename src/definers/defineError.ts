@@ -2,7 +2,6 @@ import {
   DefaultErrorType,
   IErrorDefinition,
   IErrorHelper,
-  ERROR_TYPES_LOADED,
   IErrorDefinitionFinal,
 } from "../types/error";
 import { symbolError, symbolOptionalDependency } from "../types/symbols";
@@ -11,24 +10,26 @@ class RunnerError<
   TData extends DefaultErrorType = DefaultErrorType,
 > extends Error {
   public readonly data!: TData;
-  constructor(public readonly id: string, message: string, data: TData) {
+  constructor(
+    public readonly id: string,
+    message: string,
+    data: TData,
+  ) {
     super(message);
     this.data = data;
     this.name = id;
   }
 }
 
-export class ErrorHelper<TData extends DefaultErrorType = DefaultErrorType>
-  implements IErrorHelper<TData>
-{
+export class ErrorHelper<
+  TData extends DefaultErrorType = DefaultErrorType,
+> implements IErrorHelper<TData> {
   [symbolError] = true as const;
   constructor(private readonly definition: IErrorDefinitionFinal<TData>) {}
   get id(): string {
     return this.definition.id;
   }
   throw(data: TData): never {
-    // Touch the runtime marker to keep module included under coverage
-    void ERROR_TYPES_LOADED;
     const parsed = this.definition.dataSchema
       ? this.definition.dataSchema.parse(data)
       : data;

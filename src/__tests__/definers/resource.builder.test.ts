@@ -1,4 +1,4 @@
-import { r, resource, definitions, run, tag } from "../..";
+import { r, resource, definitions, run, tag, IResourceMeta } from "../..";
 
 describe("resource builder", () => {
   it("build() returns branded resource with id", () => {
@@ -8,8 +8,16 @@ describe("resource builder", () => {
       .build();
     expect(res.id).toBe("tests.builder.r1");
     // brand
-    expect((res as any)[definitions.symbolResource]).toBe(true);
-    expect(typeof (res as any)[definitions.symbolFilePath]).toBe("string");
+    expect(
+      (res as unknown as { [definitions.symbolResource]: boolean })[
+        definitions.symbolResource
+      ],
+    ).toBe(true);
+    expect(
+      typeof (res as unknown as { [definitions.symbolFilePath]: string })[
+        definitions.symbolFilePath
+      ],
+    ).toBe("string");
   });
 
   it("register appends by default and overrides when requested", () => {
@@ -68,8 +76,14 @@ describe("resource builder", () => {
   });
 
   it("register merges array base with lazy callbacks", () => {
-    const alpha = resource({ id: "tests.builder.fnfn.alpha", init: async () => 1 });
-    const beta = resource({ id: "tests.builder.fnfn.beta", init: async () => 2 });
+    const alpha = resource({
+      id: "tests.builder.fnfn.alpha",
+      init: async () => 1,
+    });
+    const beta = resource({
+      id: "tests.builder.fnfn.beta",
+      init: async () => 2,
+    });
 
     const composed = r
       .resource("tests.builder.register.array-fn")
@@ -79,7 +93,7 @@ describe("resource builder", () => {
 
     expect(typeof composed.register).toBe("function");
     if (typeof composed.register === "function") {
-      const ids = composed.register({} as any).map((rSrc) => rSrc.id);
+      const ids = composed.register().map((rSrc: { id: string }) => rSrc.id);
       expect(ids).toEqual([alpha.id, beta.id]);
     }
   });
@@ -94,7 +108,7 @@ describe("resource builder", () => {
       .tags([])
       .middleware([])
       .context(() => ({ c: 0 }))
-      .meta({ title: "X" } as any)
+      .meta({ title: "X" } as unknown as IResourceMeta)
       .overrides([])
       .init(async (_cfg, deps, ctx) => {
         ctx.c++;
@@ -129,10 +143,7 @@ describe("resource builder", () => {
       .init(async () => Promise.resolve("OK"))
       .build();
 
-    expect(appended.middleware.map((m) => m.id)).toEqual([
-      rmw1.id,
-      rmw2.id,
-    ]);
+    expect(appended.middleware.map((m) => m.id)).toEqual([rmw1.id, rmw2.id]);
 
     const overridden = r
       .resource("tests.builder.app.mw.override")
@@ -156,7 +167,7 @@ describe("resource builder", () => {
       .init(async () => Promise.resolve("OK"))
       .build();
 
-    expect(appended.overrides.map((x: any) => x?.id)).toEqual([a.id, b.id]);
+    expect(appended.overrides.map((x) => x?.id)).toEqual([a.id, b.id]);
 
     const overridden = r
       .resource("tests.builder.overrides.override")
@@ -165,7 +176,7 @@ describe("resource builder", () => {
       .init(async () => Promise.resolve("OK"))
       .build();
 
-    expect(overridden.overrides.map((x: any) => x?.id)).toEqual([b.id]);
+    expect(overridden.overrides.map((x) => x?.id)).toEqual([b.id]);
   });
 
   it("init propagates dependencies and context through the classic signature", async () => {
@@ -202,14 +213,36 @@ describe("resource builder", () => {
   it("supports configSchema, resultSchema and meta", () => {
     const res = r
       .resource("tests.builder.r3")
-      .configSchema<{ foo: number }>({ parse: (x: any) => x })
-      .resultSchema<number>({ parse: (x: any) => x })
-      .meta({ title: "Configured" } as any)
+      .configSchema<{ foo: number }>({
+        parse: (x: unknown) => x as { foo: number },
+      })
+      .resultSchema<number>({ parse: (x: unknown) => x as number })
+      .meta({ title: "Configured" } as unknown as IResourceMeta)
       .init(async () => Promise.resolve(42))
       .build();
 
     expect(res.id).toBe("tests.builder.r3");
     expect(res.meta).toEqual({ title: "Configured" });
+  });
+
+  it("supports throws contracts without DI", () => {
+    const err = r.error("tests.builder.resource.throws.err").build();
+    const res = r
+      .resource("tests.builder.resource.throws")
+      .throws([err, "tests.builder.resource.throws.other", err])
+      .init(async () => Promise.resolve("OK"))
+      .build();
+    expect(res.throws).toEqual([err.id, "tests.builder.resource.throws.other"]);
+  });
+
+  it("throws on invalid throws entries", () => {
+    expect(() =>
+      r
+        .resource("tests.builder.resource.throws.invalid")
+        .throws([{} as unknown as string])
+        .init(async () => Promise.resolve("OK"))
+        .build(),
+    ).toThrow(/Invalid throws entry/);
   });
 
   it("resource middleware built via builder wraps init result", async () => {
@@ -326,8 +359,14 @@ describe("resource builder", () => {
   });
 
   it("resource dependencies covers function+function and object+function branches", async () => {
-    const a = resource({ id: "tests.builder.resdeps.ff.a", init: async () => 10 });
-    const b = resource({ id: "tests.builder.resdeps.ff.b", init: async () => 20 });
+    const a = resource({
+      id: "tests.builder.resdeps.ff.a",
+      init: async () => 10,
+    });
+    const b = resource({
+      id: "tests.builder.resdeps.ff.b",
+      init: async () => 20,
+    });
 
     // function + function
     const res1 = r

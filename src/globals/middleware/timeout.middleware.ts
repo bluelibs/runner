@@ -1,4 +1,9 @@
 import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
+import { journal } from "../../models/ExecutionJournal";
+
+enum AbortSignalEventType {
+  Abort = "abort",
+}
 
 export interface TimeoutMiddlewareConfig {
   /**
@@ -8,40 +13,86 @@ export interface TimeoutMiddlewareConfig {
   ttl: number;
 }
 
+/**
+ * Custom error class for timeout errors.
+ * Using a class allows proper instanceof checks.
+ */
+export class TimeoutError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TimeoutError";
+  }
+}
+
+/**
+ * Journal keys exposed by the timeout middleware.
+ * Use these to access shared state from downstream middleware or tasks.
+ */
+export const journalKeys = {
+  /** The AbortController created by the timeout middleware */
+  abortController: journal.createKey<AbortController>(
+    "globals.middleware.timeout.abortController",
+  ),
+} as const;
+
 export const timeoutTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.timeout.task",
-  async run({ task, next }, _deps, config: TimeoutMiddlewareConfig) {
+  async run({ task, next, journal }, _deps, config: TimeoutMiddlewareConfig) {
     const input = task?.input;
 
     const ttl = Math.max(0, config.ttl);
     const message = `Operation timed out after ${ttl}ms`;
+    const timeoutError = new TimeoutError(message);
 
     // Fast-path: immediate timeout
     if (ttl === 0) {
-      const error = new Error(message);
-      (error as any).name = "TimeoutError";
-      throw error;
+      throw timeoutError;
     }
 
     const controller = new AbortController();
 
-    // Create a timeout promise that rejects when aborted
-    const timeoutPromise = new Promise((_, reject) => {
+    // Expose controller for downstream middleware/tasks
+    journal.set(journalKeys.abortController, controller);
+
+    return await new Promise((resolve, reject) => {
+      let settled = false;
+
+      const abortHandler = () => settle("reject", timeoutError);
+
+      const settle = (kind: "resolve" | "reject", value?: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        controller.signal.removeEventListener(
+          AbortSignalEventType.Abort,
+          abortHandler,
+        );
+        if (kind === "resolve") {
+          resolve(value);
+        } else {
+          reject(value);
+        }
+      };
+
       const timeoutId = setTimeout(() => {
         controller.abort();
-        const error = new Error(message);
-        (error as any).name = "TimeoutError";
-        reject(error);
+        settle("reject", timeoutError);
       }, ttl);
 
-      // Clean up timeout if abort signal fires for other reasons
-      controller.signal.addEventListener("abort", () => {
-        clearTimeout(timeoutId);
-      });
-    });
+      controller.signal.addEventListener(
+        AbortSignalEventType.Abort,
+        abortHandler,
+      );
 
-    // Race between the actual operation and the timeout
-    return Promise.race([next(input as any), timeoutPromise]);
+      const finish = (cb: () => Promise<unknown>) => {
+        cb().then(
+          (result) => settle("resolve", result),
+          (error) => settle("reject", error),
+        );
+      };
+
+      finish(() => next(input as unknown));
+    });
   },
 });
 
@@ -51,23 +102,49 @@ export const timeoutResourceMiddleware = defineResourceMiddleware({
     const input = resource?.config;
     const ttl = Math.max(0, config.ttl);
     const message = `Operation timed out after ${ttl}ms`;
+    const timeoutError = new TimeoutError(message);
     if (ttl === 0) {
-      const error = new Error(message);
-      (error as any).name = "TimeoutError";
-      throw error;
+      throw timeoutError;
     }
     const controller = new AbortController();
-    const timeoutPromise = new Promise((_, reject) => {
+    return await new Promise((resolve, reject) => {
+      let settled = false;
+
+      const abortHandler = () => settle("reject", timeoutError);
+
+      const settle = (kind: "resolve" | "reject", value?: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeoutId);
+        controller.signal.removeEventListener(
+          AbortSignalEventType.Abort,
+          abortHandler,
+        );
+        if (kind === "resolve") {
+          resolve(value);
+        } else {
+          reject(value);
+        }
+      };
+
       const timeoutId = setTimeout(() => {
         controller.abort();
-        const error = new Error(message);
-        (error as any).name = "TimeoutError";
-        reject(error);
+        settle("reject", timeoutError);
       }, ttl);
-      controller.signal.addEventListener("abort", () => {
-        clearTimeout(timeoutId);
-      });
+
+      controller.signal.addEventListener(
+        AbortSignalEventType.Abort,
+        abortHandler,
+      );
+
+      const finish = (cb: () => Promise<unknown>) => {
+        cb().then(
+          (result) => settle("resolve", result),
+          (error) => settle("reject", error),
+        );
+      };
+
+      finish(() => next(input as unknown));
     });
-    return Promise.race([next(input as any), timeoutPromise]);
   },
 });

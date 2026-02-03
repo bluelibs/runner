@@ -9,6 +9,7 @@ import {
 } from "../defs";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
+import { mergeMiddlewareConfig } from "./middlewareConfig";
 
 export function defineResourceMiddleware<
   TConfig = any,
@@ -75,11 +76,13 @@ export function defineResourceMiddleware<
         return wrap({
           ...obj,
           [symbolMiddlewareConfigured]: true,
-          config: {
-            ...(obj.config as TConfig),
-            ...config,
-          },
-        } satisfies IResourceMiddlewareConfigured<TConfig, TEnforceInputContract, TEnforceOutputContract, TDependencies>);
+          config: mergeMiddlewareConfig(obj.config as TConfig, config),
+        } satisfies IResourceMiddlewareConfigured<
+          TConfig,
+          TEnforceInputContract,
+          TEnforceOutputContract,
+          TDependencies
+        >);
       },
     } as IResourceMiddleware<
       TConfig,

@@ -27,6 +27,7 @@ export interface TaskRequest {
 export interface EventRequest {
   id: string;
   payload?: unknown;
+  returnPayload?: boolean;
   context?: Record<string, unknown>;
   traceId?: string;
 }
@@ -63,25 +64,24 @@ export function toTunnelError(
     input &&
     typeof input === "object" &&
     "code" in input &&
-    "message" in input &&
-    typeof (input as any).message === "string" &&
-    typeof (input as any).code === "string"
+    "message" in input
   ) {
-    const pe = input as ProtocolErrorShape;
-    const msg = pe.message || fallbackMessage || "Tunnel error";
-    return new TunnelError(pe.code, msg, pe.details, {
-      id: pe.id,
-      data: pe.data,
-    });
+    const typed = input as { code: unknown; message: unknown };
+    if (typeof typed.message === "string" && typeof typed.code === "string") {
+      const pe = input as ProtocolErrorShape;
+      const msg = pe.message || fallbackMessage || "Tunnel error";
+      return new TunnelError(pe.code, msg, pe.details, {
+        id: pe.id,
+        data: pe.data,
+      });
+    }
   }
 
-  if (
-    input &&
-    typeof input === "object" &&
-    "message" in input &&
-    typeof (input as any).message === "string"
-  ) {
-    return new TunnelError("UNKNOWN", (input as any).message);
+  if (input && typeof input === "object" && "message" in input) {
+    const typed = input as { message: unknown };
+    if (typeof typed.message === "string") {
+      return new TunnelError("UNKNOWN", typed.message);
+    }
   }
 
   return new TunnelError(

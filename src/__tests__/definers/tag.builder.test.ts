@@ -4,8 +4,12 @@ describe("tag builder", () => {
   it("build() returns branded tag with id", () => {
     const tg = r.tag("tests.builder.tag").build();
     // brand
-    expect((tg as any)[definitions.symbolTag]).toBe(true);
-    expect(typeof (tg as any)[definitions.symbolFilePath]).toBe("string");
+    expect((tg as unknown as Record<symbol, any>)[definitions.symbolTag]).toBe(
+      true,
+    );
+    expect(
+      typeof (tg as unknown as Record<symbol, any>)[definitions.symbolFilePath],
+    ).toBe("string");
     expect(tg.id).toBe("tests.builder.tag");
   });
 

@@ -1,901 +1,815 @@
-# Runner Tunnels
+# Runner Tunnels (v2)
 
-Make tasks and events callable across processes – from a CLI, another service, or a browser – without changing your app’s core architecture.
-
-## Table of Contents
-
-1. Why tunnels
-2. Architecture at a glance
-3. Quick start (3 minutes)
-4. Choose your client
-   - Unified client (browser + node)
-   - Node Smart client (streaming/duplex)
-   - Node Mixed client (auto‑switch)
-   - Pure fetch (globals.tunnels.http)
-5. Auth (static & dynamic)
-6. Uploads & files (EJSON sentinel, FormData, Node streams)
-7. Abort & timeouts
-
-- 7.1) useExposureContext API
-
-8. CORS
-9. Server allow‑lists
-10. Examples you can run
-11. Troubleshooting
-12. Reference checklist
-13. Compression (gzip/br)
-14. Phantom Tasks (fluent builder)
-15. Typed Errors Over Tunnels
-16. Async Context Propagation
+← [Back to main README](../README.md) | [Tunnels section in FULL_GUIDE](./FULL_GUIDE.md#tunnels-bridging-runners)
 
 ---
 
-## 1) Why tunnels
+Tunnels let you **call a task in another process** (or emit an event remotely) while keeping your application code written as if everything is local.
 
-As your app grows, other processes need to call your tasks: workers, CLIs, browser UIs. Tunnels give you a consistent, secure wire: the server exposes a small HTTP surface; clients call it with JSON or streams.
+Think: **one codebase, many processes** — you scale out by moving execution, not by rewriting APIs.
 
-## 2) Architecture at a glance
+Use tunnels when you want:
 
-- Exposure: `nodeExposure` hosts `POST /task/{id}` and `POST /event/{id}`.
-- Client: one of the HTTP clients calls those endpoints (fetch, unified, or Node smart/mixed for streaming).
-- Optional server allow‑lists: restrict which ids are reachable.
- - Exclusivity: each task can be owned by at most one tunnel client. If two tunnel resources select the same task, Runner throws during init to prevent ambiguous routing.
+- a tiny, controlled HTTP surface (`/__runner/*`) instead of ad-hoc endpoints,
+- task semantics preserved (validation, middleware, typed errors, async context),
+- the parts that cross the wire (input/output, async context values, typed error payloads) to be encoded/decoded via Runner’s `Serializer`,
+- the option to switch between local execution and remote execution by configuration.
 
-## 3) Quick start (3 minutes)
+---
 
-Server: host an exposure next to your tasks/events.
+## TL;DR (Node backend devs)
+
+If you're building Node services and want to call tasks remotely while keeping the code “as if local”:
+
+- **Default Node client**: use `createHttpMixedClient` (fast serialized JSON when it can, Smart when it must).
+- **You keep Runner semantics over the wire**:
+  - **typed errors**: `{ id, data }` round-trip and can be rethrown locally (with an `errorRegistry`)
+  - **async context**: active contexts are shipped in `x-runner-context` (Serializer-encoded) and hydrated on the server for the execution
+- **Production defaults**:
+  - configure `http.auth` (token and/or validator tasks)
+  - enable server allow-lists via a `globals.tags.tunnel` resource in `mode: "server"` (or `"both"`)
+
+### Quick start (Node to Node)
+
+Server runtime (expose a small HTTP surface):
 
 ```ts
-import { r } from "@bluelibs/runner";
+import { r, run } from "@bluelibs/runner";
 import { nodeExposure } from "@bluelibs/runner/node";
 
-const add = r
+export const add = r
   .task("app.tasks.add")
   .run(async (input: { a: number; b: number }) => input.a + input.b)
-  .build();
-
-const notify = r
-  .event("app.events.notify")
-  .payloadSchema<{ message: string }>({ parse: (v) => v })
   .build();
 
 export const app = r
   .resource("app")
   .register([
     add,
-    notify,
     nodeExposure.with({
-      http: { basePath: "/__runner", listen: { port: 7070 } },
+      http: {
+        basePath: "/__runner",
+        listen: { port: 7070 },
+        auth: { token: "dev-secret" },
+      },
+    }),
+  ])
+  .build();
+
+await run(app);
+```
+
+Client runtime (call remote tasks directly):
+
+```ts
+import { getDefaultSerializer } from "@bluelibs/runner";
+import { createHttpMixedClient } from "@bluelibs/runner/node";
+
+const client = createHttpMixedClient({
+  baseUrl: "http://127.0.0.1:7070/__runner",
+  auth: { token: "dev-secret" },
+  serializer: getDefaultSerializer(),
+});
+
+const sum = await client.task<{ a: number; b: number }, number>(
+  "app.tasks.add",
+  { a: 1, b: 2 },
+);
+```
+
+## The story (the mental model)
+
+You already have Runner tasks:
+
+- they’re typed,
+- they can have middleware,
+- they run inside a DI runtime,
+- they’re easy to test.
+
+Then you hit the “now it has to run somewhere else” moment:
+
+- the browser needs to call server tasks,
+- a CLI needs to trigger work in the API service,
+- service A wants to reuse service B’s task without importing B’s entire runtime.
+
+**Tunnels solve that moment** with three pieces:
+
+1. **Exposure (server-side)**: `nodeExposure` exposes a small HTTP surface:
+   - `POST {basePath}/task/{taskId}`
+   - `POST {basePath}/event/{eventId}`
+   - `GET|POST {basePath}/discovery`
+
+2. **Clients (caller-side)**: HTTP clients that speak Runner’s tunnel protocol:
+   - universal (`createHttpClient` / `globals.resources.httpClientFactory`) for browser + Node (JSON + browser `FormData`)
+   - Node streaming (`createHttpSmartClient`, `createHttpMixedClient`) for multipart + duplex streams
+   - minimal fetch (`globals.tunnels.http.createClient` / `createExposureFetch`) for JSON-only
+
+3. **Tunnel resources (optional, but where the magic happens)**: a resource tagged with `globals.tags.tunnel` that:
+   - **selects** tasks/events it wants to route,
+   - and in `mode: "client"` it **patches those tasks** so calling them delegates to the tunnel client.
+
+Your app keeps calling `await tasks.processPayment(input)`.  
+Only the **execution location** changes.
+
+### Tunnel call flow (diagram)
+
+There are two phases:
+
+1. **Init time (client runtime)**: tunnel resources in `mode: "client"` select tasks/events and patch them to delegate remotely.
+2. **Call time**: your code calls the task; it either routes through the tunnel client or runs locally. On the server, `nodeExposure` parses + authenticates and (optionally) applies allow-lists before executing the task.
+
+```mermaid
+graph TD
+  App[App code] --> Call["Call task: add(input)"]
+  Call --> Route{Tunnel route?}
+  Route -- "no" --> Local["Runs locally<br/>or returns undefined"]
+  Route -- "yes" --> Client[HTTP tunnel client]
+  Client --> Expo["nodeExposure<br/>/__runner/*"]
+  Expo --> Guard["Parse + authenticate<br/>+ allow-list gate"]
+  Guard --> Run["Execute task<br/>in server runtime"]
+  Run --> Reply["Result / typed error"]
+  Reply --> App
+
+  classDef task fill:#4CAF50,color:#fff;
+  classDef resource fill:#2196F3,color:#fff;
+  classDef middleware fill:#9C27B0,color:#fff;
+  classDef external fill:#607D8B,color:#fff;
+
+  class Run task;
+  class Expo resource;
+  class Route middleware;
+  class App,Client,Guard external;
+```
+
+---
+
+## The happy path (an end-to-end walkthrough)
+
+This section is intentionally a “story you can follow”, not a reference dump.
+
+### Step 1 — Create tasks/events as usual (server runtime)
+
+```ts
+import { r } from "@bluelibs/runner";
+
+export const add = r
+  .task("app.tasks.add")
+  .run(async (input: { a: number; b: number }) => input.a + input.b)
+  .build();
+
+export const audit = r
+  .event("app.events.audit")
+  .payloadSchema<{ msg: string }>({ parse: (v) => v })
+  .build();
+```
+
+### Step 2 — Add `nodeExposure` (server runtime)
+
+`nodeExposure` is a **Node-only** resource from `@bluelibs/runner/node`.
+
+```ts
+import { r } from "@bluelibs/runner";
+import { nodeExposure } from "@bluelibs/runner/node";
+
+export const app = r
+  .resource("app")
+  .register([
+    add,
+    audit,
+    nodeExposure.with({
+      http: {
+        basePath: "/__runner", // default
+        listen: { port: 7070 }, // default host is 127.0.0.1
+        auth: { token: "dev-secret" }, // strongly recommended
+        // If you call this from a browser (or any cross-origin client), configure CORS:
+        // cors: { origin: "http://localhost:3000", credentials: true },
+      },
     }),
   ])
   .build();
 ```
 
-Client: call it from Node or the browser using the factory (recommended) or direct client creation.
+At this point you have an HTTP surface, but you still need to decide what’s reachable and how the client calls it.
 
-**Recommended: Use HTTP Client Factory with DI**
+### Step 3 — Decide your exposure policy (server allow-list)
 
-```ts
-import { r, globals } from "@bluelibs/runner";
+Runner can run in two modes:
 
-const callRemote = r
-  .task("app.tasks.callRemote")
-  .dependencies({ clientFactory: globals.resources.httpClientFactory })
-  .run(async (input, { clientFactory }) => {
-    // Factory auto-injects serializer, errorRegistry, and contexts
-    const client = clientFactory({
-      baseUrl: "http://127.0.0.1:7070/__runner",
-    });
-    return await client.task("app.tasks.add", { a: 1, b: 2 });
-  })
-  .build();
-```
+- **Fail-closed**: if you don’t register any _server-mode_ HTTP tunnel resource, `nodeExposure` rejects task/event requests with 403 (exposure disabled).
+- **Allow-listed**: once the runtime contains at least one tunnel resource whose value has `mode: "server"` (or `"both"`) and `transport: "http"`, `nodeExposure` enforces allow-lists and rejects non-allow-listed ids with 403.
 
-**Alternative: Direct client creation (legacy)**
-
-```ts
-import { createHttpClient } from "@bluelibs/runner";
-
-const client = createHttpClient({
-  baseUrl: "http://127.0.0.1:7070/__runner",
-  serializer, // manual injection
-  errorRegistry, // manual injection
-  contexts, // manual injection
-});
-const sum = await client.task<{ a: number; b: number }, number>(
-  "app.tasks.add",
-  { a: 1, b: 2 },
-);
-```
-
-## 4) Choose your client
-
-### 4.1 Unified client (browser + node)
-
-One API for JSON/EJSON and browser uploads (FormData). For Node streaming/multipart and duplex, use the Node clients (Smart/Mixed) below.
-
-**With factory (recommended):**
-
-```ts
-// Use clientFactory(...) within your tasks
-const client = clientFactory({ baseUrl: "/__runner" });
-```
-
-**Direct creation:**
-
-```ts
-import { createHttpClient } from "@bluelibs/runner";
-import { createFile as createWebFile } from "@bluelibs/runner/platform/createFile";
-
-const client = createHttpClient({
-  baseUrl: "/__runner",
-  serializer, // required
-});
-
-// JSON/EJSON
-await client.task("app.tasks.add", { a: 1, b: 2 });
-
-// Browser upload (multipart/form-data)
-await client.task("app.tasks.upload", {
-  file: createWebFile({ name: "a.bin" }, new Blob([1])),
-});
-```
-
-### 4.2 Node Smart client (streaming/duplex)
-
-**With factory (recommended, Node DI):**
-
-```ts
-import { globals as nodeGlobals } from "@bluelibs/runner/node";
-
-const nodeTask = r
-  .task("app.tasks.useSmart")
-  .dependencies({ smartFactory: nodeGlobals.resources.httpSmartClientFactory })
-  .run(async (_, { smartFactory }) => {
-    const client = smartFactory({
-      baseUrl: "http://127.0.0.1:7070/__runner",
-    });
-    return await client.task("app.tasks.add", { a: 1, b: 2 });
-  })
-  .build();
-```
-
-**Direct creation:**
-
-```ts
-import { createHttpSmartClient } from "@bluelibs/runner/node";
-
-const client = createHttpSmartClient({
-  baseUrl: "http://127.0.0.1:7070/__runner",
-  serializer, // required
-});
-
-// JSON/EJSON tasks
-const sum = await client.task<{ a: number; b: number }, number>(
-  "app.tasks.add",
-  { a: 1, b: 2 },
-);
-
-// Duplex: pass a Node Readable; receive streamed response
-import { Readable } from "stream";
-const reqStream = Readable.from("hello world");
-const resStream = await client.task("app.tasks.duplex", reqStream);
-resStream.on("data", (c) => process.stdout.write(c));
-```
-
-### 4.3 Node Mixed client (auto‑switch)
-
-**With factory (recommended, Node DI):**
-
-```ts
-import { globals as nodeGlobals } from "@bluelibs/runner/node";
-
-const nodeTask = r
-  .task("app.tasks.useMixed")
-  .dependencies({ mixedFactory: nodeGlobals.resources.httpMixedClientFactory })
-  .run(async (_, { mixedFactory }) => {
-    const client = mixedFactory({
-      baseUrl: "http://127.0.0.1:7070/__runner",
-    });
-    return await client.task("app.tasks.add", { a: 1, b: 2 });
-  })
-  .build();
-```
-
-**Direct creation:**
-
-```ts
-import { createHttpMixedClient, createNodeFile } from "@bluelibs/runner/node";
-import { Readable } from "stream";
-
-const client = createHttpMixedClient({
-  baseUrl: "http://127.0.0.1:7070/__runner",
-  serializer, // required
-});
-
-// Plain JSON/EJSON → fetch path
-await client.task("app.tasks.add", { a: 1, b: 2 });
-
-// Streaming duplex → Smart path (octet-stream)
-const reqStream = Readable.from("hello world");
-const resStream = await client.task("app.tasks.duplex", reqStream);
-
-// Multipart (Node file sentinel) → Smart path (multipart/form-data)
-const file = createNodeFile(
-  { name: "avatar.png", type: "image/png" },
-  { stream: Readable.from("...") },
-);
-await client.task("app.tasks.uploadAvatar", { file });
-
-// Events are always JSON/EJSON
-await client.event("app.events.audit", { action: "ping" });
-```
-
-### 4.4 Pure fetch (globals.tunnels.http)
-
-Lowest‑level HTTP client: portable, tiny surface, JSON/EJSON only.
-
-```ts
-import { globals } from "@bluelibs/runner";
-const client = globals.tunnels.http.createClient({ url: "/__runner" });
-await client.task("app.tasks.add", { a: 1, b: 2 });
-await client.event("app.events.notify", { message: "hi" });
-```
-
-### 4.5 Serializer (EJSON) and DI
-
-Runner ships with an EJSON-based serializer that you should access via DI. The `Serializer` surface is intentionally small: `stringify(value)`, `parse(text)`, and `addType(name, factory)` (for custom domain types).
-
-- Prefer resolving the global serializer resource and passing it to clients.
-- Use `getDefaultSerializer()` only outside DI (for standalone helpers, tests, etc.).
-
-Example: register custom types once via the global serializer, then pass it into clients.
+To opt into allow-lists, register a server-mode tunnel resource (it does not route calls; it declares “what may be reached”):
 
 ```ts
 import { r, globals } from "@bluelibs/runner";
-import { createHttpClient } from "@bluelibs/runner";
-import {
-  createHttpSmartClient,
-  createMixedHttpClient,
-} from "@bluelibs/runner/node";
 
-// 1) Register EJSON custom types using the global serializer resource
-const ejsonSetup = r
-  .resource("app.serialization.setup")
-  .dependencies({ serializer: globals.resources.serializer })
-  .init(async (_config, { serializer }) => {
-    class Distance {
-      constructor(public value: number, public unit: string) {}
-      toJSONValue() {
-        return { value: this.value, unit: this.unit } as const;
-      }
-      typeName() {
-        return "Distance" as const;
-      }
-    }
-
-    serializer.addType(
-      "Distance",
-      (j: { value: number; unit: string }) => new Distance(j.value, j.unit),
-    );
-  })
-  .build();
-
-// 2) Pass the serializer into any HTTP clients you create
-const clientUnified = createHttpClient({ baseUrl: "/__runner", serializer });
-const clientSmart = createHttpSmartClient({ baseUrl: "/__runner", serializer });
-const clientMixed = createMixedHttpClient({ baseUrl: "/__runner", serializer });
-const clientFetch = globals.tunnels.http.createClient({
-  url: "/__runner",
-  serializer,
-});
-```
-
-Notes:
-
-- Files are not custom EJSON types. Continue using File sentinels (see Uploads & files below).
-- If you must use the serializer outside DI, call `getDefaultSerializer()`.
-
-## 5) Auth (static & dynamic)
-
-All clients support an auth header. Static config is easiest; for dynamic tokens (per request), use `onRequest` to set headers.
-
-- Default header is `x-runner-token` (you can change it).
-- Common patterns: custom header, or `Authorization: Bearer <token>`.
-
-Static (unified):
-
-```ts
-const client = createHttpClient({
-  baseUrl: "/__runner",
-  auth: { token: getEnv("RUNNER_TOKEN")!, header: "x-runner-token" },
-});
-```
-
-Dynamic (unified):
-
-```ts
-const client = createHttpClient({
-  baseUrl: "/__runner",
-  onRequest: ({ headers }) => {
-    const token = localStorage.getItem("RUNNER_TOKEN") ?? "";
-    headers["authorization"] = `Bearer ${token}`;
-  },
-});
-```
-
-Node Smart / Mixed:
-
-```ts
-const smart = createHttpSmartClient({
-  baseUrl: "/__runner",
-  onRequest: ({ headers }) => {
-    headers["x-runner-token"] = process.env.RUNNER_TOKEN ?? "";
-  },
-});
-
-const mixed = createMixedHttpClient({
-  baseUrl: "/__runner",
-  onRequest: ({ headers }) => {
-    headers["authorization"] = `Bearer ${readToken()}`;
-  },
-});
-```
-
-Pure fetch client:
-
-```ts
-const client = globals.tunnels.http.createClient({
-  url: "/__runner",
-  onRequest: ({ headers }) => {
-    headers["x-runner-token"] = getCookie("runner_token");
-  },
-});
-```
-
-Notes:
-
-- If both `auth` and `onRequest` are provided, `onRequest` runs last and can override headers.
-- Match the exposure’s auth settings (header name and expected token).
-
-## 6) Uploads & files
-
-Use EJSON “File” sentinels in your input. In Node, build them with `createNodeFile` (stream/buffer). In browsers, use `createFile` (Blob/File). The unified client turns browser files into multipart `FormData` automatically; Node clients stream bytes and support duplex.
-
-Manifest shape (for reference):
-
-```json
-{
-  "input": {
-    "avatar": {
-      "$ejson": "File",
-      "id": "A1",
-      "meta": { "name": "avatar.png", "type": "image/png" }
-    }
-  }
-}
-```
-
-Important: “File” is not an EJSON custom type. Runner uses a special `$ejson: "File"` sentinel to mark file fields, which the unified/Node clients translate into multipart uploads and the server hydrates into `InputFile` instances. We do not register `EJSON.addType("File")` by default (and you shouldn’t either) because files are handled by the tunnel/manifest logic, not by the serializer. Use `EJSON.addType` only for your own domain objects (for example, Distance, Money, etc.).
-
-### Transport modes at a glance
-
-- JSON/EJSON: default path when your input has no files. Great for simple DTOs.
-- Multipart (recommended for JSON + files): any input that includes a File sentinel is sent as multipart/form-data with:
-  - `__manifest`: JSON/EJSON of your full input, where File fields are left as EJSON File stubs
-  - `file:{id}` parts: the actual file bytes (stream or buffer in Node; Blob in browsers)
-    This path lets you mix arbitrary JSON fields with one or more streamed files in a single request.
-- Octet-stream (duplex): when the input itself is a Node `Readable`, the client uses `application/octet-stream`. This is for raw streaming and does not carry an additional JSON body. If you need JSON alongside a stream, wrap the stream in a File sentinel in a DTO and use the multipart path instead.
-
-Node example (DTO + stream via File sentinel):
-
-```ts
-import { createHttpSmartClient, createNodeFile } from "@bluelibs/runner/node";
-import { Readable } from "stream";
-
-const client = createHttpSmartClient({ baseUrl: "/__runner" });
-await client.task("app.tasks.upload", {
-  info: { title: "demo" },
-  file: createNodeFile(
-    { name: "a.txt", type: "text/plain" },
-    { stream: Readable.from("hello world") },
-  ),
-});
-```
-
-## 7) Abort & timeouts
-
-Server: Access the full HTTP context via `useExposureContext()` from `@bluelibs/runner/node`, including `signal: AbortSignal` for aborts, `req` for request details, and `res` for streaming responses. This is available only in tasks exposed via `nodeExposure`.
-
-#### Enhanced Abort Example with Error Handling
-
-```ts
-import { r } from "@bluelibs/runner";
-import { useExposureContext } from "@bluelibs/runner/node";
-import { CancellationError } from "@bluelibs/runner/errors";
-
-// Example long-running task with full context
-const longTask = r
-  .task("app.tasks.longTask")
-  .run(async (input: { workTime: number }) => {
-    const ctx = useExposureContext(); // Destructure as needed: { signal, req, res }
-    const { signal } = ctx;
-
-    // Early check
-    if (signal.aborted) {
-      throw new CancellationError(
-        "Task aborted before starting (client timeout/disconnect)",
-      );
-    }
-
-    // Log request context
-    console.log(
-      `Task started for ${ctx.method} ${ctx.url.pathname}, User-Agent: ${
-        ctx.headers["user-agent"] || "unknown"
-      }`,
-    );
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        let aborted = false;
-        const handler = () => {
-          aborted = true;
-          reject(new CancellationError("Processing aborted by client"));
-        };
-        signal.addEventListener("abort", handler, { once: true });
-
-        // Simulate work (e.g., file processing, API calls)
-        const timer = setTimeout(() => {
-          signal.removeEventListener("abort", handler);
-          if (!aborted) resolve();
-        }, input.workTime);
-
-        // Optional: Stream progress
-        if (typeof ctx.res.write === "function") {
-          ctx.res.write(`Started processing for ${input.workTime}ms...\n`);
-        }
-      });
-
-      // Success
-      if (typeof ctx.res.end === "function") {
-        ctx.res.write("Task completed successfully!");
-      }
-
-      return { status: "success", message: "Work done" };
-    } catch (err) {
-      if (err instanceof CancellationError) {
-        // Log and re-throw
-        console.warn(`Task longTask cancelled: ${err.message}`);
-        throw err;
-      }
-      throw err; // Other errors propagate
-    }
-  })
-  .build();
-```
-
-Key enhancements:
-
-- Full context (`ctx = useExposureContext()`) for logging and response writing.
-- Try-catch to handle `CancellationError` specifically (triggers HTTP 499).
-- Listener cleanup to prevent leaks.
-- Early aborted check and progress streaming.
-
-Clients: Pass `timeoutMs` (e.g., `{ timeoutMs: 30000 }` in client options). Uses `AbortController`; aborts trigger server `signal`. JSON/multipart parsing respects it; errors like parse fails or disconnect return 499. For duplex, abort stops piping.
-
-### 7.1) useExposureContext API
-
-`useExposureContext()` is a Node-only hook in `@bluelibs/runner/node` for accessing HTTP context in exposed tasks: aborts (`signal`), request info (`req`), response streaming (`res`).
-
-#### API Shape
-
-```ts
-import type { IncomingMessage, ServerResponse } from "http";
-
-export interface ExposureRequestContextValue {
-  req: IncomingMessage;
-  res: ServerResponse;
-  url: URL;
-  basePath: string;
-  headers: IncomingMessage["headers"];
-  method?: string;
-  signal: AbortSignal;
-}
-```
-
-Use in task `.run()`: `const { signal, req, res } = useExposureContext();`
-
-For conditional access without errors in non-exposed tasks, use `hasExposureContext()`: `if (hasExposureContext()) { const ctx = useExposureContext(); ... }`
-
-#### Examples
-
-**Abort Handling:** (See expanded above.)
-
-**Streaming Response:**
-
-```ts
-import { r } from "@bluelibs/runner";
-import { useExposureContext } from "@bluelibs/runner/node";
-import { createReadStream } from "fs";
-
-// Task streaming a file
-const streamFile = r
-  .task("app.tasks.streamFile")
-  .run(async (input: { filePath: string }) => {
-    const { res, signal } = useExposureContext();
-
-    res.writeHead(200, {
-      "Content-Type": "application/octet-stream",
-      "Transfer-Encoding": "chunked",
-    });
-
-    const stream = createReadStream(input.filePath);
-    stream.pipe(res);
-
-    signal.addEventListener("abort", () => stream.destroy(), { once: true });
-  })
-  .build();
-```
-
-**Request Introspection:**
-
-```ts
-const secureTask = r
-  .task("app.tasks.secure")
-  .run(async () => {
-    const { headers, req } = useExposureContext();
-
-    if (!headers.authorization) throw new Error("Unauthorized");
-
-    // Read body if needed
-    let body = "";
-    req.on("data", (chunk) => (body += chunk));
-    await new Promise((res) => req.on("end", res));
-
-    // Process body...
-    return { validated: true };
-  })
-  .build();
-```
-
-**Duplex:**
-
-```ts
-import { Transform } from "stream";
-
-const duplexEcho = r
-  .task("app.tasks.duplexEcho")
-  .run(async () => {
-    const { req, res, signal } = useExposureContext();
-
-    const transform = new Transform({
-      transform(chunk, _, cb) {
-        this.push(chunk.toString().toUpperCase());
-        cb();
-      },
-    });
-
-    req.pipe(transform).pipe(res);
-
-    signal.addEventListener(
-      "abort",
-      () => {
-        req.destroy();
-        res.end();
-      },
-      { once: true },
-    );
-  })
-  .build();
-```
-
-#### Warnings
-
-- Node-only; throws if called in browser or non-exposed tasks.
-- Security: Sanitize logged headers; avoid exposing secrets.
-- CORS: Misconfig can cause pre-aborts on signal.
-- Links: `examples/tunnels/streaming-duplex.example.ts`; tests in `src/node/exposure/__tests__/requestContext.test.ts`.
-- Errors: Use `CancellationError` for aborts.
-
-## 8) CORS
-
-Enable CORS on the Node exposure with `nodeExposure.with({ http: { cors } })`. Preflight (`OPTIONS`) requests are handled automatically and actual responses get appropriate CORS headers applied (including on errors like 401/404/500).
-
-Config shape and defaults:
-
-```ts
-{
-  origin?: string | string[] | RegExp | ((origin?: string) => string | null | undefined);
-  methods?: string[];            // default ["POST", "OPTIONS"]
-  allowedHeaders?: string[];     // default: echo Access-Control-Request-Headers
-  exposedHeaders?: string[];     // default: none
-  credentials?: boolean;         // adds Access-Control-Allow-Credentials: true
-  maxAge?: number;               // seconds, preflight cache duration
-  varyOrigin?: boolean;          // default true; adds Vary: Origin when echoing
-}
-```
-
-Defaults are permissive: `Access-Control-Allow-Origin: *` unless `credentials` is true, in which case the request origin is echoed and `Vary: Origin` is appended. You can pass a string array or `RegExp` to allow-list origins, or a function to compute the allowed origin dynamically.
-
-Example:
-
-```ts
-nodeExposure.with({
-  http: {
-    basePath: "/__runner",
-    listen: { port: 7070 },
-    cors: {
-      origin: ["https://app.example.com", /\.example\.internal$/],
-      credentials: true,
-      methods: ["POST"],
-      allowedHeaders: ["x-runner-token", "content-type"],
-      exposedHeaders: ["content-type"],
-      maxAge: 600,
-    },
-  },
-});
-```
-
-## 9) Server-Side Allow Lists
-
-When `nodeExposure` initializes, it inspects tunnel resources that return `mode: "server"` or `mode: "both"` and `transport: "http"`. The helper `computeAllowList` collects explicit task/event IDs from those resources so only allow-listed items are served when a server-mode HTTP tunnel is present.
-
-To opt in, register a tunnel resource that returns server metadata:
-
-```ts
-export const serverTunnel = r
-  .resource("app.tunnels.server")
+const httpExposure = r
+  .resource("app.tunnels.httpExposure")
   .tags([globals.tags.tunnel])
   .init(async () => ({
-    mode: "server",
-    transport: "http",
+    transport: "http" as const,
+    mode: "server" as const,
     tasks: ["app.tasks.add"],
-    events: ["app.events.notify"],
+    events: ["app.events.audit"],
   }))
   .build();
-```
 
-Add this resource and nodeExposure will scan all resources with this tag which are in the mode `server` and expose things properly.
-
-## 10) Examples you can run
-
-- `examples/tunnels/streaming-append.example.ts` – upload a stream and transform it
-- `examples/tunnels/streaming-duplex.example.ts` – duplex raw‑body in, streamed response out
-
-## InputFile (Quick Reference)
-
-When requests contain files (multipart or via EJSON translation), Runner passes an `InputFile` handle to the task. It gives you a single‑use stream plus utilities for persistence.
-
-- Core shape: `{ name: string; type?: string; size?: number; lastModified?: number; extra?: Record<string, unknown>; resolve(): Promise<{ stream: Readable }>; toTempFile(dir?): Promise<{ path, bytesWritten }>; }`
-- Single use: `resolve()` and `stream()` produce a stream that can be consumed once; calling twice throws.
-- Metadata precedence: manifest/EJSON meta overrides stream‑detected values; stream meta is used as fallback.
-
-Example usage inside a task:
-
-```ts
-const processUpload = r
-  .task("app.tasks.processUpload")
-  .run(async (input: { file: InputFile<NodeJS.ReadableStream> }) => {
-    const { file } = input;
-    // Option A: stream directly
-    const { stream } = await file.resolve();
-    let bytes = 0;
-    await new Promise<void>((res, rej) => {
-      stream.on("data", (c: any) => {
-        bytes += Buffer.isBuffer(c) ? c.length : Buffer.byteLength(String(c));
-      });
-      stream.on("end", res);
-      stream.on("error", rej);
-    });
-
-    // Option B: persist to a temp file
-    // const { path, bytesWritten } = await file.toTempFile();
-
-    return bytes;
-  })
+export const app = r
+  .resource("app")
+  .register([
+    add,
+    audit,
+    httpExposure,
+    nodeExposure.with({
+      http: { listen: { port: 7070 }, auth: { token: "dev-secret" } },
+    }),
+  ])
   .build();
 ```
 
-Node helpers (see `src/node/inputFile.model.ts`):
+Now `GET {basePath}/discovery` (auth required) tells you exactly what’s reachable.
 
-- `NodeInputFile` constructor for building files from Node streams in tests/tools.
-- `toPassThrough(stream)` returns a distinct pass‑through copy (keeps upstream reusable).
+> [!NOTE]
+> **Legacy open behavior** (not recommended): set `http.dangerouslyAllowOpenExposure: true` in `nodeExposure.with({ http: { ... } })`.
 
-Read into memory / Write to path (Node):
+### Step 4 — Call it from somewhere else (client runtime)
 
-```ts
-import {
-  readInputFileToBuffer,
-  writeInputFileToPath,
-} from "@bluelibs/runner/node";
+You have two common styles. Pick one per boundary.
 
-// Buffer in memory (consumes the InputFile stream)
-const buf = await readInputFileToBuffer(file);
+#### Style A — Transparent routing via a tunnel resource (feels “local”)
 
-// Write to disk at a specific path
-const { bytesWritten } = await writeInputFileToPath(file, "/tmp/upload.bin");
-```
+If you want your code to call `add(...)` directly and let the tunnel decide where it runs, register a **client-mode** tunnel resource.
 
-Note: In browsers, read with the File/Blob APIs at the edge of your app (e.g., `await blob.arrayBuffer()` before sending). Server‑side `InputFile` utilities above are for Node runtimes.
+This is the “no call-site changes” style: your application code still calls `await add({ a, b })`. The only thing that changes is **runtime composition** (server registers the real task; client registers a phantom task with the same id + a tunnel resource).
 
-## 11) Troubleshooting
+The key trick is: the _caller runtime_ must also have a task definition with the same id — but it shouldn’t contain the real implementation. That’s what **phantom tasks** are for.
 
-- 401: Verify the client supplies the same token/header as the exposure.
-- 404: Ensure the id is registered and (when server tunnels exist) appears in the allow list.
-- Multipart errors: Check `__manifest` and file parts (`file:{id}`) match.
-- Shared servers: Always dispose handlers when tearing down tests/staging.
+The tunnel middleware will:
 
-## 12) Reference Checklist
-
-- [ ] Expose via `nodeExposure` (attach or listen)
-- [ ] Choose a client: `createHttpClient` (unified), Node: `createMixedHttpClient` / `createHttpSmartClient`, or pure fetch: `globals.tunnels.http.createClient` / `createExposureFetch`
-- [ ] File uploads: use `createNodeFile(...)` (Node) or `platform/createFile` (browser)
-- [ ] Streaming: duplex via `useExposureContext().req/res` or server-push via `respondStream()`
-- [ ] Serializer: register EJSON types via `globals.resources.serializer`; pass the serializer to all HTTP clients (unified, smart, mixed, pure fetch)
-- [ ] CORS: set `http.cors` when calling from browsers/cross‑origin clients
-- [ ] Abort: handle `useExposureContext()` (signal, req, res) in tasks; configure `timeoutMs` in clients
-
-## 13) Compression (gzip/br)
-
-It is possible to introduce compression for both responses and requests, but it requires coordination between the Node exposure (server) and the Node Smart client. Browsers and most fetch implementations already auto‑decompress responses; request compression needs explicit support.
-
-- Server responses (server → client)
-
-  - Negotiate via `Accept-Encoding` and compress JSON and streamed responses (gzip/br/deflate).
-  - JSON path: compress the serialized payload, set `Content-Encoding`, keep `content-type` as JSON. If you don’t pre‑buffer, omit `content-length` and use chunked transfer.
-  - Stream path: wrap the outgoing stream in a zlib transform (gzip/brotli), set `Content-Encoding`, skip if the task already wrote a compressed stream.
-  - Alternative: enable compression at a reverse proxy (nginx, Caddy, CDN). Easiest path for response compression, works for browsers and Node fetch clients; does not help request compression.
-
-- Client requests (client → server)
-
-  - Server: if `Content-Encoding` is present, transparently decompress before parsing JSON/multipart or forwarding duplex streams to tasks. Busboy expects plain multipart, so decompression must occur before piping to the parser.
-  - Unified client (fetch): browsers typically do not gzip request bodies and disallow manual `Accept-Encoding`; keep using plain JSON/multipart in the browser.
-  - Node Smart client: can optionally gzip request bodies.
-    - JSON: gzip the serialized body and set `Content-Encoding: gzip`.
-    - Multipart: gzip the multipart body stream and set `Content-Encoding: gzip` (server must decompress before Busboy).
-    - Duplex/octet‑stream: optionally gzip the request stream and set `Content-Encoding: gzip` if the server supports it.
-
-- Receiving compressed responses in Node clients
-
-  - Fetch/unified client: generally auto‑decompresses when the server compresses.
-  - Smart client: advertise `Accept-Encoding: gzip, deflate, br` and, on response, decompress based on `Content-Encoding` before JSON parsing; for streamed responses, return a decompressed stream to callers.
-
-- Operational guidance
-
-  - Default off; enable when the client advertises support and payloads are large enough (threshold) to justify CPU cost.
-  - Skip already‑compressed formats (images, archives); compress `application/json` and other text types.
-  - Security: be mindful of compression side‑channel risks (for example, BREACH‑style issues) when reflecting attacker‑controlled data next to secrets in compressed responses.
-
-- Practical paths
-  - Fastest win: reverse proxy response compression (no code changes, immediate benefit to browsers and fetch clients).
-  - Full stack: exposure negotiates/compresses responses and decompresses requests; Smart client advertises `Accept-Encoding`, decompresses responses, and can optionally compress requests.
-
-## 14) Phantom Tasks (fluent builder)
-
-Phantom tasks are typed placeholders that you intend to execute through a tunnel. They don’t implement `.run()`; instead, when a matching tunnel client is registered, the tunnel middleware routes calls to the remote Runner. If no tunnel matches, calling a phantom task returns `undefined` — a safe signal that routing is not configured.
-
-Why use them:
-
-- Typed contracts for remote actions without local implementations.
-- Clean separation of concerns: app code calls tasks; tunnels handle transport.
-- Works with allow‑lists; integrates with all HTTP clients in this guide.
-
-Define a phantom task and route via an HTTP tunnel client:
+- select tasks/events based on `tasks` / `events`,
+- patch selected tasks so calling them delegates to `tunnel.run(task, input)`,
+- enforce exclusivity (a task can be owned by only one tunnel client).
 
 ```ts
-import { r, run, globals } from "@bluelibs/runner";
+import { r, globals } from "@bluelibs/runner";
 
-// 1) Define a phantom task
-const remoteHello = r.task
-  .phantom<{ name: string }, string>("remote.tasks.hello")
+// In the caller runtime, define a phantom with the same id as the server task.
+// Your app code can keep calling `await add(...)`.
+export const add = r.task
+  .phantom<{ a: number; b: number }, number>("app.tasks.add")
   .build();
 
-// 2) Register a tunnel client resource that knows how to run it remotely
-const httpClientTunnel = r
-  .resource("app.tunnels.httpClient")
+const tunnelClient = r
+  .resource("app.tunnels.client")
   .tags([globals.tags.tunnel])
-  .init(async () => {
-    const http = globals.tunnels.http.createClient({
-      url: process.env.REMOTE_URL ?? "http://127.0.0.1:7070/__runner",
-      onRequest: ({ headers }) => {
-        headers["x-runner-token"] = process.env.RUNNER_TOKEN ?? "";
-      },
+  .dependencies({ clientFactory: globals.resources.httpClientFactory })
+  .init(async (_cfg, { clientFactory }) => {
+    const client = clientFactory({
+      baseUrl: "http://127.0.0.1:7070/__runner",
+      auth: { token: "dev-secret" },
     });
+
     return {
+      transport: "http" as const,
       mode: "client" as const,
-      tasks: [remoteHello.id], // or a predicate: (t) => t.id.startsWith("remote.tasks.")
-      run: (task, input) => http.task(task.id, input),
+      tasks: [add.id],
+      // Important: create the client once (in init) and reuse it.
+      run: async (task, input) => await client.task(task.id, input),
+      // events + emit are optional; see “Events” below.
     };
   })
   .build();
 
-// 3) Compose your app
-const app = r.resource("app").register([remoteHello, httpClientTunnel]).build();
-
-// 4) Use it anywhere in your app
-const rr = await run(app);
-const greeting = await rr.runTask(remoteHello, { name: "Ada" });
-// → "Hello Ada!" (assuming the remote Runner exposes this task)
-await rr.dispose();
+export const app = r
+  .resource("app")
+  .register([add, tunnelClient])
+  .build();
 ```
 
-Notes:
+Now calling `await add({ a: 1, b: 2 })` will execute the server’s `app.tasks.add` over HTTP.
+If the tunnel isn’t registered (or doesn’t select this id), the phantom resolves to `undefined`.
 
-- Phantom builders expose `.dependencies()`, `.middleware()`, `.tags()`, `.meta()`, `.inputSchema()`, and `.resultSchema()`. They intentionally do not expose `.run()`.
-- Without a matching tunnel, calling the task resolves to `undefined`. This helps catch misconfiguration early (for example, missing client or wrong allow‑list).
-- You can combine phantom tasks with server allow‑lists (see section 9) to control what’s reachable when you host an exposure.
- - Single-owner rule: phantom or regular tasks routed through tunnels still follow exclusivity. The first tunnel that selects a task becomes its owner; subsequent tunnels attempting to select the same task cause init to fail with a clear error message.
+This is great when you want “remote” to be a configuration concern rather than a call-site concern.
 
-## 15) Typed Errors Over Tunnels
+#### Style B — Explicit client calls (simple and explicit)
 
-You can surface your application errors end‑to‑end with type safety. Server tasks/events throw typed errors; clients can rethrow them as the exact same type — not just a generic `TunnelError`.
+If you want the boundary to be obvious in code, call the client directly — but **don’t create a client for every call**.
 
-What’s included (works cross‑tunnel as long as data is serializable):
-
-- The JSON envelope can include `error.id` and `error.data` next to `code`/`message` when the server catches a known app error.
-- Clients can opt‑in to rethrow typed errors by passing an `errorRegistry` to HTTP clients.
-
-Define an app error:
+Instead, create it once in a resource and inject it where needed:
 
 ```ts
-import { r } from "@bluelibs/runner";
-export const AppError = r.error<{ code: number; message: string }>("app.errors.generic").build();
+import { r, globals } from "@bluelibs/runner";
+
+const remoteClient = r
+  .resource("app.remote.client")
+  .dependencies({ clientFactory: globals.resources.httpClientFactory })
+  .init(async (_cfg, { clientFactory }) => {
+    return clientFactory({
+      baseUrl: "http://127.0.0.1:7070/__runner",
+      auth: { token: "dev-secret" },
+    });
+  })
+  .build();
+
+export const callRemote = r
+  .task("app.tasks.callRemote")
+  .dependencies({ remoteClient })
+  .run(async (_input, { remoteClient }) => {
+    return await remoteClient.task<{ a: number; b: number }, number>(
+      "app.tasks.add",
+      { a: 1, b: 2 },
+    );
+  })
+  .build();
 ```
 
-Throw it server‑side:
+---
+
+## What actually happens under the hood (in one page)
+
+### 1) Tunnel resource middleware patches tasks/events
+
+Any resource tagged with `globals.tags.tunnel` is inspected at init time.
+
+If its value has `mode: "client"` or `"both"`:
+
+- tasks selected by `tasks` are patched: their `run()` becomes `tunnel.run(task, input)`
+- `task.isTunneled = true` and the task is marked as “owned” by that tunnel
+- if a second tunnel selects the same task id, Runner throws during init (to avoid ambiguous routing)
+- events selected by `events` are intercepted; depending on `eventDeliveryMode`, emissions are mirrored/forwarded/etc
+
+If the value has `mode: "server"` or `"none"`:
+
+- nothing is patched (server-mode is about allow-lists and discovery, not routing).
+
+### 2) `nodeExposure` enforces auth and allow-lists, then runs the task/event
+
+For each request:
+
+- auth is validated (static token and/or validator tasks)
+- allow-list is enforced when enabled (403 if not allow-listed)
+- request is parsed (JSON / multipart / octet-stream)
+- async context is optionally hydrated from `x-runner-context`
+- the task is executed (or event emitted)
+- response is sent:
+  - JSON envelope for standard results
+  - raw stream for streaming results
+
+---
+
+## Choosing the right client
+
+If you're in Node and you’re unsure, start with **Mixed**.
+
+| You need… | Use | Notes |
+| --- | --- | --- |
+| Fast JSON task calls (default) | `createHttpMixedClient` | Uses `Serializer` over `fetch` when possible |
+| Node streams / duplex (`application/octet-stream`) | `createHttpSmartClient` (or Mixed with `forceSmart`) | Smart uses `http.request` and supports duplex |
+| Node multipart uploads (streams/buffers) | `createHttpSmartClient` (or Mixed) | Universal client can’t send Node streams |
+| Browser/edge calls (plus browser `FormData`) | `createHttpClient` | Works in any `fetch` runtime |
+| Smallest JSON-only surface | `createExposureFetch` | No universal multipart helpers |
+
+### Universal client (`createHttpClient`, `globals.resources.httpClientFactory`)
+
+Use when:
+
+- you’re in a browser/edge runtime, or shared code,
+- you only need JSON + browser uploads (`FormData`).
+
+What it can’t do:
+
+- Node duplex streams
+- Node multipart streaming uploads
+
+### Node clients (`createHttpSmartClient`, `createHttpMixedClient`)
+
+Use when:
+
+- you want Node streaming/duplex,
+- you want Node multipart uploads (streams/buffers),
+- you want “auto-switch” based on input shape.
+
+Why there are two:
+
+- **Smart** is the “full power” Node client (uses `http.request`): it supports
+  - raw-body duplex (`Content-Type: application/octet-stream`),
+  - Node multipart streaming uploads (manifest + streams/buffers),
+  - streamed responses (server returns a readable stream).
+- **Mixed** is a convenience wrapper: it uses the fast **serialized JSON** path (Runner `Serializer` over `fetch`) when it can, and falls back to Smart when it must.
+  - The auto-switch is based on **input shape**: it detects **stream inputs** and **Node File sentinels**.
+  - It cannot infer “this task will return a stream” when the input is plain JSON — use `forceSmart` (or Smart directly) for those tasks.
+
+Recommendation:
+
+- use **Mixed** as the default Node client (serialized JSON when possible, Smart when needed).
+- if you have tasks that may **return a stream even for plain JSON inputs** (ex: downloads), either:
+  - set `forceSmart: true` (or a predicate) on Mixed, or
+  - use **Smart** directly.
+
+### Pure fetch (`globals.tunnels.http.createClient`, `createExposureFetch`)
+
+Use when:
+
+- you want the smallest surface (JSON-only) without the universal multipart helpers.
+
+Example:
 
 ```ts
-const dangerous = r.task("app.tasks.dangerous").run(async () => {
-  AppError.throw({ code: 123, message: "Boom" });
-}).build();
+import { globals, getDefaultSerializer } from "@bluelibs/runner";
+
+const client = globals.tunnels.http.createClient({
+  url: "http://127.0.0.1:7070/__runner",
+  auth: { token: "dev-secret" },
+  serializer: getDefaultSerializer(),
+});
+
+const sum = await client.task<{ a: number; b: number }, number>(
+  "app.tasks.add",
+  { a: 1, b: 2 },
+);
 ```
 
-Rethrow typed on the client (opt‑in):
+---
+
+## Auth (static token + dynamic validators)
+
+`nodeExposure` supports:
+
+1. **Static token**: `http.auth.token` (string or string[]) compared via timing-safe compare.
+2. **Validator tasks**: any task tagged `globals.tags.authValidator` can approve a request by returning `{ ok: true }`.
+
+Authorization rule:
+
+- if neither a token nor validator tasks exist, exposure is open (backwards compatible)
+- otherwise, a request is allowed if **either** the static token matches **or** **any** validator approves
+
+Validator input includes `{ headers, method, url, path }`.
+
+Production checklist:
+
+- set `http.auth` (token and/or validators) and treat exposure as a real API surface
+- enable server allow-lists (next section) so you only expose the task/event ids you intend to support
+- configure body limits (`http.limits`) to match your payload expectations
+- keep `/discovery` behind auth (and avoid exposing it publicly if you don’t need it)
+
+---
+
+## Server allow-lists (the “small HTTP surface” promise)
+
+Allow-lists are computed from **initialized tunnel resources** whose values are:
+
+- `mode: "server"` or `mode: "both"`
+- and `transport` is `"http"` (or omitted)
+
+Those tunnel resources’ `tasks` and `events` selectors determine what is reachable.
+
+Why this is a nice pattern:
+
+- it keeps security policy near your Runner composition (not scattered through HTTP handlers),
+- it’s explicit (and debuggable via `/discovery`),
+- it supports both “list ids” and “select by predicate”.
+
+---
+
+## Versioning (pragmatic)
+
+Treat task/event ids as your public RPC surface. For **breaking changes**, create a new id by appending a numeric suffix:
+
+- `app.tasks.invoice.create` (v1)
+- `app.tasks.invoice.create.2`
+- `app.tasks.invoice.create.3`
+
+In practice:
+
+- the server registers both versions during a migration window
+- the allow-list can expose both (or only the new one)
+- clients migrate at their own pace
+- once all clients are upgraded, you remove the old id and stop allow-listing it
+
+Example (server registers two tasks):
 
 ```ts
-import { createHttpClient } from "@bluelibs/runner";
-const client = createHttpClient({ baseUrl: "/__runner", serializer, errorRegistry: new Map([[AppError.id, AppError]]) });
-await client.task("app.tasks.dangerous");
+export const createInvoice = r
+  .task("app.tasks.invoice.create")
+  .run(async () => {
+    return { id: "inv_1" };
+  })
+  .build();
+
+export const createInvoice2 = r
+  .task("app.tasks.invoice.create.2")
+  .run(async () => {
+    return { id: "inv_1", version: 2 as const };
+  })
+  .build();
 ```
 
-Notes:
-
-- Error `data` must be EJSON‑serializable. Register custom domain types on the global serializer resource if needed.
-- Without `errorRegistry`, clients keep throwing `TunnelError` with `code/message` — no breaking changes.
-- Server status codes remain the same (e.g., `500 INTERNAL_ERROR`); `id`/`data` in the envelope are for richer client handling.
-
-## 16) Async Context Propagation
-
-Send request‑scoped context from client to server automatically — useful for tracing, request ids, and other non‑sensitive metadata.
-
-Define an async context:
+Example (client chooses explicitly):
 
 ```ts
-import { asyncContext } from "@bluelibs/runner";
-export const requestInfo = asyncContext<{ requestId: string }>("app.contexts.requestInfo").build();
-```
-
-Provide and send from the client:
-
-```ts
-const client = createHttpClient({ baseUrl: "/__runner", serializer, contexts: [requestInfo] });
-await requestInfo.provide({ requestId: "abc-123" }, async () => {
-  await client.task("app.tasks.work");
+await client.task("app.tasks.invoice.create.2", {
+  /* ... */
 });
 ```
 
-Use on the server:
+For **non-breaking** evolution, prefer keeping the same id and making schemas backward-compatible (add optional fields, accept unions, return supersets).
+
+---
+
+## Files & uploads (multipart with a manifest)
+
+Runner file uploads are **not** serializer types.
+
+Instead, inputs contain **file sentinels** that look like:
 
 ```ts
-const work = r.task("app.tasks.work").run(async () => {
-  const { requestId } = requestInfo.use();
-  // requestId === "abc-123"
-}).build();
+{ $runnerFile: "File", id: "F1", meta: { name: "a.txt", type?: "...", size?: 123 } }
 ```
 
-Transport and serialization (works cross‑tunnel as long as values are serializable):
+Client helpers add a sidecar (`_web` or `_node`) that provides the actual bytes/stream. That sidecar is stripped before sending.
 
-- The client attaches `x-runner-context` header with an EJSON‑stringified map `{ [context.id]: serializedValue }` for JSON, multipart, and octet‑stream.
-- The Node exposure parses `x-runner-context` and hydrates known contexts for the duration of the task/event execution.
-- By default, contexts serialize via Runner’s EJSON; you can override `serialize/parse` per context if needed.
-- Only include non‑sensitive metadata; use HTTPS; allow `x-runner-context` in your CORS config when using custom rules.
+### Browser / universal
+
+For browser uploads, create a file sentinel with a `_web` sidecar containing the Blob:
+
+```ts
+// Browser file upload - create the sentinel directly
+const file = {
+  $runnerFile: "File" as const,
+  id: "F1",
+  meta: { name: "a.bin" },
+  _web: { blob: new Blob([1, 2, 3]) },
+};
+
+await client.task("app.tasks.upload", { file });
+```
+
+### Node
+
+Use `createNodeFile` and a Node client (Smart or Mixed):
+
+```ts
+import { createNodeFile, createHttpMixedClient } from "@bluelibs/runner/node";
+import { Readable } from "stream";
+
+const client = createHttpMixedClient({ baseUrl, serializer, auth: { token } });
+
+await client.task("app.tasks.upload", {
+  file: createNodeFile(
+    { name: "a.bin", type: "application/octet-stream" },
+    { stream: Readable.from([Buffer.from("hello")]) },
+    "F1",
+  ),
+});
+```
+
+### On the server
+
+When `Content-Type` is multipart:
+
+- the client sends a `__manifest` field containing JSON `{ input: ... }`
+- file parts are named `file:{id}`
+- `nodeExposure` hydrates file sentinels into `InputFile` objects (Node streams, single-use)
+
+Default safety limits:
+
+- JSON body: 2MB (configurable)
+- multipart: fileSize 20MB, files 10, fields 100, fieldSize 1MB (configurable)
+
+Example server task that receives an `InputFile` and persists it:
+
+```ts
+import { r, type InputFile } from "@bluelibs/runner";
+
+export const upload = r
+  .task("app.tasks.upload")
+  .run(async (input: { file: InputFile<NodeJS.ReadableStream> }) => {
+    const { path, bytesWritten } = await input.file.toTempFile();
+    return { path, bytesWritten };
+  })
+  .build();
+```
+
+---
+
+## Streaming & duplex (octet-stream) + `useExposureContext()`
+
+If you need true streaming request bodies (or duplex request/response), use **Node smart/mixed client** + `Content-Type: application/octet-stream`.
+
+Server-side, in the exposed task:
+
+- `input` is `undefined` (the request body is the stream)
+- use `useExposureContext()` to access:
+  - `req` (readable stream)
+  - `res` (write/stream your response)
+  - `signal` (aborts when the client disconnects)
+
+Streaming responses:
+
+- if your task returns a Node `Readable` (or `{ stream: Readable }`), exposure will pipe it directly to the HTTP response
+- if your task writes the response itself, exposure does not append a JSON envelope
+
+---
+
+## Events (and event delivery modes)
+
+A tunnel resource can also select events and implement `emit(emission)`.
+
+Delivery modes (set via `eventDeliveryMode` on the tunnel value):
+
+- `"local-only"`: never call remote
+- `"remote-only"`: only call remote (skip local listeners)
+- `"remote-first"`: try remote, fall back to local on remote error
+- `"mirror"` (default): run local listeners, then call remote (remote failure propagates)
+
+`nodeExposure` supports an optional “event with result” flow:
+
+- the client sends `{ payload, returnPayload: true }`
+- the server rejects if the event is marked `parallel`
+- if accepted, the server responds with `{ ok: true, result: <final payload> }`
+
+---
+
+## Typed errors over tunnels
+
+On the server:
+
+- if an error matches a Runner-registered error helper (for example built via `r.error("...").build()`), exposure includes `{ id, data }` in the response envelope
+- 500 errors that are not app-defined are sanitized (message becomes `"Internal Error"`)
+
+On the client:
+
+- if the client has an `errorRegistry`, it can rethrow typed errors locally using `{ id, data }`
+- the factories (`globals.resources.httpClientFactory` and Node mixed factory) auto-inject the registry from the runtime
+- `{ id, data }` is transported through the tunnel using the configured `Serializer`, so `data` can be any Serializer-supported value (not just plain JSON)
+
+---
+
+## Async context propagation (`x-runner-context`)
+
+If you use Runner async contexts (via `defineAsyncContext` / `r.asyncContext(...)`):
+
+- clients snapshot active contexts and send them in the `x-runner-context` header
+- the server hydrates known contexts for the duration of the task/event execution
+
+The header contains a serializer-encoded map: `{ [contextId]: serializedValue }`.
+
+This uses the same `Serializer` as your tunnel client (defaults to `getDefaultSerializer()`), so context values can be any Serializer-supported value.
+
+---
+
+## Tunnel middleware policy (`globals.tags.tunnelPolicy`)
+
+By default, a tunneled task **does not** run caller-side task middleware.
+
+If you want specific middleware to still run on the caller (for example, “only auth + tracing”), add a tunnel policy tag to the task:
+
+```ts
+import { r, globals } from "@bluelibs/runner";
+
+export const riskyTask = r
+  .task("app.tasks.risky")
+  .tags([
+    globals.tags.tunnelPolicy.with({
+      client: { middlewareAllowList: ["app.middleware.auth"] },
+    }),
+  ])
+  .run(async () => "ok")
+  .build();
+```
+
+Notes:
+
+- the **client** side whitelist is enforced by the local runtime when the task is tunneled
+- the **server** side whitelist is declarative (it’s included for symmetry, but a remote executor must choose to enforce it)
+- for backwards compatibility, `{ client: [...] }` (legacy) and `{ middlewareAllowList: { client: [...] } }` (previous) are accepted forms
+
+---
+
+## Phantom tasks (remote-only APIs that stay type-safe)
+
+Phantom tasks are **typed placeholders** intended to be executed through tunnels.
+
+- they do not have `.run()`
+- when called without a matching tunnel route, they resolve to `undefined`
+
+```ts
+import { r } from "@bluelibs/runner";
+
+export const remoteHello = r.task
+  .phantom<{ name: string }, string>("app.tasks.remoteHello")
+  .build();
+```
+
+When you want "missing route" to be a hard error, check for `undefined`:
+
+```ts
+const value = await remoteHello({ name: "Ada" });
+if (value === undefined) {
+  throw new Error(`Task ${remoteHello.id} was not routed through a tunnel`);
+}
+return value;
+```
+
+This pattern pairs well with client-mode tunnel resources: the phantom gives you type safety, the tunnel provides the transport.
+
+---
+
+## Testing
+
+The goal when testing tunnel-ed code is usually: “exercise my app logic” without paying the price of real HTTP, while still having at least one integration test that hits `nodeExposure`.
+
+### 1) Swap the HTTP client for a mocked one (unit tests)
+
+If your code uses `globals.resources.httpClientFactory`, you can inject a fake `fetchImpl` when building the client:
+
+```ts
+const fakeFetch: typeof fetch = async (_url, _init) =>
+  new Response(JSON.stringify({ ok: true, result: 3 }), {
+    headers: { "content-type": "application/json" },
+  });
+
+const client = clientFactory({
+  baseUrl: "http://example.test/__runner",
+  fetchImpl: fakeFetch,
+  auth: { token: "dev-secret" },
+});
+```
+
+Now you can assert:
+
+- which headers were sent (`x-runner-token`, `x-runner-context`)
+- which body was serialized
+- how typed errors are rethrown on the client side
+
+### 2) Use an in-memory tunnel (no HTTP at all)
+
+For code that calls **phantom tasks**, you can test by registering a tunnel resource whose `run()` is just a local function:
+
+```ts
+import { r, globals } from "@bluelibs/runner";
+
+const addRemote = r.task
+  .phantom<{ a: number; b: number }, number>("app.tasks.add")
+  .build();
+
+const memoryTunnel = r
+  .resource("tests.tunnels.memory")
+  .tags([globals.tags.tunnel])
+  .init(async () => ({
+    mode: "client" as const,
+    tasks: [addRemote.id],
+    run: async (_task, input: { a: number; b: number }) => input.a + input.b,
+  }))
+  .build();
+```
+
+This keeps the “tunneled call shape” (task id selection, ownership, middleware policy) but eliminates transport variability.
+
+### 3) Make limits testable (small payloads)
+
+If you want to cover “413 Payload too large” paths deterministically, set small limits in the exposure config in your test runtime:
+
+```ts
+nodeExposure.with({
+  http: {
+    listen: { port: 0 }, // pick any available port in your harness
+    limits: { json: { maxSize: 64 }, multipart: { fileSize: 128 } },
+  },
+});
+```
+
+---
+
+## Troubleshooting checklist (the fast kind)
+
+1. 401 Unauthorized
+   - confirm the client sends the correct header (default `x-runner-token`)
+   - if you use validators, ensure one returns `{ ok: true }`
+
+2. 403 Forbidden (exposure disabled / allow-list)
+   - confirm you registered a server-mode HTTP tunnel resource
+   - confirm the id is in its `tasks`/`events` selector
+   - check `GET {basePath}/discovery`
+
+3. 404 Not Found
+   - the id is not registered in the server runtime
+
+4. Unexpected local execution
+   - confirm a client-mode tunnel resource selected that task id
+   - confirm no tunnel ownership conflict happened during init
+
+5. Uploads/streams not working
+   - universal client only supports browser `Blob`/`FormData`
+   - use Node Mixed/Smart clients for Node streams and Node multipart uploads
+
+6. 499 Client Closed Request
+   - the caller aborted or disconnected; in tasks, check `useExposureContext().signal`
+
+---
+
+## Reference (what to look up next)
+
+- `readmes/TUNNEL_HTTP_POLICY.md` for the wire protocol details
+- `src/globals/middleware/tunnel.middleware.ts` for task patching + event delivery modes
+- `src/node/exposure/*` for server parsing, auth, allow-lists, streaming, and context hydration

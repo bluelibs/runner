@@ -2,7 +2,7 @@ name: Benchmark Regression
 
 on:
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
   bench:
@@ -23,9 +23,9 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: "npm"
           # Ensure caching works with multi-checkout (head/base)
-          cache-dependency-path: '**/package-lock.json'
+          cache-dependency-path: "**/package-lock.json"
 
       - name: Install deps (base)
         working-directory: base
@@ -35,7 +35,7 @@ jobs:
         working-directory: base
         env:
           NODE_OPTIONS: --expose-gc
-          BENCHMARK_OUTPUT: ${{ github.workspace }}/baseline.json
+          BENCHMARK_OUTPUT: ${{ github.workspace }}/benchmarks/baseline.json
           CI: true
           GITHUB_ACTIONS: true
         run: npm run benchmark
@@ -48,7 +48,7 @@ jobs:
         working-directory: head
         env:
           NODE_OPTIONS: --expose-gc
-          BENCHMARK_OUTPUT: ${{ github.workspace }}/benchmark-results.json
+          BENCHMARK_OUTPUT: ${{ github.workspace }}/benchmarks/benchmark-results.json
           CI: true
           GITHUB_ACTIONS: true
         run: npm run benchmark
@@ -57,11 +57,12 @@ jobs:
         run: |
           set -euo pipefail
           echo "Workspace: $GITHUB_WORKSPACE"
-          if [ ! -f "$GITHUB_WORKSPACE/baseline.json" ]; then
+          mkdir -p "$GITHUB_WORKSPACE/benchmarks"
+          if [ ! -f "$GITHUB_WORKSPACE/benchmarks/baseline.json" ]; then
             echo "No baseline.json found; creating stub baseline (no base benchmarks)."
-            printf '{"meta":{"note":"stub baseline - no benchmarks in base"},"results":{}}' > "$GITHUB_WORKSPACE/baseline.json"
+            printf '{"meta":{"note":"stub baseline - no benchmarks in base"},"results":{}}' > "$GITHUB_WORKSPACE/benchmarks/baseline.json"
           fi
-          if [ ! -f "$GITHUB_WORKSPACE/benchmark-results.json" ]; then
+          if [ ! -f "$GITHUB_WORKSPACE/benchmarks/benchmark-results.json" ]; then
             echo "benchmark-results.json missing from head run" >&2
             exit 1
           fi
@@ -70,15 +71,15 @@ jobs:
         working-directory: head
         run: |
           echo "Comparing benchmark results..."
-          echo "Baseline: ${{ github.workspace }}/baseline.json"
-          echo "Current: ${{ github.workspace }}/benchmark-results.json"
-          echo "Config: ${{ github.workspace }}/head/benchmarks.config.json"
-          
+          echo "Baseline: ${{ github.workspace }}/benchmarks/baseline.json"
+          echo "Current: ${{ github.workspace }}/benchmarks/benchmark-results.json"
+          echo "Config: ${{ github.workspace }}/head/benchmarks/benchmarks.config.json"
+
           # Show file sizes for debugging
-          ls -la ${{ github.workspace }}/baseline.json ${{ github.workspace }}/benchmark-results.json
-          
+          ls -la ${{ github.workspace }}/benchmarks/baseline.json ${{ github.workspace }}/benchmarks/benchmark-results.json
+
           # Run comparison
-          node ./scripts/compare-benchmarks.mjs ${{ github.workspace }}/baseline.json ${{ github.workspace }}/benchmark-results.json ${{ github.workspace }}/head/benchmarks.config.json
+          node ./scripts/compare-benchmarks.mjs ${{ github.workspace }}/benchmarks/baseline.json ${{ github.workspace }}/benchmarks/benchmark-results.json ${{ github.workspace }}/head/benchmarks/benchmarks.config.json
 
       - name: Upload artifacts
         if: always()
@@ -86,5 +87,5 @@ jobs:
         with:
           name: benchmark-outputs
           path: |
-            ${{ github.workspace }}/baseline.json
-            ${{ github.workspace }}/benchmark-results.json
+            ${{ github.workspace }}/benchmarks/baseline.json
+            ${{ github.workspace }}/benchmarks/benchmark-results.json

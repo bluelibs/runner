@@ -4,19 +4,22 @@ import { loadAsyncLocalStorageClass } from "./node-als";
 
 export class NodePlatformAdapter implements IPlatformAdapter {
   readonly id = "node" as const;
-  private alsClass: any;
+  private alsClass: (new <T>() => IAsyncLocalStorage<T>) | undefined;
 
   async init() {
-    this.alsClass = await loadAsyncLocalStorageClass();
+    this.alsClass = (await loadAsyncLocalStorageClass()) as new <
+      T,
+    >() => IAsyncLocalStorage<T>;
   }
 
-  onUncaughtException(handler: (error: any) => void) {
-    process.on("uncaughtException", handler as any);
-    return () => process.off("uncaughtException", handler as any);
+  onUncaughtException(handler: (error: Error) => void) {
+    const h = (error: Error) => handler(error);
+    process.on("uncaughtException", h);
+    return () => process.off("uncaughtException", h);
   }
 
-  onUnhandledRejection(handler: (reason: any) => void) {
-    const h = (reason: any) => handler(reason);
+  onUnhandledRejection(handler: (reason: unknown) => void) {
+    const h = (reason: unknown) => handler(reason);
     process.on("unhandledRejection", h);
     return () => process.off("unhandledRejection", h);
   }
@@ -43,44 +46,35 @@ export class NodePlatformAdapter implements IPlatformAdapter {
   }
 
   createAsyncLocalStorage<T>(): IAsyncLocalStorage<T> {
-    let instance: any;
-    const ensure = () => {
+    let instance: IAsyncLocalStorage<T> | undefined;
+    const ensure = (): IAsyncLocalStorage<T> => {
       if (!this.alsClass) {
-        // Lazy-hydrate when init() wasn't awaited. We avoid static
-        // node-only imports for multi-platform builds by using a
-        // runtime-only require resolved via eval, so bundlers don't
-        // include it for non-node targets.
-        let als: any | undefined;
+        // Lazy-hydrate when init() wasn't awaited.
+        let als: (new <U>() => IAsyncLocalStorage<U>) | undefined;
         const forceNoop =
           typeof process !== "undefined" &&
           !!process.env?.RUNNER_FORCE_NOOP_ALS;
         if (!forceNoop) {
           try {
-            // In Node test/runtime, require is available and faster;
-            // this path is used only in node builds/tests.
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            const mod: any = require("async_hooks");
-            als = (mod as any)?.AsyncLocalStorage;
+            const mod = require("async_hooks");
+            als = mod?.AsyncLocalStorage;
           } catch (_) {
             als = undefined;
           }
         }
 
-        // If we couldn't resolve a real AsyncLocalStorage, provide a minimal, no-op
-        // implementation so that early calls don't throw. Full semantics are
-        // available after explicit init().
-        this.alsClass = als
-          ? als
-          : (class NoopAsyncLocalStorage<U> {
-              getStore(): U | undefined {
-                return undefined;
-              }
-              run<V>(_store: U, callback: () => V): V {
-                return callback();
-              }
-            } as any);
+        this.alsClass =
+          als ||
+          (class NoopAsyncLocalStorage<U> implements IAsyncLocalStorage<U> {
+            getStore(): U | undefined {
+              return undefined;
+            }
+            run<V>(_store: U, callback: () => V): V {
+              return callback();
+            }
+          } as new <U>() => IAsyncLocalStorage<U>);
       }
-      return (instance ??= new this.alsClass());
+      return (instance ??= new this.alsClass!());
     };
     return {
       getStore: () => ensure().getStore(),

@@ -14,9 +14,9 @@ export const currentUser = r
       "Retrieve current authenticated user's profile information from JWT token",
   })
   .inputSchema(z.undefined())
-  .resultSchema(z
-    .object({ id: z.string(), name: z.string(), email: z.string() })
-    .strict())
+  .resultSchema(
+    z.object({ id: z.string(), name: z.string(), email: z.string() }).strict(),
+  )
   .tags([httpRoute.with({ method: "get", path: "/me", auth: "required" })])
   .dependencies({ db, auth: authResource })
   .run(async (_input, { db, auth }) => {

@@ -28,9 +28,7 @@ export const symbolMiddlewareConfigured: unique symbol = Symbol.for(
   "runner.middlewareConfigured",
 );
 /** Records which tunnel resource owns the task patching (exclusivity). */
-export const symbolTunneledBy: unique symbol = Symbol.for(
-  "runner.tunneledBy",
-);
+export const symbolTunneledBy: unique symbol = Symbol.for("runner.tunneledBy");
 /** @internal Marks hook definitions (event listeners without middleware) */
 export const symbolHook: unique symbol = Symbol.for("runner.hook");
 // export const symbolMiddlewareEverywhereTasks: unique symbol = Symbol.for(

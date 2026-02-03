@@ -1,3 +1,45 @@
+/**
+ * @packageDocumentation
+ *
+ * # BlueLibs Runner
+ *
+ * A TypeScript-first dependency injection framework that combines functional programming
+ * with enterprise features. No decorators, no magic - just explicit, testable code.
+ *
+ * ## Quick Start
+ *
+ * ```typescript
+ * import { r, run } from "@bluelibs/runner";
+ *
+ * // Define a task (a function with superpowers)
+ * const greet = r.task("greet")
+ *   .run(async (name: string) => `Hello, ${name}!`)
+ *   .build();
+ *
+ * // Create and run your app
+ * const app = r.resource("app").register([greet]).build();
+ * const { runTask } = await run(app);
+ *
+ * console.log(await runTask(greet, "World")); // "Hello, World!"
+ * ```
+ *
+ * ## Core Concepts
+ *
+ * - **Tasks**: Functions with dependency injection, middleware, and validation
+ * - **Resources**: Singleton services with lifecycle management (init/dispose)
+ * - **Events**: Type-safe messages for decoupled communication
+ * - **Hooks**: Lightweight event handlers
+ * - **Middleware**: Cross-cutting concerns (auth, logging, caching)
+ *
+ * ## Learn More
+ *
+ * - [Documentation](https://github.com/bluelibs/runner/blob/main/README.md)
+ * - [Examples](https://github.com/bluelibs/runner/tree/main/examples)
+ * - [API Reference](https://bluelibs.github.io/runner/)
+ *
+ * @module @bluelibs/runner
+ */
+
 import {
   defineTask,
   defineResource,
@@ -31,6 +73,7 @@ import {
 import { tag as tagFn } from "./definers/builders/tag";
 import { error as errorFn } from "./definers/builders/error";
 import { asyncContext as asyncContextFn } from "./definers/builders/asyncContext";
+import { override as overrideBuilder } from "./definers/builders/override";
 
 const globals = {
   events: globalEvents,
@@ -67,6 +110,7 @@ export const r = Object.freeze({
   event: eventFn,
   hook: hookFn,
   tag: tagFn,
+  override: overrideBuilder,
   asyncContext: asyncContextFn,
   error: errorFn,
   middleware: Object.freeze({
@@ -80,7 +124,6 @@ export * from "./models";
 export * from "./globals/types";
 export * as Errors from "./errors";
 export { PlatformAdapter, setPlatform } from "./platform";
-export { EJSON } from "@bluelibs/ejson";
 
 // HTTP and tunnel functionality
 export * from "./http-client";
@@ -88,3 +131,10 @@ export * from "./http-fetch-tunnel.resource";
 
 // Re-export types at the package root so consumer declaration emits can reference them directly
 export type * from "./defs";
+
+export { Serializer, getDefaultSerializer } from "./serializer";
+export type { TypeDefinition, SerializerOptions } from "./serializer";
+
+// ExecutionJournal for per-execution state sharing
+export { journal } from "./models/ExecutionJournal";
+export type { ExecutionJournal, JournalKey } from "./types/executionJournal";

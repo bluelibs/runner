@@ -36,12 +36,10 @@ type IsUnknown<T> = unknown extends T
 type UnknownToNever<T> = IsUnknown<T> extends true ? never : T;
 
 // Generic extractors from any IContractable via the CONTRACT brand
-type ExtractContractOf<
-  T,
-  Kind extends "input" | "output",
-> = T extends IContractable<any, infer I, infer O>
-  ? UnknownToNever<Kind extends "input" ? NonVoid<I> : NonVoid<O>>
-  : never;
+type ExtractContractOf<T, Kind extends "input" | "output"> =
+  T extends IContractable<any, infer I, infer O>
+    ? UnknownToNever<Kind extends "input" ? NonVoid<I> : NonVoid<O>>
+    : never;
 
 // Filter that preserves tuple shape; array -> Array<Union>
 type FilterContractsKind<
@@ -57,9 +55,10 @@ type FilterContractsKind<
 type ExtractContractsFromCollection<
   TItems extends readonly unknown[],
   Kind extends "input" | "output",
-> = IsTuple<TItems> extends true
-  ? FilterContractsKind<TItems, Kind>
-  : Array<ExtractContractOf<TItems[number], Kind>>;
+> =
+  IsTuple<TItems> extends true
+    ? FilterContractsKind<TItems, Kind>
+    : Array<ExtractContractOf<TItems[number], Kind>>;
 
 // Public API you asked for
 export type ExtractInputTypeFromContracts<TItems extends readonly unknown[]> =
@@ -105,11 +104,12 @@ type KeysWithNever<T> = T extends object
   : never;
 type HasNeverProperty<T> = KeysWithNever<T> extends never ? false : true;
 // "Impossible" means either overall never or an object with any `never` property
-type IsImpossibleIntersection<T> = IsNever<T> extends true
-  ? true
-  : HasNeverProperty<T> extends true
-  ? true
-  : false;
+type IsImpossibleIntersection<T> =
+  IsNever<T> extends true
+    ? true
+    : HasNeverProperty<T> extends true
+      ? true
+      : false;
 
 // Error shapes
 export type InputContractViolationError<
@@ -137,14 +137,14 @@ export type EnsureInputSatisfiesContracts<
 > = [ContractsUnionInputs<TItems>] extends [never]
   ? TValue
   : TValue extends Promise<infer U>
-  ? Promise<
-      U extends ContractsIntersectionInputs<TItems>
-        ? U
-        : InputContractViolationError<TItems, U>
-    >
-  : TValue extends ContractsIntersectionInputs<TItems>
-  ? TValue
-  : InputContractViolationError<TItems, TValue>;
+    ? Promise<
+        U extends ContractsIntersectionInputs<TItems>
+          ? U
+          : InputContractViolationError<TItems, U>
+      >
+    : TValue extends ContractsIntersectionInputs<TItems>
+      ? TValue
+      : InputContractViolationError<TItems, TValue>;
 
 export type EnsureOutputSatisfiesContracts<
   TItems extends readonly unknown[],
@@ -152,14 +152,14 @@ export type EnsureOutputSatisfiesContracts<
 > = [ContractsUnionOutputs<TItems>] extends [never]
   ? TResponse
   : TResponse extends Promise<infer U>
-  ? Promise<
-      U extends ContractsIntersectionOutputs<TItems>
-        ? U
-        : OutputContractViolationError<TItems, U>
-    >
-  : TResponse extends ContractsIntersectionOutputs<TItems>
-  ? TResponse
-  : OutputContractViolationError<TItems, TResponse>;
+    ? Promise<
+        U extends ContractsIntersectionOutputs<TItems>
+          ? U
+          : OutputContractViolationError<TItems, U>
+      >
+    : TResponse extends ContractsIntersectionOutputs<TItems>
+      ? TResponse
+      : OutputContractViolationError<TItems, TResponse>;
 
 // Inferred-input API
 // - No input contracts -> void (so the arg can be omitted)
@@ -167,16 +167,17 @@ export type EnsureOutputSatisfiesContracts<
 // - Collision -> surfaces InputContractViolationError with helpful expected
 export type InferInputOrViolationFromContracts<
   TItems extends readonly unknown[],
-> = HasInputContracts<TItems> extends false
-  ? void
-  : ContractsIntersectionInputs<TItems> extends infer I
-  ? IsImpossibleIntersection<I> extends true
-    ? InputContractViolationError<
-        TItems,
-        Simplify<I extends never ? never : I>
-      >
-    : Simplify<I>
-  : never;
+> =
+  HasInputContracts<TItems> extends false
+    ? void
+    : ContractsIntersectionInputs<TItems> extends infer I
+      ? IsImpossibleIntersection<I> extends true
+        ? InputContractViolationError<
+            TItems,
+            Simplify<I extends never ? never : I>
+          >
+        : Simplify<I>
+      : never;
 
 // Optional-arg tuple helper for nicer ergonomics
 export type InputArg<TItems extends readonly unknown[]> = [
@@ -197,16 +198,17 @@ export type InputCollisionGuard<TItems extends readonly unknown[]> =
 // Mirrored inferred-output helper
 export type InferOutputOrViolationFromContracts<
   TItems extends readonly unknown[],
-> = HasOutputContracts<TItems> extends false
-  ? unknown
-  : ContractsIntersectionOutputs<TItems> extends infer O
-  ? IsImpossibleIntersection<O> extends true
-    ? OutputContractViolationError<
-        TItems,
-        Simplify<O extends never ? never : O>
-      >
-    : Simplify<O>
-  : never;
+> =
+  HasOutputContracts<TItems> extends false
+    ? unknown
+    : ContractsIntersectionOutputs<TItems> extends infer O
+      ? IsImpossibleIntersection<O> extends true
+        ? OutputContractViolationError<
+            TItems,
+            Simplify<O extends never ? never : O>
+          >
+        : Simplify<O>
+      : never;
 
 // Back-compat aliases with your original API
 /** @deprecated Use ExtractOutputTypeFromContracts instead */

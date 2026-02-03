@@ -1,4 +1,8 @@
-## Advanced Design Patterns with Runner
+# Advanced Design Patterns with Runner
+
+← [Back to main README](../README.md) | [Factory Pattern in FULL_GUIDE](./FULL_GUIDE.md#factory-pattern)
+
+---
 
 This guide covers higher‑level patterns you can build using Runner’s primitives (resources, tasks, middleware, events, tags) while keeping your domain code plain and testable.
 

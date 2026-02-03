@@ -29,7 +29,8 @@ export interface ResourceBuilder<
   TContext = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
 > {
   id: string;
   definition: ReadonlyDeep<
@@ -53,7 +54,8 @@ export interface TaskBuilder<
   TDeps extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends TaskMiddlewareAttachmentType[] = TaskMiddlewareAttachmentType[],
+  TMiddleware extends TaskMiddlewareAttachmentType[] =
+    TaskMiddlewareAttachmentType[],
 > {
   id: string;
   definition: ReadonlyDeep<
@@ -68,10 +70,8 @@ export interface EventBuilder<TPayload = void> {
 
 export interface HookBuilder<
   TDeps extends DependencyMapType = {},
-  TOn extends
-    | "*"
-    | IEventDefinition<any>
-    | readonly IEventDefinition<any>[] = any,
+  TOn extends "*" | IEventDefinition<any> | readonly IEventDefinition<any>[] =
+    any,
   TMeta extends ITaskMeta = any,
 > {
   id: string;

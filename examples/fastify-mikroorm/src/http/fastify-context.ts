@@ -15,7 +15,7 @@ export type FastifyContext = {
 export type AuthenticatedUser = { id: string; name: string; email: string };
 
 export const fastifyContext = r
-  .asyncContext<FastifyContext & RequestContext & { user?: AuthenticatedUser | null }>(
-    "FastifyContext"
-  )
+  .asyncContext<
+    FastifyContext & RequestContext & { user?: AuthenticatedUser | null }
+  >("FastifyContext")
   .build();

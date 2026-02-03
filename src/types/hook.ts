@@ -1,10 +1,9 @@
 import {
   DependencyMapType,
   DependencyValuesType,
-  IEventDefinition,
-  IEventEmission,
   ExtractEventPayload,
-} from "../defs";
+} from "./utilities";
+import { IEventDefinition, IEventEmission } from "./event";
 import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
 import { CommonPayload, symbolFilePath, symbolHook } from "./utilities";
@@ -27,8 +26,8 @@ export interface IHookDefinition<
       TOn extends "*"
         ? any
         : TOn extends readonly IEventDefinition<any>[]
-        ? CommonPayload<TOn>
-        : ExtractEventPayload<TOn>
+          ? CommonPayload<TOn>
+          : ExtractEventPayload<TOn>
     >,
     dependencies: DependencyValuesType<TDependencies>,
   ) => Promise<any>;

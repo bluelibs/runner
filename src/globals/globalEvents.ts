@@ -1,14 +1,8 @@
 import { defineEvent } from "../define";
-import {
-  IEvent,
-  IResource,
-  IHook,
-  ITaskMiddleware,
-  IResourceMiddleware,
-} from "../defs";
+import { IEvent } from "../defs";
 import { globalTags } from "./globalTags";
 
-const systemTag = globalTags.system;
+const _systemTag = globalTags.system;
 
 export const globalEvents = {
   // Minimal core events retained if any (custom events can still be defined by users)

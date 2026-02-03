@@ -1,9 +1,19 @@
 import type { ServerResponse } from "http";
 
-import type { Serializer } from "../../globals/resources/tunnel/serializer";
+import type { SerializerLike } from "../../serializer";
 import type { JsonResponse, StreamingResponse } from "./types";
 
-export const EJSON_CONTENT_TYPE = "application/json; charset=utf-8";
+export const JSON_CONTENT_TYPE = "application/json; charset=utf-8";
+
+enum SecurityHeaderName {
+  ContentTypeOptions = "X-Content-Type-Options",
+  FrameOptions = "X-Frame-Options",
+}
+
+enum SecurityHeaderValue {
+  NoSniff = "nosniff",
+  Deny = "DENY",
+}
 
 export const NOT_FOUND_RESPONSE = jsonErrorResponse(
   404,
@@ -31,11 +41,11 @@ export function jsonErrorResponse(
 ): JsonResponse {
   const error: Record<string, unknown> = { message };
   if (code) {
-    (error as any).code = code;
+    error.code = code;
   }
   if (extra && typeof extra === "object") {
     for (const [k, v] of Object.entries(extra)) {
-      (error as any)[k] = v;
+      error[k] = v;
     }
   }
   return { status, body: { ok: false, error } };
@@ -44,19 +54,19 @@ export function jsonErrorResponse(
 export function respondJson(
   res: ServerResponse,
   response: JsonResponse,
-  serializer?: Serializer,
+  serializer?: SerializerLike,
 ): void {
   if (res.writableEnded) {
     return;
   }
   const payload = Buffer.from(
-    (serializer as Serializer | undefined)?.stringify(response.body) ??
-      JSON.stringify(response.body),
+    serializer?.stringify(response.body) ?? JSON.stringify(response.body),
     "utf8",
   );
   res.statusCode = response.status;
-  res.setHeader("content-type", EJSON_CONTENT_TYPE);
+  res.setHeader("content-type", JSON_CONTENT_TYPE);
   res.setHeader("content-length", String(payload.length));
+  applySecurityHeaders(res);
   res.end(payload);
 }
 
@@ -66,7 +76,7 @@ export function respondStream(
 ): void {
   if (res.writableEnded) return;
   const isReadable = (v: unknown): v is NodeJS.ReadableStream =>
-    !!v && typeof (v as any).pipe === "function";
+    !!v && typeof (v as { pipe?: unknown }).pipe === "function";
   let stream: NodeJS.ReadableStream;
   let status = 200;
   let contentType = "application/octet-stream";
@@ -84,48 +94,73 @@ export function respondStream(
   if (headers) {
     for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
   }
+  applySecurityHeaders(res);
   // Some unit tests stub `res` without full stream interface (no `.on`).
   // Prefer pipe when destination looks like a Writable stream, otherwise manually forward chunks.
-  const canPipe = typeof (res as any).on === "function";
+  const canPipe = typeof (res as unknown as { on?: unknown }).on === "function";
   if (canPipe) {
-    stream.pipe(res as any);
+    stream.pipe(res);
     return;
   }
 
+  const safeWrite = (payload: Buffer) => {
+    (res as unknown as { write?: (chunk: Buffer) => unknown }).write?.(payload);
+  };
+
+  const safeEnd = () => {
+    (res as unknown as { end?: () => unknown }).end?.();
+  };
+
   const handleData = (chunk: unknown) => {
     const payload = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
-    (res as any).write?.(payload);
+    safeWrite(payload);
   };
 
   const removeDataListener = () => {
-    const off = (stream as any).off ?? (stream as any).removeListener;
-    if (typeof off === "function") {
-      off.call(stream, "data", handleData);
+    const emitter = stream as unknown as {
+      removeListener?: (
+        event: string,
+        handler: (...args: any[]) => void,
+      ) => void;
+      off?: (event: string, handler: (...args: any[]) => void) => void;
+    };
+
+    if (typeof emitter.removeListener === "function") {
+      emitter.removeListener("data", handleData);
+      return;
+    }
+
+    if (typeof emitter.off === "function") {
+      emitter.off("data", handleData);
     }
   };
 
   const handleEnd = () => {
     removeDataListener();
-    (res as any).end?.();
+    safeEnd();
   };
 
   const handleError = () => {
     removeDataListener();
-    if (!res.writableEnded) (res as any).end?.();
+    if (!res.writableEnded) safeEnd();
   };
 
-  const read = (stream as any).read?.bind(stream) as
-    | undefined
-    | ((size?: number) => unknown);
+  const read = (
+    stream as unknown as { read?: (size?: number) => unknown }
+  ).read?.bind(stream) as undefined | ((size?: number) => unknown);
   if (typeof read === "function") {
     let chunk: unknown;
     while ((chunk = read()) != null) {
       handleData(chunk);
     }
-    const state: any = (stream as any)._readableState;
-    const ended = !!((stream as any).readableEnded || (state && state.ended));
+    const state = (stream as unknown as { _readableState?: unknown })
+      ._readableState as { ended?: unknown } | undefined;
+    const ended = Boolean(
+      (stream as unknown as { readableEnded?: unknown }).readableEnded ||
+      state?.ended,
+    );
     if (ended) {
-      if (!res.writableEnded) (res as any).end?.();
+      if (!res.writableEnded) safeEnd();
       return;
     }
   }
@@ -134,8 +169,16 @@ export function respondStream(
   stream.once("end", handleEnd);
   stream.once("error", handleError);
 
-  const resume = (stream as any).resume;
+  const resume = (stream as unknown as { resume?: () => unknown }).resume;
   if (typeof resume === "function") {
     resume.call(stream);
   }
+}
+
+function applySecurityHeaders(res: ServerResponse): void {
+  res.setHeader(
+    SecurityHeaderName.ContentTypeOptions,
+    SecurityHeaderValue.NoSniff,
+  );
+  res.setHeader(SecurityHeaderName.FrameOptions, SecurityHeaderValue.Deny);
 }

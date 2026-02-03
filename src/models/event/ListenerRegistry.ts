@@ -1,9 +1,6 @@
 import { IEvent } from "../../defs";
 import { globalTags } from "../../globals/globalTags";
-import {
-  HandlerOptionsDefaults,
-  IListenerStorage,
-} from "./types";
+import { HandlerOptionsDefaults, IListenerStorage } from "./types";
 
 type IsExcludedFromGlobal = (event: IEvent<any>) => boolean;
 
@@ -22,7 +19,8 @@ export class ListenerRegistry {
 
   constructor(isExcludedFromGlobal?: IsExcludedFromGlobal) {
     this.isExcludedFromGlobal =
-      isExcludedFromGlobal ?? ((event) => globalTags.excludeFromGlobalHooks.exists(event));
+      isExcludedFromGlobal ??
+      ((event) => globalTags.excludeFromGlobalHooks.exists(event));
   }
 
   get globalListenersCacheValid() {
@@ -47,7 +45,7 @@ export class ListenerRegistry {
   getListenersForEmit(eventDefinition: IEvent<any>): IListenerStorage[] {
     const excludeGlobal = this.isExcludedFromGlobal(eventDefinition);
     if (excludeGlobal) {
-      return this.listeners.get(eventDefinition.id) || [];
+      return (this.listeners.get(eventDefinition.id) || []).slice();
     }
     return this.getCachedMergedListeners(eventDefinition.id);
   }
@@ -70,6 +68,13 @@ export class ListenerRegistry {
    * Cached merge between event-specific and global listeners.
    * Exposed for backward compatibility with existing tests.
    */
+  clear(): void {
+    this.listeners.clear();
+    this.globalListeners.length = 0;
+    this.cachedMergedListeners.clear();
+    this._globalListenersCacheValid = true;
+  }
+
   getCachedMergedListeners(eventId: string): IListenerStorage[] {
     if (!this._globalListenersCacheValid) {
       this.cachedMergedListeners.clear();
@@ -82,15 +87,19 @@ export class ListenerRegistry {
       if (eventListeners.length === 0 && this.globalListeners.length === 0) {
         cached = [];
       } else if (eventListeners.length === 0) {
-        cached = this.globalListeners;
+        cached = this.globalListeners.slice();
       } else if (this.globalListeners.length === 0) {
-        cached = eventListeners;
+        cached = eventListeners.slice();
       } else {
-        cached = this.mergeSortedListeners(eventListeners, this.globalListeners);
+        cached = this.mergeSortedListeners(
+          eventListeners,
+          this.globalListeners,
+        );
       }
       this.cachedMergedListeners.set(eventId, cached);
     }
-    return cached;
+    // Return a shallow copy to ensure snapshot isolation.
+    return cached.slice();
   }
 
   private invalidateCache(eventId?: string): void {
@@ -141,7 +150,9 @@ export class ListenerRegistry {
   }
 }
 
-export function createListener(newListener: Partial<IListenerStorage>): IListenerStorage {
+export function createListener(
+  newListener: Partial<IListenerStorage>,
+): IListenerStorage {
   return {
     handler: newListener.handler!,
     order: newListener.order ?? HandlerOptionsDefaults.order,

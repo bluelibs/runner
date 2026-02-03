@@ -8,14 +8,17 @@ import { Queue } from "../.."; // <-- adjust path if needed
 /** Flush native micro‑tasks once (Promise jobs / process.nextTick). */
 const flushMicroTasks = () => Promise.resolve();
 
-/** Small delay helper for tests */
-const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
 /* ------------------------------------------------------------------ */
 /* Tests                                                              */
 /* ------------------------------------------------------------------ */
 
 describe("Queue", () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
   it("runs tasks sequentially and returns their results in order", async () => {
     const q = new Queue();
 
@@ -30,7 +33,8 @@ describe("Queue", () => {
       maxConcurrent = Math.max(maxConcurrent, concurrent);
 
       // simulate async work with a real small delay
-      await delay(1);
+      jest.advanceTimersByTime(10);
+      await Promise.resolve();
 
       finished.push(id);
       concurrent--;
@@ -61,7 +65,8 @@ describe("Queue", () => {
     const q = new Queue();
 
     const task = async () => {
-      await delay(1);
+      jest.advanceTimersByTime(10);
+      await Promise.resolve();
       return "ok";
     };
 
@@ -78,8 +83,6 @@ describe("Queue", () => {
   });
 
   it("dispose({ cancel: true }) aborts the running task", async () => {
-    jest.useFakeTimers();
-
     const q = new Queue();
 
     /** Long‑running task that cooperates with AbortSignal. */
@@ -105,14 +108,15 @@ describe("Queue", () => {
     await expect(p).rejects.toThrow(/aborted/);
     await expect(disposeDone).resolves.toBeUndefined();
 
-    jest.useRealTimers();
+    await expect(disposeDone).resolves.toBeUndefined();
   });
 
   it("dispose() is idempotent - multiple calls should be safe", async () => {
     const q = new Queue();
 
     const task = async () => {
-      await delay(1);
+      jest.advanceTimersByTime(10);
+      await Promise.resolve();
       return "ok";
     };
 
@@ -146,7 +150,8 @@ describe("Queue", () => {
     const rejectingPromise = Promise.reject(
       new Error("Simulated tail rejection"),
     );
-    (q as any).tail = rejectingPromise;
+    // We cast to allow accessing private property for testing internal resilience
+    (q as unknown as { tail: Promise<any> }).tail = rejectingPromise;
 
     // Spy on the rejecting promise to verify the catch is called
     const catchSpy = jest.spyOn(rejectingPromise, "catch");
@@ -167,12 +172,14 @@ describe("Queue", () => {
 
     // Test that exceptions are propagated, not swallowed
     const errorTask = async () => {
-      await delay(1);
+      jest.advanceTimersByTime(10);
+      await Promise.resolve();
       throw new Error("Task exception");
     };
 
     const successTask = async () => {
-      await delay(1);
+      jest.advanceTimersByTime(10);
+      await Promise.resolve();
       return "success";
     };
 
@@ -194,11 +201,85 @@ describe("Queue", () => {
     // Create a Queue instance which will use the detected platform
     const q = new Queue();
 
-    // @ts-expect-error
-    q["hasAsyncLocalStorage"] = false; // force false to simulate non-node environment
+    // We cast to access private / protected value
+    (q as unknown as { hasAsyncLocalStorage: boolean }).hasAsyncLocalStorage =
+      false;
 
     // Run a simple task to ensure basic functionality works
     const result = await q.run(async () => 3);
     expect(result).toBe(3);
+  });
+
+  it("emits queue events", async () => {
+    const q = new Queue();
+    const seen: string[] = [];
+
+    q.on("enqueue", () => seen.push("enqueue"));
+    q.on("start", () => seen.push("start"));
+    q.on("finish", () => seen.push("finish"));
+    q.on("error", () => seen.push("error"));
+    q.on("cancel", () => seen.push("cancel"));
+    q.on("disposed", () => seen.push("disposed"));
+
+    await q.run(async () => "ok");
+    await expect(
+      q.run(async () => {
+        throw new Error("boom");
+      }),
+    ).rejects.toThrow("boom");
+
+    await q.dispose({ cancel: true });
+
+    expect(seen).toEqual(
+      expect.arrayContaining([
+        "enqueue",
+        "start",
+        "finish",
+        "error",
+        "cancel",
+        "disposed",
+      ]),
+    );
+  });
+
+  it("supports once listeners", async () => {
+    const q = new Queue();
+    const seen: string[] = [];
+
+    q.once("finish", (event) => seen.push(event.type));
+
+    await q.run(async () => "first");
+    await q.run(async () => "second");
+
+    expect(seen).toEqual(["finish"]);
+  });
+
+  it("supports unsubscribing from on() listeners", async () => {
+    const q = new Queue();
+    const seen: string[] = [];
+
+    const unsubscribe = q.on("finish", () => seen.push("finish"));
+
+    await q.run(async () => "first");
+    expect(seen).toEqual(["finish"]);
+
+    // Unsubscribe and verify no more events are received
+    unsubscribe();
+
+    await q.run(async () => "second");
+    expect(seen).toEqual(["finish"]); // Still only one "finish"
+  });
+
+  it("supports unsubscribing from once() listeners before event fires", async () => {
+    const q = new Queue();
+    const seen: string[] = [];
+
+    const unsubscribe = q.once("finish", () => seen.push("finish"));
+
+    // Unsubscribe before any task runs
+    unsubscribe();
+
+    await q.run(async () => "first");
+    expect(seen).toEqual([]); // No events received because we unsubscribed
   });
 });

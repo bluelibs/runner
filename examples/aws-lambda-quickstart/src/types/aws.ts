@@ -2,7 +2,7 @@
 
 export type ApiGatewayV2HttpEvent = {
   // version is not always present in mocks; keep optional
-  version?: '2.0';
+  version?: "2.0";
   requestContext?: { http?: { method?: string } };
   rawPath?: string;
   headers?: Record<string, string | undefined>;
@@ -25,4 +25,3 @@ export type AnyApiGatewayEvent = ApiGatewayV2HttpEvent | ApiGatewayV1RestEvent;
 export type LambdaContextLike = {
   awsRequestId?: string;
 };
-

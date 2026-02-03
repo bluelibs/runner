@@ -3,6 +3,10 @@ import {
   retryResourceMiddleware,
   retryTaskMiddleware,
 } from "../../globals/middleware/retry.middleware";
+import {
+  timeoutTaskMiddleware,
+  journalKeys as timeoutJournalKeys,
+} from "../../globals/middleware/timeout.middleware";
 import { run } from "../../run";
 
 describe("Retry Middleware", () => {
@@ -70,7 +74,6 @@ describe("Retry Middleware", () => {
 
     it("should use custom delay strategy", async () => {
       jest.useFakeTimers();
-      const delays: number[] = [];
       const start = Date.now();
 
       const task = defineTask({
@@ -128,6 +131,75 @@ describe("Retry Middleware", () => {
 
       await run(app);
       expect(attempt).toBe(4); // fails once and retries 3 more times, logically
+    });
+
+    it("should skip retries when timeout abort controller is aborted", async () => {
+      let attempt = 0;
+      const task = defineTask({
+        id: "abortableTask",
+        middleware: [
+          // Timeout wraps retry - timeout should abort and retry should not retry
+          timeoutTaskMiddleware.with({ ttl: 50 }),
+          retryTaskMiddleware.with({ retries: 5 }),
+        ],
+        run: async () => {
+          attempt++;
+          // Wait longer than timeout
+          await new Promise((resolve) => setTimeout(resolve, 100));
+          return "Success";
+        },
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [task],
+        dependencies: { task },
+        async init(_, { task }) {
+          await expect(task()).rejects.toThrow("timed out");
+        },
+      });
+
+      await run(app);
+      // Should only attempt once since timeout aborted before retry could kick in
+      expect(attempt).toBe(1);
+    });
+
+    it("should not retry when abort controller signal is aborted", async () => {
+      // This test directly verifies the abort controller check without timeout middleware
+      // by manually creating an aborted controller in the journal
+      let attempts = 0;
+
+      const task = defineTask({
+        id: "abortAwareTask",
+        middleware: [retryTaskMiddleware.with({ retries: 5 })],
+        run: async (_input, _deps, context) => {
+          attempts++;
+          // On first attempt, set an aborted controller in the journal
+          if (attempts === 1 && context?.journal) {
+            const abortController = new AbortController();
+            context.journal.set(
+              timeoutJournalKeys.abortController,
+              abortController,
+            );
+            // Abort it immediately so retry sees it as aborted on next catch
+            abortController.abort();
+          }
+          throw new Error("Should not retry after abort");
+        },
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [task],
+        dependencies: { task },
+        async init(_, { task }) {
+          await expect(task()).rejects.toThrow("Should not retry after abort");
+        },
+      });
+
+      await run(app);
+      // Should only attempt once since abort controller was aborted
+      expect(attempts).toBe(1);
     });
   });
 
@@ -214,7 +286,7 @@ describe("Retry Middleware", () => {
         async init(_, { resource }) {},
       });
 
-      expect(run(app)).rejects.toThrow("FATAL");
+      await expect(run(app)).rejects.toThrow("FATAL");
     });
 
     /**

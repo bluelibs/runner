@@ -27,4 +27,12 @@ export const globalTags = {
   debug: debugTag,
   tunnel: tunnelTag,
   tunnelPolicy: tunnelPolicyTag,
+  authValidator: defineTag({
+    id: "globals.tags.authValidator",
+    meta: {
+      title: "Auth Validator",
+      description:
+        "Marks tasks that validate HTTP requests for tunnel authentication.",
+    },
+  }),
 };

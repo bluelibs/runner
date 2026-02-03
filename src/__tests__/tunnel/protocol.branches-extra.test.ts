@@ -7,7 +7,7 @@ import {
 describe("tunnel protocol - branches extra", () => {
   it("assertOkEnvelope throws INVALID_RESPONSE with default message when envelope is not object", () => {
     try {
-      assertOkEnvelope(undefined as any);
+      assertOkEnvelope(undefined as unknown as { ok: boolean });
       fail("should throw");
     } catch (e) {
       expect(e).toBeInstanceOf(TunnelError);
@@ -16,13 +16,13 @@ describe("tunnel protocol - branches extra", () => {
   });
 
   it("toTunnelError uses fallback when non-string thrown value provided and no message", () => {
-    const te = toTunnelError(123 as any, "FALL");
+    const te = toTunnelError(123 as unknown as Error, "FALL");
     expect(te).toBeInstanceOf(TunnelError);
     expect(te.message).toBe("FALL");
   });
 
   it("toTunnelError uses default message when protocol error has empty message and no fallback", () => {
-    const te = toTunnelError({ code: "C", message: "" } as any);
+    const te = toTunnelError({ code: "C", message: "" } as unknown as Error);
     expect(te).toBeInstanceOf(TunnelError);
     expect(te.code).toBe("C");
     expect(te.message).toBe("Tunnel error");
@@ -30,7 +30,7 @@ describe("tunnel protocol - branches extra", () => {
 
   it("assertOkEnvelope not ok and no error and no fallback uses default message", () => {
     try {
-      assertOkEnvelope({ ok: false } as any);
+      assertOkEnvelope({ ok: false } as unknown as { ok: boolean });
       fail("should throw");
     } catch (e) {
       expect((e as TunnelError).message).toMatch(/Tunnel error/);
@@ -38,7 +38,7 @@ describe("tunnel protocol - branches extra", () => {
   });
 
   it("toTunnelError handles null input with default message", () => {
-    const te = toTunnelError(null as any);
+    const te = toTunnelError(null as unknown as Error);
     expect(te).toBeInstanceOf(TunnelError);
     expect(te.message).toBe("Tunnel error");
   });

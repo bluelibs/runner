@@ -1,5 +1,5 @@
 import { error } from "./definers/builders/error";
-import type { DefaultErrorType, IErrorHelper } from "./types/error";
+import type { DefaultErrorType } from "./types/error";
 import { detectEnvironment } from "./platform";
 
 // Duplicate registration
@@ -187,9 +187,52 @@ export const tunnelOwnershipConflictError = error<
     attemptedOwnerId: string;
   } & DefaultErrorType
 >("runner.errors.tunnelOwnershipConflict")
-  .format(({ taskId, currentOwnerId, attemptedOwnerId }) =>
-    `Task "${taskId}" is already tunneled by resource "${currentOwnerId}". Resource "${attemptedOwnerId}" cannot tunnel it again. Ensure each task is owned by a single tunnel client.`,
+  .format(
+    ({ taskId, currentOwnerId, attemptedOwnerId }) =>
+      `Task "${taskId}" is already tunneled by resource "${currentOwnerId}". Resource "${attemptedOwnerId}" cannot tunnel it again. Ensure each task is owned by a single tunnel client.`,
   )
+  .build();
+
+// Phantom task executed without a matching tunnel route
+export const phantomTaskNotRoutedError = error<
+  { taskId: string } & DefaultErrorType
+>("runner.errors.phantomTaskNotRouted")
+  .format(
+    ({ taskId }) =>
+      `Phantom task "${taskId}" is not routed through any tunnel. Ensure a tunnel client selects this task id (or avoid calling the phantom task directly).`,
+  )
+  .build();
+
+// Task not registered in Store (internal invariant)
+export const taskNotRegisteredError = error<
+  { taskId: string } & DefaultErrorType
+>("runner.errors.taskNotRegistered")
+  .format(
+    ({ taskId }) =>
+      `Task "${taskId}" is not registered in the Store. This is an internal error—ensure the task is registered before execution.`,
+  )
+  .build();
+
+/** Builder types that require validation before build() */
+export type BuilderType = "hook" | "task-middleware" | "resource-middleware";
+
+// Builder incomplete (missing required fields)
+export const builderIncompleteError = error<
+  {
+    type: BuilderType;
+    builderId: string;
+    missingFields: string[];
+  } & DefaultErrorType
+>("runner.errors.builderIncomplete")
+  .format(({ type, builderId, missingFields }) => {
+    const typeLabel =
+      type === "hook"
+        ? "Hook"
+        : type === "task-middleware"
+          ? "Task middleware"
+          : "Resource middleware";
+    return `${typeLabel} "${builderId}" is incomplete. Missing required: ${missingFields.join(", ")}. Call ${missingFields.map((f) => `.${f}()`).join(" and ")} before .build().`;
+  })
   .build();
 
 export function isCancellationError(err: unknown): boolean {

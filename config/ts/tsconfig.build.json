@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // Build-specific overrides
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "emitDeclarationOnly": false,
+    "outDir": "../../dist",
+    "types": ["node"]
+  },
+  "include": ["../../src"],
+  "exclude": [
+    "../../examples/**",
+    "../../src/__tests__/**",
+    "../../src/**/__tests__/**",
+    "../../src/**/*.test.ts",
+    "../../src/node/durable/dashboard/**"
+  ]
+}

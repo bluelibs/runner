@@ -1,5 +1,9 @@
 # BlueLibs Runner: Functional Programming Without Classes
 
+← [Back to main README](../README.md)
+
+---
+
 _Or: How I Learned to Stop Worrying and Love Closures_
 
 This guide shows how to build applications using BlueLibs Runner's functional approach. Instead of thinking in classes, think in terms of functions that return capabilities. You get the power of OOP patterns with the simplicity and testability of functions. With 100% type-safety.
@@ -9,7 +13,7 @@ This guide shows how to build applications using BlueLibs Runner's functional ap
 The core idea is that **resources are factories** that return API objects.
 
 ```ts
-// ❌ Instead of a class...
+// Bad: Instead of a class...
 class UserService {
   constructor(private db: Database) {}
   async getUser(id: string) {
@@ -17,7 +21,7 @@ class UserService {
   }
 }
 
-// ✅ ...use a resource that returns an API object.
+// Good: Use a resource that returns an API object.
 import { r } from "@bluelibs/runner";
 
 const userService = r
@@ -48,15 +52,15 @@ Variables declared inside `init` but outside the returned object are completely 
 const secureWallet = r
   .resource("app.wallet")
   .init(async (config: { initialBalance: number }) => {
-    // ✅ Private state - invisible from the outside
+    // Good: Private state - invisible from the outside
     let balance = config.initialBalance;
 
-    // ✅ Private helper function
+    // Good: Private helper function
     const validate = (amount: number) => {
       if (balance < amount) throw new Error("Insufficient funds");
     };
 
-    // ✅ Public API - only these methods are accessible
+    // Good: Public API - only these methods are accessible
     return {
       getBalance: () => balance,
       debit(amount: number) {
@@ -167,7 +171,7 @@ const getUserProfile = r
   .task("app.tasks.getUserProfile")
   .tags([userContract, ageContract])
   .run(async () => {
-    // ✅ TypeScript enforces this return shape: { name: string } & { age: number }
+    // Good: TypeScript enforces this return shape: { name: string } & { age: number }
     return { name: "Ada", age: 37 };
   })
   .build();
@@ -177,7 +181,7 @@ const profileService = r
   .resource("app.resources.profile")
   .tags([userContract])
   .init(async () => {
-    // ✅ Must return { name: string }
+    // Good: Must return { name: string }
     return { name: "Ada" };
   })
   .build();
@@ -209,9 +213,11 @@ Use contract tags to discover and select implementations at runtime.
 ```ts
 // 1. Define the strategy contract
 const paymentStrategyContract = r
-  .tag<void, void, { process(amount: number): Promise<boolean> }>(
-    "contract.paymentStrategy",
-  )
+  .tag<
+    void,
+    void,
+    { process(amount: number): Promise<boolean> }
+  >("contract.paymentStrategy")
   .build();
 
 // 2. Implement concrete strategies

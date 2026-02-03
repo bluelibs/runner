@@ -40,10 +40,10 @@ async function respondDuplex(
       .on("data", (c: any) => {
         const buf = Buffer.isBuffer(c) ? c : Buffer.from(String(c));
         // Required demo logs
-        // eslint-disable-next-line no-console
+
         console.log("receive", buf.toString("utf8"));
         const out = transform(buf);
-        // eslint-disable-next-line no-console
+
         console.log("sent-back", out);
         res.write(out);
       })
@@ -70,7 +70,11 @@ const duplexTask = task({
 });
 
 const exposure = nodeExposure.with({
-  http: { listen: { port: 0 }, basePath: BASE_PATH },
+  http: {
+    dangerouslyAllowOpenExposure: true,
+    listen: { port: 0 },
+    basePath: BASE_PATH,
+  },
 });
 const app = resource({
   id: "examples.streaming.duplex.app",
@@ -94,7 +98,7 @@ export async function runStreamingDuplexExample(): Promise<void> {
           const text = Buffer.isBuffer(chunk)
             ? chunk.toString("utf8")
             : String(chunk);
-          // eslint-disable-next-line no-console
+
           console.log("send", text);
           cb(null, chunk);
         },
@@ -114,7 +118,7 @@ export async function runStreamingDuplexExample(): Promise<void> {
       res
         .on("data", (c: any) => {
           const buf = Buffer.isBuffer(c) ? c : Buffer.from(String(c));
-          // eslint-disable-next-line no-console
+
           console.log("received-back", buf.toString("utf8"));
           chunks.push(buf);
         })

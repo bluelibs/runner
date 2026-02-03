@@ -1,15 +1,18 @@
 import {
   DependencyMapType,
   IOptionalDependency,
-  IResourceMiddleware,
   IValidationSchema,
   OverridableElements,
   RegisterableItems,
   ResourceDependencyValuesType,
+} from "./utilities";
+import {
+  IResourceMiddleware,
   ResourceMiddlewareAttachmentType,
-} from "../defs";
+} from "./resourceMiddleware";
 import { TagType } from "./tag";
 import { IResourceMeta } from "./meta";
+import type { ThrowsList } from "./error";
 import {
   symbolFilePath,
   symbolResource,
@@ -23,26 +26,39 @@ import {
   InferInputOrViolationFromContracts,
 } from "./contracts";
 
+export type {
+  DependencyMapType,
+  IOptionalDependency,
+  IValidationSchema,
+  OverridableElements,
+  RegisterableItems,
+  ResourceDependencyValuesType,
+} from "./utilities";
+export type { ResourceMiddlewareAttachmentType } from "./resourceMiddleware";
+export type { TagType } from "./tag";
+export type { IResourceMeta } from "./meta";
+
 // Helper to detect `any` so we can treat it as "unspecified"
 type IsAny<T> = 0 extends 1 & T ? true : false;
 type IsUnspecified<T> = [T] extends [undefined]
   ? true
   : [T] extends [void]
-  ? true
-  : IsAny<T> extends true
-  ? true
-  : false;
+    ? true
+    : IsAny<T> extends true
+      ? true
+      : false;
 
 export interface IResourceDefinition<
   TConfig = any,
   TValue extends Promise<any> = Promise<any>,
   TDependencies extends DependencyMapType = {},
   TContext = any,
-  THooks = any,
-  TRegisterableItems = any,
+  _THooks = any,
+  _TRegisterableItems = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
 > {
   /** Stable identifier. */
   id: string;
@@ -94,6 +110,16 @@ export interface IResourceDefinition<
   ) => Promise<void>;
   meta?: TMeta;
   /**
+   * Declares which typed errors are part of this resource's contract.
+   *
+   * This is a declarative contract only:
+   * - It does not imply dependency injection
+   * - It does not enforce that only these errors can be thrown
+   *
+   * Use string ids or Error helpers.
+   */
+  throws?: ThrowsList;
+  /**
    * Optional validation schema for runtime config validation.
    * When provided, resource config will be validated when .with() is called.
    */
@@ -117,7 +143,6 @@ export interface IResourceDefinition<
   [symbolFilePath]?: string;
   tags?: TTags;
 }
-
 
 /**
  * Helper alias describing the canonical resource init call signature.
@@ -152,18 +177,19 @@ export interface IResource<
   TContext = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
 > extends IResourceDefinition<
-    TConfig,
-    TValue,
-    TDependencies,
-    TContext,
-    any,
-    any,
-    TMeta,
-    TTags,
-    TMiddleware
-  > {
+  TConfig,
+  TValue,
+  TDependencies,
+  TContext,
+  any,
+  any,
+  TMeta,
+  TTags,
+  TMiddleware
+> {
   id: string;
   with(
     config: HasInputContracts<[...TTags, ...TMiddleware]> extends true
@@ -187,6 +213,8 @@ export interface IResource<
   middleware: TMiddleware;
   [symbolFilePath]: string;
   [symbolResource]: true;
+  /** Normalized list of error ids declared via `throws`. */
+  throws?: readonly string[];
   /** Return an optional dependency wrapper for this resource. */
   optional: () => IOptionalDependency<
     IResource<
@@ -200,6 +228,22 @@ export interface IResource<
     >
   >;
   tags: TTags;
+  /**
+   * Create a new resource with a different id but the same definition.
+   * Useful for creating multiple instances of a "template" resource.
+   * The forked resource should be exported and used as a dependency.
+   */
+  fork(
+    newId: string,
+  ): IResource<
+    TConfig,
+    TValue,
+    TDependencies,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
 }
 
 export interface IResourceWithConfig<
@@ -209,12 +253,8 @@ export interface IResourceWithConfig<
   TContext = any,
   TMeta extends IResourceMeta = any,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends IResourceMiddleware<
-    any,
-    any,
-    any,
-    any
-  >[] = IResourceMiddleware[],
+  TMiddleware extends IResourceMiddleware<any, any, any, any>[] =
+    IResourceMiddleware[],
 > {
   [symbolResourceWithConfig]: true;
   /** The id of the underlying resource. */

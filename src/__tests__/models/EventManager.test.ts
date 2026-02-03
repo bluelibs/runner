@@ -1,20 +1,14 @@
-import {
-  IEvent,
-  IEventEmission,
-  symbolEvent,
-  symbolFilePath,
-} from "../../defs";
+import { IEvent, IEventEmission, IHook } from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
-import { eventCycleError } from "../../errors";
 
 describe("EventManager", () => {
   let eventManager: EventManager;
   let eventDefinition: IEvent<string>;
 
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeCycleDetection: true });
+    eventManager = new EventManager({ runtimeEventCycleDetection: true });
     eventDefinition = defineEvent<string>({ id: "testEvent" });
   });
 
@@ -145,11 +139,11 @@ describe("EventManager", () => {
 
     expect(() => {
       eventManager.addListener(eventDefinition, handler);
-    }).toThrowError("Cannot modify the EventManager when it is locked.");
+    }).toThrow("Cannot modify the EventManager when it is locked.");
 
     expect(() => {
       eventManager.addGlobalListener(handler);
-    }).toThrowError("Cannot modify the EventManager when it is locked.");
+    }).toThrow("Cannot modify the EventManager when it is locked.");
   });
 
   it("should handle multiple events", async () => {
@@ -315,14 +309,18 @@ describe("EventManager", () => {
 
     try {
       await eventManager.emit(parallelEvent, "data", "src");
-    } catch (err: any) {
-      expect(err.name).toBe("AggregateError");
-      expect(Array.isArray(err.errors)).toBe(true);
-      expect(err.errors.map((e: any) => e.listenerId)).toEqual(
+    } catch (err: unknown) {
+      const aggErr = err as {
+        name: string;
+        errors: (Error & { listenerId: string; listenerOrder: number })[];
+      };
+      expect(aggErr.name).toBe("AggregateError");
+      expect(Array.isArray(aggErr.errors)).toBe(true);
+      expect(aggErr.errors.map((e) => e.listenerId)).toEqual(
         expect.arrayContaining(["l2", "l3"]),
       );
-      expect(err.errors.map((e: any) => e.listenerOrder)).toEqual([0, 0]);
-      expect(err.errors[0]).toBeInstanceOf(Error);
+      expect(aggErr.errors.map((e) => e.listenerOrder)).toEqual([0, 0]);
+      expect(aggErr.errors[0]).toBeInstanceOf(Error);
     }
   });
 
@@ -342,7 +340,12 @@ describe("EventManager", () => {
 
     try {
       await eventManager.emit(parallelEvent, "data", "src");
-    } catch (err: any) {
+    } catch (error: unknown) {
+      const err = error as {
+        listenerId: string;
+        listenerOrder: number;
+        message: string;
+      };
       expect(err.listenerId).toBe("solo");
       expect(err.listenerOrder).toBe(0);
       expect(err.message).toBe("solo-bang");
@@ -408,7 +411,7 @@ describe("EventManager", () => {
 
     expect(() => {
       eventManager.addListener(eventDefinition, handler);
-    }).toThrowError("Cannot modify the EventManager when it is locked.");
+    }).toThrow("Cannot modify the EventManager when it is locked.");
   });
 
   it("should not throw when emitting after lock", async () => {
@@ -463,7 +466,7 @@ describe("EventManager", () => {
   it("should skip listener when listener id equals source", async () => {
     const handler = jest.fn();
 
-    eventManager.addListener(eventDefinition, handler, { id: "self" } as any);
+    eventManager.addListener(eventDefinition, handler, { id: "self" });
 
     // When the source equals the listener id, the listener should be skipped
     await eventManager.emit(eventDefinition, "data", "self");
@@ -722,7 +725,11 @@ describe("EventManager", () => {
     expect(ok).toHaveBeenCalled();
 
     await expect(
-      eventManager.emit(schemaEvent, { x: "nope" } as any, "src"),
+      eventManager.emit(
+        schemaEvent,
+        { x: "nope" } as unknown as { x: number },
+        "src",
+      ),
     ).rejects.toThrow(/Event payload/i);
   });
 
@@ -744,7 +751,10 @@ describe("EventManager", () => {
   it("hasListeners returns true when only global listeners exist and event has empty array", () => {
     const handler = jest.fn();
     eventManager.addGlobalListener(handler);
-    (eventManager as any).listeners.set(eventDefinition.id, []);
+    (eventManager as unknown as { listeners: Map<any, any> }).listeners.set(
+      eventDefinition.id,
+      [],
+    );
     expect(eventManager.hasListeners(eventDefinition)).toBe(true);
   });
 
@@ -756,9 +766,12 @@ describe("EventManager", () => {
       eventManager.intercept(interceptor1);
       eventManager.intercept(interceptor2);
 
-      expect((eventManager as any).emissionInterceptors).toHaveLength(2);
-      expect((eventManager as any).emissionInterceptors[0]).toBe(interceptor1);
-      expect((eventManager as any).emissionInterceptors[1]).toBe(interceptor2);
+      const interceptors = (
+        eventManager as unknown as { emissionInterceptors: any[] }
+      ).emissionInterceptors;
+      expect(interceptors).toHaveLength(2);
+      expect(interceptors[0]).toBe(interceptor1);
+      expect(interceptors[1]).toBe(interceptor2);
     });
 
     it("should throw error when adding interceptors after lock", () => {
@@ -859,6 +872,46 @@ describe("EventManager", () => {
     });
   });
 
+  describe("emitWithResult", () => {
+    it("returns final payload after interceptor and listener mutations", async () => {
+      eventManager.intercept(async (next, event) => {
+        return next({ ...event, data: `${event.data}-i` });
+      });
+
+      eventManager.addListener(eventDefinition, async (e) => {
+        e.data = `${e.data}-l`;
+      });
+
+      const out = await eventManager.emitWithResult(
+        eventDefinition,
+        "orig",
+        "src",
+      );
+      expect(out).toBe("orig-i-l");
+    });
+
+    it("returns payload even when interceptors short-circuit emission", async () => {
+      eventManager.intercept(async (next, event) => {
+        return next({ ...event, data: "deep" });
+      });
+      eventManager.intercept(async () => {
+        // Prevent base emission
+        return;
+      });
+
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+
+      const out = await eventManager.emitWithResult(
+        eventDefinition,
+        "orig",
+        "src",
+      );
+      expect(handler).not.toHaveBeenCalled();
+      expect(out).toBe("deep");
+    });
+  });
+
   describe("interceptHook", () => {
     it("should add hook interceptors", () => {
       const interceptor1 = jest.fn(async (next, hook, event) =>
@@ -871,9 +924,12 @@ describe("EventManager", () => {
       eventManager.interceptHook(interceptor1);
       eventManager.interceptHook(interceptor2);
 
-      expect((eventManager as any).hookInterceptors).toHaveLength(2);
-      expect((eventManager as any).hookInterceptors[0]).toBe(interceptor1);
-      expect((eventManager as any).hookInterceptors[1]).toBe(interceptor2);
+      const intercepts = (
+        eventManager as unknown as { hookInterceptors: any[] }
+      ).hookInterceptors;
+      expect(intercepts).toHaveLength(2);
+      expect(intercepts[0]).toBe(interceptor1);
+      expect(intercepts[1]).toBe(interceptor2);
     });
 
     it("should throw error when adding hook interceptors after lock", () => {
@@ -904,8 +960,8 @@ describe("EventManager", () => {
       };
 
       const result = await eventManager.executeHookWithInterceptors(
-        mockHook as any,
-        mockEvent as any,
+        mockHook as unknown as IHook<any, any>,
+        mockEvent as unknown as IEventEmission<any>,
         {},
       );
 
@@ -945,8 +1001,8 @@ describe("EventManager", () => {
       };
 
       await eventManager.executeHookWithInterceptors(
-        mockHook as any,
-        mockEvent as any,
+        mockHook as unknown as IHook<any, any>,
+        mockEvent as unknown as IEventEmission<any>,
         {},
       );
 
@@ -980,8 +1036,8 @@ describe("EventManager", () => {
       };
 
       await eventManager.executeHookWithInterceptors(
-        mockHook as any,
-        mockEvent as any,
+        mockHook as unknown as IHook<any, any>,
+        mockEvent as unknown as IEventEmission<any>,
         {},
       );
 
@@ -1013,8 +1069,8 @@ describe("EventManager", () => {
       };
 
       const result = await eventManager.executeHookWithInterceptors(
-        mockHook as any,
-        mockEvent as any,
+        mockHook as unknown as IHook<any, any>,
+        mockEvent as unknown as IEventEmission<any>,
         {},
       );
 
@@ -1037,11 +1093,11 @@ describe("EventManager", () => {
         stopPropagation: () => {},
         isPropagationStopped: () => false,
         tags: [globalTags.excludeFromGlobalHooks],
-      } as any;
+      } as unknown as IHook<any, any>;
 
       const result = await eventManager.executeHookWithInterceptors(
-        mockHook as any,
-        mockEvent as any,
+        mockHook as unknown as IHook<any, any>,
+        mockEvent as unknown as IEventEmission<any>,
         {},
       );
 
@@ -1064,24 +1120,24 @@ describe("EventManager", () => {
         stopPropagation: () => {},
         isPropagationStopped: () => false,
         tags: [],
-      } as any;
+      } as unknown as IEventEmission<any>;
 
       await expect(
         eventManager.executeHookWithInterceptors(
-          mockHook as any,
-          mockEvent as any,
+          mockHook as unknown as IHook<any, any>,
+          mockEvent as unknown as IEventEmission<any>,
           {},
         ),
       ).rejects.toThrow("boom");
       expect(mockHook.run).toHaveBeenCalled();
     });
 
-    it("executes hook directly when runtimeCycleDetection is false", async () => {
-      const em = new EventManager({ runtimeCycleDetection: false });
+    it("executes hook directly when runtimeEventCycleDetection is false", async () => {
+      const em = new EventManager({ runtimeEventCycleDetection: false });
       const mockHook = {
         id: "noContextHook",
         run: jest.fn().mockResolvedValue("ok-no-context"),
-      } as any;
+      } as unknown as IHook<any, any>;
 
       const mockEvent = {
         id: "evt",
@@ -1089,7 +1145,7 @@ describe("EventManager", () => {
         timestamp: new Date(),
         source: "s",
         tags: [],
-      } as any;
+      } as unknown as IEventEmission<any>;
 
       const result = await em.executeHookWithInterceptors(
         mockHook,
@@ -1150,8 +1206,8 @@ describe("EventManager", () => {
 
       await expect(
         eventManager.executeHookWithInterceptors(
-          mockHook as any,
-          mockEvent as any,
+          mockHook as unknown as IHook<any, any>,
+          mockEvent as unknown as IEventEmission<any>,
           {},
         ),
       ).rejects.toThrow("Hook interceptor error");
@@ -1160,7 +1216,6 @@ describe("EventManager", () => {
   });
 
   it("should exclude global listeners when event has excludeFromGlobalHooks tag", async () => {
-    const { globalTags } = await import("../../globals/globalTags");
     const handlerEvent = jest.fn();
     const handlerGlobal = jest.fn();
 
@@ -1227,7 +1282,10 @@ describe("EventManager", () => {
   });
 
   it("uses only event-specific listeners when excludeFromGlobal is set (avoids merging)", async () => {
-    const spy = jest.spyOn(eventManager as any, "getCachedMergedListeners");
+    const spy = jest.spyOn(
+      eventManager as unknown as { getCachedMergedListeners: any },
+      "getCachedMergedListeners",
+    );
 
     const handlerEvent = jest.fn();
     const handlerGlobal = jest.fn();
@@ -1251,11 +1309,12 @@ describe("EventManager", () => {
 
   it("exposes getCachedMergedListeners for backward compatibility", () => {
     const manager = new EventManager();
-    const registry = (manager as any).registry;
+    const registry = (manager as unknown as { registry: any }).registry;
     const spy = jest.spyOn(registry, "getCachedMergedListeners");
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (manager as any).getCachedMergedListeners("evt-bc");
+    (
+      manager as unknown as { getCachedMergedListeners: any }
+    ).getCachedMergedListeners("evt-bc");
 
     expect(spy).toHaveBeenCalledWith("evt-bc");
   });
@@ -1277,7 +1336,7 @@ describe("EventManager", () => {
         executionOrder.push("hook-run");
         return "ok";
       }),
-    } as any;
+    } as unknown as IHook<any, any>;
 
     const mockEvent = {
       id: "evt",
@@ -1288,7 +1347,7 @@ describe("EventManager", () => {
       stopPropagation: () => {},
       isPropagationStopped: () => false,
       tags: [globalTags.excludeFromGlobalHooks],
-    } as any;
+    } as unknown as IEventEmission<any>;
 
     const result = await eventManager.executeHookWithInterceptors(
       mockHook,
@@ -1309,7 +1368,7 @@ describe("EventManager", () => {
   // Hook lifecycle events are no longer emitted by EventManager; related tests removed
 
   describe("cycle detection", () => {
-    it("constructor default enables runtimeCycleDetection and throws on self-cycle", async () => {
+    it("constructor default enables runtimeEventCycleDetection and throws on self-cycle", async () => {
       const em = new EventManager();
       const A = defineEvent<string>({ id: "A_default" });
       em.addListener(A, async () => {
@@ -1320,7 +1379,7 @@ describe("EventManager", () => {
     });
 
     it("safe re-emit by same hook does not throw", async () => {
-      const em = new EventManager({ runtimeCycleDetection: true });
+      const em = new EventManager({ runtimeEventCycleDetection: true });
       const A = defineEvent<string>({ id: "A_hook" });
 
       const hook = {
@@ -1332,11 +1391,11 @@ describe("EventManager", () => {
           }
           return undefined;
         },
-      } as any;
+      } as unknown as IHook<any, any>;
 
       em.addListener(A, async (event) => {
         // Execute hook within currentHookIdContext via executeHookWithInterceptors
-        await em.executeHookWithInterceptors(hook, event, {} as any);
+        await em.executeHookWithInterceptors(hook, event, {});
       });
 
       // Initial emit should not throw because re-emit is from the same hook id
@@ -1389,13 +1448,13 @@ describe("EventManager", () => {
       expect(calls).toEqual(["A", "B", "C"]);
     });
 
-    it("does not throw when runtimeCycleDetection is false (A -> B -> A)", async () => {
+    it("does not throw when runtimeEventCycleDetection is false (A -> B -> A)", async () => {
       const calls: string[] = [];
       const max = 2;
       const A = defineEvent<{ count: number }>({ id: "A_disabled" });
       const B = defineEvent<{ count: number }>({ id: "B_disabled" });
 
-      const em = new EventManager({ runtimeCycleDetection: false });
+      const em = new EventManager({ runtimeEventCycleDetection: false });
 
       em.addListener(A, async (event) => {
         calls.push("A");

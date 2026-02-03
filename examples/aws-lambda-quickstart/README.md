@@ -1,31 +1,33 @@
-AWS Lambda QuickStart with BlueLibs Runner
+# AWS Lambda QuickStart with BlueLibs Runner
 
 Quick serverless integration:
 
-```ts
+```bash
 # Start it with serverless
 npm run dev
 
-# Start with with AWS SAM
+# Start with AWS SAM
 npm run dev:sam
 ```
 
 This example shows two deployment styles using Runner:
 
-- Lambdalith: one Lambda handles all REST routes
-- Per-route: each REST endpoint has its own Lambda
+- **Lambdalith**: one Lambda handles all REST routes
+- **Per-route**: each REST endpoint has its own Lambda
 
 The code in `src/` is imported by the repository tests. In a standalone app you'd import from `@bluelibs/runner` instead of using a relative path.
 
-Files
+## Files
 
-- `src/bootstrap.ts`: shared resources, tasks, and cached runner instance
-- `src/handler.lambdalith.ts`: single handler that routes by method/path
-- `src/handlers/getUser.ts`: per-route handler for GET /users/{id}
-- `src/handlers/createUser.ts`: per-route handler for POST /users
+- `src/bootstrap.ts` — shared resources, tasks, and cached runner instance
+- `src/http.ts` — shared HTTP utilities (CORS, JSON responses, event parsing)
+- `src/handler.lambdalith.ts` — single handler that routes by method/path
+- `src/handlers/getUser.ts` — per-route handler for GET /users/{id}
+- `src/handlers/createUser.ts` — per-route handler for POST /users
 
-Notes
+## Notes
 
 - Uses request-scoped context via `createContext`
 - Disables shutdown hooks for Lambda (`shutdownHooks: false`)
 - Keeps a cached runner between warm invocations
+- All handlers share HTTP utilities from `http.ts` to avoid duplication

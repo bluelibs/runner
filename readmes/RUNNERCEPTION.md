@@ -1,27 +1,31 @@
-## Runnerception: Private Containers inside Resources
+# Runnerception: Private Containers inside Resources
 
-Sometimes you want an isolated dependency graph that lives inside a single resource: a private container with its own tasks, resources, middleware, and overrides. You can achieve this by starting a nested Runner from within a resource’s `init()` and disposing it in `dispose()`.
+← [Back to main README](../README.md)
 
-### Why do this?
+> **Prerequisites**: Familiarity with [Resources, Tasks, and the fluent builder API](./AI.md) is assumed.
 
-- **Bounded context isolation**: Keep a sub‑system’s wiring, policies, and overrides self‑contained.
-- **Multi‑tenant per‑instance containers**: Spin up one inner container per tenant/region/project.
-- **Plugin sandboxes**: Run third‑party or experimental modules without polluting the global graph.
-- **Lifecycle scoping**: Start/stop an entire sub‑graph with the parent resource.
+Sometimes you want an isolated dependency graph that lives inside a single resource: a private container with its own tasks, resources, middleware, and overrides. You can achieve this by starting a nested Runner from within a resource's `init()` and disposing it in `dispose()`.
 
-### Pattern overview
+## Why do this?
 
-1. Define the inner graph (root resource with its own registrations).
-2. From the outer resource’s `init()`, call `run(innerRoot, options)`.
-3. Return a façade that proxies into the inner runner (or return the inner `RunResult` directly).
-4. In `dispose()`, call `inner.dispose()`.
+- **Bounded context isolation**: Keep a sub-system's wiring, policies, and overrides self-contained.
+- **Multi-tenant per-instance containers**: Spin up one inner container per tenant/region/project.
+- **Plugin sandboxes**: Run third-party or experimental modules without polluting the global graph.
+- **Lifecycle scoping**: Start/stop an entire sub-graph with the parent resource.
 
-### Example: Per‑tenant private container
+## Pattern overview
+
+1. **Define the inner graph** — Create a root resource with its own registrations.
+2. **Start the inner Runner** — From the outer resource's `init()`, call `run(innerRoot, options)`.
+3. **Return a facade** — Expose a minimal API that proxies calls into the inner runner (e.g., wrapper functions that call `inner.runTask()`).
+4. **Dispose cleanly** — In the outer resource's `dispose()`, call `inner.dispose()`.
+
+## Example: Per-tenant private container
 
 ```ts
 import { r, run } from "@bluelibs/runner";
 
-// --- Inner graph (private sub‑system) ---
+// --- Inner graph (private sub-system) ---
 const greet = r
   .task("tenant.tasks.greet")
   .run(async (input: { name: string }) => `Hello, ${input.name}!`)
@@ -43,13 +47,12 @@ export const tenantContainer = r
       logs: { printThreshold: null },
     });
 
-    // Expose a minimal façade; avoid leaking the entire inner container if not needed
+    // Expose a minimal facade; avoid leaking the entire inner container
     return {
       tenantId: config.tenantId,
-      greet: async (name: string) =>
-        inner.runTask("tenant.tasks.greet", { name }),
-      // Optionally, expose getters:
-      getInner: () => inner, // give full access only if you trust the caller
+      greet: async (name: string) => inner.runTask(greet, { name }),
+      // Optionally expose full access (only if you trust the caller):
+      getInner: () => inner,
       disposeInner: () => inner.dispose(),
     };
   })
@@ -69,7 +72,7 @@ export const welcome = r
   .build();
 ```
 
-### Example: Private adapters and policies
+## Example: Private adapters and policies
 
 Give the inner container its own middleware, tags, and overrides without affecting the global graph.
 
@@ -81,8 +84,9 @@ const audit = r.middleware
   .run(async ({ task, next }) => {
     const startedAt = Date.now();
     const result = await next(task.input);
-    const tookMs = Date.now() - startedAt;
-    // Ship audit logs somewhere tenant‑specific
+    const durationMs = Date.now() - startedAt;
+    // Example: log or ship audit data to a tenant-specific destination
+    console.log(`[audit] ${task.definition.id} took ${durationMs}ms`);
     return result;
   })
   .build();
@@ -109,7 +113,8 @@ export const privateRunner = r
       logs: { printThreshold: cfg.logs ? "info" : null },
     });
     return {
-      run: inner.runTask,
+      run: <I, R>(task: { id: string }, input: I) =>
+        inner.runTask(task.id, input) as Promise<R>,
       dispose: inner.dispose,
     };
   })
@@ -117,15 +122,22 @@ export const privateRunner = r
   .build();
 ```
 
-### Tips and caveats
+## Tips and caveats
 
-- **Dispose correctly**: Always call `inner.dispose()` from the parent’s `dispose()`.
-- **Avoid cycles**: The inner graph should not depend back on the parent resource.
-- **Keep the façade small**: Expose only what you need (e.g., specific task calls), not the whole inner store, to preserve isolation.
-- **Resource intensity**: Spinning many inner containers can be expensive. Consider pooling or a shared inner container keyed by config.
-- **Overrides and tags**: Inner overrides will not leak globally. Use tags and `globals.events.ready` inside the inner graph for programmatic wiring.
-- **Debugging**: Give the inner container its own `debug`/`logs` config for focused traces.
+- **Dispose correctly** — Always call `inner.dispose()` from the parent's `dispose()` to avoid resource leaks.
+
+- **Avoid cycles** — The inner graph should not depend back on the parent resource or its dependencies.
+
+- **Keep the facade small** — Expose only what you need (e.g., specific task calls), not the whole inner store, to preserve isolation.
+
+- **Resource intensity** — Spinning many inner containers can be expensive. Consider pooling or a shared inner container keyed by config.
+
+- **Overrides and tags** — Inner overrides will not leak globally. Use tags and `globals.events.ready` inside the inner graph for programmatic wiring.
+
+- **Debugging** — Give the inner container its own `debug`/`logs` config for focused traces.
+
+---
 
 Runnerception lets you scope complex wiring behind a single resource boundary. You keep your global graph clean while gaining sandboxed composition where needed.
 
-![Mr. X Meme](https://i.imgflip.com/5r1uy.jpg?a487416)
+<!-- Why "Runnerception"? It's runners inside runners — inspired by the film Inception. -->

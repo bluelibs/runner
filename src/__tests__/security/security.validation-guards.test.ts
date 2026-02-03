@@ -13,7 +13,11 @@ describe("Security: Validation guards", () => {
       id: "sec.tasks.createUser",
       inputSchema: {
         parse: (input: any) => {
-          if (!input || typeof input.email !== "string" || !input.email.includes("@")) {
+          if (
+            !input ||
+            typeof input.email !== "string" ||
+            !input.email.includes("@")
+          ) {
             throw new Error("Invalid email");
           }
           return input;
@@ -28,9 +32,9 @@ describe("Security: Validation guards", () => {
     const app = defineResource({ id: "sec.app", register: [task] });
     const rr = await run(app);
 
-    await expect(rr.runTask(task as any, { email: "not-an-email" } as any)).rejects.toThrow(
-      /Task input validation/i,
-    );
+    await expect(
+      rr.runTask(task as any, { email: "not-an-email" } as any),
+    ).rejects.toThrow(/Task input validation/i);
 
     await rr.dispose();
   });

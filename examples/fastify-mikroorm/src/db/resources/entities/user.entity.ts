@@ -4,12 +4,7 @@
  * - File: src/db/resources/user-entity.resource.ts
  */
 import { r } from "@bluelibs/runner";
-import {
-  BaseEntity,
-  Collection,
-  defineEntity,
-  EntitySchema,
-} from "@mikro-orm/core";
+import { BaseEntity, Collection, EntitySchema } from "@mikro-orm/core";
 import { Post } from "./post.entity";
 
 export class User extends BaseEntity {
@@ -26,25 +21,27 @@ export const userEntity = r
   .resource("app.db.entities.resources.user")
   .meta({
     title: "User Entity Schema",
-    description: "MikroORM entity schema for User with authentication fields and post relationships",
+    description:
+      "MikroORM entity schema for User with authentication fields and post relationships",
   })
-  .init(async () =>
-    new EntitySchema<User>({
-      name: "User",
-      class: User,
-      tableName: "users",
-      properties: {
-        id: { type: "uuid", primary: true },
-        name: { type: "string" },
-        email: { type: "string" },
-        passwordHash: { type: "string", nullable: true },
-        passwordSalt: { type: "string", nullable: true },
-        posts: {
-          kind: "1:m",
-          entity: () => "Post",
-          mappedBy: (post) => post.author,
+  .init(
+    async () =>
+      new EntitySchema<User>({
+        name: "User",
+        class: User,
+        tableName: "users",
+        properties: {
+          id: { type: "uuid", primary: true },
+          name: { type: "string" },
+          email: { type: "string" },
+          passwordHash: { type: "string", nullable: true },
+          passwordSalt: { type: "string", nullable: true },
+          posts: {
+            kind: "1:m",
+            entity: () => "Post",
+            mappedBy: (post) => post.author,
+          },
         },
-      },
-    })
+      }),
   )
   .build();

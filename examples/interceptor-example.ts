@@ -3,7 +3,7 @@
  * Shows how to use interceptEmission and interceptHook
  */
 
-import { event, hook, resource, run } from "../src";
+import { event, hook, resource } from "../src";
 import { EventManager } from "../src/models/EventManager";
 
 // Define an event

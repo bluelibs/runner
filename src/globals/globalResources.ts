@@ -4,10 +4,14 @@ import { Logger } from "../models/Logger";
 import { Store } from "../models/Store";
 import { TaskRunner } from "../models/TaskRunner";
 import { cacheResource } from "./middleware/cache.middleware";
+import { circuitBreakerResource } from "./middleware/circuitBreaker.middleware";
+import { concurrencyResource } from "./middleware/concurrency.middleware";
+import { rateLimitResource } from "./middleware/rateLimit.middleware";
+import { temporalResource } from "./middleware/temporal.middleware";
 import { queueResource } from "./resources/queue.resource";
 import { globalTags } from "./globalTags";
 import { MiddlewareManager } from "../models/MiddlewareManager";
-import type { Serializer } from "./resources/tunnel/serializer";
+import type { SerializerLike as Serializer } from "../serializer";
 import { httpClientFactory } from "./resources/httpClientFactory.resource";
 
 const systemTag = globalTags.system;
@@ -27,7 +31,7 @@ export const serializer = defineResource<void, Promise<Serializer>>({
   meta: {
     title: "Serializer",
     description:
-      "Serializes and deserializes data. Provides EJSON-compatible stringify/parse and custom type registration via addType.",
+      "Serializes and deserializes data. Supports stringify/parse and custom type registration via addType.",
   },
   tags: [systemTag],
 });
@@ -50,6 +54,9 @@ export const globalResources = {
         "Manages all events and event listeners. This is meant to be used internally for most use-cases.",
     },
     tags: [systemTag],
+    dispose: async (eventManager) => {
+      eventManager.dispose();
+    },
   }),
   taskRunner: defineResource<void, Promise<TaskRunner>>({
     id: "globals.resources.taskRunner",
@@ -74,4 +81,10 @@ export const globalResources = {
   cache: cacheResource,
   queue: queueResource,
   httpClientFactory: httpClientFactory,
+
+  // Middleware State Resources
+  rateLimit: rateLimitResource,
+  circuitBreaker: circuitBreakerResource,
+  temporal: temporalResource,
+  concurrency: concurrencyResource,
 } as const;

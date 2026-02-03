@@ -23,17 +23,25 @@ describe("extractAuthUser", () => {
       db,
       extractToken: () => "token",
     });
-    expect(result).toEqual({ id: entity.id, name: entity.name, email: entity.email });
+    expect(result).toEqual({
+      id: entity.id,
+      name: entity.name,
+      email: entity.email,
+    });
   });
 
   it("swallows errors and returns null", async () => {
     const result = await extractAuthUser({
       request: {},
-      auth: { cookieName: "auth", verifyToken: () => { throw new Error("bad"); } },
+      auth: {
+        cookieName: "auth",
+        verifyToken: () => {
+          throw new Error("bad");
+        },
+      },
       db: { em: () => ({}) },
       extractToken: () => "token",
     });
     expect(result).toBeNull();
   });
 });
-

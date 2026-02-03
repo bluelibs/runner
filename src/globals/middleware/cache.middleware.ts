@@ -1,18 +1,24 @@
-import { defineTaskMiddleware, defineResource, defineTask } from "../../define";
+import { defineTaskMiddleware } from "../../definers/defineTaskMiddleware";
+import { defineResource } from "../../definers/defineResource";
+import { defineTask } from "../../definers/defineTask";
 import { LRUCache } from "lru-cache";
-import { IResource, ITask } from "../../defs";
+import { journal as journalHelper } from "../../models/ExecutionJournal";
 
 export interface ICacheInstance {
   set(key: string, value: any): void;
   get(key: string): any;
   clear(): void;
+  /** Optional presence check to disambiguate cached undefined values */
+  has?(key: string): boolean;
 }
 
 // Default cache factory task that can be overridden
 export const cacheFactoryTask = defineTask({
   id: "globals.tasks.cacheFactory",
-  run: async (options: any) => {
-    return new LRUCache(options) as ICacheInstance;
+  run: async (
+    options: LRUCache.Options<any, any, any>,
+  ): Promise<ICacheInstance> => {
+    return new LRUCache(options);
   },
 });
 
@@ -23,6 +29,15 @@ type CacheResourceConfig = {
 type CacheMiddlewareConfig = {
   keyBuilder?: (taskId: string, input: any) => string;
 } & any;
+
+/**
+ * Journal keys exposed by the cache middleware.
+ * Use these to access shared state from downstream middleware or tasks.
+ */
+export const journalKeys = {
+  /** Whether the result was served from cache (true) or freshly computed (false) */
+  hit: journalHelper.createKey<boolean>("globals.middleware.cache.hit"),
+} as const;
 
 export const cacheResource = defineResource({
   id: "globals.resources.cache",
@@ -55,7 +70,7 @@ const defaultKeyBuilder = (taskId: string, input: any) =>
 export const cacheMiddleware = defineTaskMiddleware({
   id: "globals.middleware.cache",
   dependencies: { cache: cacheResource },
-  async run({ task, next }, deps, config: CacheMiddlewareConfig) {
+  async run({ task, next, journal }, deps, config: CacheMiddlewareConfig) {
     const { cache } = deps;
     config = {
       keyBuilder: defaultKeyBuilder,
@@ -84,11 +99,17 @@ export const cacheMiddleware = defineTaskMiddleware({
     const key = config.keyBuilder!(taskId, task!.input);
 
     const cachedValue = await cacheHolderForTask.get(key);
+    const hasCachedEntry =
+      typeof cacheHolderForTask.has === "function"
+        ? cacheHolderForTask.has(key)
+        : cachedValue !== undefined;
 
-    if (cachedValue) {
+    if (hasCachedEntry) {
+      journal.set(journalKeys.hit, true, { override: true });
       return cachedValue;
     }
 
+    journal.set(journalKeys.hit, false, { override: true });
     const result = await next(task!.input);
 
     await cacheHolderForTask.set(key, result);

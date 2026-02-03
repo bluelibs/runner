@@ -2,7 +2,12 @@ import { defineResourceMiddleware } from "../../define";
 import { globalTags } from "../globalTags";
 import { globalResources } from "../globalResources";
 import type { Store } from "../../models/Store";
-import type { ITask, IEvent, IEventEmission } from "../../defs";
+import type {
+  ITask,
+  IEvent,
+  IEventEmission,
+  DependencyMapType,
+} from "../../defs";
 import type {
   TunnelRunner,
   TunnelTaskSelector,
@@ -11,16 +16,11 @@ import type {
 import { symbolTunneledBy } from "../../types/symbols";
 import { tunnelOwnershipConflictError } from "../../errors";
 
-const originalRuns = new WeakMap<
-  ITask<any, any, any, any, any, any>,
-  Function
->();
-
 export const tunnelResourceMiddleware = defineResourceMiddleware<
   void,
-  any,
+  DependencyMapType,
   TunnelRunner,
-  any
+  DependencyMapType
 >({
   id: "globals.middleware.resource.tunnel",
   dependencies: {
@@ -31,13 +31,18 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
   everywhere: (resource) => globalTags.tunnel.exists(resource),
   run: async ({ resource, next }, { store, eventManager }) => {
     // Initialize the resource and get its value (tunnel runner)
-    const value = (await next(resource.config)) as TunnelRunner;
+    const value = await next(resource.config);
 
     const mode = value.mode || "none";
     const delivery = value.eventDeliveryMode || "mirror";
-    const tasks = value.tasks ? resolveTasks(store, value.tasks) : [];
+    // Cast store to Store type for helper functions
+    const typedStore = store as unknown as Store;
+    const tasks = value.tasks ? resolveTasks(typedStore, value.tasks) : [];
     const events = value.events
-      ? resolveEvents(store, value.events as any)
+      ? resolveEvents(
+          typedStore,
+          value.events as unknown as TunnelEventSelector,
+        )
       : [];
 
     if (mode === "client" || mode === "both") {
@@ -62,8 +67,9 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
 
     // Override selected tasks' run() to delegate to tunnel runner (reversible)
     for (const t of tasks) {
+      const st = typedStore.tasks.get(t.id)!;
       // Enforce single-owner policy: a task can be tunneled by only one resource
-      const currentOwner: string | undefined = (t as any)[symbolTunneledBy];
+      const currentOwner = (st.task as any)[symbolTunneledBy];
       const resourceId = resource.definition.id;
       if (currentOwner && currentOwner !== resourceId) {
         tunnelOwnershipConflictError.throw({
@@ -72,14 +78,15 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
           attemptedOwnerId: resourceId,
         });
       }
-      if (!originalRuns.has(t)) {
-        originalRuns.set(t, t.run as any);
-      }
-      t.run = (async (input: any) => {
-        return value.run!(t as any, input);
-      }) as any;
-      t.isTunneled = true;
-      (t as any)[symbolTunneledBy] = resourceId;
+
+      st.task = {
+        ...st.task,
+        run: (async (input: unknown) => {
+          return value.run!(t as unknown as ITask, input);
+        }) as unknown as ITask["run"],
+        isTunneled: true,
+        [symbolTunneledBy]: resourceId,
+      } as any;
     }
 
     if (events.length > 0) {
@@ -87,7 +94,10 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
       // Install a global emission interceptor for selected events
       // Install an emission interceptor for this tunnel instance as well
       eventManager.intercept(
-        async (next: any, emission: IEventEmission<any>) => {
+        async (
+          next: (emission: IEventEmission<any>) => Promise<void>,
+          emission: IEventEmission<any>,
+        ) => {
           if (!selectedEventIds.has(emission.id)) {
             return next(emission);
           }
@@ -98,12 +108,15 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
 
           if (delivery === "remote-only") {
             // Forward remotely only; skip local listeners
-            return value.emit!(emission);
+            const remotePayload = await value.emit!(emission);
+            if (remotePayload !== undefined) emission.data = remotePayload;
+            return;
           }
 
           if (delivery === "remote-first") {
             try {
-              await value.emit!(emission);
+              const remotePayload = await value.emit!(emission);
+              if (remotePayload !== undefined) emission.data = remotePayload;
             } catch (_) {
               // Remote failed; fall back to local
               return next(emission);
@@ -114,7 +127,9 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
 
           // mirror (default): local then remote; propagate remote failure
           await next(emission);
-          return value.emit!(emission);
+          const remotePayload = await value.emit!(emission);
+          if (remotePayload !== undefined) emission.data = remotePayload;
+          return;
         },
       );
     }

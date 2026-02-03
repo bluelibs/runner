@@ -22,14 +22,18 @@ describe("error builder", () => {
       fail("Expected throw to raise");
     } catch (err) {
       expect(AppError.is(err)).toBe(true);
-      if (AppError.is(err)) {
-        // Name and message should reflect id and data.message
-        expect(err.name).toBe("tests.errors.app");
-        expect(err.message).toBe('{"code":123,"message":"Boom"}');
-        expect(err.toString()).toBe(
-          'tests.errors.app: {"code":123,"message":"Boom"}',
-        );
+      if (!AppError.is(err)) {
+        throw err;
       }
+      if (!(err instanceof Error)) {
+        throw new Error("Expected an Error instance");
+      }
+      // Name and message should reflect id and data.message
+      expect(err.name).toBe("tests.errors.app");
+      expect(err.message).toBe('{"code":123,"message":"Boom"}');
+      expect(err.toString()).toBe(
+        'tests.errors.app: {"code":123,"message":"Boom"}',
+      );
     }
   });
 
@@ -48,7 +52,7 @@ describe("error builder", () => {
       .build();
 
     const bad: any = { code: "x", message: 1 };
-    expect(() => TypedError.throw(bad)).toThrowError("invalid");
+    expect(() => TypedError.throw(bad)).toThrow("invalid");
   });
 
   it("accepts format in builder chain (smoke)", () => {

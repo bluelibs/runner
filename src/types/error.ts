@@ -1,10 +1,10 @@
-import { symbolError, symbolOptionalDependency } from "./symbols";
+import { symbolError } from "./symbols";
 import type { IOptionalDependency } from "./utilities";
 import type { IValidationSchema } from "./utilities";
 import type { IErrorMeta } from "./meta";
 
-// Tiny runtime marker to help coverage include this file
-export const ERROR_TYPES_LOADED = true as const;
+export type ErrorReference = string | IErrorHelper<any>;
+export type ThrowsList = ReadonlyArray<ErrorReference>;
 
 export interface IErrorDefinition<
   TData extends DefaultErrorType = DefaultErrorType,
@@ -20,8 +20,9 @@ export interface IErrorDefinition<
   meta?: IErrorMeta;
 }
 
-export interface IErrorDefinitionFinal<TData extends DefaultErrorType>
-  extends IErrorDefinition<TData> {
+export interface IErrorDefinitionFinal<
+  TData extends DefaultErrorType,
+> extends IErrorDefinition<TData> {
   format: (data: TData) => string;
 }
 

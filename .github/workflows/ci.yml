@@ -21,6 +21,15 @@ jobs:
   build-and-test:
     # The type of runner that the job will run on
     runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+      rabbitmq:
+        image: rabbitmq:3-management-alpine
+        ports:
+          - 5672:5672
 
     # Steps represent a sequence of tasks that will be executed as part of the job
     steps:
@@ -39,8 +48,19 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
       # Run tests with enforced 100% coverage
       - name: Run tests with coverage enforcement
+        env:
+          # Enables the durable "real backends" integration suite (Redis + RabbitMQ).
+          DURABLE_INTEGRATION: "1"
+          DURABLE_TEST_REDIS_URL: "redis://127.0.0.1:6379"
+          DURABLE_TEST_RABBIT_URL: "amqp://127.0.0.1:5672"
         run: npm run test:ci
 
       # Generate documentation (only on main branch)

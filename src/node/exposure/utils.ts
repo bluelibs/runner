@@ -11,7 +11,7 @@ import { cancellationError } from "../../errors";
  * the first one is used.
  */
 export function getContentType(headers: IncomingHttpHeaders): string {
-  const raw = (headers as any)["content-type"];
+  const raw = (headers as unknown as Record<string, unknown>)["content-type"];
   if (Array.isArray(raw)) return String(raw[0]);
   return String(raw ?? "");
 }
@@ -30,8 +30,8 @@ export function attachRequestListener(
     typeof anyTarget?.once === "function"
       ? anyTarget.once.bind(anyTarget)
       : typeof anyTarget?.on === "function"
-      ? anyTarget.on.bind(anyTarget)
-      : undefined;
+        ? anyTarget.on.bind(anyTarget)
+        : undefined;
   if (!add) return false;
   add(event, handler);
   return true;
@@ -54,7 +54,7 @@ export function createAbortControllerForRequest(
           try {
             cancellationError.throw({ reason: "Client Closed Request" });
           } catch (e) {
-            return e as any;
+            return e as Error;
           }
         })(),
       );

@@ -11,12 +11,14 @@ describe("platform factory branches coverage", () => {
     originalTarget = (globalThis as any).__TARGET__;
   });
   afterAll(() => {
-    if (originalTarget !== undefined) (globalThis as any).__TARGET__ = originalTarget;
+    if (originalTarget !== undefined)
+      (globalThis as any).__TARGET__ = originalTarget;
     else delete (globalThis as any).__TARGET__;
   });
 
   afterEach(() => {
-    if (originalTarget !== undefined) (globalThis as any).__TARGET__ = originalTarget;
+    if (originalTarget !== undefined)
+      (globalThis as any).__TARGET__ = originalTarget;
     else delete (globalThis as any).__TARGET__;
   });
 
@@ -44,5 +46,3 @@ describe("platform factory branches coverage", () => {
     expect(a).toBeInstanceOf(UniversalPlatformAdapter);
   });
 });
-
-

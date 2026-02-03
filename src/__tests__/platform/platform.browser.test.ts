@@ -3,21 +3,34 @@
  */
 
 class FakePromiseRejectionEvent extends Event {
-  promise: Promise<any>;
-  reason: any;
+  promise: Promise<unknown>;
+  reason: unknown;
 
-  constructor(type: string, init: { promise: Promise<any>; reason: any }) {
+  constructor(
+    type: string,
+    init: { promise: Promise<unknown>; reason: unknown },
+  ) {
     super(type);
     this.promise = init.promise;
     this.reason = init.reason;
   }
 }
 
-(global as any).PromiseRejectionEvent = FakePromiseRejectionEvent;
+declare global {
+  interface Window {
+    PromiseRejectionEvent: typeof FakePromiseRejectionEvent;
+    __ENV__?: Record<string, string>;
+    process?: { env: Record<string, string> };
+    env?: Record<string, string>;
+  }
+}
+
+(
+  global as unknown as { PromiseRejectionEvent: unknown }
+).PromiseRejectionEvent = FakePromiseRejectionEvent;
 
 import { detectEnvironment, PlatformAdapter } from "../../platform";
 import { defineAsyncContext, storage } from "../../definers/defineAsyncContext";
-import exp from "constants";
 describe("PlatformAdapter (Browser)", () => {
   it("should register and cleanup error listeners", () => {
     const adapter = new PlatformAdapter("browser");
@@ -29,12 +42,13 @@ describe("PlatformAdapter (Browser)", () => {
     expect(() => storage.run(new Map(), () => {})).toThrow();
 
     expect(adapter.hasAsyncLocalStorage()).toBe(false);
-    const originalAdd = (globalThis as any).addEventListener;
-    const originalRemove = (globalThis as any).removeEventListener;
+    expect(adapter.hasAsyncLocalStorage()).toBe(false);
+    const originalAdd = globalThis.addEventListener;
+    const originalRemove = globalThis.removeEventListener;
     const addSpy = jest.fn();
     const removeSpy = jest.fn();
-    (globalThis as any).addEventListener = addSpy;
-    (globalThis as any).removeEventListener = removeSpy;
+    globalThis.addEventListener = addSpy;
+    globalThis.removeEventListener = removeSpy;
 
     const cleanup = adapter.onUncaughtException(() => {});
     expect(addSpy).toHaveBeenCalledWith("error", expect.any(Function));
@@ -42,21 +56,25 @@ describe("PlatformAdapter (Browser)", () => {
     cleanup();
     expect(removeSpy).toHaveBeenCalledWith("error", expect.any(Function));
 
-    (globalThis as any).addEventListener = originalAdd;
-    (globalThis as any).removeEventListener = originalRemove;
+    globalThis.addEventListener = originalAdd;
+    globalThis.removeEventListener = originalRemove;
   });
 
   it("should handle unhandled rejection with globalThis fallback", () => {
     const adapter = new PlatformAdapter("browser");
 
-    const originalAdd = (globalThis as any).addEventListener;
-    const originalRemove = (globalThis as any).removeEventListener;
+    const originalAdd = globalThis.addEventListener;
+    const originalRemove = globalThis.removeEventListener;
     const addSpy = jest.fn();
     const removeSpy = jest.fn();
-    (globalThis as any).addEventListener = addSpy;
-    (globalThis as any).removeEventListener = removeSpy;
-    const originalWindow = (globalThis as any).window;
-    delete (globalThis as any).window; // force fallback path
+    globalThis.addEventListener = addSpy;
+    globalThis.removeEventListener = removeSpy;
+
+    const { window: originalWindow, ..._rest } = globalThis as unknown as {
+      window: unknown;
+    };
+    // Force fallback path by deleting window if it exists (in jsdom it usually does)
+    delete (globalThis as unknown as { window: unknown }).window;
 
     const cleanup = adapter.onUnhandledRejection(() => {});
     expect(addSpy).toHaveBeenCalledWith(
@@ -69,22 +87,23 @@ describe("PlatformAdapter (Browser)", () => {
       expect.any(Function),
     );
 
-    (globalThis as any).addEventListener = originalAdd;
-    (globalThis as any).removeEventListener = originalRemove;
-    (globalThis as any).window = originalWindow;
+    globalThis.addEventListener = originalAdd;
+    globalThis.removeEventListener = originalRemove;
+    (globalThis as unknown as { window: unknown }).window = originalWindow;
   });
 
   it("should use globalThis fallback for shutdown listeners and cleanup", () => {
     const adapter = new PlatformAdapter("browser");
 
-    const originalAdd = (globalThis as any).addEventListener;
-    const originalRemove = (globalThis as any).removeEventListener;
+    const originalAdd = globalThis.addEventListener;
+    const originalRemove = globalThis.removeEventListener;
     const addSpy = jest.fn();
     const removeSpy = jest.fn();
-    (globalThis as any).addEventListener = addSpy;
-    (globalThis as any).removeEventListener = removeSpy;
-    const originalWindow = (globalThis as any).window;
-    delete (globalThis as any).window; // force fallback path
+    globalThis.addEventListener = addSpy;
+    globalThis.removeEventListener = removeSpy;
+    const originalWindow = (globalThis as unknown as { window: unknown })
+      .window;
+    delete (globalThis as unknown as { window: unknown }).window; // force fallback path
 
     const cleanup = adapter.onShutdownSignal(() => {});
     expect(addSpy).toHaveBeenCalledWith("beforeunload", expect.any(Function));
@@ -94,9 +113,9 @@ describe("PlatformAdapter (Browser)", () => {
       "beforeunload",
       expect.any(Function),
     );
-    (globalThis as any).addEventListener = originalAdd;
-    (globalThis as any).removeEventListener = originalRemove;
-    (globalThis as any).window = originalWindow;
+    globalThis.addEventListener = originalAdd;
+    globalThis.removeEventListener = originalRemove;
+    (globalThis as unknown as { window: unknown }).window = originalWindow;
   });
 
   it("should throw on exit", () => {
@@ -106,31 +125,40 @@ describe("PlatformAdapter (Browser)", () => {
 
   it("should support env fallbacks", () => {
     const adapter = new PlatformAdapter("browser");
-    (globalThis as any).__ENV__ = { A: "1" };
+    (
+      window as unknown as Window & { __ENV__: Record<string, string> }
+    ).__ENV__ = {
+      A: "1",
+    };
     expect(adapter.getEnv("A")).toBe("1");
-    delete (globalThis as any).__ENV__;
+    delete (window as unknown as Window & { __ENV__?: Record<string, string> })
+      .__ENV__;
 
-    (globalThis as any).process = { env: { A: "2" } };
+    (window as unknown as Window & { process: unknown }).process = {
+      env: { A: "2" },
+    };
     expect(adapter.getEnv("A")).toBe("2");
-    delete (globalThis as any).process;
+    delete (window as unknown as Window & { process?: unknown }).process;
 
-    (globalThis as any).env = { A: "3" };
+    (window as unknown as Window & { env: unknown }).env = { A: "3" };
     expect(adapter.getEnv("A")).toBe("3");
-    delete (globalThis as any).env;
+    delete (window as unknown as Window & { env?: unknown }).env;
   });
 
   it("does not invoke shutdown handler when document is undefined on visibilitychange", () => {
     const adapter = new PlatformAdapter("browser");
 
-    const originalWindow: any = (globalThis as any).window;
+    const originalWindow = (globalThis as unknown as { window: unknown })
+      .window;
     const listeners: Record<string, Function> = {};
-    (globalThis as any).window = {
+    (globalThis as unknown as { window: unknown }).window = {
       addEventListener: (evt: string, fn: Function) => (listeners[evt] = fn),
       removeEventListener: () => {},
-    } as any;
+    };
 
-    const originalDocument = (globalThis as any).document;
-    delete (globalThis as any).document;
+    const originalDocument = (globalThis as unknown as { document: unknown })
+      .document;
+    delete (globalThis as unknown as { document: unknown }).document;
 
     let called = false;
     adapter.onShutdownSignal(() => {
@@ -140,14 +168,15 @@ describe("PlatformAdapter (Browser)", () => {
     listeners["visibilitychange"]?.();
     expect(called).toBe(false);
 
-    (globalThis as any).document = originalDocument;
-    (globalThis as any).window = originalWindow;
+    (globalThis as unknown as { document: unknown }).document =
+      originalDocument;
+    (globalThis as unknown as { window: unknown }).window = originalWindow;
   });
 
   it("should handle unhandled rejection with window defined", () => {
     const adapter = new PlatformAdapter("browser");
 
-    let flag = jest.fn();
+    const flag = jest.fn();
 
     adapter.onUnhandledRejection(() => {
       flag();

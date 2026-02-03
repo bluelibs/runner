@@ -65,16 +65,15 @@ describe("run.ts rollback and unhooking", () => {
       },
     });
 
-    const originalExit = process.exit as any;
-    // @ts-ignore
-    process.exit = () => undefined as any;
+    const originalExit = process.exit;
+    (process as unknown as { exit: unknown }).exit =
+      (() => {}) as unknown as never;
 
     // First run: should react to SIGINT
     const first = await run(app, {
       shutdownHooks: true,
       errorBoundary: false,
     });
-    // @ts-ignore
     process.emit("SIGINT");
     await new Promise((r) => setTimeout(r, 0));
     expect(calls.length).toBeGreaterThanOrEqual(1);
@@ -87,14 +86,12 @@ describe("run.ts rollback and unhooking", () => {
     });
     await second.dispose();
     const before = calls.length;
-    // @ts-ignore
     process.emit("SIGINT");
     await new Promise((r) => setTimeout(r, 0));
     expect(calls.length).toBe(before);
 
     // restore
-    // @ts-ignore
-    process.exit = originalExit;
+    (process as unknown as { exit: unknown }).exit = originalExit;
   });
 
   it("unhooks process safety nets on dispose() when errorBoundary is true (global dispatcher)", async () => {
@@ -113,7 +110,6 @@ describe("run.ts rollback and unhooking", () => {
         onUnhandledError(error, kind, source),
     });
 
-    // @ts-ignore
     process.emit("unhandledRejection", new Error("boom"), Promise.resolve());
     await new Promise((r) => setTimeout(r, 0));
     expect(onUnhandledError).toHaveBeenCalled();
@@ -121,7 +117,6 @@ describe("run.ts rollback and unhooking", () => {
     onUnhandledError.mockClear();
     await dispose();
     // After dispose, this run's handler should be unregistered and not receive events
-    // @ts-ignore
     process.emit("unhandledRejection", new Error("boom2"), Promise.resolve());
     await new Promise((r) => setTimeout(r, 0));
     expect(onUnhandledError).not.toHaveBeenCalled();

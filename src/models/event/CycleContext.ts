@@ -7,9 +7,9 @@ export class CycleContext {
   private readonly currentHookIdContext: IAsyncLocalStorage<string> | null;
   readonly isEnabled: boolean;
 
-  constructor(runtimeCycleDetection: boolean) {
+  constructor(runtimeEventCycleDetection: boolean) {
     const platform = getPlatform();
-    if (platform.hasAsyncLocalStorage() && runtimeCycleDetection) {
+    if (platform.hasAsyncLocalStorage() && runtimeEventCycleDetection) {
       this.emissionStack = platform.createAsyncLocalStorage<IEmissionFrame[]>();
       this.currentHookIdContext = platform.createAsyncLocalStorage<string>();
       this.isEnabled = true;
@@ -20,7 +20,11 @@ export class CycleContext {
     }
   }
 
-  runEmission(frame: IEmissionFrame, source: string, processEmission: () => Promise<void>): Promise<void> {
+  runEmission<TResult>(
+    frame: IEmissionFrame,
+    source: string,
+    processEmission: () => Promise<TResult>,
+  ): Promise<TResult> {
     if (!this.isEnabled || !this.emissionStack || !this.currentHookIdContext) {
       return processEmission();
     }
@@ -33,10 +37,17 @@ export class CycleContext {
       if (cycleStart !== -1) {
         const top = currentStack[currentStack.length - 1];
         const currentHookId = this.currentHookIdContext.getStore();
-        const safeReEmitBySameHook =
-          top.id === frame.id && currentHookId && currentHookId === source;
 
-        if (!safeReEmitBySameHook) {
+        // Allow re-emission of the same event by the same hook ("idempotent re-emit"),
+        // BUT ONLY IF the source is changing (e.g. initial->hook).
+        // If the source is unchanged (hook->hook), it means the hook triggered itself, which is an infinite loop.
+        const isSafeReEmit =
+          top.id === frame.id &&
+          currentHookId &&
+          currentHookId === source &&
+          top.source !== source;
+
+        if (!isSafeReEmit) {
           eventCycleError.throw({
             path: [...currentStack.slice(cycleStart), frame],
           });

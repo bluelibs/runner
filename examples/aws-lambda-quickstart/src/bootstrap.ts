@@ -8,12 +8,25 @@ import {
   RunResult,
 } from "@bluelibs/runner";
 
-// Keep it simple for local example typing; real apps should type this
-export const RequestCtx: any = createContext("app.http.request");
+/** Request context shape for Lambda handlers */
+export interface RequestContext {
+  requestId: string;
+  method: string;
+  path: string;
+  headers: Record<string, string | undefined>;
+}
+
+/** Type for the users repository */
+export type UsersRepo = {
+  get: (id: string) => Promise<{ id: string; name: string } | null>;
+  create: (input: { name: string }) => Promise<{ id: string; name: string }>;
+};
+
+export const RequestCtx = createContext<RequestContext>("app.http.request");
 
 export const usersRepo = resource({
   id: "app.resources.usersRepo",
-  init: async () => {
+  init: async (): Promise<UsersRepo> => {
     const db = new Map<string, { id: string; name: string }>();
     return {
       get: async (id: string) => db.get(id) ?? null,
@@ -30,8 +43,7 @@ export const usersRepo = resource({
 export const getUser = task({
   id: "app.tasks.getUser",
   dependencies: { users: usersRepo },
-  run: async (input: { id: string }, { users }: any) => {
-    const _req = RequestCtx.use();
+  run: async (input: { id: string }, { users }) => {
     return users.get(input.id);
   },
 });
@@ -39,8 +51,7 @@ export const getUser = task({
 export const createUser = task({
   id: "app.tasks.createUser",
   dependencies: { users: usersRepo },
-  run: async (input: { name: string }, { users }: any) => {
-    const _req = RequestCtx.use();
+  run: async (input: { name: string }, { users }) => {
     return users.create({ name: input.name });
   },
 });

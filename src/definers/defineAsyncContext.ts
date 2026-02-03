@@ -3,12 +3,8 @@ import { getPlatform } from "../platform";
 import { ITaskMiddlewareConfigured } from "../defs";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
 import { contextError, platformUnsupportedFunctionError } from "../errors";
-import {
-  IAsyncContext,
-  IAsyncContextDefinition,
-  ASYNC_CONTEXT_TYPES_LOADED,
-} from "../types/asyncContext";
-import { getDefaultSerializer } from "../globals/resources/tunnel/serializer";
+import { IAsyncContext, IAsyncContextDefinition } from "../types/asyncContext";
+import { getDefaultSerializer } from "../serializer";
 import { symbolAsyncContext, symbolOptionalDependency } from "../types/symbols";
 
 export { contextError as ContextError };
@@ -39,7 +35,6 @@ export function defineAsyncContext<T>(
 
   /* istanbul ignore next */
   const use = (): T => {
-    void ASYNC_CONTEXT_TYPES_LOADED; // keep async context types included under coverage
     const store = getCurrentStore();
     if (!store || !store.has(ctxId)) {
       contextError.throw({
@@ -58,7 +53,8 @@ export function defineAsyncContext<T>(
 
     map.set(ctxId, value);
 
-    return storage.run(map, fn as any);
+    // storage.run expects () => R, our fn is () => Promise<R> | R which is compatible
+    return storage.run(map, fn as () => R);
   };
 
   const serializer = getDefaultSerializer();

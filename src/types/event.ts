@@ -1,4 +1,4 @@
-import { IOptionalDependency, IValidationSchema } from "../defs";
+import { IOptionalDependency, IValidationSchema } from "./utilities";
 import { TagType } from "./tag";
 import { IEventMeta } from "./meta";
 import { CommonPayload, symbolEvent, symbolFilePath } from "./utilities";

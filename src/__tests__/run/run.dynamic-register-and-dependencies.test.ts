@@ -328,9 +328,9 @@ describe("Dynamic Register and Dependencies", () => {
         register: [logger.with({ level: "INFO", prefix: "SERVICE" })],
         dependencies: { logger },
         init: async (_, { logger }) => {
-          expect((logger as any).config.level).toBe("INFO");
-          expect((logger as any).config.prefix).toBe("SERVICE");
-          return (logger as any).log("Service initialized");
+          expect(logger.config.level).toBe("INFO");
+          expect(logger.config.prefix).toBe("SERVICE");
+          return logger.log("Service initialized");
         },
       });
 
@@ -369,7 +369,7 @@ describe("Dynamic Register and Dependencies", () => {
         ],
         dependencies: { apiService },
         init: async (_, { apiService }) => {
-          return (apiService as any).call("/users");
+          return apiService.call("/users");
         },
       });
 
@@ -405,7 +405,7 @@ describe("Dynamic Register and Dependencies", () => {
           logger: loggerResource,
         },
         run: async ({ next }, { logger }, config: ValidationConfig) => {
-          (logger as any).log(
+          logger.log(
             `Validating with schema: ${config.schema} (strict: ${config.strict})`,
           );
           const result = await next();
@@ -520,9 +520,9 @@ describe("Dynamic Register and Dependencies", () => {
             return next();
           }
 
-          (logger as any).log(
-            `Cache configured with TTL: ${(cache as any).ttl}, MaxSize: ${
-              (cache as any).maxSize
+          logger.log(
+            `Cache configured with TTL: ${cache.ttl}, MaxSize: ${
+              cache.maxSize
             }`,
           );
           const result = await next();
@@ -652,7 +652,7 @@ describe("Dynamic Register and Dependencies", () => {
           return deps;
         },
         init: async (_, { service, featureToggle }) => {
-          const isAdvanced = (featureToggle as any).isEnabled("ADVANCED");
+          const isAdvanced = featureToggle.isEnabled("ADVANCED");
           expect(isAdvanced).toBe(true);
           expect(service).toBe("Real Service");
           return `App with ${service}`;
@@ -689,7 +689,7 @@ describe("Dynamic Register and Dependencies", () => {
           return deps;
         },
         init: async (_, { service, featureToggle }) => {
-          const isAdvanced = (featureToggle as any).isEnabled("ADVANCED");
+          const isAdvanced = featureToggle.isEnabled("ADVANCED");
           expect(isAdvanced).toBe(false);
           expect(service).toBe("Mock Service");
           return `App with ${service}`;
@@ -980,8 +980,8 @@ describe("Dynamic Register and Dependencies", () => {
             config.redis
               ? `redis-${key}`
               : config.memory
-              ? `memory-${key}`
-              : null,
+                ? `memory-${key}`
+                : null,
           set: (key: string, value: any) => `cache-set-${key}`,
         }),
       });

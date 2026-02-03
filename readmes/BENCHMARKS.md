@@ -1,5 +1,7 @@
 # Benchmark System
 
+← [Back to main README](../README.md)
+
 This project includes a comprehensive benchmark system to track performance regressions over time.
 
 ## Overview
@@ -7,7 +9,7 @@ This project includes a comprehensive benchmark system to track performance regr
 The benchmark system has been designed to be **statistically reliable** and **CI-friendly**, addressing the common issues with micro-benchmarks:
 
 - Multiple runs with statistical analysis (median, percentiles)
-- Proper warmup phases to stabilize JIT compilation  
+- Proper warmup phases to stabilize JIT compilation
 - Environment-aware thresholds (higher tolerance in CI)
 - Severity classification (major vs minor regressions)
 - Trend monitoring with warnings
@@ -15,28 +17,31 @@ The benchmark system has been designed to be **statistically reliable** and **CI
 ## Running Benchmarks
 
 ### Full Benchmark Suite
+
 ```bash
 # Run all benchmarks (takes ~2-3 minutes)
-npx jest --config=jest.bench.config.js
+npx jest --config=config/jest/jest.bench.config.js
 
 # Run with output to file
-BENCHMARK_OUTPUT=results.json npx jest --config=jest.bench.config.js
+BENCHMARK_OUTPUT=results.json npx jest --config=config/jest/jest.bench.config.js
 ```
 
 ### Single Benchmark
+
 ```bash
-npx jest --config=jest.bench.config.js --testNamePattern="basic task execution"
+npx jest --config=config/jest/jest.bench.config.js --testNamePattern="basic task execution"
 ```
 
 ## Benchmark Configuration
 
-Configuration is stored in `benchmarks.config.json`:
+Configuration is stored in `benchmarks/benchmarks.config.json`:
 
 ```json
 {
-  "threshold": 0.3,           // 30% tolerance for local runs
-  "ciThreshold": 0.4,         // 40% tolerance for CI runs  
-  "metricThresholds": {       // Per-metric overrides
+  "threshold": 0.3, // 30% tolerance for local runs
+  "ciThreshold": 0.4, // 40% tolerance for CI runs
+  "metricThresholds": {
+    // Per-metric overrides
     "cacheMiddleware.speedupFactor": 0.2
   }
 }
@@ -46,10 +51,11 @@ Configuration is stored in `benchmarks.config.json`:
 
 ```bash
 # Compare current results against baseline
-node scripts/compare-benchmarks.mjs baseline.json current.json benchmarks.config.json
+node scripts/compare-benchmarks.mjs benchmarks/baseline.json benchmarks/benchmark-results.json benchmarks/benchmarks.config.json
 ```
 
 The comparison script provides:
+
 - **Environment detection** (CI vs Local)
 - **Severity classification** (Major vs Minor regressions)
 - **Trend warnings** for concerning changes within thresholds
@@ -64,7 +70,8 @@ When performance characteristics legitimately change (new features, architectura
 ./scripts/update-baseline.sh
 ```
 
-**⚠️ Important:** Only update baselines when:
+**Important:** Only update baselines when:
+
 - You've made intentional performance changes
 - The current environment is representative
 - Changes have been reviewed and approved
@@ -72,6 +79,7 @@ When performance characteristics legitimately change (new features, architectura
 ## Statistical Approach
 
 Each benchmark runs multiple times (3-5 runs) and reports:
+
 - **Median** - Primary comparison metric (robust against outliers)
 - **25th/75th percentiles** - Spread indication
 - **Min/Max** - Full range
@@ -82,6 +90,7 @@ This approach provides much more reliable results than single-run measurements.
 ## CI Integration
 
 The system automatically:
+
 - Detects CI environments and uses relaxed thresholds
 - Only fails builds on **major regressions** (>60% by default)
 - Shows **minor regressions** as warnings
@@ -90,19 +99,25 @@ The system automatically:
 ## Troubleshooting
 
 ### "Screaming CI" (False Positives)
+
 If CI frequently fails with minor performance differences:
+
 1. Increase `ciThreshold` in config (try 0.5-0.6)
 2. Check if baseline was generated in similar environment
 3. Consider updating baseline if environment has changed
 
-### Inconsistent Results  
+### Inconsistent Results
+
 If results vary wildly between runs:
+
 1. Check for background processes during benchmarks
 2. Ensure sufficient warmup iterations
 3. Consider running fewer concurrent jobs in CI
 
 ### Major Regressions
+
 If you see legitimate major regressions:
+
 1. Identify the change that caused it
 2. Determine if it's intentional (new feature trade-off)
 3. Optimize the regression or update baseline if acceptable

@@ -13,7 +13,8 @@ describe("resource builder - register function+function merge branch", () => {
 
     expect(typeof composed.register).toBe("function");
     if (typeof composed.register === "function") {
-      const ids = composed.register({} as any).map((it) => it.id);
+      // @ts-expect-error test
+      const ids = composed.register({}).map((it) => it.id);
       expect(ids).toEqual([a.id, b.id]);
     }
   });
@@ -86,10 +87,7 @@ describe("resource builder - register function+function merge branch", () => {
       return Promise.resolve("zero");
     }
 
-    const app = r
-      .resource("tests.builder.init.zero")
-      .init(zeroInit)
-      .build();
+    const app = r.resource("tests.builder.init.zero").init(zeroInit).build();
 
     const rr = await run(app);
     expect(rr.value).toBe("zero");
@@ -101,7 +99,10 @@ describe("resource builder - register function+function merge branch", () => {
     // are inconclusive; the function should still be wired unchanged.
     const fn: any = eval("cfg => 11");
 
-    const app = r.resource("tests.builder.init.arrow.noparens").init(fn).build();
+    const app = r
+      .resource("tests.builder.init.arrow.noparens")
+      .init(fn)
+      .build();
 
     const rr = await run(app);
     expect(rr.value).toBe(11);
@@ -121,7 +122,7 @@ describe("resource builder - register function+function merge branch", () => {
 
     const app = r
       .resource("tests.builder.init.exotic")
-      .init(proxied as any)
+      .init(proxied as unknown as () => Promise<string>)
       .build();
 
     const rr = await run(app);
@@ -159,8 +160,14 @@ describe("resource builder - register function+function merge branch", () => {
   });
 
   it("resource dependencies object+object append branch", async () => {
-    const a = resource({ id: "tests.builder.resdeps.oo.a", init: async () => 1 });
-    const b = resource({ id: "tests.builder.resdeps.oo.b", init: async () => 2 });
+    const a = resource({
+      id: "tests.builder.resdeps.oo.a",
+      init: async () => 1,
+    });
+    const b = resource({
+      id: "tests.builder.resdeps.oo.b",
+      init: async () => 2,
+    });
     const app = r
       .resource("tests.builder.resdeps.oo")
       .register([a, b])
@@ -172,5 +179,4 @@ describe("resource builder - register function+function merge branch", () => {
     expect(rr.value).toBe(3);
     await rr.dispose();
   });
-
 });

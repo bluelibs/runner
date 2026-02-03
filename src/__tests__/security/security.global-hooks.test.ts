@@ -14,7 +14,9 @@ describe("Security: Global hooks scoping", () => {
       tags: [globals.tags.excludeFromGlobalHooks],
     });
 
-    const publicEvent = defineEvent<{ msg: string }>({ id: "sec.events.public" });
+    const publicEvent = defineEvent<{ msg: string }>({
+      id: "sec.events.public",
+    });
 
     const seen: string[] = [];
     const star = defineHook({

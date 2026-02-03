@@ -1,5 +1,5 @@
 import type { Readable } from "stream";
-import type { EjsonFileSentinel, InputFileMeta } from "../../types/inputFile";
+import type { RunnerFileSentinel, InputFileMeta } from "../../types/inputFile";
 
 export interface NodeFileSource {
   id: string;
@@ -14,28 +14,31 @@ export interface BuiltManifest<T = any> {
   files: NodeFileSource[];
 }
 
-type AnyObj = Record<string, any>;
+export type AnyObj = Record<string, unknown>;
 
 /**
  * Walk an input object and collect File sentinels having local Node sources.
  * It returns a shallow-cloned structure where any internal _node fields are removed.
  */
-export function buildNodeManifest<T = any>(input: T): BuiltManifest<T> {
+export function buildNodeManifest<T>(input: T): BuiltManifest<T> {
   const files: NodeFileSource[] = [];
 
-  function visit(value: any): any {
+  function visit(value: unknown): unknown {
     if (!value || typeof value !== "object") return value;
-    // Detect EJSON File sentinel with optional _node sidecar
+
+    // Detect File sentinel with optional _node sidecar
+    const potentialFile = value as RunnerFileSentinel & {
+      _node?: { buffer?: Buffer; stream?: Readable };
+    };
+
     if (
-      (value as EjsonFileSentinel).$ejson === "File" &&
-      typeof (value as any).id === "string"
+      potentialFile.$runnerFile === "File" &&
+      typeof potentialFile.id === "string"
     ) {
-      const v: any = value;
-      const id: string = v.id;
-      const meta: InputFileMeta = v.meta;
-      const local = v._node as
-        | { buffer?: Buffer; stream?: Readable }
-        | undefined;
+      const id = potentialFile.id;
+      const meta = potentialFile.meta;
+      const local = potentialFile._node;
+
       if (local?.buffer) {
         files.push({
           id,
@@ -50,7 +53,7 @@ export function buildNodeManifest<T = any>(input: T): BuiltManifest<T> {
         });
       }
       // Strip _node from manifest copy
-      const copy: AnyObj = { $ejson: "File", id, meta };
+      const copy: RunnerFileSentinel = { $runnerFile: "File", id, meta };
       return copy;
     }
 
@@ -58,13 +61,14 @@ export function buildNodeManifest<T = any>(input: T): BuiltManifest<T> {
       return value.map((x) => visit(x));
     }
 
-    const out: AnyObj = {};
-    for (const k of Object.keys(value)) {
-      out[k] = visit((value as AnyObj)[k]);
+    const out: Record<string, unknown> = {};
+    const obj = value as Record<string, unknown>;
+    for (const k of Object.keys(obj)) {
+      out[k] = visit(obj[k]);
     }
     return out;
   }
 
-  const cloned = visit(input);
-  return { input: cloned, files } as BuiltManifest<T>;
+  const cloned = visit(input) as T;
+  return { input: cloned, files };
 }

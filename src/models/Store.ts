@@ -1,16 +1,12 @@
 import {
-  DependencyMapType,
   IResource,
-  ITask,
   RegisterableItems,
+  ITag,
   ITaskMiddleware,
   IResourceMiddleware,
-  ITag,
+  DependencyMapType,
 } from "../defs";
-import {
-  findCircularDependencies,
-  IDependentNode,
-} from "./utils/findCircularDependencies";
+import { findCircularDependencies } from "./utils/findCircularDependencies";
 import { globalEventsArray } from "../globals/globalEvents";
 import {
   circularDependenciesError,
@@ -25,8 +21,6 @@ import { StoreValidator } from "./StoreValidator";
 import {
   ResourceStoreElementType,
   TaskStoreElementType,
-  TaskMiddlewareStoreElementType,
-  ResourceMiddlewareStoreElementType,
   EventStoreElementType,
 } from "../types/storeTypes";
 import { TaskRunner } from "./TaskRunner";
@@ -40,16 +34,35 @@ import {
   timeoutTaskMiddleware,
   timeoutResourceMiddleware,
 } from "../globals/middleware/timeout.middleware";
+import {
+  concurrencyTaskMiddleware,
+  concurrencyResource,
+} from "../globals/middleware/concurrency.middleware";
+import {
+  debounceTaskMiddleware,
+  throttleTaskMiddleware,
+  temporalResource,
+} from "../globals/middleware/temporal.middleware";
+import { fallbackTaskMiddleware } from "../globals/middleware/fallback.middleware";
+import {
+  rateLimitTaskMiddleware,
+  rateLimitResource,
+} from "../globals/middleware/rateLimit.middleware";
+import {
+  circuitBreakerMiddleware,
+  circuitBreakerResource,
+} from "../globals/middleware/circuitBreaker.middleware";
 import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middleware";
 import { OnUnhandledError } from "./UnhandledError";
 import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
-import { EJSON } from "@bluelibs/ejson";
 import { RunnerMode } from "../types/runner";
-import { detectRunnerMode } from "../utils/detectRunnerMode";
+import { detectRunnerMode } from "../tools/detectRunnerMode";
+import { getDefaultSerializer } from "../serializer";
+import { isOptional, isResource } from "../define";
 
 // Re-export types for backward compatibility
-export {
+export type {
   ResourceStoreElementType,
   TaskStoreElementType,
   EventStoreElementType,
@@ -65,6 +78,7 @@ export class Store {
   private validator: StoreValidator;
   private taskRunner?: TaskRunner;
   private middlewareManager!: MiddlewareManager;
+  private readonly initializedResourceIds: string[] = [];
 
   #isLocked = false;
   #isInitialized = false;
@@ -142,13 +156,13 @@ export class Store {
   private registerGlobalComponents() {
     const builtInResourcesMap = new Map<
       IResource<any, any, any, any, any>,
-      any
+      unknown
     >();
     builtInResourcesMap.set(globalResources.store, this);
     builtInResourcesMap.set(globalResources.eventManager, this.eventManager);
     builtInResourcesMap.set(globalResources.logger, this.logger);
     builtInResourcesMap.set(globalResources.taskRunner, this.taskRunner!);
-    builtInResourcesMap.set(globalResources.serializer, EJSON);
+    builtInResourcesMap.set(globalResources.serializer, getDefaultSerializer());
     builtInResourcesMap.set(
       globalResources.middlewareManager,
       this.middlewareManager,
@@ -163,6 +177,7 @@ export class Store {
       if (entry) {
         entry.value = value;
         entry.isInitialized = true;
+        this.recordResourceInitialized(resource.id);
       }
     }
 
@@ -182,10 +197,16 @@ export class Store {
       requireContextTaskMiddleware,
       retryTaskMiddleware,
       timeoutTaskMiddleware,
+      concurrencyTaskMiddleware,
+      debounceTaskMiddleware,
+      throttleTaskMiddleware,
+      fallbackTaskMiddleware,
+      rateLimitTaskMiddleware,
+      circuitBreakerMiddleware,
     ];
     builtInTaskMiddlewares.forEach((middleware) => {
       this.registry.taskMiddlewares.set(middleware.id, {
-        middleware: middleware as any,
+        middleware: middleware as unknown as ITaskMiddleware<any>,
         computedDependencies: {},
         isInitialized: false,
       });
@@ -198,11 +219,17 @@ export class Store {
     ];
     builtInResourceMiddlewares.forEach((middleware) => {
       this.registry.resourceMiddlewares.set(middleware.id, {
-        middleware: middleware as any,
+        middleware: middleware as unknown as IResourceMiddleware<any>,
         computedDependencies: {},
         isInitialized: false,
       });
     });
+
+    // Register built-in resources that support the middlewares
+    this.registry.storeGenericItem(rateLimitResource);
+    this.registry.storeGenericItem(circuitBreakerResource);
+    this.registry.storeGenericItem(temporalResource);
+    this.registry.storeGenericItem(concurrencyResource);
   }
 
   public setTaskRunner(taskRunner: TaskRunner) {
@@ -265,16 +292,109 @@ export class Store {
   }
 
   public async dispose() {
-    for (const resource of this.resources.values()) {
+    for (const resource of this.getResourcesInDisposeOrder()) {
       if (resource.isInitialized && resource.resource.dispose) {
         await resource.resource.dispose(
           resource.value,
           resource.config,
-          resource.computedDependencies as any,
+          resource.computedDependencies as unknown as DependencyMapType,
           resource.context,
         );
       }
     }
+  }
+
+  public recordResourceInitialized(resourceId: string) {
+    if (
+      this.initializedResourceIds[this.initializedResourceIds.length - 1] ===
+      resourceId
+    ) {
+      return;
+    }
+    if (this.initializedResourceIds.includes(resourceId)) {
+      return;
+    }
+    this.initializedResourceIds.push(resourceId);
+  }
+
+  private getResourcesInDisposeOrder(): ResourceStoreElementType[] {
+    const initializedResources = Array.from(this.resources.values()).filter(
+      (r) => r.isInitialized,
+    );
+
+    // Fast path: if the store tracked a complete init order, reverse it for disposal.
+    // This is correct because initialization happens dependency-first, so dependents
+    // always appear after their dependencies in the init sequence.
+    const initOrderHasAllInitialized =
+      this.initializedResourceIds.length === initializedResources.length &&
+      initializedResources.every((r) =>
+        this.initializedResourceIds.includes(r.resource.id),
+      );
+    if (initOrderHasAllInitialized) {
+      const byId = new Map(
+        initializedResources.map((r) => [r.resource.id, r] as const),
+      );
+      return this.initializedResourceIds
+        .slice()
+        .reverse()
+        .map((id) => byId.get(id))
+        .filter((r): r is ResourceStoreElementType => Boolean(r));
+    }
+
+    // Dispose order should be dependents-first (reverse init order).
+    // We derive it from the resource dependency graph to make it stable
+    // regardless of registration/insertion order.
+    const visitState = new Map<string, "visiting" | "visited">();
+    const initOrder: ResourceStoreElementType[] = [];
+    let cycleDetected = false;
+
+    const getDependencyIds = (resource: ResourceStoreElementType): string[] => {
+      const raw = resource.resource.dependencies;
+      if (!raw) return [];
+      const deps = raw as unknown;
+      if (!deps || typeof deps !== "object") return [];
+
+      const out: string[] = [];
+      const collect = (value: unknown): void => {
+        if (isOptional(value)) {
+          collect((value as { inner: unknown }).inner);
+          return;
+        }
+        if (isResource(value)) {
+          out.push(value.id);
+        }
+      };
+
+      Object.values(deps as Record<string, unknown>).forEach(collect);
+      return out;
+    };
+
+    const visit = (resourceId: string): void => {
+      const state = visitState.get(resourceId);
+      if (state === "visited") return;
+      if (state === "visiting") {
+        cycleDetected = true;
+        return;
+      }
+
+      const resource = this.resources.get(resourceId);
+      if (!resource) return;
+
+      visitState.set(resourceId, "visiting");
+      getDependencyIds(resource).forEach(visit);
+      visitState.set(resourceId, "visited");
+      initOrder.push(resource);
+    };
+
+    initializedResources.forEach((r) => visit(r.resource.id));
+
+    // If a cycle sneaks in despite validation (or disposal is called on a
+    // partially-initialized store), fall back to insertion order LIFO.
+    if (cycleDetected) {
+      return initializedResources.slice().reverse();
+    }
+
+    return initOrder.reverse();
   }
 
   /**

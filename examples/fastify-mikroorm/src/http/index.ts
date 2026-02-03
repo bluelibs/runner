@@ -12,7 +12,8 @@ export const http = r
   .resource("app.http.resources.http")
   .meta({
     title: "HTTP Module",
-    description: "HTTP server module with Fastify integration and automatic route registration",
+    description:
+      "HTTP server module with Fastify integration and automatic route registration",
   })
   .register([fastify, fastifyRouter, httpRoute, onReady, healthz, readyz])
   .build();

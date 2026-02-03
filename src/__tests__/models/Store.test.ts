@@ -7,13 +7,8 @@ import {
   defineTag,
   defineTaskMiddleware,
 } from "../../define";
-import {
-  Logger,
-  MiddlewareManager,
-  OnUnhandledError,
-  TaskRunner,
-} from "../../models";
-import { StoreRegistry } from "../../models/StoreRegistry";
+import { run } from "../../run";
+import { Logger, MiddlewareManager, OnUnhandledError } from "../../models";
 import { RunnerMode } from "../../types/runner";
 
 describe("Store", () => {
@@ -23,7 +18,7 @@ describe("Store", () => {
   let onUnhandledError: OnUnhandledError;
 
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeCycleDetection: true });
+    eventManager = new EventManager({ runtimeEventCycleDetection: true });
     logger = new Logger({
       printThreshold: "info",
       printStrategy: "pretty",
@@ -35,6 +30,13 @@ describe("Store", () => {
 
   it("should expose some helpers", () => {
     expect(store.getMiddlewareManager()).toBeInstanceOf(MiddlewareManager);
+  });
+
+  it("should ignore duplicate calls to recordResourceInitialized", () => {
+    store.recordResourceInitialized("dup");
+    store.recordResourceInitialized("dup");
+    store.recordResourceInitialized("other");
+    store.recordResourceInitialized("dup");
   });
 
   it("should initialize the store with a root resource", () => {
@@ -117,6 +119,162 @@ describe("Store", () => {
     await store.dispose();
 
     expect(disposeFn).toHaveBeenCalled();
+  });
+
+  it("should dispose dependents before their dependencies", async () => {
+    const callOrder: string[] = [];
+
+    const dependency = defineResource({
+      id: "dispose.order.dep",
+      dispose: async () => {
+        callOrder.push("dep");
+      },
+    });
+
+    const dependent = defineResource({
+      id: "dispose.order.dependent",
+      dependencies: { dependency },
+      dispose: async () => {
+        callOrder.push("dependent");
+      },
+    });
+
+    // Register dependency first to ensure insertion order is not relied on.
+    store.storeGenericItem(dependency);
+    store.storeGenericItem(dependent);
+
+    store.resources.get(dependency.id)!.isInitialized = true;
+    store.resources.get(dependent.id)!.isInitialized = true;
+
+    await store.dispose();
+    expect(callOrder).toEqual(["dependent", "dep"]);
+  });
+
+  it("should handle optional resource dependencies when ordering disposal", async () => {
+    const callOrder: string[] = [];
+
+    const dependency = defineResource({
+      id: "dispose.order.optional.dep",
+      dispose: async () => {
+        callOrder.push("dep");
+      },
+    });
+
+    const dependent = defineResource({
+      id: "dispose.order.optional.dependent",
+      dependencies: { maybeDep: dependency.optional() },
+      dispose: async () => {
+        callOrder.push("dependent");
+      },
+    });
+
+    store.storeGenericItem(dependency);
+    store.storeGenericItem(dependent);
+
+    store.resources.get(dependency.id)!.isInitialized = true;
+    store.resources.get(dependent.id)!.isInitialized = true;
+
+    await store.dispose();
+    expect(callOrder).toEqual(["dependent", "dep"]);
+  });
+
+  it("should dispose in reverse init order when init order is tracked", async () => {
+    const callOrder: string[] = [];
+
+    const dependency = defineResource({
+      id: "dispose.initOrder.dep",
+      async init() {
+        return "dep";
+      },
+      dispose: async () => {
+        callOrder.push("dep");
+      },
+    });
+
+    const app = defineResource({
+      id: "dispose.initOrder.app",
+      register: [dependency],
+      dependencies: { dependency },
+      async init() {
+        return "app";
+      },
+      dispose: async () => {
+        callOrder.push("app");
+      },
+    });
+
+    const result = await run(app, { mode: RunnerMode.TEST });
+    await result.dispose();
+    expect(callOrder).toEqual(["app", "dep"]);
+  });
+
+  it("should ignore non-object dependencies when ordering disposal", async () => {
+    const disposeFn = jest.fn();
+    const weirdDepsResource = defineResource({
+      id: "dispose.order.weird.deps",
+      dependencies: (() => "not-an-object") as any,
+      dispose: async () => {
+        disposeFn();
+      },
+    });
+
+    store.storeGenericItem(weirdDepsResource);
+    store.resources.get(weirdDepsResource.id)!.isInitialized = true;
+
+    await store.dispose();
+    expect(disposeFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("should not throw if a dependency resource is not registered during disposal ordering", async () => {
+    const disposeFn = jest.fn();
+    const missing = defineResource({
+      id: "dispose.order.missing.dep",
+    });
+    const dependent = defineResource({
+      id: "dispose.order.missing.dependent",
+      dependencies: { missing },
+      dispose: async () => {
+        disposeFn();
+      },
+    });
+
+    store.storeGenericItem(dependent);
+    store.resources.get(dependent.id)!.isInitialized = true;
+
+    await store.dispose();
+    expect(disposeFn).toHaveBeenCalledTimes(1);
+  });
+
+  it("should fall back to insertion order LIFO when a cycle is detected during disposal ordering", async () => {
+    const callOrder: string[] = [];
+
+    const aDeps: any = {};
+    const bDeps: any = {};
+    const a = defineResource({
+      id: "dispose.order.cycle.a",
+      dependencies: aDeps,
+      dispose: async () => {
+        callOrder.push("a");
+      },
+    });
+    const b = defineResource({
+      id: "dispose.order.cycle.b",
+      dependencies: bDeps,
+      dispose: async () => {
+        callOrder.push("b");
+      },
+    });
+
+    aDeps.b = b;
+    bDeps.a = a;
+
+    store.storeGenericItem(a);
+    store.storeGenericItem(b);
+    store.resources.get(a.id)!.isInitialized = true;
+    store.resources.get(b.id)!.isInitialized = true;
+
+    await store.dispose();
+    expect(callOrder).toEqual(["b", "a"]);
   });
 
   it("should throw an error for duplicate registration", () => {

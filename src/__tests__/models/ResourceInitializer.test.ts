@@ -3,7 +3,6 @@ import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { defineResource } from "../../define";
 import { Logger, OnUnhandledError } from "../../models";
-import { globalResources } from "../../globals/globalResources";
 import { RunnerMode } from "../../types/runner";
 
 describe("ResourceInitializer", () => {
@@ -14,7 +13,7 @@ describe("ResourceInitializer", () => {
   let onUnhandledError: OnUnhandledError;
 
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeCycleDetection: true });
+    eventManager = new EventManager({ runtimeEventCycleDetection: true });
     logger = new Logger({
       printThreshold: "info",
       printStrategy: "pretty",
@@ -40,11 +39,11 @@ describe("ResourceInitializer", () => {
       mockDependencies,
     );
 
-    expect(result).toEqual({ value: "initialized value", context: undefined });
+    expect(result).toEqual({ value: "initialized value", context: {} });
     expect(mockResource.init).toHaveBeenCalledWith(
       mockConfig,
       mockDependencies,
-      undefined,
+      {},
     );
 
     // No lifecycle events anymore
@@ -70,7 +69,7 @@ describe("ResourceInitializer", () => {
     expect(mockResource.init).toHaveBeenCalledWith(
       mockConfig,
       mockDependencies,
-      undefined,
+      {},
     );
   });
 
@@ -88,7 +87,7 @@ describe("ResourceInitializer", () => {
       mockDependencies,
     );
 
-    expect(result).toEqual({ value: undefined, context: undefined });
+    expect(result).toEqual({ value: undefined, context: {} });
     // No lifecycle events anymore
   });
 });

@@ -3,17 +3,18 @@ import {
   emitViaTunnel,
   toTunnelError,
 } from "../../globals/resources/tunnel/protocol";
+import { ITask, IEventEmission } from "../../defs";
 
 describe("tunnel protocol - run/emit helpers", () => {
   it("runViaTunnel delegates to runner", async () => {
-    const calls: any[] = [];
-    const task: any = { id: "t" };
+    const calls: { t: { id: string }; input: unknown }[] = [];
+    const task = { id: "t" };
     const out = await runViaTunnel(
       async (t, input) => {
         calls.push({ t, input });
         return 7;
       },
-      task,
+      task as unknown as ITask<any, any, any, any, any, any>,
       { a: 1 },
     );
     expect(out).toBe(7);
@@ -21,13 +22,13 @@ describe("tunnel protocol - run/emit helpers", () => {
   });
 
   it("emitViaTunnel delegates to runner", async () => {
-    const calls: any[] = [];
+    const calls: { id: string; data: unknown }[] = [];
     await emitViaTunnel(
       async (emission) => {
-        calls.push(emission);
+        calls.push(emission as { id: string; data: unknown });
         return undefined;
       },
-      { id: "e", data: { x: 1 } } as any,
+      { id: "e", data: { x: 1 } } as unknown as IEventEmission<any>,
     );
     expect(calls[0]).toEqual({ id: "e", data: { x: 1 } });
   });

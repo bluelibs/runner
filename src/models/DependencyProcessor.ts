@@ -8,6 +8,7 @@ import {
   TaskLocalInterceptor,
   ResourceDependencyValuesType,
   TaskDependencyWithIntercept,
+  TaskCallOptions,
 } from "../defs";
 import { Store } from "./Store";
 import {
@@ -26,9 +27,7 @@ import {
 import { Logger } from "./Logger";
 
 /**
- * This class is responsible of setting up dependencies with their respective computedValues.
- * Note that all elements must have been previously registered otherwise errors will be thrown
- * when trying to depend on something not in the store.
+ * Resolves and caches computed dependencies for store items (resources, tasks, middleware, hooks).
  */
 export class DependencyProcessor {
   protected readonly resourceInitializer: ResourceInitializer;
@@ -48,7 +47,7 @@ export class DependencyProcessor {
   }
 
   /**
-   * This function is going to go through all the resources, tasks and middleware to compute their required dependencies.
+   * Computes and caches dependencies for all registered store items.
    */
   async computeAllDependencies() {
     for (const middleware of this.store.resourceMiddlewares.values()) {
@@ -107,8 +106,7 @@ export class DependencyProcessor {
     task.isInitialized = true;
   }
 
-  // Most likely these are resources that no-one has dependencies towards
-  // We need to ensure they work too!
+  // Initialize non-root resources that are registered but not depended upon (side effects/disposers).
   public async initializeUninitializedResources() {
     for (const resource of this.store.resources.values()) {
       if (
@@ -116,27 +114,59 @@ export class DependencyProcessor {
         // The root is the last one to be initialized and is done in a separate process.
         resource.resource.id !== this.store.root.resource.id
       ) {
-        await this.processResourceDependencies(resource);
-        const { value, context } =
-          await this.resourceInitializer.initializeResource(
-            resource.resource,
-            resource.config,
-            resource.computedDependencies!,
-          );
-        resource.context = context;
-        resource.value = value;
-        resource.isInitialized = true;
+        try {
+          await this.processResourceDependencies(resource);
+          const { value, context } =
+            await this.resourceInitializer.initializeResource(
+              resource.resource,
+              resource.config,
+              resource.computedDependencies!,
+            );
+          resource.context = context;
+          resource.value = value;
+          resource.isInitialized = true;
+          this.store.recordResourceInitialized(resource.resource.id);
+        } catch (error: unknown) {
+          this.rethrowResourceInitError(resource.resource.id, error);
+        }
       }
     }
   }
 
+  private rethrowResourceInitError(resourceId: string, error: unknown): never {
+    const prefix = `Resource "${resourceId}" initialization failed`;
+    if (error instanceof Error) {
+      if (!error.message.includes(resourceId)) {
+        error.message = `${prefix}: ${error.message}`;
+      }
+      if (!Object.prototype.hasOwnProperty.call(error, "resourceId")) {
+        Object.defineProperty(error, "resourceId", {
+          value: resourceId,
+          configurable: true,
+        });
+      }
+      if (!Object.prototype.hasOwnProperty.call(error, "cause")) {
+        Object.defineProperty(error, "cause", {
+          value: { resourceId },
+          configurable: true,
+        });
+      }
+      throw error;
+    }
+
+    throw new Error(`${prefix}: ${String(error)}`);
+  }
+
   /**
-   * Processes dependencies and hooks
-   * @param resource
+   * Computes and caches dependencies for a resource (if not already computed).
    */
   protected async processResourceDependencies<TD extends DependencyMapType>(
     resource: ResourceStoreElementType<any, any, TD>,
   ) {
+    if (Object.keys(resource.computedDependencies || {}).length > 0) {
+      return;
+    }
+
     const deps = (resource.resource.dependencies || ({} as TD)) as TD;
     const extracted = await this.extractDependencies(
       deps,
@@ -156,11 +186,10 @@ export class DependencyProcessor {
   ): ResourceDependencyValuesType<TD> {
     const wrapped: Record<string, unknown> = {};
     for (const key of Object.keys(deps) as Array<keyof TD>) {
-      const original = deps[key] as any;
+      const original = deps[key];
       const value = (extracted as Record<string, unknown>)[key as string];
-      // Handle optional wrappers
       if (utils.isOptional(original)) {
-        const inner = original.inner as any;
+        const inner = (original as { inner: unknown }).inner;
         if (utils.isTask(inner)) {
           wrapped[key as string] = value
             ? this.makeTaskWithIntercept(inner)
@@ -185,11 +214,11 @@ export class DependencyProcessor {
     D extends DependencyMapType,
   >(original: ITask<I, O, D>): TaskDependencyWithIntercept<I, O> {
     const taskId = original.id;
-    const fn: (input: I) => O = (input) => {
+    const fn: (input: I, options?: TaskCallOptions) => O = (input, options) => {
       const storeTask = this.store.tasks.get(taskId)!;
       const effective: ITask<I, O, D> = storeTask.task;
 
-      return this.taskRunner.run(effective, input) as O;
+      return this.taskRunner.run(effective, input, options) as O;
     };
     return Object.assign(fn, {
       intercept: (middleware: TaskLocalInterceptor<I, O>) => {
@@ -199,7 +228,7 @@ export class DependencyProcessor {
         if (!storeTask.interceptors) storeTask.interceptors = [];
         storeTask.interceptors.push(middleware);
       },
-    }) as TaskDependencyWithIntercept<I, O>;
+    }) as unknown as TaskDependencyWithIntercept<I, O>;
   }
 
   public async initializeRoot() {
@@ -216,10 +245,11 @@ export class DependencyProcessor {
     rootResource.context = context;
     rootResource.value = value;
     rootResource.isInitialized = true;
+    this.store.recordResourceInitialized(rootResource.resource.id);
   }
 
   /**
-   * Processes all hooks, should run before emission of any event.
+   * Attaches listeners for all hooks. Must run before emitting events.
    */
   public attachListeners() {
     // Attach listeners for dedicated hooks map
@@ -244,21 +274,29 @@ export class DependencyProcessor {
         if (eventDefinition === "*") {
           this.eventManager.addGlobalListener(handler, { order });
         } else if (Array.isArray(eventDefinition)) {
-          for (const ed of eventDefinition) {
-            if (this.store.events.get(ed.id) === undefined) {
-              eventNotFoundError.throw({ id: ed.id });
+          for (const e of eventDefinition) {
+            if (this.store.events.get(e.id) === undefined) {
+              eventNotFoundError.throw({ id: e.id });
             }
           }
-          this.eventManager.addListener(eventDefinition as any, handler, {
-            order,
-          });
+          this.eventManager.addListener(
+            eventDefinition as unknown as IEvent[],
+            handler,
+            {
+              order,
+            },
+          );
         } else {
           if (this.store.events.get(eventDefinition.id) === undefined) {
             eventNotFoundError.throw({ id: eventDefinition.id });
           }
-          this.eventManager.addListener(eventDefinition as any, handler, {
-            order,
-          });
+          this.eventManager.addListener(
+            eventDefinition as unknown as IEvent,
+            handler,
+            {
+              order,
+            },
+          );
         }
       }
     }
@@ -275,8 +313,9 @@ export class DependencyProcessor {
         object[key] = await this.extractDependency(map[key], source);
         // Special handling, a little bit of magic and memory sacrifice for the sake of observability.
         // Maybe later we can allow this to be opt-in to save 'memory' in the case of large tasks?
-        if ((object[key] as any) instanceof Logger) {
-          object[key] = object[key].with({ source });
+        const val = object[key] as unknown;
+        if (val instanceof Logger) {
+          (object as Record<string, unknown>)[key] = val.with({ source });
         }
       } catch (e) {
         const errorMessage = String(e);
@@ -365,8 +404,8 @@ export class DependencyProcessor {
       st.isInitialized = true;
     }
 
-    return (input: unknown) => {
-      return this.taskRunner.run(st.task, input);
+    return (input: unknown, options?: TaskCallOptions) => {
+      return this.taskRunner.run(st.task, input, options);
     };
   }
 
@@ -381,21 +420,27 @@ export class DependencyProcessor {
     const { resource, config } = sr;
 
     if (!sr.isInitialized) {
-      // check if it has an initialisation function that provides the value
-      if (resource.init) {
-        const depMap = (resource.dependencies || {}) as DependencyMapType;
-        const raw = await this.extractDependencies(depMap, resource.id);
-        const wrapped = this.wrapResourceDependencies(depMap, raw);
-        const { value, context } =
-          await this.resourceInitializer.initializeResource(
-            resource,
-            config,
-            wrapped,
-          );
+      const depMap = (resource.dependencies || {}) as DependencyMapType;
 
-        sr.context = context;
-        sr.value = value;
+      let wrapped =
+        sr.computedDependencies as ResourceDependencyValuesType<any>;
+
+      // If not already computed, compute and cache it!
+      if (!wrapped || Object.keys(wrapped).length === 0) {
+        const raw = await this.extractDependencies(depMap, resource.id);
+        wrapped = this.wrapResourceDependencies(depMap, raw);
+        sr.computedDependencies = wrapped;
       }
+
+      const { value, context } =
+        await this.resourceInitializer.initializeResource(
+          resource,
+          config,
+          wrapped,
+        );
+
+      sr.context = context;
+      sr.value = value;
 
       // we need to initialize the resource
       sr.isInitialized = true;

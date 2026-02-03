@@ -1,8 +1,12 @@
 # Multi-Platform Architecture Guide
 
+← [Back to main README](../README.md)
+
+---
+
 Welcome to the BlueLibs Runner multi-platform architecture! This guide will walk you through one of our most interesting architectural decisions: **how we made a single codebase work seamlessly across Node.js, browsers, edge workers, and other JavaScript runtimes**.
 
-## 🎯 The Challenge We Solved
+## The Challenge We Solved
 
 JavaScript runs everywhere these days - Node.js servers, browser tabs, Cloudflare Workers, Deno, Bun, and more. Each environment has its own quirks:
 
@@ -13,7 +17,7 @@ JavaScript runs everywhere these days - Node.js servers, browser tabs, Cloudflar
 
 The challenge? How do you write a dependency injection framework that works everywhere without duplicating code?
 
-## 🏗️ Our Solution: Platform Adapters
+## Our Solution: Platform Adapters
 
 We created a **platform adapter system** that abstracts away runtime differences behind a common interface. Think of it as a translation layer between your application code and the underlying JavaScript runtime.
 
@@ -42,7 +46,7 @@ interface IPlatformAdapter {
 
 This interface captures **what every runtime needs to provide** for a dependency injection container to work properly.
 
-## 🔍 Smart Environment Detection
+## Smart Environment Detection
 
 The magic starts with environment detection. We don't just guess - we carefully probe the global environment:
 
@@ -83,7 +87,7 @@ export function detectEnvironment(): PlatformEnv {
 
 **Why this approach?** We check for the most specific features first, then fall back to broader categories. This means when new runtimes appear, they'll likely work out of the box.
 
-## 🎭 Meet the Platform Adapters
+## Meet the Platform Adapters
 
 ### NodePlatformAdapter
 
@@ -170,7 +174,7 @@ export class EdgePlatformAdapter extends BrowserPlatformAdapter {
 
 **Design choice:** Edge workers are like browsers but even more constrained. We inherit most browser behavior but remove unreliable features.
 
-## 🎪 The Universal Adapter: Our Secret Sauce
+## The Universal Adapter: Our Secret Sauce
 
 The `UniversalPlatformAdapter` is where things get really interesting. It's a **lazy-loading, runtime-detecting adapter**:
 
@@ -210,12 +214,12 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
 
 **Why delegation?** Once we know what runtime we're in, we can use the specialized adapter optimized for that environment.
 
-## 📦 Build-Time Optimization
+## Build-Time Optimization
 
 Here's where it gets clever. We don't just detect at runtime - we also **optimize at build time** using different bundles:
 
 ```typescript
-// tsup.config.ts creates different bundles with __TARGET__ defined
+// config/tsup/tsup.config.ts creates different bundles with __TARGET__ defined
 
 // In factory.ts:
 export function createPlatformAdapter(): IPlatformAdapter {
@@ -264,7 +268,7 @@ Our package.json shows the full strategy:
 
 **Result:** Node.js bundlers automatically get the Node-optimized bundle (and its Node-only type declarations) even when you import from `@bluelibs/runner`. Consumers that explicitly target `@bluelibs/runner/node` hit the same runtime + declarations, while browsers and universal runtimes continue to receive the appropriate builds with runtime detection fallback.
 
-## 🔄 Backwards Compatibility
+## Backwards Compatibility
 
 We didn't break existing code. The old `PlatformAdapter` class is now a wrapper:
 
@@ -292,7 +296,7 @@ export class PlatformAdapter implements IPlatformAdapter {
 
 **Design principle:** New code gets the benefits, old code keeps working.
 
-## 🤔 Interesting Design Decisions
+## Interesting Design Decisions
 
 ### Why Not Feature Detection?
 
@@ -316,7 +320,7 @@ Every event listener registration returns a cleanup function:
 ```typescript
 onUncaughtException(handler) {
   process.on("uncaughtException", handler);
-  return () => process.off("uncaughtException", handler); // ✨
+  return () => process.off("uncaughtException", handler); // Clean cleanup.
 }
 ```
 
@@ -334,7 +338,7 @@ exit() {
 
 This lets developers know _why_ something failed and what runtime features they're missing.
 
-## 🎯 Real-World Benefits
+## Real-World Benefits
 
 ### For Library Authors
 
@@ -354,7 +358,7 @@ This lets developers know _why_ something failed and what runtime features they'
 - Easy to add new runtime support
 - Clear separation of concerns
 
-## 🚀 Adding New Platforms
+## Adding New Platforms
 
 Want to support a new runtime? Just implement the interface:
 
@@ -380,7 +384,7 @@ export class DenoEdgePlatformAdapter implements IPlatformAdapter {
 
 Then add it to the detection logic and build config. That's it!
 
-## 🎉 Conclusion
+## Conclusion
 
 The multi-platform architecture might seem complex, but it solves a real problem: **JavaScript fragmentation**. By abstracting platform differences behind a clean interface, we can:
 
@@ -393,9 +397,9 @@ The key insight is that **dependency injection has universal concepts** (lifecyc
 
 Next time you see code like `getPlatform().onShutdownSignal(handler)`, you'll know there's a sophisticated system making sure it works whether you're running in Node.js, a browser, or the next JavaScript runtime that gets invented!
 
-_Happy coding! 🚀_
+_Happy coding!_
 
-## 🧪 Testing & Coverage Strategy (What We Practiced)
+## Testing & Coverage Strategy (What We Practiced)
 
 Achieving reliable 100% coverage across Node, Browser, and Universal adapters requires a pragmatic test strategy. Here’s what we do and why it works.
 
@@ -440,16 +444,13 @@ All registration methods return disposers. Tests should:
 ### Patterns we used in tests
 
 - Browser beforeunload & visibilitychange
-
   - Mock `window.addEventListener`/`removeEventListener` and stash handlers to invoke them synchronously.
   - Provide a `document` mock with `visibilityState = "hidden"` to trigger the visibility handler.
 
 - Error/unhandledrejection handling
-
   - Register handlers via the adapter, then call captured listeners with shapes `{ error: Error }` or `{ reason: value }` to validate unwrapping paths.
 
 - Timers exposure
-
   - Call `adapter.setTimeout(fn, ms)` and immediately `adapter.clearTimeout(id)` to ensure bindings are wired and execute without throwing.
 
 - AsyncLocalStorage

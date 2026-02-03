@@ -1,5 +1,5 @@
 import type { Readable } from "stream";
-import type { InputFileMeta, EjsonFileSentinel } from "../types/inputFile";
+import type { InputFileMeta, RunnerFileSentinel } from "../types/inputFile";
 
 export interface NodeCollectedFile {
   id: string;
@@ -15,34 +15,38 @@ export interface WebCollectedFile {
   blob: Blob;
 }
 
-export interface BuiltUniversalManifest<T = any> {
+export interface BuiltUniversalManifest<T = unknown> {
   input: T; // cloned input with sidecars removed
   nodeFiles: NodeCollectedFile[];
   webFiles: WebCollectedFile[];
 }
 
-type AnyObj = Record<string, any>;
+type AnyObj = Record<string, unknown>;
 
-export function buildUniversalManifest<T = any>(
+/** Internal representation of a file value with platform-specific data */
+interface InternalFileValue extends RunnerFileSentinel {
+  _node?: { buffer?: Buffer; stream?: Readable };
+  _web?: { blob?: Blob };
+}
+
+export function buildUniversalManifest<T = unknown>(
   input: T,
 ): BuiltUniversalManifest<T> {
   const nodeFiles: NodeCollectedFile[] = [];
   const webFiles: WebCollectedFile[] = [];
 
-  function visit(value: any): any {
+  function visit(value: unknown): unknown {
     if (!value || typeof value !== "object") return value;
 
     if (
-      (value as EjsonFileSentinel).$ejson === "File" &&
-      typeof (value as any).id === "string"
+      (value as RunnerFileSentinel).$runnerFile === "File" &&
+      typeof (value as RunnerFileSentinel).id === "string"
     ) {
-      const v: any = value;
+      const v = value as InternalFileValue;
       const id: string = v.id;
       const meta: InputFileMeta = v.meta;
-      const node = v._node as
-        | { buffer?: Buffer; stream?: Readable }
-        | undefined;
-      const web = v._web as { blob?: Blob } | undefined;
+      const node = v._node;
+      const web = v._web;
 
       if (node?.buffer) {
         nodeFiles.push({
@@ -60,7 +64,7 @@ export function buildUniversalManifest<T = any>(
         webFiles.push({ id, meta, blob: web.blob });
       }
 
-      const copy: AnyObj = { $ejson: "File", id, meta };
+      const copy: AnyObj = { $runnerFile: "File", id, meta };
       return copy;
     }
 
@@ -82,5 +86,3 @@ export function buildUniversalManifest<T = any>(
     webFiles,
   } as BuiltUniversalManifest<T>;
 }
-
-

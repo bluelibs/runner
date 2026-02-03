@@ -1,4 +1,3 @@
-import { platformUnsupportedFunctionError } from "../../errors";
 import { isWebWorker } from "../../platform/types";
 /**
  * Simple test to verify platform abstraction works in different environments
@@ -144,19 +143,40 @@ describe("Platform Abstraction", () => {
     }).not.toThrow();
 
     // Test __ENV__ fallback
-    (globalThis as any).__ENV__ = { TEST_VAR: "env_value" };
+    Object.defineProperty(globalThis, "__ENV__", {
+      value: { TEST_VAR: "env_value" },
+      configurable: true,
+    });
     expect(universalAdapter.getEnv("TEST_VAR")).toBe("env_value");
     delete (globalThis as any).__ENV__;
 
     // Test process.env fallback
-    (globalThis as any).process = { env: { TEST_VAR: "process_value" } };
+    const originalProcess = (globalThis as any).process;
+    Object.defineProperty(globalThis, "process", {
+      value: { env: { TEST_VAR: "process_value" } },
+      configurable: true,
+    });
     expect(universalAdapter.getEnv("TEST_VAR")).toBe("process_value");
-    delete (globalThis as any).process;
 
     // Test env fallback
-    (globalThis as any).env = { TEST_VAR: "global_value" };
+    Object.defineProperty(globalThis, "process", {
+      value: undefined,
+      configurable: true,
+    });
+    Object.defineProperty(globalThis, "env", {
+      value: { TEST_VAR: "global_value" },
+      configurable: true,
+    });
     expect(universalAdapter.getEnv("TEST_VAR")).toBe("global_value");
     delete (globalThis as any).env;
+    if (originalProcess) {
+      Object.defineProperty(globalThis, "process", {
+        value: originalProcess,
+        configurable: true,
+      });
+    } else {
+      delete (globalThis as any).process;
+    }
 
     // Test undefined when no env found
     expect(universalAdapter.getEnv("TEST_VAR")).toBeUndefined();
@@ -245,14 +265,16 @@ describe("Platform Abstraction", () => {
 
       // Mock process.exit to capture the call
       const exitSpy = jest.fn();
-      process.exit = exitSpy as any;
+      const exitMock = jest
+        .spyOn(process, "exit")
+        .mockImplementation(exitSpy as any);
 
       try {
         nodeAdapter.exit(1);
         expect(exitSpy).toHaveBeenCalledWith(1);
       } finally {
         // Restore original
-        process.exit = originalExit;
+        exitMock.mockRestore();
       }
     } else {
       // Skip test in non-Node.js environments

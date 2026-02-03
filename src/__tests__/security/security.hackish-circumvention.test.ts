@@ -5,7 +5,12 @@
 // - Spoofing event source can only self-suppress a matching listener id.
 // - Safe self re-emit (same hook id) should not create a cycle and should
 //   still deliver to other listeners.
-import { defineEvent, defineHook, defineResource, defineTask } from "../../define";
+import {
+  defineEvent,
+  defineHook,
+  defineResource,
+  defineTask,
+} from "../../define";
 import { run } from "../../run";
 import { globals } from "../../index";
 
@@ -62,11 +67,9 @@ describe("Security: Hackish circumvention attempts", () => {
     expect(seen).not.toContain("h1"); // spoof only suppresses the matching hook
   });
 
-  it("safe re-emit by same hook doesn't loop but still notifies others", async () => {
-    // A hook may re-emit the same event while identifying as the same source.
-    // This is permitted to avoid false positives for idempotent patterns.
-    // The guarantee we need: no infinite loop and other listeners still receive
-    // the second emission.
+  it("safe re-emit by same hook is allowed (idempotent pattern)", async () => {
+    // A hook re-emitting the same event is allowed IF the source changes (e.g. initial->hook).
+    // This supports idempotent patterns where a hook re-emits to notify others but skips itself.
     const e = defineEvent<{ step: number }>({ id: "sec.hack.reemit" });
     let countH = 0;
     let countSpy = 0;
@@ -78,7 +81,6 @@ describe("Security: Hackish circumvention attempts", () => {
       run: async (ev, { eventManager }) => {
         countH++;
         if (ev.data.step === 0) {
-          // Attempt bypass: re-emit same event with source set to self ("safe" path)
           await eventManager.emit(e, { step: 1 }, "sec.hack.h");
         }
       },
@@ -94,11 +96,12 @@ describe("Security: Hackish circumvention attempts", () => {
 
     const app = defineResource({ id: "sec.hack.app2", register: [e, h, spy] });
     const rr = await run(app);
+
     await rr.emitEvent(e, { step: 0 });
     await rr.dispose();
 
     expect(countH).toBe(1); // self-skipped on re-emit
-    expect(countSpy).toBe(2); // saw both emissions
+    expect(countSpy).toBe(2); // saw both emissions (step 0 and step 1)
   });
 
   // Note: exclusion from global hooks is already validated; spoofing source

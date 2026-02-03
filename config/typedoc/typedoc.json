@@ -1,0 +1,11 @@
+{
+  "entryPoints": ["../../src/index.ts"],
+  "tsconfig": "../../config/ts/tsconfig.build.json",
+  "out": "../../docs",
+  "exclude": ["**/__tests__/**/*", "**/src/node/durable/dashboard/**/*"],
+  "includeVersion": true,
+  "plugin": ["typedoc-material-theme"],
+  "themeColor": "#cb9820",
+  "readme": "../../README.md",
+  "customCss": "typedoc.custom.css"
+}

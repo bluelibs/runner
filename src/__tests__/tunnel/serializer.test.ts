@@ -1,42 +1,38 @@
-import {
-  EjsonSerializer,
-  EJSON,
-  getDefaultSerializer,
-} from "../../globals/resources/tunnel/serializer";
+// These live under the tunnel suite because they validate the default serializer
+// singleton and the stable stringify/parse/addType surface used by tunnels.
+import { getDefaultSerializer, Serializer } from "../../serializer";
 
 describe("tunnel serializer", () => {
-  it("getDefaultSerializer returns the shared EJSON serializer", () => {
-    const serializer = getDefaultSerializer();
-    expect(serializer).toBe(EjsonSerializer);
+  it("getDefaultSerializer returns a shared serializer singleton", () => {
+    const s = getDefaultSerializer();
+    expect(s).toBe(getDefaultSerializer()); // idempotent singleton
 
     const now = new Date("2024-01-02T03:04:05.006Z");
-    const encoded = serializer.stringify({ now });
-    expect(encoded).toContain("$date");
-
-    const decoded = serializer.parse<{ now: Date }>(encoded);
+    const encoded = s.stringify({ now });
+    const decoded = s.parse<{ now: Date }>(encoded);
     expect(decoded.now).toBeInstanceOf(Date);
     expect(decoded.now.getTime()).toBe(now.getTime());
   });
 
-  it("Runner EJSON export stays in sync with serializer implementation", () => {
+  it("round-trips payloads via stringify/parse", () => {
     const payload = {
       when: new Date("2024-05-03T04:05:06.123Z"),
       nested: { flag: true },
     };
-    const viaSerializer = EjsonSerializer.stringify(payload);
-    const viaExport = EJSON.stringify(payload);
-    expect(viaSerializer).toBe(viaExport);
+    const s = getDefaultSerializer();
+    const viaSerializer = s.stringify(payload);
 
-    const parsedFromSerializer =
-      EjsonSerializer.parse<typeof payload>(viaExport);
-    const parsedFromExport = EJSON.parse(viaSerializer) as typeof payload;
+    // Check that we can roundtrip
+    const parsedFromSerializer = s.parse<typeof payload>(viaSerializer);
     expect(parsedFromSerializer.when.getTime()).toBe(payload.when.getTime());
-    expect(parsedFromExport.when.getTime()).toBe(payload.when.getTime());
   });
 
-  it("supports addType via default serializer (delegates to EJSON.addType)", () => {
+  it("supports addType(name, factory) with typeName()/toJSONValue() value types", () => {
     class Distance {
-      constructor(public value: number, public unit: string) {}
+      constructor(
+        public value: number,
+        public unit: string,
+      ) {}
       toJSONValue() {
         return { value: this.value, unit: this.unit } as const;
       }
@@ -46,7 +42,7 @@ describe("tunnel serializer", () => {
     }
 
     const s = getDefaultSerializer();
-    s.addType?.(
+    s.addType(
       "Distance",
       (j: { value: number; unit: string }) => new Distance(j.value, j.unit),
     );
@@ -55,5 +51,18 @@ describe("tunnel serializer", () => {
     expect(decoded.d).toBeInstanceOf(Distance);
     expect(decoded.d.value).toBe(10);
     expect(decoded.d.unit).toBe("km");
+  });
+
+  it("supports addType(typeDefinition) directly", () => {
+    const s = new Serializer();
+    s.addType({
+      id: "Token",
+      is: (obj: unknown): obj is string =>
+        typeof obj === "string" && obj.startsWith("T:"),
+      serialize: (v) => v,
+      deserialize: (v) => v,
+      strategy: "value",
+    });
+    expect(s.parse(s.stringify({ v: "T:1" }))).toEqual({ v: "T:1" });
   });
 });

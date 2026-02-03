@@ -12,9 +12,9 @@ export const getUserById = r
   })
   // We expect the id to come from path params
   .inputSchema(z.object({ id: z.string() }).strict())
-  .resultSchema(z
-    .object({ id: z.string(), name: z.string(), email: z.string() })
-    .strict())
+  .resultSchema(
+    z.object({ id: z.string(), name: z.string(), email: z.string() }).strict(),
+  )
   .tags([
     httpRoute.with({
       method: "get",

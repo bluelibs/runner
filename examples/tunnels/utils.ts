@@ -25,7 +25,11 @@ export async function getExposureBaseUrl(handlers: {
 export function createStreamingClient(baseUrl: string) {
   const base = baseUrl.replace(/\/$/, "");
   return {
-    async task(taskId: string, body: Readable, headers: Record<string, string> = {}) {
+    async task(
+      taskId: string,
+      body: Readable,
+      headers: Record<string, string> = {},
+    ) {
       const url = new URL(`${base}/task/${encodeURIComponent(taskId)}`);
       return new Promise<Readable>((resolve, reject) => {
         const req = http.request(

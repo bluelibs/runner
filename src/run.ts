@@ -4,7 +4,6 @@ import { DependencyProcessor } from "./models/DependencyProcessor";
 import { EventManager } from "./models/EventManager";
 import { globalEvents } from "./globals/globalEvents";
 import { Store } from "./models/Store";
-import { findCircularDependencies } from "./models/utils/findCircularDependencies";
 import { Logger } from "./models/Logger";
 import { isResourceWithConfig } from "./define";
 import { debugResource } from "./globals/resources/debug";
@@ -44,7 +43,7 @@ export async function run<C, V extends Promise<any>>(
     shutdownHooks = true,
     dryRun = false,
     onUnhandledError: onUnhandledErrorOpt,
-    runtimeCycleDetection = true,
+    runtimeEventCycleDetection = true,
   } = options || {};
 
   const {
@@ -56,10 +55,10 @@ export async function run<C, V extends Promise<any>>(
   } = logs;
 
   const eventManager = new EventManager({
-    runtimeCycleDetection,
+    runtimeEventCycleDetection,
   });
 
-  let { resource, config } = extractResourceAndConfig(
+  const { resource, config } = extractResourceAndConfig(
     resourceOrResourceWithConfig,
   );
 

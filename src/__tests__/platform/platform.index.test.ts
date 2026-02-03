@@ -14,6 +14,15 @@ import { EdgePlatformAdapter } from "../../platform/adapters/edge";
 import { UniversalPlatformAdapter } from "../../platform/adapters/universal";
 import { GenericUniversalPlatformAdapter } from "../../platform/adapters/universal-generic";
 
+interface TestGlobal {
+  __TARGET__?: string;
+}
+const testGlobal = globalThis as unknown as TestGlobal;
+
+function getInner(adapter: PlatformAdapter) {
+  return (adapter as unknown as { inner: any }).inner;
+}
+
 describe("Platform Index", () => {
   afterEach(() => {
     resetPlatform();
@@ -139,15 +148,15 @@ describe("Platform Index", () => {
     let originalTarget: any;
 
     beforeAll(() => {
-      originalTarget = (globalThis as any).__TARGET__;
-      (globalThis as any).__TARGET__ = "universal";
+      originalTarget = testGlobal.__TARGET__;
+      testGlobal.__TARGET__ = "universal";
     });
 
     afterAll(() => {
       if (originalTarget !== undefined) {
-        (globalThis as any).__TARGET__ = originalTarget;
+        testGlobal.__TARGET__ = originalTarget;
       } else {
-        delete (globalThis as any).__TARGET__;
+        delete testGlobal.__TARGET__;
       }
     });
 
@@ -184,33 +193,31 @@ describe("Platform Index", () => {
     it("should create NodePlatformAdapter for node environment", () => {
       const adapter = new PlatformAdapter("node");
       expect(adapter.env).toBe("node");
-      expect((adapter as any).inner).toBeInstanceOf(NodePlatformAdapter);
+      expect(getInner(adapter)).toBeInstanceOf(NodePlatformAdapter);
     });
 
     it("should create BrowserPlatformAdapter for browser environment", () => {
       const adapter = new PlatformAdapter("browser");
       expect(adapter.env).toBe("browser");
-      expect((adapter as any).inner).toBeInstanceOf(BrowserPlatformAdapter);
+      expect(getInner(adapter)).toBeInstanceOf(BrowserPlatformAdapter);
     });
 
     it("should create EdgePlatformAdapter for edge environment", () => {
       const adapter = new PlatformAdapter("edge");
       expect(adapter.env).toBe("edge");
-      expect((adapter as any).inner).toBeInstanceOf(EdgePlatformAdapter);
+      expect(getInner(adapter)).toBeInstanceOf(EdgePlatformAdapter);
     });
 
     it("should create GenericUniversalPlatformAdapter for universal environment", () => {
       const adapter = new PlatformAdapter("universal");
       expect(adapter.env).toBe("universal");
-      expect((adapter as any).inner).toBeInstanceOf(
-        GenericUniversalPlatformAdapter,
-      );
+      expect(getInner(adapter)).toBeInstanceOf(GenericUniversalPlatformAdapter);
     });
 
     it("should create UniversalPlatformAdapter for unknown environment", () => {
       const adapter = new PlatformAdapter("unknown" as any);
       expect(adapter.env).toBe("unknown");
-      expect((adapter as any).inner).toBeInstanceOf(UniversalPlatformAdapter);
+      expect(getInner(adapter)).toBeInstanceOf(UniversalPlatformAdapter);
     });
 
     it("should detect environment when no env is provided", () => {
@@ -220,7 +227,7 @@ describe("Platform Index", () => {
 
     it("should delegate init to inner adapter", async () => {
       const adapter = new PlatformAdapter("node");
-      const initSpy = jest.spyOn((adapter as any).inner, "init");
+      const initSpy = jest.spyOn(getInner(adapter), "init");
 
       await adapter.init();
       expect(initSpy).toHaveBeenCalled();
@@ -229,7 +236,7 @@ describe("Platform Index", () => {
     it("should delegate onUncaughtException to inner adapter", () => {
       const adapter = new PlatformAdapter("node");
       const handler = jest.fn();
-      const spy = jest.spyOn((adapter as any).inner, "onUncaughtException");
+      const spy = jest.spyOn(getInner(adapter), "onUncaughtException");
 
       adapter.onUncaughtException(handler);
       expect(spy).toHaveBeenCalledWith(handler);
@@ -238,7 +245,7 @@ describe("Platform Index", () => {
     it("should delegate onUnhandledRejection to inner adapter", () => {
       const adapter = new PlatformAdapter("node");
       const handler = jest.fn();
-      const spy = jest.spyOn((adapter as any).inner, "onUnhandledRejection");
+      const spy = jest.spyOn(getInner(adapter), "onUnhandledRejection");
 
       adapter.onUnhandledRejection(handler);
       expect(spy).toHaveBeenCalledWith(handler);
@@ -247,7 +254,7 @@ describe("Platform Index", () => {
     it("should delegate onShutdownSignal to inner adapter", () => {
       const adapter = new PlatformAdapter("node");
       const handler = jest.fn();
-      const spy = jest.spyOn((adapter as any).inner, "onShutdownSignal");
+      const spy = jest.spyOn(getInner(adapter), "onShutdownSignal");
 
       adapter.onShutdownSignal(handler);
       expect(spy).toHaveBeenCalledWith(handler);
@@ -255,7 +262,7 @@ describe("Platform Index", () => {
 
     it("should delegate exit to inner adapter", () => {
       const adapter = new PlatformAdapter("browser"); // Use browser instead of node to avoid process.exit
-      const spy = jest.spyOn((adapter as any).inner, "exit");
+      const spy = jest.spyOn(getInner(adapter), "exit");
 
       try {
         adapter.exit(1);
@@ -267,7 +274,7 @@ describe("Platform Index", () => {
 
     it("should delegate getEnv to inner adapter", () => {
       const adapter = new PlatformAdapter("node");
-      const spy = jest.spyOn((adapter as any).inner, "getEnv");
+      const spy = jest.spyOn(getInner(adapter), "getEnv");
 
       adapter.getEnv("TEST_KEY");
       expect(spy).toHaveBeenCalledWith("TEST_KEY");
@@ -275,7 +282,7 @@ describe("Platform Index", () => {
 
     it("should delegate hasAsyncLocalStorage to inner adapter", () => {
       const adapter = new PlatformAdapter("node");
-      const spy = jest.spyOn((adapter as any).inner, "hasAsyncLocalStorage");
+      const spy = jest.spyOn(getInner(adapter), "hasAsyncLocalStorage");
 
       adapter.hasAsyncLocalStorage();
       expect(spy).toHaveBeenCalled();
@@ -283,7 +290,7 @@ describe("Platform Index", () => {
 
     it("should delegate createAsyncLocalStorage to inner adapter", () => {
       const adapter = new PlatformAdapter("node");
-      const spy = jest.spyOn((adapter as any).inner, "createAsyncLocalStorage");
+      const spy = jest.spyOn(getInner(adapter), "createAsyncLocalStorage");
 
       adapter.createAsyncLocalStorage();
       expect(spy).toHaveBeenCalled();
@@ -300,21 +307,21 @@ describe("Platform Index", () => {
     let originalTarget: any;
 
     beforeEach(() => {
-      originalTarget = (globalThis as any).__TARGET__;
+      originalTarget = testGlobal.__TARGET__;
       resetPlatform();
     });
 
     afterEach(() => {
       if (originalTarget !== undefined) {
-        (globalThis as any).__TARGET__ = originalTarget;
+        testGlobal.__TARGET__ = originalTarget;
       } else {
-        delete (globalThis as any).__TARGET__;
+        delete testGlobal.__TARGET__;
       }
     });
 
     describe("__TARGET__ = node", () => {
       beforeEach(() => {
-        (globalThis as any).__TARGET__ = "node";
+        testGlobal.__TARGET__ = "node";
       });
 
       it("should use node as detected environment when __TARGET__ is node", () => {
@@ -337,7 +344,7 @@ describe("Platform Index", () => {
 
     describe("__TARGET__ = browser", () => {
       beforeEach(() => {
-        (globalThis as any).__TARGET__ = "browser";
+        testGlobal.__TARGET__ = "browser";
       });
 
       it("should use browser as detected environment when __TARGET__ is browser", () => {
@@ -360,7 +367,7 @@ describe("Platform Index", () => {
 
     describe("__TARGET__ = edge", () => {
       beforeEach(() => {
-        (globalThis as any).__TARGET__ = "edge";
+        testGlobal.__TARGET__ = "edge";
       });
 
       it("should use edge as detected environment when __TARGET__ is edge", () => {
@@ -383,7 +390,7 @@ describe("Platform Index", () => {
 
     describe("__TARGET__ = universal", () => {
       beforeEach(() => {
-        (globalThis as any).__TARGET__ = "universal";
+        testGlobal.__TARGET__ = "universal";
       });
 
       it("should use runtime detection when __TARGET__ is universal", () => {
@@ -413,7 +420,7 @@ describe("Platform Index", () => {
 
     describe("__TARGET__ undefined cases", () => {
       beforeEach(() => {
-        (globalThis as any).__TARGET__ = undefined;
+        testGlobal.__TARGET__ = undefined;
       });
 
       it("should use node as detected environment when __TARGET__ is undefined", () => {

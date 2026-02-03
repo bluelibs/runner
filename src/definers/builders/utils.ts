@@ -1,11 +1,11 @@
 import type { DependencyMapType } from "../../defs";
 
 // Freezes and returns a new builder state with a patch applied, preserving typing.
-export function cloneState<
-  S,
-  NS
->(s: S, patch: Partial<NS>): NS {
-  return Object.freeze({ ...(s as unknown as NS), ...(patch as Partial<NS>) }) as NS;
+export function cloneState<S, NS>(s: S, patch: Partial<NS>): NS {
+  return Object.freeze({
+    ...(s as unknown as NS),
+    ...(patch as Partial<NS>),
+  }) as NS;
 }
 
 // Merge arrays with optional override (replace vs append)
@@ -34,26 +34,34 @@ export function mergeDepsNoConfig<
   const isFnAddition = typeof addition === "function";
 
   if (override || !existing) {
-    return (addition as any) as (TExisting & TNew) | (() => TExisting & TNew);
+    return addition as unknown as (TExisting & TNew) | (() => TExisting & TNew);
   }
 
   if (isFnExisting && isFnAddition) {
     const e = existing as () => TExisting;
     const a = addition as () => TNew;
-    return (() => ({ ...(e() as any), ...(a() as any) })) as any;
+    return (() => ({
+      ...e(),
+      ...a(),
+    })) as unknown as () => TExisting & TNew;
   }
   if (isFnExisting && !isFnAddition) {
     const e = existing as () => TExisting;
     const a = addition as TNew;
-    return (() => ({ ...(e() as any), ...(a as any) })) as any;
+    return (() => ({
+      ...e(),
+      ...a,
+    })) as unknown as () => TExisting & TNew;
   }
   if (!isFnExisting && isFnAddition) {
     const e = existing as TExisting;
     const a = addition as () => TNew;
-    return (() => ({ ...(e as any), ...(a() as any) })) as any;
+    return (() => ({
+      ...e,
+      ...a(),
+    })) as unknown as () => TExisting & TNew;
   }
   const e = existing as TExisting;
   const a = addition as TNew;
-  return ({ ...(e as any), ...(a as any) }) as any;
+  return { ...e, ...a } as unknown as TExisting & TNew;
 }
-

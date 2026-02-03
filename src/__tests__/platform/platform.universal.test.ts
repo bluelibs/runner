@@ -1,8 +1,25 @@
-import { UniversalPlatformAdapter, detectEnvironment } from "../../platform/adapters/universal";
-import { NodePlatformAdapter } from "../../platform/adapters/node";
-import { BrowserPlatformAdapter } from "../../platform/adapters/browser";
-import { EdgePlatformAdapter } from "../../platform/adapters/edge";
 import { GenericUniversalPlatformAdapter } from "../../platform/adapters/universal-generic";
+import { BrowserPlatformAdapter } from "../../platform/adapters/browser";
+import { NodePlatformAdapter } from "../../platform/adapters/node";
+import { EdgePlatformAdapter } from "../../platform/adapters/edge";
+import {
+  UniversalPlatformAdapter,
+  detectEnvironment,
+} from "../../platform/adapters/universal";
+
+interface MutableGlobal {
+  window?: unknown;
+  document?: unknown;
+  process?: { versions?: { node?: string; bun?: string }; on?: any; off?: any };
+  Deno?: unknown;
+  Bun?: unknown;
+  WorkerGlobalScope?: unknown;
+  self?: unknown;
+  addEventListener?: unknown;
+  removeEventListener?: unknown;
+}
+
+const mutableGlobal = globalThis as unknown as MutableGlobal;
 
 describe("UniversalPlatformAdapter", () => {
   let adapter: UniversalPlatformAdapter;
@@ -12,103 +29,118 @@ describe("UniversalPlatformAdapter", () => {
   });
 
   describe("detectEnvironment", () => {
-    const originalWindow = (globalThis as any).window;
-    const originalDocument = (globalThis as any).document;
-    const originalProcess = (globalThis as any).process;
-    const originalDeno = (globalThis as any).Deno;
-    const originalBun = (globalThis as any).Bun;
-    const originalWorkerGlobalScope = (globalThis as any).WorkerGlobalScope;
-    const originalSelf = (globalThis as any).self;
+    const originalWindow = mutableGlobal.window;
+    const originalDocument = mutableGlobal.document;
+    const originalProcess = mutableGlobal.process;
+    const originalDeno = mutableGlobal.Deno;
+    const originalBun = mutableGlobal.Bun;
+    const originalWorkerGlobalScope = mutableGlobal.WorkerGlobalScope;
+    const originalSelf = mutableGlobal.self;
 
     afterEach(() => {
       // Restore original values
-      (globalThis as any).window = originalWindow;
-      (globalThis as any).document = originalDocument;
-      (globalThis as any).process = originalProcess;
-      (globalThis as any).Deno = originalDeno;
-      (globalThis as any).Bun = originalBun;
-      (globalThis as any).WorkerGlobalScope = originalWorkerGlobalScope;
-      (globalThis as any).self = originalSelf;
-      
+      if (originalWindow === undefined) delete mutableGlobal.window;
+      else mutableGlobal.window = originalWindow;
+
+      if (originalDocument === undefined) delete mutableGlobal.document;
+      else mutableGlobal.document = originalDocument;
+
+      if (originalProcess === undefined) delete mutableGlobal.process;
+      else mutableGlobal.process = originalProcess;
+
+      if (originalDeno === undefined) delete mutableGlobal.Deno;
+      else mutableGlobal.Deno = originalDeno;
+
+      if (originalBun === undefined) delete mutableGlobal.Bun;
+      else mutableGlobal.Bun = originalBun;
+
+      if (originalWorkerGlobalScope === undefined)
+        delete mutableGlobal.WorkerGlobalScope;
+      else mutableGlobal.WorkerGlobalScope = originalWorkerGlobalScope;
+
+      if (originalSelf === undefined) delete mutableGlobal.self;
+      else mutableGlobal.self = originalSelf;
+
       // Clear any jest mocks
       jest.clearAllMocks();
       jest.restoreAllMocks();
     });
 
     it("should detect browser environment", () => {
-      (globalThis as any).window = {};
-      (globalThis as any).document = {};
-      
+      mutableGlobal.window = {};
+      mutableGlobal.document = {};
+
       expect(detectEnvironment()).toBe("browser");
     });
 
-
     it("should detect node environment", () => {
-      delete (globalThis as any).window;
-      delete (globalThis as any).document;
-      (globalThis as any).process = {
-        versions: { node: "18.0.0" }
+      delete mutableGlobal.window;
+      delete mutableGlobal.document;
+      mutableGlobal.process = {
+        versions: { node: "18.0.0" },
       };
-      
+
       expect(detectEnvironment()).toBe("node");
     });
 
     it("should detect Deno universal environment", () => {
-      delete (globalThis as any).window;
-      delete (globalThis as any).document;
-      delete (globalThis as any).process;
-      (globalThis as any).Deno = {};
-      
+      delete mutableGlobal.window;
+      delete mutableGlobal.document;
+      delete mutableGlobal.process;
+      mutableGlobal.Deno = {};
+
       expect(detectEnvironment()).toBe("universal");
     });
 
     it("should detect Bun universal environment via globalThis.Bun", () => {
-      delete (globalThis as any).window;
-      delete (globalThis as any).document;
-      delete (globalThis as any).process;
-      delete (globalThis as any).Deno;
-      (globalThis as any).Bun = {};
-      
+      delete mutableGlobal.window;
+      delete mutableGlobal.document;
+      delete mutableGlobal.process;
+      delete mutableGlobal.Deno;
+      mutableGlobal.Bun = {};
+
       expect(detectEnvironment()).toBe("universal");
     });
 
     it("should detect Bun universal environment via process.versions.bun", () => {
-      delete (globalThis as any).window;
-      delete (globalThis as any).document;
-      delete (globalThis as any).Deno;
-      delete (globalThis as any).Bun;
-      (globalThis as any).process = {
-        versions: { bun: "1.0.0" }
+      delete mutableGlobal.window;
+      delete mutableGlobal.document;
+      delete mutableGlobal.Deno;
+      delete mutableGlobal.Bun;
+      mutableGlobal.process = {
+        versions: { bun: "1.0.0" },
       };
-      
+
       expect(detectEnvironment()).toBe("universal");
     });
 
     it("should detect edge environment", () => {
-      delete (globalThis as any).window;
-      delete (globalThis as any).document;
-      delete (globalThis as any).process;
-      delete (globalThis as any).Deno;
-      delete (globalThis as any).Bun;
-      
-      const mockWorkerGlobalScope = function() {} as any;
-      const mockSelf = Object.create(mockWorkerGlobalScope.prototype);
-      
-      (globalThis as any).WorkerGlobalScope = mockWorkerGlobalScope;
-      (globalThis as any).self = mockSelf;
-      
+      delete mutableGlobal.window;
+      delete mutableGlobal.document;
+      delete mutableGlobal.process;
+      delete mutableGlobal.Deno;
+      delete mutableGlobal.Bun;
+
+      const mockWorkerGlobalScope = function () {} as unknown;
+      const mockSelf = Object.create(
+        (mockWorkerGlobalScope as { prototype: object }).prototype,
+      );
+
+      mutableGlobal.WorkerGlobalScope = mockWorkerGlobalScope;
+      mutableGlobal.self = mockSelf;
+
       expect(detectEnvironment()).toBe("edge");
     });
 
     it("should fallback to universal environment", () => {
-      delete (globalThis as any).window;
-      delete (globalThis as any).document;
-      delete (globalThis as any).process;
-      delete (globalThis as any).Deno;
-      delete (globalThis as any).Bun;
-      delete (globalThis as any).WorkerGlobalScope;
-      delete (globalThis as any).self;
-      
+      delete mutableGlobal.window;
+      delete mutableGlobal.document;
+      delete mutableGlobal.process;
+      delete mutableGlobal.Deno;
+      delete mutableGlobal.Bun;
+      delete mutableGlobal.WorkerGlobalScope;
+      delete mutableGlobal.self;
+
       expect(detectEnvironment()).toBe("universal");
     });
   });
@@ -116,121 +148,148 @@ describe("UniversalPlatformAdapter", () => {
   describe("init", () => {
     it("should initialize inner adapter based on detected environment", async () => {
       await adapter.init();
-      expect((adapter as any).inner).toBeDefined();
+      expect((adapter as unknown as { inner: unknown }).inner).toBeDefined();
     });
 
     it("should not reinitialize if already initialized", async () => {
       await adapter.init();
-      const firstInner = (adapter as any).inner;
-      
+      const firstInner = (adapter as unknown as { inner: unknown }).inner;
+
       await adapter.init();
-      const secondInner = (adapter as any).inner;
-      
+      const secondInner = (adapter as unknown as { inner: unknown }).inner;
+
       expect(firstInner).toBe(secondInner);
     });
 
     it("should use BrowserPlatformAdapter when document exists", async () => {
-      const originalDocument = (globalThis as any).document;
-      (globalThis as any).document = {};
-      
+      const originalDocument = mutableGlobal.document;
+      mutableGlobal.document = {};
+
       await adapter.init();
-      expect((adapter as any).inner).toBeInstanceOf(BrowserPlatformAdapter);
-      
-      (globalThis as any).document = originalDocument;
+      expect((adapter as unknown as { inner: unknown }).inner).toBeInstanceOf(
+        BrowserPlatformAdapter,
+      );
+
+      if (originalDocument === undefined) delete mutableGlobal.document;
+      else mutableGlobal.document = originalDocument;
     });
 
     it("should use BrowserPlatformAdapter when addEventListener exists", async () => {
-      const originalAddEventListener = (globalThis as any).addEventListener;
-      (globalThis as any).addEventListener = () => {};
-      
+      const originalAddEventListener = mutableGlobal.addEventListener;
+      mutableGlobal.addEventListener = () => {};
+
       await adapter.init();
-      expect((adapter as any).inner).toBeInstanceOf(BrowserPlatformAdapter);
-      
-      (globalThis as any).addEventListener = originalAddEventListener;
+      expect((adapter as unknown as { inner: unknown }).inner).toBeInstanceOf(
+        BrowserPlatformAdapter,
+      );
+
+      if (originalAddEventListener === undefined)
+        delete mutableGlobal.addEventListener;
+      else mutableGlobal.addEventListener = originalAddEventListener;
     });
 
     it("should use different adapters based on environment in init()", async () => {
       // Test browser case in init - document exists
-      const originalDocument = (globalThis as any).document;
-      const originalProcess = (globalThis as any).process;
-      
-      delete (globalThis as any).process;
-      (globalThis as any).document = {};
-      
+      const originalDocument = mutableGlobal.document;
+      const originalProcess = mutableGlobal.process;
+
+      if (originalProcess === undefined) delete mutableGlobal.process;
+      else mutableGlobal.process = originalProcess;
+      delete mutableGlobal.process;
+      mutableGlobal.document = {};
+
       const browserAdapter = new UniversalPlatformAdapter();
       await browserAdapter.init();
-      expect((browserAdapter as any).inner).toBeInstanceOf(BrowserPlatformAdapter);
-      
+      expect(
+        (browserAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(BrowserPlatformAdapter);
+
       // Test browser case without document but with addEventListener
-      delete (globalThis as any).document;
-      delete (globalThis as any).process;
-      const originalAdd = (globalThis as any).addEventListener;
-      (globalThis as any).addEventListener = jest.fn();
-      
+      delete mutableGlobal.document;
+      delete mutableGlobal.process;
+      const originalAdd = mutableGlobal.addEventListener;
+      mutableGlobal.addEventListener = jest.fn();
+
       const browserAdapter2 = new UniversalPlatformAdapter();
       await browserAdapter2.init();
-      expect((browserAdapter2 as any).inner).toBeInstanceOf(BrowserPlatformAdapter);
-      
-      (globalThis as any).addEventListener = originalAdd;
-      
+      expect(
+        (browserAdapter2 as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(BrowserPlatformAdapter);
+
+      if (originalAdd === undefined) delete mutableGlobal.addEventListener;
+      else mutableGlobal.addEventListener = originalAdd;
+
       // Test node case with mock process
-      delete (globalThis as any).addEventListener;
-      (globalThis as any).process = { 
+      delete mutableGlobal.addEventListener;
+      mutableGlobal.process = {
         versions: { node: "18.0.0" },
         on: jest.fn(),
-        off: jest.fn()
+        off: jest.fn(),
       };
-      
+
       const nodeAdapter = new UniversalPlatformAdapter();
       await nodeAdapter.init();
-      expect((nodeAdapter as any).inner).toBeInstanceOf(NodePlatformAdapter);
-      
+      expect(
+        (nodeAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(NodePlatformAdapter);
+
       // Test explicit browser environment without document/addEventListener
-      delete (globalThis as any).process;
-      delete (globalThis as any).document;
-      delete (globalThis as any).addEventListener;
-      delete (globalThis as any).Deno;
-      delete (globalThis as any).Bun;
-      delete (globalThis as any).WorkerGlobalScope;
-      delete (globalThis as any).self;
-      (globalThis as any).window = {};
-      (globalThis as any).document = {};
-      
+      delete mutableGlobal.process;
+      delete mutableGlobal.document;
+      delete mutableGlobal.addEventListener;
+      delete mutableGlobal.Deno;
+      delete mutableGlobal.Bun;
+      delete mutableGlobal.WorkerGlobalScope;
+      delete mutableGlobal.self;
+      mutableGlobal.window = {};
+      mutableGlobal.document = {};
+
       const explicitBrowserAdapter = new UniversalPlatformAdapter();
       await explicitBrowserAdapter.init();
-      expect((explicitBrowserAdapter as any).inner).toBeInstanceOf(BrowserPlatformAdapter);
-      
+      expect(
+        (explicitBrowserAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(BrowserPlatformAdapter);
+
       // Test edge case
-      delete (globalThis as any).window;
-      delete (globalThis as any).document;
-      delete (globalThis as any).process;
-      delete (globalThis as any).addEventListener;
-      const mockWorkerGlobalScope = function() {} as any;
-      const mockSelf = Object.create(mockWorkerGlobalScope.prototype);
-      
-      (globalThis as any).WorkerGlobalScope = mockWorkerGlobalScope;
-      (globalThis as any).self = mockSelf;
-      
+      delete mutableGlobal.window;
+      delete mutableGlobal.document;
+      delete mutableGlobal.process;
+      delete mutableGlobal.addEventListener;
+      const mockWorkerGlobalScope = function () {} as unknown;
+      const mockSelf = Object.create(
+        (mockWorkerGlobalScope as { prototype: object }).prototype,
+      );
+
+      mutableGlobal.WorkerGlobalScope = mockWorkerGlobalScope;
+      mutableGlobal.self = mockSelf;
+
       const edgeAdapter = new UniversalPlatformAdapter();
       await edgeAdapter.init();
-      expect((edgeAdapter as any).inner).toBeInstanceOf(EdgePlatformAdapter);
-      
+      expect(
+        (edgeAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(EdgePlatformAdapter);
+
       // Test default/universal case
-      delete (globalThis as any).WorkerGlobalScope;
-      delete (globalThis as any).self;
-      delete (globalThis as any).process;
-      delete (globalThis as any).document;
-      delete (globalThis as any).addEventListener;
-      delete (globalThis as any).Deno;
-      delete (globalThis as any).Bun;
-      
+      delete mutableGlobal.WorkerGlobalScope;
+      delete mutableGlobal.self;
+      delete mutableGlobal.process;
+      delete mutableGlobal.document;
+      delete mutableGlobal.addEventListener;
+      delete mutableGlobal.Deno;
+      delete mutableGlobal.Bun;
+
       const defaultAdapter = new UniversalPlatformAdapter();
       await defaultAdapter.init();
-      expect((defaultAdapter as any).inner).toBeInstanceOf(GenericUniversalPlatformAdapter);
-      
+      expect(
+        (defaultAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(GenericUniversalPlatformAdapter);
+
       // Restore
-      (globalThis as any).document = originalDocument;
-      (globalThis as any).process = originalProcess;
+      if (originalDocument === undefined) delete mutableGlobal.document;
+      else mutableGlobal.document = originalDocument;
+
+      if (originalProcess === undefined) delete mutableGlobal.process;
+      else mutableGlobal.process = originalProcess;
     });
   });
 
@@ -238,102 +297,120 @@ describe("UniversalPlatformAdapter", () => {
     it("should lazily initialize inner adapter when methods are called", () => {
       const handler = jest.fn();
       adapter.onUncaughtException(handler);
-      expect((adapter as any).inner).toBeDefined();
+      expect((adapter as unknown as { inner: unknown }).inner).toBeDefined();
     });
 
     it("should use same adapter for subsequent calls", () => {
       const handler = jest.fn();
       adapter.onUncaughtException(handler);
-      const firstInner = (adapter as any).inner;
-      
+      const firstInner = (adapter as unknown as { inner: unknown }).inner;
+
       adapter.onUnhandledRejection(handler);
-      const secondInner = (adapter as any).inner;
-      
+      const secondInner = (adapter as unknown as { inner: unknown }).inner;
+
       expect(firstInner).toBe(secondInner);
     });
 
     it("should use different adapters based on environment in get()", () => {
       // Test browser case in get() - document exists
-      const originalDocument = (globalThis as any).document;
-      const originalProcess = (globalThis as any).process;
-      
-      delete (globalThis as any).process;
-      (globalThis as any).document = {};
-      
+      const originalDocument = mutableGlobal.document;
+      const originalProcess = mutableGlobal.process;
+
+      delete mutableGlobal.process;
+      mutableGlobal.document = {};
+
       const browserAdapter = new UniversalPlatformAdapter();
       browserAdapter.onUncaughtException(() => {});
-      expect((browserAdapter as any).inner).toBeInstanceOf(BrowserPlatformAdapter);
-      
+      expect(
+        (browserAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(BrowserPlatformAdapter);
+
       // Test browser case without document but with addEventListener
-      delete (globalThis as any).document;
-      delete (globalThis as any).process;
-      const originalAdd = (globalThis as any).addEventListener;
-      (globalThis as any).addEventListener = jest.fn();
-      
+      delete mutableGlobal.document;
+      delete mutableGlobal.process;
+      const originalAdd = mutableGlobal.addEventListener;
+      mutableGlobal.addEventListener = jest.fn();
+
       const browserAdapter2 = new UniversalPlatformAdapter();
       browserAdapter2.onUncaughtException(() => {});
-      expect((browserAdapter2 as any).inner).toBeInstanceOf(BrowserPlatformAdapter);
-      
-      (globalThis as any).addEventListener = originalAdd;
-      
+      expect(
+        (browserAdapter2 as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(BrowserPlatformAdapter);
+
+      if (originalAdd === undefined) delete mutableGlobal.addEventListener;
+      else mutableGlobal.addEventListener = originalAdd;
+
       // Test node case with mock process
-      delete (globalThis as any).addEventListener;
-      (globalThis as any).process = { 
+      delete mutableGlobal.addEventListener;
+      mutableGlobal.process = {
         versions: { node: "18.0.0" },
         on: jest.fn(),
-        off: jest.fn()
+        off: jest.fn(),
       };
-      
+
       const nodeAdapter = new UniversalPlatformAdapter();
       nodeAdapter.onUncaughtException(() => {});
-      expect((nodeAdapter as any).inner).toBeInstanceOf(NodePlatformAdapter);
-      
+      expect(
+        (nodeAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(NodePlatformAdapter);
+
       // Test explicit browser environment without document/addEventListener
-      delete (globalThis as any).process;
-      delete (globalThis as any).document;
-      delete (globalThis as any).addEventListener;
-      delete (globalThis as any).Deno;
-      delete (globalThis as any).Bun;
-      delete (globalThis as any).WorkerGlobalScope;
-      delete (globalThis as any).self;
-      (globalThis as any).window = {};
-      (globalThis as any).document = {};
-      
+      delete mutableGlobal.process;
+      delete mutableGlobal.document;
+      delete mutableGlobal.addEventListener;
+      delete mutableGlobal.Deno;
+      delete mutableGlobal.Bun;
+      delete mutableGlobal.WorkerGlobalScope;
+      delete mutableGlobal.self;
+      mutableGlobal.window = {};
+      mutableGlobal.document = {};
+
       const explicitBrowserAdapter = new UniversalPlatformAdapter();
       explicitBrowserAdapter.onUncaughtException(() => {});
-      expect((explicitBrowserAdapter as any).inner).toBeInstanceOf(BrowserPlatformAdapter);
-      
+      expect(
+        (explicitBrowserAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(BrowserPlatformAdapter);
+
       // Test edge case
-      delete (globalThis as any).window;
-      delete (globalThis as any).document;
-      delete (globalThis as any).process;
-      delete (globalThis as any).addEventListener;
-      const mockWorkerGlobalScope = function() {} as any;
-      const mockSelf = Object.create(mockWorkerGlobalScope.prototype);
-      
-      (globalThis as any).WorkerGlobalScope = mockWorkerGlobalScope;
-      (globalThis as any).self = mockSelf;
-      
+      delete mutableGlobal.window;
+      delete mutableGlobal.document;
+      delete mutableGlobal.process;
+      delete mutableGlobal.addEventListener;
+      const mockWorkerGlobalScope = function () {} as unknown;
+      const mockSelf = Object.create(
+        (mockWorkerGlobalScope as { prototype: object }).prototype,
+      );
+
+      mutableGlobal.WorkerGlobalScope = mockWorkerGlobalScope;
+      mutableGlobal.self = mockSelf;
+
       const edgeAdapter = new UniversalPlatformAdapter();
       edgeAdapter.onUncaughtException(() => {});
-      expect((edgeAdapter as any).inner).toBeInstanceOf(EdgePlatformAdapter);
-      
+      expect(
+        (edgeAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(EdgePlatformAdapter);
+
       // Test default/universal case
-      delete (globalThis as any).WorkerGlobalScope;
-      delete (globalThis as any).self;
-      delete (globalThis as any).process;
-      delete (globalThis as any).document;
-      delete (globalThis as any).addEventListener;
-      delete (globalThis as any).Deno;
-      delete (globalThis as any).Bun;
-      
+      delete mutableGlobal.WorkerGlobalScope;
+      delete mutableGlobal.self;
+      delete mutableGlobal.process;
+      delete mutableGlobal.document;
+      delete mutableGlobal.addEventListener;
+      delete mutableGlobal.Deno;
+      delete mutableGlobal.Bun;
+
       const defaultAdapter = new UniversalPlatformAdapter();
       defaultAdapter.onUncaughtException(() => {});
-      expect((defaultAdapter as any).inner).toBeInstanceOf(GenericUniversalPlatformAdapter);
-      
+      expect(
+        (defaultAdapter as unknown as { inner: unknown }).inner,
+      ).toBeInstanceOf(GenericUniversalPlatformAdapter);
+
       // Restore
-      (globalThis as any).document = originalDocument;
-      (globalThis as any).process = originalProcess;
+      if (originalDocument === undefined) delete mutableGlobal.document;
+      else mutableGlobal.document = originalDocument;
+
+      if (originalProcess === undefined) delete mutableGlobal.process;
+      else mutableGlobal.process = originalProcess;
     });
   });
 
@@ -341,8 +418,8 @@ describe("UniversalPlatformAdapter", () => {
     it("should delegate onUncaughtException to inner adapter", () => {
       const handler = jest.fn();
       const mockInner = { onUncaughtException: jest.fn(() => () => {}) };
-      (adapter as any).inner = mockInner;
-      
+      (adapter as unknown as { inner: unknown }).inner = mockInner;
+
       adapter.onUncaughtException(handler);
       expect(mockInner.onUncaughtException).toHaveBeenCalledWith(handler);
     });
@@ -350,8 +427,8 @@ describe("UniversalPlatformAdapter", () => {
     it("should delegate onUnhandledRejection to inner adapter", () => {
       const handler = jest.fn();
       const mockInner = { onUnhandledRejection: jest.fn(() => () => {}) };
-      (adapter as any).inner = mockInner;
-      
+      (adapter as unknown as { inner: unknown }).inner = mockInner;
+
       adapter.onUnhandledRejection(handler);
       expect(mockInner.onUnhandledRejection).toHaveBeenCalledWith(handler);
     });
@@ -359,24 +436,24 @@ describe("UniversalPlatformAdapter", () => {
     it("should delegate onShutdownSignal to inner adapter", () => {
       const handler = jest.fn();
       const mockInner = { onShutdownSignal: jest.fn(() => () => {}) };
-      (adapter as any).inner = mockInner;
-      
+      (adapter as unknown as { inner: unknown }).inner = mockInner;
+
       adapter.onShutdownSignal(handler);
       expect(mockInner.onShutdownSignal).toHaveBeenCalledWith(handler);
     });
 
     it("should delegate exit to inner adapter", () => {
       const mockInner = { exit: jest.fn() };
-      (adapter as any).inner = mockInner;
-      
+      (adapter as unknown as { inner: unknown }).inner = mockInner;
+
       adapter.exit(1);
       expect(mockInner.exit).toHaveBeenCalledWith(1);
     });
 
     it("should delegate getEnv to inner adapter", () => {
       const mockInner = { getEnv: jest.fn(() => "test-value") };
-      (adapter as any).inner = mockInner;
-      
+      (adapter as unknown as { inner: unknown }).inner = mockInner;
+
       const result = adapter.getEnv("TEST_KEY");
       expect(mockInner.getEnv).toHaveBeenCalledWith("TEST_KEY");
       expect(result).toBe("test-value");
@@ -384,8 +461,8 @@ describe("UniversalPlatformAdapter", () => {
 
     it("should delegate hasAsyncLocalStorage to inner adapter", () => {
       const mockInner = { hasAsyncLocalStorage: jest.fn(() => true) };
-      (adapter as any).inner = mockInner;
-      
+      (adapter as unknown as { inner: unknown }).inner = mockInner;
+
       const result = adapter.hasAsyncLocalStorage();
       expect(mockInner.hasAsyncLocalStorage).toHaveBeenCalled();
       expect(result).toBe(true);
@@ -394,8 +471,8 @@ describe("UniversalPlatformAdapter", () => {
     it("should delegate createAsyncLocalStorage to inner adapter", () => {
       const mockALS = { getStore: jest.fn(), run: jest.fn() };
       const mockInner = { createAsyncLocalStorage: jest.fn(() => mockALS) };
-      (adapter as any).inner = mockInner;
-      
+      (adapter as unknown as { inner: unknown }).inner = mockInner;
+
       const result = adapter.createAsyncLocalStorage();
       expect(mockInner.createAsyncLocalStorage).toHaveBeenCalled();
       expect(result).toBe(mockALS);

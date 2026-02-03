@@ -52,7 +52,7 @@ export type RunOptions = {
    * When set, forces runtime cycle detection for event emissions. Disable if you're sure
    * you don't have event deadlocks to improve event emission performance.
    */
-  runtimeCycleDetection?: boolean;
+  runtimeEventCycleDetection?: boolean;
   /**
    * Specify in which mode to run "dev", "prod" or "test".
    * If inside Node this is automatically detected from the NODE_ENV environment variable if not provided.

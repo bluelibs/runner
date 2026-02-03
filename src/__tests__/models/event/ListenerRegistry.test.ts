@@ -1,14 +1,19 @@
 import { IEvent } from "../../../defs";
 import { defineEvent } from "../../../definers/defineEvent";
-import { ListenerRegistry, createListener } from "../../../models/event/ListenerRegistry";
+import {
+  ListenerRegistry,
+  createListener,
+} from "../../../models/event/ListenerRegistry";
 
 interface TestEvent {
   id: string;
   exclude: boolean;
 }
 
-const createTestEvent = (id: string, exclude: boolean): TestEvent &
-  ReturnType<typeof defineEvent> => {
+const createTestEvent = (
+  id: string,
+  exclude: boolean,
+): TestEvent & ReturnType<typeof defineEvent> => {
   return Object.assign(defineEvent({ id }), { exclude });
 };
 
@@ -19,7 +24,11 @@ describe("ListenerRegistry", () => {
     );
 
     const eventId = "ev1";
-    const globalListener = createListener({ handler: jest.fn(), order: 1, isGlobal: true });
+    const globalListener = createListener({
+      handler: jest.fn(),
+      order: 1,
+      isGlobal: true,
+    });
     const specificListener = createListener({ handler: jest.fn(), order: 0 });
 
     registry.addListener(eventId, specificListener);
@@ -53,7 +62,11 @@ describe("ListenerRegistry", () => {
     const registry = new ListenerRegistry();
     expect(registry.globalListenersCacheValid).toBe(true);
 
-    const globalListener = createListener({ handler: jest.fn(), order: 0, isGlobal: true });
+    const globalListener = createListener({
+      handler: jest.fn(),
+      order: 0,
+      isGlobal: true,
+    });
     registry.addGlobalListener(globalListener);
 
     expect(registry.globalListenersCacheValid).toBe(false);

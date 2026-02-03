@@ -9,7 +9,7 @@ import { run } from "../../run";
 import { globals } from "../../index";
 
 describe("Comprehensive Performance Benchmarks", () => {
-  let results: Record<string, any> = {};
+  const results: Record<string, any> = {};
 
   // Configuration for benchmark runs
   const BENCHMARK_CONFIG = {
@@ -26,7 +26,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     for (let i = 0; i < runs; i++) {
       // run sequentially to avoid shared-state/resource conflicts between runs
       // and to produce stable timing measurements
-      // eslint-disable-next-line no-await-in-loop
+
       results.push(await fn());
     }
     return results;
@@ -61,6 +61,7 @@ describe("Comprehensive Performance Benchmarks", () => {
     if (outputPath) {
       try {
         const fs = require("fs");
+        const path = require("path");
         const os = require("os");
         const meta = {
           timestamp: new Date().toISOString(),
@@ -72,15 +73,20 @@ describe("Comprehensive Performance Benchmarks", () => {
           runs: BENCHMARK_CONFIG.runs,
           warmupRuns: BENCHMARK_CONFIG.warmupRuns,
         };
+
+        const outputDir = path.dirname(outputPath);
+        if (outputDir && outputDir !== ".") {
+          fs.mkdirSync(outputDir, { recursive: true });
+        }
+
         fs.writeFileSync(
           outputPath,
           JSON.stringify({ meta, results }, null, 2),
           "utf8",
         );
-        // eslint-disable-next-line no-console
+
         console.log(`Benchmark results written to ${outputPath}`);
       } catch (e) {
-        // eslint-disable-next-line no-console
         console.warn("Failed to write benchmark results:", e);
       }
     }
@@ -94,8 +100,6 @@ describe("Comprehensive Performance Benchmarks", () => {
     });
 
     const runBenchmark = async () => {
-      let benchmarkResult: any;
-
       const app = defineResource({
         id: "benchmark.basic.app",
         register: [task],
@@ -116,7 +120,7 @@ describe("Comprehensive Performance Benchmarks", () => {
       }
       const duration = performance.now() - start;
 
-      benchmarkResult = {
+      const benchmarkResult = {
         totalTimeMs: parseFloat(duration.toFixed(2)),
         avgTimePerTaskMs: parseFloat((duration / iterations).toFixed(4)),
         tasksPerSecond: Math.round(iterations / (duration / 1000)),
@@ -198,7 +202,7 @@ describe("Comprehensive Performance Benchmarks", () => {
           middlewareOverheadMs: parseFloat(
             (
               duration / iterations -
-              results.basicTaskExecution.avgTimePerTaskMs
+              results.basicTaskExecution.avgTimePerTaskMs.median
             ).toFixed(4),
           ),
         };

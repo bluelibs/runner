@@ -10,6 +10,7 @@ import type {
   ResourceMiddlewareAttachmentType,
   TagType,
 } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 import type { ResolveConfig } from "./types";
 
 /**
@@ -23,7 +24,8 @@ export interface ResourceFluentBuilder<
   TContext = any,
   TMeta extends IResourceMeta = IResourceMeta,
   TTags extends TagType[] = TagType[],
-  TMiddleware extends ResourceMiddlewareAttachmentType[] = ResourceMiddlewareAttachmentType[],
+  TMiddleware extends ResourceMiddlewareAttachmentType[] =
+    ResourceMiddlewareAttachmentType[],
 > {
   id: string;
 
@@ -200,6 +202,18 @@ export interface ResourceFluentBuilder<
     TDeps,
     TContext,
     TNewMeta,
+    TTags,
+    TMiddleware
+  >;
+
+  throws(
+    list: ThrowsList,
+  ): ResourceFluentBuilder<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
     TTags,
     TMiddleware
   >;

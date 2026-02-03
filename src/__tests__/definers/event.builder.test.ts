@@ -15,9 +15,9 @@ describe("event builder", () => {
     expect(ev.payloadSchema).toBe(schema);
     expect(ev.meta).toEqual({ title: "unit" });
     expect(ev.parallel).toBe(false);
-    expect((ev as any)[definitions.symbolFilePath]).toContain(
-      "event.builder.test",
-    );
+    expect(
+      (ev as unknown as Record<symbol, any>)[definitions.symbolFilePath],
+    ).toContain("event.builder.test");
 
     const evDefaultParallel = r
       .event("tests.builder.event.parallel.default")

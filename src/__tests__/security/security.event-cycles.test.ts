@@ -7,7 +7,6 @@
 // and throws EventCycleError instead of hanging the event loop.
 import { defineEvent, defineHook, defineResource } from "../../define";
 import { run } from "../../run";
-import { eventCycleError } from "../../errors";
 import { globals } from "../../index";
 
 describe("Security: Event cycle detection", () => {

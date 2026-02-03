@@ -53,7 +53,9 @@ export function isBrowser(): boolean {
 export function isWebWorker(): boolean {
   return !!(
     typeof self !== "undefined" &&
-    typeof (globalThis as any).importScripts === "function" &&
+    typeof (
+      globalThis as unknown as { importScripts: (urls: string[]) => void }
+    ).importScripts === "function" &&
     typeof window === "undefined"
   );
 }

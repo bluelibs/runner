@@ -22,7 +22,20 @@ export type RequestHandler = (
 
 export type Authenticator = (
   req: IncomingMessage,
-) => { ok: true } | { ok: false; response: JsonResponse };
+) => Promise<{ ok: true } | { ok: false; response: JsonResponse }>;
+
+/** Input provided to auth validator tasks */
+export interface AuthValidatorInput {
+  headers: Record<string, string | string[] | undefined>;
+  method: string;
+  url: string;
+  path: string;
+}
+
+/** Result returned by auth validator tasks */
+export type AuthValidatorResult =
+  | { ok: true }
+  | { ok: false; message?: string };
 
 export interface AllowListGuard {
   ensureTask(id: string): JsonResponse | null;

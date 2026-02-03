@@ -1,0 +1,117 @@
+{
+  "meta": {
+    "timestamp": "2026-01-10T08:58:35.193Z",
+    "node": "v24.11.0",
+    "platform": "darwin",
+    "arch": "arm64",
+    "cpu": "Apple M1 Max",
+    "isCI": false,
+    "runs": 5,
+    "warmupRuns": 2
+  },
+  "results": {
+    "basicTaskExecution": {
+      "iterations": 1000,
+      "runs": 5,
+      "totalTimeMs": {
+        "min": 0.19,
+        "max": 0.26,
+        "median": 0.22,
+        "mean": 0.22599999999999998,
+        "p25": 0.22,
+        "p75": 0.24,
+        "values": [
+          0.26,
+          0.22,
+          0.22,
+          0.24,
+          0.19
+        ]
+      },
+      "avgTimePerTaskMs": {
+        "min": 0.0002,
+        "max": 0.0003,
+        "median": 0.0002,
+        "mean": 0.00022,
+        "p25": 0.0002,
+        "p75": 0.0002,
+        "values": [
+          0.0003,
+          0.0002,
+          0.0002,
+          0.0002,
+          0.0002
+        ]
+      },
+      "tasksPerSecond": {
+        "min": 3797473,
+        "max": 5325040,
+        "median": 4576659,
+        "mean": 4483167.4,
+        "p25": 4136505,
+        "p75": 4580160,
+        "values": [
+          3797473,
+          4580160,
+          4576659,
+          4136505,
+          5325040
+        ]
+      }
+    },
+    "middlewareTaskExecution": {
+      "iterations": 1000,
+      "middlewareCount": 5,
+      "totalTimeMs": 1.06,
+      "avgTimePerTaskMs": 0.0011,
+      "tasksPerSecond": 945552,
+      "middlewareOverheadMs": 0.0009
+    },
+    "resourceInitialization": {
+      "resourceCount": 100,
+      "totalTimeMs": 1.25,
+      "avgTimePerResourceMs": 0.0125,
+      "resourcesPerSecond": 80091
+    },
+    "eventEmissionAndHandling": {
+      "iterations": 500,
+      "totalTimeMs": 1.91,
+      "avgTimePerEventMs": 0.0038,
+      "eventsPerSecond": 261296,
+      "eventHandlerCallCount": 500
+    },
+    "dependencyResolution": {
+      "iterations": 100,
+      "chainDepth": 10,
+      "totalTimeMs": 18.79,
+      "avgTimePerChainMs": 0.1879,
+      "chainsPerSecond": 5323
+    },
+    "cacheMiddleware": {
+      "iterationsWithoutCache": 200,
+      "iterationsWithCache": 100,
+      "timeWithoutCacheMs": 1.5,
+      "timeWithCacheMs": 0.21,
+      "avgTimeWithoutCacheMs": 0.0075,
+      "avgTimeWithCacheMs": 0.0021,
+      "speedupFactor": 3.62
+    },
+    "memoryUsage": {
+      "before": {
+        "heapUsedMB": 275.24,
+        "heapTotalMB": 420.28
+      },
+      "afterInit": {
+        "heapUsedMB": 275.51,
+        "heapTotalMB": 411.03
+      },
+      "afterExecution": {
+        "heapUsedMB": 275.51,
+        "heapTotalMB": 411.03
+      },
+      "initOverheadMB": 0.27,
+      "executionOverheadMB": 0,
+      "componentCount": 100
+    }
+  }
+}

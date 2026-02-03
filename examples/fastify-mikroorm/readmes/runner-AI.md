@@ -114,7 +114,7 @@ const internal = event({
 });
 
 // Performance: runtime event emission cycle detection
-// run(app, { runtimeCycleDetection: true }) // To prevent event-driven deadlocks from happening.
+// run(app, { runtimeEventCycleDetection: true }) // To prevent event-driven deadlocks from happening.
 ```
 
 ### Multiple Events per Hook
@@ -695,7 +695,3 @@ middleware({
   configSchema, // runs on .with()
 });
 ```
-
-
-
-

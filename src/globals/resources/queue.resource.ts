@@ -6,7 +6,7 @@ export const queueResource = defineResource({
   context: () => ({
     map: new Map<string, Queue>(),
   }),
-  init: async (_, deps, context) => {
+  init: async (_, _deps, context) => {
     const map = context.map;
 
     return {
@@ -23,7 +23,7 @@ export const queueResource = defineResource({
       },
     };
   },
-  dispose: async (value, _, deps, context) => {
+  dispose: async (_value, _, _deps, context) => {
     context.map.forEach((queue) => queue.dispose());
   },
   meta: {
