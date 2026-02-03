@@ -37,7 +37,15 @@ export interface ExecutionManagerConfig {
 }
 
 /**
- * Manages durable execution lifecycle: start, process, retry, complete.
+ * Runs durable executions (the "workflow engine" for attempts).
+ *
+ * Responsibilities:
+ * - persist new executions (including optional idempotency keys)
+ * - enqueue work (queue mode) or run directly (embedded mode)
+ * - execute a workflow attempt via `taskExecutor.run(...)`
+ * - inject a per-attempt `DurableContext` (via `contextProvider` / ALS wrapper)
+ * - interpret `SuspensionSignal` as "pause + reschedule" rather than failure
+ * - update execution status/result/error and notify waiters (`WaitManager`)
  */
 export class ExecutionManager {
   constructor(

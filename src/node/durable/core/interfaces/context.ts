@@ -91,6 +91,16 @@ export interface IDurableContext {
   rollback(): Promise<void>;
 }
 
+/**
+ * Internal control-flow signal used to suspend a durable execution without failing it.
+ *
+ * `DurableContext` throws this error to indicate "pause here and resume later":
+ * - `"sleep"`: durable sleep timer was scheduled
+ * - `"yield"`: waiting for a signal (or signal-timeout timer) to complete
+ *
+ * `ExecutionManager` treats this as a normal suspension and will not mark the execution
+ * as failed; instead it schedules a resume via timers/queue depending on configuration.
+ */
 export class SuspensionSignal extends Error {
   constructor(public readonly reason: "sleep" | "yield" | "timeout") {
     super(`Execution suspended: ${reason}`);

@@ -10,7 +10,14 @@ export interface WaitConfig {
 }
 
 /**
- * Handles waiting for execution results via event bus or polling.
+ * Waits for an execution to reach a terminal state and returns/throws accordingly.
+ *
+ * Strategy:
+ * - if an event bus is configured, subscribe to `execution:<executionId>` for low-latency completion
+ * - otherwise (or on bus issues) fall back to polling the store
+ *
+ * The durable store remains the source of truth; this manager is purely a convenience layer
+ * for callers that want `await durable.wait(...)` / `await durable.execute(...)`.
  */
 export class WaitManager {
   constructor(

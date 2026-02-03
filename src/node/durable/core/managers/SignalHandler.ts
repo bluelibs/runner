@@ -32,7 +32,13 @@ const isWaitingSignalStep = (step: {
 };
 
 /**
- * Handles signal delivery to waiting durable executions.
+ * Delivers external signals to durable executions waiting in `DurableContext.waitForSignal()`.
+ *
+ * Signal delivery is store-centric:
+ * - find the earliest waiting signal step for the given `signalId`
+ * - persist a "completed" signal payload into the step result
+ * - optionally clean up timeout timers
+ * - trigger execution resumption (queue message or direct processing)
  */
 export class SignalHandler {
   constructor(

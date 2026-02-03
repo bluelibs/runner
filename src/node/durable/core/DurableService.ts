@@ -23,7 +23,20 @@ import {
 export { DurableExecutionError } from "./utils";
 
 /**
- * Orchestrates durable workflow execution by composing specialized managers.
+ * High-level facade for the Durable Workflows subsystem.
+ *
+ * `DurableService` glues together the durable backends (store/queue/event bus) and
+ * the specialized managers that implement durable semantics:
+ *
+ * - `ExecutionManager` runs workflow attempts and injects `DurableContext`
+ * - `SignalHandler` delivers external signals to waiting steps
+ * - `WaitManager` waits for results (event-bus first, polling fallback)
+ * - `ScheduleManager` creates/updates schedules and their timers
+ * - `PollingManager` drives timers (sleep, retries, signal timeouts, schedules)
+ * - `AuditLogger` emits/persists an audit trail (best-effort)
+ *
+ * `DurableResource` wraps this service for Runner integration and provides
+ * `durable.use()` to read the per-execution `DurableContext`.
  */
 export class DurableService implements IDurableService {
   private readonly taskRegistry: TaskRegistry;

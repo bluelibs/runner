@@ -1,8 +1,12 @@
 import type { DurableTask } from "../interfaces/service";
 
 /**
- * Simple task registry for durable workflows.
- * Stores registered tasks and supports external resolution.
+ * In-memory durable task registry.
+ *
+ * Durable executions persist only a `taskId` in the store, so the runtime needs a way
+ * to resolve `taskId -> DurableTask` when resuming. This registry holds tasks that
+ * were registered on the current process and optionally delegates to an external
+ * resolver for tasks defined elsewhere (useful for modular apps).
  */
 export class TaskRegistry {
   private readonly tasks = new Map<string, DurableTask<any, any>>();

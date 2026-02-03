@@ -26,7 +26,16 @@ export interface PollingManagerCallbacks {
 }
 
 /**
- * Manages timer polling loop for scheduled executions, sleeps, and retries.
+ * Timer/tick driver for durable workflows.
+ *
+ * The durable store is the source of truth, but time needs an active driver:
+ * `PollingManager` periodically scans ready timers and performs the appropriate action:
+ *
+ * - complete `sleep()` steps by marking their step result as completed
+ * - resume executions after signal timeouts / scheduled kickoffs / retries
+ * - coordinate multi-worker polling via optional `store.claimTimer(...)`
+ *
+ * In production topologies you typically enable polling on worker nodes only.
  */
 export class PollingManager {
   private isRunning = false;

@@ -12,7 +12,11 @@ import { createExecutionId, sleepMs } from "../utils";
 import type { TaskRegistry } from "./TaskRegistry";
 
 /**
- * Handles scheduling of durable workflows - cron, intervals, and one-time delays.
+ * Creates and maintains durable schedules.
+ *
+ * A schedule is persisted in the store and translated into durable timers that
+ * `PollingManager` will later process to kick off executions. This keeps scheduling
+ * crash-safe and horizontally scalable: schedules aren't owned by in-memory timers.
  */
 export class ScheduleManager {
   constructor(

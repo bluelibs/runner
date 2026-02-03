@@ -4,6 +4,15 @@ import type { DurableAuditEntry } from "./audit";
 import type { StepResult } from "./types";
 import type { ListExecutionsOptions } from "./interfaces/store";
 
+/**
+ * Administrative / operator API for durable workflows.
+ *
+ * This class is intentionally store-backed and side-effect free with respect to
+ * "running" workflows: it reads execution details and, when supported by the store,
+ * can perform operator actions (retry rollback, skip a step, force fail, patch state).
+ *
+ * Used by dashboards / CLIs / tooling to inspect and recover executions.
+ */
 export class DurableOperator {
   constructor(private readonly store: IDurableStore) {}
 

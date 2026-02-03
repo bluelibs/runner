@@ -59,6 +59,13 @@ export function parseSignalState(value: unknown): {
   return null;
 }
 
+/**
+ * Error thrown to consumers waiting on an execution (`DurableService.wait/execute*`).
+ *
+ * Distinguishes durable execution failures/timeouts/cancellations from ordinary
+ * task errors by carrying execution metadata and a (serialized) cause payload.
+ * `WaitManager` is the primary producer of this error.
+ */
 export class DurableExecutionError extends Error {
   constructor(
     message: string,

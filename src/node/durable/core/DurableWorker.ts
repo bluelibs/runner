@@ -1,6 +1,14 @@
 import type { IDurableQueue, QueueMessage } from "./interfaces/queue";
 import type { IDurableExecutionProcessor } from "./interfaces/service";
 
+/**
+ * Durable queue consumer (worker process role).
+ *
+ * The worker listens to the durable queue and turns queue messages into
+ * `processExecution(executionId)` calls on the service layer (`ExecutionManager`
+ * behind `IDurableExecutionProcessor`). This is how "resume" work is distributed
+ * horizontally: the store is the source of truth, the queue provides delivery.
+ */
 export class DurableWorker {
   constructor(
     private readonly service: IDurableExecutionProcessor,

@@ -1,6 +1,14 @@
 import { createRequire } from "node:module";
 import { join } from "node:path";
 
+/**
+ * Cron helper used by `ScheduleManager`.
+ *
+ * Prefers the optional `cron-parser` dependency when available, but provides a
+ * deterministic fallback implementation so durable scheduling works even when
+ * optional deps are not installed (important for the multi-platform packaging
+ * and optionalDependency setup).
+ */
 export class CronParser {
   static getNextRun(cron: string, from: Date = new Date()): Date {
     const external = CronParser.tryGetExternalParser();

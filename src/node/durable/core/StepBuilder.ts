@@ -1,6 +1,15 @@
 import type { IStepBuilder, StepOptions } from "./interfaces/context";
 import type { DurableContext } from "./DurableContext";
 
+/**
+ * Fluent helper for building a durable step.
+ *
+ * This is the ergonomic layer behind `ctx.step("id")`:
+ * - `up()` defines the memoized computation
+ * - `down()` registers a compensation to be invoked by `ctx.rollback()`
+ *
+ * It is `PromiseLike`, so users can `await ctx.step("x").up(...).down(...)`.
+ */
 export class StepBuilder<T> implements IStepBuilder<T> {
   private upFn?: () => Promise<T>;
   private downFn?: (result: T) => Promise<void>;

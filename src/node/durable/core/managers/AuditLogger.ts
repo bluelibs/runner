@@ -20,8 +20,11 @@ export interface AuditConfig {
 }
 
 /**
- * Handles audit trail logging for durable workflows.
- * Gracefully degrades if audit persistence fails.
+ * Durable audit trail sink.
+ *
+ * Used across the durable subsystem (service/managers/context) to record lifecycle
+ * events in a best-effort way. Persistence and emission are explicitly non-critical:
+ * failures must never affect workflow correctness (the store remains the source of truth).
  */
 export class AuditLogger {
   constructor(
