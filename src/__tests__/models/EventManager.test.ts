@@ -310,13 +310,16 @@ describe("EventManager", () => {
     try {
       await eventManager.emit(parallelEvent, "data", "src");
     } catch (err: unknown) {
-      const aggErr = err as { name: string; errors: any[] };
+      const aggErr = err as {
+        name: string;
+        errors: (Error & { listenerId: string; listenerOrder: number })[];
+      };
       expect(aggErr.name).toBe("AggregateError");
       expect(Array.isArray(aggErr.errors)).toBe(true);
-      expect(aggErr.errors.map((e: any) => e.listenerId)).toEqual(
+      expect(aggErr.errors.map((e) => e.listenerId)).toEqual(
         expect.arrayContaining(["l2", "l3"]),
       );
-      expect(aggErr.errors.map((e: any) => e.listenerOrder)).toEqual([0, 0]);
+      expect(aggErr.errors.map((e) => e.listenerOrder)).toEqual([0, 0]);
       expect(aggErr.errors[0]).toBeInstanceOf(Error);
     }
   });

@@ -38,7 +38,8 @@ describe("Errors", () => {
   it("should throw unknown item type error at task level", async () => {
     const task = defineTask({
       id: "test.task",
-      dependencies: { nonExistentDep: {} as any },
+      // @ts-expect-error Testing invalid dependency type
+      dependencies: { nonExistentDep: {} },
       run: async () => {},
     });
 
@@ -58,9 +59,10 @@ describe("Errors", () => {
     const app = defineResource({
       id: "app",
       register: [
+        // @ts-expect-error Testing invalid item
         {
           id: "nonExistent",
-        } as any,
+        },
       ],
       async init(_, {}) {},
     });
@@ -69,9 +71,9 @@ describe("Errors", () => {
   });
 
   it("should throw circularDependencies error", async () => {
-    const task1: any = defineTask({
+    const task1 = defineTask({
       id: "task1",
-      dependencies: (): any => ({ task2 }),
+      dependencies: () => ({ task2 }),
       run: async () => {},
     });
 
@@ -90,7 +92,7 @@ describe("Errors", () => {
   });
 
   it("should throw eventNotFound error", async () => {
-    const nonExistentEvent = { id: "non.existent.event" } as any;
+    const nonExistentEvent = { id: "non.existent.event" };
 
     const task = defineHook({
       id: "test.task",
@@ -273,7 +275,8 @@ describe("Errors", () => {
   it("should throw an error when a task depends on a non-registered task", async () => {
     const offTheGrid = defineTask({
       id: "test.off.the.grid",
-      dependencies: { nonExistentTask: { id: "non" } as any },
+      // @ts-expect-error Testing invalid dependency definition
+      dependencies: { nonExistentTask: { id: "non" } },
       run: async () => {},
     });
 
@@ -367,7 +370,7 @@ describe("Errors", () => {
       const capture = (fn: () => void) => {
         try {
           fn();
-        } catch (e: any) {
+        } catch (e: unknown) {
           return e as Error & { name: string; data?: any };
         }
         throw new Error("expected throw");

@@ -20,8 +20,8 @@ describe("override() helper", () => {
 
     expect(changed).not.toBe(base);
     expect(changed.id).toBe(base.id);
-    expect(await base.run(undefined as any, {} as any)).toBe("base");
-    expect(await changed.run(undefined as any, {} as any)).toBe("changed");
+    expect(await base.run(undefined, {})).toBe("base");
+    expect(await changed.run(undefined, {})).toBe("changed");
     expect(changed.meta?.title).toBe("Updated");
   });
 
@@ -41,13 +41,9 @@ describe("override() helper", () => {
     // Call the init functions directly (without runner) to validate override
     // Signatures: init(config, deps, ctx)
 
-    const v1 = await base.init!(undefined as any, {} as any, undefined as any);
+    const v1 = await base.init!(undefined, {}, undefined);
 
-    const v2 = await changed.init!(
-      undefined as any,
-      {} as any,
-      undefined as any,
-    );
+    const v2 = await changed.init!(undefined, {}, undefined);
     expect(v1).toBe(1);
     expect(v2).toBe(2);
     expect(changed.meta?.description).toBe("Updated");
@@ -76,8 +72,8 @@ describe("override() helper", () => {
       next: async () => 456,
     } as any;
 
-    const baseResult = await mw.run(input, {} as any, undefined as any);
-    const changedResult = await changed.run(input, {} as any, undefined as any);
+    const baseResult = await mw.run(input, {}, undefined);
+    const changedResult = await changed.run(input, {}, undefined);
     expect(baseResult).toBe(456);
     expect(changedResult).toEqual({ wrapped: 456 });
   });
