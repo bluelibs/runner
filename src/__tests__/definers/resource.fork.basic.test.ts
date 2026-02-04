@@ -1,6 +1,7 @@
+import { symbolResourceForkedFrom } from "../../defs";
 import { r, run } from "../../index";
 
-describe("IResource.fork()", () => {
+describe("IResource.fork() (basic)", () => {
   it("creates a new resource with a different id", () => {
     const base = r
       .resource<{ value: string }>("base.resource")
@@ -11,6 +12,12 @@ describe("IResource.fork()", () => {
 
     expect(forked.id).toBe("forked.resource");
     expect(base.id).toBe("base.resource");
+
+    expect(base[symbolResourceForkedFrom]).toBeUndefined();
+    expect(forked[symbolResourceForkedFrom]?.fromId).toBe("base.resource");
+    expect(forked[symbolResourceForkedFrom]?.forkedAtFilePath).toEqual(
+      expect.any(String),
+    );
   });
 
   it("preserves the type signature and config shape", async () => {
@@ -21,7 +28,6 @@ describe("IResource.fork()", () => {
 
     const forked = base.fork("replica.db");
 
-    // Configure both with the same shape
     const app = r
       .resource("app")
       .register([
@@ -74,7 +80,6 @@ describe("IResource.fork()", () => {
 
   it("inherits tags from the base resource", () => {
     const myTag = r.tag("test.tag").build();
-
     const base = r.resource("base.tagged").tags([myTag]).build();
 
     const forked = base.fork("forked.tagged");
@@ -90,7 +95,6 @@ describe("IResource.fork()", () => {
       .build();
 
     const configured = base.fork("custom.service").with({ name: "World" });
-
     const app = r.resource("app").register([configured]).build();
 
     const runtime = await run(app);
@@ -140,9 +144,44 @@ describe("IResource.fork()", () => {
       .build();
 
     const base = r.resource("base.with.mw").middleware([mw]).build();
-
     const forked = base.fork("forked.with.mw");
 
     expect(forked.middleware).toHaveLength(1);
+  });
+
+  it("can drop registered items on fork", async () => {
+    const sharedTask = r
+      .task("test.shared")
+      .run(async () => "ok")
+      .build();
+
+    const base = r
+      .resource("base.with.register")
+      .register([sharedTask])
+      .build();
+    const forked = base.fork("base.with.register.fork", { register: "drop" });
+
+    expect(Array.isArray(forked.register)).toBe(true);
+    expect(forked.register).toHaveLength(0);
+
+    const app = r.resource("app").register([base, forked]).build();
+
+    const runtime = await run(app);
+    const result = await runtime.runTask(sharedTask);
+
+    expect(result).toBe("ok");
+
+    await runtime.dispose();
+  });
+
+  it("keep-mode preserves the base register list", () => {
+    const task = r
+      .task("test.keep.task")
+      .run(async () => "ok")
+      .build();
+    const base = r.resource("test.keep.base").register([task]).build();
+
+    const forked = base.fork("test.keep.forked", { register: "keep" });
+    expect(forked.register).toBe(base.register);
   });
 });

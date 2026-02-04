@@ -1380,7 +1380,7 @@ const app = r
 
 #### Resource Forking
 
-Use `.fork(newId)` to create multiple instances of a "template" resource with different identities. This is perfect when you need several instances of the same resource type (e.g., multiple database connections, multiple mailers):
+Use `.fork(newId)` to create multiple instances of a "template" resource with different identities. If the base resource registers other items, use `.fork(newId, { register: "drop" })` to avoid re-registering them, or `.fork(newId, { register: "deep", reId })` to deep-fork **registered resources** (resource tree) with new ids. This is perfect when you need several instances of the same resource type (e.g., multiple database connections, multiple mailers):
 
 ```typescript
 // Define a reusable template
@@ -1414,11 +1414,40 @@ const app = r
   .build();
 ```
 
+If the base resource registers other resources and you want a clean clone of the resource tree, use `register: "deep"` with a re-id function:
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const child = r
+  .resource("app.base.child")
+  .init(async () => ({ ok: true }))
+  .build();
+
+const base = r
+  .resource("app.base")
+  .dependencies({ child })
+  .register([child])
+  .init(async (_cfg, deps) => deps.child)
+  .build();
+
+const forked = base.fork("app.base.forked", {
+  register: "deep",
+  reId: (id) => `forked.${id}`,
+});
+
+const app = r.resource("app").register([base, forked]).build();
+```
+
+Note: `register: "deep"` deep-forks registered **resources**; other registerables (tasks/events/hooks/middleware/tags/errors/async contexts) are not cloned.
+Resource dependencies that point to deep-forked resources are remapped inside the cloned tree.
+
 Key points:
 
 - **`.fork()` returns a built `IResource`** - no need to call `.build()` again
 - **Tags, middleware, and type parameters are inherited**
 - **Each fork gets independent runtime** - no shared state
+- **`register` defaults to `"keep"`**; use `"drop"` for leaf resources or `"deep"` when you want cloned *registered resources* (resource tree)
 - **Export forked resources** to use them as typed dependencies
 
 #### Optional Dependencies

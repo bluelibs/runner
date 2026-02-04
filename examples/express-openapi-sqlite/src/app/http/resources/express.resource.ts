@@ -10,7 +10,7 @@ const generateId = () =>
 
 export interface ExpressServer {
   app: Express;
-  server: any;
+  server: any | null;
   port: number;
 }
 
@@ -22,7 +22,7 @@ export const expressServerResource = r
   })
   .register([httpTag])
   .init(async (_, { appConfig, logger }): Promise<ExpressServer> => {
-    const { port } = appConfig;
+    const { port, host, listen } = appConfig;
 
     const app = express();
 
@@ -50,11 +50,16 @@ export const expressServerResource = r
       res.json({ status: "ok", timestamp: new Date().toISOString() });
     });
 
+    if (!listen) {
+      logger.debug("Express server listen disabled");
+      return { app, server: null, port };
+    }
+
     // Start server, we do this to ensure before this resource responds, the server is ready.
     const promise = new Promise<ExpressServer>((resolve, reject) => {
-      const server = app.listen(port, () => {
-        logger.info(`🚀 Express server running on http://localhost:${port}`);
-        logger.info(`📚 API documentation: http://localhost:${port}/api-docs`);
+      const server = app.listen(port, host, () => {
+        logger.info(`🚀 Express server running on http://${host}:${port}`);
+        logger.info(`📚 API documentation: http://${host}:${port}/api-docs`);
         resolve({ app, server, port });
       });
       server.on("error", (err: Error) => {
@@ -65,6 +70,7 @@ export const expressServerResource = r
     return promise;
   })
   .dispose(async ({ server }, _, { logger }) => {
+    if (!server) return;
     return new Promise<void>((resolve) => {
       server.close(() => {
         logger.info("Express server stopped");
