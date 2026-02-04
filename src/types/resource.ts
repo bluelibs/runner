@@ -46,11 +46,11 @@ export interface ResourceForkOptions {
    * Control whether the fork keeps the base `register` list.
    * - "keep" (default) keeps registration items
    * - "drop" clears registration items
-   * - "deep" clones registration items with new ids
+   * - "deep" deep-forks registered resources with new ids (resource tree)
    */
   register?: ResourceForkRegisterMode;
   /**
-   * Used with `register: "deep"` to derive ids for cloned registration items.
+   * Used with `register: "deep"` to derive ids for deep-forked resources.
    * Defaults to `(id) => \`\${newId}.\${id}\``.
    */
   reId?: (id: string) => string;

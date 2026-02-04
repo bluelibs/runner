@@ -19,7 +19,7 @@ import {
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { normalizeThrows } from "../tools/throws";
-import { resolveRegisterForFork } from "./resourceFork";
+import { resolveForkedRegisterAndDependencies } from "./resourceFork";
 
 export function defineResource<
   TConfig = void,
@@ -118,15 +118,17 @@ export function defineResource<
       >;
     },
     fork(newId: string, options?: ResourceForkOptions) {
-      const register = resolveRegisterForFork(
-        constConfig.register,
-        newId,
+      const forkedParts = resolveForkedRegisterAndDependencies({
+        register: constConfig.register,
+        dependencies: constConfig.dependencies,
+        forkId: newId,
         options,
-      );
+      });
       const forked = defineResource({
         ...constConfig,
         id: newId,
-        register,
+        register: forkedParts.register,
+        dependencies: forkedParts.dependencies,
         [symbolFilePath]: filePath,
       });
       forked[symbolResourceForkedFrom] = {

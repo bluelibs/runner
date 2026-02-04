@@ -1,10 +1,5 @@
-import type { RegisterableItems } from "../../defs";
-import {
-  symbolMiddlewareConfigured,
-  symbolResourceForkedFrom,
-  symbolTagConfigured,
-} from "../../defs";
-import { defineTask, isHook, isResourceWithConfig, isTask } from "../../define";
+import { symbolResourceForkedFrom } from "../../defs";
+import { isOptional, isResource, isResourceWithConfig } from "../../define";
 import { r, run } from "../../index";
 import {
   assertRegisterArray,
@@ -12,253 +7,143 @@ import {
 } from "./resource.fork.test.utils";
 
 describe("IResource.fork() (deep)", () => {
-  it("can deep-fork registered items with reId", async () => {
-    const baseEvent = r.event("test.deep.event").build();
-    const baseHook = r
-      .hook("test.deep.hook")
-      .on(baseEvent)
-      .run(async () => undefined)
+  it("deep-forks registered resources with reId and remaps dependencies", async () => {
+    const child = r
+      .resource("test.deep.child")
+      .init(async () => ({ ok: true }))
       .build();
-    const baseTask = r
-      .task("test.deep.task")
-      .run(async () => "deep-ok")
+
+    const sharedTask = r
+      .task("test.deep.shared.task")
+      .run(async () => "ok")
       .build();
 
     const base = r
-      .resource("base.deep")
-      .register([baseEvent, baseHook, baseTask])
+      .resource("test.deep.base")
+      .dependencies({ child })
+      .register([child, sharedTask])
+      .init(async (_, deps) => deps.child)
       .build();
 
     const reId = (id: string) => `forked.${id}`;
-    const forked = base.fork("base.deep.forked", {
+    const forked = base.fork("test.deep.base.forked", {
       register: "deep",
       reId,
     });
 
     assertRegisterArray(forked.register);
     const forkedRegister = forked.register;
-    const forkedEvent = forkedRegister.find(
-      (item) => item.id === reId(baseEvent.id),
+
+    expect(forkedRegister.some((item) => item.id === reId(child.id))).toBe(
+      true,
     );
-    const forkedHook = forkedRegister.find(
-      (item) => item.id === reId(baseHook.id),
-    );
-    const forkedTask = forkedRegister.find(
-      (item) => item.id === reId(baseTask.id),
+    expect(forkedRegister.some((item) => item.id === reId(sharedTask.id))).toBe(
+      false,
     );
 
-    expect(forkedEvent).toBeDefined();
-    expect(forkedHook).toBeDefined();
-    if (!forkedHook || !isHook(forkedHook)) {
-      throw new Error("Expected forkedHook to be a hook");
+    const deps =
+      typeof forked.dependencies === "function"
+        ? forked.dependencies(undefined)
+        : forked.dependencies;
+    if (!deps || !("child" in deps)) {
+      throw new Error("Expected forked.dependencies to include child");
     }
-    if (forkedHook.on === "*" || Array.isArray(forkedHook.on)) {
-      throw new Error("Expected forkedHook.on to be a single event definition");
-    }
-    expect(forkedHook.on.id).toBe(reId(baseEvent.id));
+    expect(deps.child.id).toBe(reId(child.id));
+    expect(forked[symbolResourceForkedFrom]?.fromId).toBe(base.id);
 
-    const app = r.resource("app").register([base, forked]).build();
+    const app = r.resource("app").register([forked, sharedTask]).build();
     const runtime = await run(app);
 
-    expect(forkedTask).toBeDefined();
-    if (!forkedTask || !isTask(forkedTask)) {
-      throw new Error("Expected forkedTask to be a task");
-    }
-    const result = await runtime.runTask(forkedTask);
-    expect(result).toBe("deep-ok");
+    expect(() => runtime.getResourceValue(child)).toThrow();
+    expect(runtime.getResourceValue(forked)).toEqual({ ok: true });
 
     await runtime.dispose();
   });
 
-  it("deep-forks all registerable types with reId", () => {
-    const evA = r.event("test.deep.all.event.a").build();
-    const evB = r.event("test.deep.all.event.b").build();
-    const hookArray = r
-      .hook("test.deep.all.hook.array")
-      .on([evA, evB])
-      .run(async () => undefined)
-      .build();
-    const hookStar = r
-      .hook("test.deep.all.hook.star")
-      .on("*")
-      .run(async () => undefined)
+  it("deep-fork remaps sibling resource dependencies (registered together)", async () => {
+    const a = r
+      .resource("test.deep.sibling.a")
+      .init(async () => ({ value: 1 }))
       .build();
 
-    const task = r
-      .task("test.deep.all.task")
-      .run(async () => "ok")
+    const b = r
+      .resource("test.deep.sibling.b")
+      .dependencies({ a })
+      .init(async (_, deps) => ({ value: deps.a.value + 1 }))
       .build();
-    const phantom = defineTask.phantom({
-      id: "test.deep.all.task.phantom",
-      dependencies: {},
-    });
-
-    const taskMwBase = r.middleware
-      .task("test.deep.all.mw.task.base")
-      .run(async ({ next }) => next())
-      .build();
-    const taskMwConfigured = r.middleware
-      .task<{ label: string }>("test.deep.all.mw.task.configured")
-      .configSchema({ parse: (v) => v })
-      .run(async ({ next }) => next())
-      .build()
-      .with({ label: "configured-task" });
-
-    const resMwBase = r.middleware
-      .resource("test.deep.all.mw.res.base")
-      .run(async ({ next }) => next())
-      .build();
-    const resMwConfigured = r.middleware
-      .resource<{ label: string }>("test.deep.all.mw.res.configured")
-      .configSchema({ parse: (v) => v })
-      .run(async ({ next }) => next())
-      .build()
-      .with({ label: "configured-resource" });
-
-    const tagBase = r.tag("test.deep.all.tag.base").build();
-    const tagConfigured = r
-      .tag<{ level: string }>("test.deep.all.tag.configured")
-      .configSchema({ parse: (v) => v })
-      .build()
-      .with({ level: "high" });
-
-    const err = r.error<{ code: number }>("test.deep.all.error").build();
-    const ctx = r.asyncContext<{ id: string }>("test.deep.all.ctx").build();
-
-    const child = r.resource("test.deep.all.child").build();
-    const childCfg = r
-      .resource<{ name: string }>("test.deep.all.child.cfg")
-      .init(async (cfg) => ({ name: cfg.name }))
-      .build()
-      .with({ name: "x" });
 
     const base = r
-      .resource("test.deep.all.base")
-      .register([
-        evA,
-        evB,
-        hookArray,
-        hookStar,
-        task,
-        phantom,
-        taskMwBase,
-        taskMwConfigured,
-        resMwBase,
-        resMwConfigured,
-        tagBase,
-        tagConfigured,
-        err,
-        ctx,
-        child,
-        childCfg,
-      ])
+      .resource("test.deep.sibling.base")
+      // reverse order on purpose: b depends on a
+      .register([b, a])
       .build();
 
-    const reId = (id: string) => `forked.${id}`;
-    const forked = base.fork("test.deep.all.forked", {
+    const forked = base.fork("test.deep.sibling.base.forked", {
       register: "deep",
-      reId,
+      reId: (id) => `forked.${id}`,
+    });
+
+    assertRegisterArray(forked.register);
+    const forkedB = forked.register.find(
+      (item) => item.id === "forked.test.deep.sibling.b",
+    );
+    expect(forkedB).toBeDefined();
+    if (!forkedB || !isResource(forkedB)) {
+      throw new Error("Expected forkedB to be a resource");
+    }
+
+    const deps =
+      typeof forkedB.dependencies === "function"
+        ? forkedB.dependencies(undefined)
+        : forkedB.dependencies;
+    if (!deps || !("a" in deps)) {
+      throw new Error("Expected forkedB.dependencies to include a");
+    }
+    expect(deps.a.id).toBe("forked.test.deep.sibling.a");
+
+    const app = r.resource("app").register([forked]).build();
+    const runtime = await run(app);
+
+    expect(runtime.getResourceValue(forkedB)).toEqual({ value: 2 });
+
+    await runtime.dispose();
+  });
+
+  it("deep-forks resources registered via .with(config)", () => {
+    const child = r
+      .resource<{ name: string }>("test.deep.child.cfg")
+      .init(async (cfg) => ({ name: cfg.name }))
+      .build();
+
+    const base = r
+      .resource("test.deep.base.cfg")
+      .register([child.with({ name: "x" })])
+      .build();
+
+    const forked = base.fork("test.deep.base.cfg.forked", {
+      register: "deep",
+      reId: (id) => `forked.${id}`,
     });
 
     assertRegisterArray(forked.register);
     const forkedRegister = forked.register;
 
-    const forkedHookArray = forkedRegister.find(
-      (item) => item.id === reId(hookArray.id),
-    );
-    expect(forkedHookArray).toBeDefined();
-    if (!forkedHookArray || !isHook(forkedHookArray)) {
-      throw new Error("Expected forkedHookArray to be a hook");
+    expect(forkedRegister).toHaveLength(1);
+    const item = forkedRegister[0];
+    if (!isResourceWithConfig(item)) {
+      throw new Error(
+        "Expected forked register item to be a resource with config",
+      );
     }
-    if (!Array.isArray(forkedHookArray.on)) {
-      throw new Error("Expected forkedHookArray.on to be an array of events");
-    }
-    expect(forkedHookArray.on.map((ev) => ev.id)).toEqual([
-      reId(evA.id),
-      reId(evB.id),
-    ]);
-
-    const forkedHookStar = forkedRegister.find(
-      (item) => item.id === reId(hookStar.id),
-    );
-    expect(forkedHookStar).toBeDefined();
-    if (!forkedHookStar || !isHook(forkedHookStar)) {
-      throw new Error("Expected forkedHookStar to be a hook");
-    }
-    expect(forkedHookStar.on).toBe("*");
-
-    const forkedTaskMwConfigured = forkedRegister.find(
-      (item) => item.id === reId(taskMwConfigured.id),
-    );
-    expect(forkedTaskMwConfigured).toBeDefined();
-    if (
-      !forkedTaskMwConfigured ||
-      !(symbolMiddlewareConfigured in forkedTaskMwConfigured)
-    ) {
-      throw new Error("Expected forkedTaskMwConfigured to be configured");
-    }
-    expect(forkedTaskMwConfigured).toEqual(
-      expect.objectContaining({
-        config: expect.objectContaining({ label: "configured-task" }),
-      }),
-    );
-
-    const forkedResMwConfigured = forkedRegister.find(
-      (item) => item.id === reId(resMwConfigured.id),
-    );
-    expect(forkedResMwConfigured).toBeDefined();
-    if (
-      !forkedResMwConfigured ||
-      !(symbolMiddlewareConfigured in forkedResMwConfigured)
-    ) {
-      throw new Error("Expected forkedResMwConfigured to be configured");
-    }
-    expect(forkedResMwConfigured).toEqual(
-      expect.objectContaining({
-        config: expect.objectContaining({ label: "configured-resource" }),
-      }),
-    );
-
-    const forkedTagConfigured = forkedRegister.find(
-      (item) => item.id === reId(tagConfigured.id),
-    );
-    expect(forkedTagConfigured).toBeDefined();
-    if (!forkedTagConfigured || !(symbolTagConfigured in forkedTagConfigured)) {
-      throw new Error("Expected forkedTagConfigured to be configured");
-    }
-    expect(forkedTagConfigured).toEqual(
-      expect.objectContaining({
-        config: expect.objectContaining({ level: "high" }),
-      }),
-    );
-
-    const forkedCtx = forkedRegister.find((item) => item.id === reId(ctx.id));
-    expect(forkedCtx).toBeDefined();
-
-    const forkedChildCfg = forkedRegister.find(
-      (item) => item.id === reId(childCfg.resource.id),
-    );
-    expect(forkedChildCfg).toBeDefined();
-    if (!forkedChildCfg || !isResourceWithConfig(forkedChildCfg)) {
-      throw new Error("Expected forkedChildCfg to be a resource with config");
-    }
-    expect(forkedChildCfg).toEqual(
-      expect.objectContaining({
-        config: expect.objectContaining({ name: "x" }),
-      }),
-    );
-
-    expect(forked[symbolResourceForkedFrom]?.fromId).toBe(base.id);
+    expect(item.resource.id).toBe("forked.test.deep.child.cfg");
+    expect(item.config).toEqual({ name: "x" });
   });
 
   it("deep-fork caches duplicate registerables", () => {
-    const task = r
-      .task("test.deep.cache.task")
-      .run(async () => "ok")
-      .build();
+    const child = r.resource("test.deep.cache.child").build();
     const base = r
       .resource("test.deep.cache.base")
-      .register([task, task])
+      .register([child, child])
       .build();
 
     const forked = base.fork("test.deep.cache.forked", {
@@ -272,11 +157,8 @@ describe("IResource.fork() (deep)", () => {
   });
 
   it("deep-fork validates reId return value", () => {
-    const task = r
-      .task("test.deep.reid.task")
-      .run(async () => "ok")
-      .build();
-    const base = r.resource("test.deep.reid.base").register([task]).build();
+    const child = r.resource("test.deep.reid.child").build();
+    const base = r.resource("test.deep.reid.base").register([child]).build();
 
     expect(() =>
       base.fork("test.deep.reid.forked", {
@@ -287,13 +169,11 @@ describe("IResource.fork() (deep)", () => {
   });
 
   it("deep-fork supports register functions", () => {
-    const task = r
-      .task("test.deep.fn.task")
-      .run(async () => "ok")
-      .build();
+    const child = r.resource("test.deep.fn.child").build();
     const base = r
       .resource("test.deep.fn.base")
-      .register(() => [task])
+      .dependencies(() => ({ child }))
+      .register(() => [child])
       .build();
 
     const forked = base.fork("test.deep.fn.forked", {
@@ -303,36 +183,105 @@ describe("IResource.fork() (deep)", () => {
 
     assertRegisterFn(forked.register);
     const forkedRegister = forked.register(undefined);
-    expect(forkedRegister[0].id).toBe("forked.test.deep.fn.task");
+    expect(forkedRegister[0].id).toBe("forked.test.deep.fn.child");
+
+    if (typeof forked.dependencies !== "function") {
+      throw new Error("Expected forked.dependencies to be a function");
+    }
+    expect(forked.dependencies(undefined).child.id).toBe(
+      "forked.test.deep.fn.child",
+    );
+  });
+
+  it("deep-fork remaps optional resource dependencies", async () => {
+    const child = r
+      .resource("test.deep.optional.child")
+      .init(async () => ({ ok: true }))
+      .build();
+
+    const base = r
+      .resource("test.deep.optional.base")
+      .dependencies({ child: child.optional() })
+      .register([child])
+      .init(async (_, deps) => ({ hasChild: Boolean(deps.child?.ok) }))
+      .build();
+
+    const forked = base.fork("test.deep.optional.forked", {
+      register: "deep",
+      reId: (id) => `forked.${id}`,
+    });
+
+    const deps =
+      typeof forked.dependencies === "function"
+        ? forked.dependencies(undefined)
+        : forked.dependencies;
+    if (!deps || !("child" in deps)) {
+      throw new Error("Expected forked.dependencies to include child");
+    }
+    const dep = deps.child;
+    if (!isOptional(dep)) {
+      throw new Error("Expected forked.dependencies.child to be optional");
+    }
+    expect(dep.inner.id).toBe("forked.test.deep.optional.child");
+
+    const app = r.resource("app").register([forked]).build();
+    const runtime = await run(app);
+
+    expect(runtime.getResourceValue(forked)).toEqual({ hasChild: true });
+
+    await runtime.dispose();
+  });
+
+  it("deep-fork supports register functions with no dependencies", () => {
+    const child = r.resource("test.deep.fn.nodeps.child").build();
+    const base = r
+      .resource("test.deep.fn.nodeps.base")
+      .register(() => [child])
+      .build();
+
+    const forked = base.fork("test.deep.fn.nodeps.forked", {
+      register: "deep",
+      reId: (id) => `forked.${id}`,
+    });
+
+    expect(forked.dependencies).toBeUndefined();
+    assertRegisterFn(forked.register);
+    expect(forked.register(undefined)[0].id).toBe(
+      "forked.test.deep.fn.nodeps.child",
+    );
+  });
+
+  it("deep-fork supports register functions with object dependencies", () => {
+    const child = r.resource("test.deep.fn.objdeps.child").build();
+    const base = r
+      .resource("test.deep.fn.objdeps.base")
+      .dependencies({ child })
+      .register(() => [child])
+      .build();
+
+    const forked = base.fork("test.deep.fn.objdeps.forked", {
+      register: "deep",
+      reId: (id) => `forked.${id}`,
+    });
+
+    if (typeof forked.dependencies !== "function") {
+      throw new Error("Expected forked.dependencies to be a function");
+    }
+    expect(forked.dependencies(undefined).child.id).toBe(
+      "forked.test.deep.fn.objdeps.child",
+    );
   });
 
   it("deep-fork uses the default reId prefix", () => {
-    const task = r
-      .task("test.deep.default.task")
-      .run(async () => "ok")
-      .build();
-    const base = r.resource("test.deep.default.base").register([task]).build();
+    const child = r.resource("test.deep.default.child").build();
+    const base = r.resource("test.deep.default.base").register([child]).build();
 
     const forked = base.fork("test.deep.default.forked", { register: "deep" });
 
     assertRegisterArray(forked.register);
     const forkedRegister = forked.register;
     expect(forkedRegister[0].id).toBe(
-      "test.deep.default.forked.test.deep.default.task",
+      "test.deep.default.forked.test.deep.default.child",
     );
-  });
-
-  it("deep-fork preserves unknown registerables", () => {
-    const unknown = { id: "test.unknown.item" } as unknown as RegisterableItems;
-    const base = r.resource("test.unknown.base").register([unknown]).build();
-
-    const forked = base.fork("test.unknown.forked", {
-      register: "deep",
-      reId: (id) => `forked.${id}`,
-    });
-
-    assertRegisterArray(forked.register);
-    const forkedRegister = forked.register;
-    expect(forkedRegister[0]).toBe(unknown);
   });
 });
