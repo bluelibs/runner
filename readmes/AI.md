@@ -76,15 +76,16 @@ await runtime.runTask(createUser, { name: "Ada" });
 ```
 
 - `r.*.with(config)` produces a configured copy of the definition.
-- `r.*.fork(newId)` creates a new resource with a different id but the same definition—useful for multi-instance patterns. Export forked resources to use as dependencies.
+- `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` creates a new resource with a different id but the same definition. Use `register: "drop"` to avoid re-registering nested items, or `register: "deep"` to clone them with new ids via `reId`. Export forked resources to use as dependencies.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns helpers such as `runTask`, `getResourceValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
 
 ### Resource Forking
 
-Use `.fork(newId)` to clone a resource definition under a new id (handy for multi-instance patterns).
-Forks keep the same implementation/types but get separate runtime instances (no shared state).
+Use `.fork(newId, { register, reId })` to clone a resource definition under a new id (handy for multi-instance patterns).
+Forks keep the same implementation/types but get separate runtime instances (no shared state). Use `register: "drop"` to clear registered items, or `register: "deep"` to clone them with new ids.
 Prefer exporting forks so other tasks/resources can depend on them.
+Forked resources also expose provenance at `[definitions.symbolResourceForkedFrom]` (`fromId`, `forkedAtFilePath`) for tooling/debugging.
 
 ## Tasks
 

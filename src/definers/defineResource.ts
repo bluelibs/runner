@@ -7,16 +7,19 @@ import type {
   IOptionalDependency,
   ResourceMiddlewareAttachmentType,
   IResourceWithConfig,
+  ResourceForkOptions,
 } from "../types/resource";
 import {
   symbolResource,
   symbolFilePath,
   symbolOptionalDependency,
   symbolResourceWithConfig,
+  symbolResourceForkedFrom,
 } from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { normalizeThrows } from "../tools/throws";
+import { resolveRegisterForFork } from "./resourceFork";
 
 export function defineResource<
   TConfig = void,
@@ -114,12 +117,23 @@ export function defineResource<
         IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>
       >;
     },
-    fork(newId: string) {
-      return defineResource({
+    fork(newId: string, options?: ResourceForkOptions) {
+      const register = resolveRegisterForFork(
+        constConfig.register,
+        newId,
+        options,
+      );
+      const forked = defineResource({
         ...constConfig,
         id: newId,
+        register,
         [symbolFilePath]: filePath,
       });
+      forked[symbolResourceForkedFrom] = {
+        fromId: id,
+        forkedAtFilePath: getCallerFile(),
+      };
+      return forked;
     },
   };
 }

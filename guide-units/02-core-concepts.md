@@ -158,7 +158,7 @@ const app = r
 
 #### Resource Forking
 
-Use `.fork(newId)` to create multiple instances of a "template" resource with different identities. This is perfect when you need several instances of the same resource type (e.g., multiple database connections, multiple mailers):
+Use `.fork(newId)` to create multiple instances of a "template" resource with different identities. If the base resource registers other items, use `.fork(newId, { register: "drop" })` to avoid re-registering them, or `.fork(newId, { register: "deep", reId })` to clone them with new ids. This is perfect when you need several instances of the same resource type (e.g., multiple database connections, multiple mailers):
 
 ```typescript
 // Define a reusable template
@@ -192,11 +192,30 @@ const app = r
   .build();
 ```
 
+If the base resource registers other items and you want a clean clone of the whole tree, use `register: "deep"` with a re-id function:
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const base = r
+  .resource("app.base")
+  .register([r.task("app.base.task").run(async () => "ok").build()])
+  .build();
+
+const forked = base.fork("app.base.forked", {
+  register: "deep",
+  reId: (id) => `forked.${id}`,
+});
+
+const app = r.resource("app").register([base, forked]).build();
+```
+
 Key points:
 
 - **`.fork()` returns a built `IResource`** - no need to call `.build()` again
 - **Tags, middleware, and type parameters are inherited**
 - **Each fork gets independent runtime** - no shared state
+- **`register` defaults to `"keep"`**; use `"drop"` for leaf resources or `"deep"` when you want cloned registrations
 - **Export forked resources** to use them as typed dependencies
 
 #### Optional Dependencies

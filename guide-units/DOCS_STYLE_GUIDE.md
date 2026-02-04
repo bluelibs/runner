@@ -350,6 +350,14 @@ const task = r
   .build();
 ```
 
+### API Option Defaults
+
+When documenting builder options or configuration objects:
+
+- Always state the default behavior (especially when it preserves legacy behavior)
+- Call out any option that changes registration, lifecycle, or runtime wiring
+- Keep option names in code format (for example: `register: "drop"`)
+
 ### When Referencing Undefined Dependencies
 
 If showing a partial example, **explicitly note what's assumed**:

@@ -17,6 +17,7 @@ import {
   symbolFilePath,
   symbolResource,
   symbolResourceWithConfig,
+  symbolResourceForkedFrom,
 } from "./symbols";
 import {
   EnsureInputSatisfiesContracts,
@@ -37,6 +38,30 @@ export type {
 export type { ResourceMiddlewareAttachmentType } from "./resourceMiddleware";
 export type { TagType } from "./tag";
 export type { IResourceMeta } from "./meta";
+
+export type ResourceForkRegisterMode = "keep" | "drop" | "deep";
+
+export interface ResourceForkOptions {
+  /**
+   * Control whether the fork keeps the base `register` list.
+   * - "keep" (default) keeps registration items
+   * - "drop" clears registration items
+   * - "deep" clones registration items with new ids
+   */
+  register?: ResourceForkRegisterMode;
+  /**
+   * Used with `register: "deep"` to derive ids for cloned registration items.
+   * Defaults to `(id) => \`\${newId}.\${id}\``.
+   */
+  reId?: (id: string) => string;
+}
+
+export interface ResourceForkInfo {
+  /** The id of the resource that was forked. */
+  readonly fromId: string;
+  /** Best-effort call-site file path for the fork operation. */
+  readonly forkedAtFilePath: string;
+}
 
 // Helper to detect `any` so we can treat it as "unspecified"
 type IsAny<T> = 0 extends 1 & T ? true : false;
@@ -213,6 +238,8 @@ export interface IResource<
   middleware: TMiddleware;
   [symbolFilePath]: string;
   [symbolResource]: true;
+  /** Present only on forked resources. */
+  [symbolResourceForkedFrom]?: ResourceForkInfo;
   /** Normalized list of error ids declared via `throws`. */
   throws?: readonly string[];
   /** Return an optional dependency wrapper for this resource. */
@@ -235,6 +262,7 @@ export interface IResource<
    */
   fork(
     newId: string,
+    options?: ResourceForkOptions,
   ): IResource<
     TConfig,
     TValue,
