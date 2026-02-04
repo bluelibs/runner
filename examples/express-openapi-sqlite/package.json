@@ -21,7 +21,7 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "passport-local": "^1.0.0",
-    "sqlite3": "^5.1.7",
+    "sqlite3": "^5.0.2",
     "swagger-ui-express": "^5.0.0",
     "zod": "^4.0.17",
     "zod-openapi": "^5.3.1"
