@@ -2,7 +2,7 @@
 
 /**
  * Compose documentation outputs from guide-units.
- * Usage: node compose-readme.mjs
+ * Usage: node compose-guide.mjs
  *
  * Outputs:
  * - README.md: landing page (short) - at repository root
@@ -149,3 +149,4 @@ try {
   console.error(`[compose] Failed: ${error.message}`);
   process.exit(1);
 }
+

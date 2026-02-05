@@ -2,10 +2,19 @@
 
 ### Explicit TypeScript Dependency Injection Toolkit
 
-**Compose tasks and resources with predictable lifecycle, testing hooks, and runtime control**
+**Build apps from tasks and resources with explicit dependencies, predictable lifecycle, and first-class testing**
 
-Runner is a TypeScript-first framework for building applications from tasks (functions) and resources
-(singletons), with explicit dependency injection, middleware, events, hooks, and lifecycle management.
+Runner is a TypeScript-first toolkit for building an `app` out of small, typed building blocks. You can find more details and a visual overview at [runner.bluelibs.com](https://runner.bluelibs.com/).
+
+- **Tasks**: async functions with explicit `dependencies`, middleware, and input/output validation
+- **Resources**: singletons with `init`/`dispose` lifecycle (databases, clients, servers, caches)
+- **Reliability Middleware**: built-in `retry`, `timeout`, `circuitBreaker`, `cache`, and `rateLimit`
+- **HTTP Tunnels**: cross-process execution (the "Distributed Monolith") with zero call-site changes
+- **Durable Workflows**: persistent, crash-recoverable async logic for Node.js
+- **Events & hooks**: typed signals and subscribers for decoupling
+- **Runtime control**: run, observe, test, and dispose your `app` predictably
+
+The goal is simple: keep dependencies explicit, keep lifecycle predictable, and make your runtime easy to control in production and in tests.
 
 <p align="center">
 <a href="https://github.com/bluelibs/runner/actions/workflows/ci.yml"><img src="https://github.com/bluelibs/runner/actions/workflows/ci.yml/badge.svg?branch=main" alt="Build Status" /></a>
@@ -16,7 +25,7 @@ Runner is a TypeScript-first framework for building applications from tasks (fun
 </p>
 
 ```typescript
-import { r, run } from "@bluelibs/runner";
+import { r, run, globals } from "@bluelibs/runner";
 import { z } from "zod";
 
 const db = r
@@ -40,10 +49,11 @@ const mailer = r
   }))
   .build();
 
-// Define a task with dependencies, schema validation, and type-safe input/output
+// Define a task with dependencies, middleware, and zod validation
 const createUser = r
   .task("users.create")
   .dependencies({ db, mailer })
+  .middleware([globals.middleware.task.retry.with({ attempts: 3 })])
   .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
   .run(async (input, { db, mailer }) => {
     const user = await db.users.insert(input);
@@ -63,7 +73,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 | Resource                                                                                                            | Type    | Description                         |
 | ------------------------------------------------------------------------------------------------------------------- | ------- | ----------------------------------- |
-| [Presentation Website](https://runner.bluelibs.com/)                                                                | Website | Overview and features               |
+| [Official Website & Documentation](https://runner.bluelibs.com/)                                                    | Website | Overview and features               |
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
@@ -91,9 +101,9 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 ## Platform Support (Quick Summary)
 
-| Capability                                  | Node.js | Browser | Edge | Notes                                      |
-| ------------------------------------------- | ------- | ------- | ---- | ------------------------------------------ |
-| Core runtime (tasks/resources/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
+| Capability                                              | Node.js | Browser | Edge | Notes                                      |
+| ------------------------------------------------------- | ------- | ------- | ---- | ------------------------------------------ |
+| Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
 | Async Context (`r.asyncContext`)            | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
 | Durable workflows (`@bluelibs/runner/node`) | Full    | None    | None | Node-only module                           |
 | Tunnels client (`createExposureFetch`)      | Full    | Full    | Full | Requires `fetch`                           |
