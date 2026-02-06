@@ -363,16 +363,22 @@ try {
 - The thrown `Error` has `name = id` and `message = format(data)`. If you don’t provide `.format(...)`, the default is `JSON.stringify(data)`.
 - `message` is not required in the data unless your custom formatter expects it.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
-- For HTTP/tunnel clients, pass an `errorRegistry` to rethrow remote errors as your typed helpers:
+- For HTTP/tunnel clients, you can pass an `errorRegistry` to rethrow remote errors as your typed helpers (optional):
+
   ```ts
-  import { createHttpClient, getDefaultSerializer } from "@bluelibs/runner";
+  import { createHttpClient, Serializer } from "@bluelibs/runner";
 
   const client = createHttpClient({
     baseUrl: "http://localhost:3000/__runner",
-    serializer: getDefaultSerializer(),
+    serializer: new Serializer(),
     errorRegistry: new Map([[AppError.id, AppError]]),
   });
   ```
+
+  Notes:
+  - `errorRegistry` is optional. If omitted, typed errors remain `TunnelError` instances.
+  - `serializer` is required for `createHttpClient`, but it is fully customizable (any `SerializerLike` works). If you use `globals.resources.httpClientFactory`, the serializer, error registry, and async contexts are auto-injected, so you can omit them from your own config.
+  - Other supported options on the same config object: `auth`, `timeoutMs`, `fetchImpl`, `onRequest`, and `contexts`.
 
 ## Overrides
 

@@ -12,6 +12,12 @@ import { IEvent } from "./event";
 import { IEventDefinition } from "./event";
 import { TaskLocalInterceptor } from "./utilities";
 
+export enum HookDependencyState {
+  Pending = "pending",
+  Computing = "computing",
+  Ready = "ready",
+}
+
 export type ResourceStoreElementType<
   C = any,
   V extends Promise<any> = any,
@@ -43,6 +49,7 @@ export type HookStoreElementType<
 > = {
   hook: IHook<D, TOn>;
   computedDependencies: DependencyValuesType<D>;
+  dependencyState: HookDependencyState;
 };
 
 export type TaskMiddlewareStoreElementType<

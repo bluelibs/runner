@@ -154,6 +154,12 @@ export class Store {
   }
 
   private registerGlobalComponents() {
+    if (!this.taskRunner) {
+      throw new Error(
+        "TaskRunner is not set. Call store.setTaskRunner() before initializeStore().",
+      );
+    }
+
     const builtInResourcesMap = new Map<
       IResource<any, any, any, any, any>,
       unknown
@@ -161,7 +167,7 @@ export class Store {
     builtInResourcesMap.set(globalResources.store, this);
     builtInResourcesMap.set(globalResources.eventManager, this.eventManager);
     builtInResourcesMap.set(globalResources.logger, this.logger);
-    builtInResourcesMap.set(globalResources.taskRunner, this.taskRunner!);
+    builtInResourcesMap.set(globalResources.taskRunner, this.taskRunner);
     builtInResourcesMap.set(globalResources.serializer, new Serializer());
     builtInResourcesMap.set(
       globalResources.middlewareManager,
@@ -236,11 +242,16 @@ export class Store {
     this.taskRunner = taskRunner;
   }
 
-  private setupRootResource(root: IResource<any>, config: any) {
-    root.dependencies =
-      typeof root.dependencies === "function"
-        ? root.dependencies(config)
-        : root.dependencies;
+  private setupRootResource(rootDefinition: IResource<any>, config: any) {
+    // Clone the root definition so per-run dependency/register resolution
+    // never mutates the reusable user definition object.
+    const root: IResource<any> = {
+      ...rootDefinition,
+      dependencies:
+        typeof rootDefinition.dependencies === "function"
+          ? rootDefinition.dependencies(config)
+          : rootDefinition.dependencies,
+    };
 
     this.root = {
       resource: root,

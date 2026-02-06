@@ -43,9 +43,7 @@ The recommended integration is a **single durable resource** that:
 
 ```ts
 import { event, r, run } from "@bluelibs/runner";
-import {
-  memoryDurableResource,
-} from "@bluelibs/runner/node";
+import { memoryDurableResource } from "@bluelibs/runner/node";
 
 const Approved = event<{ approvedBy: string }>({ id: "app.signals.approved" });
 
@@ -98,9 +96,7 @@ await run(app, { logs: { printThreshold: null } });
 For production, swap the in-memory backends:
 
 ```ts
-import {
-  redisDurableResource,
-} from "@bluelibs/runner/node";
+import { redisDurableResource } from "@bluelibs/runner/node";
 
 const durable = redisDurableResource.fork("app.durable");
 
@@ -298,7 +294,10 @@ export interface IDurableStore {
   listIncompleteExecutions(): Promise<Execution[]>;
 
   // Steps (Memoized results for exactly-once-ish semantics)
-  getStepResult(executionId: string, stepId: string): Promise<StepResult | null>;
+  getStepResult(
+    executionId: string,
+    stepId: string,
+  ): Promise<StepResult | null>;
   saveStepResult(result: StepResult): Promise<void>;
 
   // Timers (Drives sleep(), signal timeouts, and cron)
@@ -316,19 +315,37 @@ export interface IDurableStore {
   listActiveSchedules(): Promise<Schedule[]>;
 
   // Optional: Distributed Timer Coordination
-  claimTimer?(timerId: string, workerId: string, ttlMs: number): Promise<boolean>;
+  claimTimer?(
+    timerId: string,
+    workerId: string,
+    ttlMs: number,
+  ): Promise<boolean>;
 
   // Optional: Idempotency (dedupe startExecution calls)
-  getExecutionIdByIdempotencyKey?(params: { taskId: string, idempotencyKey: string }): Promise<string | null>;
-  setExecutionIdByIdempotencyKey?(params: { taskId: string, idempotencyKey: string, executionId: string }): Promise<boolean>;
+  getExecutionIdByIdempotencyKey?(params: {
+    taskId: string;
+    idempotencyKey: string;
+  }): Promise<string | null>;
+  setExecutionIdByIdempotencyKey?(params: {
+    taskId: string;
+    idempotencyKey: string;
+    executionId: string;
+  }): Promise<boolean>;
 
   // Optional: Dashboard & Operator API
   listExecutions?(options?: ListExecutionsOptions): Promise<Execution[]>;
   listStepResults?(executionId: string): Promise<StepResult[]>;
   retryRollback?(executionId: string): Promise<void>;
   skipStep?(executionId: string, stepId: string): Promise<void>;
-  forceFail?(executionId: string, error: { message: string, stack?: string }): Promise<void>;
-  editStepResult?(executionId: string, stepId: string, newResult: unknown): Promise<void>;
+  forceFail?(
+    executionId: string,
+    error: { message: string; stack?: string },
+  ): Promise<void>;
+  editStepResult?(
+    executionId: string,
+    stepId: string,
+    newResult: unknown,
+  ): Promise<void>;
 
   // Lifecycle
   init?(): Promise<void>;
@@ -450,7 +467,10 @@ class MySqlStore implements IDurableStore {
   }
 
   async getExecution(id: string) {
-    const row = await db.query("SELECT data FROM durable_executions WHERE id = ?", [id]);
+    const row = await db.query(
+      "SELECT data FROM durable_executions WHERE id = ?",
+      [id],
+    );
     return row ? deserialize(row.data) : null;
   }
 
@@ -459,13 +479,14 @@ class MySqlStore implements IDurableStore {
 ```
 
 > [!TIP]
-> Look at [MemoryStore.ts](file:///c:/Users/diaco/Projects/runner/src/node/durable/store/MemoryStore.ts) for a clean reference of how to manage in-memory state, or [RedisStore.ts](file:///c:/Users/diaco/Projects/runner/src/node/durable/store/RedisStore.ts) for a production-grade implementation using Lua scripts for atomicity.
+> Look at [MemoryStore.ts](../src/node/durable/store/MemoryStore.ts) for a clean reference of how to manage in-memory state, or [RedisStore.ts](../src/node/durable/store/RedisStore.ts) for a production-grade implementation using Lua scripts for atomicity.
 
 ### Implementing a Custom Queue
 
 If you want to use a different message broker (SQS, Kafka, Redis Streams), implement `IDurableQueue`.
 
 **Key Responsibilities:**
+
 - **`enqueue`**: Push a message (task execution hint) to the broker.
 - **`consume`**: Register a listener that calls the provided handler when a message arrives.
 - **`ack` / `nack`**: Handle message confirmation/failure.
@@ -473,7 +494,10 @@ If you want to use a different message broker (SQS, Kafka, Redis Streams), imple
 ```typescript
 class SqsQueue implements IDurableQueue {
   async enqueue(msg) {
-    const res = await sqs.sendMessage({ QueueUrl, MessageBody: JSON.stringify(msg) });
+    const res = await sqs.sendMessage({
+      QueueUrl,
+      MessageBody: JSON.stringify(msg),
+    });
     return res.MessageId;
   }
 
@@ -893,30 +917,37 @@ const fulfillOrder = r
       return await db.orders.findById(input.orderId);
     });
 
-    const result = await ctx.switch("fulfillment-route", order.tier, [
+    const result = await ctx.switch(
+      "fulfillment-route",
+      order.tier,
+      [
+        {
+          id: "premium",
+          match: (tier) => tier === "premium",
+          run: async () => {
+            await ctx.step("express-ship", async () => shipping.express(order));
+            return "express-shipped" as const;
+          },
+        },
+        {
+          id: "standard",
+          match: (tier) => tier === "standard",
+          run: async () => {
+            await ctx.step("standard-ship", async () =>
+              shipping.standard(order),
+            );
+            return "standard-shipped" as const;
+          },
+        },
+      ],
       {
-        id: "premium",
-        match: (tier) => tier === "premium",
+        id: "manual-review",
         run: async () => {
-          await ctx.step("express-ship", async () => shipping.express(order));
-          return "express-shipped" as const;
+          await ctx.step("flag-review", async () => flagForReview(order));
+          return "needs-review" as const;
         },
       },
-      {
-        id: "standard",
-        match: (tier) => tier === "standard",
-        run: async () => {
-          await ctx.step("standard-ship", async () => shipping.standard(order));
-          return "standard-shipped" as const;
-        },
-      },
-    ], {
-      id: "manual-review",
-      run: async () => {
-        await ctx.step("flag-review", async () => flagForReview(order));
-        return "needs-review" as const;
-      },
-    });
+    );
 
     return { orderId: input.orderId, result };
   })
@@ -961,10 +992,17 @@ const shape = await describeFlow(async (ctx) => {
   await ctx.step("validate", async () => ({ ok: true }));
   await ctx.switch("route", "premium", [
     { id: "free", match: (v) => v === "free", run: async () => "free" },
-    { id: "premium", match: (v) => v === "premium", run: async () => "premium" },
+    {
+      id: "premium",
+      match: (v) => v === "premium",
+      run: async () => "premium",
+    },
   ]);
   await ctx.sleep(60_000, { stepId: "cooldown" });
-  await ctx.waitForSignal(Approved, { timeoutMs: 86_400_000, stepId: "approval" });
+  await ctx.waitForSignal(Approved, {
+    timeoutMs: 86_400_000,
+    stepId: "approval",
+  });
   await ctx.emit(OrderShipped, { orderId: "123" }, { stepId: "notify" });
   await ctx.note("Order processing complete");
 });
@@ -980,7 +1018,12 @@ interface DurableFlowShape {
 type FlowNode =
   | { kind: "step"; stepId: string; hasCompensation: boolean }
   | { kind: "sleep"; durationMs: number; stepId?: string }
-  | { kind: "waitForSignal"; signalId: string; timeoutMs?: number; stepId?: string }
+  | {
+      kind: "waitForSignal";
+      signalId: string;
+      timeoutMs?: number;
+      stepId?: string;
+    }
   | { kind: "emit"; eventId: string; stepId?: string }
   | { kind: "switch"; stepId: string; branchIds: string[]; hasDefault: boolean }
   | { kind: "note"; message: string };
@@ -1043,27 +1086,22 @@ const dailyCleanup = r
   .build();
 
 // Create schedules once at startup (in a bootstrap resource/task)
-if (!(await durable.getSchedule("daily-cleanup"))) {
-  await durable.schedule(
-    dailyCleanup,
-    {},
-    { id: "daily-cleanup", cron: "0 3 * * *" },
-  );
-}
-if (!(await durable.getSchedule("hourly-sync"))) {
-  await durable.schedule(
-    syncInventory,
-    { full: false },
-    { id: "hourly-sync", cron: "0 * * * *" },
-  );
-}
-if (!(await durable.getSchedule("weekly-report"))) {
-  await durable.schedule(
-    generateWeeklyReport,
-    { type: "weekly" },
-    { id: "weekly-report", cron: "0 9 * * MON" },
-  );
-}
+// ensureSchedule() is idempotent — safe to call on every boot and concurrently
+await durable.ensureSchedule(
+  dailyCleanup,
+  {},
+  { id: "daily-cleanup", cron: "0 3 * * *" },
+);
+await durable.ensureSchedule(
+  syncInventory,
+  { full: false },
+  { id: "hourly-sync", cron: "0 * * * *" },
+);
+await durable.ensureSchedule(
+  generateWeeklyReport,
+  { type: "weekly" },
+  { id: "weekly-report", cron: "0 9 * * MON" },
+);
 ```
 
 ### Interval-Based Scheduling
@@ -1071,27 +1109,22 @@ if (!(await durable.getSchedule("weekly-report"))) {
 Run tasks at fixed intervals (e.g., every 30 seconds):
 
 ```typescript
-if (!(await durable.getSchedule("health-check"))) {
-  await durable.schedule(
-    healthCheckTask,
-    { endpoints: ["api", "db"] },
-    { id: "health-check", interval: 30_000 },
-  );
-}
-if (!(await durable.getSchedule("poll-external-api"))) {
-  await durable.schedule(
-    pollExternalApi,
-    {},
-    { id: "poll-external-api", interval: 5 * 60 * 1000 },
-  );
-}
-if (!(await durable.getSchedule("metrics-sync"))) {
-  await durable.schedule(
-    metricsSync,
-    { flush: true },
-    { id: "metrics-sync", interval: 60_000 },
-  );
-}
+// ensureSchedule() is idempotent — safe to call on every boot and concurrently
+await durable.ensureSchedule(
+  healthCheckTask,
+  { endpoints: ["api", "db"] },
+  { id: "health-check", interval: 30_000 },
+);
+await durable.ensureSchedule(
+  pollExternalApi,
+  {},
+  { id: "poll-external-api", interval: 5 * 60 * 1000 },
+);
+await durable.ensureSchedule(
+  metricsSync,
+  { flush: true },
+  { id: "metrics-sync", interval: 60_000 },
+);
 ```
 
 **Interval vs Cron:**
@@ -1347,8 +1380,11 @@ export interface DurableServiceConfig {
 }
 
 export interface ScheduleOptions {
+  id?: string; // Stable schedule id (required for ensureSchedule)
   at?: Date; // Run at specific time
   delay?: number; // Run after delay (ms)
+  cron?: string; // Cron expression (for recurring)
+  interval?: number; // Interval in ms (for recurring)
 }
 
 export interface IDurableService {
@@ -1394,6 +1430,16 @@ export interface IDurableService {
     task: DurableTask<TInput, any>,
     input: TInput,
     options: ScheduleOptions,
+  ): Promise<string>;
+
+  /**
+   * Idempotently create (or update) a recurring schedule (cron/interval).
+   * Safe to call on every boot and concurrently across processes.
+   */
+  ensureSchedule<TInput>(
+    task: DurableTask<TInput, any>,
+    input: TInput,
+    options: ScheduleOptions & { id: string },
   ): Promise<string>;
 
   /**
@@ -1730,6 +1776,7 @@ const durableRegistration = durable.with({ store });
 Expose durable task execution over HTTP using Runner's tunnel pattern:
 
 ```typescript
+import { createHttpClient } from "@bluelibs/runner";
 import { nodeExposure } from "@bluelibs/runner/node";
 
 const app = r
@@ -1768,7 +1815,7 @@ const app = r
 
 The recovery process:
 
-1. Load all executions with status `running` or `sleeping`
+1. Load all incomplete executions (status `pending`, `running`, `sleeping`, or `retrying`)
 2. For each, re-execute the task within a new DurableContext
 3. The task replays through cached steps automatically
 4. Execution continues from where it left off
@@ -1784,7 +1831,7 @@ backends while keeping the `run()` semantics you use in production.
 import { r, run } from "@bluelibs/runner";
 import { createDurableTestSetup, waitUntil } from "@bluelibs/runner/node";
 
-const { durable, store } = createDurableTestSetup();
+const { durable, durableRegistration, store } = createDurableTestSetup();
 const Paid = r.event<{ paidAt: number }>("app.signals.paid").build();
 
 const task = r
@@ -1797,7 +1844,10 @@ const task = r
   })
   .build();
 
-const app = r.resource("spec.app").register([durable, Paid, task]).build();
+const app = r
+  .resource("spec.app")
+  .register([durableRegistration, Paid, task])
+  .build();
 const runtime = await run(app);
 const durableRuntime = runtime.getResourceValue(durable);
 

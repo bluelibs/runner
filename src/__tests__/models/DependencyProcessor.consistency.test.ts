@@ -1,12 +1,23 @@
 import { r } from "../../index";
 import { run } from "../../run";
+import { DependencyProcessor } from "../../models/DependencyProcessor";
+import { createTestFixture } from "../test-utils";
 
 enum ResourceId {
   Broken = "broken.resource",
   BrokenWithMeta = "broken.resource.meta",
+  BrokenViaDependency = "broken.resource.dependency",
   Root = "root",
   Task = "task",
   Resource = "res",
+  Service = "service",
+  Event = "event",
+  Hook = "hook",
+  Emitter = "emitter",
+  Consumer = "consumer",
+  DependencyTask = "task.dependency",
+  TaskConsumer = "resource.taskConsumer",
+  TaskInitConsumer = "resource.taskInitConsumer",
 }
 
 enum ErrorMessage {
@@ -143,5 +154,162 @@ describe("DependencyProcessor Consistency", () => {
     expect(injectedTask).toBe(storedTask);
 
     await runtime.dispose();
+  });
+
+  it("should initialize hook dependencies before early event emissions", async () => {
+    const seen: number[] = [];
+
+    const event = r.event<{ ok: true }>(ResourceId.Event).build();
+
+    const service = r
+      .resource(ResourceId.Service)
+      .init(async () => ({ value: 42 }))
+      .build();
+
+    const hook = r
+      .hook(ResourceId.Hook)
+      .on(event)
+      .dependencies({ service })
+      .run(async (_input, { service }) => {
+        seen.push(service.value);
+      })
+      .build();
+
+    const emitter = r
+      .resource(ResourceId.Emitter)
+      .dependencies({ event })
+      .init(async (_config, { event }) => {
+        await event({ ok: true });
+        return "emitter";
+      })
+      .build();
+
+    const consumer = r
+      .resource(ResourceId.Consumer)
+      .dependencies({ emitter })
+      .init(async () => "consumer")
+      .build();
+
+    const root = r
+      .resource(ResourceId.Root)
+      .register([consumer, emitter, service, hook, event])
+      .init(async () => "root")
+      .build();
+
+    const runtime = await run(root);
+    expect(seen).toEqual([42]);
+    await runtime.dispose();
+  });
+
+  it("should use the store task definition when resolving early task dependencies", async () => {
+    const service = r
+      .resource(ResourceId.Service)
+      .init(async () => ({ value: 7 }))
+      .build();
+
+    const task = r
+      .task(ResourceId.DependencyTask)
+      .dependencies(() => ({ service }))
+      .run(async (_input, { service }) => service.value)
+      .build();
+
+    const taskConsumer = r
+      .resource(ResourceId.TaskConsumer)
+      .dependencies({ task })
+      .init(async (_config, { task }) => {
+        const value = await task(undefined);
+        return { value };
+      })
+      .build();
+
+    // Depends on taskConsumer so it gets initialized while dependencies
+    // are still being traversed for other resources.
+    const taskInitConsumer = r
+      .resource(ResourceId.TaskInitConsumer)
+      .dependencies({ taskConsumer })
+      .init(async () => "ok")
+      .build();
+
+    const root = r
+      .resource(ResourceId.Root)
+      .register([taskInitConsumer, taskConsumer, service, task])
+      .dependencies({ taskConsumer })
+      .init(async (_config, { taskConsumer }) => taskConsumer.value)
+      .build();
+
+    const runtime = await run(root);
+    expect(runtime.value).toBe(7);
+    await runtime.dispose();
+  });
+
+  it("should annotate dependency-triggered resource initialization errors", async () => {
+    const broken = r
+      .resource(ResourceId.BrokenViaDependency)
+      .init(async () => {
+        throw new Error(ErrorMessage.Boom);
+      })
+      .build();
+
+    const consumer = r
+      .resource(ResourceId.Consumer)
+      .dependencies({ broken })
+      .init(async () => "consumer")
+      .build();
+
+    const root = r
+      .resource(ResourceId.Root)
+      .register([consumer, broken])
+      .dependencies({ consumer })
+      .init(async () => "root")
+      .build();
+
+    let caught: unknown;
+    try {
+      await run(root);
+    } catch (error) {
+      caught = error;
+    }
+
+    expect(caught).toBeInstanceOf(Error);
+    const caughtError = caught as Error;
+    expect(caughtError.message).toContain(ResourceId.BrokenViaDependency);
+    expect(Reflect.get(caughtError, "resourceId")).toBe(
+      ResourceId.BrokenViaDependency,
+    );
+    expect(Reflect.get(caughtError, "cause")).toEqual({
+      resourceId: ResourceId.BrokenViaDependency,
+    });
+  });
+
+  it("should skip hook execution when dependencies are not ready yet", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const event = r.event<{ ok: true }>("hook.pending.event").build();
+    const runHook = jest.fn(async () => undefined);
+    const hook = r
+      .hook("hook.pending.hook")
+      .on(event)
+      .run(async () => runHook())
+      .build();
+    const root = r
+      .resource("hook.pending.root")
+      .register([event, hook])
+      .build();
+
+    store.initializeStore(root, {});
+
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+    );
+    processor.attachListeners();
+
+    await eventManager.emit(event, { ok: true }, "test");
+    expect(runHook).not.toHaveBeenCalled();
   });
 });

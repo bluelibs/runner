@@ -39,10 +39,15 @@ Signals buffer if no waiter exists yet; the next `waitForSignal(...)` consumes t
 Recommended wiring (config-only resources):
 
 ```ts
-import { memoryDurableResource, redisDurableResource } from "@bluelibs/runner/node";
+import {
+  memoryDurableResource,
+  redisDurableResource,
+} from "@bluelibs/runner/node";
 
 // dev/tests
-const durable = memoryDurableResource.fork("app.durable").with({ worker: true });
+const durable = memoryDurableResource
+  .fork("app.durable")
+  .with({ worker: true });
 
 // production (Redis + optional RabbitMQ queue)
 const durableProd = redisDurableResource.fork("app.durable").with({
@@ -96,10 +101,25 @@ Import and subscribe using event definitions (not strings): `import { durableEve
 `ctx.switch()` is a replay-safe branching primitive. It evaluates matchers against a value, persists which branch was taken, and on replay skips the matchers entirely.
 
 ```ts
-const result = await ctx.switch("route-order", order.status, [
-  { id: "approve", match: (s) => s === "paid", run: async (s) => { /* ... */ return "approved"; } },
-  { id: "reject",  match: (s) => s === "declined", run: async () => "rejected" },
-], { id: "manual-review", run: async () => "needs-review" }); // optional default
+const result = await ctx.switch(
+  "route-order",
+  order.status,
+  [
+    {
+      id: "approve",
+      match: (s) => s === "paid",
+      run: async (s) => {
+        /* ... */ return "approved";
+      },
+    },
+    {
+      id: "reject",
+      match: (s) => s === "declined",
+      run: async () => "rejected",
+    },
+  ],
+  { id: "manual-review", run: async () => "needs-review" },
+); // optional default
 ```
 
 - First arg is the step id (must be unique, like `ctx.step`).
@@ -119,7 +139,11 @@ const shape = await describeFlow(async (ctx) => {
   await ctx.step("validate", async () => ({ ok: true }));
   await ctx.switch("route", "premium", [
     { id: "free", match: (v) => v === "free", run: async () => "free" },
-    { id: "premium", match: (v) => v === "premium", run: async () => "premium" },
+    {
+      id: "premium",
+      match: (v) => v === "premium",
+      run: async () => "premium",
+    },
   ]);
   await ctx.sleep(60_000, { stepId: "cooldown" });
   await ctx.note("Flow complete");

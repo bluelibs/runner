@@ -24,6 +24,7 @@ import { Store } from "./Store";
 import { IDependentNode } from "./utils/findCircularDependencies";
 import { IErrorHelper } from "../types/error";
 import type { IAsyncContext } from "../types/asyncContext";
+import { HookDependencyState } from "../types/storeTypes";
 
 type StoringMode = "normal" | "override";
 export class StoreRegistry {
@@ -99,6 +100,7 @@ export class StoreRegistry {
     this.hooks.set(hook.id, {
       hook,
       computedDependencies: {},
+      dependencyState: HookDependencyState.Pending,
     });
   }
 

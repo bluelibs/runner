@@ -19,7 +19,9 @@ describe("Store", () => {
   let onUnhandledError: OnUnhandledError;
 
   beforeEach(() => {
-    ({ eventManager, logger, onUnhandledError, store } = createTestFixture());
+    const fixture = createTestFixture();
+    ({ eventManager, logger, onUnhandledError, store } = fixture);
+    store.setTaskRunner(fixture.createTaskRunner());
   });
 
   it("should expose some helpers", () => {
@@ -41,7 +43,8 @@ describe("Store", () => {
 
     store.initializeStore(rootResource, {});
 
-    expect(store.root.resource).toBe(rootResource);
+    expect(store.root.resource.id).toBe(rootResource.id);
+    expect(store.root.resource).not.toBe(rootResource);
     expect(store.resources.has("root")).toBe(true);
   });
 

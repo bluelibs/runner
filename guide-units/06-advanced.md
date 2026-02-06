@@ -103,9 +103,9 @@ Ever sent a `Date` over JSON and gotten `"2024-01-15T..."` back as a string? Run
 ### Two modes
 
 ```typescript
-import { getDefaultSerializer } from "@bluelibs/runner";
+import { Serializer } from "@bluelibs/runner";
 
-const serializer = getDefaultSerializer();
+const serializer = new Serializer();
 
 // Tree mode - like JSON.stringify, but type-aware
 const json = serializer.stringify({ when: new Date(), pattern: /hello/i });
