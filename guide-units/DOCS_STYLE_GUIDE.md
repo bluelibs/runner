@@ -291,6 +291,33 @@ The main README follows this high-level structure:
 
 ## Code Example Standards
 
+### Namespacing & IDs
+
+Component ids are part of Runner’s public surface: they show up in logs, tooling, overrides, tunnels/clients, and docs.
+In documentation, always use stable, readable ids and keep them consistent across examples.
+
+**Recommended id namespaces:**
+
+| Type                | Recommended Prefix / Pattern                              | Example |
+| ------------------- | ---------------------------------------------------------- | ------- |
+| Root app resource   | `app`                                                      | `r.resource("app")` |
+| Resources           | `{domain}.{noun}` (use subdomains to group)                | `app.db`, `app.http.server`, `app.services.user` |
+| Tasks               | `{domain}.tasks.{verb}`                                    | `app.tasks.createUser` |
+| Events              | `{domain}.events.{pastTenseVerbOrNoun}`                    | `app.events.userRegistered` |
+| Hooks               | `{domain}.hooks.{name}` (use `onX` for event-reactive hooks) | `app.hooks.onUserRegistered` |
+| Task middleware     | `{domain}.middleware.task.{name}`                          | `app.middleware.task.audit` |
+| Resource middleware | `{domain}.middleware.resource.{name}`                      | `app.middleware.resource.retry` |
+| Errors              | `{domain}.errors.{PascalCaseName}`                         | `app.errors.InvalidCredentials` |
+| Async Context       | `{domain}.ctx.{noun}`                                      | `app.ctx.request` |
+| Tags                | `{domain}.tags.{noun}`                                     | `app.tags.httpRoute` |
+
+**Rules of thumb:**
+
+- Keep ids dot-separated and human-readable (no random suffixes).
+- Prefer **`camelCase`** for the final segment of tasks/events/hooks/middleware/ctx/tags; prefer **`PascalCase`** for errors.
+- Prefer **verbs** for task ids, **past-tense** for event ids, and **nouns** for resources/ctx/tags.
+- Keep the entire example in the same domain (default: `app.*`) unless the point is cross-domain composition.
+
 ### Variable Naming
 
 **Always use these standard names:**

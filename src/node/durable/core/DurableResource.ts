@@ -8,6 +8,8 @@ import type {
   ScheduleOptions,
 } from "./interfaces/service";
 import type { Schedule } from "./types";
+import type { IDurableStore } from "./interfaces/store";
+import { DurableOperator } from "./DurableOperator";
 
 export interface DurableResourceConfig {
   worker?: boolean;
@@ -36,6 +38,12 @@ export interface IDurableResource extends Pick<
    * Throws if called outside of a durable execution.
    */
   use(): IDurableContext;
+
+  /**
+   * Store-backed operator API to inspect and administrate executions
+   * (steps/audit/history and operator actions where supported by the store).
+   */
+  readonly operator: DurableOperator;
 }
 
 /**
@@ -46,10 +54,25 @@ export interface IDurableResource extends Pick<
  * `durable.use()` to access the per-execution durable context.
  */
 export class DurableResource implements IDurableResource {
+  private operatorInstance: DurableOperator | null = null;
+
   constructor(
     public readonly service: IDurableService,
     private readonly contextStorage: AsyncLocalStorage<IDurableContext>,
+    private readonly store?: IDurableStore,
   ) {}
+
+  get operator(): DurableOperator {
+    if (!this.store) {
+      throw new Error(
+        "Durable operator API is not available: store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) or construct a DurableOperator(store) directly.",
+      );
+    }
+    if (!this.operatorInstance) {
+      this.operatorInstance = new DurableOperator(this.store);
+    }
+    return this.operatorInstance;
+  }
 
   use(): IDurableContext {
     const ctx = this.contextStorage.getStore();

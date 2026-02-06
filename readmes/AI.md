@@ -305,10 +305,6 @@ import { r } from "@bluelibs/runner";
 
 const requestContext = r
   .asyncContext<{ requestId: string }>("app.ctx.request")
-  // below is optional
-  .configSchema(z.object({ ... }))
-  .serialize((data) => JSON.stringify(data))
-  .parse((raw) => JSON.parse(raw))
   .build();
 
 // Provide and read within an async boundary
@@ -317,11 +313,14 @@ await requestContext.provide({ requestId: "abc" }, async () => {
 });
 
 // Require middleware for tasks that need the context
-r.task('task').middleware([requestContext.require()]);
+r.task("task").middleware([requestContext.require(["requestId"])]);
 ```
 
+- Recommended ids: `{domain}.ctx.{noun}` (for example: `app.ctx.request`).
+- `.configSchema(schema)` (optional) validates the value passed to `provide(...)`.
 - If you don't provide `serialize`/`parse`, Runner uses its default serializer to preserve Dates, RegExp, etc.
 - You can also inject async contexts as dependencies; the injected value is the helper itself. Contexts must be registered to be used.
+- Optional dependencies: `dependencies({ requestContext: requestContext.optional() })` injects `undefined` if the context isn’t registered.
 
 ```ts
 const whoAmI = r
@@ -355,9 +354,20 @@ try {
 }
 ```
 
+- Recommended ids: `{domain}.errors.{PascalCaseName}` (for example: `app.errors.InvalidCredentials`).
 - The thrown `Error` has `name = id` and `message = format(data)`. If you don’t provide `.format(...)`, the default is `JSON.stringify(data)`.
 - `message` is not required in the data unless your custom formatter expects it.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
+- For HTTP/tunnel clients, pass an `errorRegistry` to rethrow remote errors as your typed helpers:
+  ```ts
+  import { createHttpClient, getDefaultSerializer } from "@bluelibs/runner";
+
+  const client = createHttpClient({
+    baseUrl: "http://localhost:3000/__runner",
+    serializer: getDefaultSerializer(),
+    errorRegistry: new Map([[AppError.id, AppError]]),
+  });
+  ```
 
 ## Overrides
 
@@ -512,7 +522,7 @@ test("sends welcome email", async () => {
 ## Metadata & Namespacing
 
 - Meta: `.meta({ title, description })` on tasks/resources/events/middleware for human-friendly docs and tooling; extend meta types via module augmentation when needed.
-- Namespacing: keep ids consistent with `domain.resources.name`, `domain.tasks.name`, `domain.events.name`, `domain.hooks.on-name`, and `domain.middleware.{task|resource}.name`.
+- Namespacing: keep ids consistent with `domain.resources.name`, `domain.tasks.name`, `domain.events.name`, `domain.hooks.on-name`, `domain.middleware.{task|resource}.name`, `domain.errors.ErrorName`, and `domain.ctx.name`.
 - Runtime validation: `inputSchema`, `resultSchema`, `payloadSchema`, `configSchema` share the same `parse(input)` contract; config validation happens on `.with()`, task/event validation happens on call/emit.
 
 ## Advanced Patterns

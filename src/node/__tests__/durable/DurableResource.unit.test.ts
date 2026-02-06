@@ -43,6 +43,33 @@ function createMockService(
 }
 
 describe("durable: DurableResource", () => {
+  it("operator throws when store is not available", () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const durable = new DurableResource(service, storage);
+
+    expect(() => durable.operator).toThrow(
+      "Durable operator API is not available: store was not provided to DurableResource.",
+    );
+  });
+
+  it("operator is store-backed and cached", async () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const store = new MemoryStore();
+    const durable = new DurableResource(service, storage, store);
+
+    const op1 = durable.operator;
+    const op2 = durable.operator;
+    expect(op1).toBe(op2);
+
+    await expect(op1.getExecutionDetail("e1")).resolves.toEqual({
+      execution: null,
+      steps: [],
+      audit: [],
+    });
+  });
+
   it("throws when use() is called outside a durable execution", () => {
     const service = createMockService();
     const storage = new AsyncLocalStorage<IDurableContext>();

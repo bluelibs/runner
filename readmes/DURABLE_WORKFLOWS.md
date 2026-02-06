@@ -42,24 +42,14 @@ The recommended integration is a **single durable resource** that:
 ```ts
 import { event, r, run } from "@bluelibs/runner";
 import {
-  durableResource,
-  MemoryStore,
-  MemoryQueue,
-  MemoryEventBus,
+  memoryDurableResource,
 } from "@bluelibs/runner/node";
 
 const Approved = event<{ approvedBy: string }>({ id: "app.signals.approved" });
 
-const store = new MemoryStore();
-const queue = new MemoryQueue();
-const eventBus = new MemoryEventBus();
-
-const durable = durableResource.fork("app.durable");
+const durable = memoryDurableResource.fork("app.durable");
 
 const durableRegistration = durable.with({
-  store,
-  queue,
-  eventBus,
   worker: true, // single-process dev/tests
 });
 
@@ -107,34 +97,27 @@ For production, swap the in-memory backends:
 
 ```ts
 import {
-  durableResource,
-  RabbitMQQueue,
-  RedisEventBus,
-  RedisStore,
+  redisDurableResource,
 } from "@bluelibs/runner/node";
 
-const store = new RedisStore({ redis: process.env.REDIS_URL });
-const queue = new RabbitMQQueue({ url: process.env.RABBITMQ_URL });
-const eventBus = new RedisEventBus({ redis: process.env.REDIS_URL });
-
-const durable = durableResource.fork("app.durable");
+const durable = redisDurableResource.fork("app.durable");
 
 const durableRegistration = durable.with({
-  store,
-  queue,
-  eventBus,
+  redis: { url: process.env.REDIS_URL! },
+  queue: { url: process.env.RABBITMQ_URL! },
   worker: true,
 });
 ```
 
+Isolation note: `redisDurableResource` derives Redis key prefixes, pub/sub prefixes, and default queue names from the durable resource id (the value you pass to `.fork("...")`). Use different ids (or set `{ namespace }`) to run multiple durable "apps" safely on the same Redis/RabbitMQ.
+
 API nodes typically **disable polling and the embedded worker**:
 
 ```ts
-const durable = durableResource.fork("app.durable");
+const durable = redisDurableResource.fork("app.durable");
 const durableRegistration = durable.with({
-  store,
-  queue,
-  eventBus,
+  redis: { url: process.env.REDIS_URL! },
+  queue: { url: process.env.RABBITMQ_URL! },
   worker: false,
   polling: { enabled: false },
 });
@@ -158,11 +141,10 @@ The core idea is: **the store is the source of truth**, and the queue distribute
 **API node config (no background work):**
 
 ```ts
-const durable = durableResource.fork("app.durable");
+const durable = redisDurableResource.fork("app.durable");
 const durableRegistration = durable.with({
-  store,
-  queue,
-  eventBus,
+  redis: { url: process.env.REDIS_URL! },
+  queue: { url: process.env.RABBITMQ_URL! },
   worker: false,
   polling: { enabled: false },
 });
@@ -171,11 +153,10 @@ const durableRegistration = durable.with({
 **Worker node config (does background work):**
 
 ```ts
-const durable = durableResource.fork("app.durable");
+const durable = redisDurableResource.fork("app.durable");
 const durableRegistration = durable.with({
-  store,
-  queue,
-  eventBus,
+  redis: { url: process.env.REDIS_URL! },
+  queue: { url: process.env.RABBITMQ_URL! },
   worker: true,
   polling: { enabled: true, interval: 1000 },
 });
@@ -205,6 +186,34 @@ const executionId = await d.startExecution(approveOrder, {
   orderId: "order-123",
 });
 // store executionId on the order record so your webhook can resume the workflow later
+```
+
+### Reading status later (no double-sync required)
+
+If you store the `executionId` in your main database (eg. `orders.durable_execution_id`), you can fetch live workflow status on-demand from the durable store.
+This avoids mirroring every durable transition into Postgres.
+
+```ts
+import { DurableOperator, RedisStore } from "@bluelibs/runner/node";
+
+const namespace = "app.durable"; // usually the same id you passed to `.fork("...")`
+const prefix = `durable:${encodeURIComponent(namespace)}:`; // must match your durable config
+
+// Read-only store client for status lookups (same redis url + prefix)
+const store = new RedisStore({ redis: process.env.REDIS_URL!, prefix });
+
+// Minimal: just the execution row (status/result/error)
+const execution = await store.getExecution(executionId);
+
+// Rich: execution + steps + audit (dashboard-like view)
+const operator = new DurableOperator(store);
+const detail = await operator.getExecutionDetail(executionId);
+```
+
+If you already have the durable resource instance (dependency injection), you can use the operator API directly:
+
+```ts
+const detail = await durable.operator.getExecutionDetail(executionId);
 ```
 
 ### 3) Resume from the outside (webhook / callback)
@@ -274,8 +283,60 @@ Three pluggable interfaces allow swapping backends without changing application 
 
 ### 1. IDurableStore - State Storage
 
-Persists execution state, step results, timers, and schedules.  
-See the **Store Interface** section below for the full TypeScript contract that all store implementations must follow.
+The **Store** is the absolute source of truth. It persists execution state, step results, timers, and schedules. If it's not in the store, it didn't happen.
+
+```typescript
+// interfaces/IDurableStore.ts
+
+export interface IDurableStore {
+  // Executions (The primary workflow records)
+  saveExecution(execution: Execution): Promise<void>;
+  getExecution(id: string): Promise<Execution | null>;
+  updateExecution(id: string, updates: Partial<Execution>): Promise<void>;
+  listIncompleteExecutions(): Promise<Execution[]>;
+
+  // Steps (Memoized results for exactly-once-ish semantics)
+  getStepResult(executionId: string, stepId: string): Promise<StepResult | null>;
+  saveStepResult(result: StepResult): Promise<void>;
+
+  // Timers (Drives sleep(), signal timeouts, and cron)
+  createTimer(timer: Timer): Promise<void>;
+  getReadyTimers(now?: Date): Promise<Timer[]>;
+  markTimerFired(timerId: string): Promise<void>;
+  deleteTimer(timerId: string): Promise<void>;
+
+  // Schedules (Cron and Interval orchestration)
+  createSchedule(schedule: Schedule): Promise<void>;
+  getSchedule(id: string): Promise<Schedule | null>;
+  updateSchedule(id: string, updates: Partial<Schedule>): Promise<void>;
+  deleteSchedule(id: string): Promise<void>;
+  listSchedules(): Promise<Schedule[]>;
+  listActiveSchedules(): Promise<Schedule[]>;
+
+  // Optional: Distributed Timer Coordination
+  claimTimer?(timerId: string, workerId: string, ttlMs: number): Promise<boolean>;
+
+  // Optional: Idempotency (dedupe startExecution calls)
+  getExecutionIdByIdempotencyKey?(params: { taskId: string, idempotencyKey: string }): Promise<string | null>;
+  setExecutionIdByIdempotencyKey?(params: { taskId: string, idempotencyKey: string, executionId: string }): Promise<boolean>;
+
+  // Optional: Dashboard & Operator API
+  listExecutions?(options?: ListExecutionsOptions): Promise<Execution[]>;
+  listStepResults?(executionId: string): Promise<StepResult[]>;
+  retryRollback?(executionId: string): Promise<void>;
+  skipStep?(executionId: string, stepId: string): Promise<void>;
+  forceFail?(executionId: string, error: { message: string, stack?: string }): Promise<void>;
+  editStepResult?(executionId: string, stepId: string, newResult: unknown): Promise<void>;
+
+  // Lifecycle
+  init?(): Promise<void>;
+  dispose?(): Promise<void>;
+
+  // Optional: Locking (if store handles its own concurrency)
+  acquireLock?(resource: string, ttlMs: number): Promise<string | null>;
+  releaseLock?(resource: string, lockId: string): Promise<void>;
+}
+```
 
 **Implementations:**
 
@@ -367,6 +428,66 @@ export interface IDurableQueue {
 
 - `MemoryQueue` - Dev/test, no persistence
 - `RabbitMQQueue` - Production default, quorum queues for durability
+
+---
+
+## Adapting to Your Flow: Custom Backends
+
+One of Runner’s core philosophies is **zero lock-in**. If your team uses Postgres for state or Kafka for queues, you shouldn't have to change your workflow logic to use them.
+
+### Implementing a Custom Store
+
+To implement a custom store (e.g., for SQL), you only need to satisfy the `IDurableStore` interface. The engine is designed to be "dumb" and trust the store for all persistence.
+
+**Minimum Viable Store (Pseudo-SQL):**
+
+```typescript
+class MySqlStore implements IDurableStore {
+  async saveExecution(e: Execution) {
+    await db.query("INSERT INTO durable_executions ...", [e.id, serialize(e)]);
+  }
+
+  async getExecution(id: string) {
+    const row = await db.query("SELECT data FROM durable_executions WHERE id = ?", [id]);
+    return row ? deserialize(row.data) : null;
+  }
+
+  // ... implement other methods by mapping to your DB tables
+}
+```
+
+> [!TIP]
+> Look at [MemoryStore.ts](file:///c:/Users/diaco/Projects/runner/src/node/durable/store/MemoryStore.ts) for a clean reference of how to manage in-memory state, or [RedisStore.ts](file:///c:/Users/diaco/Projects/runner/src/node/durable/store/RedisStore.ts) for a production-grade implementation using Lua scripts for atomicity.
+
+### Implementing a Custom Queue
+
+If you want to use a different message broker (SQS, Kafka, Redis Streams), implement `IDurableQueue`.
+
+**Key Responsibilities:**
+- **`enqueue`**: Push a message (task execution hint) to the broker.
+- **`consume`**: Register a listener that calls the provided handler when a message arrives.
+- **`ack` / `nack`**: Handle message confirmation/failure.
+
+```typescript
+class SqsQueue implements IDurableQueue {
+  async enqueue(msg) {
+    const res = await sqs.sendMessage({ QueueUrl, MessageBody: JSON.stringify(msg) });
+    return res.MessageId;
+  }
+
+  async consume(handler) {
+    // Polling loop or subscription
+    const msgs = await sqs.receiveMessage({ QueueUrl });
+    for (const m of msgs) {
+      await handler(JSON.parse(m.Body));
+      await this.ack(m.ReceiptHandle);
+    }
+  }
+}
+```
+
+> [!IMPORTANT]
+> A queue in Durable Workflows is just a **hint**. If a message is lost, the `polling` loop in `DurableService` acts as a safety net to find and resume stuck executions. However, a reliable queue (like RabbitMQ or SQS) is critical for low-latency distribution and high throughput.
 
 ---
 
@@ -1015,54 +1136,7 @@ export interface DurableContextState {
 
 ---
 
-### IDurableStore - State Storage
-
-```typescript
-export interface ListExecutionsOptions {
-  status?: ExecutionStatus[];
-  taskId?: string;
-  limit?: number;
-  offset?: number;
-}
-
-export interface IDurableStore {
-  // Executions
-  saveExecution(execution: Execution): Promise<void>;
-  getExecution(id: string): Promise<Execution | null>;
-  updateExecution(id: string, updates: Partial<Execution>): Promise<void>;
-  listIncompleteExecutions(): Promise<Execution[]>;
-
-  // Steps
-  getStepResult(
-    executionId: string,
-    stepId: string,
-  ): Promise<StepResult | null>;
-  saveStepResult(result: StepResult): Promise<void>;
-
-  // Timers
-  createTimer(timer: Timer): Promise<void>;
-  getReadyTimers(now?: Date): Promise<Timer[]>;
-  markTimerFired(timerId: string): Promise<void>;
-  deleteTimer(timerId: string): Promise<void>;
-
-  // Schedules
-  createSchedule(schedule: Schedule): Promise<void>;
-  getSchedule(id: string): Promise<Schedule | null>;
-  updateSchedule(id: string, updates: Partial<Schedule>): Promise<void>;
-  deleteSchedule(id: string): Promise<void>;
-  listSchedules(): Promise<Schedule[]>;
-  listActiveSchedules(): Promise<Schedule[]>;
-
-  // Dashboard & Operator
-  listExecutions?(options?: ListExecutionsOptions): Promise<Execution[]>;
-  listStepResults?(executionId: string): Promise<StepResult[]>;
-  listStuckExecutions?(): Promise<Execution[]>;
-
-  // Lifecycle
-  init?(): Promise<void>;
-  dispose?(): Promise<void>;
-}
-```
+**Note on Interfaces**: The full technical contracts for `IDurableStore`, `IEventBus`, and `IDurableQueue` are documented in the [Abstract Interfaces](#abstract-interfaces) section.
 
 ---
 

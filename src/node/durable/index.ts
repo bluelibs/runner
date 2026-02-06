@@ -17,6 +17,11 @@ export {
 } from "./core/DurableService";
 export { durableResource } from "./core/resource";
 export type { DurableResourceRuntimeConfig } from "./core/resource";
+export { createRunnerDurableRuntime } from "./core/createRunnerDurableRuntime";
+export type {
+  RunnerDurableDeps,
+  RunnerDurableRuntimeConfig,
+} from "./core/createRunnerDurableRuntime";
 export { DurableContext } from "./core/DurableContext";
 export { StepBuilder } from "./core/StepBuilder";
 export { DurableOperator } from "./core/DurableOperator";
@@ -38,3 +43,8 @@ export { RedisEventBus } from "./bus/RedisEventBus";
 
 export { createDurableTestSetup, waitUntil } from "./test-utils";
 export type { DurableTestSetup, DurableTestSetupOptions } from "./test-utils";
+
+export { memoryDurableResource } from "./resources/memoryDurableResource";
+export type { MemoryDurableResourceConfig } from "./resources/memoryDurableResource";
+export { redisDurableResource } from "./resources/redisDurableResource";
+export type { RedisDurableResourceConfig } from "./resources/redisDurableResource";

@@ -32,7 +32,25 @@ Rule: side effects belong inside `ctx.step(...)`.
    - look up `executionId`
    - `await service.signal(executionId, SignalDef, payload)`
 
+For user-facing status pages, you can read the durable execution on-demand from the durable store using `executionId` (no need to mirror into Postgres): `store.getExecution(executionId)` (or `new DurableOperator(store).getExecutionDetail(executionId)` when supported).
+
 Signals buffer if no waiter exists yet; the next `waitForSignal(...)` consumes the payload.
+
+Recommended wiring (config-only resources):
+
+```ts
+import { memoryDurableResource, redisDurableResource } from "@bluelibs/runner/node";
+
+// dev/tests
+const durable = memoryDurableResource.fork("app.durable").with({ worker: true });
+
+// production (Redis + optional RabbitMQ queue)
+const durableProd = redisDurableResource.fork("app.durable").with({
+  redis: { url: process.env.REDIS_URL! },
+  queue: { url: process.env.RABBITMQ_URL! },
+  worker: true,
+});
+```
 
 `waitForSignal()` return shapes:
 
