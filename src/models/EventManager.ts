@@ -143,12 +143,12 @@ export class EventManager {
         data,
         timestamp: new Date(),
         source,
-        meta: eventDefinition.meta || {},
+        meta: { ...(eventDefinition.meta || {}) },
         stopPropagation: () => {
           propagationStopped = true;
         },
         isPropagationStopped: () => propagationStopped,
-        tags: eventDefinition.tags,
+        tags: [...eventDefinition.tags],
       };
 
       // Create the base emission function
@@ -186,10 +186,14 @@ export class EventManager {
         if (!interceptor) {
           return baseEmit(eventToEmit);
         }
-        return interceptor(
-          (nextEvent) => runInterceptor(index + 1, nextEvent),
-          eventToEmit,
-        );
+        return interceptor((nextEvent) => {
+          this.assertPropagationMethodsUnchanged(
+            eventDefinition.id,
+            eventToEmit,
+            nextEvent,
+          );
+          return runInterceptor(index + 1, nextEvent);
+        }, eventToEmit);
       };
 
       await runInterceptor(0, event as IEventEmission<any>);
@@ -330,22 +334,32 @@ export class EventManager {
     }
   }
 
-  /**
-   * Clears all listeners and interceptors.
-   * Call this to release references and free memory.
-   */
-  clear(): void {
-    this.registry.clear();
-    this.emissionInterceptors.length = 0;
-    this.hookInterceptors.length = 0;
+  private assertPropagationMethodsUnchanged(
+    eventId: string,
+    currentEvent: IEventEmission<any>,
+    nextEvent: IEventEmission<any>,
+  ): void {
+    if (
+      nextEvent.stopPropagation !== currentEvent.stopPropagation ||
+      nextEvent.isPropagationStopped !== currentEvent.isPropagationStopped
+    ) {
+      validationError.throw({
+        subject: "Event interceptor",
+        id: eventId,
+        originalError: new Error(
+          "Interceptors cannot override stopPropagation/isPropagationStopped",
+        ),
+      });
+    }
   }
 
   /**
    * Disposes the EventManager, releasing all listeners and interceptors.
-   * Alias for clear() following the IResource disposal pattern.
    */
   dispose(): void {
-    this.clear();
+    this.registry.clear();
+    this.emissionInterceptors.length = 0;
+    this.hookInterceptors.length = 0;
   }
 
   /**
