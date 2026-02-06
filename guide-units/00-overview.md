@@ -1,7 +1,3 @@
-← [Back to main README](../README.md)
-
----
-
 ## Why Runner?
 
 Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
@@ -97,9 +93,8 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Why Runner?](#why-runner) - The problem we solve
 - [What Is This Thing?](#what-is-this-thing)
 - [When to Use Runner](#when-to-use-runner) - Is it right for you?
-- [Show me the wiring](#show-me-the-wiring) - See it in action
+- [Show Me the Wiring](#show-me-the-wiring) - See it in action
 - [How Does It Compare?](#how-does-it-compare) - vs. other frameworks
-- [Performance at a Glance](#performance-at-a-glance) - Real benchmarks
 - [What's in the Box?](#whats-in-the-box) - Feature matrix
 - [Your First 5 Minutes](#your-first-5-minutes) - **Start here!**
 - [Quick Start](#quick-start) - Full Express example
@@ -168,7 +163,6 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 
 - [Real-World Example](#real-world-example-the-complete-package) - Complete application
 - [Internal Services](#internal-services) - Framework internals
-- [Performance](#performance) - Benchmarks and metrics
 - [Why Choose BlueLibs Runner?](#why-choose-bluelibs-runner) - Framework comparison
 - [Migration Path](#the-migration-path) - Adopting Runner
 - [Troubleshooting](#troubleshooting) - Common issues and solutions

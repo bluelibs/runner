@@ -268,10 +268,6 @@ interface ILog {
 }
 ```
 
-### Catch Logs
-
-> **runtime:** "'Debugging is enjoyable.' So is dental surgery, apparently. You produce a novella of logs; I paginate, color, stringify, and mail it to three observability planets. Please don’t `logger.debug` inside a `for` loop. My IO has feelings."
-
 ## Debug Resource
 
 _Debug hooks for tasks, resources, and events without shipping extra overhead when disabled_

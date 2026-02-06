@@ -11,7 +11,8 @@ const expensiveTask = r
     globals.middleware.task.cache.with({
       // lru-cache options by default
       ttl: 60 * 1000, // Cache for 1 minute
-      keyBuilder: (taskId, input: { userId: string }) => `${taskId}-${input.userId}`, // optional key builder
+      keyBuilder: (taskId, input: { userId: string }) =>
+        `${taskId}-${input.userId}`, // optional key builder
     }),
   ])
   .run(async (input: { userId: string }) => {
@@ -59,8 +60,8 @@ import { r, globals } from "@bluelibs/runner";
 
 const cacheJournalKeys = globals.middleware.task.cache.journalKeys;
 
-const cacheLogger = r
-  .middleware.task("app.middleware.cacheLogger")
+const cacheLogger = r.middleware
+  .task("app.middleware.cacheLogger")
   .run(async ({ task, next, journal }) => {
     const result = await next(task.input);
     const wasHit = journal.get(cacheJournalKeys.hit);
@@ -92,7 +93,9 @@ const limitMiddleware = globals.middleware.task.concurrency.with({ limit: 5 });
 
 // Option 2: Explicit semaphore for fine-grained coordination
 const dbSemaphore = new Semaphore(10);
-const dbLimit = globals.middleware.task.concurrency.with({ semaphore: dbSemaphore });
+const dbLimit = globals.middleware.task.concurrency.with({
+  semaphore: dbSemaphore,
+});
 
 const heavyTask = r
   .task("app.tasks.heavy")
@@ -104,6 +107,7 @@ const heavyTask = r
 ```
 
 **Key benefits:**
+
 - **Resource protection**: Prevent connection pool exhaustion.
 - **Queueing**: Automatically queues excess requests instead of failing.
 - **Timeouts**: Supports waiting timeouts and cancellation via `AbortSignal`.
@@ -123,9 +127,9 @@ const resilientTask = r
   .task("app.tasks.remoteCall")
   .middleware([
     globals.middleware.task.circuitBreaker.with({
-      failureThreshold: 5,   // Trip after 5 failures
-      resetTimeout: 30000,  // Stay open for 30 seconds
-    })
+      failureThreshold: 5, // Trip after 5 failures
+      resetTimeout: 30000, // Stay open for 30 seconds
+    }),
   ])
   .run(async () => {
     return await callExternalService();
@@ -134,6 +138,7 @@ const resilientTask = r
 ```
 
 **How it works:**
+
 1. **CLOSED**: Everything is normal. Requests flow through.
 2. **OPEN**: Threshold reached. All requests throw `CircuitBreakerOpenError` immediately.
 3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
@@ -196,6 +201,7 @@ const logTask = r
 ```
 
 **When to use:**
+
 - **Debounce**: Search-as-you-type, autosave, window resize events.
 - **Throttle**: Scroll listeners, telemetry pings, high-frequency webhooks.
 
@@ -218,8 +224,8 @@ const getPrice = r
       fallback: async (input, error) => {
         console.warn(`Price fetch failed: ${error.message}. Using default.`);
         return 9.99;
-      }
-    })
+      },
+    }),
   ])
   .run(async () => {
     return await fetchPriceFromAPI();
@@ -234,8 +240,8 @@ import { r, globals } from "@bluelibs/runner";
 
 const fallbackJournalKeys = globals.middleware.task.fallback.journalKeys;
 
-const fallbackLogger = r
-  .middleware.task("app.middleware.fallbackLogger")
+const fallbackLogger = r.middleware
+  .task("app.middleware.fallbackLogger")
   .run(async ({ task, next, journal }) => {
     const result = await next(task.input);
     const wasActivated = journal.get(fallbackJournalKeys.active);
@@ -273,8 +279,8 @@ const sensitiveTask = r
   .middleware([
     globals.middleware.task.rateLimit.with({
       windowMs: 60 * 1000, // 1 minute window
-      max: 5,              // Max 5 attempts per window
-    })
+      max: 5, // Max 5 attempts per window
+    }),
   ])
   .run(async (credentials) => {
     // Assuming auth service is available
@@ -284,6 +290,7 @@ const sensitiveTask = r
 ```
 
 **Key features:**
+
 - **Fixed-window strategy**: Simple, predictable request counting.
 - **Isolation**: Limits are tracked per task definition.
 - **Error handling**: Throws `RateLimitError` when the limit is exceeded.
@@ -297,185 +304,22 @@ const rateLimitJournalKeys = globals.middleware.task.rateLimit.journalKeys;
 
 const myTask = r
   .task("app.tasks.rateLimited")
-  .middleware([globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 10 })])
+  .middleware([
+    globals.middleware.task.rateLimit.with({ windowMs: 60000, max: 10 }),
+  ])
   .run(async (_input, _deps, context) => {
     const remaining = context?.journal.get(rateLimitJournalKeys.remaining); // number
     const resetTime = context?.journal.get(rateLimitJournalKeys.resetTime); // timestamp (ms)
     const limit = context?.journal.get(rateLimitJournalKeys.limit); // number
-    console.log(`${remaining}/${limit} requests remaining, resets at ${new Date(resetTime)}`);
+    console.log(
+      `${remaining}/${limit} requests remaining, resets at ${new Date(resetTime)}`,
+    );
     return "result";
   })
   .build();
 ```
 
 > **runtime:** "Rate limiting: counting beans so you don't have to. You've had five turns this minute; come back when the clock says so."
-
----
-
-## Performance
-
-Runner keeps the DI and middleware stack lightweight. The numbers below come from the project's benchmark suite; rerun them on your hardware to size real-world overhead.
-
-Test it yourself by cloning @bluelibs/runner and running `npm run benchmark`.
-
-You may see negative middlewareOverheadMs. This is a measurement artifact at micro-benchmark scale: JIT warm‑up, CPU scheduling, GC timing, and cache effects can make the "with middleware" run appear slightly faster than the baseline. Interpret small negatives as ≈ 0 overhead.
-
-### Performance Benchmarks
-
-Here are real performance metrics from our comprehensive benchmark suite on an M1 Max.
-
-**Core Operations**
-
-┌───────────────────────────────────────┬────────────────────────┐
-│ Operation                             │ Throughput             │
-├───────────────────────────────────────┼────────────────────────┤
-│ Basic task execution                  │ ~2.2M tasks/sec        │
-│ Task execution with 5 middlewares     │ ~244,000 tasks/sec     │
-│ Resource initialization               │ ~59,700 resources/sec  │
-│ Event emission and handling           │ ~245,861 events/sec    │
-│ Dependency resolution (10-level chain)│ ~8,400 chains/sec      │
-└───────────────────────────────────────┴────────────────────────┘
-
-#### Overhead Analysis
-
-- **Middleware overhead**: ~0.0013ms for all 5, ~0.00026ms per middleware (virtually zero)
-- **Memory overhead**: ~3.3MB for 100 components (resources + tasks)
-- **Cache middleware speedup**: 3.65x faster with cache hits
-
-#### Real-World Performance
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-// Assuming: auth, logging, metrics middleware and database are defined elsewhere
-// This executes in ~0.005ms on average
-const userTask = r
-  .task("user.create")
-  .middleware([auth, logging, metrics])
-  .run(async (input) => database.users.create(input))
-  .build();
-
-// 1000 executions = ~5ms total time
-for (let i = 0; i < 1000; i++) {
-  await userTask(mockUserData);
-}
-```
-
-### Performance Guidelines
-
-#### When Performance Matters Most
-
-**Use tasks for:**
-
-- High-level business operations that benefit from observability
-- Operations that need middleware (auth, caching, retry)
-- Functions called from multiple places
-
-**Use regular functions or service resources for:**
-
-- Simple utilities and helpers
-- Performance-critical hot paths (< 1ms requirement)
-- Single-use internal logic
-
-#### Optimizing Your App
-
-**Middleware Ordering**: Place faster middleware first
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const task = r
-  .task("app.performance.example")
-  .middleware([
-    fastAuthCheck, // ~0.1ms
-    slowRateLimiting, // ~2ms
-    expensiveLogging, // ~5ms
-  ])
-  .run(async () => null)
-  .build();
-```
-
-**Resource Reuse**: Resources are singletons—perfect for expensive setup
-
-```typescript
-import { r } from "@bluelibs/runner";
-
-const database = r
-  .resource("app.performance.db")
-  .init(async () => {
-    // Expensive connection setup happens once
-    const connection = await createDbConnection();
-    return connection;
-  })
-  .build();
-```
-
-**Cache Strategically**: Use built-in caching for expensive operations
-
-```typescript
-import { r, globals } from "@bluelibs/runner";
-
-const expensiveTask = r
-  .task("app.performance.expensive")
-  .middleware([globals.middleware.task.cache.with({ ttl: 60000 })])
-  .run(async (input) => {
-    // This expensive computation is cached
-    return performExpensiveCalculation(input);
-  })
-  .build();
-```
-
-#### Memory Considerations
-
-- **Lightweight**: Each component adds ~33KB to memory footprint
-- **Automatic cleanup**: Resources dispose properly to prevent leaks
-- **Event efficiency**: Hook subscriptions are automatically managed
-
-#### Benchmarking Your Code
-
-Run the framework's benchmark suite:
-
-```bash
-# Comprehensive benchmarks
-npm run test -- --testMatch="**/comprehensive-benchmark.test.ts"
-
-# Benchmark.js based tests
-npm run benchmark
-```
-
-Create your own performance tests:
-
-```typescript
-const iterations = 1000;
-const start = performance.now();
-
-for (let i = 0; i < iterations; i++) {
-  await yourTask(testData);
-}
-
-const duration = performance.now() - start;
-console.log(`${iterations} tasks in ${duration.toFixed(2)}ms`);
-console.log(`Average: ${(duration / iterations).toFixed(4)}ms per task`);
-console.log(
-  `Throughput: ${Math.round(iterations / (duration / 1000))} tasks/sec`,
-);
-```
-
-### Performance vs Features Trade-off
-
-BlueLibs Runner achieves high performance while providing enterprise features:
-
-| Feature              | Overhead             | Benefit                       |
-| -------------------- | -------------------- | ----------------------------- |
-| Dependency Injection | ~0.001ms             | Type safety, testability      |
-| Event System         | ~0.013ms             | Loose coupling, observability |
-| Middleware Chain     | ~0.0003ms/middleware | Cross-cutting concerns        |
-| Resource Management  | One-time init        | Singleton pattern, lifecycle  |
-| Built-in Caching     | Variable speedup     | Automatic optimization        |
-
-**Bottom line**: On the measured hardware, the overhead for a task pipeline stayed around ~0.005ms while still enabling DI, middleware, and events. Validate against your own workload to set budgets.
-
-> **runtime:** "'Millions of tasks per second.' Fantastic—on your lava‑warmed laptop, in a vacuum, with the wind at your back. Add I/O, entropy, and one feral user and watch those numbers molt. I’ll still be here, caffeinated and inevitable."
 
 ---
 
@@ -523,7 +367,8 @@ const myTask = r
   .run(async (_input, _deps, context) => {
     const attempt = context?.journal.get(retryJournalKeys.attempt); // 0-indexed attempt number
     const lastError = context?.journal.get(retryJournalKeys.lastError); // Error from previous attempt, if any
-    if ((attempt ?? 0) > 0) console.log(`Retry attempt ${attempt} after: ${lastError?.message}`);
+    if ((attempt ?? 0) > 0)
+      console.log(`Retry attempt ${attempt} after: ${lastError?.message}`);
     return "result";
   })
   .build();
@@ -588,6 +433,7 @@ Best practices:
 - Consider network conditions when setting API call timeouts
 
 > **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It’s not me, it’s your molasses‑flavored endpoint. I just blow the whistle."
+
 ## Concurrency Utilities
 
 Runner includes two battle-tested primitives for managing concurrent operations:

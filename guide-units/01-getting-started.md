@@ -27,7 +27,7 @@ BlueLibs Runner is a TypeScript-first dependency injection framework built aroun
 
 ---
 
-## Show me the wiring
+## Show Me the Wiring
 
 **Here's what explicit wiring looks like in practice:**
 
@@ -68,22 +68,22 @@ test("getUser works", async () => {
 
 ### Quick Comparison Matrix
 
-| Feature                    | Runner                 | NestJS              | InversifyJS    | TypeDI         | tsyringe       |
-| -------------------------- | ---------------------- | ------------------- | -------------- | -------------- | -------------- |
-| **Programming Paradigm**   | Functional-first       | OOP/Class-based     | OOP/Class-based | OOP/Class-based | OOP/Class-based |
-| **DI Mechanism**           | Explicit, no reflection | Decorators, reflection | Decorators, reflection | Decorators, reflection | Decorators, reflection |
-| **Type Safety**            | Full inference         | Manual typing       | Manual typing  | Manual typing  | Manual typing  |
-| **Learning Curve**         | Gentle                 | Steep               | Moderate       | Moderate       | Moderate       |
-| **Size**                   | Medium (tree-shakable) | Large               | Small          | Small          | Small          |
-| **Built-in Features**      | Broad toolkit          | Full framework      | DI only        | DI only        | DI only        |
-| **Test Isolation**         | Easy                   | Moderate            | Moderate       | Moderate       | Moderate       |
-| **Framework Lock-in**      | Minimal                | High                | Low            | Low            | Low            |
-| **Async Context**          | Yes (Node-only)        | Partial (ecosystem) | No             | No             | No             |
-| **Middleware**             | Composable, type-safe  | Guard/Interceptor system | N/A        | N/A            | N/A            |
-| **Events**                 | First-class support    | EventEmitter2       | N/A            | N/A            | N/A            |
-| **Durable Workflows**      | Yes (Node-only)        | No (external libs)  | No             | No             | No             |
-| **HTTP Tunnels**           | Yes (Node-only)        | No                  | No             | No             | No             |
-| **Ecosystem**              | Growing                | Mature, extensive   | Moderate       | Moderate       | Small          |
+| Feature                  | Runner                  | NestJS                   | InversifyJS            | TypeDI                 | tsyringe               |
+| ------------------------ | ----------------------- | ------------------------ | ---------------------- | ---------------------- | ---------------------- |
+| **Programming Paradigm** | Functional-first        | OOP/Class-based          | OOP/Class-based        | OOP/Class-based        | OOP/Class-based        |
+| **DI Mechanism**         | Explicit, no reflection | Decorators, reflection   | Decorators, reflection | Decorators, reflection | Decorators, reflection |
+| **Type Safety**          | Full inference          | Manual typing            | Manual typing          | Manual typing          | Manual typing          |
+| **Learning Curve**       | Gentle                  | Steep                    | Moderate               | Moderate               | Moderate               |
+| **Size**                 | Medium (tree-shakable)  | Large                    | Small                  | Small                  | Small                  |
+| **Built-in Features**    | Broad toolkit           | Full framework           | DI only                | DI only                | DI only                |
+| **Test Isolation**       | Easy                    | Moderate                 | Moderate               | Moderate               | Moderate               |
+| **Framework Lock-in**    | Minimal                 | High                     | Low                    | Low                    | Low                    |
+| **Async Context**        | Yes (Node-only)         | Partial (ecosystem)      | No                     | No                     | No                     |
+| **Middleware**           | Composable, type-safe   | Guard/Interceptor system | N/A                    | N/A                    | N/A                    |
+| **Events**               | First-class support     | EventEmitter2            | N/A                    | N/A                    | N/A                    |
+| **Durable Workflows**    | Yes (Node-only)         | No (external libs)       | No                     | No                     | No                     |
+| **HTTP Tunnels**         | Yes (Node-only)         | No                       | No                     | No                     | No                     |
+| **Ecosystem**            | Growing                 | Mature, extensive        | Moderate               | Moderate               | Small                  |
 
 > **Note:** This table is intentionally qualitative. Runner’s durable workflows and HTTP tunnels are Node-only features (via `@bluelibs/runner/node`).
 
@@ -99,7 +99,7 @@ Let's compare implementing the same user service in both frameworks:
 
 ```typescript
 // user.dto.ts
-import { IsString, IsEmail } from 'class-validator';
+import { IsString, IsEmail } from "class-validator";
 
 export class CreateUserDto {
   @IsString()
@@ -110,9 +110,9 @@ export class CreateUserDto {
 }
 
 // user.service.ts
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Injectable } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
 
 @Injectable()
 export class UserService {
@@ -152,15 +152,17 @@ import { z } from "zod";
 
 const createUser = r
   .task("users.create")
-  .dependencies({ 
-    db, 
-    mailer, 
-    logger: globals.resources.logger 
+  .dependencies({
+    db,
+    mailer,
+    logger: globals.resources.logger,
   })
-  .inputSchema(z.object({ 
-    name: z.string(), 
-    email: z.string().email() 
-  }))
+  .inputSchema(
+    z.object({
+      name: z.string(),
+      email: z.string().email(),
+    }),
+  )
   .run(async (input, { db, mailer, logger }) => {
     const user = await db.users.insert(input);
     await mailer.sendWelcome(user.email);
@@ -170,9 +172,7 @@ const createUser = r
   .build();
 
 // Register in app
-const app = r.resource("app")
-  .register([db, mailer, createUser])
-  .build();
+const app = r.resource("app").register([db, mailer, createUser]).build();
 ```
 
 </td>
@@ -181,8 +181,9 @@ const app = r.resource("app")
 <td>
 
 **Testing in NestJS:**
+
 ```typescript
-describe('UserService', () => {
+describe("UserService", () => {
   let service: UserService;
   let userRepo: MockType<Repository<User>>;
 
@@ -190,21 +191,19 @@ describe('UserService', () => {
     const module = await Test.createTestingModule({
       providers: [
         UserService,
-        { provide: getRepositoryToken(User), 
-          useFactory: mockRepository },
-        { provide: MailerService, 
-          useValue: mockMailer },
-        { provide: LoggerService, 
-          useValue: mockLogger },
+        { provide: getRepositoryToken(User), useFactory: mockRepository },
+        { provide: MailerService, useValue: mockMailer },
+        { provide: LoggerService, useValue: mockLogger },
       ],
     }).compile();
 
     service = module.get(UserService);
   });
 
-  it('creates user', async () => {
+  it("creates user", async () => {
     const result = await service.createUser({
-      name: 'Ada', email: 'ada@test.com'
+      name: "Ada",
+      email: "ada@test.com",
     });
     expect(result.id).toBeDefined();
   });
@@ -215,17 +214,18 @@ describe('UserService', () => {
 <td valign="top">
 
 **Testing in Runner:**
+
 ```typescript
-describe('createUser', () => {
-  it('creates user', async () => {
+describe("createUser", () => {
+  it("creates user", async () => {
     // Direct call - no app runtime needed
     const result = await createUser.run(
-      { name: 'Ada', email: 'ada@test.com' },
-      { 
-        db: mockDb, 
-        mailer: mockMailer, 
-        logger: mockLogger 
-      }
+      { name: "Ada", email: "ada@test.com" },
+      {
+        db: mockDb,
+        mailer: mockMailer,
+        logger: mockLogger,
+      },
     );
     expect(result.id).toBeDefined();
   });
@@ -236,8 +236,8 @@ describe('createUser', () => {
 </tr>
 </table>
 
-
 **Choose Runner when:**
+
 - You need **built-in reliability primitives** – circuit breakers, rate limiting, retry with backoff, caching, timeouts, fallbacks, and concurrency control are first-class, not bolted on
 - You want **full type inference** – dependencies, middleware configs, and task I/O are inferred, not manually typed
 - **Testing speed matters** – call `task.run(input, { mockDep })` directly; no framework test modules, no DI container setup
@@ -247,57 +247,24 @@ describe('createUser', () => {
 - You're integrating into an existing project gradually – no "rewrite in our style" requirement
 
 **Choose a DI container (InversifyJS / TypeDI / tsyringe) when:**
+
 - You only need class-based dependency injection
 - You're happy to bring your own middleware, events, lifecycle management, and reliability patterns
 - You want minimal surface area and will build the rest yourself
 
 **The concrete differences:**
 
-| Capability              | NestJS                                           | Runner                                              |
-| ----------------------- | ------------------------------------------------ | --------------------------------------------------- |
-| **Reliability**         | Add external libs (e.g., `nestjs-retry`)         | Built-in: retry, circuit breaker, rate limit, cache, timeout, fallback |
-| **Type Safety**         | Manual typing for DI tokens                      | Full inference from `.dependencies()` and `.with()` |
-| **Test Setup**          | `Test.createTestingModule()` boilerplate         | `task.run(input, mocks)` – one line                 |
-| **Scope**               | Web framework (HTTP-centric)                     | Application toolkit (any TypeScript app)            |
-| **Middleware**          | Guards, interceptors, pipes (HTTP lifecycle)     | Composable, type-safe, with journal introspection   |
-| **Concurrency**         | Bring your own                                   | Built-in Semaphore and Queue primitives             |
-| **Bundle Size**         | Large (full framework)                           | Tree-shakable (import what you use)                 |
+| Capability      | NestJS                                       | Runner                                                                 |
+| --------------- | -------------------------------------------- | ---------------------------------------------------------------------- |
+| **Reliability** | Add external libs (e.g., `nestjs-retry`)     | Built-in: retry, circuit breaker, rate limit, cache, timeout, fallback |
+| **Type Safety** | Manual typing for DI tokens                  | Full inference from `.dependencies()` and `.with()`                    |
+| **Test Setup**  | `Test.createTestingModule()` boilerplate     | `task.run(input, mocks)` – one line                                    |
+| **Scope**       | Web framework (HTTP-centric)                 | Application toolkit (any TypeScript app)                               |
+| **Middleware**  | Guards, interceptors, pipes (HTTP lifecycle) | Composable, type-safe, with journal introspection                      |
+| **Concurrency** | Bring your own                               | Built-in Semaphore and Queue primitives                                |
+| **Bundle Size** | Large (full framework)                       | Tree-shakable (import what you use)                                    |
 
 > **TL;DR:** NestJS gives you a structured web framework with conventions. Runner gives you a composable toolkit with **production-ready reliability built in** – you bring the structure that fits your app.
-
-
----
-
-## Performance at a glance
-
-Measured numbers on an M1 Max; use them as a feel for overhead, not a guarantee for your hardware:
-
-```
-┌─────────────────────────────────────┬───────────────┬──────────────┐
-│ Operation                           │ Ops/Second    │ Time/Op      │
-├─────────────────────────────────────┼───────────────┼──────────────┤
-│ Basic task execution                │ 2.2M          │ ~0.0005 ms   │
-│ Task with 5 middlewares             │ 244K          │ ~0.004 ms    │
-│ Resource initialization             │ 59.7K         │ ~0.017 ms    │
-│ Event emission + handling           │ 245K          │ ~0.004 ms    │
-│ 10-level dependency chain           │ 8.4K          │ ~0.12 ms     │
-│ Cache middleware (hit)              │ 8M            │ ~0.000125 ms │
-└─────────────────────────────────────┴───────────────┴──────────────┘
-
-Overhead Analysis:
-├─ Middleware overhead:  ~0.00026 ms per middleware (virtually zero)
-├─ DI overhead:         ~0.001 ms (compile-time safety pays off)
-├─ Memory footprint:    ~3.3 MB per 100 components
-└─ Cache speedup:       3.65x faster (automatic optimization)
-```
-
-**What this means for you:**
-
-- **Instant feedback** - Tests run in milliseconds, not seconds
-- **Lower cloud costs** - Handle more requests with fewer resources
-- **Production ready** - Battle-tested at scale (see [Performance](#performance) for details)
-
-> **Note:** Benchmarks will vary by hardware. These numbers show relative overhead, not absolute performance targets.
 
 ---
 
@@ -390,6 +357,7 @@ Runner comes with **everything you need** to build production apps:
 **No extra packages needed.** It's all included and works together seamlessly.
 
 ---
+
 ## Your First 5 Minutes
 
 **New to Runner?** Here's the absolute minimum you need to know:
@@ -570,6 +538,7 @@ Runner auto-detects the platform (Node.js, browser, edge) and adapts behavior at
 - [HTTP Tunnels](./readmes/TUNNELS.md) - Remote task execution
 
 ---
+
 ## Learning Guide
 
 These patterns will save you hours of debugging. Each one addresses a real mistake we've seen developers make when learning Runner.
@@ -739,6 +708,7 @@ Now that you know the patterns, here's your learning path:
 > **runtime:** "Six patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
 ---
+
 ## Quick Wins: Copy-Paste Solutions
 
 Production-ready patterns you can use today. Each example is complete and tested.
