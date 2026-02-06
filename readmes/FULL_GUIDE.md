@@ -152,8 +152,8 @@ const onUserCreatedHook = r
   .on(userCreated)
   .dependencies({ mailer, logger })
   .run(async (event, { mailer, logger }) => {
-    await mailer.sendWelcome(event.userId);
-    logger.info("Welcome email sent", { userId: event.userId });
+    await mailer.sendWelcome(event.data.userId);
+    logger.info("Welcome email sent", { userId: event.data.userId });
   })
   .build();
 
@@ -1389,6 +1389,36 @@ const app = r
   .build();
 ```
 
+#### Dynamic Registration
+
+`.register()` accepts a function, not just arrays. Use this when the set of registered components depends on the resource config.
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const auditLog = r
+  .resource("app.audit")
+  .init(async () => ({ write: (message: string) => console.log(message) }))
+  .build();
+
+const feature = r
+  .resource<{ enableAudit: boolean }>("app.feature")
+  .register((config) => (config.enableAudit ? [auditLog] : []))
+  .init(async () => ({ enabled: true }))
+  .build();
+
+const app = r
+  .resource("app")
+  .register([feature.with({ enableAudit: true })])
+  .build();
+```
+
+Use function-based registration when:
+
+- Registered components depend on `config`
+- You want one reusable resource template with environment-specific wiring
+- You need to avoid registering optional components in every environment
+
 #### Resource Forking
 
 Use `.fork(newId)` to create multiple instances of a "template" resource with different identities. If the base resource registers other items, use `.fork(newId, { register: "drop" })` to avoid re-registering them, or `.fork(newId, { register: "deep", reId })` to deep-fork **registered resources** (resource tree) with new ids. This is perfect when you need several instances of the same resource type (e.g., multiple database connections, multiple mailers):
@@ -2324,6 +2354,7 @@ await result.dispose();
 | `runTask(...)`          | Run a task by reference or string id                               |
 | `emitEvent(...)`        | Emit events                                                        |
 | `getResourceValue(...)` | Read a resource's value                                            |
+| `getResourceConfig(...)` | Read a resource's resolved config                                  |
 | `logger`                | Logger instance                                                    |
 | `store`                 | Runtime store with registered resources, tasks, middleware, events |
 | `dispose()`             | Gracefully dispose resources and unhook process listeners          |
@@ -3628,16 +3659,22 @@ const userTask = r
 
     // With error information
     try {
-      const user = await createUser(input);
+      // Replace with your own persistence/service call
+      const user = await Promise.resolve({
+        id: "user-1",
+        email: input.email,
+      });
       logger.info("User created successfully", {
         data: { userId: user.id, email: user.email },
       });
     } catch (error) {
+      const safeError =
+        error instanceof Error ? error : new Error(String(error));
+
       logger.error("User creation failed", {
-        error,
+        error: safeError,
         data: {
           attemptedEmail: input.email,
-          validationErrors: error.validationErrors,
         },
       });
     }
@@ -3992,18 +4029,19 @@ This section covers patterns for building resilient, distributed applications. U
 
 ## Optional Dependencies
 
-What happens when your analytics service is down? Or your email provider is rate-limiting? With optional dependencies, your app keeps running instead of crashing.
+Optional dependencies are for components that may not be registered in a given runtime (for example local dev, feature-flagged modules, or partial deployments).
+They are not a substitute for retry/circuit-breaker logic when a registered dependency fails at runtime.
 
 ### The problem
 
 ```typescript
-// Without optional dependencies - if analytics is down, the whole task fails
+// Without optional dependencies - if analytics is not registered, startup fails
 const registerUser = r
-  .task("users.register")
+  .task("app.tasks.registerUser")
   .dependencies({ database, analytics }) // analytics must be available!
   .run(async (input, { database, analytics }) => {
     const user = await database.create(input);
-    await analytics.track("user.registered"); // Crashes if analytics is down
+    await analytics.track("user.registered");
     return user;
   })
   .build();
@@ -4015,7 +4053,7 @@ const registerUser = r
 import { r } from "@bluelibs/runner";
 
 const registerUser = r
-  .task("users.register")
+  .task("app.tasks.registerUser")
   .dependencies({
     database, // Required - task fails if missing
     analytics: analyticsService.optional(), // Optional - undefined if missing
@@ -4034,6 +4072,9 @@ const registerUser = r
   .build();
 ```
 
+Important: `optional()` handles dependency absence (`undefined`) at wiring time.
+If a registered dependency throws, handle that with retry/fallback/circuit-breaker patterns.
+
 ### When to use optional dependencies
 
 | Use Case                  | Example                                            |
@@ -4046,21 +4087,25 @@ const registerUser = r
 
 ### Dynamic dependencies
 
-For more control, you can compute dependencies based on config:
+For components that accept config (like resources), you can compute dependencies from `.with(...)` config:
 
 ```typescript
-const myTask = r
-  .task("app.tasks.flexible")
+const analyticsAdapter = r
+  .resource<{ enableAnalytics?: boolean }>("app.services.analyticsAdapter")
   .dependencies((config) => ({
     database,
-    // Only include analytics in production
-    ...(config.enableAnalytics ? { analytics } : {}),
+    // Only include analytics when enabled in resource config
+    ...(config?.enableAnalytics ? { analytics } : {}),
   }))
-  .run(async (input, deps) => {
-    // deps.analytics may or may not exist
-  })
+  .init(async (_config, deps) => ({
+    async record(eventName: string) {
+      await deps.analytics?.track(eventName);
+    },
+  }))
   .build();
 ```
+
+For tasks, prefer static dependencies (required or `.optional()`) and branch at execution time.
 
 ---
 
@@ -4418,21 +4463,20 @@ const overriddenMiddleware = override(originalMiddleware, {
 
 The override builder starts from the base definition and applies fluent mutations (dependencies/tags/middleware append by default; use `{ override: true }` to replace). Hook overrides keep the same `.on` target.
 
-Overrides can let you expand dependencies and even call your overriden resource (like a classical OOP extends):
+Overrides can also extend behavior while reusing the base implementation:
 
 ```ts
-const testEmailer = override(productionEmailer, {
-  dependencies: {
-    ...productionEmailer,
-    // expand it, make some deps optional, or just remove some dependencies
-  }
-  init: async (_, deps) => {
-    const base = productionEmailer.init(_, deps);
-
+const extendingEmailer = override(productionEmailer, {
+  init: async (config, deps) => {
+    const base = await productionEmailer.init(config, deps);
     return {
       ...base,
-      // expand it, modify methods of base.
-    }
+      async send(to: string, body: string) {
+        // Add behavior, then delegate to base
+        console.log("Audit email send", { to });
+        return base.send(to, body);
+      },
+    };
   },
 });
 ```
@@ -5733,7 +5777,8 @@ describe("User registration flow", () => {
       .build();
 
     // Run the full app
-    const { runTask, getResourceValue, dispose } = await run(testApp);
+    const { runTask, getResourceValue, getResourceConfig, dispose } =
+      await run(testApp);
 
     try {
       // Execute through the full pipeline (middleware runs!)
@@ -5747,6 +5792,7 @@ describe("User registration flow", () => {
 
       const mailer = await getResourceValue(mockMailer);
       expect(mailer.send).toHaveBeenCalled();
+      expect(getResourceConfig(mockMailer)).toEqual({});
     } finally {
       await dispose();
     }

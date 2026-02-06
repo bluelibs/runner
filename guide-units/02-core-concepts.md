@@ -156,6 +156,36 @@ const app = r
   .build();
 ```
 
+#### Dynamic Registration
+
+`.register()` accepts a function, not just arrays. Use this when the set of registered components depends on the resource config.
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const auditLog = r
+  .resource("app.audit")
+  .init(async () => ({ write: (message: string) => console.log(message) }))
+  .build();
+
+const feature = r
+  .resource<{ enableAudit: boolean }>("app.feature")
+  .register((config) => (config.enableAudit ? [auditLog] : []))
+  .init(async () => ({ enabled: true }))
+  .build();
+
+const app = r
+  .resource("app")
+  .register([feature.with({ enableAudit: true })])
+  .build();
+```
+
+Use function-based registration when:
+
+- Registered components depend on `config`
+- You want one reusable resource template with environment-specific wiring
+- You need to avoid registering optional components in every environment
+
 #### Resource Forking
 
 Use `.fork(newId)` to create multiple instances of a "template" resource with different identities. If the base resource registers other items, use `.fork(newId, { register: "drop" })` to avoid re-registering them, or `.fork(newId, { register: "deep", reId })` to deep-fork **registered resources** (resource tree) with new ids. This is perfect when you need several instances of the same resource type (e.g., multiple database connections, multiple mailers):

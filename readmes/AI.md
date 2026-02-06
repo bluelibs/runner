@@ -77,7 +77,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 
 - `r.*.with(config)` produces a configured copy of the definition.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` creates a new resource with a different id but the same definition. Use `register: "drop"` to avoid re-registering nested items, or `register: "deep"` to deep-fork **registered resources** with new ids via `reId` (other registerables are not kept; resource dependencies pointing to deep-forked resources are remapped to those forks). Export forked resources to use as dependencies.
-- `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns helpers such as `runTask`, `getResourceValue`, and `dispose`.
+- `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns helpers such as `runTask`, `getResourceValue`, `getResourceConfig`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
 
 ### Resource Forking
@@ -305,6 +305,11 @@ import { r } from "@bluelibs/runner";
 
 const requestContext = r
   .asyncContext<{ requestId: string }>("app.ctx.request")
+  // below is optional
+  .configSchema(z.object({ ... }))
+  // for tunnels mostly
+  .serialize((data) => JSON.stringify(data))
+  .parse((raw) => JSON.parse(raw))
   .build();
 
 // Provide and read within an async boundary
@@ -392,7 +397,7 @@ const app = r
 
 ## Runtime & Lifecycle
 
-- `run(root, options)` wires dependencies, initializes resources, and returns helpers: `runTask`, `emitEvent`, `getResourceValue`, `store`, `logger`, and `dispose`.
+- `run(root, options)` wires dependencies, initializes resources, and returns helpers: `runTask`, `emitEvent`, `getResourceValue`, `getResourceConfig`, `store`, `logger`, and `dispose`.
 - Run options highlights: `debug` (normal/verbose or custom config), `logs` (printThreshold/strategy/buffer), `errorBoundary` and `onUnhandledError`, `shutdownHooks`, `dryRun`.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime (runs inside middleware; won’t run if middleware short-circuits).
 - Shutdown hooks: install signal listeners to call `dispose` (default in `run`).
@@ -493,7 +498,7 @@ Note on files: The “File” you see in tunnels is not a custom serializer type
 
 ## Testing
 
-- In unit tests, prefer running a minimal root resource and call `await run(root)` to get `runTask`, `emitEvent`, or `getResourceValue`.
+- In unit tests, prefer running a minimal root resource and call `await run(root)` to get `runTask`, `emitEvent`, `getResourceValue`, or `getResourceConfig`.
 - The Jest runner has a watchdog (`JEST_WATCHDOG_MS`, default 10 minutes) to avoid "hung test run" situations.
 - For durable workflow tests, use `createDurableTestSetup` from `@bluelibs/runner/node` for fast, in-memory execution.
 

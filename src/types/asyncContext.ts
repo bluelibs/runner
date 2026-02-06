@@ -29,12 +29,9 @@ export interface IAsyncContext<T> {
    */
   provide<R>(value: T, fn: () => Promise<R> | R): Promise<R> | R;
   /**
-   * Generates a middleware that guarantees the context exists (and optionally
-   * enforces that certain keys are present on the context object).
+   * Generates a middleware that guarantees the context exists.
    */
-  require<K extends keyof T = never>(
-    keys?: K[],
-  ): ITaskMiddlewareConfigured<{ context: IAsyncContext<T> }>;
+  require(): ITaskMiddlewareConfigured<{ context: IAsyncContext<T> }>;
 
   serialize(data: T): string;
   parse(data: string): T;

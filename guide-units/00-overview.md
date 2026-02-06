@@ -50,8 +50,8 @@ const onUserCreatedHook = r
   .on(userCreated)
   .dependencies({ mailer, logger })
   .run(async (event, { mailer, logger }) => {
-    await mailer.sendWelcome(event.userId);
-    logger.info("Welcome email sent", { userId: event.userId });
+    await mailer.sendWelcome(event.data.userId);
+    logger.info("Welcome email sent", { userId: event.data.userId });
   })
   .build();
 

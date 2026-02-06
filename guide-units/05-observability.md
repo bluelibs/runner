@@ -89,16 +89,22 @@ const userTask = r
 
     // With error information
     try {
-      const user = await createUser(input);
+      // Replace with your own persistence/service call
+      const user = await Promise.resolve({
+        id: "user-1",
+        email: input.email,
+      });
       logger.info("User created successfully", {
         data: { userId: user.id, email: user.email },
       });
     } catch (error) {
+      const safeError =
+        error instanceof Error ? error : new Error(String(error));
+
       logger.error("User creation failed", {
-        error,
+        error: safeError,
         data: {
           attemptedEmail: input.email,
-          validationErrors: error.validationErrors,
         },
       });
     }

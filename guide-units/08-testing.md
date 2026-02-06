@@ -279,7 +279,8 @@ describe("User registration flow", () => {
       .build();
 
     // Run the full app
-    const { runTask, getResourceValue, dispose } = await run(testApp);
+    const { runTask, getResourceValue, getResourceConfig, dispose } =
+      await run(testApp);
 
     try {
       // Execute through the full pipeline (middleware runs!)
@@ -293,6 +294,7 @@ describe("User registration flow", () => {
 
       const mailer = await getResourceValue(mockMailer);
       expect(mailer.send).toHaveBeenCalled();
+      expect(getResourceConfig(mockMailer)).toEqual({});
     } finally {
       await dispose();
     }
