@@ -6,7 +6,6 @@ import {
 } from "../../define";
 import { symbolFilePath } from "../../defs";
 import { getCallerFile } from "../../tools/getCallerFile";
-import * as platformModule from "../../platform";
 
 describe("getCallerFile", () => {
   afterEach(() => {
@@ -55,9 +54,22 @@ describe("getCallerFile", () => {
   });
 
   it("returns 'unknown' in non-node environments (mocked)", async () => {
-    jest.spyOn(platformModule, "isNode").mockReturnValue(false);
-    const out = getCallerFile();
-    expect(out).toBe("unknown");
+    // Mock process.versions to simulate non-node environment
+    // getCallerFile uses inline node detection: typeof process.versions.node === "string"
+    const originalVersions = process.versions;
+    Object.defineProperty(process, "versions", {
+      value: { ...originalVersions, node: undefined },
+      configurable: true,
+    });
+    try {
+      const out = getCallerFile();
+      expect(out).toBe("unknown");
+    } finally {
+      Object.defineProperty(process, "versions", {
+        value: originalVersions,
+        configurable: true,
+      });
+    }
   });
 
   // No need for further branch gymnastics; non-node path is constant

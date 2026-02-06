@@ -60,6 +60,7 @@ describe("error fluent builder + defineError", () => {
   it("makeErrorBuilder builds via defineError", () => {
     const helper = makeErrorBuilder({
       id: "tests.errors.fluent",
+      filePath: "tests/builders.utils.test.ts",
       serialize: (d: { message: string }) => JSON.stringify(d),
       parse: (s: string) => JSON.parse(s),
       dataSchema: { parse: (v: unknown) => v as { message: string } },

@@ -39,14 +39,17 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
     },
 
     build() {
-      return defineError<TData>({
-        id: state.id,
-        serialize: state.serialize,
-        parse: state.parse,
-        dataSchema: state.dataSchema,
-        format: state.format,
-        meta: state.meta,
-      });
+      return defineError<TData>(
+        {
+          id: state.id,
+          serialize: state.serialize,
+          parse: state.parse,
+          dataSchema: state.dataSchema,
+          format: state.format,
+          meta: state.meta,
+        },
+        state.filePath,
+      );
     },
   };
 

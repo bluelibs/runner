@@ -41,7 +41,7 @@ export function makeAsyncContextBuilder<T>(
         configSchema: state.configSchema,
         meta: state.meta,
       };
-      return defineAsyncContext<T>(def);
+      return defineAsyncContext<T>(def, state.filePath);
     },
   };
 

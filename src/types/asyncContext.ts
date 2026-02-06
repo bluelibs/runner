@@ -1,4 +1,4 @@
-import { symbolAsyncContext } from "./symbols";
+import { symbolAsyncContext, symbolFilePath } from "./symbols";
 import { ITaskMiddlewareConfigured } from "./taskMiddleware";
 import type { IValidationSchema, IOptionalDependency } from "./utilities";
 import type { IAsyncContextMeta } from "./meta";
@@ -37,4 +37,6 @@ export interface IAsyncContext<T> {
   parse(data: string): T;
   /** Return an optional dependency wrapper for this context */
   optional(): IOptionalDependency<IAsyncContext<T>>;
+  /** File path where this async context was defined */
+  [symbolFilePath]: string;
 }

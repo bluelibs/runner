@@ -10,6 +10,7 @@ import type {
  */
 export type BuilderState<TData extends DefaultErrorType> = Readonly<{
   id: string;
+  filePath: string;
   format?: (data: TData) => string;
   serialize?: (data: TData) => string;
   parse?: (raw: string) => TData;

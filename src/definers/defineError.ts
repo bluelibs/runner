@@ -4,7 +4,12 @@ import {
   IErrorHelper,
   IErrorDefinitionFinal,
 } from "../types/error";
-import { symbolError, symbolOptionalDependency } from "../types/symbols";
+import {
+  symbolError,
+  symbolFilePath,
+  symbolOptionalDependency,
+} from "../types/symbols";
+import { getCallerFile } from "../tools/getCallerFile";
 
 class RunnerError<
   TData extends DefaultErrorType = DefaultErrorType,
@@ -25,7 +30,13 @@ export class ErrorHelper<
   TData extends DefaultErrorType = DefaultErrorType,
 > implements IErrorHelper<TData> {
   [symbolError] = true as const;
-  constructor(private readonly definition: IErrorDefinitionFinal<TData>) {}
+  [symbolFilePath]: string;
+  constructor(
+    private readonly definition: IErrorDefinitionFinal<TData>,
+    filePath: string,
+  ) {
+    this[symbolFilePath] = filePath;
+  }
   get id(): string {
     return this.definition.id;
   }
@@ -55,10 +66,16 @@ export class ErrorHelper<
  */
 export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
   definition: IErrorDefinition<TData>,
+  filePath?: string,
 ) {
   if (!definition.format) {
     definition.format = (data) => `${JSON.stringify(data)}`;
   }
 
-  return new ErrorHelper<TData>(definition as IErrorDefinitionFinal<TData>);
+  const resolvedFilePath = filePath ?? getCallerFile();
+
+  return new ErrorHelper<TData>(
+    definition as IErrorDefinitionFinal<TData>,
+    resolvedFilePath,
+  );
 }

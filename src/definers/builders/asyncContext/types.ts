@@ -6,6 +6,7 @@ import type { IAsyncContextMeta, IValidationSchema } from "../../../defs";
  */
 export type BuilderState<T> = Readonly<{
   id: string;
+  filePath: string;
   serialize?: (data: T) => string;
   parse?: (raw: string) => T;
   configSchema?: IValidationSchema<T>;
