@@ -258,7 +258,7 @@ export class TaskMiddlewareComposer {
    */
   private wrapWithInterceptors<TInput, TOutput extends Promise<any>>(
     middlewareRunner: (input: TInput, journal: ExecutionJournal) => TOutput,
-    interceptors: Array<any>,
+    interceptors: readonly any[],
     task: ITask<TInput, TOutput, any>,
   ): (input: TInput, journal: ExecutionJournal) => TOutput {
     if (interceptors.length === 0) {

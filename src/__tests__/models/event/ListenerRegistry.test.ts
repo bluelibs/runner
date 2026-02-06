@@ -79,4 +79,20 @@ describe("ListenerRegistry", () => {
     const listener = createListener({ handler: jest.fn(), order: 0 });
     expect(listener.isGlobal).toBe(false);
   });
+
+  it("mergeSortedListeners keeps remaining listeners from either side", () => {
+    const registry = new (ListenerRegistry as any)();
+    const l1 = { priority: 10, handler: () => {} };
+    const l2 = { priority: 5, handler: () => {} };
+
+    const mergedLeft = registry.mergeSortedListeners([l1, l2], []);
+    expect(mergedLeft).toHaveLength(2);
+    expect(mergedLeft[0]).toBe(l1);
+    expect(mergedLeft[1]).toBe(l2);
+
+    const mergedRight = registry.mergeSortedListeners([], [l1, l2]);
+    expect(mergedRight).toHaveLength(2);
+    expect(mergedRight[0]).toBe(l1);
+    expect(mergedRight[1]).toBe(l2);
+  });
 });

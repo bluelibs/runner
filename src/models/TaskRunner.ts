@@ -25,7 +25,7 @@ export class TaskRunner {
   private readonly middlewareManager: MiddlewareManager;
 
   /**
-   * Begins the execution of an task. These are registered tasks and all sanity checks have been performed at this stage to ensure consistency of the object.
+   * Begins the execution of a task. These are registered tasks and all sanity checks have been performed at this stage to ensure consistency of the object.
    * This function can throw only if any of the event listeners or run function throws
    * @param task the task to be run
    * @param input the input to be passed to the task

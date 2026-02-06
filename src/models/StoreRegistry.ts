@@ -174,10 +174,14 @@ export class StoreRegistry {
   }
 
   computeRegistrationDeeply<_C>(element: IResource<_C>, config?: _C) {
-    const items =
+    let items =
       typeof element.register === "function"
         ? element.register(config as _C)
         : element.register;
+
+    if (!items) {
+      items = [];
+    }
 
     element.register = items;
 

@@ -30,11 +30,14 @@ describe("run", () => {
 
     expect(run1.value).toBe("Resource Value");
     expect(run2.value).toBe("Resource Value");
+
+    await run1.dispose();
+    await run2.dispose();
   });
 
   // Tasks
   describe("Tasks", () => {
-    it("should be able to register an task and execute it", async () => {
+    it("should be able to register a task and execute it", async () => {
       const testTask = defineTask({
         id: "test.task",
         run: async () => "Hello, World!",
@@ -50,10 +53,11 @@ describe("run", () => {
         },
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
     });
 
-    it("should be able to register an task with dependencies and execute it", async () => {
+    it("should be able to register a task with dependencies and execute it", async () => {
       const dependencyTask = defineTask({
         id: "dependency.task",
         run: async (_, { _d1 }) => {
@@ -80,10 +84,11 @@ describe("run", () => {
         },
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
     });
 
-    it("should be able to register an task that emits an event", async () => {
+    it("should be able to register a task that emits an event", async () => {
       const testEvent = defineEvent<{ message: string }>({ id: "test.event" });
       const eventHandler = jest.fn();
 
@@ -112,7 +117,8 @@ describe("run", () => {
         },
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
     });
 
     it("should compute dependencies() for events for a task", async () => {
@@ -146,7 +152,8 @@ describe("run", () => {
         },
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
     });
 
     // Lifecycle-specific task events removed
@@ -158,9 +165,6 @@ describe("run", () => {
           throw new Error("Task failed");
         },
       });
-
-      const _value = false;
-      const _errorHook = jest.fn();
 
       const app = defineResource({
         id: "app",
@@ -174,7 +178,7 @@ describe("run", () => {
       await expect(run(app)).rejects.toThrow("Task failed");
     });
 
-    it("should be able to register an task with middleware and execute it, ensuring the middleware is called in the correct order", async () => {
+    it("should be able to register a task with middleware and execute it, ensuring the middleware is called in the correct order", async () => {
       const order: string[] = [];
 
       const testMiddleware1 = defineTaskMiddleware({
@@ -215,7 +219,8 @@ describe("run", () => {
         },
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
 
       expect(order).toEqual([
         "middleware1 before",
@@ -226,7 +231,7 @@ describe("run", () => {
       ]);
     });
 
-    it("should be able to register an task with middleware that has dependencies and execute it", async () => {
+    it("should be able to register a task with middleware that has dependencies and execute it", async () => {
       const dependencyResource = defineResource({
         id: "dependency.resource",
         init: async () => "Dependency Value",
@@ -257,7 +262,8 @@ describe("run", () => {
         },
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
     });
 
     it("should throw an error if there's an infinite dependency", async () => {
@@ -319,7 +325,8 @@ describe("run", () => {
         },
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
       expect(eventHandler).toHaveBeenCalled();
     });
 
@@ -346,7 +353,8 @@ describe("run", () => {
         },
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
       expect(eventHandler).toHaveBeenCalled();
     });
 
@@ -382,7 +390,8 @@ describe("run", () => {
         },
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
       expect(eventHandler).toHaveBeenCalled();
       expect(matched).toBe(true);
     });
@@ -405,7 +414,8 @@ describe("run", () => {
         },
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
     });
 
     it("should be able to register a resource with dependencies and get its value", async () => {
@@ -430,7 +440,8 @@ describe("run", () => {
         },
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
     });
 
     it("should allow to register a resource without an init task", async () => {
@@ -450,7 +461,8 @@ describe("run", () => {
         register: [testResource],
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
       expect(mockFn).toHaveBeenCalled();
     });
 
@@ -474,7 +486,8 @@ describe("run", () => {
         },
       });
 
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
     });
 
     it("should allow suppression of an error (no longer supported)", async () => {
@@ -523,7 +536,8 @@ describe("run", () => {
       register: () => [testResource],
     });
 
-    await run(app);
+    const result = await run(app);
+    await result.dispose();
     expect(mockFn).toHaveBeenCalled();
   });
 
@@ -546,7 +560,8 @@ describe("run", () => {
       },
     });
 
-    await run(app);
+    const result = await run(app);
+    await result.dispose();
     expect(mockFn).toHaveBeenCalled();
   });
 
@@ -579,7 +594,8 @@ describe("run", () => {
       },
     });
 
-    await run(app);
+    const result = await run(app);
+    await result.dispose();
     expect(mockFn).toHaveBeenCalled();
   });
 
@@ -611,7 +627,8 @@ describe("run", () => {
       },
     });
 
-    await run(app);
+    const result = await run(app);
+    await result.dispose();
     expect(mockFn).toHaveBeenCalled();
   });
 
@@ -623,6 +640,7 @@ describe("run", () => {
 
     const result = await run(testResource.with({ prefix: "Hello," }));
     expect(result.value).toBe("Hello, World!");
+    await result.dispose();
   });
 
   describe("disposal", () => {
@@ -685,7 +703,28 @@ describe("run", () => {
       expect(disposeFn).toHaveBeenCalledWith("Resource Value", {}, {}, {});
     });
 
-    it("should work with primitive return values", async () => {
+    it.each([
+      { name: "primitive number", value: 42, expected: 42 },
+      {
+        name: "object",
+        value: { api: "server", value: 42 },
+        expected: { api: "server", value: 42 },
+      },
+      { name: "null", value: null, expected: null },
+      { name: "undefined", value: undefined, expected: undefined },
+      { name: "boolean", value: true, expected: true },
+      {
+        name: "string",
+        value: "hello world test",
+        expected: "hello world test",
+      },
+      {
+        name: "symbol",
+        value: Symbol("test"),
+        expected: (v: any) => expect(v.toString()).toBe("Symbol(test)"),
+      },
+      { name: "bigint", value: BigInt(123), expected: BigInt(123) },
+    ])("should work with $name return values", async ({ value, expected }) => {
       const disposeFn = jest.fn();
       const testResource = defineResource({
         id: "test.resource",
@@ -698,178 +737,16 @@ describe("run", () => {
         register: [testResource],
         dependencies: { testResource },
         async init(_config, { testResource: _ }) {
-          return 42; // primitive number
+          return value;
         },
       });
 
       const result = await run(app);
-      expect(result.value + 1).toBe(43); // should work as number
-      expect(result.value).toBe(42);
-      await result.dispose();
-      expect(disposeFn).toHaveBeenCalled();
-    });
-
-    it("should work with object return values", async () => {
-      const disposeFn = jest.fn();
-      const testResource = defineResource({
-        id: "test.resource",
-        dispose: disposeFn,
-        init: async () => "Resource Value",
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [testResource],
-        dependencies: { testResource },
-        async init(_config, { testResource: _ }) {
-          return { api: "server", value: 42 };
-        },
-      });
-
-      const result = await run(app);
-      expect(result.value.api).toBe("server");
-      expect(result.value.value).toBe(42);
-      await result.dispose();
-      expect(disposeFn).toHaveBeenCalled();
-    });
-
-    it("should work with null return values", async () => {
-      const disposeFn = jest.fn();
-      const testResource = defineResource({
-        id: "test.resource",
-        dispose: disposeFn,
-        init: async () => "Resource Value",
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [testResource],
-        dependencies: { testResource },
-        async init(_config, { testResource: _ }) {
-          return null; // null return value
-        },
-      });
-
-      const result = await run(app);
-      expect(result.value).toBe(null);
-      await result.dispose();
-      expect(disposeFn).toHaveBeenCalled();
-    });
-
-    it("should work with undefined return values", async () => {
-      const disposeFn = jest.fn();
-      const testResource = defineResource({
-        id: "test.resource",
-        dispose: disposeFn,
-        init: async () => "Resource Value",
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [testResource],
-        dependencies: { testResource },
-        async init(_config, { testResource: _ }) {
-          return undefined; // undefined return value
-        },
-      });
-
-      const result = await run(app);
-      expect(result.value).toBe(undefined);
-      await result.dispose();
-      expect(disposeFn).toHaveBeenCalled();
-    });
-
-    it("should work with boolean return values", async () => {
-      const disposeFn = jest.fn();
-      const testResource = defineResource({
-        id: "test.resource",
-        dispose: disposeFn,
-        init: async () => "Resource Value",
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [testResource],
-        dependencies: { testResource },
-        async init(_config, { testResource: _ }) {
-          return true; // boolean return value
-        },
-      });
-
-      const result = await run(app);
-      expect(result.value).toBe(true);
-      await result.dispose();
-      expect(disposeFn).toHaveBeenCalled();
-    });
-
-    it("should forward string methods correctly", async () => {
-      const disposeFn = jest.fn();
-      const testResource = defineResource({
-        id: "test.resource",
-        dispose: disposeFn,
-        init: async () => "Resource Value",
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [testResource],
-        dependencies: { testResource },
-        async init(_config, { testResource: _ }) {
-          return "hello world test"; // string return value
-        },
-      });
-
-      const result = await run(app);
-      expect(result.value).toBe("hello world test");
-      await result.dispose();
-      expect(disposeFn).toHaveBeenCalled();
-    });
-
-    it("should work with symbol return values", async () => {
-      const disposeFn = jest.fn();
-      const testResource = defineResource({
-        id: "test.resource",
-        dispose: disposeFn,
-        init: async () => "Resource Value",
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [testResource],
-        dependencies: { testResource },
-        async init(_config, { testResource: _ }) {
-          return Symbol("test"); // symbol return value
-        },
-      });
-
-      const result = await run(app);
-      expect(typeof result.value).toBe("symbol");
-      expect(result.value.toString()).toBe("Symbol(test)");
-      await result.dispose();
-      expect(disposeFn).toHaveBeenCalled();
-    });
-
-    it("should work with bigint return values", async () => {
-      const disposeFn = jest.fn();
-      const testResource = defineResource({
-        id: "test.resource",
-        dispose: disposeFn,
-        init: async () => "Resource Value",
-      });
-
-      const app = defineResource({
-        id: "app",
-        register: [testResource],
-        dependencies: { testResource },
-        async init(_config, { testResource: _ }) {
-          return BigInt(123); // bigint return value
-        },
-      });
-
-      const result = await run(app);
-      expect(typeof result.value).toBe("bigint");
-      expect(result.value).toBe(BigInt(123));
-      expect(result.value.toString()).toBe("123");
+      if (typeof expected === "function") {
+        expected(result.value);
+      } else {
+        expect(result.value).toEqual(expected);
+      }
       await result.dispose();
       expect(disposeFn).toHaveBeenCalled();
     });
@@ -1013,7 +890,8 @@ describe("run", () => {
           // nothing
         },
       });
-      await run(app);
+      const result = await run(app);
+      await result.dispose();
       expect(handler).toHaveBeenCalled();
     });
   });
@@ -1059,7 +937,8 @@ describe("run", () => {
       },
     });
 
-    await run(app);
+    const result = await run(app);
+    await result.dispose();
     expect(init).toHaveBeenCalledTimes(1);
   });
 });

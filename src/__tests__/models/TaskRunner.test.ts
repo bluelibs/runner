@@ -3,7 +3,7 @@ import { Store } from "../../models/Store";
 import { EventManager } from "../../models/EventManager";
 import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
 import { Logger } from "../../models";
-import { RunnerMode } from "../../types/runner";
+import { createTestFixture } from "../test-utils";
 
 describe("TaskRunner", () => {
   let store: Store;
@@ -12,18 +12,14 @@ describe("TaskRunner", () => {
   let logger: Logger;
 
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeEventCycleDetection: true });
-    logger = new Logger({
-      printThreshold: "info",
-      printStrategy: "pretty",
-      bufferLogs: false,
-    });
-    const onUnhandledError = jest.fn();
-    store = new Store(eventManager, logger, onUnhandledError, RunnerMode.TEST);
-    taskRunner = new TaskRunner(store, eventManager, logger);
+    const fixture = createTestFixture();
+    store = fixture.store;
+    eventManager = fixture.eventManager;
+    logger = fixture.logger;
+    taskRunner = fixture.createTaskRunner();
   });
 
-  it("should run an task without middleware", async () => {
+  it("should run a task without middleware", async () => {
     defineResource({
       id: "app",
       register: () => [task],
@@ -44,7 +40,7 @@ describe("TaskRunner", () => {
     expect(result).toBe(10);
   });
 
-  it("should run an task with middleware", async () => {
+  it("should run a task with middleware", async () => {
     const middleware1 = defineTaskMiddleware({
       id: "middleware1",
       run: async ({ next, task }) => {

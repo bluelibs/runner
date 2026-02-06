@@ -69,6 +69,27 @@ describe("LogPrinter", () => {
     expect(combined).not.toMatch(/\x1b\[/);
   });
 
+  it("pretty prints error stack frames", () => {
+    const p = new LogPrinter({ strategy: "pretty", useColors: true });
+    const error = new Error("Test Error");
+    error.stack =
+      "Error: Test Error\n  at Object.<anonymous> (test.ts:1:1)\n  at process (node.js:1:1)";
+
+    p.print({
+      level: "error",
+      message: "msg",
+      timestamp: new Date("2020-01-01T00:00:00.123Z"),
+      error: {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+      },
+    });
+
+    expect(errs.join("\n")).toContain("Object.<anonymous>");
+    expect(errs.join("\n")).toContain("process (node.js:1:1)");
+  });
+
   it("handles circular and bigint in message/data/context", () => {
     const p = new LogPrinter({ strategy: "json", useColors: false });
     const circ: any = { x: 1 };
