@@ -114,6 +114,8 @@ Runner keeps everything as plain functions and objects. You declare dependencies
 
 ```typescript
 import { r, run, globals } from "@bluelibs/runner";
+import { z } from "zod";
+
 const logger = globals.resources.logger;
 
 // resources are singletons with lifecycle management
@@ -129,15 +131,24 @@ const db = r
   }))
   .build();
 
+const mailer = r
+  .resource("app.mailer")
+  .init(async () => ({
+    sendWelcome: async (userId: string) => {
+      logger.info("Sending welcome email", { userId });
+    },
+  }))
+  .build();
+
 // events are signals that something happened, often used for decoupling
 const userCreated = r
-  .event("users.created")
+  .event("app.events.userCreated")
   .payloadSchema(z.object({ userId: z.string() })) // runtime and compile-time validation
   .build();
 
 // notifications module
 const onUserCreatedHook = r
-  .hook("users.welcomeEmail")
+  .hook("app.hooks.onUserCreated")
   .on(userCreated)
   .dependencies({ mailer, logger })
   .run(async (event, { mailer, logger }) => {
@@ -148,7 +159,7 @@ const onUserCreatedHook = r
 
 // tasks are functions with explicit dependencies and input/output schemas
 const createUser = r
-  .task("users.create")
+  .task("app.tasks.createUser")
   .dependencies({ db, logger, emitUserCreated: userCreated })
   .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
   .run(async (user, { db, logger, emitUserCreated }) => {
@@ -163,7 +174,7 @@ const createUser = r
 // wire everything into the app resource
 const app = r
   .resource("app")
-  .register([db, userCreated, createUser, onUserCreatedHook]) // lets the runtime know about it
+  .register([db, mailer, userCreated, createUser, onUserCreatedHook]) // lets the runtime know about it
   .build(); // close the builder
 
 const { runTask, emitEvent, dispose } = await run(app);
@@ -3640,7 +3651,7 @@ Create logger instances with bound context for consistent metadata across relate
 
 ```typescript
 const RequestContext = r
-  .asyncContext<{ requestId: string; userId: string }>("app.requestContext")
+  .asyncContext<{ requestId: string; userId: string }>("app.ctx.request")
   .build();
 
 const requestHandler = r
@@ -4436,25 +4447,30 @@ As your app grows, you'll want consistent naming. Here's the convention that won
 
 | Type                | Format                                           |
 | ------------------- | ------------------------------------------------ |
-| Resources           | `{domain}.resources.{resource-name}`             |
-| Tasks               | `{domain}.tasks.{task-name}`                     |
-| Events              | `{domain}.events.{event-name}`                   |
-| Hooks               | `{domain}.hooks.on-{event-name}`                 |
-| Task Middleware     | `{domain}.middleware.task.{middleware-name}`     |
-| Resource Middleware | `{domain}.middleware.resource.{middleware-name}` |
+| Resources           | `{domain}.{noun}`                                |
+| Tasks               | `{domain}.tasks.{verb}`                          |
+| Events              | `{domain}.events.{pastTenseVerbOrNoun}`          |
+| Hooks               | `{domain}.hooks.{name}` (use `onX` for handlers) |
+| Task Middleware     | `{domain}.middleware.task.{name}`                |
+| Resource Middleware | `{domain}.middleware.resource.{name}`            |
+| Errors              | `{domain}.errors.{PascalCaseName}`               |
+| Async Context       | `{domain}.ctx.{noun}`                            |
+| Tags                | `{domain}.tags.{noun}`                           |
 
-We recommend kebab-case for file names and ids. Suffix files with their primitive type: `*.task.ts`, `*.task-middleware.ts`, `*.hook.ts`, etc.
+Use dot-separated IDs and keep them human-readable. Prefer `camelCase` for the final segment (tasks/events/hooks/middleware/ctx/tags) and `PascalCase` for errors.
+Use verbs for task IDs, past tense for event IDs, and nouns for resources/contexts/tags.
+Kebab-case is still great for file names (for example: `create-user.task.ts`, `auth.task-middleware.ts`, `on-user-created.hook.ts`).
 
-Folders can look something like this: `src/app/users/tasks/create-user.task.ts`. For domain: `app.users` and a task. Use `middleware/task|resource` for middleware files.
+Folders can look like this: `src/app/users/tasks/create-user.task.ts`. Keep the example domain consistent (for example `app.*`) unless you're intentionally showing cross-domain composition.
 
 ```typescript
 // Helper function for consistency
 function namespaced(id: string) {
-  return `mycompany.myapp.${id}`;
+  return `app.${id}`;
 }
 
-const userTask = r
-  .task(namespaced("tasks.user.create-user"))
+const createUserTask = r
+  .task(namespaced("tasks.createUser"))
   .run(async () => null)
   .build();
 ```
@@ -5481,7 +5497,7 @@ const database = r
 
 // Context for request data
 const RequestContext = r
-  .asyncContext<{ userId?: string; role?: string }>("app.requestContext")
+  .asyncContext<{ userId?: string; role?: string }>("app.ctx.request")
   .build();
 
 // Email service (replace with SendGrid/SES/etc in real apps)

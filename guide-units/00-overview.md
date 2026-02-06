@@ -12,6 +12,8 @@ Runner keeps everything as plain functions and objects. You declare dependencies
 
 ```typescript
 import { r, run, globals } from "@bluelibs/runner";
+import { z } from "zod";
+
 const logger = globals.resources.logger;
 
 // resources are singletons with lifecycle management
@@ -27,15 +29,24 @@ const db = r
   }))
   .build();
 
+const mailer = r
+  .resource("app.mailer")
+  .init(async () => ({
+    sendWelcome: async (userId: string) => {
+      logger.info("Sending welcome email", { userId });
+    },
+  }))
+  .build();
+
 // events are signals that something happened, often used for decoupling
 const userCreated = r
-  .event("users.created")
+  .event("app.events.userCreated")
   .payloadSchema(z.object({ userId: z.string() })) // runtime and compile-time validation
   .build();
 
 // notifications module
 const onUserCreatedHook = r
-  .hook("users.welcomeEmail")
+  .hook("app.hooks.onUserCreated")
   .on(userCreated)
   .dependencies({ mailer, logger })
   .run(async (event, { mailer, logger }) => {
@@ -46,7 +57,7 @@ const onUserCreatedHook = r
 
 // tasks are functions with explicit dependencies and input/output schemas
 const createUser = r
-  .task("users.create")
+  .task("app.tasks.createUser")
   .dependencies({ db, logger, emitUserCreated: userCreated })
   .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
   .run(async (user, { db, logger, emitUserCreated }) => {
@@ -61,7 +72,7 @@ const createUser = r
 // wire everything into the app resource
 const app = r
   .resource("app")
-  .register([db, userCreated, createUser, onUserCreatedHook]) // lets the runtime know about it
+  .register([db, mailer, userCreated, createUser, onUserCreatedHook]) // lets the runtime know about it
   .build(); // close the builder
 
 const { runTask, emitEvent, dispose } = await run(app);

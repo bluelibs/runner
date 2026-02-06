@@ -43,7 +43,7 @@ const database = r
 
 // Context for request data
 const RequestContext = r
-  .asyncContext<{ userId?: string; role?: string }>("app.requestContext")
+  .asyncContext<{ userId?: string; role?: string }>("app.ctx.request")
   .build();
 
 // Email service (replace with SendGrid/SES/etc in real apps)

@@ -112,7 +112,7 @@ Create logger instances with bound context for consistent metadata across relate
 
 ```typescript
 const RequestContext = r
-  .asyncContext<{ requestId: string; userId: string }>("app.requestContext")
+  .asyncContext<{ requestId: string; userId: string }>("app.ctx.request")
   .build();
 
 const requestHandler = r

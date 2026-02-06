@@ -313,7 +313,7 @@ await requestContext.provide({ requestId: "abc" }, async () => {
 });
 
 // Require middleware for tasks that need the context
-r.task("task").middleware([requestContext.require(["requestId"])]);
+r.task("task").middleware([requestContext.require()]);
 ```
 
 - Recommended ids: `{domain}.ctx.{noun}` (for example: `app.ctx.request`).

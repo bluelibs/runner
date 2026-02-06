@@ -461,25 +461,30 @@ As your app grows, you'll want consistent naming. Here's the convention that won
 
 | Type                | Format                                           |
 | ------------------- | ------------------------------------------------ |
-| Resources           | `{domain}.resources.{resource-name}`             |
-| Tasks               | `{domain}.tasks.{task-name}`                     |
-| Events              | `{domain}.events.{event-name}`                   |
-| Hooks               | `{domain}.hooks.on-{event-name}`                 |
-| Task Middleware     | `{domain}.middleware.task.{middleware-name}`     |
-| Resource Middleware | `{domain}.middleware.resource.{middleware-name}` |
+| Resources           | `{domain}.{noun}`                                |
+| Tasks               | `{domain}.tasks.{verb}`                          |
+| Events              | `{domain}.events.{pastTenseVerbOrNoun}`          |
+| Hooks               | `{domain}.hooks.{name}` (use `onX` for handlers) |
+| Task Middleware     | `{domain}.middleware.task.{name}`                |
+| Resource Middleware | `{domain}.middleware.resource.{name}`            |
+| Errors              | `{domain}.errors.{PascalCaseName}`               |
+| Async Context       | `{domain}.ctx.{noun}`                            |
+| Tags                | `{domain}.tags.{noun}`                           |
 
-We recommend kebab-case for file names and ids. Suffix files with their primitive type: `*.task.ts`, `*.task-middleware.ts`, `*.hook.ts`, etc.
+Use dot-separated IDs and keep them human-readable. Prefer `camelCase` for the final segment (tasks/events/hooks/middleware/ctx/tags) and `PascalCase` for errors.
+Use verbs for task IDs, past tense for event IDs, and nouns for resources/contexts/tags.
+Kebab-case is still great for file names (for example: `create-user.task.ts`, `auth.task-middleware.ts`, `on-user-created.hook.ts`).
 
-Folders can look something like this: `src/app/users/tasks/create-user.task.ts`. For domain: `app.users` and a task. Use `middleware/task|resource` for middleware files.
+Folders can look like this: `src/app/users/tasks/create-user.task.ts`. Keep the example domain consistent (for example `app.*`) unless you're intentionally showing cross-domain composition.
 
 ```typescript
 // Helper function for consistency
 function namespaced(id: string) {
-  return `mycompany.myapp.${id}`;
+  return `app.${id}`;
 }
 
-const userTask = r
-  .task(namespaced("tasks.user.create-user"))
+const createUserTask = r
+  .task(namespaced("tasks.createUser"))
   .run(async () => null)
   .build();
 ```
