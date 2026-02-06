@@ -34,7 +34,7 @@ npx jest --config=config/jest/jest.bench.config.js --testNamePattern="basic task
 
 ## Benchmark Configuration
 
-Configuration is stored in `benchmarks/benchmarks.config.json`:
+Configuration is stored in `config/benchmarks/benchmarks.config.json`:
 
 ```json
 {
@@ -51,7 +51,7 @@ Configuration is stored in `benchmarks/benchmarks.config.json`:
 
 ```bash
 # Compare current results against baseline
-node scripts/compare-benchmarks.mjs benchmarks/baseline.json benchmarks/benchmark-results.json benchmarks/benchmarks.config.json
+node scripts/compare-benchmarks.mjs config/benchmarks/baseline.json config/benchmarks/benchmark-results.json config/benchmarks/benchmarks.config.json
 ```
 
 The comparison script provides:

@@ -100,8 +100,8 @@
     "postbuild": "npm run guide:compose",
     "typedoc": "typedoc --options config/typedoc/typedoc.json",
     "benchmark": "jest --config config/jest/jest.bench.config.js --verbose --runInBand",
-    "benchmark:json": "BENCHMARK_OUTPUT=./benchmarks/benchmark-results.json NODE_OPTIONS=--expose-gc npm run benchmark",
-    "benchmark:compare": "node ./scripts/compare-benchmarks.mjs ./benchmarks/baseline.json ./benchmarks/benchmark-results.json ./benchmarks/benchmarks.config.json",
+    "benchmark:json": "BENCHMARK_OUTPUT=./config/benchmarks/benchmark-results.json NODE_OPTIONS=--expose-gc npm run benchmark",
+    "benchmark:compare": "node ./scripts/compare-benchmarks.mjs ./config/benchmarks/baseline.json ./config/benchmarks/benchmark-results.json ./config/benchmarks/benchmarks.config.json",
     "guide:compose": "node ./scripts/compose-readme.mjs"
   },
   "devDependencies": {
