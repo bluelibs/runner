@@ -1,5 +1,7 @@
-import { event } from "../../..";
+import { event, r } from "../../..";
 import { describeFlow } from "../../durable/core/describeFlow";
+import { createDurableStepId } from "../../durable/core/ids";
+import { memoryDurableResource } from "../../durable/resources/memoryDurableResource";
 
 describe("durable: describeFlow", () => {
   it("records step nodes", async () => {
@@ -269,5 +271,173 @@ describe("durable: describeFlow", () => {
     expect(shape.nodes).toEqual([
       { kind: "step", stepId: "passthrough", hasCompensation: false },
     ]);
+  });
+
+  it("resolves DurableStepId objects to their string id", async () => {
+    const validateId = createDurableStepId<{ ok: boolean }>("validate");
+    const processId = createDurableStepId<string>("process");
+
+    const shape = await describeFlow(async (ctx) => {
+      await ctx.step(validateId, async () => ({ ok: true }));
+      await ctx.step(processId).up(async () => "done");
+    });
+
+    expect(shape.nodes).toEqual([
+      { kind: "step", stepId: "validate", hasCompensation: false },
+      { kind: "step", stepId: "process", hasCompensation: false },
+    ]);
+  });
+
+  it("records note nodes with meta (meta is ignored in shape)", async () => {
+    const shape = await describeFlow(async (ctx) => {
+      await ctx.note("checkpoint reached", { orderId: "123", attempt: 2 });
+    });
+
+    expect(shape.nodes).toEqual([
+      { kind: "note", message: "checkpoint reached" },
+    ]);
+  });
+
+  // ─── Task-based describeFlow ────────────────────────────────────────────
+
+  describe("from task", () => {
+    const durable = memoryDurableResource.fork("describe.test.durable");
+
+    it("extracts the shape from a task definition", async () => {
+      const task = r
+        .task("describe.test.simple")
+        .dependencies({ durable })
+        .run(async (_input: undefined, { durable }) => {
+          const ctx = durable.use();
+          await ctx.step("validate", async () => ({ ok: true }));
+          await ctx.step("process", async () => "done");
+        })
+        .build();
+
+      const shape = await describeFlow(task);
+
+      expect(shape.nodes).toEqual([
+        { kind: "step", stepId: "validate", hasCompensation: false },
+        { kind: "step", stepId: "process", hasCompensation: false },
+      ]);
+    });
+
+    it("extracts a complex multi-node shape from a task", async () => {
+      const PaymentReceived = event<{ amount: number }>({
+        id: "describe.test.payment",
+      });
+
+      const task = r
+        .task("describe.test.complex")
+        .dependencies({ durable })
+        .run(async (_input: undefined, { durable }) => {
+          const ctx = durable.use();
+          await ctx.step("validate-order", async () => ({ valid: true }));
+          await ctx.waitForSignal(PaymentReceived, {
+            timeoutMs: 86_400_000,
+            stepId: "await-payment",
+          });
+          await ctx.sleep(5_000, { stepId: "cooldown" });
+          await ctx.note("Order complete");
+        })
+        .build();
+
+      const shape = await describeFlow(task);
+
+      expect(shape.nodes).toHaveLength(4);
+      expect(shape.nodes[0]).toEqual({
+        kind: "step",
+        stepId: "validate-order",
+        hasCompensation: false,
+      });
+      expect(shape.nodes[1]).toEqual({
+        kind: "waitForSignal",
+        signalId: "describe.test.payment",
+        timeoutMs: 86_400_000,
+        stepId: "await-payment",
+      });
+      expect(shape.nodes[2]).toEqual({
+        kind: "sleep",
+        durationMs: 5_000,
+        stepId: "cooldown",
+      });
+      expect(shape.nodes[3]).toEqual({
+        kind: "note",
+        message: "Order complete",
+      });
+    });
+
+    it("works with tasks that use lazy (function) dependencies", async () => {
+      const task = r
+        .task("describe.test.lazy-deps")
+        .dependencies(() => ({ durable }))
+        .run(async (_input: undefined, { durable }) => {
+          const ctx = durable.use();
+          await ctx.step("lazy-step", async () => "ok");
+        })
+        .build();
+
+      const shape = await describeFlow(task);
+
+      expect(shape.nodes).toEqual([
+        { kind: "step", stepId: "lazy-step", hasCompensation: false },
+      ]);
+    });
+
+    it("works with tasks that have step builders and compensation", async () => {
+      const task = r
+        .task("describe.test.compensation")
+        .dependencies({ durable })
+        .run(async (_input: undefined, { durable }) => {
+          const ctx = durable.use();
+          await ctx
+            .step("create-resource")
+            .up(async () => "created")
+            .down(async () => {});
+        })
+        .build();
+
+      const shape = await describeFlow(task);
+
+      expect(shape.nodes).toEqual([
+        { kind: "step", stepId: "create-resource", hasCompensation: true },
+      ]);
+    });
+
+    it("works with tasks that have multiple dependencies", async () => {
+      const otherResource = r
+        .resource("describe.test.other")
+        .init(async () => ({ value: 42 }))
+        .build();
+
+      const task = r
+        .task("describe.test.multi-deps")
+        .dependencies({ durable, other: otherResource })
+        .run(async (_input: undefined, { durable }) => {
+          const ctx = durable.use();
+          await ctx.step("with-other-deps", async () => "ok");
+        })
+        .build();
+
+      const shape = await describeFlow(task);
+
+      expect(shape.nodes).toEqual([
+        { kind: "step", stepId: "with-other-deps", hasCompensation: false },
+      ]);
+    });
+
+    it("handles tasks with nullish dependencies gracefully", async () => {
+      const task = r
+        .task("describe.test.no-deps")
+        .run(async () => "ok")
+        .build();
+
+      // Force-clear dependencies to simulate an edge case
+      (task as unknown as Record<string, unknown>).dependencies = undefined;
+
+      const shape = await describeFlow(task);
+
+      expect(shape.nodes).toEqual([]);
+    });
   });
 });

@@ -132,32 +132,37 @@ const result = await ctx.switch(
 
 `describeFlow()` lets you export the structure of a workflow without executing it. Useful for documentation, visualization, and tooling.
 
+**Easiest: pass the task directly** — no refactoring needed:
+
 ```ts
 import { describeFlow } from "@bluelibs/runner/node";
 
-const shape = await describeFlow(async (ctx) => {
-  await ctx.step("validate", async () => ({ ok: true }));
-  await ctx.switch("route", "premium", [
-    { id: "free", match: (v) => v === "free", run: async () => "free" },
-    {
-      id: "premium",
-      match: (v) => v === "premium",
-      run: async () => "premium",
-    },
-  ]);
-  await ctx.sleep(60_000, { stepId: "cooldown" });
-  await ctx.note("Flow complete");
-});
-
-// shape.nodes = [
-//   { kind: "step", stepId: "validate", hasCompensation: false },
-//   { kind: "switch", stepId: "route", branchIds: ["free", "premium"], hasDefault: false },
-//   { kind: "sleep", durationMs: 60000, stepId: "cooldown" },
-//   { kind: "note", message: "Flow complete" },
-// ]
+const shape = await describeFlow(myDurableTask);
+// shape.nodes = [{ kind: "step", stepId: "validate", ... }, ...]
 ```
 
-- The descriptor receives a recording context (not a real one) — all return values are `undefined`.
+`describeFlow()` intercepts the `durable.use()` call inside the task's `run` and records every `ctx.*` operation.
+
+**Alternative: pass a descriptor function** (also accepts `IDurableContext`):
+
+```ts
+import { describeFlow, type IDurableContext } from "@bluelibs/runner/node";
+
+// Optionally extract the workflow body for sharing
+async function onboardingFlow(ctx: IDurableContext, input: { userId: string }) {
+  await ctx.step("create-account", async () => ({ ok: true }));
+  await ctx.sleep(60_000, { stepId: "cooldown" });
+  await ctx.step("send-welcome", async () => "sent");
+}
+
+const shape = await describeFlow(async (ctx) => {
+  await onboardingFlow(ctx, { userId: "__placeholder__" });
+});
+```
+
+- Accepts a task or `(ctx: IDurableContext) => Promise<void>`.
+- The recording context captures each `ctx.*` call as a `FlowNode`; all return values are `undefined`.
+- When passing a task, input is set to `undefined` — step bodies are never executed.
 - Supported node kinds: `step`, `sleep`, `waitForSignal`, `emit`, `switch`, `note`.
 - `DurableFlowShape` and all `FlowNode` types are exported for type-safe consumption.
 - Conditional logic should be modeled with `ctx.switch()` (not JS `if/else`) for the shape to capture it.

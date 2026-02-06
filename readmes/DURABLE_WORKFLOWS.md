@@ -983,7 +983,66 @@ interface SwitchBranch<TValue, TResult> {
 - Tooling and editor plugins
 - API schema exports
 
-### API
+### From an existing task (recommended)
+
+Pass your task directly — `describeFlow()` intercepts the `durable.use()` call and records every `ctx.*` operation:
+
+```typescript
+import { describeFlow } from "@bluelibs/runner/node";
+
+const shape = await describeFlow(approveOrder);
+
+console.log(shape.nodes);
+// [
+//   { kind: "step", stepId: "validate", hasCompensation: false },
+//   { kind: "waitForSignal", signalId: "app.signals.approved", ... },
+//   { kind: "step", stepId: "ship", hasCompensation: false },
+//   { kind: "emit", eventId: "app.events.shipped", stepId: "notify" },
+// ]
+```
+
+That's it. No refactoring, no extraction — just point `describeFlow` at your task and get the shape.
+
+### From a descriptor function
+
+You can also pass a function that receives an `IDurableContext` directly. This is useful when you want to describe a flow that isn't wired as a task yet, or when you want to share the workflow body between the task and the descriptor:
+
+```typescript
+import { describeFlow, type IDurableContext } from "@bluelibs/runner/node";
+
+// Extract the workflow body into a plain function
+async function approveOrderFlow(
+  ctx: IDurableContext,
+  input: { orderId: string },
+) {
+  await ctx.step("validate", async () => ({ ok: true }));
+  await ctx.waitForSignal(Approved, {
+    timeoutMs: 86_400_000,
+    stepId: "approval",
+  });
+  await ctx.step("ship", async () => ({ shipped: true }));
+}
+
+// Wire it into the task
+const approveOrder = r
+  .task("app.tasks.approveOrder")
+  .dependencies({ durable })
+  .run(async (input: { orderId: string }, { durable }) => {
+    return approveOrderFlow(durable.use(), input);
+  })
+  .build();
+
+// Extract the shape — same function, recording context
+const shape = await describeFlow(async (ctx) => {
+  await approveOrderFlow(ctx, { orderId: "__placeholder__" });
+});
+```
+
+> **Tip:** When using the function form, pass dummy values for the input — the recorder never executes step bodies, so the actual values don't matter. What matters is that every `ctx.*` call is reached.
+
+### Standalone inline descriptor
+
+For quick one-off descriptions without a task:
 
 ```typescript
 import { describeFlow } from "@bluelibs/runner/node";
@@ -999,11 +1058,6 @@ const shape = await describeFlow(async (ctx) => {
     },
   ]);
   await ctx.sleep(60_000, { stepId: "cooldown" });
-  await ctx.waitForSignal(Approved, {
-    timeoutMs: 86_400_000,
-    stepId: "approval",
-  });
-  await ctx.emit(OrderShipped, { orderId: "123" }, { stepId: "notify" });
   await ctx.note("Order processing complete");
 });
 ```
@@ -1031,7 +1085,9 @@ type FlowNode =
 
 ### How it works
 
-The descriptor function receives a **recording context** — a lightweight mock that captures each `ctx.*` call as a `FlowNode` instead of executing it. All return values are `undefined`, so the descriptor must not rely on step results for control flow. Conditional branching should be modeled with `ctx.switch()`.
+The descriptor function receives a **recording context** — a lightweight mock that implements `IDurableContext` and captures each `ctx.*` call as a `FlowNode` instead of executing it. All return values are `undefined`, so the descriptor must not rely on step results for control flow. Conditional branching should be modeled with `ctx.switch()`.
+
+When a task is passed directly, `describeFlow()` calls its `run` function with mock dependencies where every `.use()` returns the recorder — so the same `durable.use()` call in your task transparently hands back the recording context.
 
 The step builder API (`.up()` / `.down()`) is also supported: `hasCompensation` reflects whether `.down()` was called.
 

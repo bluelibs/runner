@@ -89,6 +89,7 @@ For tasks, prefer static dependencies (required or `.optional()`) and branch at 
 ## Serialization
 
 Ever sent a `Date` over JSON and gotten `"2024-01-15T..."` back as a string? Runner's serializer preserves types across the wire.
+It also supports object graphs that plain JSON cannot represent, including circular and self-referencing objects.
 
 ### What it handles
 
@@ -99,6 +100,7 @@ Ever sent a `Date` over JSON and gotten `"2024-01-15T..."` back as a string? Run
 | `Map`, `Set`  | Lost   | Preserved         |
 | `Uint8Array`  | Lost   | Preserved         |
 | Circular refs | Error  | Preserved         |
+| Self refs     | Error  | Preserved         |
 
 ### Two modes
 
@@ -112,14 +114,16 @@ const json = serializer.stringify({ when: new Date(), pattern: /hello/i });
 const obj = serializer.parse(json);
 // obj.when is a Date, obj.pattern is a RegExp
 
-// Graph mode - handles circular references
+// Graph mode - handles circular and self references
 const user = { name: "Alice" };
 const team = { members: [user], lead: user }; // shared reference
 user.team = team; // circular reference
+team.self = team; // self reference
 
 const data = serializer.serialize(team);
 const restored = serializer.deserialize(data);
 // restored.members[0] === restored.lead (same object!)
+// restored.self === restored (self-reference preserved)
 ```
 
 ### Custom types
