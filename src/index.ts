@@ -132,7 +132,7 @@ export * from "./http-fetch-tunnel.resource";
 // Re-export types at the package root so consumer declaration emits can reference them directly
 export type * from "./defs";
 
-export { Serializer, getDefaultSerializer } from "./serializer";
+export { Serializer } from "./serializer";
 export type { TypeDefinition, SerializerOptions } from "./serializer";
 
 // ExecutionJournal for per-execution state sharing

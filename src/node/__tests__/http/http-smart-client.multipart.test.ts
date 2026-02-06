@@ -2,7 +2,7 @@ import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
 import { createNodeFile } from "../../files";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 
 function asIncoming(
   res: Readable,
@@ -18,7 +18,7 @@ describe("http-smart-client multipart", () => {
   it("multipart uploads returns asserted ok", async () => {
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     // No real request performed in this unit test; exercise shape only
     expect(typeof client.task).toBe("function");
@@ -27,7 +27,7 @@ describe("http-smart-client multipart", () => {
   it("multipart path with web files also works when passed through smart client", async () => {
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     expect(client).toBeDefined();
   });
@@ -35,7 +35,7 @@ describe("http-smart-client multipart", () => {
   it("multipart path returns stream for duplex response", async () => {
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     expect(client).toBeDefined();
   });
@@ -67,7 +67,7 @@ describe("createHttpSmartClient - multipart", () => {
 
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
 
     // File stream that errors shortly after
@@ -92,7 +92,7 @@ describe("createHttpSmartClient - multipart", () => {
       .spyOn(http, "request")
       .mockImplementation((opts: any, cb: any) => {
         const env = { ok: true, result: "OK" };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
 
         const sink = new Writable({
@@ -120,7 +120,7 @@ describe("createHttpSmartClient - multipart", () => {
 
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const file = createNodeFile(
       { name: "payload.txt", type: "text/plain" },
@@ -166,7 +166,7 @@ describe("createHttpSmartClient - multipart", () => {
 
       const env = { ok: true, result: "OK" };
       const res = Readable.from([
-        Buffer.from(getDefaultSerializer().stringify(env), "utf8"),
+        Buffer.from(new Serializer().stringify(env), "utf8"),
       ]);
       // respond on next tick after some body has been written
       setImmediate(() =>
@@ -177,7 +177,7 @@ describe("createHttpSmartClient - multipart", () => {
 
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const file = createNodeFile(
       { name: "x.bin", type: "application/octet-stream" },
@@ -196,7 +196,7 @@ describe("createHttpSmartClient - multipart", () => {
       .mockImplementation((opts: any, cb: any) => {
         const env = { ok: true, result: undefined };
         const res = Readable.from([
-          Buffer.from(getDefaultSerializer().stringify(env), "utf8"),
+          Buffer.from(new Serializer().stringify(env), "utf8"),
         ]);
         setImmediate(() =>
           cb(asIncoming(res, { "content-type": "application/json" })),
@@ -219,7 +219,7 @@ describe("createHttpSmartClient - multipart", () => {
 
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
       contexts: [
         {
           id: "ctx.mp2",

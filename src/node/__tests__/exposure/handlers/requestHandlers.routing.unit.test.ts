@@ -3,7 +3,7 @@ import { Readable } from "stream";
 import { createRequestHandlers } from "../../../exposure/requestHandlers";
 import { createAllowListGuard } from "../../../exposure/allowList";
 import { globalTags } from "../../../../globals/globalTags";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 import { defineResource, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
@@ -15,7 +15,7 @@ import {
 } from "./requestHandlers.test.utils";
 
 describe("requestHandlers - routing and dispatching", () => {
-  const serializer = getDefaultSerializer();
+  const serializer = new Serializer();
 
   afterEach(() => {
     jest.restoreAllMocks();

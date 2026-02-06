@@ -113,7 +113,7 @@ const sendEmail = r
 
 - `.dependencies()` accepts a literal map or function `(config) => deps`; appends (shallow-merge) by default
 - `.middleware()` appends by default
-- `.tags()` replaces the list each time
+- `.tags()` appends by default
 - Pass `{ override: true }` to any of these methods to replace instead of append
 - Provide result validation with `.resultSchema()` when the function returns structured data
 
@@ -477,7 +477,7 @@ const serializerSetup = r
   .build();
 ```
 
-Use `getDefaultSerializer()` when you need a standalone instance outside DI.
+Use `new Serializer()` when you need a standalone instance outside DI.
 
 Note on files: The “File” you see in tunnels is not a custom serializer type. Runner uses a dedicated `$runnerFile: "File"` sentinel in inputs which the tunnel client/server convert to multipart streams via a manifest. File handling is performed by the tunnel layer (manifest hydration and multipart), not by the serializer. Keep using `createWebFile`/`createNodeFile` for uploads.
 

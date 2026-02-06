@@ -1,7 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpMixedClient } from "../../http/http-mixed-client";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 
 function asIncoming(
   res: Readable,
@@ -29,7 +29,7 @@ function makeSink(): http.ClientRequest {
 
 describe("createHttpMixedClient.forceSmart (unit)", () => {
   const baseUrl = "http://127.0.0.1:7777/__runner";
-  const serializer = getDefaultSerializer();
+  const serializer = new Serializer();
 
   afterEach(() => {
     jest.restoreAllMocks();

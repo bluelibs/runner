@@ -2,7 +2,7 @@ import {
   createRequestHandlers,
   type RequestProcessingDeps,
 } from "../../../exposure/requestHandlers";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 import * as multipartModule from "../../../exposure/multipart";
 import {
   createReqRes,
@@ -30,7 +30,7 @@ describe("requestHandlers - multipart and sanitization", () => {
       isUnderBase: () => true,
     },
     cors: undefined,
-    serializer: getDefaultSerializer(),
+    serializer: new Serializer(),
   });
 
   afterEach(() => {

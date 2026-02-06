@@ -2082,7 +2082,7 @@ if (customJournal.has(traceIdKey)) {
 
 ### Tags
 
-Tags are metadata that can influence system behavior. Unlike meta properties, tags can be queried at runtime to build dynamic functionality. They can be simple strings or structured configuration objects.
+Tags are metadata that can influence system behavior. Unlike meta properties, tags can be queried at runtime to build dynamic functionality. They can be marker tags (no config) or configured tags.
 
 #### Basic Usage
 
@@ -2099,6 +2099,24 @@ const getUserTask = r
   .build();
 ```
 
+#### Tag Composition Behavior
+
+Repeated `.tags()` calls append by default. If you want to replace the existing list, pass `{ override: true }`.
+
+```typescript
+const apiTag = r.tag("app.tags.api").build();
+const cacheableTag = r.tag("app.tags.cacheable").build();
+const internalTag = r.tag("app.tags.internal").build();
+
+const taskWithTags = r
+  .task("app.tasks.example")
+  .tags([apiTag])
+  .tags([cacheableTag]) // -> [apiTag, cacheableTag]
+  .tags([internalTag], { override: true }) // -> [internalTag]
+  .run(async () => "ok")
+  .build();
+```
+
 #### Discovering Components by Tags
 
 The core power of tags is runtime discovery. Use `store.getTasksWithTag()` to find components:
@@ -2106,6 +2124,7 @@ The core power of tags is runtime discovery. Use `store.getTasksWithTag()` to fi
 ```typescript
 import { r, globals } from "@bluelibs/runner";
 
+// Assuming: httpTag and cacheableTag are defined and registered
 // Auto-register HTTP routes based on tags
 const routeRegistration = r
   .hook("app.hooks.registerRoutes")
@@ -2126,8 +2145,7 @@ const routeRegistration = r
       });
     });
 
-    // Also find by string tags
-    const cacheableTasks = store.getTasksWithTag("cacheable");
+    const cacheableTasks = store.getTasksWithTag(cacheableTag);
     console.log(`Found ${cacheableTasks.length} cacheable tasks`);
   })
   .build();

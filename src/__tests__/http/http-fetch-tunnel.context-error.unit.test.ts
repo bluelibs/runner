@@ -1,5 +1,5 @@
 import { createExposureFetch } from "../../http-fetch-tunnel.resource";
-import { getDefaultSerializer } from "../../serializer";
+import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
 
 describe("createExposureFetch - context header and typed rethrow", () => {
@@ -7,7 +7,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
 
   it("adds x-runner-context header and rethrows typed when registry provided", async () => {
     const calls: Array<{ url: string; headers: Record<string, string> }> = [];
-    const serializer = getDefaultSerializer();
+    const serializer = new Serializer();
     const fetchImpl = jest.fn(async (url: any, init?: any) => {
       calls.push({ url: String(url), headers: init?.headers ?? {} });
       const env = {
@@ -64,7 +64,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
 
   it("omits x-runner-context header when contexts are provided but inactive", async () => {
     const calls: Array<{ url: string; headers: Record<string, string> }> = [];
-    const serializer = getDefaultSerializer();
+    const serializer = new Serializer();
     const fetchImpl = jest.fn(async (url: any, init?: any) => {
       calls.push({ url: String(url), headers: init?.headers ?? {} });
       const env = { ok: true, result: 1 };

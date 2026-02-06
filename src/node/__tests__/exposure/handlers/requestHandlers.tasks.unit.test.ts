@@ -1,6 +1,6 @@
 import { createRequestHandlers } from "../../../exposure/requestHandlers";
 import { defineError } from "../../../../definers/defineError";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 import * as requestBody from "../../../exposure/requestBody";
 import { cancellationError } from "../../../../errors";
 import {
@@ -12,7 +12,7 @@ import {
 } from "./requestHandlers.test.utils";
 
 describe("requestHandlers - task handling", () => {
-  const serializer = getDefaultSerializer();
+  const serializer = new Serializer();
 
   afterEach(() => {
     jest.restoreAllMocks();

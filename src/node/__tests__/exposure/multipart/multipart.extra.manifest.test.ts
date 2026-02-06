@@ -1,5 +1,5 @@
 import { parseMultipartInput } from "../../../exposure/multipart";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 import { createMockRequest, expectErrorCode } from "./multipart.mock.utils";
 
 jest.mock("busboy", () => {
@@ -30,7 +30,7 @@ jest.mock("busboy", () => {
   return () => new FakeBusboy();
 });
 
-const serializer = getDefaultSerializer();
+const serializer = new Serializer();
 
 describe("parseMultipartInput - manifest extra branches", () => {
   const boundary = "----unit-mock-boundary";

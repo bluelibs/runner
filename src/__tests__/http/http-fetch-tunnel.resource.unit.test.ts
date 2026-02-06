@@ -1,5 +1,5 @@
 import { createExposureFetch } from "../../http-fetch-tunnel.resource";
-import { getDefaultSerializer, Serializer } from "../../serializer";
+import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
 
 describe("http-fetch-tunnel.resource (unit)", () => {
@@ -42,7 +42,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
       timeoutMs: 5,
       fetchImpl: stubFetch,
       auth: { token: "T" },
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const out = await client.task("t.id", { a: 1 });
     expect(out).toBe(42);
@@ -64,7 +64,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const c1 = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchErrMsg,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await expect(c1.event("e.id", { x: 1 })).rejects.toThrow(/boom/);
 
@@ -75,7 +75,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const c2 = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchNoMsg,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await expect(c2.event("e.id", { y: 1 })).rejects.toThrow(
       /Tunnel event error/,
@@ -89,7 +89,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const c = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchEmpty,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await expect(c.event("e.id", { y: 2 })).rejects.toThrow(
       /Tunnel event error/,
@@ -97,7 +97,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
   });
 
   it("createExposureFetch: eventWithResult() posts returnPayload and returns result", async () => {
-    const serializer = getDefaultSerializer();
+    const serializer = new Serializer();
     const calls: Array<{ url: string; init: any; body: any }> = [];
     const fetchImpl: typeof fetch = (async (url: any, init: any) => {
       const parsed = serializer.parse<any>(String(init?.body ?? ""));
@@ -121,7 +121,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
   });
 
   it("createExposureFetch: eventWithResult() throws when server is ok but omits result", async () => {
-    const serializer = getDefaultSerializer();
+    const serializer = new Serializer();
     const fetchImpl: typeof fetch = (async () => ({
       text: async () => serializer.stringify({ ok: true }),
     })) as unknown as typeof fetch;
@@ -137,7 +137,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
   });
 
   it("createExposureFetch: eventWithResult() rethrows typed app errors via errorRegistry", async () => {
-    const serializer = getDefaultSerializer();
+    const serializer = new Serializer();
     const fetchImpl: typeof fetch = (async () => ({
       text: async () =>
         serializer.stringify({
@@ -173,7 +173,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
   });
 
   it("createExposureFetch: eventWithResult() rethrows TunnelError when no typed mapping is present", async () => {
-    const serializer = getDefaultSerializer();
+    const serializer = new Serializer();
     const fetchImpl: typeof fetch = (async () => ({
       text: async () => serializer.stringify({ ok: false }),
     })) as unknown as typeof fetch;
@@ -195,7 +195,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const c = createExposureFetch({
       baseUrl: "http://api",
       fetchImpl: fetchNoMsg,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await expect(c.task("t.id", { z: 1 })).rejects.toThrow(/Tunnel task error/);
   });
@@ -212,7 +212,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const client = createExposureFetch({
       baseUrl: "http://api/",
       fetchImpl: stubFetch,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await client.task("t.id");
     expect(calls[0].url).toBe("http://api/task/t.id");
@@ -222,7 +222,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const seen: Array<{ url: string; init: any }> = [];
     const requestDate = new Date("2024-03-01T02:03:04.005Z");
     const responseDate = new Date("2024-03-02T03:04:05.006Z");
-    const serializer = getDefaultSerializer();
+    const serializer = new Serializer();
 
     const fetchImpl: typeof fetch = (async (url: any, init: any) => {
       seen.push({ url, init });

@@ -1,5 +1,5 @@
 import { parseMultipartInput } from "../../../exposure/multipart";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 import {
   createMultipartRequest,
   part,
@@ -7,7 +7,7 @@ import {
 } from "./multipart.test.utils";
 import type { InputFile } from "../../../../types/inputFile";
 
-const serializer = getDefaultSerializer();
+const serializer = new Serializer();
 
 function assertFilePair(
   value: unknown,

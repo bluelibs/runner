@@ -1,7 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 import { createNodeFile } from "../../files";
 
 function asIncoming(
@@ -24,7 +24,7 @@ describe("createHttpSmartClient - extra branches", () => {
       .spyOn(http, "request")
       .mockImplementation((opts: any, cb: any) => {
         const env = { ok: true, result: 9 };
-        const body = getDefaultSerializer().stringify(env);
+        const body = new Serializer().stringify(env);
         // Emit as string chunks (not Buffer) to cover chunk coercion
         const res = new Readable({
           read() {
@@ -50,7 +50,7 @@ describe("createHttpSmartClient - extra branches", () => {
       }) as any;
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const out = await client.task("json", { a: 1 } as any);
     expect(out).toBe(9);
@@ -62,7 +62,7 @@ describe("createHttpSmartClient - extra branches", () => {
       .spyOn(http, "request")
       .mockImplementation((opts: any, cb: any) => {
         const env = { ok: true, result: 101 };
-        const body = getDefaultSerializer().stringify(env);
+        const body = new Serializer().stringify(env);
         const res = new Readable({
           read() {
             this.push(body);
@@ -91,7 +91,7 @@ describe("createHttpSmartClient - extra branches", () => {
 
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
 
     const input = {
@@ -111,7 +111,7 @@ describe("createHttpSmartClient - extra branches", () => {
       .spyOn(http, "request")
       .mockImplementation((opts: any, cb: any) => {
         const env = { ok: true, result: "ARR" };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         cb(asIncoming(res, { "content-type": "application/json" }));
         const sink = new Writable({
@@ -129,7 +129,7 @@ describe("createHttpSmartClient - extra branches", () => {
       }) as any;
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const input = {
       files: [
@@ -166,7 +166,7 @@ describe("createHttpSmartClient - extra branches", () => {
 
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
 
     await expect(client.task("duplex", Readable.from("hi"))).rejects.toThrow(
@@ -198,7 +198,7 @@ describe("createHttpSmartClient - extra branches", () => {
     }) as any;
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const input = {
       f: createNodeFile({ name: "x" }, { stream: Readable.from("x") }, "FX"),
@@ -211,7 +211,7 @@ describe("createHttpSmartClient - extra branches", () => {
       .spyOn(http, "request")
       .mockImplementation((opts: any, cb: any) => {
         const env = { ok: true, result: "FALLBACK" };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         cb(asIncoming(res, { "content-type": "application/json" }));
         // Assert multipart header contains escaped filename (quotes)
@@ -232,7 +232,7 @@ describe("createHttpSmartClient - extra branches", () => {
       }) as any;
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     // meta as any to omit name/type and hit fallbacks in encoder
     const file = createNodeFile(
@@ -250,7 +250,7 @@ describe("createHttpSmartClient - extra branches", () => {
       .spyOn(http, "request")
       .mockImplementation((opts: any, cb: any) => {
         const env = { ok: true, result: 77 };
-        const text = getDefaultSerializer().stringify(env);
+        const text = new Serializer().stringify(env);
         const res = new Readable({
           read() {
             // Emit two string chunks to cover parseMaybe data aggregation path
@@ -275,7 +275,7 @@ describe("createHttpSmartClient - extra branches", () => {
       }) as any;
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const out = await client.task("upload", {
       file: createNodeFile({ name: "x" }, { buffer: Buffer.from([1]) }, "FX"),

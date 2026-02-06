@@ -7,11 +7,11 @@ import type {
   Timer,
 } from "../../durable/core/types";
 import { ExecutionStatus } from "../../durable/core/types";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 import type { DurableAuditEntry } from "../../durable/core/audit";
 import * as ioredisOptional from "../../durable/optionalDeps/ioredis";
 
-const serializer = getDefaultSerializer();
+const serializer = new Serializer();
 
 describe("durable: RedisStore", () => {
   let redisMock: jest.Mocked<RedisClient>;

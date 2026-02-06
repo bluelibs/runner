@@ -2,7 +2,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 
 import { Logger } from "../../../../models/Logger";
 import type { Store } from "../../../../models/Store";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 import {
   ExposureErrorLogKey,
   handleRequestError,
@@ -72,7 +72,7 @@ describe("errorHandlers", () => {
   });
 
   it("handles non-object errors flagged as typed errors", () => {
-    const serializer = getDefaultSerializer();
+    const serializer = new Serializer();
     const store = {
       errors: new Map([
         [

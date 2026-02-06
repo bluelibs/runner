@@ -1,7 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 
 describe("createHttpSmartClient - octet-stream source error", () => {
   const baseUrl = "http://127.0.0.1:7777/__runner";
@@ -30,7 +30,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
 
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const src = new Readable({ read() {} });
     const p = client.task("duplex", src as any);
@@ -70,7 +70,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
     ];
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
       contexts: contexts as any,
     });
     const src = new Readable({

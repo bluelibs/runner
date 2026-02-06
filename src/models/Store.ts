@@ -58,7 +58,7 @@ import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
 import { RunnerMode } from "../types/runner";
 import { detectRunnerMode } from "../tools/detectRunnerMode";
-import { getDefaultSerializer } from "../serializer";
+import { Serializer } from "../serializer";
 import { isOptional, isResource } from "../define";
 
 // Re-export types for backward compatibility
@@ -162,7 +162,7 @@ export class Store {
     builtInResourcesMap.set(globalResources.eventManager, this.eventManager);
     builtInResourcesMap.set(globalResources.logger, this.logger);
     builtInResourcesMap.set(globalResources.taskRunner, this.taskRunner!);
-    builtInResourcesMap.set(globalResources.serializer, getDefaultSerializer());
+    builtInResourcesMap.set(globalResources.serializer, new Serializer());
     builtInResourcesMap.set(
       globalResources.middlewareManager,
       this.middlewareManager,

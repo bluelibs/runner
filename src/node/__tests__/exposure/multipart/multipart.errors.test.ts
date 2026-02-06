@@ -1,5 +1,5 @@
 import { parseMultipartInput } from "../../../exposure/multipart";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 import {
   createMultipartRequest,
   part,
@@ -8,7 +8,7 @@ import {
   createRequestFromBody,
 } from "./multipart.test.utils";
 
-const serializer = getDefaultSerializer();
+const serializer = new Serializer();
 
 describe("parseMultipartInput - Errors", () => {
   const boundary = "----jest-boundary";

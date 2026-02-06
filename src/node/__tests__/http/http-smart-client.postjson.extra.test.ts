@@ -1,7 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 import { createNodeFile } from "../../files";
 
 function asIncoming(
@@ -21,7 +21,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
 
   it("event(): aggregates mixed string+buffer chunks as JSON", async () => {
     jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
-      const payload = getDefaultSerializer().stringify({
+      const payload = new Serializer().stringify({
         ok: true,
         result: undefined,
       });
@@ -49,7 +49,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     }) as any;
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await expect(client.event("evt", { a: 1 } as any)).resolves.toBeUndefined();
   });
@@ -57,7 +57,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
   it("multipart: parseMaybeJsonResponse aggregates mixed chunks", async () => {
     jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
       const env = { ok: true, result: 123 };
-      const text = getDefaultSerializer().stringify(env);
+      const text = new Serializer().stringify(env);
       const res = new Readable({
         read() {
           // emit Buffer then string
@@ -82,7 +82,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     }) as any;
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const out = await client.task("upload", {
       file: createNodeFile({ name: "x" }, { buffer: Buffer.from([1]) }, "FX"),
@@ -95,7 +95,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
       // Capture headers for assertion
       captured.push(opts.headers);
-      const payload = getDefaultSerializer().stringify({
+      const payload = new Serializer().stringify({
         ok: true,
         result: 42,
       });
@@ -132,14 +132,14 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     ];
     const client = createHttpSmartClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
       contexts: contexts as any,
     });
     const out = await client.task("t.json", { a: 1 } as any);
     expect(out).toBe(42);
     const hdrs = captured[0] as Record<string, string>;
     expect(typeof hdrs["x-runner-context"]).toBe("string");
-    const map = getDefaultSerializer().parse<Record<string, string>>(
+    const map = new Serializer().parse<Record<string, string>>(
       hdrs["x-runner-context"],
     );
     expect(JSON.parse(map["ctx.demo"]).k).toBe(1);

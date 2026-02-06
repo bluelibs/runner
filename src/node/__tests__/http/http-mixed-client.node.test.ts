@@ -1,7 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpMixedClient } from "../../http/http-mixed-client";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 import { createNodeFile } from "../../files";
 
 function asIncoming(
@@ -33,15 +33,14 @@ describe("createMixedHttpClient (unit)", () => {
         body: JSON.parse(bodyStr),
       });
       return {
-        text: async () =>
-          getDefaultSerializer().stringify({ ok: true, result: 42 }),
+        text: async () => new Serializer().stringify({ ok: true, result: 42 }),
       } as unknown as Response;
     };
 
     const client = createHttpMixedClient({
       baseUrl,
       fetchImpl: fetchMock,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const out = await client.task<{ a: number }, number>("my.task", { a: 1 });
     expect(out).toBe(42);
@@ -76,7 +75,7 @@ describe("createMixedHttpClient (unit)", () => {
 
     const client = createHttpMixedClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const input = Readable.from("hello");
     const out = (await client.task("duplex", input)) as Readable;
@@ -101,7 +100,7 @@ describe("createMixedHttpClient (unit)", () => {
       .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "OK" };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
         callback(im);
@@ -121,7 +120,7 @@ describe("createMixedHttpClient (unit)", () => {
 
     const client = createHttpMixedClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const input = {
       file: createNodeFile(
@@ -141,7 +140,7 @@ describe("createMixedHttpClient (unit)", () => {
       .mockImplementation((_opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "OK2" };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
         callback(im);
@@ -161,7 +160,7 @@ describe("createMixedHttpClient (unit)", () => {
 
     const client = createHttpMixedClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const input = {
       arr: [
@@ -188,14 +187,14 @@ describe("createMixedHttpClient (unit)", () => {
       });
       return {
         text: async () =>
-          getDefaultSerializer().stringify({ ok: true, result: undefined }),
+          new Serializer().stringify({ ok: true, result: undefined }),
       } as unknown as Response;
     };
 
     const client = createHttpMixedClient({
       baseUrl,
       fetchImpl: fetchMock,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await client.event("log", { x: 1 });
     expect(calls).toHaveLength(1);
@@ -207,18 +206,18 @@ describe("createMixedHttpClient (unit)", () => {
     const fetchMock = async (url: RequestInfo | URL, init?: RequestInit) => {
       calls.push({
         url: String(url),
-        body: getDefaultSerializer().parse(String(init?.body ?? "")),
+        body: new Serializer().parse(String(init?.body ?? "")),
       });
       return {
         text: async () =>
-          getDefaultSerializer().stringify({ ok: true, result: { x: 2 } }),
+          new Serializer().stringify({ ok: true, result: { x: 2 } }),
       } as unknown as Response;
     };
 
     const client = createHttpMixedClient({
       baseUrl,
       fetchImpl: fetchMock,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
 
     expect(typeof client.eventWithResult).toBe("function");
@@ -233,7 +232,7 @@ describe("createMixedHttpClient (unit)", () => {
     expect(() =>
       createHttpMixedClient({
         baseUrl: "" as unknown as string, // Force invalid url to validation
-        serializer: getDefaultSerializer(),
+        serializer: new Serializer(),
       } as any),
     ).toThrow();
   });
@@ -246,15 +245,14 @@ describe("createMixedHttpClient (unit)", () => {
         body: JSON.parse(String(init?.body ?? "")),
       });
       return {
-        text: async () =>
-          getDefaultSerializer().stringify({ ok: true, result: 9 }),
+        text: async () => new Serializer().stringify({ ok: true, result: 9 }),
       } as unknown as Response;
     };
 
     const client = createHttpMixedClient({
       baseUrl,
       fetchImpl: fetchMock,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
 
     const httpReqSpy = jest.spyOn(http, "request");
@@ -275,15 +273,14 @@ describe("createMixedHttpClient (unit)", () => {
         body: JSON.parse(String(init?.body ?? "")),
       });
       return {
-        text: async () =>
-          getDefaultSerializer().stringify({ ok: true, result: 10 }),
+        text: async () => new Serializer().stringify({ ok: true, result: 10 }),
       } as unknown as Response;
     };
 
     const client = createHttpMixedClient({
       baseUrl,
       fetchImpl: fetchMock,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
 
     const httpReqSpy = jest.spyOn(http, "request");
@@ -304,15 +301,14 @@ describe("createMixedHttpClient (unit)", () => {
         body: JSON.parse(String(init?.body ?? "")),
       });
       return {
-        text: async () =>
-          getDefaultSerializer().stringify({ ok: true, result: 11 }),
+        text: async () => new Serializer().stringify({ ok: true, result: 11 }),
       } as unknown as Response;
     };
 
     const client = createHttpMixedClient({
       baseUrl,
       fetchImpl: fetchMock,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
 
     const httpReqSpy = jest.spyOn(http, "request");

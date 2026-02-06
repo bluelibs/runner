@@ -12,14 +12,14 @@ import type {
   IDurableStore,
   ListExecutionsOptions,
 } from "../core/interfaces/store";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 import {
   createDurableAuditEntryId,
   type DurableAuditEntry,
 } from "../core/audit";
 import { createIORedisClient } from "../optionalDeps/ioredis";
 
-const serializer = getDefaultSerializer();
+const serializer = new Serializer();
 
 export interface RedisPipeline {
   get(key: string): RedisPipeline;

@@ -1,7 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 import { createNodeFile } from "../../files";
 
 function asIncoming(
@@ -16,7 +16,7 @@ describe("createHttpSmartClient (unit)", () => {
   const baseUrl = "http://127.0.0.1:1234/__runner";
   const client = createHttpSmartClient({
     baseUrl,
-    serializer: getDefaultSerializer(),
+    serializer: new Serializer(),
   });
 
   afterEach(() => {
@@ -30,7 +30,7 @@ describe("createHttpSmartClient (unit)", () => {
         const callback = cb as (res: http.IncomingMessage) => void;
         // Fake response with JSON content type
         const env = { ok: true, result: 5 };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, {
           "content-type": "application/json; charset=utf-8",
@@ -64,7 +64,7 @@ describe("createHttpSmartClient (unit)", () => {
       .mockImplementation((opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: 1 };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         callback(asIncoming(res, { "content-type": "application/json" }));
         const sink = new Writable({
@@ -83,7 +83,7 @@ describe("createHttpSmartClient (unit)", () => {
     const c = createHttpSmartClient({
       baseUrl,
       onRequest,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const out = await c.task("x", { v: 1 } as any);
     expect(out).toBe(1);
@@ -101,7 +101,7 @@ describe("createHttpSmartClient (unit)", () => {
       .mockImplementation((opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "OK" };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
         callback(im);
@@ -137,7 +137,7 @@ describe("createHttpSmartClient (unit)", () => {
       .mockImplementation((opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "BUF" };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
         callback(im);
@@ -254,7 +254,7 @@ describe("createHttpSmartClient (unit)", () => {
       .mockImplementation((opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: undefined };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
         callback(im);
@@ -282,7 +282,7 @@ describe("createHttpSmartClient (unit)", () => {
       .mockImplementation((opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: { x: 2 } };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
         callback(im);
@@ -309,7 +309,7 @@ describe("createHttpSmartClient (unit)", () => {
     const sentText = Buffer.concat(sent as unknown as Uint8Array[]).toString(
       "utf8",
     );
-    const sentJson = getDefaultSerializer().parse<any>(sentText);
+    const sentJson = new Serializer().parse<any>(sentText);
     expect(sentJson).toEqual({ payload: { x: 1 }, returnPayload: true });
     expect(spy).toHaveBeenCalled();
   });
@@ -320,7 +320,7 @@ describe("createHttpSmartClient (unit)", () => {
       .mockImplementation((opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         callback(asIncoming(res, { "content-type": "application/json" }));
         const sink = new Writable({
@@ -347,7 +347,7 @@ describe("createHttpSmartClient (unit)", () => {
       .mockImplementation((opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: 7 };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         const im = asIncoming(res, { "content-type": "application/json" });
         callback(im);
@@ -371,7 +371,7 @@ describe("createHttpSmartClient (unit)", () => {
     const c = createHttpSmartClient({
       baseUrl: "https://127.0.0.1/__runner",
       auth: { header: "x-token", token: "secret" },
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const out = await c.task("sum", { a: 3, b: 4 } as any);
     expect(out).toBe(7);
@@ -417,7 +417,7 @@ describe("createHttpSmartClient (unit)", () => {
     expect(() =>
       createHttpSmartClient({
         baseUrl: "" as any,
-        serializer: getDefaultSerializer(),
+        serializer: new Serializer(),
       } as any),
     ).toThrow();
   });
@@ -498,7 +498,7 @@ describe("createHttpSmartClient (unit)", () => {
       .mockImplementationOnce((opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: "OK" };
-        const body = Buffer.from(getDefaultSerializer().stringify(env), "utf8");
+        const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
         callback(asIncoming(res, { "content-type": "application/json" }));
         const sink = new Writable({
@@ -517,7 +517,7 @@ describe("createHttpSmartClient (unit)", () => {
     const c = createHttpSmartClient({
       baseUrl,
       onRequest,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await c.task("upload", {
       file: createNodeFile({ name: "x" }, { stream: Readable.from("x") }, "Fz"),

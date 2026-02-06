@@ -4,7 +4,7 @@ import { ITaskMiddlewareConfigured } from "../defs";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
 import { contextError, platformUnsupportedFunctionError } from "../errors";
 import { IAsyncContext, IAsyncContextDefinition } from "../types/asyncContext";
-import { getDefaultSerializer } from "../serializer";
+import { Serializer } from "../serializer";
 import { symbolAsyncContext, symbolOptionalDependency } from "../types/symbols";
 
 export { contextError as ContextError };
@@ -57,7 +57,7 @@ export function defineAsyncContext<T>(
     return storage.run(map, fn as () => R);
   };
 
-  const serializer = getDefaultSerializer();
+  const serializer = new Serializer();
 
   const api = {
     id: ctxId,

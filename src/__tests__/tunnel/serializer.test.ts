@@ -1,11 +1,10 @@
-// These live under the tunnel suite because they validate the default serializer
-// singleton and the stable stringify/parse/addType surface used by tunnels.
-import { getDefaultSerializer, Serializer } from "../../serializer";
+// These live under the tunnel suite because they validate
+// the stable stringify/parse/addType surface used by tunnels.
+import { Serializer } from "../../serializer";
 
 describe("tunnel serializer", () => {
-  it("getDefaultSerializer returns a shared serializer singleton", () => {
-    const s = getDefaultSerializer();
-    expect(s).toBe(getDefaultSerializer()); // idempotent singleton
+  it("supports instantiate -> stringify -> parse", () => {
+    const s = new Serializer();
 
     const now = new Date("2024-01-02T03:04:05.006Z");
     const encoded = s.stringify({ now });
@@ -19,7 +18,7 @@ describe("tunnel serializer", () => {
       when: new Date("2024-05-03T04:05:06.123Z"),
       nested: { flag: true },
     };
-    const s = getDefaultSerializer();
+    const s = new Serializer();
     const viaSerializer = s.stringify(payload);
 
     // Check that we can roundtrip
@@ -41,7 +40,7 @@ describe("tunnel serializer", () => {
       }
     }
 
-    const s = getDefaultSerializer();
+    const s = new Serializer();
     s.addType(
       "Distance",
       (j: { value: number; unit: string }) => new Distance(j.value, j.unit),

@@ -1,6 +1,6 @@
 import type { IncomingHttpHeaders } from "http";
 
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 
 enum MultipartHeaderName {
   ContentType = "content-type",
@@ -87,7 +87,7 @@ describe("parseMultipartInput - unexpected file handler errors", () => {
     const { parseMultipartInput } = require("../../../exposure/multipart");
 
     const boundary = "----unit-busboy-default-boundary-unexpected";
-    const serializer = getDefaultSerializer();
+    const serializer = new Serializer();
     const req = createMockRequest(
       {
         [MultipartHeaderName.ContentType]: `${MultipartMimeType.FormData}; boundary=${boundary}`,

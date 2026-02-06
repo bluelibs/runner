@@ -42,11 +42,11 @@ import {
   parseMultipartInput,
   type MultipartRequest,
 } from "../../../exposure/multipart";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 import { PassThrough } from "node:stream";
 import { NodeInputFile } from "../../../files/inputFile.model";
 
-const serializer = getDefaultSerializer();
+const serializer = new Serializer();
 
 function createMockRequest(
   headers: IncomingHttpHeaders,
