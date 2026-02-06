@@ -18,6 +18,8 @@
 - [Signals (wait for external events)](#signals-wait-for-external-events)
 - [Testing Utilities](#testing-utilities)
 - [Compensation / Rollback Pattern](#compensation--rollback-pattern)
+- [Branching with ctx.switch()](#branching-with-ctxswitch)
+- [Describing a Flow (Static Shape Export)](#describing-a-flow-static-shape-export)
 - [Scheduling & Cron Jobs](#scheduling--cron-jobs)
 - [Gotchas & Troubleshooting](#gotchas--troubleshooting)
 
@@ -857,6 +859,140 @@ const processOrderWithRollback = r
 ```
 
 This is more explicit and readable than an automatic saga system.
+
+---
+
+## Branching with ctx.switch()
+
+`ctx.switch()` is a replay-safe branching primitive for durable workflows. Instead of using plain `if/else` (which the flow shape exporter can't capture), model conditional logic with `switch` so that:
+
+1. The branch decision is **persisted** — on replay, matchers are skipped and the cached branch result is returned.
+2. The branch structure is **visible** to `describeFlow()` for documentation and visualization.
+
+### API
+
+```typescript
+const result = await ctx.switch<TValue, TResult>(
+  stepId,      // unique step ID (like ctx.step)
+  value,       // the value to match against
+  branches,    // array of { id, match, run }
+  defaultBranch?, // optional { id, run } (no match needed)
+);
+```
+
+### Example
+
+```typescript
+const fulfillOrder = r
+  .task("app.tasks.fulfillOrder")
+  .dependencies({ durable })
+  .run(async (input: { orderId: string; tier: string }, { durable }) => {
+    const ctx = durable.use();
+
+    const order = await ctx.step("fetch-order", async () => {
+      return await db.orders.findById(input.orderId);
+    });
+
+    const result = await ctx.switch("fulfillment-route", order.tier, [
+      {
+        id: "premium",
+        match: (tier) => tier === "premium",
+        run: async () => {
+          await ctx.step("express-ship", async () => shipping.express(order));
+          return "express-shipped" as const;
+        },
+      },
+      {
+        id: "standard",
+        match: (tier) => tier === "standard",
+        run: async () => {
+          await ctx.step("standard-ship", async () => shipping.standard(order));
+          return "standard-shipped" as const;
+        },
+      },
+    ], {
+      id: "manual-review",
+      run: async () => {
+        await ctx.step("flag-review", async () => flagForReview(order));
+        return "needs-review" as const;
+      },
+    });
+
+    return { orderId: input.orderId, result };
+  })
+  .build();
+```
+
+### How it works
+
+- **First execution**: matchers evaluate in order; the first matching branch's `run()` is called. The branch `id` and result are persisted as a step result.
+- **Replay**: the cached `{ branchId, result }` is returned immediately — no matchers or `run()` are re-executed.
+- **Audit**: emits a `switch_evaluated` audit entry with `branchId` and `durationMs`.
+- **Determinism**: the step ID is user-provided (required), so it's stable across refactors (like `ctx.step`).
+- **Fail-fast**: throws if no branch matches and no default is provided.
+
+### Interface
+
+```typescript
+interface SwitchBranch<TValue, TResult> {
+  id: string;
+  match: (value: TValue) => boolean;
+  run: (value: TValue) => Promise<TResult>;
+}
+```
+
+---
+
+## Describing a Flow (Static Shape Export)
+
+`describeFlow()` captures the **structure** of a durable workflow without executing it. It returns a serializable `DurableFlowShape` object that you can use for:
+
+- Documentation generation
+- Visual workflow diagrams
+- Tooling and editor plugins
+- API schema exports
+
+### API
+
+```typescript
+import { describeFlow } from "@bluelibs/runner/node";
+
+const shape = await describeFlow(async (ctx) => {
+  await ctx.step("validate", async () => ({ ok: true }));
+  await ctx.switch("route", "premium", [
+    { id: "free", match: (v) => v === "free", run: async () => "free" },
+    { id: "premium", match: (v) => v === "premium", run: async () => "premium" },
+  ]);
+  await ctx.sleep(60_000, { stepId: "cooldown" });
+  await ctx.waitForSignal(Approved, { timeoutMs: 86_400_000, stepId: "approval" });
+  await ctx.emit(OrderShipped, { orderId: "123" }, { stepId: "notify" });
+  await ctx.note("Order processing complete");
+});
+```
+
+### Output shape
+
+```typescript
+interface DurableFlowShape {
+  nodes: FlowNode[];
+}
+
+type FlowNode =
+  | { kind: "step"; stepId: string; hasCompensation: boolean }
+  | { kind: "sleep"; durationMs: number; stepId?: string }
+  | { kind: "waitForSignal"; signalId: string; timeoutMs?: number; stepId?: string }
+  | { kind: "emit"; eventId: string; stepId?: string }
+  | { kind: "switch"; stepId: string; branchIds: string[]; hasDefault: boolean }
+  | { kind: "note"; message: string };
+```
+
+### How it works
+
+The descriptor function receives a **recording context** — a lightweight mock that captures each `ctx.*` call as a `FlowNode` instead of executing it. All return values are `undefined`, so the descriptor must not rely on step results for control flow. Conditional branching should be modeled with `ctx.switch()`.
+
+The step builder API (`.up()` / `.down()`) is also supported: `hasCompensation` reflects whether `.down()` was called.
+
+`rollback()` is a no-op in the recorder (it's a runtime concern, not a structural one).
 
 ---
 

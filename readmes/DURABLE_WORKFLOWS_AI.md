@@ -91,6 +91,53 @@ Import and subscribe using event definitions (not strings): `import { durableEve
 - `ctx.step("id").up(...).down(...)` registers compensations.
 - `await ctx.rollback()` runs compensations in reverse order.
 
+## Branching with ctx.switch()
+
+`ctx.switch()` is a replay-safe branching primitive. It evaluates matchers against a value, persists which branch was taken, and on replay skips the matchers entirely.
+
+```ts
+const result = await ctx.switch("route-order", order.status, [
+  { id: "approve", match: (s) => s === "paid", run: async (s) => { /* ... */ return "approved"; } },
+  { id: "reject",  match: (s) => s === "declined", run: async () => "rejected" },
+], { id: "manual-review", run: async () => "needs-review" }); // optional default
+```
+
+- First arg is the step id (must be unique, like `ctx.step`).
+- Matchers evaluate in order; first match wins.
+- The matched branch `id` + result are persisted; on replay the cached result is returned immediately.
+- Throws if no branch matches and no default is provided.
+- Audit emits a `switch_evaluated` entry with `branchId` and `durationMs`.
+
+## Describing a flow (static shape export)
+
+`describeFlow()` lets you export the structure of a workflow without executing it. Useful for documentation, visualization, and tooling.
+
+```ts
+import { describeFlow } from "@bluelibs/runner/node";
+
+const shape = await describeFlow(async (ctx) => {
+  await ctx.step("validate", async () => ({ ok: true }));
+  await ctx.switch("route", "premium", [
+    { id: "free", match: (v) => v === "free", run: async () => "free" },
+    { id: "premium", match: (v) => v === "premium", run: async () => "premium" },
+  ]);
+  await ctx.sleep(60_000, { stepId: "cooldown" });
+  await ctx.note("Flow complete");
+});
+
+// shape.nodes = [
+//   { kind: "step", stepId: "validate", hasCompensation: false },
+//   { kind: "switch", stepId: "route", branchIds: ["free", "premium"], hasDefault: false },
+//   { kind: "sleep", durationMs: 60000, stepId: "cooldown" },
+//   { kind: "note", message: "Flow complete" },
+// ]
+```
+
+- The descriptor receives a recording context (not a real one) — all return values are `undefined`.
+- Supported node kinds: `step`, `sleep`, `waitForSignal`, `emit`, `switch`, `note`.
+- `DurableFlowShape` and all `FlowNode` types are exported for type-safe consumption.
+- Conditional logic should be modeled with `ctx.switch()` (not JS `if/else`) for the shape to capture it.
+
 ## Versioning (don’t get burned)
 
 - Step ids are part of the durable contract: don’t rename/reorder casually.

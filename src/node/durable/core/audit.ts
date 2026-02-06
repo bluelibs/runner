@@ -10,6 +10,7 @@ export const DurableAuditEntryKind = {
   SignalDelivered: "signal_delivered",
   SignalTimedOut: "signal_timed_out",
   EmitPublished: "emit_published",
+  SwitchEvaluated: "switch_evaluated",
   Note: "note",
 } as const;
 
@@ -74,6 +75,12 @@ export type DurableAuditEntry =
       kind: typeof DurableAuditEntryKind.EmitPublished;
       stepId: string;
       eventId: string;
+    })
+  | (DurableAuditEntryBase & {
+      kind: typeof DurableAuditEntryKind.SwitchEvaluated;
+      stepId: string;
+      branchId: string;
+      durationMs: number;
     })
   | (DurableAuditEntryBase & {
       kind: typeof DurableAuditEntryKind.Note;
@@ -150,6 +157,13 @@ export type DurableAuditEntryInput =
       kind: typeof DurableAuditEntryKind.EmitPublished;
       stepId: string;
       eventId: string;
+      taskId?: string;
+    }
+  | {
+      kind: typeof DurableAuditEntryKind.SwitchEvaluated;
+      stepId: string;
+      branchId: string;
+      durationMs: number;
       taskId?: string;
     }
   | {

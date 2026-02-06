@@ -6,6 +6,7 @@ import type {
   SignalOptions,
   SleepOptions,
   StepOptions,
+  SwitchBranch,
 } from "./interfaces/context";
 import type { IDurableStore } from "./interfaces/store";
 import { StepBuilder } from "./StepBuilder";
@@ -28,6 +29,7 @@ import {
 import { emitDurably } from "./durable-context/DurableContext.emit";
 import { sleepDurably } from "./durable-context/DurableContext.sleep";
 import { waitForSignalDurably } from "./durable-context/DurableContext.waitForSignal";
+import { switchDurably } from "./durable-context/DurableContext.switch";
 
 /**
  * Per-execution workflow toolkit used by durable tasks.
@@ -228,6 +230,27 @@ export class DurableContext implements IDurableContext {
       event,
       payload,
       options,
+    });
+  }
+
+  async switch<TValue, TResult>(
+    stepId: string,
+    value: TValue,
+    branches: SwitchBranch<TValue, TResult>[],
+    defaultBranch?: Omit<SwitchBranch<TValue, TResult>, "match">,
+  ): Promise<TResult> {
+    this.determinism.assertUserStepId(stepId);
+
+    return await switchDurably({
+      store: this.store,
+      executionId: this.executionId,
+      assertNotCancelled: this.assertNotCancelled.bind(this),
+      appendAuditEntry: this.audit.append,
+      assertUniqueStepId: this.determinism.assertUniqueStepId,
+      stepId,
+      value,
+      branches,
+      defaultBranch,
     });
   }
 

@@ -26,6 +26,17 @@ export { DurableContext } from "./core/DurableContext";
 export { StepBuilder } from "./core/StepBuilder";
 export { DurableOperator } from "./core/DurableOperator";
 export { DurableWorker, initDurableWorker } from "./core/DurableWorker";
+export { describeFlow } from "./core/describeFlow";
+export type {
+  DurableFlowShape,
+  FlowNode,
+  FlowStepNode,
+  FlowSleepNode,
+  FlowSignalNode,
+  FlowEmitNode,
+  FlowSwitchNode,
+  FlowNoteNode,
+} from "./core/describeFlow";
 
 // We don't export server.ts by default to avoid Express dependency if not used?
 // Actually user asked for everything in one package.
