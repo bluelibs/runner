@@ -86,5 +86,10 @@ export async function createRunnerDurableRuntime(
     await initDurableWorker(service, config.queue);
   }
 
-  return new DurableResource(service, contextStorage, config.store);
+  return new DurableResource(
+    service,
+    contextStorage,
+    config.store,
+    deps.runnerStore,
+  );
 }

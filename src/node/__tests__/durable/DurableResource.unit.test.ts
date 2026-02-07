@@ -80,6 +80,44 @@ describe("durable: DurableResource", () => {
     );
   });
 
+  it("throws when describe() is called without runner store", async () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const durable = new DurableResource(service, storage);
+
+    const task = r
+      .task("durable.tests.resource.describe.task")
+      .run(async () => "ok")
+      .build();
+
+    await expect(durable.describe(task)).rejects.toThrow(
+      "Durable describe API is not available: runner store was not provided to DurableResource.",
+    );
+  });
+
+  it("throws when describe() is called and dependencies are missing in runner store", async () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const task = r
+      .task("durable.tests.resource.describe.task.missing-deps")
+      .run(async () => "ok")
+      .build();
+
+    const runnerStore = {
+      tasks: new Map([[task.id, { task }]]),
+    } as any;
+    const durable = new DurableResource(
+      service,
+      storage,
+      undefined,
+      runnerStore,
+    );
+
+    await expect(durable.describe(task)).rejects.toThrow(
+      'Cannot describe task "durable.tests.resource.describe.task.missing-deps": task dependencies are not available in the runtime store.',
+    );
+  });
+
   it("proxies durable methods to the underlying service and exposes a scoped use()", async () => {
     const service = createMockService(true);
 

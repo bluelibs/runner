@@ -58,5 +58,3 @@ export { memoryDurableResource } from "./resources/memoryDurableResource";
 export type { MemoryDurableResourceConfig } from "./resources/memoryDurableResource";
 export { redisDurableResource } from "./resources/redisDurableResource";
 export type { RedisDurableResourceConfig } from "./resources/redisDurableResource";
-export { durableRecorderResource } from "./resources/durableRecorderResource";
-export type { DurableRecorder } from "./resources/durableRecorderResource";

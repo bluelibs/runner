@@ -130,16 +130,14 @@ const result = await ctx.switch(
 
 ## Describing a flow (static shape export)
 
-Use `durableRecorderResource` to export the structure of a workflow without executing it. Useful for documentation, visualization, and tooling.
+Use `durable.describe(...)` to export the structure of a workflow without executing it. Useful for documentation, visualization, and tooling.
 
 **Easiest: pass the task directly** — no refactoring needed:
 
 ```ts
-import { durableRecorderResource } from "@bluelibs/runner/node";
-
-// Register recorder in your app, then:
-const recorder = runtime.getResourceValue(durableRecorderResource.fork("app.durable.recorder"));
-const shape = await recorder.describe(myDurableTask);
+// Get your durable dependency from runtime, then:
+const durableRuntime = runtime.getResourceValue(durable);
+const shape = await durableRuntime.describe(myDurableTask);
 // shape.nodes = [{ kind: "step", stepId: "validate", ... }, ...]
 ```
 

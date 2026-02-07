@@ -891,7 +891,7 @@ This is more explicit and readable than an automatic saga system.
 `ctx.switch()` is a replay-safe branching primitive for durable workflows. Instead of using plain `if/else` (which the flow shape exporter can't capture), model conditional logic with `switch` so that:
 
 1. The branch decision is **persisted** — on replay, matchers are skipped and the cached branch result is returned.
-2. The branch structure is **visible** to the flow-shape recorder (via `durableRecorderResource`) for documentation and visualization.
+2. The branch structure is **visible** to the flow-shape recorder (via `durable.describe(...)`) for documentation and visualization.
 
 ### API
 
@@ -976,7 +976,7 @@ interface SwitchBranch<TValue, TResult> {
 
 ## Describing a Flow (Static Shape Export)
 
-Use `durableRecorderResource` to capture the **structure** of a durable workflow without executing it. It returns a serializable `DurableFlowShape` object that you can use for:
+Use `durable.describe(...)` to capture the **structure** of a durable workflow without executing it. It returns a serializable `DurableFlowShape` object that you can use for:
 
 - Documentation generation
 - Visual workflow diagrams
@@ -985,16 +985,17 @@ Use `durableRecorderResource` to capture the **structure** of a durable workflow
 
 ### From an existing task (recommended)
 
-Register the recorder in your app, then pass your task directly — it shims `durable.use()` and records every `ctx.*` operation:
+Call `describe()` on your durable dependency, then pass your task directly — it shims `durable.use()` and records every `ctx.*` operation:
 
 ```typescript
-import { durableRecorderResource } from "@bluelibs/runner/node";
+import { r, run } from "@bluelibs/runner";
+import { memoryDurableResource } from "@bluelibs/runner/node";
 
-const recorder = durableRecorderResource.fork("app.durable.recorder");
-const app = r.resource("app").register([recorder]).build();
+const durable = memoryDurableResource.fork("app.durable");
+const app = r.resource("app").register([durable.with({})]).build();
 const runtime = await run(app);
 
-const shape = await runtime.getResourceValue(recorder).describe(approveOrder);
+const shape = await runtime.getResourceValue(durable).describe(approveOrder);
 
 console.log(shape.nodes);
 // [
@@ -1005,7 +1006,7 @@ console.log(shape.nodes);
 // ]
 ```
 
-That's it. No refactoring — just point the recorder at your task and get the shape.
+That's it. No refactoring — just call `durable.describe(task)` and get the shape.
 
 ### Output shape
 

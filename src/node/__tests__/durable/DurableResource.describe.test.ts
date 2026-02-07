@@ -1,14 +1,10 @@
 import { r, run } from "../../..";
-import { durableRecorderResource } from "../../durable/resources/durableRecorderResource";
 import { memoryDurableResource } from "../../durable/resources/memoryDurableResource";
 
-describe("durable: durableRecorderResource", () => {
+describe("durable: describe()", () => {
   it("describes a task using real non-durable deps and shimmed durable.use()", async () => {
     const durable = memoryDurableResource.fork(
       "durable.tests.recorder.durable",
-    );
-    const recorderDef = durableRecorderResource.fork(
-      "durable.tests.recorder.resource",
     );
 
     const other = r
@@ -38,13 +34,13 @@ describe("durable: durableRecorderResource", () => {
 
     const app = r
       .resource("durable.tests.recorder.app")
-      .register([durable.with({}), recorderDef.with(), other, task])
+      .register([durable.with({}), other, task])
       .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
-    const recorder = runtime.getResourceValue(recorderDef);
+    const durableRuntime = runtime.getResourceValue(durable);
 
-    const shape = await recorder.describe(task);
+    const shape = await durableRuntime.describe(task);
     expect(shape.nodes).toEqual([
       { kind: "step", stepId: "a", hasCompensation: false },
       { kind: "note", message: "done" },
@@ -54,8 +50,8 @@ describe("durable: durableRecorderResource", () => {
   });
 
   it("throws when describing an unregistered task id", async () => {
-    const recorderDef = durableRecorderResource.fork(
-      "durable.tests.recorder.resource.unregistered",
+    const durable = memoryDurableResource.fork(
+      "durable.tests.recorder.durable.unregistered",
     );
 
     const registeredTask = r
@@ -70,13 +66,13 @@ describe("durable: durableRecorderResource", () => {
 
     const app = r
       .resource("durable.tests.recorder.app.unregistered")
-      .register([recorderDef.with(), registeredTask])
+      .register([durable.with({}), registeredTask])
       .build();
 
     const runtime = await run(app, { logs: { printThreshold: null } });
-    const recorder = runtime.getResourceValue(recorderDef);
+    const durableRuntime = runtime.getResourceValue(durable);
 
-    await expect(recorder.describe(unregisteredTask)).rejects.toThrow(
+    await expect(durableRuntime.describe(unregisteredTask)).rejects.toThrow(
       /task is not registered in the runtime store/,
     );
 
