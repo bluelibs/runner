@@ -538,7 +538,7 @@ test("sends welcome email", async () => {
 
 ## Advanced Patterns
 
-- **Optional dependencies:** mark dependencies as optional (`analytics: analyticsService.optional()`) so the builder injects `null` when the resource is absent.
+- **Optional dependencies:** mark dependencies as optional (`analytics: analyticsService.optional()`) so the builder injects `undefined` when the resource is absent.
 - **Conditional registration:** `.register((config) => (config.enableFeature ? [featureResource] : []))`.
 - **Async coordination:** `Semaphore` (O(1) linked queue for heavy contention) and `Queue` live in the main package. Both use isolated EventManagers internally for their lifecycle events, separate from the global EventManager used for business-level application events.
 - **Event safety:** Runner detects event emission cycles and throws an `EventCycleError` with the offending chain.

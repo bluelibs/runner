@@ -194,11 +194,13 @@ This avoids mirroring every durable transition into Postgres.
 ```ts
 import { DurableOperator, RedisStore } from "@bluelibs/runner/node";
 
-const namespace = "app.durable"; // usually the same id you passed to `.fork("...")`
-const prefix = `durable:${encodeURIComponent(namespace)}:`; // must match your durable config
+const durableStorePrefix = process.env.DURABLE_STORE_PREFIX!; // same value used by your durable runtime config
 
 // Read-only store client for status lookups (same redis url + prefix)
-const store = new RedisStore({ redis: process.env.REDIS_URL!, prefix });
+const store = new RedisStore({
+  redis: process.env.REDIS_URL!,
+  prefix: durableStorePrefix,
+});
 
 // Minimal: just the execution row (status/result/error)
 const execution = await store.getExecution(executionId);
@@ -207,6 +209,8 @@ const execution = await store.getExecution(executionId);
 const operator = new DurableOperator(store);
 const detail = await operator.getExecutionDetail(executionId);
 ```
+
+Keep the durable store prefix in one shared config module and reuse it for both workflow runtime wiring and read-only status lookups.
 
 If you already have the durable resource instance (dependency injection), you can use the operator API directly:
 

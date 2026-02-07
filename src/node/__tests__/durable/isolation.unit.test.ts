@@ -1,3 +1,4 @@
+import { validationError } from "../../../errors";
 import { deriveDurableIsolation } from "../../durable/resources/isolation";
 
 describe("durable: isolation derivation", () => {
@@ -33,5 +34,19 @@ describe("durable: isolation derivation", () => {
 
     expect(iso.queueName).toBe("q");
     expect(iso.deadLetterQueueName).toBe("dlq");
+  });
+
+  it("fails fast when namespace is blank", () => {
+    let captured: unknown;
+    try {
+      deriveDurableIsolation({ namespace: "   " });
+    } catch (error) {
+      captured = error;
+    }
+
+    expect(validationError.is(captured)).toBe(true);
+    expect((captured as Error).message).toBe(
+      "Durable isolation namespace validation failed for params.namespace: must be a non-empty string",
+    );
   });
 });

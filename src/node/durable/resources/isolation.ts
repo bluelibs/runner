@@ -1,3 +1,5 @@
+import { validationError } from "../../../errors";
+
 function normalizePrefix(prefix: string): string {
   return prefix.endsWith(":") ? prefix : `${prefix}:`;
 }
@@ -18,6 +20,14 @@ export function deriveDurableIsolation(params: {
   queueName?: string;
   deadLetterQueueName?: string;
 }): DurableIsolation {
+  if (params.namespace.trim().length === 0) {
+    validationError.throw({
+      subject: "Durable isolation namespace",
+      id: "params.namespace",
+      originalError: "must be a non-empty string",
+    });
+  }
+
   const encodedNamespace = encodeURIComponent(params.namespace);
 
   const storePrefix = normalizePrefix(

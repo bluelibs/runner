@@ -184,6 +184,7 @@ const server = r
 const { dispose } = await run(server, {
   debug: "normal", // Enable debug logging
   // logs: { printStrategy: "json" }, // Use JSON log format
+  shutdownHooks: false, // We handle process signals explicitly below
 });
 
 // Graceful shutdown

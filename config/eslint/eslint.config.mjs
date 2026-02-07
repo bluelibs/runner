@@ -112,7 +112,6 @@ export default tseslint.config(
     },
   },
 
-  // Prettier integration (must be last to override)
   // Test file overrides (must come after core config to properly override)
   {
     files: ["src/__tests__/**/*.ts", "**/*.test.ts"],

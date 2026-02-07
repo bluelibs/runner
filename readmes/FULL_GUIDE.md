@@ -356,10 +356,10 @@ test("getUser works", async () => {
 | **Middleware**           | Composable, type-safe   | Guard/Interceptor system | N/A                    | N/A                    | N/A                    |
 | **Events**               | First-class support     | EventEmitter2            | N/A                    | N/A                    | N/A                    |
 | **Durable Workflows**    | Yes (Node-only)         | No (external libs)       | No                     | No                     | No                     |
-| **HTTP Tunnels**         | Yes (Node-only)         | No                       | No                     | No                     | No                     |
+| **HTTP Tunnels**         | Yes (server Node-only, client browser/edge) | No | No                     | No                     | No                     |
 | **Ecosystem**            | Growing                 | Mature, extensive        | Moderate               | Moderate               | Small                  |
 
-> **Note:** This table is intentionally qualitative. Runner’s durable workflows and HTTP tunnels are Node-only features (via `@bluelibs/runner/node`).
+> **Note:** This table is intentionally qualitative. Durable workflows are Node-only (via `@bluelibs/runner/node`), while HTTP tunnels require Node on the server/exposure side and work in any `fetch` runtime on the client side.
 
 ### Side-by-Side: The Same Feature in Both Frameworks
 
@@ -5493,6 +5493,7 @@ const server = r
 const { dispose } = await run(server, {
   debug: "normal", // Enable debug logging
   // logs: { printStrategy: "json" }, // Use JSON log format
+  shutdownHooks: false, // We handle process signals explicitly below
 });
 
 // Graceful shutdown
