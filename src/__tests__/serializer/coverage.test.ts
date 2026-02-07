@@ -62,6 +62,16 @@ describe("Serializer Coverage Tests", () => {
         nodes: null,
       });
     });
+
+    it("should deserialize graph payloads regardless of version for now", () => {
+      const invalidPayload = JSON.stringify({
+        __graph: true,
+        version: 2,
+        root: {},
+        nodes: {},
+      });
+      expect(serializer.deserialize(invalidPayload)).toEqual({});
+    });
   });
 
   describe("Reference Resolution", () => {

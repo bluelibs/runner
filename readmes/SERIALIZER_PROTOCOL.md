@@ -22,6 +22,7 @@ The serializer accepts the following options:
 | `maxRegExpPatternLength` | `number`   | `1024`  | Maximum allowed RegExp pattern length                              |
 | `allowUnsafeRegExp`      | `boolean`  | `false` | Allow patterns that fail the safety heuristic (nested quantifiers) |
 | `allowedTypes`           | `string[]` | `null`  | Whitelist of type IDs allowed during deserialization (null = all)  |
+| `symbolPolicy`           | `string`   | `AllowAll` | Symbol deserialization policy: `AllowAll`, `WellKnownOnly`, `Disabled` |
 | `pretty`                 | `boolean`  | `false` | Enable indented JSON output                                        |
 
 ---
@@ -194,8 +195,12 @@ RegExp payloads are validated:
 
 ## Versioning
 
-`version` is reserved for protocol changes. Current graph version:
+`version` is reserved for protocol changes. Current graph version emitted by serializer:
 
 - `version: 1`
 
-The deserializer currently uses `__graph: true` plus basic shape checks to detect graph payloads; `version` is expected to match the current graph shape.
+Deserializer behavior (current):
+
+- Graph payload detection uses `__graph: true` plus basic shape checks (`root` and `nodes` present/object).
+- `version` is currently informational and not strictly enforced during deserialization.
+- If/when protocol evolution is introduced, `version` will become the compatibility switch for forward/backward handling.

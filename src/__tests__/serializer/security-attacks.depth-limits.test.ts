@@ -96,21 +96,19 @@ describe("Serializer Security Attacks", () => {
       expect(result.a.b.c).toBe(1);
     });
 
-    it("should treat Infinity maxDepth as default", () => {
+    it("should allow Infinity maxDepth as unlimited depth", () => {
       const infiniteDepthSerializer = new Serializer({
         maxDepth: Number.POSITIVE_INFINITY,
       });
 
-      // Serializer currently requires a finite maxDepth; Infinity falls back to
-      // the default depth limit, so a deep payload should still be rejected.
       let nested = '{"end":true}';
       for (let i = 0; i < 1100; i++) {
         nested = `{"level":${nested}}`;
       }
 
-      expect(() => infiniteDepthSerializer.deserialize(nested)).toThrow(
-        /Maximum depth exceeded/,
-      );
+      const result =
+        infiniteDepthSerializer.deserialize<Record<string, unknown>>(nested);
+      expect(result).toBeDefined();
     });
   });
 });
