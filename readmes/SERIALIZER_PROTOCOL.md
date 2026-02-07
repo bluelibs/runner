@@ -159,9 +159,13 @@ These rules are applied by both formats:
 
 - `undefined` is preserved via `{ "__type": "Undefined", "value": null }`.
 - non-finite numbers (`NaN`, `Infinity`, `-Infinity`) are preserved via `{ "__type": "NonFiniteNumber", "value": "NaN" | "Infinity" | "-Infinity" }`.
-- `bigint`, `symbol`, and `function` are rejected (throw).
+- `bigint` is preserved via `{ "__type": "BigInt", "value": "123" }`.
+- `symbol` is supported for:
+  - **Global symbols**: `Symbol.for(key)` is preserved via `{ "__type": "Symbol", "value": { "kind": "For", "key": "..." } }`.
+  - **Well-known symbols**: Standard symbols (e.g. `Symbol.iterator`) are preserved via `{ "__type": "Symbol", "value": { "kind": "WellKnown", "key": "..." } }`.
+- Unique symbols (`Symbol('...')`) and `function` are rejected (throw).
 
-Previous versions of the protocol serialized these as `null` (matching `JSON.stringify`). Modern versions prefer data integrity.
+Previous versions of the protocol serialized these as `null` (matching `JSON.stringify`). Modern versions prefer data integrity for supported types and strict failure for prohibited types.
 
 ---
 

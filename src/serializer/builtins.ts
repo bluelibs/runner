@@ -3,6 +3,8 @@
  */
 
 import type { TypeDefinition } from "./types";
+import { binaryBuiltInTypes } from "./binary-builtins";
+import { errorAndUrlBuiltInTypes } from "./error-url-builtins";
 import {
   assertBigIntPayload,
   assertNonFiniteNumberTag,
@@ -224,4 +226,6 @@ export const builtInTypes: Array<TypeDefinition<unknown, unknown>> = [
   NonFiniteNumberType as TypeDefinition<unknown, unknown>,
   BigIntType as TypeDefinition<unknown, unknown>,
   SymbolType as TypeDefinition<unknown, unknown>,
+  ...errorAndUrlBuiltInTypes,
+  ...binaryBuiltInTypes,
 ];

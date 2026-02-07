@@ -61,14 +61,17 @@ describe("Serializer Security Attacks", () => {
       expect(() => serializer.deserialize(payload)).toThrow(/Unknown type/);
     });
 
-    it("should not execute code via Buffer type name with malicious data", () => {
-      // Buffer is not a built-in type, so should be rejected
+    it("should treat Buffer payload as binary data only", () => {
       const payload = JSON.stringify({
         __type: "Buffer",
         value: [0x48, 0x65, 0x6c, 0x6c, 0x6f],
       });
 
-      expect(() => serializer.deserialize(payload)).toThrow(/Unknown type/);
+      const result = serializer.deserialize<unknown>(payload);
+      expect(result).toBeInstanceOf(Uint8Array);
+      expect(Array.from(result as Uint8Array)).toEqual([
+        0x48, 0x65, 0x6c, 0x6c, 0x6f,
+      ]);
     });
 
     it("should not be vulnerable to type name with special characters", () => {
