@@ -73,13 +73,13 @@ jobs:
           echo "Comparing benchmark results..."
           echo "Baseline: ${{ github.workspace }}/benchmarks/baseline.json"
           echo "Current: ${{ github.workspace }}/benchmarks/benchmark-results.json"
-          echo "Config: ${{ github.workspace }}/head/benchmarks/benchmarks.config.json"
+          echo "Config: ${{ github.workspace }}/head/config/benchmarks/benchmarks.config.json"
 
           # Show file sizes for debugging
           ls -la ${{ github.workspace }}/benchmarks/baseline.json ${{ github.workspace }}/benchmarks/benchmark-results.json
 
           # Run comparison
-          node ./scripts/compare-benchmarks.mjs ${{ github.workspace }}/benchmarks/baseline.json ${{ github.workspace }}/benchmarks/benchmark-results.json ${{ github.workspace }}/head/benchmarks/benchmarks.config.json
+          node ./scripts/compare-benchmarks.mjs ${{ github.workspace }}/benchmarks/baseline.json ${{ github.workspace }}/benchmarks/benchmark-results.json ${{ github.workspace }}/head/config/benchmarks/benchmarks.config.json
 
       - name: Upload artifacts
         if: always()
