@@ -11,7 +11,7 @@
  * Demonstrates: ctx.step(), ctx.waitForSignal() with timeout,
  *               ctx.switch() (replay-safe branching), ctx.note().
  */
-import { r } from "@bluelibs/runner/node";
+import { r } from "@bluelibs/runner";
 import { durable, EmailVerified } from "./ids.js";
 
 export interface OnboardingInput {
@@ -31,72 +31,76 @@ export interface OnboardingResult {
 export const userOnboarding = r
   .task("example.tasks.userOnboarding")
   .dependencies({ durable })
-  .run(async (input: OnboardingInput, { durable }): Promise<OnboardingResult> => {
-    const ctx = durable.use();
+  .run(
+    async (input: OnboardingInput, { durable }): Promise<OnboardingResult> => {
+      const ctx = durable.use();
 
-    // Step 1 — create account
-    const account = await ctx.step("createAccount", async () => {
-      const userId = `user_${Date.now()}`;
-      return { userId, email: input.email, plan: input.plan };
-    });
+      // Step 1 — create account
+      const account = await ctx.step("createAccount", async () => {
+        const userId = `user_${Date.now()}`;
+        return { userId, email: input.email, plan: input.plan };
+      });
 
-    await ctx.note(`Account created for ${account.email}`);
+      await ctx.note(`Account created for ${account.email}`);
 
-    // Step 2 — send verification email
-    await ctx.step("sendVerificationEmail", async () => {
-      // Simulate sending an email
-      return { sentTo: account.email, sentAt: Date.now() };
-    });
+      // Step 2 — send verification email
+      await ctx.step("sendVerificationEmail", async () => {
+        // Simulate sending an email
+        return { sentTo: account.email, sentAt: Date.now() };
+      });
 
-    // Step 3 — wait for email verification (15 second timeout for demo)
-    const verification = await ctx.waitForSignal(EmailVerified, {
-      stepId: "awaitEmailVerification",
-      timeoutMs: 15_000,
-    });
+      // Step 3 — wait for email verification (15 second timeout for demo)
+      const verification = await ctx.waitForSignal(EmailVerified, {
+        stepId: "awaitEmailVerification",
+        timeoutMs: 15_000,
+      });
 
-    // Step 4 — branch based on verification outcome
-    const workspace: string | null = await ctx.switch(
-      "provisionBranch",
-      verification,
-      [
-        {
-          id: "verified",
-          match: (v: typeof verification) => v.kind === "signal",
-          run: async () => {
-            // Provision resources only if verified
-            const ws = await ctx.step("provisionResources", async () => {
-              return `workspace_${account.userId}`;
-            });
-            return ws;
+      // Step 4 — branch based on verification outcome
+      const workspace: string | null = await ctx.switch(
+        "provisionBranch",
+        verification,
+        [
+          {
+            id: "verified",
+            match: (v: typeof verification) => v.kind === "signal",
+            run: async () => {
+              // Provision resources only if verified
+              const ws = await ctx.step("provisionResources", async () => {
+                return `workspace_${account.userId}`;
+              });
+              return ws;
+            },
           },
-        },
-        {
-          id: "timed-out",
-          match: (v: typeof verification) => v.kind === "timeout",
-          run: async () => {
-            await ctx.note("Email verification timed out — skipping provisioning");
-            return null;
+          {
+            id: "timed-out",
+            match: (v: typeof verification) => v.kind === "timeout",
+            run: async () => {
+              await ctx.note(
+                "Email verification timed out — skipping provisioning",
+              );
+              return null;
+            },
           },
-        },
-      ],
-    );
+        ],
+      );
 
-    // Step 5 — send welcome email
-    await ctx.step("sendWelcomeEmail", async () => {
+      // Step 5 — send welcome email
+      await ctx.step("sendWelcomeEmail", async () => {
+        return {
+          sentTo: account.email,
+          verified: verification.kind === "signal",
+          sentAt: Date.now(),
+        };
+      });
+
       return {
-        sentTo: account.email,
+        userId: account.userId,
+        email: account.email,
+        plan: account.plan,
         verified: verification.kind === "signal",
-        sentAt: Date.now(),
+        workspace,
+        completedAt: Date.now(),
       };
-    });
-
-    return {
-      userId: account.userId,
-      email: account.email,
-      plan: account.plan,
-      verified: verification.kind === "signal",
-      workspace,
-      completedAt: Date.now(),
-    };
-  })
+    },
+  )
   .build();

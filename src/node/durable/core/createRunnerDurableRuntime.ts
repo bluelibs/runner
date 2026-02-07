@@ -8,6 +8,7 @@ import { createDurableRunnerAuditEmitter } from "../emitters/runnerAuditEmitter"
 import type { EventManager } from "../../../models/EventManager";
 import type { TaskRunner } from "../../../models/TaskRunner";
 import type { Store } from "../../../models/Store";
+import type { ITask } from "../../../types/task";
 import { initDurableWorker } from "./DurableWorker";
 
 export type RunnerDurableRuntimeConfig = Omit<
@@ -66,7 +67,10 @@ export async function createRunnerDurableRuntime(
         task: DurableTask<TInput, TResult>,
         input?: TInput,
       ) => {
-        const outputPromise = await deps.taskRunner.run(task, input);
+        const outputPromise = await deps.taskRunner.run(
+          task as ITask<TInput, Promise<TResult>, any, any, any, any>,
+          input,
+        );
         if (outputPromise === undefined) {
           throw new Error(
             `Durable task '${task.id}' completed without a result promise.`,

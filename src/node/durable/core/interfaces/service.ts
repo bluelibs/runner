@@ -1,4 +1,3 @@
-import type { ITask } from "../../../../types/task";
 import type { IEventDefinition } from "../../../../types/event";
 import type { IDurableStore } from "./store";
 import type { IDurableQueue } from "./queue";
@@ -7,11 +6,10 @@ import type { IDurableContext } from "./context";
 import type { Schedule } from "../types";
 import type { DurableAuditEmitter } from "../audit";
 
-export type DurableTask<TInput = unknown, TResult = unknown> = ITask<
-  TInput,
-  Promise<TResult>,
-  any
->;
+export interface DurableTask<TInput = unknown, TResult = unknown> {
+  id: string;
+  run(input: TInput, ...args: any[]): Promise<TResult>;
+}
 
 export interface ITaskExecutor {
   run<TInput, TResult>(

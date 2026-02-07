@@ -10,7 +10,7 @@
  *
  * Demonstrates: ctx.step(), ctx.sleep(), ctx.waitForSignal(), signals.
  */
-import { r } from "@bluelibs/runner/node";
+import { r } from "@bluelibs/runner";
 import { durable, PaymentConfirmed } from "./ids.js";
 
 export interface OrderInput {
@@ -72,7 +72,9 @@ export const processOrder = r
       };
     });
 
-    await ctx.note(`Order ${validated.orderId} shipped via charge ${charge.chargeId}`);
+    await ctx.note(
+      `Order ${validated.orderId} shipped via charge ${charge.chargeId}`,
+    );
 
     return shipment;
   })

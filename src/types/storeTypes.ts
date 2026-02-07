@@ -24,7 +24,7 @@ export type ResourceStoreElementType<
   D extends DependencyMapType = {},
   TContext = any,
 > = {
-  resource: IResource<C, V, D, TContext, any, any>;
+  resource: IResource<C, V, D, TContext>;
   computedDependencies?: ResourceDependencyValuesType<D>;
   config: C;
   value: V;
@@ -37,7 +37,7 @@ export type TaskStoreElementType<
   Output extends Promise<any> = any,
   D extends DependencyMapType = any,
 > = {
-  task: ITask<Input, Output, D, any, any, any>;
+  task: ITask<Input, Output, D>;
   computedDependencies: DependencyValuesType<D>;
   isInitialized: boolean;
   interceptors?: Array<TaskLocalInterceptor<any, any>>;
@@ -55,7 +55,7 @@ export type HookStoreElementType<
 export type TaskMiddlewareStoreElementType<
   TDeps extends DependencyMapType = any,
 > = {
-  middleware: ITaskMiddleware<any, TDeps, any, any>;
+  middleware: ITaskMiddleware<any, any, any, TDeps>;
   computedDependencies: DependencyValuesType<TDeps>;
   isInitialized: boolean;
 };
@@ -63,7 +63,7 @@ export type TaskMiddlewareStoreElementType<
 export type ResourceMiddlewareStoreElementType<
   TDeps extends DependencyMapType = any,
 > = {
-  middleware: IResourceMiddleware<any, TDeps>;
+  middleware: IResourceMiddleware<any, any, any, TDeps>;
   computedDependencies: DependencyValuesType<TDeps>;
   isInitialized: boolean;
 };

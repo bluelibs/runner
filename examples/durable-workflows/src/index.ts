@@ -8,9 +8,16 @@
  * Usage:
  *   npm run build && node dist/index.js
  */
-import { r, run, waitUntil } from "@bluelibs/runner/node";
+import { r, run } from "@bluelibs/runner";
+import { waitUntil } from "@bluelibs/runner/node";
 
-import { durable, durableRegistration, store, PaymentConfirmed, EmailVerified } from "./ids.js";
+import {
+  durable,
+  durableRegistration,
+  store,
+  PaymentConfirmed,
+  EmailVerified,
+} from "./ids.js";
 import { processOrder } from "./orderProcessing.js";
 import { userOnboarding } from "./userOnboarding.js";
 import type { OrderResult } from "./orderProcessing.js";
@@ -55,12 +62,16 @@ export async function runDurableWorkflowsDemo(): Promise<{
         const steps = await store.listStepResults(orderExecutionId);
         return steps.some((s) => {
           const r = s.result as Record<string, unknown> | null;
-          return r && r.state === "waiting" && r.signalId === PaymentConfirmed.id;
+          return (
+            r && r.state === "waiting" && r.signalId === PaymentConfirmed.id
+          );
         });
       },
       { timeoutMs: 5_000, intervalMs: 20 },
     );
-    console.log("  Workflow is sleeping — waiting for PaymentConfirmed signal...");
+    console.log(
+      "  Workflow is sleeping — waiting for PaymentConfirmed signal...",
+    );
 
     // Simulate external payment confirmation (e.g. from a webhook)
     await service.signal(orderExecutionId, PaymentConfirmed, {
@@ -69,10 +80,10 @@ export async function runDurableWorkflowsDemo(): Promise<{
     console.log("  Signal sent: PaymentConfirmed");
 
     // Wait for the execution to complete
-    const orderResult = await service.wait(orderExecutionId, {
+    const orderResult = (await service.wait(orderExecutionId, {
       timeout: 10_000,
       waitPollIntervalMs: 20,
-    }) as OrderResult;
+    })) as OrderResult;
     console.log("  Order result:", orderResult);
 
     // ── Workflow 2: User Onboarding (verified path) ──────────────────────
@@ -104,10 +115,10 @@ export async function runDurableWorkflowsDemo(): Promise<{
     console.log("  Signal sent: EmailVerified");
 
     // Wait for completion
-    const onboardingResult = await service.wait(onboardingExecutionId, {
+    const onboardingResult = (await service.wait(onboardingExecutionId, {
       timeout: 10_000,
       waitPollIntervalMs: 20,
-    }) as OnboardingResult;
+    })) as OnboardingResult;
     console.log("  Onboarding result:", onboardingResult);
 
     console.log("\n=== All workflows completed successfully! ===\n");

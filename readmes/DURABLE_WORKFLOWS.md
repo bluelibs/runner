@@ -992,10 +992,19 @@ import { r, run } from "@bluelibs/runner";
 import { memoryDurableResource } from "@bluelibs/runner/node";
 
 const durable = memoryDurableResource.fork("app.durable");
-const app = r.resource("app").register([durable.with({})]).build();
+const app = r
+  .resource("app")
+  .register([durable.with({})])
+  .build();
 const runtime = await run(app);
 
+// TInput is inferred from the task:
 const shape = await runtime.getResourceValue(durable).describe(approveOrder);
+
+// Or specify input explicitly:
+const shape2 = await runtime
+  .getResourceValue(durable)
+  .describe<{ orderId: string }>(approveOrder, { orderId: "123" });
 
 console.log(shape.nodes);
 // [

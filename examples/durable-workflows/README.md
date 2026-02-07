@@ -35,14 +35,14 @@ npm test            # builds + runs the test suite
 
 ## What it shows
 
-| Feature | Where |
-|---|---|
-| `ctx.step(id, fn)` | Both workflows |
-| `ctx.sleep(ms)` | Order processing |
-| `ctx.waitForSignal(signal)` | Both workflows |
-| `ctx.waitForSignal(signal, { timeoutMs })` | User onboarding |
-| `ctx.switch()` (replay-safe branching) | User onboarding |
-| `ctx.note()` | Both workflows |
-| `service.startExecution()` | index.ts |
-| `service.signal()` | index.ts |
-| `service.wait()` | index.ts |
+| Feature                                    | Where            |
+| ------------------------------------------ | ---------------- |
+| `ctx.step(id, fn)`                         | Both workflows   |
+| `ctx.sleep(ms)`                            | Order processing |
+| `ctx.waitForSignal(signal)`                | Both workflows   |
+| `ctx.waitForSignal(signal, { timeoutMs })` | User onboarding  |
+| `ctx.switch()` (replay-safe branching)     | User onboarding  |
+| `ctx.note()`                               | Both workflows   |
+| `service.startExecution()`                 | index.ts         |
+| `service.signal()`                         | index.ts         |
+| `service.wait()`                           | index.ts         |

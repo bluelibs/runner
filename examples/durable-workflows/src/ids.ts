@@ -1,9 +1,8 @@
 /**
  * Shared event & resource definitions for the durable workflows example.
  */
+import { r, event } from "@bluelibs/runner";
 import {
-  r,
-  event,
   durableResource,
   MemoryStore,
   MemoryEventBus,

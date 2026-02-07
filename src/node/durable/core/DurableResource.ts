@@ -49,8 +49,14 @@ export interface IDurableResource extends Pick<
    * - Durable deps are shimmed so `durable.use()` returns the recorder context.
    *
    * The task must be registered in the runtime store (ie. part of the app tree).
+   *
+   * Accepts any Runner `ITask`. Generic `TInput` is inferred from the task,
+   * or can be specified explicitly: `describe<MyInput>(task, input)`.
    */
-  describe(task: AnyTask, input?: unknown): Promise<DurableFlowShape>;
+  describe<TInput>(
+    task: ITask<TInput, any, any, any, any, any>,
+    input?: TInput,
+  ): Promise<DurableFlowShape>;
 
   /**
    * Store-backed operator API to inspect and administrate executions
@@ -98,9 +104,9 @@ export class DurableResource implements IDurableResource {
     return ctx;
   }
 
-  async describe<I>(
-    task: ITask<I, any, any, any, any, any>,
-    input?: I,
+  async describe<TInput>(
+    task: ITask<TInput, any, any, any, any, any>,
+    input?: TInput,
   ): Promise<DurableFlowShape> {
     if (!this.runnerStore) {
       throw new Error(
@@ -125,7 +131,7 @@ export class DurableResource implements IDurableResource {
 
     return await recordFlowShape(async (ctx) => {
       const depsWithRecorder = this.injectRecorderIntoDurableDeps(deps, ctx);
-      await effectiveTask.run(input, depsWithRecorder);
+      await effectiveTask.run(input as TInput, depsWithRecorder as any);
     });
   }
 

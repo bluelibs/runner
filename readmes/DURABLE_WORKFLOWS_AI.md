@@ -137,13 +137,19 @@ Use `durable.describe(...)` to export the structure of a workflow without execut
 ```ts
 // Get your durable dependency from runtime, then:
 const durableRuntime = runtime.getResourceValue(durable);
-const shape = await durableRuntime.describe(myDurableTask);
+const shape = await durableRuntime.describe(myTask);
 // shape.nodes = [{ kind: "step", stepId: "validate", ... }, ...]
+
+// TInput is inferred from the task, or can be specified explicitly:
+const shape2 = await durableRuntime.describe<{ orderId: string }>(myTask, {
+  orderId: "123",
+});
 ```
 
 The recorder shims `durable.use()` inside the task's `run` and records every `ctx.*` operation.
 
 Notes:
+
 - The recorder captures each `ctx.*` call as a `FlowNode`; step bodies are never executed.
 - Supported node kinds: `step`, `sleep`, `waitForSignal`, `emit`, `switch`, `note`.
 - `DurableFlowShape` and all `FlowNode` types are exported for type-safe consumption.
