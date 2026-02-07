@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Store } from "../../../models/Store";
 import type { IEventDefinition } from "../../../types/event";
-import type { AnyTask } from "../../../types/task";
+import type { AnyTask, ITask } from "../../../types/task";
 import type { IDurableContext } from "./interfaces/context";
 import type {
   DurableTask,
@@ -98,7 +98,10 @@ export class DurableResource implements IDurableResource {
     return ctx;
   }
 
-  async describe(task: AnyTask, input?: unknown): Promise<DurableFlowShape> {
+  async describe<I>(
+    task: ITask<I, any, any, any, any, any>,
+    input?: I,
+  ): Promise<DurableFlowShape> {
     if (!this.runnerStore) {
       throw new Error(
         "Durable describe API is not available: runner store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) instead of manually constructing DurableResource.",
