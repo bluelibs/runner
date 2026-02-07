@@ -247,14 +247,14 @@ Our package.json shows the full strategy:
 {
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./dist/types/index.d.ts",
       "browser": {
         "import": "./dist/browser/index.mjs",
         "require": "./dist/browser/index.cjs",
         "default": "./dist/browser/index.mjs"
       },
       "node": {
-        "types": "./dist/node/node.d.ts",
+        "types": "./dist/types/node/index.d.ts",
         "import": "./dist/node/node.mjs",
         "require": "./dist/node/node.cjs"
       },

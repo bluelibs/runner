@@ -79,4 +79,25 @@ describe("ListenerRegistry", () => {
     const listener = createListener({ handler: jest.fn(), order: 0 });
     expect(listener.isGlobal).toBe(false);
   });
+
+  it("mergeSortedListeners keeps remaining listeners from either side", () => {
+    const registry = new (ListenerRegistry as any)();
+    const l1 = createListener({ handler: jest.fn(), order: 1 });
+    const l2 = createListener({ handler: jest.fn(), order: 2 });
+
+    const mergedLeft = registry.mergeSortedListeners([l1, l2], []);
+    expect(mergedLeft).toHaveLength(2);
+    expect(mergedLeft[0]).toBe(l1);
+    expect(mergedLeft[1]).toBe(l2);
+
+    const mergedRight = registry.mergeSortedListeners([], [l1, l2]);
+    expect(mergedRight).toHaveLength(2);
+    expect(mergedRight[0]).toBe(l1);
+    expect(mergedRight[1]).toBe(l2);
+
+    // Verify actual interleaving when both sides are non-empty
+    const l3 = createListener({ handler: jest.fn(), order: 3 });
+    const merged = registry.mergeSortedListeners([l1, l3], [l2]);
+    expect(merged).toEqual([l1, l2, l3]);
+  });
 });

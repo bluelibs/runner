@@ -13,6 +13,18 @@ import { EventManager, Logger, Store, TaskRunner } from "./models";
 
 let testResourceCounter = 0;
 
+export interface TestFacade {
+  runTask: <I, O extends Promise<any>, D extends DependencyMapType>(
+    task: ITask<I, O, D>,
+    ...args: I extends undefined ? [] : [I]
+  ) => Promise<Awaited<O> | undefined>;
+  getResource: (id: string) => unknown;
+  taskRunner: TaskRunner;
+  store: Store;
+  logger: Logger;
+  eventManager: EventManager;
+}
+
 /**
  * Helper to create a minimal test harness resource that wraps a root app (or any registerable)
  * and exposes convenient testing utilities while running the full ecosystem
@@ -30,7 +42,7 @@ export function createTestResource(
       | IResourceWithConfig
     >;
   },
-): IResource<void, Promise<ReturnType<typeof buildTestFacade>>> {
+): IResource<void, Promise<TestFacade>> {
   return defineResource({
     id: `testing.${root.id}.${++testResourceCounter}`,
     register: [root],
@@ -46,12 +58,13 @@ export function createTestResource(
     },
   });
 }
+
 function buildTestFacade(deps: {
   taskRunner: TaskRunner;
   store: Store;
   logger: Logger;
   eventManager: EventManager;
-}) {
+}): TestFacade {
   return {
     // Run a task within the fully initialized ecosystem
     runTask: <I, O extends Promise<any>, D extends DependencyMapType>(

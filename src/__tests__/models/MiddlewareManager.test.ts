@@ -251,6 +251,27 @@ describe("MiddlewareManager", () => {
     expect(Array.isArray(interceptors)).toBe(true);
   });
 
+  it("returns defensive copies for global interceptor getters", () => {
+    const taskInterceptor = jest.fn(async (next, input) => next(input));
+    manager.intercept("task", taskInterceptor);
+
+    const taskInterceptors = (
+      manager as unknown as { taskMiddlewareInterceptors: any[] }
+    ).taskMiddlewareInterceptors;
+
+    expect(Object.isFrozen(taskInterceptors)).toBe(true);
+    expect(() =>
+      taskInterceptors.push(
+        jest.fn(async (next: any, input: any) => next(input)),
+      ),
+    ).toThrow();
+
+    const taskInterceptorsAfterMutationAttempt = (
+      manager as unknown as { taskMiddlewareInterceptors: any[] }
+    ).taskMiddlewareInterceptors;
+    expect(taskInterceptorsAfterMutationAttempt).toHaveLength(1);
+  });
+
   it("getEverywhereMiddlewareForTasks includes middleware with everywhere: true", () => {
     const task = defineTask({ id: "task.true", run: async () => 0 });
     const mw = defineTaskMiddleware({

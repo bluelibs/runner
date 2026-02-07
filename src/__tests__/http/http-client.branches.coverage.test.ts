@@ -1,6 +1,6 @@
 import { createHttpClient } from "../../http-client";
 import { createWebFile } from "../../platform/createWebFile";
-import { getDefaultSerializer } from "../../serializer";
+import { Serializer } from "../../serializer";
 
 describe("http-client branches coverage", () => {
   const baseUrl = "http://127.0.0.1:7070/__runner";
@@ -16,7 +16,7 @@ describe("http-client branches coverage", () => {
     const client = createHttpClient({
       baseUrl,
       fetchImpl: fetchMock as any,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await expect(client.task("t.empty", { file } as any)).rejects.toBeTruthy();
   });
@@ -28,14 +28,13 @@ describe("http-client branches coverage", () => {
     const file = createWebFile({ name: "b.bin" }, blob, "FE2");
     const fetchMock = async () =>
       ({
-        text: async () =>
-          getDefaultSerializer().stringify({ ok: true, result: 5 }),
+        text: async () => new Serializer().stringify({ ok: true, result: 5 }),
         headers: { get: () => "text/plain" },
       }) as any;
     const client = createHttpClient({
       baseUrl,
       fetchImpl: fetchMock as any,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const r = await client.task("t.nonjson", { file } as any);
     expect(r).toBe(5);

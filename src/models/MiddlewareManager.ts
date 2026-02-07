@@ -1,7 +1,5 @@
 import { DependencyMapType, ITask, IResource } from "../defs";
-import { EventManager } from "./EventManager";
 import { Store } from "./Store";
-import { Logger } from "./Logger";
 import { ITaskMiddleware, IResourceMiddleware } from "../defs";
 import { isResourceMiddleware, isTaskMiddleware } from "../define";
 import { InterceptorRegistry } from "./middleware/InterceptorRegistry";
@@ -30,8 +28,8 @@ export class MiddlewareManager {
 
   constructor(
     protected readonly store: Store,
-    protected readonly eventManager: EventManager,
-    protected readonly logger: Logger,
+    _eventManager: unknown,
+    _logger: unknown,
   ) {
     this.interceptorRegistry = new InterceptorRegistry();
     this.middlewareResolver = new MiddlewareResolver(store);
@@ -83,6 +81,8 @@ export class MiddlewareManager {
    * @param kind - The type of middleware to intercept ("task" or "resource")
    * @param interceptor - The interceptor function to add
    */
+  intercept(kind: "task", interceptor: TaskMiddlewareInterceptor): void;
+  intercept(kind: "resource", interceptor: ResourceMiddlewareInterceptor): void;
   intercept(
     kind: "task" | "resource",
     interceptor: TaskMiddlewareInterceptor | ResourceMiddlewareInterceptor,
@@ -105,6 +105,14 @@ export class MiddlewareManager {
    * @param middleware - The middleware instance to intercept
    * @param interceptor - The interceptor function with proper typing
    */
+  interceptMiddleware(
+    middleware: ITaskMiddleware<any, any, any, any>,
+    interceptor: TaskMiddlewareInterceptor,
+  ): void;
+  interceptMiddleware(
+    middleware: IResourceMiddleware<any, any, any, any>,
+    interceptor: ResourceMiddlewareInterceptor,
+  ): void;
   interceptMiddleware(
     middleware:
       | ITaskMiddleware<any, any, any, any>

@@ -1,4 +1,10 @@
-import type { IPlatformAdapter, IAsyncLocalStorage, PlatformId } from "./types";
+import type {
+  IPlatformAdapter,
+  IAsyncLocalStorage,
+  PlatformId,
+  PlatformSetTimeout,
+  PlatformClearTimeout,
+} from "./types";
 import { createPlatformAdapter } from "./factory";
 import { detectEnvironment } from "./adapters/universal";
 import { NodePlatformAdapter } from "./adapters/node";
@@ -69,13 +75,21 @@ export function isUniversal(): boolean {
   return detectEnvironment() === "universal";
 }
 
-export type { IPlatformAdapter, IAsyncLocalStorage } from "./types";
+export type {
+  IPlatformAdapter,
+  IAsyncLocalStorage,
+  PlatformId,
+  PlatformSetTimeout,
+  PlatformClearTimeout,
+} from "./types";
 
 // Backwards-compat adapter preserving old constructor(env) signature used in tests
 export class PlatformAdapter implements IPlatformAdapter {
   private inner: IPlatformAdapter;
   readonly env: PlatformId;
   readonly id: PlatformId;
+  readonly setTimeout: PlatformSetTimeout;
+  readonly clearTimeout: PlatformClearTimeout;
 
   constructor(env?: PlatformId) {
     const kind = env ?? detectEnvironment();
@@ -98,6 +112,8 @@ export class PlatformAdapter implements IPlatformAdapter {
         this.inner = new UniversalPlatformAdapter();
     }
     this.id = this.inner.id;
+    this.setTimeout = this.inner.setTimeout;
+    this.clearTimeout = this.inner.clearTimeout;
   }
 
   async init() {
@@ -124,6 +140,4 @@ export class PlatformAdapter implements IPlatformAdapter {
   createAsyncLocalStorage<T>(): IAsyncLocalStorage<T> {
     return this.inner.createAsyncLocalStorage<T>();
   }
-  setTimeout = globalThis.setTimeout;
-  clearTimeout = globalThis.clearTimeout;
 }

@@ -1,4 +1,4 @@
-import { symbolError } from "./symbols";
+import { symbolError, symbolFilePath } from "./symbols";
 import type { IOptionalDependency } from "./utilities";
 import type { IValidationSchema } from "./utilities";
 import type { IErrorMeta } from "./meta";
@@ -45,4 +45,6 @@ export interface IErrorHelper<
   [symbolError]: true;
   /** Return an optional dependency wrapper for this error */
   optional(): IOptionalDependency<IErrorHelper<TData>>;
+  /** File path where this error was defined */
+  [symbolFilePath]: string;
 }

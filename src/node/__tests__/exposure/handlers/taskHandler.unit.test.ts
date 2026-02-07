@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 
 import { createTaskHandler } from "../../../exposure/handlers/taskHandler";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 import * as multipartModule from "../../../exposure/multipart";
 import * as requestBodyModule from "../../../exposure/requestBody";
 import * as errorHandlers from "../../../exposure/handlers/errorHandlers";
@@ -86,7 +86,7 @@ describe("taskHandler", () => {
   });
 
   it("finalizes multipart and reports task errors via handleRequestError", async () => {
-    const serializer = getDefaultSerializer();
+    const serializer = new Serializer();
     const handleRequestErrorSpy = jest.spyOn(
       errorHandlers,
       "handleRequestError",
@@ -132,7 +132,7 @@ describe("taskHandler", () => {
   });
 
   it("does not write a default JSON envelope when the task already wrote a response", async () => {
-    const serializer = getDefaultSerializer();
+    const serializer = new Serializer();
     jest
       .spyOn(requestBodyModule, "readJsonBody")
       .mockResolvedValue({ ok: true, value: { input: 1 } });

@@ -10,6 +10,7 @@ import type { BuilderState } from "./types";
 
 // Re-export the interface for external consumers
 export type { ResourceFluentBuilder } from "./fluent-builder.interface";
+export * from "./types";
 
 /**
  * Creates a new resource builder with the given id.

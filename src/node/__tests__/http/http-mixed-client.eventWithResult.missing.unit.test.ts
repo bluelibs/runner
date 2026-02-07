@@ -1,6 +1,6 @@
 import * as exposureFetchModule from "../../../http-fetch-tunnel.resource";
 import { createHttpMixedClient } from "../../http/http-mixed-client";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 
 describe("createMixedHttpClient (unit) - eventWithResult missing", () => {
   beforeEach(() => {
@@ -18,7 +18,7 @@ describe("createMixedHttpClient (unit) - eventWithResult missing", () => {
   it("throws when underlying fetch client does not support eventWithResult", async () => {
     const client = createHttpMixedClient({
       baseUrl: "http://127.0.0.1:7777/__runner",
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
 
     await expect(

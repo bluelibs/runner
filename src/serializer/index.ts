@@ -2,20 +2,19 @@
  * Main export module for the Serializer
  */
 
-import { Serializer } from "./Serializer";
-
 export type {
+  JsonPrimitive,
+  ObjectReference,
+  SerializedTypeRecord,
   SerializerOptions,
   TypeDefinition,
+  SerializedNode,
+  SerializedValue,
+  SerializationContext,
+  DeserializationContext,
   SerializedGraph,
   SerializerLike,
 } from "./types";
 
 export { SymbolPolicy, SymbolPolicyErrorMessage } from "./types";
 export { Serializer } from "./Serializer";
-
-const defaultSerializer = new Serializer();
-
-export function getDefaultSerializer(): Serializer {
-  return defaultSerializer;
-}

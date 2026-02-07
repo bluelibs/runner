@@ -1,6 +1,14 @@
 import { EventManager } from "./EventManager";
 import { defineEvent } from "../definers/defineEvent";
-import { IEventEmission } from "../defs";
+import { IEventDefinition, IEventEmission } from "../defs";
+
+export type SemaphoreEventType =
+  | "queued"
+  | "acquired"
+  | "released"
+  | "timeout"
+  | "aborted"
+  | "disposed";
 
 // Event definitions for Semaphore
 const SemaphoreEvents = {
@@ -10,11 +18,12 @@ const SemaphoreEvents = {
   timeout: defineEvent<SemaphoreEvent>({ id: "semaphore.timeout" }),
   aborted: defineEvent<SemaphoreEvent>({ id: "semaphore.aborted" }),
   disposed: defineEvent<SemaphoreEvent>({ id: "semaphore.disposed" }),
-} as const;
+} as const satisfies Record<
+  SemaphoreEventType,
+  IEventDefinition<SemaphoreEvent>
+>;
 
-type SemaphoreEventType = keyof typeof SemaphoreEvents;
-
-type SemaphoreEvent = {
+export type SemaphoreEvent = {
   type: SemaphoreEventType;
   permits: number;
   waiting: number;

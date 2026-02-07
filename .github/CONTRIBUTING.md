@@ -47,4 +47,20 @@ If you’re opening a PR:
 - Run tests: `npm test`
 - Build locally: `npm run build`
 
+## VS Code Copilot Commit Messages (optional)
+
+If you use VS Code + Copilot, you can customize generated commit messages with workspace instructions in `.vscode/settings.json`:
+
+```json
+{
+  "github.copilot.chat.commitMessageGeneration.instructions": [
+    {
+      "text": "Use Conventional Commits (feat|fix|refactor|docs|test|chore) with a scope when clear. Keep the subject imperative and <=72 chars, no trailing period. Summarize the real user-facing or architectural change, and mention tests/docs updates when relevant."
+    }
+  ]
+}
+```
+
+Note: `.vscode/` is gitignored in this repo, so this stays local to your workspace unless you choose to share it elsewhere.
+
 That’s it — thank you for making Runner better!

@@ -1,7 +1,15 @@
 import { getPlatform } from "../platform";
 import { EventManager } from "./EventManager";
 import { defineEvent } from "../definers/defineEvent";
-import { IEventEmission } from "../defs";
+import { IEventDefinition, IEventEmission } from "../defs";
+
+export type QueueEventType =
+  | "enqueue"
+  | "start"
+  | "finish"
+  | "error"
+  | "cancel"
+  | "disposed";
 
 // Event definitions for Queue
 const QueueEvents = {
@@ -11,11 +19,9 @@ const QueueEvents = {
   error: defineEvent<QueueEvent>({ id: "queue.error" }),
   cancel: defineEvent<QueueEvent>({ id: "queue.cancel" }),
   disposed: defineEvent<QueueEvent>({ id: "queue.disposed" }),
-} as const;
+} as const satisfies Record<QueueEventType, IEventDefinition<QueueEvent>>;
 
-type QueueEventType = keyof typeof QueueEvents;
-
-type QueueEvent = {
+export type QueueEvent = {
   type: QueueEventType;
   taskId: number;
   disposed: boolean;

@@ -31,15 +31,15 @@ Use these terms consistently throughout all documentation:
 
 ### Terms to Avoid
 
-| Don't Use   | Use Instead         | Reason                      |
-| ----------- | ------------------- | --------------------------- |
-| `root`      | `app`               | Consistency                 |
-| `listener`  | `hook`              | Use `hook` for Runner event subscriptions (but `listener` is fine for servers/process events) |
-| `handler`   | `hook` or `task`    | More specific               |
-| `inject`    | `dependencies`      | Explicit over magical       |
+| Don't Use   | Use Instead         | Reason                                                                                              |
+| ----------- | ------------------- | --------------------------------------------------------------------------------------------------- |
+| `root`      | `app`               | Consistency                                                                                         |
+| `listener`  | `hook`              | Use `hook` for Runner event subscriptions (but `listener` is fine for servers/process events)       |
+| `handler`   | `hook` or `task`    | More specific                                                                                       |
+| `inject`    | `dependencies`      | Explicit over magical                                                                               |
 | `module`    | `resource`          | Use `resource` when referring to Runner building blocks (but `module` is fine for npm/Node modules) |
-| `provider`  | `resource`          | Runner-specific terminology |
-| `container` | `app` or `resource` | Clearer purpose             |
+| `provider`  | `resource`          | Runner-specific terminology                                                                         |
+| `container` | `app` or `resource` | Clearer purpose                                                                                     |
 
 ---
 
@@ -79,7 +79,7 @@ Avoid in every paragraph - save for milestone moments.
 
 ```markdown
 **Good - Confident:**
-"BlueLibs Runner is fast. Here are real benchmarks..."
+"BlueLibs Runner is fast. Here's why..."
 
 **Good - Humble:**
 "Yes, we know there are 47 other frameworks. This one's still different."
@@ -238,7 +238,7 @@ The main README follows this high-level structure:
 - What Is This Thing? (conceptual overview)
 - Show Me the Magic (quick wins)
 - How Does It Compare? (framework comparison)
-- Performance at a Glance (benchmarks)
+- Performance at a Glance
 - What's in the Box? (feature matrix)
 - Your First 5 Minutes (absolute minimum)
 - Quick Start (full example)
@@ -290,6 +290,33 @@ The main README follows this high-level structure:
 ---
 
 ## Code Example Standards
+
+### Namespacing & IDs
+
+Component ids are part of Runner’s public surface: they show up in logs, tooling, overrides, tunnels/clients, and docs.
+In documentation, always use stable, readable ids and keep them consistent across examples.
+
+**Recommended id namespaces:**
+
+| Type                | Recommended Prefix / Pattern                                 | Example                                          |
+| ------------------- | ------------------------------------------------------------ | ------------------------------------------------ |
+| Root app resource   | `app`                                                        | `r.resource("app")`                              |
+| Resources           | `{domain}.{noun}` (use subdomains to group)                  | `app.db`, `app.http.server`, `app.services.user` |
+| Tasks               | `{domain}.tasks.{verb}`                                      | `app.tasks.createUser`                           |
+| Events              | `{domain}.events.{pastTenseVerbOrNoun}`                      | `app.events.userRegistered`                      |
+| Hooks               | `{domain}.hooks.{name}` (use `onX` for event-reactive hooks) | `app.hooks.onUserRegistered`                     |
+| Task middleware     | `{domain}.middleware.task.{name}`                            | `app.middleware.task.audit`                      |
+| Resource middleware | `{domain}.middleware.resource.{name}`                        | `app.middleware.resource.retry`                  |
+| Errors              | `{domain}.errors.{PascalCaseName}`                           | `app.errors.InvalidCredentials`                  |
+| Async Context       | `{domain}.ctx.{noun}`                                        | `app.ctx.request`                                |
+| Tags                | `{domain}.tags.{noun}`                                       | `app.tags.httpRoute`                             |
+
+**Rules of thumb:**
+
+- Keep ids dot-separated and human-readable (no random suffixes).
+- Prefer **`camelCase`** for the final segment of tasks/events/hooks/middleware/ctx/tags; prefer **`PascalCase`** for errors.
+- Prefer **verbs** for task ids, **past-tense** for event ids, and **nouns** for resources/ctx/tags.
+- Keep the entire example in the same domain (default: `app.*`) unless the point is cross-domain composition.
 
 ### Variable Naming
 
@@ -553,11 +580,8 @@ Use plain code blocks for terminal output:
 
 ````markdown
 ```
-┌─────────────────────────────────────┬───────────────┬──────────────┐
-│ Operation                           │ Ops/Second    │ Time/Op      │
-├─────────────────────────────────────┼───────────────┼──────────────┤
-│ Basic task execution                │ 2.2M          │ ~0.0005 ms   │
-└─────────────────────────────────────┴───────────────┴──────────────┘
+Server running on port 3000
+Connected to database
 ```
 ````
 
@@ -708,28 +732,6 @@ graph LR
 - Use sequence diagrams for lifecycle
 - Keep diagrams simple (max 10 nodes)
 - Always add color styling
-
-### Performance Benchmarks
-
-Format benchmark results in monospace tables:
-
-```markdown
-\`\`\`
-┌─────────────────────────────────────┬───────────────┬──────────────┐
-│ Operation │ Ops/Second │ Time/Op │
-├─────────────────────────────────────┼───────────────┼──────────────┤
-│ Basic task execution │ 2.2M │ ~0.0005 ms │
-│ Task with 5 middlewares │ 244K │ ~0.004 ms │
-└─────────────────────────────────────┴───────────────┴──────────────┘
-\`\`\`
-```
-
-**Guidelines:**
-
-- Use ASCII box drawing characters
-- Align numbers to the right
-- Include units in headers
-- Round to 2-4 significant figures
 
 ### TL;DR Summaries
 
@@ -902,9 +904,9 @@ Use clear, descriptive text:
 - Support: Yes/Full, Partial, No/None
 - Speed: Fast, Moderate, Slow
 
-### "What this means for you" Pattern
+### "What This Means for You" Pattern
 
-After benchmark data, translate to business value:
+After explaining a feature or comparison, translate to practical value:
 
 ```markdown
 **What this means for you:**

@@ -32,7 +32,13 @@ describe("package root exports coverage", () => {
     expect(root.definitions).toBeDefined();
     expect(root.Errors).toBeDefined();
     expect(root.Serializer).toBeDefined();
-    expect(typeof root.getDefaultSerializer).toBe("function");
+    expect(typeof root.Serializer).toBe("function");
+    expect(root.SymbolPolicy).toBeDefined();
+    expect(typeof root.SymbolPolicy).toBe("object");
+    expect(root.SymbolPolicyErrorMessage).toBeDefined();
+    expect(typeof root.SymbolPolicyErrorMessage).toBe("object");
+    expect(root.LogPrinter).toBeDefined();
+    expect(typeof root.LogPrinter).toBe("function");
     expect(root.PlatformAdapter).toBeDefined();
     expect(typeof root.setPlatform).toBe("function");
   });

@@ -76,6 +76,22 @@ export class RunResult<V> {
     return this.store.resources.get(resourceId)!.value;
   };
 
+  /**
+   * Get the config of a resource from the run result.
+   * @param resource - The resource to get the config of.
+   * @returns The config passed for the resource.
+   */
+  public getResourceConfig = <Config>(
+    resource: string | IResource<Config, any, any, any, any>,
+  ): Config => {
+    const resourceId = typeof resource === "string" ? resource : resource.id;
+    if (!this.store.resources.has(resourceId)) {
+      throw new Error(`Resource "${resourceId}" not found.`);
+    }
+
+    return this.store.resources.get(resourceId)!.config;
+  };
+
   public dispose = () => {
     return this.disposeFn();
   };

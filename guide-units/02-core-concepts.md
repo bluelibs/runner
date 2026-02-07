@@ -156,6 +156,36 @@ const app = r
   .build();
 ```
 
+#### Dynamic Registration
+
+`.register()` accepts a function, not just arrays. Use this when the set of registered components depends on the resource config.
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const auditLog = r
+  .resource("app.audit")
+  .init(async () => ({ write: (message: string) => console.log(message) }))
+  .build();
+
+const feature = r
+  .resource<{ enableAudit: boolean }>("app.feature")
+  .register((config) => (config.enableAudit ? [auditLog] : []))
+  .init(async () => ({ enabled: true }))
+  .build();
+
+const app = r
+  .resource("app")
+  .register([feature.with({ enableAudit: true })])
+  .build();
+```
+
+Use function-based registration when:
+
+- Registered components depend on `config`
+- You want one reusable resource template with environment-specific wiring
+- You need to avoid registering optional components in every environment
+
 #### Resource Forking
 
 Use `.fork(newId)` to create multiple instances of a "template" resource with different identities. If the base resource registers other items, use `.fork(newId, { register: "drop" })` to avoid re-registering them, or `.fork(newId, { register: "deep", reId })` to deep-fork **registered resources** (resource tree) with new ids. This is perfect when you need several instances of the same resource type (e.g., multiple database connections, multiple mailers):
@@ -860,7 +890,7 @@ if (customJournal.has(traceIdKey)) {
 
 ### Tags
 
-Tags are metadata that can influence system behavior. Unlike meta properties, tags can be queried at runtime to build dynamic functionality. They can be simple strings or structured configuration objects.
+Tags are metadata that can influence system behavior. Unlike meta properties, tags can be queried at runtime to build dynamic functionality. They can be marker tags (no config) or configured tags.
 
 #### Basic Usage
 
@@ -877,6 +907,24 @@ const getUserTask = r
   .build();
 ```
 
+#### Tag Composition Behavior
+
+Repeated `.tags()` calls append by default. If you want to replace the existing list, pass `{ override: true }`.
+
+```typescript
+const apiTag = r.tag("app.tags.api").build();
+const cacheableTag = r.tag("app.tags.cacheable").build();
+const internalTag = r.tag("app.tags.internal").build();
+
+const taskWithTags = r
+  .task("app.tasks.example")
+  .tags([apiTag])
+  .tags([cacheableTag]) // -> [apiTag, cacheableTag]
+  .tags([internalTag], { override: true }) // -> [internalTag]
+  .run(async () => "ok")
+  .build();
+```
+
 #### Discovering Components by Tags
 
 The core power of tags is runtime discovery. Use `store.getTasksWithTag()` to find components:
@@ -884,6 +932,7 @@ The core power of tags is runtime discovery. Use `store.getTasksWithTag()` to fi
 ```typescript
 import { r, globals } from "@bluelibs/runner";
 
+// Assuming: httpTag and cacheableTag are defined and registered
 // Auto-register HTTP routes based on tags
 const routeRegistration = r
   .hook("app.hooks.registerRoutes")
@@ -904,8 +953,7 @@ const routeRegistration = r
       });
     });
 
-    // Also find by string tags
-    const cacheableTasks = store.getTasksWithTag("cacheable");
+    const cacheableTasks = store.getTasksWithTag(cacheableTag);
     console.log(`Found ${cacheableTasks.length} cacheable tasks`);
   })
   .build();

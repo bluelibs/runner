@@ -1,10 +1,20 @@
-import { isNode } from "../platform";
+/**
+ * Inline node detection to avoid circular dependency with platform module.
+ * This is necessary because getCallerFile() is called during error module
+ * initialization, before the platform module is fully loaded.
+ */
+function isNodeInline(): boolean {
+  return (
+    typeof process !== "undefined" &&
+    typeof (process as NodeJS.Process)?.versions?.node === "string"
+  );
+}
 
 export function getCallerFile(): string {
   const originalPrepare = Error.prepareStackTrace;
   try {
     // Prefer robust Node path with structured stack frames
-    if (isNode()) {
+    if (isNodeInline()) {
       const err = new Error();
       Error.prepareStackTrace = (_err, stack) => stack;
       const stack = err.stack as unknown as Array<{

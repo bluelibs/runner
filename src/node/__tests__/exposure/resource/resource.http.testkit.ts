@@ -1,7 +1,7 @@
 import type { IncomingMessage, ServerResponse } from "http";
 import { Socket } from "net";
 import { Readable } from "stream";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 
 export type MockReq = Readable & IncomingMessage;
 export type MockRes = ServerResponse;
@@ -133,9 +133,7 @@ export function createMockReqRes(init: CreateMockReqResInit = {}) {
       const buf = getBodyBuffer();
       if (buf.length === 0) return undefined;
       try {
-        return getDefaultSerializer().parse(
-          buf.toString("utf8"),
-        ) as JsonResponse;
+        return new Serializer().parse(buf.toString("utf8")) as JsonResponse;
       } catch {
         return undefined;
       }

@@ -1,7 +1,3 @@
-← [Back to main README](../README.md)
-
----
-
 ## Why Runner?
 
 Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
@@ -12,6 +8,8 @@ Runner keeps everything as plain functions and objects. You declare dependencies
 
 ```typescript
 import { r, run, globals } from "@bluelibs/runner";
+import { z } from "zod";
+
 const logger = globals.resources.logger;
 
 // resources are singletons with lifecycle management
@@ -27,26 +25,36 @@ const db = r
   }))
   .build();
 
+const mailer = r
+  .resource("app.mailer")
+  .dependencies({ logger })
+  .init(async (_config, { logger }) => ({
+    sendWelcome: async (userId: string) => {
+      logger.info("Sending welcome email", { userId });
+    },
+  }))
+  .build();
+
 // events are signals that something happened, often used for decoupling
 const userCreated = r
-  .event("users.created")
+  .event("app.events.userCreated")
   .payloadSchema(z.object({ userId: z.string() })) // runtime and compile-time validation
   .build();
 
 // notifications module
 const onUserCreatedHook = r
-  .hook("users.welcomeEmail")
+  .hook("app.hooks.onUserCreated")
   .on(userCreated)
   .dependencies({ mailer, logger })
   .run(async (event, { mailer, logger }) => {
-    await mailer.sendWelcome(event.userId);
-    logger.info("Welcome email sent", { userId: event.userId });
+    await mailer.sendWelcome(event.data.userId);
+    logger.info("Welcome email sent", { userId: event.data.userId });
   })
   .build();
 
 // tasks are functions with explicit dependencies and input/output schemas
 const createUser = r
-  .task("users.create")
+  .task("app.tasks.createUser")
   .dependencies({ db, logger, emitUserCreated: userCreated })
   .inputSchema(z.object({ name: z.string(), email: z.string().email() }))
   .run(async (user, { db, logger, emitUserCreated }) => {
@@ -61,7 +69,7 @@ const createUser = r
 // wire everything into the app resource
 const app = r
   .resource("app")
-  .register([db, userCreated, createUser, onUserCreatedHook]) // lets the runtime know about it
+  .register([db, mailer, userCreated, createUser, onUserCreatedHook]) // lets the runtime know about it
   .build(); // close the builder
 
 const { runTask, emitEvent, dispose } = await run(app);
@@ -86,9 +94,8 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Why Runner?](#why-runner) - The problem we solve
 - [What Is This Thing?](#what-is-this-thing)
 - [When to Use Runner](#when-to-use-runner) - Is it right for you?
-- [Show me the wiring](#show-me-the-wiring) - See it in action
+- [Show Me the Wiring](#show-me-the-wiring) - See it in action
 - [How Does It Compare?](#how-does-it-compare) - vs. other frameworks
-- [Performance at a Glance](#performance-at-a-glance) - Real benchmarks
 - [What's in the Box?](#whats-in-the-box) - Feature matrix
 - [Your First 5 Minutes](#your-first-5-minutes) - **Start here!**
 - [Quick Start](#quick-start) - Full Express example
@@ -157,7 +164,6 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 
 - [Real-World Example](#real-world-example-the-complete-package) - Complete application
 - [Internal Services](#internal-services) - Framework internals
-- [Performance](#performance) - Benchmarks and metrics
 - [Why Choose BlueLibs Runner?](#why-choose-bluelibs-runner) - Framework comparison
 - [Migration Path](#the-migration-path) - Adopting Runner
 - [Troubleshooting](#troubleshooting) - Common issues and solutions

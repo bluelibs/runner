@@ -92,7 +92,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 ## Choose Your Path
 
 - **New to Runner**: Start with [Your First 5 Minutes](#your-first-5-minutes)
-- **Prefer an end-to-end example**: Jump to [Quick Start](#quick-start) or the [Real-World Example](./readmes/FULL_GUIDE.md#real-world-example-the-complete-package)
+- **Prefer an end-to-end example**: Jump to [Quick Start](#quick-start) or the [Real-World Example](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#real-world-example-the-complete-package)
 - **Need Node-only capabilities**: See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
 - **Need remote execution**: See [HTTP Tunnels](./readmes/TUNNELS.md) (expose from Node.js, call from any `fetch` runtime)
 - **Care about portability**: Read [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md)
@@ -158,11 +158,11 @@ npx tsx index.ts
 
 - **Complete guide**: Read [FULL_GUIDE.md](./readmes/FULL_GUIDE.md) (the full reference, composed from `guide-units/`)
 - **Popular guide sections**:
-  - [Tasks](./readmes/FULL_GUIDE.md#tasks)
-  - [Resources](./readmes/FULL_GUIDE.md#resources)
-  - [Middleware](./readmes/FULL_GUIDE.md#middleware)
-  - [Testing](./readmes/FULL_GUIDE.md#testing)
-  - [Troubleshooting](./readmes/FULL_GUIDE.md#troubleshooting)
+  - [Tasks](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#tasks)
+  - [Resources](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#resources)
+  - [Middleware](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#middleware)
+  - [Testing](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#testing)
+  - [Troubleshooting](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#troubleshooting)
 - **API reference**: Browse the [TypeDoc documentation](https://bluelibs.github.io/runner/)
 - **Token-friendly overview**: Read [AI.md](./readmes/AI.md)
 - **Node-only features**:

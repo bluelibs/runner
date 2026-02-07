@@ -31,6 +31,10 @@ import {
   resolveReference as resolveReferenceFn,
   mergePlaceholder as mergePlaceholderFn,
 } from "./deserializer";
+import {
+  normalizeMaxDepth,
+  normalizeMaxRegExpPatternLength,
+} from "./option-normalizers";
 
 const GRAPH_VERSION = 1;
 const DEFAULT_MAX_DEPTH = 1000;
@@ -59,20 +63,11 @@ export class Serializer {
 
   constructor(options: SerializerOptions = {}) {
     this.indent = options.pretty ? 2 : undefined;
-    const maxDepth = options.maxDepth;
-    this.maxDepth =
-      typeof maxDepth === "number" && Number.isFinite(maxDepth) && maxDepth >= 0
-        ? Math.floor(maxDepth)
-        : DEFAULT_MAX_DEPTH;
-    const maxPatternLength = options.maxRegExpPatternLength;
-    this.maxRegExpPatternLength =
-      maxPatternLength === Number.POSITIVE_INFINITY
-        ? Number.POSITIVE_INFINITY
-        : typeof maxPatternLength === "number" &&
-            Number.isFinite(maxPatternLength) &&
-            maxPatternLength > 0
-          ? Math.floor(maxPatternLength)
-          : DEFAULT_MAX_REGEXP_PATTERN_LENGTH;
+    this.maxDepth = normalizeMaxDepth(options.maxDepth, DEFAULT_MAX_DEPTH);
+    this.maxRegExpPatternLength = normalizeMaxRegExpPatternLength(
+      options.maxRegExpPatternLength,
+      DEFAULT_MAX_REGEXP_PATTERN_LENGTH,
+    );
     this.allowUnsafeRegExp = options.allowUnsafeRegExp ?? false;
     this.unsafeKeys = DEFAULT_UNSAFE_KEYS;
 

@@ -346,6 +346,4 @@ npm ls @bluelibs/runner
 3. **Ask the AI**: [Runner Chatbot](https://chatgpt.com/g/g-68b756abec648191aa43eaa1ea7a7945-runner)
 4. **Open an issue**: [New Issue](https://github.com/bluelibs/runner/issues/new)
 
-> **runtime:** "Troubleshooting: the archaeological dig through your own decisions. You ask 'why is this broken?' and I ask 'did you call .build()?' Nine times out of ten, we both know the answer. The tenth time, it's genuinely my fault. File an issue. I'll wait."
-
 ---

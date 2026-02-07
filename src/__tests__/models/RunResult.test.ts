@@ -7,7 +7,7 @@ import {
 import { run } from "../../run";
 
 describe("RunResult", () => {
-  it("exposes runTask, emitEvent, getResourceValue, logger and they work", async () => {
+  it("exposes runTask, emitEvent, getResourceValue, getResourceConfig, logger and they work", async () => {
     const double = defineTask({
       id: "helpers.double",
       run: async (x: number) => x * 2,
@@ -15,6 +15,11 @@ describe("RunResult", () => {
 
     const acc = defineResource({
       id: "helpers.acc",
+      configSchema: {
+        parse(input) {
+          return input as { label: string };
+        },
+      },
       async init() {
         return { calls: 0 } as { calls: number };
       },
@@ -33,7 +38,7 @@ describe("RunResult", () => {
 
     const app = defineResource({
       id: "helpers.app",
-      register: [double, acc, ping, onPing],
+      register: [double, acc.with({ label: "main" }), ping, onPing],
       async init() {
         return "ready" as const;
       },
@@ -43,6 +48,7 @@ describe("RunResult", () => {
     expect(typeof r.runTask).toBe("function");
     expect(typeof r.emitEvent).toBe("function");
     expect(typeof r.getResourceValue).toBe("function");
+    expect(typeof r.getResourceConfig).toBe("function");
     expect(r.logger).toBeDefined();
 
     const out = await r.runTask(double, 21);
@@ -57,12 +63,23 @@ describe("RunResult", () => {
     const value2 = r.getResourceValue(acc);
     expect(value2.calls).toBe(5);
 
+    const config = r.getResourceConfig(acc);
+    expect(config).toEqual({ label: "main" });
+
+    const config2 = r.getResourceConfig("helpers.acc");
+    expect(config2).toEqual({ label: "main" });
+
     await r.dispose();
   });
 
-  it("supports string ids for runTask, emitEvent, and getResourceValue", async () => {
+  it("supports string ids for runTask, emitEvent, getResourceValue, and getResourceConfig", async () => {
     const acc = defineResource({
       id: "rr.acc",
+      configSchema: {
+        parse(input) {
+          return input as { seed: number };
+        },
+      },
       async init() {
         return { value: 0 } as { value: number };
       },
@@ -89,7 +106,7 @@ describe("RunResult", () => {
 
     const app = defineResource({
       id: "rr.app",
-      register: [acc, inc, ping, onPing],
+      register: [acc.with({ seed: 123 }), inc, ping, onPing],
       async init() {
         return "ready" as const;
       },
@@ -101,6 +118,8 @@ describe("RunResult", () => {
     await r.emitEvent("rr.ping", { n: 3 });
     const value = r.getResourceValue("rr.acc");
     expect(value.value).toBe(5);
+    const config = r.getResourceConfig("rr.acc");
+    expect(config).toEqual({ seed: 123 });
 
     await r.dispose();
   });
@@ -114,6 +133,9 @@ describe("RunResult", () => {
       'Event "nope.event" not found.',
     );
     expect(() => r.getResourceValue("nope.res")).toThrow(
+      'Resource "nope.res" not found.',
+    );
+    expect(() => r.getResourceConfig("nope.res")).toThrow(
       'Resource "nope.res" not found.',
     );
 

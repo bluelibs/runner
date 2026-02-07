@@ -1,4 +1,4 @@
-import { r } from "../..";
+import { definitions, r } from "../..";
 
 describe("error builder", () => {
   it("build() returns an ErrorHelper that can throw and type-narrow via is()", () => {
@@ -77,5 +77,16 @@ describe("error builder", () => {
     } catch (err) {
       expect(E.is(err)).toBe(true);
     }
+  });
+
+  it("captures symbolFilePath from the caller location", () => {
+    const E = r.error<{ message: string }>("tests.errors.filePath").build();
+
+    expect(
+      (E as unknown as Record<symbol, any>)[definitions.symbolFilePath],
+    ).toBeDefined();
+    expect(
+      (E as unknown as Record<symbol, any>)[definitions.symbolFilePath],
+    ).toContain("error.builder.test");
   });
 });

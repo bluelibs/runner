@@ -297,6 +297,32 @@ describe.skip("typesafety", () => {
     expect(true).toBe(true);
   });
 
+  it("RunResult.getResourceConfig: should be type-safe", async () => {
+    type Config = { region: "us" | "eu"; retries: number };
+
+    const client = defineResource<Config, Promise<{ ok: true }>>({
+      id: "types.resource.config.client",
+      init: async () => ({ ok: true }),
+    });
+
+    const app = defineResource({
+      id: "types.resource.config.app",
+      register: [client.with({ region: "us", retries: 3 })],
+    });
+
+    const rr = await run(app);
+    const config = rr.getResourceConfig(client);
+    const region: "us" | "eu" = config.region;
+    const retries: number = config.retries;
+
+    const configById = rr.getResourceConfig("types.resource.config.client");
+    const idRetries: number = (configById as Config).retries;
+
+    expect(region).toBe("us");
+    expect(retries).toBe(3);
+    expect(idRetries).toBe(3);
+  });
+
   it("should have propper type safety for overrides", async () => {
     const task = defineTask({
       id: "task",

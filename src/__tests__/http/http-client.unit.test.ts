@@ -2,7 +2,7 @@ import { Readable } from "stream";
 import { createHttpClient } from "../../http-client";
 import { createWebFile } from "../../platform/createWebFile";
 import { createFile as createNodeFile } from "../../node/platform/createFile";
-import { getDefaultSerializer } from "../../serializer";
+import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
 import * as exposureFetchModule from "../../http-fetch-tunnel.resource";
 import { TunnelError } from "../../globals/resources/tunnel/protocol";
@@ -62,7 +62,7 @@ describe("http-client (universal)", () => {
   it("JSON fallback uses exposure fetch", async () => {
     const client = createHttpClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const result = await client.task("t.json", { a: 1 });
     expect(result).toBe("JSON-OK");
@@ -73,7 +73,7 @@ describe("http-client (universal)", () => {
   it("event delegates to exposure fetch event", async () => {
     const client = createHttpClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await client.event("e.hello", { x: true });
     expect(exposureState.event).toHaveBeenCalledTimes(1);
@@ -83,7 +83,7 @@ describe("http-client (universal)", () => {
   it("eventWithResult delegates to exposure fetch eventWithResult", async () => {
     const client = createHttpClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     expect(typeof client.eventWithResult).toBe("function");
     const out = await client.eventWithResult!("e.ret", { x: true });
@@ -98,7 +98,7 @@ describe("http-client (universal)", () => {
     });
     const client = createHttpClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await expect(client.eventWithResult!("e.nope", { a: 1 })).rejects.toThrow(
       /eventWithResult not available/i,
@@ -122,7 +122,7 @@ describe("http-client (universal)", () => {
     } as any;
     const client = createHttpClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
       errorRegistry: new Map([["tests.errors.evret", helper]]),
     });
     await expect(client.eventWithResult!("e.ret", { a: 1 })).rejects.toThrow(
@@ -152,7 +152,7 @@ describe("http-client (universal)", () => {
       });
       const env = { ok: true, result: "UP" };
       return {
-        text: async () => getDefaultSerializer().stringify(env),
+        text: async () => new Serializer().stringify(env),
       } as unknown as Response;
     });
     const onRequest = jest.fn();
@@ -161,7 +161,7 @@ describe("http-client (universal)", () => {
       fetchImpl: fetchMock as unknown as typeof fetch,
       auth: { token: "tok" },
       onRequest,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
       contexts: [
         {
           id: "ctx.web",
@@ -191,13 +191,13 @@ describe("http-client (universal)", () => {
       async (url: any, init?: any) =>
         ({
           text: async () =>
-            getDefaultSerializer().stringify({ ok: true, result: "DEF" }),
+            new Serializer().stringify({ ok: true, result: "DEF" }),
         }) as any,
     );
     const client = createHttpClient({
       baseUrl,
       fetchImpl: fetchMock as any,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const r = await client.task("t.upload.def", { file } as any);
     expect(r).toBe("DEF");
@@ -211,7 +211,7 @@ describe("http-client (universal)", () => {
       blob,
       "FERR",
     );
-    const serializer = getDefaultSerializer();
+    const serializer = new Serializer();
     const fetchMock = jest.fn(async (url: any, init?: any) => {
       const env = {
         ok: false,
@@ -235,7 +235,7 @@ describe("http-client (universal)", () => {
     const client = createHttpClient({
       baseUrl,
       fetchImpl: fetchMock as any,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
       errorRegistry: new Map([["tests.errors.web", helper]]),
     });
     await expect(client.task("t.upload.err", { file } as any)).rejects.toThrow(
@@ -260,7 +260,7 @@ describe("http-client (universal)", () => {
     } as any;
     const client = createHttpClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
       errorRegistry: new Map([["tests.errors.ev", helper]]),
     });
     await expect(client.event("e.1", { a: 1 })).rejects.toThrow(/typed-ev:8/);
@@ -272,7 +272,7 @@ describe("http-client (universal)", () => {
     });
     const client = createHttpClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await expect(client.task("t.json.raw", { a: 1 } as any)).rejects.toThrow(
       /json-raw/,
@@ -285,7 +285,7 @@ describe("http-client (universal)", () => {
     });
     const client = createHttpClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     await expect(client.event("e.raw", { a: 1 } as any)).rejects.toThrow(
       /ev-raw/,
@@ -295,7 +295,7 @@ describe("http-client (universal)", () => {
   it("throws helpful error when Node File sentinel present", async () => {
     const client = createHttpClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const nodeFile = createNodeFile(
       { name: "nf.bin" },
@@ -312,7 +312,7 @@ describe("http-client (universal)", () => {
   it("throws helpful error when input is a Node Readable stream", async () => {
     const client = createHttpClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     });
     const stream = Readable.from([Buffer.from("data")]);
     await expect(client.task("t.duplex", stream)).rejects.toThrow(
@@ -323,8 +323,7 @@ describe("http-client (universal)", () => {
   it("falls back to global fetch when fetchImpl not provided (web multipart)", async () => {
     const origFetch = testGlobal.fetch;
     testGlobal.fetch = jest.fn(async (_url: any, _init?: any) => ({
-      text: async () =>
-        getDefaultSerializer().stringify({ ok: true, result: "GUP" }),
+      text: async () => new Serializer().stringify({ ok: true, result: "GUP" }),
     })) as unknown as typeof fetch;
     try {
       const blob = new Blob([Buffer.from("abc") as any], {
@@ -338,7 +337,7 @@ describe("http-client (universal)", () => {
       const client = createHttpClient({
         baseUrl,
         auth: { token: "tk" },
-        serializer: getDefaultSerializer(),
+        serializer: new Serializer(),
       });
       const r = await client.task("t.upload.web2", { file } as any);
       expect(r).toBe("GUP");
@@ -352,7 +351,7 @@ describe("http-client (universal)", () => {
     expect(() =>
       createHttpClient({
         baseUrl: "" as any,
-        serializer: getDefaultSerializer(),
+        serializer: new Serializer(),
       } as any),
     ).toThrow();
   });
@@ -375,7 +374,7 @@ describe("http-client (universal)", () => {
     } as any;
     const client = createHttpClient({
       baseUrl,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
       errorRegistry: new Map([["tests.errors.app", helper]]),
     });
     await expect(client.task("t.json", { a: 1 } as any)).rejects.toThrow(

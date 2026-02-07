@@ -1,7 +1,7 @@
 import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 
 function asIncoming(
   res: Readable,
@@ -13,7 +13,7 @@ function asIncoming(
 
 describe("createHttpSmartClient - auth default header", () => {
   const baseUrl = "http://127.0.0.1:5555/__runner";
-  const serializer = getDefaultSerializer();
+  const serializer = new Serializer();
 
   afterEach(() => {
     jest.restoreAllMocks();

@@ -90,15 +90,15 @@ export class InterceptorRegistry {
   /**
    * Gets all global task interceptors
    */
-  getGlobalTaskInterceptors(): TaskMiddlewareInterceptor[] {
-    return this.taskInterceptors;
+  getGlobalTaskInterceptors(): readonly TaskMiddlewareInterceptor[] {
+    return Object.freeze([...this.taskInterceptors]);
   }
 
   /**
    * Gets all global resource interceptors
    */
-  getGlobalResourceInterceptors(): ResourceMiddlewareInterceptor[] {
-    return this.resourceInterceptors;
+  getGlobalResourceInterceptors(): readonly ResourceMiddlewareInterceptor[] {
+    return Object.freeze([...this.resourceInterceptors]);
   }
 
   /**
@@ -106,8 +106,9 @@ export class InterceptorRegistry {
    */
   getTaskMiddlewareInterceptors(
     middlewareId: string,
-  ): TaskMiddlewareInterceptor[] {
-    return this.perTaskMiddleware.get(middlewareId) || [];
+  ): readonly TaskMiddlewareInterceptor[] {
+    const interceptors = this.perTaskMiddleware.get(middlewareId) ?? [];
+    return Object.freeze([...interceptors]);
   }
 
   /**
@@ -115,7 +116,8 @@ export class InterceptorRegistry {
    */
   getResourceMiddlewareInterceptors(
     middlewareId: string,
-  ): ResourceMiddlewareInterceptor[] {
-    return this.perResourceMiddleware.get(middlewareId) || [];
+  ): readonly ResourceMiddlewareInterceptor[] {
+    const interceptors = this.perResourceMiddleware.get(middlewareId) ?? [];
+    return Object.freeze([...interceptors]);
   }
 }

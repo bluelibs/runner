@@ -22,6 +22,7 @@ The serializer accepts the following options:
 | `maxRegExpPatternLength` | `number`   | `1024`  | Maximum allowed RegExp pattern length                              |
 | `allowUnsafeRegExp`      | `boolean`  | `false` | Allow patterns that fail the safety heuristic (nested quantifiers) |
 | `allowedTypes`           | `string[]` | `null`  | Whitelist of type IDs allowed during deserialization (null = all)  |
+| `symbolPolicy`           | `string`   | `AllowAll` | Symbol deserialization policy: `AllowAll`, `WellKnownOnly`, `Disabled` |
 | `pretty`                 | `boolean`  | `false` | Enable indented JSON output                                        |
 
 ---
@@ -159,9 +160,13 @@ These rules are applied by both formats:
 
 - `undefined` is preserved via `{ "__type": "Undefined", "value": null }`.
 - non-finite numbers (`NaN`, `Infinity`, `-Infinity`) are preserved via `{ "__type": "NonFiniteNumber", "value": "NaN" | "Infinity" | "-Infinity" }`.
-- `bigint`, `symbol`, and `function` are rejected (throw).
+- `bigint` is preserved via `{ "__type": "BigInt", "value": "123" }`.
+- `symbol` is supported for:
+  - **Global symbols**: `Symbol.for(key)` is preserved via `{ "__type": "Symbol", "value": { "kind": "For", "key": "..." } }`.
+  - **Well-known symbols**: Standard symbols (e.g. `Symbol.iterator`) are preserved via `{ "__type": "Symbol", "value": { "kind": "WellKnown", "key": "..." } }`.
+- Unique symbols (`Symbol('...')`) and `function` are rejected (throw).
 
-Previous versions of the protocol serialized these as `null` (matching `JSON.stringify`). Modern versions prefer data integrity.
+Previous versions of the protocol serialized these as `null` (matching `JSON.stringify`). Modern versions prefer data integrity for supported types and strict failure for prohibited types.
 
 ---
 
@@ -190,8 +195,12 @@ RegExp payloads are validated:
 
 ## Versioning
 
-`version` is reserved for protocol changes. Current graph version:
+`version` is reserved for protocol changes. Current graph version emitted by serializer:
 
 - `version: 1`
 
-The deserializer currently uses `__graph: true` plus basic shape checks to detect graph payloads; `version` is expected to match the current graph shape.
+Deserializer behavior (current):
+
+- Graph payload detection uses `__graph: true` plus basic shape checks (`root` and `nodes` present/object).
+- `version` is currently informational and not strictly enforced during deserialization.
+- If/when protocol evolution is introduced, `version` will become the compatibility switch for forward/backward handling.

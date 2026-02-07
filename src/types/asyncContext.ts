@@ -1,4 +1,4 @@
-import { symbolAsyncContext } from "./symbols";
+import { symbolAsyncContext, symbolFilePath } from "./symbols";
 import { ITaskMiddlewareConfigured } from "./taskMiddleware";
 import type { IValidationSchema, IOptionalDependency } from "./utilities";
 import type { IAsyncContextMeta } from "./meta";
@@ -29,15 +29,14 @@ export interface IAsyncContext<T> {
    */
   provide<R>(value: T, fn: () => Promise<R> | R): Promise<R> | R;
   /**
-   * Generates a middleware that guarantees the context exists (and optionally
-   * enforces that certain keys are present on the context object).
+   * Generates a middleware that guarantees the context exists.
    */
-  require<K extends keyof T = never>(
-    keys?: K[],
-  ): ITaskMiddlewareConfigured<{ context: IAsyncContext<T> }>;
+  require(): ITaskMiddlewareConfigured<{ context: IAsyncContext<T> }>;
 
   serialize(data: T): string;
   parse(data: string): T;
   /** Return an optional dependency wrapper for this context */
   optional(): IOptionalDependency<IAsyncContext<T>>;
+  /** File path where this async context was defined */
+  [symbolFilePath]: string;
 }

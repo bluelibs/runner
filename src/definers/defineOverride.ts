@@ -14,29 +14,20 @@ import {
  * @param patch - Properties to override (except `id`).
  * @returns A definition of the same kind with overrides applied.
  */
-type AnyTask = ITask<any, any, any, any, any, any>;
-type AnyResource = IResource<any, any, any, any, any, any, any>;
-type AnyTaskMiddleware = ITaskMiddleware<any, any, any, any>;
-type AnyResourceMiddleware = IResourceMiddleware<any, any, any, any>;
-type AnyHook = IHook<any, any, any>;
-
-type AnyOverrideable =
-  | AnyTask
-  | AnyResource
-  | AnyTaskMiddleware
-  | AnyResourceMiddleware
-  | AnyHook;
-
-type OverridePatch<TBase extends AnyOverrideable> = Readonly<
-  TBase extends AnyHook
+type OverridePatch<TBase> = Readonly<
+  TBase extends IHook<any, any, any>
     ? Omit<Partial<TBase>, "id" | "on">
     : Omit<Partial<TBase>, "id">
 >;
 
-export function defineOverride<TBase extends AnyOverrideable>(
-  base: TBase,
-  patch: OverridePatch<TBase>,
-): TBase {
+export function defineOverride<
+  TBase extends
+    | ITask<any, any, any, any, any, any>
+    | IResource<any, any, any, any, any, any, any>
+    | ITaskMiddleware<any, any, any, any>
+    | IResourceMiddleware<any, any, any, any>
+    | IHook<any, any, any>,
+>(base: TBase, patch: OverridePatch<TBase>): TBase {
   const overridden = {
     ...base,
     ...patch,
@@ -44,8 +35,10 @@ export function defineOverride<TBase extends AnyOverrideable>(
   } as TBase;
 
   // Hooks should preserve the event binding identity as well.
-  if ((base as AnyHook).on !== undefined) {
-    (overridden as unknown as AnyHook).on = (base as AnyHook).on;
+  if ("on" in base && base.on !== undefined) {
+    (overridden as unknown as IHook<any, any, any>).on = (
+      base as IHook<any, any, any>
+    ).on;
   }
 
   return overridden;

@@ -193,7 +193,7 @@ export class ResourceMiddlewareComposer {
    */
   private wrapWithInterceptors<TConfig, TValue extends Promise<any>>(
     middlewareRunner: (config: TConfig) => TValue,
-    interceptors: Array<any>,
+    interceptors: readonly any[],
     resource: IResource<TConfig, TValue, any, any>,
   ): (config: TConfig) => TValue {
     if (interceptors.length === 0) {

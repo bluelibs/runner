@@ -4,7 +4,7 @@
 
 For the landing overview, see [README.md](../README.md). For the complete guide, see [FULL_GUIDE.md](./FULL_GUIDE.md).
 
-**Durable Workflows (Node-only):** For persistence and crash recovery, see `DURABLE_WORKFLOWS.md`.
+**Durable Workflows (Node-only):** For persistence and crash recovery, see `DURABLE_WORKFLOWS.md`. Includes `ctx.switch()` (replay-safe branching) and `durable.describe()` (DI-accurate flow shape export) — see `DURABLE_WORKFLOWS_AI.md` for quick reference.
 
 ## Serializer Safety
 
@@ -77,7 +77,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 
 - `r.*.with(config)` produces a configured copy of the definition.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` creates a new resource with a different id but the same definition. Use `register: "drop"` to avoid re-registering nested items, or `register: "deep"` to deep-fork **registered resources** with new ids via `reId` (other registerables are not kept; resource dependencies pointing to deep-forked resources are remapped to those forks). Export forked resources to use as dependencies.
-- `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns helpers such as `runTask`, `getResourceValue`, and `dispose`.
+- `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns helpers such as `runTask`, `getResourceValue`, `getResourceConfig`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
 
 ### Resource Forking
@@ -113,7 +113,7 @@ const sendEmail = r
 
 - `.dependencies()` accepts a literal map or function `(config) => deps`; appends (shallow-merge) by default
 - `.middleware()` appends by default
-- `.tags()` replaces the list each time
+- `.tags()` appends by default
 - Pass `{ override: true }` to any of these methods to replace instead of append
 - Provide result validation with `.resultSchema()` when the function returns structured data
 
@@ -307,6 +307,7 @@ const requestContext = r
   .asyncContext<{ requestId: string }>("app.ctx.request")
   // below is optional
   .configSchema(z.object({ ... }))
+  // for tunnels mostly
   .serialize((data) => JSON.stringify(data))
   .parse((raw) => JSON.parse(raw))
   .build();
@@ -317,11 +318,14 @@ await requestContext.provide({ requestId: "abc" }, async () => {
 });
 
 // Require middleware for tasks that need the context
-r.task('task').middleware([requestContext.require()]);
+r.task("task").middleware([requestContext.require()]);
 ```
 
+- Recommended ids: `{domain}.ctx.{noun}` (for example: `app.ctx.request`).
+- `.configSchema(schema)` (optional) validates the value passed to `provide(...)`.
 - If you don't provide `serialize`/`parse`, Runner uses its default serializer to preserve Dates, RegExp, etc.
 - You can also inject async contexts as dependencies; the injected value is the helper itself. Contexts must be registered to be used.
+- Optional dependencies: `dependencies({ requestContext: requestContext.optional() })` injects `undefined` if the context isn’t registered.
 
 ```ts
 const whoAmI = r
@@ -355,9 +359,26 @@ try {
 }
 ```
 
+- Recommended ids: `{domain}.errors.{PascalCaseName}` (for example: `app.errors.InvalidCredentials`).
 - The thrown `Error` has `name = id` and `message = format(data)`. If you don’t provide `.format(...)`, the default is `JSON.stringify(data)`.
 - `message` is not required in the data unless your custom formatter expects it.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
+- For HTTP/tunnel clients, you can pass an `errorRegistry` to rethrow remote errors as your typed helpers (optional):
+
+  ```ts
+  import { createHttpClient, Serializer } from "@bluelibs/runner";
+
+  const client = createHttpClient({
+    baseUrl: "http://localhost:3000/__runner",
+    serializer: new Serializer(),
+    errorRegistry: new Map([[AppError.id, AppError]]),
+  });
+  ```
+
+  Notes:
+  - `errorRegistry` is optional. If omitted, typed errors remain `TunnelError` instances.
+  - `serializer` is required for `createHttpClient`, but it is fully customizable (any `SerializerLike` works). If you use `globals.resources.httpClientFactory`, the serializer, error registry, and async contexts are auto-injected, so you can omit them from your own config.
+  - Other supported options on the same config object: `auth`, `timeoutMs`, `fetchImpl`, `onRequest`, and `contexts`.
 
 ## Overrides
 
@@ -382,7 +403,7 @@ const app = r
 
 ## Runtime & Lifecycle
 
-- `run(root, options)` wires dependencies, initializes resources, and returns helpers: `runTask`, `emitEvent`, `getResourceValue`, `store`, `logger`, and `dispose`.
+- `run(root, options)` wires dependencies, initializes resources, and returns helpers: `runTask`, `emitEvent`, `getResourceValue`, `getResourceConfig`, `store`, `logger`, and `dispose`.
 - Run options highlights: `debug` (normal/verbose or custom config), `logs` (printThreshold/strategy/buffer), `errorBoundary` and `onUnhandledError`, `shutdownHooks`, `dryRun`.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime (runs inside middleware; won’t run if middleware short-circuits).
 - Shutdown hooks: install signal listeners to call `dispose` (default in `run`).
@@ -477,13 +498,13 @@ const serializerSetup = r
   .build();
 ```
 
-Use `getDefaultSerializer()` when you need a standalone instance outside DI.
+Use `new Serializer()` when you need a standalone instance outside DI.
 
 Note on files: The “File” you see in tunnels is not a custom serializer type. Runner uses a dedicated `$runnerFile: "File"` sentinel in inputs which the tunnel client/server convert to multipart streams via a manifest. File handling is performed by the tunnel layer (manifest hydration and multipart), not by the serializer. Keep using `createWebFile`/`createNodeFile` for uploads.
 
 ## Testing
 
-- In unit tests, prefer running a minimal root resource and call `await run(root)` to get `runTask`, `emitEvent`, or `getResourceValue`.
+- In unit tests, prefer running a minimal root resource and call `await run(root)` to get `runTask`, `emitEvent`, `getResourceValue`, or `getResourceConfig`.
 - The Jest runner has a watchdog (`JEST_WATCHDOG_MS`, default 10 minutes) to avoid "hung test run" situations.
 - For durable workflow tests, use `createDurableTestSetup` from `@bluelibs/runner/node` for fast, in-memory execution.
 
@@ -512,12 +533,12 @@ test("sends welcome email", async () => {
 ## Metadata & Namespacing
 
 - Meta: `.meta({ title, description })` on tasks/resources/events/middleware for human-friendly docs and tooling; extend meta types via module augmentation when needed.
-- Namespacing: keep ids consistent with `domain.resources.name`, `domain.tasks.name`, `domain.events.name`, `domain.hooks.on-name`, and `domain.middleware.{task|resource}.name`.
+- Namespacing: keep ids consistent with `domain.resources.name`, `domain.tasks.name`, `domain.events.name`, `domain.hooks.on-name`, `domain.middleware.{task|resource}.name`, `domain.errors.ErrorName`, and `domain.ctx.name`.
 - Runtime validation: `inputSchema`, `resultSchema`, `payloadSchema`, `configSchema` share the same `parse(input)` contract; config validation happens on `.with()`, task/event validation happens on call/emit.
 
 ## Advanced Patterns
 
-- **Optional dependencies:** mark dependencies as optional (`analytics: analyticsService.optional()`) so the builder injects `null` when the resource is absent.
+- **Optional dependencies:** mark dependencies as optional (`analytics: analyticsService.optional()`) so the builder injects `undefined` when the resource is absent.
 - **Conditional registration:** `.register((config) => (config.enableFeature ? [featureResource] : []))`.
 - **Async coordination:** `Semaphore` (O(1) linked queue for heavy contention) and `Queue` live in the main package. Both use isolated EventManagers internally for their lifecycle events, separate from the global EventManager used for business-level application events.
 - **Event safety:** Runner detects event emission cycles and throws an `EventCycleError` with the offending chain.

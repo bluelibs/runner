@@ -33,6 +33,21 @@ export interface EmitOptions {
   stepId?: string;
 }
 
+/**
+ * A single branch in a durable switch expression.
+ *
+ * `id` identifies the branch for replay; `match` tests whether this branch applies;
+ * `run` executes the branch logic (only on first evaluation, cached on replay).
+ */
+export interface SwitchBranch<TValue, TResult> {
+  /** Stable identifier for this branch. Persisted for replay. */
+  id: string;
+  /** Predicate that selects this branch based on the switch value. */
+  match: (value: TValue) => boolean;
+  /** Logic to execute when this branch is selected. */
+  run: (value: TValue) => Promise<TResult>;
+}
+
 export interface IStepBuilder<T> extends PromiseLike<T> {
   up(fn: () => Promise<T>): this;
   down(fn: (result: T) => Promise<void>): this;
@@ -87,6 +102,22 @@ export interface IDurableContext {
    * This is a no-op if audit is disabled or the store does not support it.
    */
   note(message: string, meta?: Record<string, unknown>): Promise<void>;
+
+  /**
+   * Replay-safe branching primitive.
+   *
+   * Evaluates `branches` against `value` to find the first matching branch.
+   * The matched branch's `id` and result are persisted; on replay the matchers
+   * are skipped and the cached result is returned directly.
+   *
+   * Throws if no branch matches and no `defaultBranch` is provided.
+   */
+  switch<TValue, TResult>(
+    stepId: string,
+    value: TValue,
+    branches: SwitchBranch<TValue, TResult>[],
+    defaultBranch?: Omit<SwitchBranch<TValue, TResult>, "match">,
+  ): Promise<TResult>;
 
   rollback(): Promise<void>;
 }

@@ -4,8 +4,13 @@ import { ITaskMiddlewareConfigured } from "../defs";
 import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
 import { contextError, platformUnsupportedFunctionError } from "../errors";
 import { IAsyncContext, IAsyncContextDefinition } from "../types/asyncContext";
-import { getDefaultSerializer } from "../serializer";
-import { symbolAsyncContext, symbolOptionalDependency } from "../types/symbols";
+import { Serializer } from "../serializer";
+import {
+  symbolAsyncContext,
+  symbolFilePath,
+  symbolOptionalDependency,
+} from "../types/symbols";
+import { getCallerFile } from "../tools/getCallerFile";
 
 export { contextError as ContextError };
 
@@ -19,11 +24,12 @@ export function getCurrentStore(): Map<string, unknown> | undefined {
   return storage.getStore();
 }
 /**
- * Create a new typed Context. The result contains helpers similar to React’s
+ * Create a new typed Context. The result contains helpers similar to React's
  * Context API but adapted for async usage in Runner.
  */
 export function defineAsyncContext<T>(
   def: IAsyncContextDefinition<T>,
+  filePath?: string,
 ): IAsyncContext<T> {
   if (!platform.hasAsyncLocalStorage()) {
     platformUnsupportedFunctionError.throw({
@@ -32,6 +38,7 @@ export function defineAsyncContext<T>(
   }
 
   const ctxId = def.id;
+  const resolvedFilePath = filePath ?? getCallerFile();
 
   /* istanbul ignore next */
   const use = (): T => {
@@ -57,11 +64,12 @@ export function defineAsyncContext<T>(
     return storage.run(map, fn as () => R);
   };
 
-  const serializer = getDefaultSerializer();
+  const serializer = new Serializer();
 
   const api = {
     id: ctxId,
     [symbolAsyncContext]: true as const,
+    [symbolFilePath]: resolvedFilePath,
     use,
     /* istanbul ignore next */
     provide(value: T, fn: () => Promise<any> | any) {

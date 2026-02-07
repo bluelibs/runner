@@ -8,7 +8,10 @@ import { TagType } from "./tag";
 import { ITaskMeta } from "./meta";
 import { CommonPayload, symbolFilePath, symbolHook } from "./utilities";
 
-type OnType = "*" | IEventDefinition<any> | readonly IEventDefinition<any>[];
+export type OnType =
+  | "*"
+  | IEventDefinition<any>
+  | readonly IEventDefinition<any>[];
 
 export interface IHookDefinition<
   TDependencies extends DependencyMapType = {},

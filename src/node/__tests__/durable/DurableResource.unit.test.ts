@@ -43,6 +43,33 @@ function createMockService(
 }
 
 describe("durable: DurableResource", () => {
+  it("operator throws when store is not available", () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const durable = new DurableResource(service, storage);
+
+    expect(() => durable.operator).toThrow(
+      "Durable operator API is not available: store was not provided to DurableResource.",
+    );
+  });
+
+  it("operator is store-backed and cached", async () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const store = new MemoryStore();
+    const durable = new DurableResource(service, storage, store);
+
+    const op1 = durable.operator;
+    const op2 = durable.operator;
+    expect(op1).toBe(op2);
+
+    await expect(op1.getExecutionDetail("e1")).resolves.toEqual({
+      execution: null,
+      steps: [],
+      audit: [],
+    });
+  });
+
   it("throws when use() is called outside a durable execution", () => {
     const service = createMockService();
     const storage = new AsyncLocalStorage<IDurableContext>();
@@ -50,6 +77,44 @@ describe("durable: DurableResource", () => {
 
     expect(() => durable.use()).toThrow(
       "Durable context is not available. Did you call durable.use() outside a durable task execution?",
+    );
+  });
+
+  it("throws when describe() is called without runner store", async () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const durable = new DurableResource(service, storage);
+
+    const task = r
+      .task("durable.tests.resource.describe.task")
+      .run(async () => "ok")
+      .build();
+
+    await expect(durable.describe(task)).rejects.toThrow(
+      "Durable describe API is not available: runner store was not provided to DurableResource.",
+    );
+  });
+
+  it("throws when describe() is called and dependencies are missing in runner store", async () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const task = r
+      .task("durable.tests.resource.describe.task.missing-deps")
+      .run(async () => "ok")
+      .build();
+
+    const runnerStore = {
+      tasks: new Map([[task.id, { task }]]),
+    } as any;
+    const durable = new DurableResource(
+      service,
+      storage,
+      undefined,
+      runnerStore,
+    );
+
+    await expect(durable.describe(task)).rejects.toThrow(
+      'Cannot describe task "durable.tests.resource.describe.task.missing-deps": task dependencies are not available in the runtime store.',
     );
   });
 

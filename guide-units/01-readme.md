@@ -46,11 +46,11 @@ npx tsx index.ts
 
 - **Complete guide**: Read [FULL_GUIDE.md](./readmes/FULL_GUIDE.md) (the full reference, composed from `guide-units/`)
 - **Popular guide sections**:
-  - [Tasks](./readmes/FULL_GUIDE.md#tasks)
-  - [Resources](./readmes/FULL_GUIDE.md#resources)
-  - [Middleware](./readmes/FULL_GUIDE.md#middleware)
-  - [Testing](./readmes/FULL_GUIDE.md#testing)
-  - [Troubleshooting](./readmes/FULL_GUIDE.md#troubleshooting)
+  - [Tasks](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#tasks)
+  - [Resources](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#resources)
+  - [Middleware](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#middleware)
+  - [Testing](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#testing)
+  - [Troubleshooting](https://github.com/bluelibs/runner/blob/main/readmes/FULL_GUIDE.md#troubleshooting)
 - **API reference**: Browse the [TypeDoc documentation](https://bluelibs.github.io/runner/)
 - **Token-friendly overview**: Read [AI.md](./readmes/AI.md)
 - **Node-only features**:

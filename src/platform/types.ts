@@ -4,6 +4,12 @@
  */
 
 export type PlatformId = "node" | "browser" | "edge" | "universal";
+export type PlatformSetTimeout = (
+  ...args: Parameters<typeof globalThis.setTimeout>
+) => ReturnType<typeof globalThis.setTimeout>;
+export type PlatformClearTimeout = (
+  timeout: ReturnType<PlatformSetTimeout>,
+) => void;
 
 export interface IPlatformAdapter {
   readonly id: PlatformId;
@@ -22,8 +28,8 @@ export interface IPlatformAdapter {
   createAsyncLocalStorage<T>(): IAsyncLocalStorage<T>;
 
   // Timers (Web API compatible)
-  setTimeout: typeof globalThis.setTimeout;
-  clearTimeout: typeof globalThis.clearTimeout;
+  setTimeout: PlatformSetTimeout;
+  clearTimeout: PlatformClearTimeout;
 
   init: () => Promise<void>;
 }

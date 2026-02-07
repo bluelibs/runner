@@ -31,6 +31,7 @@ await result.dispose();
 | `runTask(...)`          | Run a task by reference or string id                               |
 | `emitEvent(...)`        | Emit events                                                        |
 | `getResourceValue(...)` | Read a resource's value                                            |
+| `getResourceConfig(...)` | Read a resource's resolved config                                  |
 | `logger`                | Logger instance                                                    |
 | `store`                 | Runtime store with registered resources, tasks, middleware, events |
 | `dispose()`             | Gracefully dispose resources and unhook process listeners          |

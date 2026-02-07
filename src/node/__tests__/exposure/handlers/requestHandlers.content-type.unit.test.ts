@@ -1,5 +1,5 @@
 import { createRequestHandlers } from "../../../exposure/requestHandlers";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 import {
   createReqRes,
   HeaderName,
@@ -28,7 +28,7 @@ describe("requestHandlers - content-type handling", () => {
     const deps = getDeps();
     const { handleTask } = createRequestHandlers({
       ...deps,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     } as any);
     const headers = {
       [HeaderName.ContentType]: [MimeType.ApplicationJson],
@@ -48,7 +48,7 @@ describe("requestHandlers - content-type handling", () => {
     const deps = getDeps();
     const { handleTask } = createRequestHandlers({
       ...deps,
-      serializer: getDefaultSerializer(),
+      serializer: new Serializer(),
     } as any);
     const headers = {
       [HeaderName.ContentType]: [""],

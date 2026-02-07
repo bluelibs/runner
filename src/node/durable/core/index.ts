@@ -8,3 +8,4 @@ export * from "./CronParser";
 export * from "./DurableContext";
 export * from "./DurableService";
 export * from "./DurableWorker";
+export * from "./flowShape";

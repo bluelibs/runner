@@ -17,10 +17,25 @@ export {
 } from "./core/DurableService";
 export { durableResource } from "./core/resource";
 export type { DurableResourceRuntimeConfig } from "./core/resource";
+export { createRunnerDurableRuntime } from "./core/createRunnerDurableRuntime";
+export type {
+  RunnerDurableDeps,
+  RunnerDurableRuntimeConfig,
+} from "./core/createRunnerDurableRuntime";
 export { DurableContext } from "./core/DurableContext";
 export { StepBuilder } from "./core/StepBuilder";
 export { DurableOperator } from "./core/DurableOperator";
 export { DurableWorker, initDurableWorker } from "./core/DurableWorker";
+export type {
+  DurableFlowShape,
+  FlowNode,
+  FlowStepNode,
+  FlowSleepNode,
+  FlowSignalNode,
+  FlowEmitNode,
+  FlowSwitchNode,
+  FlowNoteNode,
+} from "./core/flowShape";
 
 // We don't export server.ts by default to avoid Express dependency if not used?
 // Actually user asked for everything in one package.
@@ -38,3 +53,8 @@ export { RedisEventBus } from "./bus/RedisEventBus";
 
 export { createDurableTestSetup, waitUntil } from "./test-utils";
 export type { DurableTestSetup, DurableTestSetupOptions } from "./test-utils";
+
+export { memoryDurableResource } from "./resources/memoryDurableResource";
+export type { MemoryDurableResourceConfig } from "./resources/memoryDurableResource";
+export { redisDurableResource } from "./resources/redisDurableResource";
+export type { RedisDurableResourceConfig } from "./resources/redisDurableResource";

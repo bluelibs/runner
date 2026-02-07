@@ -10,6 +10,7 @@ import {
 import { run } from "../../run";
 import { Logger, MiddlewareManager, OnUnhandledError } from "../../models";
 import { RunnerMode } from "../../types/runner";
+import { createTestFixture } from "../test-utils";
 
 describe("Store", () => {
   let eventManager: EventManager;
@@ -18,14 +19,9 @@ describe("Store", () => {
   let onUnhandledError: OnUnhandledError;
 
   beforeEach(() => {
-    eventManager = new EventManager({ runtimeEventCycleDetection: true });
-    logger = new Logger({
-      printThreshold: "info",
-      printStrategy: "pretty",
-      bufferLogs: false,
-    });
-    onUnhandledError = jest.fn();
-    store = new Store(eventManager, logger, onUnhandledError, RunnerMode.TEST);
+    const fixture = createTestFixture();
+    ({ eventManager, logger, onUnhandledError, store } = fixture);
+    store.setTaskRunner(fixture.createTaskRunner());
   });
 
   it("should expose some helpers", () => {
@@ -47,7 +43,8 @@ describe("Store", () => {
 
     store.initializeStore(rootResource, {});
 
-    expect(store.root.resource).toBe(rootResource);
+    expect(store.root.resource.id).toBe(rootResource.id);
+    expect(store.root.resource).not.toBe(rootResource);
     expect(store.resources.has("root")).toBe(true);
   });
 

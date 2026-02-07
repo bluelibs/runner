@@ -92,12 +92,12 @@ export default tseslint.config(
       // Warn instead of error for prefer-const
       "prefer-const": "warn",
 
-      // Unused imports/vars configuration (Warning level - non-blocking)
+      // Unused imports/vars configuration (blocking)
       "no-unused-vars": "off",
       "@typescript-eslint/no-unused-vars": "off",
-      "unused-imports/no-unused-imports": "warn",
+      "unused-imports/no-unused-imports": "error",
       "unused-imports/no-unused-vars": [
-        "warn",
+        "error",
         {
           vars: "all",
           varsIgnorePattern: "^_",
@@ -116,7 +116,7 @@ export default tseslint.config(
   {
     files: ["src/__tests__/**/*.ts", "**/*.test.ts"],
     rules: {
-      // Allow unused vars in tests (common for setup/teardown)
+      // Keep test ergonomics while enforcing strictness in non-test code.
       "unused-imports/no-unused-vars": "off",
     },
   },

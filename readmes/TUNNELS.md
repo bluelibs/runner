@@ -62,13 +62,13 @@ await run(app);
 Client runtime (call remote tasks directly):
 
 ```ts
-import { getDefaultSerializer } from "@bluelibs/runner";
+import { Serializer } from "@bluelibs/runner";
 import { createHttpMixedClient } from "@bluelibs/runner/node";
 
 const client = createHttpMixedClient({
   baseUrl: "http://127.0.0.1:7070/__runner",
   auth: { token: "dev-secret" },
-  serializer: getDefaultSerializer(),
+  serializer: new Serializer(),
 });
 
 const sum = await client.task<{ a: number; b: number }, number>(
@@ -415,12 +415,12 @@ Use when:
 Example:
 
 ```ts
-import { globals, getDefaultSerializer } from "@bluelibs/runner";
+import { globals, Serializer } from "@bluelibs/runner";
 
 const client = globals.tunnels.http.createClient({
   url: "http://127.0.0.1:7070/__runner",
   auth: { token: "dev-secret" },
-  serializer: getDefaultSerializer(),
+  serializer: new Serializer(),
 });
 
 const sum = await client.task<{ a: number; b: number }, number>(
@@ -654,7 +654,7 @@ If you use Runner async contexts (via `defineAsyncContext` / `r.asyncContext(...
 
 The header contains a serializer-encoded map: `{ [contextId]: serializedValue }`.
 
-This uses the same `Serializer` as your tunnel client (defaults to `getDefaultSerializer()`), so context values can be any Serializer-supported value.
+This uses the same `Serializer` instance you pass to your tunnel client, so context values can be any Serializer-supported value.
 
 ---
 

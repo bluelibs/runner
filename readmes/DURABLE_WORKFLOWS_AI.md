@@ -32,7 +32,30 @@ Rule: side effects belong inside `ctx.step(...)`.
    - look up `executionId`
    - `await service.signal(executionId, SignalDef, payload)`
 
+For user-facing status pages, you can read the durable execution on-demand from the durable store using `executionId` (no need to mirror into Postgres): `store.getExecution(executionId)` (or `new DurableOperator(store).getExecutionDetail(executionId)` when supported).
+
 Signals buffer if no waiter exists yet; the next `waitForSignal(...)` consumes the payload.
+
+Recommended wiring (config-only resources):
+
+```ts
+import {
+  memoryDurableResource,
+  redisDurableResource,
+} from "@bluelibs/runner/node";
+
+// dev/tests
+const durable = memoryDurableResource
+  .fork("app.durable")
+  .with({ worker: true });
+
+// production (Redis + optional RabbitMQ queue)
+const durableProd = redisDurableResource.fork("app.durable").with({
+  redis: { url: process.env.REDIS_URL! },
+  queue: { url: process.env.RABBITMQ_URL! },
+  worker: true,
+});
+```
 
 `waitForSignal()` return shapes:
 
@@ -72,6 +95,65 @@ Import and subscribe using event definitions (not strings): `import { durableEve
 
 - `ctx.step("id").up(...).down(...)` registers compensations.
 - `await ctx.rollback()` runs compensations in reverse order.
+
+## Branching with ctx.switch()
+
+`ctx.switch()` is a replay-safe branching primitive. It evaluates matchers against a value, persists which branch was taken, and on replay skips the matchers entirely.
+
+```ts
+const result = await ctx.switch(
+  "route-order",
+  order.status,
+  [
+    {
+      id: "approve",
+      match: (s) => s === "paid",
+      run: async (s) => {
+        /* ... */ return "approved";
+      },
+    },
+    {
+      id: "reject",
+      match: (s) => s === "declined",
+      run: async () => "rejected",
+    },
+  ],
+  { id: "manual-review", run: async () => "needs-review" },
+); // optional default
+```
+
+- First arg is the step id (must be unique, like `ctx.step`).
+- Matchers evaluate in order; first match wins.
+- The matched branch `id` + result are persisted; on replay the cached result is returned immediately.
+- Throws if no branch matches and no default is provided.
+- Audit emits a `switch_evaluated` entry with `branchId` and `durationMs`.
+
+## Describing a flow (static shape export)
+
+Use `durable.describe(...)` to export the structure of a workflow without executing it. Useful for documentation, visualization, and tooling.
+
+**Easiest: pass the task directly** — no refactoring needed:
+
+```ts
+// Get your durable dependency from runtime, then:
+const durableRuntime = runtime.getResourceValue(durable);
+const shape = await durableRuntime.describe(myTask);
+// shape.nodes = [{ kind: "step", stepId: "validate", ... }, ...]
+
+// TInput is inferred from the task, or can be specified explicitly:
+const shape2 = await durableRuntime.describe<{ orderId: string }>(myTask, {
+  orderId: "123",
+});
+```
+
+The recorder shims `durable.use()` inside the task's `run` and records every `ctx.*` operation.
+
+Notes:
+
+- The recorder captures each `ctx.*` call as a `FlowNode`; step bodies are never executed.
+- Supported node kinds: `step`, `sleep`, `waitForSignal`, `emit`, `switch`, `note`.
+- `DurableFlowShape` and all `FlowNode` types are exported for type-safe consumption.
+- Conditional logic should be modeled with `ctx.switch()` (not JS `if/else`) for the shape to capture it.
 
 ## Versioning (don’t get burned)
 

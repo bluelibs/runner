@@ -89,16 +89,22 @@ const userTask = r
 
     // With error information
     try {
-      const user = await createUser(input);
+      // Replace with your own persistence/service call
+      const user = await Promise.resolve({
+        id: "user-1",
+        email: input.email,
+      });
       logger.info("User created successfully", {
         data: { userId: user.id, email: user.email },
       });
     } catch (error) {
+      const safeError =
+        error instanceof Error ? error : new Error(String(error));
+
       logger.error("User creation failed", {
-        error,
+        error: safeError,
         data: {
           attemptedEmail: input.email,
-          validationErrors: error.validationErrors,
         },
       });
     }
@@ -112,7 +118,7 @@ Create logger instances with bound context for consistent metadata across relate
 
 ```typescript
 const RequestContext = r
-  .asyncContext<{ requestId: string; userId: string }>("app.requestContext")
+  .asyncContext<{ requestId: string; userId: string }>("app.ctx.request")
   .build();
 
 const requestHandler = r
@@ -261,10 +267,6 @@ interface ILog {
   context?: Record<string, any>; // Bound context from logger.with(), it's about the context in which the log was created
 }
 ```
-
-### Catch Logs
-
-> **runtime:** "'Debugging is enjoyable.' So is dental surgery, apparently. You produce a novella of logs; I paginate, color, stringify, and mail it to three observability planets. Please don’t `logger.debug` inside a `for` loop. My IO has feelings."
 
 ## Debug Resource
 

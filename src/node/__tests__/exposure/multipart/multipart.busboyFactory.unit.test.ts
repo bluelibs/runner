@@ -1,5 +1,5 @@
 import { PassThrough } from "node:stream";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 
 function createReq(): PassThrough & { headers: Record<string, string> } {
   const req = new PassThrough() as PassThrough & {
@@ -20,7 +20,7 @@ describe("multipart busboy interop branches", () => {
     const { parseMultipartInput } = require("../../../exposure/multipart");
 
     const req = createReq();
-    const promise = parseMultipartInput(req, undefined, getDefaultSerializer());
+    const promise = parseMultipartInput(req, undefined, new Serializer());
     req.end();
 
     const out = await promise;
@@ -37,7 +37,7 @@ describe("multipart busboy interop branches", () => {
     const { parseMultipartInput } = require("../../../exposure/multipart");
 
     const req = createReq();
-    const promise = parseMultipartInput(req, undefined, getDefaultSerializer());
+    const promise = parseMultipartInput(req, undefined, new Serializer());
     req.end();
 
     const out = await promise;

@@ -1,4 +1,4 @@
-import { r, asyncContext, createContext } from "../..";
+import { definitions, r, asyncContext, createContext } from "../..";
 
 describe("async context builder and defineAsyncContext", () => {
   it("builder.build produces context with id and custom serializer/parse", () => {
@@ -81,5 +81,16 @@ describe("async context builder and defineAsyncContext", () => {
     await ctx.provide({ id: 1 }, async () => {
       expect(ctx.use()).toEqual({ id: 1 });
     });
+  });
+
+  it("captures symbolFilePath from the caller location", () => {
+    const ctx = r.asyncContext<{ id: string }>("tests.ctx.filePath").build();
+
+    expect(
+      (ctx as unknown as Record<symbol, any>)[definitions.symbolFilePath],
+    ).toBeDefined();
+    expect(
+      (ctx as unknown as Record<symbol, any>)[definitions.symbolFilePath],
+    ).toContain("asyncContext.builder.test");
   });
 });

@@ -2,7 +2,7 @@ import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
 import { createHttpMixedClient } from "../../http/http-mixed-client";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 import { createNodeFile } from "../../files";
 
 function asIncoming(
@@ -30,7 +30,7 @@ function makeSink(): any {
 
 describe("http smart/mixed client typed errors", () => {
   const baseUrl = "http://127.0.0.1:3333/__runner";
-  const serializer = getDefaultSerializer();
+  const serializer = new Serializer();
   const helper = {
     id: "tests.errors.node",
     throw: (data: any) => {

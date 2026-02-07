@@ -2,10 +2,10 @@ import {
   createExposureFetch,
   normalizeError,
 } from "../../../http-fetch-tunnel.resource";
-import { getDefaultSerializer } from "../../../serializer";
+import { Serializer } from "../../../serializer";
 
 describe("httpFetchTunnel & createExposureFetch - additional coverage", () => {
-  const serializer = getDefaultSerializer();
+  const serializer = new Serializer();
 
   it("normalizes baseUrl and serializes bodies (postJson lines)", async () => {
     const calls: Array<{

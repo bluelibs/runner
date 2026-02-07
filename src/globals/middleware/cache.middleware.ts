@@ -22,9 +22,9 @@ export const cacheFactoryTask = defineTask({
   },
 });
 
-type CacheResourceConfig = {
+export interface CacheResourceConfig {
   defaultOptions?: any;
-};
+}
 
 type CacheMiddlewareConfig = {
   keyBuilder?: (taskId: string, input: any) => string;

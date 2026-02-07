@@ -1,7 +1,7 @@
 import * as http from "http";
 import { createRequestHandlers } from "../../../exposure/requestHandlers";
 import { defineError } from "../../../../definers/defineError";
-import { getDefaultSerializer } from "../../../../serializer";
+import { Serializer } from "../../../../serializer";
 import { defineResource, defineEvent, defineHook } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
@@ -16,7 +16,7 @@ import {
 } from "./requestHandlers.test.utils";
 
 describe("requestHandlers - event handling", () => {
-  const serializer = getDefaultSerializer();
+  const serializer = new Serializer();
 
   afterEach(() => {
     jest.restoreAllMocks();
