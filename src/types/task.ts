@@ -128,6 +128,8 @@ export interface ITask<
   tags: TTags;
 }
 
+export type AnyTask = ITask<any, any, any, any, any, any>;
+
 /** Narrowed type for phantom tasks (no-op run by default). */
 export type IPhantomTask<
   TInput = any,

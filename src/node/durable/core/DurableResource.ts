@@ -1,8 +1,7 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { Store } from "../../../models/Store";
 import type { IEventDefinition } from "../../../types/event";
-import type { ITask } from "../../../types/task";
-import type { DependencyMapType } from "../../../types/utilities";
+import type { AnyTask } from "../../../types/task";
 import type { IDurableContext } from "./interfaces/context";
 import type {
   DurableTask,
@@ -51,10 +50,7 @@ export interface IDurableResource extends Pick<
    *
    * The task must be registered in the runtime store (ie. part of the app tree).
    */
-  describe<I, O extends Promise<any>, D extends DependencyMapType>(
-    task: ITask<I, O, D>,
-    input?: I,
-  ): Promise<DurableFlowShape>;
+  describe(task: AnyTask, input?: unknown): Promise<DurableFlowShape>;
 
   /**
    * Store-backed operator API to inspect and administrate executions
@@ -102,10 +98,7 @@ export class DurableResource implements IDurableResource {
     return ctx;
   }
 
-  async describe<I, O extends Promise<any>, D extends DependencyMapType>(
-    task: ITask<I, O, D>,
-    input?: I,
-  ): Promise<DurableFlowShape> {
+  async describe(task: AnyTask, input?: unknown): Promise<DurableFlowShape> {
     if (!this.runnerStore) {
       throw new Error(
         "Durable describe API is not available: runner store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) instead of manually constructing DurableResource.",
@@ -119,7 +112,7 @@ export class DurableResource implements IDurableResource {
       );
     }
 
-    const effectiveTask = storeTask.task as ITask<any, any, any>;
+    const effectiveTask = storeTask.task as AnyTask;
     if (!storeTask.computedDependencies) {
       throw new Error(
         `Cannot describe task "${task.id}": task dependencies are not available in the runtime store.`,
@@ -129,7 +122,7 @@ export class DurableResource implements IDurableResource {
 
     return await recordFlowShape(async (ctx) => {
       const depsWithRecorder = this.injectRecorderIntoDurableDeps(deps, ctx);
-      await effectiveTask.run(input as any, depsWithRecorder as any);
+      await effectiveTask.run(input, depsWithRecorder);
     });
   }
 
