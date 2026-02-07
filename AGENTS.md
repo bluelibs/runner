@@ -23,7 +23,8 @@
 </general>
 
 <specifics>
-- Node specific code goes under ./src/node/ folder. It is exported only for node.
+- This library has 100% code coverage.
+- Node specific code (Async Context, Durable Workflows, Tunnels, etc) goes under ./src/node/ folder. It is exported only for node.
 - This package is multi-platform (readmes/MULTIPLATFORM.md) be sure to take this into account when implementing changes
 - AI.md (readmes/AI.md) contains AI-token-friendly documentation about Runner. Read it if the task implies that you know Runner.
 - Always run `npm run qa` to ensure type safety and linting. (Expected to take around 30 seconds)

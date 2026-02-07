@@ -1,6 +1,4 @@
 import type { IEventDefinition } from "../../../types/event";
-import type { ITask } from "../../../types/task";
-import { symbolTask } from "../../../types/symbols";
 import type {
   IDurableContext,
   SwitchBranch,
@@ -63,7 +61,7 @@ export interface FlowNoteNode {
 /**
  * Serializable description of a durable workflow's structure.
  *
- * Produced by `describeFlow()` without actually executing the workflow.
+ * Produced by `recordFlowShape()` without actually executing the workflow.
  * Useful for documentation, visualization dashboards, and tooling.
  */
 export interface DurableFlowShape {
@@ -74,12 +72,12 @@ export interface DurableFlowShape {
 
 /**
  * A lightweight mock of `IDurableContext` that records the structure of a
- * workflow instead of executing it. Used internally by `describeFlow()`.
+ * workflow instead of executing it. Used internally by `recordFlowShape()`.
  */
 class FlowRecorder implements IDurableContext {
   readonly nodes: FlowNode[] = [];
 
-  readonly executionId = "__flow_describe__";
+  readonly executionId = "__flow_record__";
   readonly attempt = 0;
 
   private resolveStepId(stepId: string | DurableStepId<unknown>): string {
@@ -181,7 +179,6 @@ class FlowRecorder implements IDurableContext {
  * Recording step builder that captures `.up()` / `.down()` calls without executing.
  */
 class FlowStepRecorder<T> implements IStepBuilder<T> {
-  private hasUp = false;
   private hasDown = false;
 
   constructor(
@@ -190,7 +187,6 @@ class FlowStepRecorder<T> implements IStepBuilder<T> {
   ) {}
 
   up(_fn: () => Promise<T>): this {
-    this.hasUp = true;
     return this;
   }
 
@@ -223,86 +219,16 @@ class FlowStepRecorder<T> implements IStepBuilder<T> {
   }
 }
 
-// ─── Public API ──────────────────────────────────────────────────────────
-
 /**
- * A task with any dependency map — used in the `describeFlow()` overload
- * so that tasks with arbitrary dependencies are accepted.
+ * Record a durable workflow flow-shape without executing it.
+ *
+ * This runs the descriptor against a recording `IDurableContext` that captures
+ * `ctx.*` calls into a serializable shape.
  */
-type AnyTask = ITask<any, any, any, any, any, any>;
-
-/**
- * Statically describe the shape of a durable workflow without executing it.
- *
- * Accepts either:
- * - A **descriptor function** that receives a recording `IDurableContext`.
- * - A **task definition** (built with `r.task(…).build()`) that uses `durable.use()`.
- *
- * When a task is passed, its `run` function is called with a mock dependencies
- * object where every `.use()` returns the recorder. Step bodies are never
- * executed — only the `ctx.*` calls are captured.
- *
- * @example
- * ```ts
- * // From a function:
- * const shape = await describeFlow(async (ctx) => {
- *   await ctx.step("validate", async () => ({ ok: true }));
- *   await ctx.sleep(60_000, { stepId: "cooldown" });
- * });
- *
- * // From an existing task:
- * const shape = await describeFlow(myDurableTask);
- * ```
- */
-export async function describeFlow(
-  source: ((ctx: IDurableContext) => Promise<void>) | AnyTask,
+export async function recordFlowShape(
+  descriptor: (ctx: IDurableContext) => Promise<void>,
 ): Promise<DurableFlowShape> {
   const recorder = new FlowRecorder();
-
-  if (isTask(source)) {
-    const mockDeps = createMockDependencies(source, recorder);
-    await source.run(undefined, mockDeps);
-  } else {
-    await source(recorder);
-  }
-
+  await descriptor(recorder);
   return { nodes: recorder.nodes };
-}
-
-// ─── Internal helpers ────────────────────────────────────────────────────
-
-/** Runtime check for a branded Runner task. */
-function isTask(value: unknown): value is AnyTask {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[symbolTask] === true
-  );
-}
-
-/**
- * Build a mock dependencies object for a task. Every property returns a
- * lightweight proxy whose `.use()` hands back the given `FlowRecorder`.
- *
- * This lets `describeFlow(task)` work regardless of how the dev named their
- * durable dependency key — the recorder is injected into whichever dep
- * calls `.use()`.
- */
-function createMockDependencies(
-  task: AnyTask,
-  recorder: FlowRecorder,
-): Record<string, unknown> {
-  const rawDeps =
-    typeof task.dependencies === "function"
-      ? task.dependencies()
-      : task.dependencies;
-
-  const durableMock = { use: () => recorder };
-
-  const mockDeps: Record<string, unknown> = {};
-  for (const key of Object.keys(rawDeps ?? {})) {
-    mockDeps[key] = durableMock;
-  }
-
-  return mockDeps;
 }

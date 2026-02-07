@@ -129,7 +129,8 @@ const db = r
 
 const mailer = r
   .resource("app.mailer")
-  .init(async () => ({
+  .dependencies({ logger })
+  .init(async (_config, { logger }) => ({
     sendWelcome: async (userId: string) => {
       logger.info("Sending welcome email", { userId });
     },

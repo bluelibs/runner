@@ -130,39 +130,23 @@ const result = await ctx.switch(
 
 ## Describing a flow (static shape export)
 
-`describeFlow()` lets you export the structure of a workflow without executing it. Useful for documentation, visualization, and tooling.
+Use `durableRecorderResource` to export the structure of a workflow without executing it. Useful for documentation, visualization, and tooling.
 
 **Easiest: pass the task directly** — no refactoring needed:
 
 ```ts
-import { describeFlow } from "@bluelibs/runner/node";
+import { durableRecorderResource } from "@bluelibs/runner/node";
 
-const shape = await describeFlow(myDurableTask);
+// Register recorder in your app, then:
+const recorder = runtime.getResourceValue(durableRecorderResource.fork("app.durable.recorder"));
+const shape = await recorder.describe(myDurableTask);
 // shape.nodes = [{ kind: "step", stepId: "validate", ... }, ...]
 ```
 
-`describeFlow()` intercepts the `durable.use()` call inside the task's `run` and records every `ctx.*` operation.
+The recorder shims `durable.use()` inside the task's `run` and records every `ctx.*` operation.
 
-**Alternative: pass a descriptor function** (also accepts `IDurableContext`):
-
-```ts
-import { describeFlow, type IDurableContext } from "@bluelibs/runner/node";
-
-// Optionally extract the workflow body for sharing
-async function onboardingFlow(ctx: IDurableContext, input: { userId: string }) {
-  await ctx.step("create-account", async () => ({ ok: true }));
-  await ctx.sleep(60_000, { stepId: "cooldown" });
-  await ctx.step("send-welcome", async () => "sent");
-}
-
-const shape = await describeFlow(async (ctx) => {
-  await onboardingFlow(ctx, { userId: "__placeholder__" });
-});
-```
-
-- Accepts a task or `(ctx: IDurableContext) => Promise<void>`.
-- The recording context captures each `ctx.*` call as a `FlowNode`; all return values are `undefined`.
-- When passing a task, input is set to `undefined` — step bodies are never executed.
+Notes:
+- The recorder captures each `ctx.*` call as a `FlowNode`; step bodies are never executed.
 - Supported node kinds: `step`, `sleep`, `waitForSignal`, `emit`, `switch`, `note`.
 - `DurableFlowShape` and all `FlowNode` types are exported for type-safe consumption.
 - Conditional logic should be modeled with `ctx.switch()` (not JS `if/else`) for the shape to capture it.

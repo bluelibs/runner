@@ -26,7 +26,6 @@ export { DurableContext } from "./core/DurableContext";
 export { StepBuilder } from "./core/StepBuilder";
 export { DurableOperator } from "./core/DurableOperator";
 export { DurableWorker, initDurableWorker } from "./core/DurableWorker";
-export { describeFlow } from "./core/describeFlow";
 export type {
   DurableFlowShape,
   FlowNode,
@@ -36,7 +35,7 @@ export type {
   FlowEmitNode,
   FlowSwitchNode,
   FlowNoteNode,
-} from "./core/describeFlow";
+} from "./core/flowShape";
 
 // We don't export server.ts by default to avoid Express dependency if not used?
 // Actually user asked for everything in one package.
@@ -59,3 +58,5 @@ export { memoryDurableResource } from "./resources/memoryDurableResource";
 export type { MemoryDurableResourceConfig } from "./resources/memoryDurableResource";
 export { redisDurableResource } from "./resources/redisDurableResource";
 export type { RedisDurableResourceConfig } from "./resources/redisDurableResource";
+export { durableRecorderResource } from "./resources/durableRecorderResource";
+export type { DurableRecorder } from "./resources/durableRecorderResource";
