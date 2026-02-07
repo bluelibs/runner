@@ -13,7 +13,8 @@ export {
   useExposureContext,
 } from "./exposure/requestContext";
 export type * from "./exposure/resourceTypes";
-export { createNodeFile } from "./files";
+export { createNodeFile, NodeInputFile } from "./files";
+export type { NodeReadable } from "./files";
 export { readInputFileToBuffer, writeInputFileToPath } from "./files";
 // Important: avoid importing a path that ends with `.node`
 // as tsup's native-node-modules plugin treats it as a native addon.

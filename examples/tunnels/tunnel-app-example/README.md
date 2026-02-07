@@ -1,7 +1,7 @@
 # @runner-examples/tunnel-app
 
 Small, end-to-end tunnel demo that proves Runner tasks can be executed in another
-process/runtime over HTTP, while the caller still uses *typed* task dependencies.
+process/runtime over HTTP, while the caller still uses _typed_ task dependencies.
 
 What this example demonstrates:
 
@@ -20,8 +20,8 @@ npm install
 
 Notes:
 
-- This example depends on the local repo package via `@bluelibs/runner: file:../../..`.
-- If you haven’t built the repo recently, run `npm run build` from the repo root.
+- This example depends on `@bluelibs/runner` from npm.
+- Run `npm install` to fetch all dependencies.
 
 ## Run
 

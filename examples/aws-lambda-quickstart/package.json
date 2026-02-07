@@ -12,7 +12,7 @@
     "dev:sam": "sam build && sam local start-api --port 3060"
   },
   "dependencies": {
-    "@bluelibs/runner": "^4.5.9",
+    "@bluelibs/runner": "^5.2.0",
     "esbuild": "^0.25.9",
     "zod": "^3.23.8"
   },

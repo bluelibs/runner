@@ -3,8 +3,7 @@
  * Shows how to use interceptEmission and interceptHook
  */
 
-import { event, hook, resource } from "../src";
-import { EventManager } from "../src/models/EventManager";
+import { event, hook, resource, EventManager } from "@bluelibs/runner";
 
 // Define an event
 const userActionEvent = event<{ action: string; userId: string }>({

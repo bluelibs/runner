@@ -6,12 +6,12 @@
 
 import { z } from "zod";
 import {
-  defineTask,
-  defineResource,
-  defineEvent,
-  defineMiddleware,
-} from "../define";
-import { IValidationSchema } from "../defs";
+  task as defineTask,
+  resource as defineResource,
+  event as defineEvent,
+  taskMiddleware as defineMiddleware,
+} from "@bluelibs/runner";
+import type { IValidationSchema } from "@bluelibs/runner";
 
 // Zod schemas already implement IValidationSchema<T>!
 // The .parse() method is compatible with our interface

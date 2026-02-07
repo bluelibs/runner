@@ -6,12 +6,12 @@
  * - Client uploads slowly; server responds per chunk
  */
 
-import { globals, resource, run, task } from "../../src";
+import { globals, resource, run, task } from "@bluelibs/runner";
 import {
   nodeExposure,
   useExposureContext,
   createHttpSmartClient,
-} from "../../src/node";
+} from "@bluelibs/runner/node";
 import { Readable, Transform } from "stream";
 import { createSlowReadable } from "./utils";
 
@@ -72,6 +72,7 @@ const duplexTask = task({
 const exposure = nodeExposure.with({
   http: {
     dangerouslyAllowOpenExposure: true,
+    auth: { allowAnonymous: true },
     listen: { port: 0 },
     basePath: BASE_PATH,
   },

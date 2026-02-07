@@ -5,14 +5,14 @@
  * - Client: Node smart client that auto-detects File sentinels and streams via multipart
  */
 
-import { globals, resource, run, task } from "../../src";
+import { globals, resource, run, task, InputFile } from "@bluelibs/runner";
 import { Readable, Transform } from "stream";
-import type { InputFile } from "../../src/types/inputFile";
 import {
   nodeExposure,
   createNodeFile,
   createHttpSmartClient,
-} from "../../src/node";
+} from "@bluelibs/runner/node";
+
 // @ts-ignore
 import { createSlowReadable, getExposureBaseUrl } from "./utils";
 
@@ -84,6 +84,7 @@ const appendTask = task({
 const exposure = nodeExposure.with({
   http: {
     dangerouslyAllowOpenExposure: true,
+    auth: { allowAnonymous: true },
     basePath: "/__runner",
     listen: { port: 0 },
   },

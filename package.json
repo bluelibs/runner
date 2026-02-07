@@ -103,7 +103,7 @@
     "benchmark": "jest --config config/jest/jest.bench.config.js --verbose --runInBand",
     "benchmark:json": "BENCHMARK_OUTPUT=./config/benchmarks/benchmark-results.json NODE_OPTIONS=--expose-gc npm run benchmark",
     "benchmark:compare": "node ./scripts/compare-benchmarks.mjs ./config/benchmarks/baseline.json ./config/benchmarks/benchmark-results.json ./config/benchmarks/benchmarks.config.json",
-    "guide:compose": "node ./scripts/compose-readme.mjs"
+    "guide:compose": "node ./scripts/compose-guide.mjs"
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.7",

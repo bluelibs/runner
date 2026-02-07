@@ -1,0 +1,17 @@
+{
+  "name": "streaming-examples",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "run:append": "tsx src/append.ts",
+    "run:duplex": "tsx src/duplex.ts"
+  },
+  "dependencies": {
+    "@bluelibs/runner": "^5.2.0"
+  },
+  "devDependencies": {
+    "@bluelibs/runner-dev": "^5.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.0.0"
+  }
+}

@@ -32,8 +32,11 @@ interface JwtMiddlewareConfig {
 
 const jwtGuard = r.middleware
   .task("examples.tunnels.jwt.guard")
+  .configSchema<JwtMiddlewareConfig>({
+    parse: (value) => value as JwtMiddlewareConfig,
+  })
   .everywhere((t) => t.id.startsWith("examples.tunnels.jwt."))
-  .run(async (context, _deps, config?: JwtMiddlewareConfig) => {
+  .run(async (context, _deps, config: JwtMiddlewareConfig) => {
     const nextInput = context.task?.input;
     let requestContext: ReturnType<typeof useExposureContext>;
     try {

@@ -24,7 +24,6 @@ This will:
 
 Notes:
 
-- The example depends on the local Runner via a file-based package link:
-  - package.json → devDependencies → "@bluelibs/runner": "file:../../.."
-  - Build the root package first if needed: from repository root run `npm run build`.
+- The example depends on `@bluelibs/runner` from npm.
+  - Run `npm install` to fetch all dependencies.
 - Modify secrets or scopes in `examples/tunnels/jwt-auth.example.ts` as needed.
