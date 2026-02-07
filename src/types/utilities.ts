@@ -141,7 +141,7 @@ export interface TaskCallOptions {
  * Task dependencies transform into callable functions: call with the task input
  * and you receive the task output. Optionally accepts TaskCallOptions for journal forwarding.
  */
-type TaskDependency<I, O> = I extends null | void
+export type TaskDependency<I, O> = I extends null | void
   ? {
       (options?: TaskCallOptions): O;
       (input?: I, options?: TaskCallOptions): O;
@@ -150,12 +150,12 @@ type TaskDependency<I, O> = I extends null | void
 /**
  * Resource dependencies resolve to the resource's value directly.
  */
-type ResourceDependency<V> = V;
+export type ResourceDependency<V> = V;
 /**
  * Event dependencies resolve to an emitter function. If the payload type is
  * `void`, the function can be called with zero args (or an empty object).
  */
-type EventDependency<P> = P extends void
+export type EventDependency<P> = P extends void
   ? (() => Promise<void>) & ((input?: Record<string, never>) => Promise<void>)
   : (input: P) => Promise<void>;
 

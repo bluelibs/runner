@@ -64,8 +64,8 @@ export interface ResourceForkInfo {
 }
 
 // Helper to detect `any` so we can treat it as "unspecified"
-type IsAny<T> = 0 extends 1 & T ? true : false;
-type IsUnspecified<T> = [T] extends [undefined]
+export type IsAny<T> = 0 extends 1 & T ? true : false;
+export type IsUnspecified<T> = [T] extends [undefined]
   ? true
   : [T] extends [void]
     ? true

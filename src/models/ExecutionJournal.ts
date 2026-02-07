@@ -53,5 +53,5 @@ export const journal = {
    * Creates a new empty ExecutionJournal.
    * Useful when you need to pass a specific journal instance to `runTask` or nested calls.
    */
-  create: () => new ExecutionJournalImpl(),
+  create: (): ExecutionJournal => new ExecutionJournalImpl(),
 };

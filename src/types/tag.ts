@@ -61,7 +61,7 @@ export interface ITag<
   [symbolTag]: true;
 }
 
-type ITagWithOptionalConfig<
+export type ITagWithOptionalConfig<
   _TValue,
   TEnforceInputContract,
   TEnforceOutputContract,

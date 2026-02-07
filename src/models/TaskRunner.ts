@@ -65,8 +65,6 @@ export class TaskRunner {
   /**
    * Creates the function with the chain of middleware.
    * @param task
-   * @param input
-   * @param taskDependencies
    * @returns
    */
   protected createRunnerWithMiddleware<

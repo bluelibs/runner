@@ -3,8 +3,15 @@
  */
 
 export type {
+  JsonPrimitive,
+  ObjectReference,
+  SerializedTypeRecord,
   SerializerOptions,
   TypeDefinition,
+  SerializedNode,
+  SerializedValue,
+  SerializationContext,
+  DeserializationContext,
   SerializedGraph,
   SerializerLike,
 } from "./types";

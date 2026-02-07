@@ -22,6 +22,9 @@ describe("main exports", () => {
     expect(typeof mainExports.Queue).toBe("function");
     expect(typeof mainExports.Semaphore).toBe("function");
     expect(typeof mainExports.Serializer).toBe("function");
+    expect(typeof mainExports.SymbolPolicy).toBe("object");
+    expect(typeof mainExports.SymbolPolicyErrorMessage).toBe("object");
+    expect(typeof mainExports.LogPrinter).toBe("function");
     expect(typeof mainExports.PlatformAdapter).toBe("function");
 
     // Test that aliases work the same as direct imports

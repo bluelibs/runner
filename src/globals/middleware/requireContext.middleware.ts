@@ -1,9 +1,9 @@
 import type { IAsyncContext } from "../../definers/defineAsyncContext";
 import { defineTaskMiddleware } from "../../define";
 
-type RequireContextMiddlewareConfig = {
+export interface RequireContextMiddlewareConfig {
   context: IAsyncContext<any>;
-};
+}
 
 export const requireContextTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.requireContext",

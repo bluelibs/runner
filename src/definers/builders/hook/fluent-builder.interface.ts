@@ -8,13 +8,13 @@ import type {
 } from "../../../defs";
 
 /** Valid event targets for hook's .on() method */
-type ValidOnTarget =
+export type ValidOnTarget =
   | "*"
   | IEventDefinition<any>
   | readonly IEventDefinition<any>[];
 
 /** Resolved TOn when valid, or `any` when undefined (build will throw at runtime) */
-type ResolvedOn<TOn> = TOn extends ValidOnTarget ? TOn : any;
+export type ResolvedOn<TOn> = TOn extends ValidOnTarget ? TOn : any;
 
 export interface HookFluentBuilder<
   TDeps extends DependencyMapType = {},

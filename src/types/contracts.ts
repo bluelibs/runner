@@ -1,6 +1,7 @@
 // Solution to enforce input,output contracts from 'tags' and 'middleware'
 
 import { TagType } from "./tag";
+import type { UnionToIntersection } from "./utilities";
 
 // A unique symbol key used both for typing and runtime branding
 export const CONTRACT: unique symbol = Symbol.for("runner.contract");
@@ -18,31 +19,26 @@ export interface IContractable<TConfig = any, TInput = void, TOutput = void> {
 }
 
 // Helpers
-type NonVoid<T> = [T] extends [void] ? never : T;
-type IsTuple<T extends readonly unknown[]> = number extends T["length"]
+export type NonVoid<T> = [T] extends [void] ? never : T;
+export type IsTuple<T extends readonly unknown[]> = number extends T["length"]
   ? false
   : true;
-type UnionToIntersection<U> = (
-  U extends any ? (arg: U) => void : never
-) extends (arg: infer I) => void
-  ? I
-  : never;
-type Simplify<T> = { [K in keyof T]: T[K] } & {};
-type IsUnknown<T> = unknown extends T
+export type Simplify<T> = { [K in keyof T]: T[K] } & {};
+export type IsUnknown<T> = unknown extends T
   ? [T] extends [unknown]
     ? true
     : false
   : false;
-type UnknownToNever<T> = IsUnknown<T> extends true ? never : T;
+export type UnknownToNever<T> = IsUnknown<T> extends true ? never : T;
 
 // Generic extractors from any IContractable via the CONTRACT brand
-type ExtractContractOf<T, Kind extends "input" | "output"> =
+export type ExtractContractOf<T, Kind extends "input" | "output"> =
   T extends IContractable<any, infer I, infer O>
     ? UnknownToNever<Kind extends "input" ? NonVoid<I> : NonVoid<O>>
     : never;
 
 // Filter that preserves tuple shape; array -> Array<Union>
-type FilterContractsKind<
+export type FilterContractsKind<
   TItems extends readonly unknown[],
   Kind extends "input" | "output",
   Acc extends readonly unknown[] = [],
@@ -52,7 +48,7 @@ type FilterContractsKind<
     : FilterContractsKind<R, Kind, [...Acc, ExtractContractOf<H, Kind>]>
   : Acc;
 
-type ExtractContractsFromCollection<
+export type ExtractContractsFromCollection<
   TItems extends readonly unknown[],
   Kind extends "input" | "output",
 > =
@@ -68,20 +64,20 @@ export type ExtractOutputTypeFromContracts<TItems extends readonly unknown[]> =
   ExtractContractsFromCollection<TItems, "output">;
 
 // Unions and intersections
-type ContractsUnionInputs<TItems extends readonly unknown[]> =
+export type ContractsUnionInputs<TItems extends readonly unknown[]> =
   ExtractInputTypeFromContracts<TItems> extends readonly (infer U)[]
     ? U
     : never;
 
-type ContractsUnionOutputs<TItems extends readonly unknown[]> =
+export type ContractsUnionOutputs<TItems extends readonly unknown[]> =
   ExtractOutputTypeFromContracts<TItems> extends readonly (infer U)[]
     ? U
     : never;
 
-type ContractsIntersectionInputs<TItems extends readonly unknown[]> =
+export type ContractsIntersectionInputs<TItems extends readonly unknown[]> =
   UnionToIntersection<ContractsUnionInputs<TItems>>;
 
-type ContractsIntersectionOutputs<TItems extends readonly unknown[]> =
+export type ContractsIntersectionOutputs<TItems extends readonly unknown[]> =
   UnionToIntersection<ContractsUnionOutputs<TItems>>;
 
 // Booleans
@@ -98,13 +94,13 @@ export type HasOutputContracts<TItems extends readonly unknown[]> = [
   : true;
 
 // Collision detection helpers for intersections
-type IsNever<T> = [T] extends [never] ? true : false;
-type KeysWithNever<T> = T extends object
+export type IsNever<T> = [T] extends [never] ? true : false;
+export type KeysWithNever<T> = T extends object
   ? { [K in keyof T]-?: [T[K]] extends [never] ? K : never }[keyof T]
   : never;
-type HasNeverProperty<T> = KeysWithNever<T> extends never ? false : true;
+export type HasNeverProperty<T> = KeysWithNever<T> extends never ? false : true;
 // "Impossible" means either overall never or an object with any `never` property
-type IsImpossibleIntersection<T> =
+export type IsImpossibleIntersection<T> =
   IsNever<T> extends true
     ? true
     : HasNeverProperty<T> extends true
