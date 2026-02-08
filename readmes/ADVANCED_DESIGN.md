@@ -4,7 +4,7 @@
 
 ---
 
-This guide covers higher‑level patterns you can build using Runner’s primitives (resources, tasks, middleware, events, tags) while keeping your domain code plain and testable.
+This guide covers higher‑level patterns you can build using Runner's primitives (resources, tasks, middleware, events, tags) while keeping your domain code plain and testable.
 
 ### Factory Pattern (configurable builders)
 

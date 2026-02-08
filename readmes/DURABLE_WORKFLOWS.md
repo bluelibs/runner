@@ -11,7 +11,7 @@
 - [Start Here](#start-here)
 - [Quickstart](#quickstart)
 - [Tagging Workflows for Discovery](#tagging-workflows-for-discovery)
-- [Why You’d Want This (In One Minute)](#why-youd-want-this-in-one-minute)
+- [Why You'd Want This (In One Minute)](#why-youd-want-this-in-one-minute)
 - [Core Insight](#core-insight)
 - [Abstract Interfaces](#abstract-interfaces)
 - [API Design](#api-design)
@@ -27,7 +27,7 @@
 ## Start Here
 
 - If you want the short version: `readmes/DURABLE_WORKFLOWS_AI.md`
-- If you’re new to Runner concepts (tasks/resources/events/middleware): `readmes/AI.md`
+- If you're new to Runner concepts (tasks/resources/events/middleware): `readmes/AI.md`
 - Platform note (why this is Node-only): `readmes/MULTI_PLATFORM.md`
 
 ## Quickstart
@@ -259,12 +259,12 @@ await d.signal(executionId, Approved, { approvedBy: "admin@company.com" });
 const result = await d.wait(executionId, { timeout: 30_000 });
 ```
 
-## Why You’d Want This (In One Minute)
+## Why You'd Want This (In One Minute)
 
 - Your workflow needs to span time: minutes, hours, days (payments, shipping, approvals).
 - You want deterministic retries without duplicating side-effects (charge twice, email twice, etc.).
-- You want horizontal scaling without “who owns this in-memory timeout?” problems.
-- You want explicit, type-safe “outside world pokes the workflow” via signals.
+- You want horizontal scaling without "who owns this in-memory timeout?" problems.
+- You want explicit, type-safe "outside world pokes the workflow" via signals.
 
 ## Core Insight
 
@@ -490,7 +490,7 @@ export interface IDurableQueue {
 
 ## Adapting to Your Flow: Custom Backends
 
-One of Runner’s core philosophies is **zero lock-in**. If your team uses Postgres for state or Kafka for queues, you shouldn't have to change your workflow logic to use them.
+One of Runner's core philosophies is **zero lock-in**. If your team uses Postgres for state or Kafka for queues, you shouldn't have to change your workflow logic to use them.
 
 ### Implementing a Custom Store
 
@@ -688,7 +688,7 @@ const result = await d.execute(processOrder, {
 ### How It Works
 
 1. **`durable.execute(task, input)`** creates an execution record and runs the task
-   - Prefer `execute()` when you want “start and wait for result” in one call.
+   - Prefer `execute()` when you want "start and wait for result" in one call.
    - Prefer `startExecution()` + `signal()` + `wait()` when the outside world must resume the workflow later (webhooks, approvals).
 2. **`ctx.step(id, fn)`** checks if step was already executed:
    - If yes: returns cached result (replay)
@@ -822,7 +822,7 @@ This section summarizes the safety guarantees and expectations of the durable wo
 - **Reserved step ids**
   - Step ids starting with `__` and `rollback:` are reserved for durable internals. Avoid using them in `ctx.step(...)` to prevent collisions with system steps.
 
-These semantics intentionally favor **safety and debuggability** over perfect “exactly-once” guarantees at the infrastructure level. Application code remains explicit and testable, while the system provides strong, well-defined durability guarantees around that code.
+These semantics intentionally favor **safety and debuggability** over perfect "exactly-once" guarantees at the infrastructure level. Application code remains explicit and testable, while the system provides strong, well-defined durability guarantees around that code.
 
 ---
 
@@ -888,7 +888,7 @@ await d.signal(executionId, Paid, { paidAt: Date.now() });
 
 ### Whichever comes first: signal or timeout
 
-If you need “wait for payment confirmation or continue after 1 day”, use the timeout variant:
+If you need "wait for payment confirmation or continue after 1 day", use the timeout variant:
 
 ```typescript
 const outcome = await ctx.waitForSignal(Paid, { timeoutMs: 86_400_000 });
@@ -1699,7 +1699,7 @@ export class RabbitMQQueue implements IDurableQueue {
 - **Concurrency & Atomicity**:
   - `updateExecution()` uses a Lua script to perform a read/merge/write update atomically.
   - Execution processing is guarded by `acquireLock()` so only one worker runs an execution attempt at a time.
-  - Signal delivery (`durable.signal`) and signal waits (`ctx.waitForSignal`) use a per-execution/per-signal lock when supported by the store, to prevent races between “signal arrives” and “wait is being recorded”.
+  - Signal delivery (`durable.signal`) and signal waits (`ctx.waitForSignal`) use a per-execution/per-signal lock when supported by the store, to prevent races between "signal arrives" and "wait is being recorded".
 
 ### Optimized Client Waiting
 
@@ -2105,8 +2105,8 @@ const mirrorAudit = r
 - **Always put side effects inside `ctx.step(...)`**: anything outside a step can run multiple times on retries/replays.
 - **Keep step ids stable**: renaming a step id (or changing control-flow so a different call order happens) can break replay determinism for existing executions.
 - **Call-order indexing is real**: `emit()` and repeated `waitForSignal()` allocate `:<index>` internally based on call order; refactors that add/remove calls can shift indexes.
-- **Signals are “deliver to current wait”**: `durableService.signal(executionId, ...)` delivers to the base signal slot if it’s not completed yet (this can buffer the first signal even if the workflow hasn’t reached the wait). Additional signals only deliver to subsequent indexed waits; otherwise they are ignored.
-- **Don’t hang forever**: prefer `durableService.wait(executionId, { timeout: ... })` unless you intentionally want an unbounded wait.
+- **Signals are "deliver to current wait"**: `durableService.signal(executionId, ...)` delivers to the base signal slot if it's not completed yet (this can buffer the first signal even if the workflow hasn't reached the wait). Additional signals only deliver to subsequent indexed waits; otherwise they are ignored.
+- **Don't hang forever**: prefer `durableService.wait(executionId, { timeout: ... })` unless you intentionally want an unbounded wait.
 - **Compensation failures are terminal**: if `ctx.rollback()` fails, execution becomes `compensation_failed` and `wait()` rejects. Use `DurableOperator.retryRollback(executionId)` after fixing the underlying issue.
 - **Intervals can overlap**: interval schedules are currently measured from kickoff time, not completion time. If you need non-overlapping behavior, implement it via `ctx.sleep()` inside the workflow.
 - **Debugging**: inspect step results + timers in the dashboard, or query your `IDurableStore` implementation directly (Redis keys are prefixed by `durable:` by default).
@@ -2129,7 +2129,7 @@ There are two different "idempotency" problems:
 
 If you need workflow-level dedupe by business key (for example `orderId`), use it as the `idempotencyKey` (for example `order:${orderId}`), and store the returned `executionId` on the record as well.
 
-## Cancellation (and why it’s tricky)
+## Cancellation (and why it's tricky)
 
 Durable exposes a first-class cancellation API:
 

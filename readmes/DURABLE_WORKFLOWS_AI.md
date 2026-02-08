@@ -6,11 +6,11 @@
 
 Durable workflows are **Runner tasks with replay-safe checkpoints** (Node-only: `@bluelibs/runner/node`).
 
-They’re designed for flows that span time (minutes → days): approvals, payments, onboarding, shipping.
+They're designed for flows that span time (minutes → days): approvals, payments, onboarding, shipping.
 
 ## The mental model
 
-- A workflow does not “resume the instruction pointer”.
+- A workflow does not "resume the instruction pointer".
 - On every wake-up (sleep/signal/retry/recover), it **re-runs from the top** and fast-forwards using stored results:
   - `ctx.step("id", fn)` runs once, persists result, returns cached on replay.
   - `ctx.sleep(...)` and `ctx.waitForSignal(...)` persist durable checkpoints.
@@ -109,9 +109,9 @@ const durableProd = redisDurableResource.fork("app.durable").with({
   - `store.listAuditEntries(executionId)` → timeline (step_completed, signal_waiting, signal_delivered, sleeps, status changes)
 - `new DurableOperator(store).getExecutionDetail(executionId)` returns `{ execution, steps, audit }`.
 
-There’s also a dashboard middleware: `createDashboardMiddleware(service, new DurableOperator(store), { operatorAuth })` (operator actions are denied unless `operatorAuth` is provided; opt out with `dangerouslyAllowUnauthenticatedOperator: true`).
+There's also a dashboard middleware: `createDashboardMiddleware(service, new DurableOperator(store), { operatorAuth })` (operator actions are denied unless `operatorAuth` is provided; opt out with `dangerouslyAllowUnauthenticatedOperator: true`).
 
-“Internal steps” are recorded steps created by durable primitives (`sleep/waitForSignal/emit` and some bookkeeping). They typically use reserved step id prefixes like `__...` or `rollback:...`.
+"Internal steps" are recorded steps created by durable primitives (`sleep/waitForSignal/emit` and some bookkeeping). They typically use reserved step id prefixes like `__...` or `rollback:...`.
 
 Audit can be enabled via `audit: { enabled: true }`; inside workflows you can add replay-safe notes via `ctx.note("msg", meta)`. In Runner integration, audit entries are also emitted via `durableEvents.*`.
 
@@ -183,11 +183,11 @@ Notes:
 - `DurableFlowShape` and all `FlowNode` types are exported for type-safe consumption.
 - Conditional logic should be modeled with `ctx.switch()` (not JS `if/else`) for the shape to capture it.
 
-## Versioning (don’t get burned)
+## Versioning (don't get burned)
 
-- Step ids are part of the durable contract: don’t rename/reorder casually.
+- Step ids are part of the durable contract: don't rename/reorder casually.
 - For breaking behavior changes, ship a **new workflow task id** (eg. `...v2`) and route new starts to it while v1 drains.
-- A “dispatcher/alias” task is great for _new starts_, but in-flight stability requires the version choice to be stable (don’t silently change behavior under the same durable task id).
+- A "dispatcher/alias" task is great for _new starts_, but in-flight stability requires the version choice to be stable (don't silently change behavior under the same durable task id).
 
 ## Operational notes
 

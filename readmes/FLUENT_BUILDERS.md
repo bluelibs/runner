@@ -12,7 +12,7 @@ This guide shows how to use the new fluent Builder API exposed via a single `r` 
 import { r, run } from "@bluelibs/runner";
 ```
 
-You’ll primarily use `r`:
+You'll primarily use `r`:
 
 - `r.resource(id)`
 - `r.task(id)`
@@ -246,7 +246,7 @@ const rmw = r.middleware
   .build();
 ```
 
-Attach to resources or tasks via `.middleware([mw])` and ensure they’re registered in a parent resource.
+Attach to resources or tasks via `.middleware([mw])` and ensure they're registered in a parent resource.
 
 Note on `.init()`:
 
@@ -333,7 +333,7 @@ await rr.dispose();
 ## Type Safety Highlights
 
 - Builder generics propagate across the chain: config, value/result, dependencies, context, meta, tags, and middleware are strongly typed.
-- You can pre-seed a resource’s config type at the entry point: `r.resource<MyConfig>(id)` — this provides typed `config` for `.dependencies((config) => ...)` and `.register((config) => ...)` callables.
+- You can pre-seed a resource's config type at the entry point: `r.resource<MyConfig>(id)` — this provides typed `config` for `.dependencies((config) => ...)` and `.register((config) => ...)` callables.
 - Resource `.init` follows `(config, deps, ctx)`; task `.run` still supports the object-style helper `({ input, deps })` and will adopt the typed first parameter when you skip `.configSchema()`.
 - Tags and middleware must be registered; otherwise, sanity checks will fail at runtime. Builders keep tag and middleware types intact for compile-time checks.
 - Schemas can be passed as plain objects with `parse` or libraries like `zod`—inference will flow accordingly.

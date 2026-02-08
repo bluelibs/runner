@@ -284,7 +284,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Community & Support](#community--support) - Getting help
 ## What Is This Thing?
 
-BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It’s explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
+BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It's explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
 
 ### The Core
 
@@ -1757,7 +1757,7 @@ const emergencyHook = r
   .build();
 ```
 
-> **runtime:** "'A really good office messenger.' That’s me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
+> **runtime:** "'A really good office messenger.' That's me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
 
 ### Middleware
 
@@ -2439,7 +2439,7 @@ const app = r
 await run(app);
 ```
 
-> **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You’re collapsing the waveform of a task at runtime and I’m Schrödinger’s runtime, praying the cat hasn’t overridden `run()` with `throw new Error('lol')`."
+> **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You're collapsing the waveform of a task at runtime and I'm Schrödinger's runtime, praying the cat hasn't overridden `run()` with `throw new Error('lol')`."
 
 ## Lifecycle Management
 
@@ -2587,7 +2587,7 @@ const { dispose, logger } = await run(app, {
 });
 ```
 
-> **runtime:** "You summon a 'graceful shutdown' with Ctrl‑C like a wizard casting Chill Vibes. Meanwhile I’m speed‑dating every socket, timer, and file handle to say goodbye before the OS pulls the plug. `dispose()`: now with 30% more dignity."
+> **runtime:** "You summon a 'graceful shutdown' with Ctrl‑C like a wizard casting Chill Vibes. Meanwhile I'm speed‑dating every socket, timer, and file handle to say goodbye before the OS pulls the plug. `dispose()`: now with 30% more dignity."
 
 ## Unhandled Errors
 
@@ -2638,7 +2638,7 @@ await run(app, {
 - Notify load balancers and health checks
 - Stop accepting new work before cleaning up
 
-> **runtime:** "An error boundary: a trampoline under your tightrope. I’m the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
+> **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
 ## Caching
 
 Avoid recomputing expensive work by caching task results with TTL-based eviction:
@@ -3015,7 +3015,7 @@ const myTask = r
   .build();
 ```
 
-> **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it’ll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I’ll keep the attempts ledger while your API cosplays a coin toss."
+> **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it'll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I'll keep the attempts ledger while your API cosplays a coin toss."
 
 ---
 
@@ -3073,7 +3073,7 @@ Best practices:
 - Use longer timeouts for resource initialization than task execution
 - Consider network conditions when setting API call timeouts
 
-> **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It’s not me, it’s your molasses‑flavored endpoint. I just blow the whistle."
+> **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It's not me, it's your molasses‑flavored endpoint. I just blow the whistle."
 
 ## Concurrency Utilities
 
@@ -3837,7 +3837,7 @@ await paymentLogger.info("Processing payment", { data: paymentData });
 await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
-> **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it’s off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
+> **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
 ## Advanced Patterns
 
 This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
@@ -7216,7 +7216,7 @@ After reading this far, here's what you've learned:
 - **Performance**: Middleware overhead is ~0.00026ms. Tests run in milliseconds
 - **Batteries included**: Caching, retry, timeouts, events, logging—all built in
 
-> **runtime:** "Why choose it? The bullets are persuasive. Keep your tasks small and your dependencies explicit, and the code stays tidy. Ignore the types and I can’t save you—but I’ll still log the crash with impeccable manners."
+> **runtime:** "Why choose it? The bullets are persuasive. Keep your tasks small and your dependencies explicit, and the code stays tidy. Ignore the types and I can't save you—but I'll still log the crash with impeccable manners."
 
 ## The Migration Path
 
@@ -7250,7 +7250,7 @@ await run(app);
 
 Repeat. Gradually, your spaghetti becomes lasagna.
 
-> **runtime:** "'No big bang rewrites.' Start with one resource and one task, then migrate incrementally. I’ll keep the wiring honest while you refactor—one small, reversible step at a time."
+> **runtime:** "'No big bang rewrites.' Start with one resource and one task, then migrate incrementally. I'll keep the wiring honest while you refactor—one small, reversible step at a time."
 
 ## Community & Support
 

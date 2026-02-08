@@ -94,7 +94,7 @@ const { dispose, getResourceValue, runTask, emitEvent } = await run(app);
 const { dispose } = await run(app, { debug: "verbose" });
 ```
 
-> **runtime:** "'Less lines than Hello World.' Incredible. All you had to do was externalize 90% of the work into `express`, Node, and me. But please, bask in the brevity. I’ll be over here negotiating a peace treaty between your dependency tree and reality."
+> **runtime:** "'Less lines than Hello World.' Incredible. All you had to do was externalize 90% of the work into `express`, Node, and me. But please, bask in the brevity. I'll be over here negotiating a peace treaty between your dependency tree and reality."
 
 ### Platform & Async Context
 
@@ -142,7 +142,7 @@ Look, we get it. You could turn every function into a task, but that's like usin
 
 Think of tasks as the "main characters" in your application story, not every single line of dialogue.
 
-> **runtime:** "'Pure-ish.' Like diet chaos. Zero calories, full aftertaste. You stapled dependencies to a function and called it virtuous. It's fine. I’ll keep the receipts while you roleplay purity with side effects in a trench coat."
+> **runtime:** "'Pure-ish.' Like diet chaos. Zero calories, full aftertaste. You stapled dependencies to a function and called it virtuous. It's fine. I'll keep the receipts while you roleplay purity with side effects in a trench coat."
 
 ### Resources
 
@@ -235,7 +235,7 @@ const dbResource = resource({
 });
 ```
 
-> **runtime:** "Singletons: global variables with a nicer haircut. You ban globals, then create 'resources' that live forever and hold the keys to everything. At least there's a `dispose()`. I’ll believe you use it when I stop finding zombie sockets haunting the process."
+> **runtime:** "Singletons: global variables with a nicer haircut. You ban globals, then create 'resources' that live forever and hold the keys to everything. At least there's a `dispose()`. I'll believe you use it when I stop finding zombie sockets haunting the process."
 
 ### Events
 
@@ -440,7 +440,7 @@ const emergencyHandler = hook({
 });
 ```
 
-> **runtime:** "'A really good office messenger.' That’s me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
+> **runtime:** "'A really good office messenger.' That's me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
 
 ### Middleware
 
@@ -758,10 +758,10 @@ What `run()` returns:
 
 | Property                | Description                                                        |
 | ----------------------- | ------------------------------------------------------------------ |
-| `value`                 | Value returned by root resource’s `init()`                         |
+| `value`                 | Value returned by root resource's `init()`                         |
 | `runTask(...)`          | Run a task by reference or string id                               |
 | `emitEvent(...)`        | Emit events                                                        |
-| `getResourceValue(...)` | Read a resource’s value                                            |
+| `getResourceValue(...)` | Read a resource's value                                            |
 | `logger`                | Logger instance                                                    |
 | `store`                 | Runtime store with registered resources, tasks, middleware, events |
 | `dispose()`             | Gracefully dispose resources and unhook listeners                  |
@@ -869,7 +869,7 @@ const app = resource({
 await run(app);
 ```
 
-> **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You’re collapsing the waveform of a task at runtime and I’m Schrödinger’s runtime, praying the cat hasn’t overridden `run()` with `throw new Error('lol')`."
+> **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You're collapsing the waveform of a task at runtime and I'm Schrödinger's runtime, praying the cat hasn't overridden `run()` with `throw new Error('lol')`."
 
 ## Optional Dependencies
 
@@ -931,7 +931,7 @@ const userRegistration = task({
 - Easier testing with partial mocks
 - Smoother development environments
 
-> **runtime:** "Graceful degradation: your app quietly limps with a brave smile. I’ll juggle `undefined` like a street performer while your analytics vendor takes a nap. Please clap when I keep the lights on using the raw power of conditional chaining."
+> **runtime:** "Graceful degradation: your app quietly limps with a brave smile. I'll juggle `undefined` like a street performer while your analytics vendor takes a nap. Please clap when I keep the lights on using the raw power of conditional chaining."
 
 ## Context
 
@@ -1005,7 +1005,7 @@ const handleRequest = task({
 });
 ```
 
-> **runtime:** "Context: global state with manners. You invented a teleporting clipboard for data and called it 'nice.' Forget to `provide()` once and I’ll unleash the 'Context not available' banshee scream exactly where your logs are least helpful."
+> **runtime:** "Context: global state with manners. You invented a teleporting clipboard for data and called it 'nice.' Forget to `provide()` once and I'll unleash the 'Context not available' banshee scream exactly where your logs are least helpful."
 
 ## System Shutdown Hooks
 
@@ -1078,7 +1078,7 @@ const { dispose, logger } = await run(app, {
 });
 ```
 
-> **runtime:** "You summon a 'graceful shutdown' with Ctrl‑C like a wizard casting Chill Vibes. Meanwhile I’m speed‑dating every socket, timer, and file handle to say goodbye before the OS pulls the plug. `dispose()`: now with 30% more dignity."
+> **runtime:** "You summon a 'graceful shutdown' with Ctrl‑C like a wizard casting Chill Vibes. Meanwhile I'm speed‑dating every socket, timer, and file handle to say goodbye before the OS pulls the plug. `dispose()`: now with 30% more dignity."
 
 ## Unhandled Errors
 
@@ -1129,7 +1129,7 @@ await run(app, {
 - Notify load balancers and health checks
 - Stop accepting new work before cleaning up
 
-> **runtime:** "An error boundary: a trampoline under your tightrope. I’m the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
+> **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
 
 ## Caching
 
@@ -1337,7 +1337,7 @@ BlueLibs Runner achieves high performance while providing enterprise features:
 
 **Bottom line**: The framework adds minimal overhead (~0.005ms per task) while providing significant architectural benefits.
 
-> **runtime:** "'Millions of tasks per second.' Fantastic—on your lava‑warmed laptop, in a vacuum, with the wind at your back. Add I/O, entropy, and one feral user and watch those numbers molt. I’ll still be here, caffeinated and inevitable."
+> **runtime:** "'Millions of tasks per second.' Fantastic—on your lava‑warmed laptop, in a vacuum, with the wind at your back. Add I/O, entropy, and one feral user and watch those numbers molt. I'll still be here, caffeinated and inevitable."
 
 ## Retrying Failed Operations
 
@@ -1373,7 +1373,7 @@ The retry middleware can be configured with:
 - `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
 
-> **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it’ll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I’ll keep the attempts ledger while your API cosplays a coin toss."
+> **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it'll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I'll keep the attempts ledger while your API cosplays a coin toss."
 
 ## Timeouts
 
@@ -1429,7 +1429,7 @@ Best practices:
 - Use longer timeouts for resource initialization than task execution
 - Consider network conditions when setting API call timeouts
 
-> **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It’s not me, it’s your molasses‑flavored endpoint. I just blow the whistle."
+> **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It's not me, it's your molasses‑flavored endpoint. I just blow the whistle."
 
 ## Logging
 
@@ -1701,7 +1701,7 @@ interface ILog {
 
 ### Catch Logs
 
-> **runtime:** "'Debugging is enjoyable.' So is dental surgery, apparently. You produce a novella of logs; I paginate, color, stringify, and mail it to three observability planets. Please don’t `logger.debug` inside a `for` loop. My IO has feelings."
+> **runtime:** "'Debugging is enjoyable.' So is dental surgery, apparently. You produce a novella of logs; I paginate, color, stringify, and mail it to three observability planets. Please don't `logger.debug` inside a `for` loop. My IO has feelings."
 
 ## Debug Resource
 
@@ -1864,7 +1864,7 @@ await paymentLogger.info("Processing payment", { data: paymentData });
 await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
-> **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it’s off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
+> **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
 
 ## Meta
 
@@ -2526,7 +2526,7 @@ The function pattern essentially gives you "just-in-time" dependency resolution 
 
 **Performance note**: Function-based dependencies have minimal overhead - they're only called once during dependency resolution.
 
-> **runtime:** "'Use with caution,' they whisper, tossing you the root credentials to the universe. Yes, reach into the `store`. Rewire fate. When the graph looks like spaghetti art, I’ll frame it and label it 'experimental.'"
+> **runtime:** "'Use with caution,' they whisper, tossing you the root credentials to the universe. Yes, reach into the `store`. Rewire fate. When the graph looks like spaghetti art, I'll frame it and label it 'experimental.'"
 
 ## Handling Circular Dependencies
 
@@ -2619,7 +2619,7 @@ export const problematicResource = defineResource({
 
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
-> **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It’s weird. Nobody tell the linter."
+> **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
 
 ## Real-World Example: The Complete Package
 
@@ -3188,7 +3188,7 @@ try {
 - **Clarity**: Explicit dependencies, no hidden magic
 - **Developer Experience**: Helpful error messages and clear patterns
 
-> **runtime:** "Why choose it? The bullets are persuasive. In practice, your 'intelligent inference' occasionally elopes with `any`, and your 'clear patterns' cosplay spaghetti. Still, compared to the alternatives… I’ve seen worse cults."
+> **runtime:** "Why choose it? The bullets are persuasive. In practice, your 'intelligent inference' occasionally elopes with `any`, and your 'clear patterns' cosplay spaghetti. Still, compared to the alternatives… I've seen worse cults."
 
 ## The Migration Path
 
@@ -3196,7 +3196,7 @@ Coming from Express? No problem. Coming from NestJS? We feel your pain. Coming f
 
 The beauty of BlueLibs Runner is that you can adopt it incrementally. Start with one task, one resource, and gradually refactor your existing code. No big bang rewrites required - your sanity will thank you.
 
-> **runtime:** "'No big bang rewrites.' Only a series of extremely small bangs that echo for six months. You start with one task; next thing, your monolith is wearing microservice eyeliner. It’s a look."
+> **runtime:** "'No big bang rewrites.' Only a series of extremely small bangs that echo for six months. You start with one task; next thing, your monolith is wearing microservice eyeliner. It's a look."
 
 ## Community & Support
 
@@ -3208,10 +3208,10 @@ This is part of the [BlueLibs](https://www.bluelibs.com) ecosystem. We're not tr
 
 _P.S. - Yes, we know there are 47 other JavaScript frameworks. This one's still different._
 
-> **runtime:** "'This one's different.' Sure. You’re all unique frameworks, just like everyone else. To me, you’re all 'please run this async and don’t explode,' but the seasoning here is… surprisingly tasteful."
+> **runtime:** "'This one's different.' Sure. You're all unique frameworks, just like everyone else. To me, you're all 'please run this async and don't explode,' but the seasoning here is… surprisingly tasteful."
 
 ## License
 
 This project is licensed under the MIT License - see the [LICENSE.md](../../../LICENSE.md) file for details.
 
-> **runtime:** "MIT License: do cool stuff, don’t blame us. A dignified bow. Now if you’ll excuse me, I have sockets to tuck in and tasks to shepherd."
+> **runtime:** "MIT License: do cool stuff, don't blame us. A dignified bow. Now if you'll excuse me, I have sockets to tuck in and tasks to shepherd."
