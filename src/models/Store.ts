@@ -2,6 +2,7 @@ import {
   IResource,
   RegisterableItems,
   ITag,
+  AnyTask,
   ITaskMiddleware,
   IResourceMiddleware,
   DependencyMapType,
@@ -429,7 +430,7 @@ export class Store {
    * @param tag - The tag to filter by.
    * @returns The tasks with the given tag.
    */
-  public getTasksWithTag(tag: string | ITag<any, any, any>) {
+  public getTasksWithTag(tag: string | ITag<any, any, any>): AnyTask[] {
     return this.registry.getTasksWithTag(tag);
   }
 

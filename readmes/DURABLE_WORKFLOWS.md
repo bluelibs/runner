@@ -10,7 +10,7 @@
 
 - [Start Here](#start-here)
 - [Quickstart](#quickstart)
-- [Tagging Workflows for Discovery](#tagging-workflows-for-discovery)
+- [Tagging Workflows for Discovery](#tagging-workflows-for-discovery-required)
 - [Why You'd Want This (In One Minute)](#why-youd-want-this-in-one-minute)
 - [Core Insight](#core-insight)
 - [Abstract Interfaces](#abstract-interfaces)

@@ -1,6 +1,7 @@
 import {
   IResource,
   ITask,
+  AnyTask,
   IResourceWithConfig,
   RegisterableItems,
   ITaskMiddleware,
@@ -487,7 +488,7 @@ export class StoreRegistry {
     }
   }
 
-  getTasksWithTag(tag: string | ITag) {
+  getTasksWithTag(tag: string | ITag): AnyTask[] {
     const tagId = typeof tag === "string" ? tag : tag.id;
 
     return Array.from(this.tasks.values())

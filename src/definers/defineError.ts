@@ -11,15 +11,6 @@ import {
 } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
 
-/** Resolves remediation advice from a static string or a data-dependent function. */
-function resolveRemediation<TData extends DefaultErrorType>(
-  remediation: string | ((data: TData) => string) | undefined,
-  data: TData,
-): string | undefined {
-  if (remediation === undefined) return undefined;
-  return typeof remediation === "function" ? remediation(data) : remediation;
-}
-
 class RunnerError<
   TData extends DefaultErrorType = DefaultErrorType,
 > extends Error {
@@ -62,7 +53,10 @@ export class ErrorHelper<
       : data;
 
     const message = this.definition.format(parsed);
-    const remediation = resolveRemediation(this.definition.remediation, parsed);
+    const remediation =
+      typeof this.definition.remediation === "function"
+        ? this.definition.remediation(parsed)
+        : this.definition.remediation;
     throw new RunnerError(this.definition.id, message, parsed, remediation);
   }
   is(error: unknown): error is RunnerError<TData> {

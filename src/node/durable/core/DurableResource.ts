@@ -148,7 +148,7 @@ export class DurableResource implements IDurableResource {
       );
     }
 
-    return this.runnerStore.getTasksWithTag(durableWorkflowTag) as AnyTask[];
+    return this.runnerStore.getTasksWithTag(durableWorkflowTag);
   }
 
   private injectRecorderIntoDurableDeps(
