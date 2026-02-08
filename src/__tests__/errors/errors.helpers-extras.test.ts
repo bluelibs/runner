@@ -12,6 +12,7 @@ describe("error helpers extra branches", () => {
     try {
       // no details -> uses fallback branch
       contextError.throw({});
+      fail("Expected throw");
     } catch (e: any) {
       expect(String(e?.message)).toContain("Context error");
     }
@@ -20,6 +21,7 @@ describe("error helpers extra branches", () => {
   it("resourceNotFoundError message", () => {
     try {
       resourceNotFoundError.throw({ id: "x" });
+      fail("Expected throw");
     } catch (e: any) {
       expect(String(e?.message)).toContain('Resource "x" not found.');
     }
@@ -28,6 +30,7 @@ describe("error helpers extra branches", () => {
   it("platformUnsupportedFunctionError smoke", () => {
     try {
       platformUnsupportedFunctionError.throw({ functionName: "testFn" });
+      fail("Expected throw");
     } catch (e: any) {
       expect(String(e?.message)).toContain("Platform function not supported");
     }
@@ -37,6 +40,7 @@ describe("error helpers extra branches", () => {
     it("includes remediation advice in the message", () => {
       try {
         dependencyNotFoundError.throw({ key: "myService" });
+        fail("Expected throw");
       } catch (e: any) {
         expect(e.message).toContain("Dependency myService not found");
         expect(e.message).toContain("Remediation:");
@@ -47,6 +51,7 @@ describe("error helpers extra branches", () => {
     it("includes static remediation when data is not referenced", () => {
       try {
         contextError.throw({});
+        fail("Expected throw");
       } catch (e: any) {
         expect(e.remediation).toContain("async context");
       }
@@ -55,6 +60,7 @@ describe("error helpers extra branches", () => {
     it("includes data-dependent remediation for duplicateRegistration", () => {
       try {
         duplicateRegistrationError.throw({ type: "Task", id: "test.task" });
+        fail("Expected throw");
       } catch (e: any) {
         expect(e.remediation).toContain("Task");
         expect(e.remediation).toContain(".fork()");
@@ -68,6 +74,7 @@ describe("error helpers extra branches", () => {
           id: "t1",
           originalError: "bad",
         });
+        fail("Expected throw");
       } catch (e: any) {
         expect(e.remediation).toContain(".inputSchema()");
       }
@@ -80,6 +87,7 @@ describe("error helpers extra branches", () => {
           id: "r1",
           originalError: "bad",
         });
+        fail("Expected throw");
       } catch (e: any) {
         expect(e.remediation).toContain(".configSchema()");
       }
@@ -92,6 +100,7 @@ describe("error helpers extra branches", () => {
           id: "t2",
           originalError: "bad",
         });
+        fail("Expected throw");
       } catch (e: any) {
         expect(e.remediation).toContain(".resultSchema()");
       }
@@ -104,6 +113,7 @@ describe("error helpers extra branches", () => {
           id: "e1",
           originalError: "bad",
         });
+        fail("Expected throw");
       } catch (e: any) {
         expect(e.remediation).toContain(".schema()");
         expect(e.remediation).not.toContain("inputSchema");

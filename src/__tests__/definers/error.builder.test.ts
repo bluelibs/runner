@@ -37,6 +37,26 @@ describe("error builder", () => {
     }
   });
 
+  it("is() narrows unknown to a typed runner error shape", () => {
+    const E = r
+      .error<{ code: number }>("tests.errors.narrowing")
+      .format((d) => `Code: ${d.code}`)
+      .remediation("Use a valid code.")
+      .build();
+
+    try {
+      E.throw({ code: 7 });
+      fail("Expected throw");
+    } catch (err: unknown) {
+      if (!E.is(err)) fail("Expected typed error");
+      const code: number = err.data.code;
+      const remediation: string | undefined = err.remediation;
+
+      expect(code).toBe(7);
+      expect(remediation).toBe("Use a valid code.");
+    }
+  });
+
   it("validates data via dataSchema.parse before throwing", () => {
     const TypedError = r
       .error<{ code: number; message: string }>("tests.errors.typed")
@@ -174,6 +194,22 @@ describe("error builder", () => {
         fail("Expected throw");
       } catch (err: any) {
         expect(err.remediation).toBeUndefined();
+      }
+    });
+
+    it("appends remediation label even when remediation is an empty string", () => {
+      const E = r
+        .error<{ code: number }>("tests.errors.remediation.empty")
+        .format((d) => `Error ${d.code}`)
+        .remediation("")
+        .build();
+
+      try {
+        E.throw({ code: 5 });
+        fail("Expected throw");
+      } catch (err) {
+        if (!(err instanceof Error)) throw new Error("Expected Error");
+        expect(err.message).toBe("Error 5\n\nRemediation: ");
       }
     });
   });

@@ -31,7 +31,11 @@ class RunnerError<
     data: TData,
     remediation?: string,
   ) {
-    super(remediation ? `${message}\n\nRemediation: ${remediation}` : message);
+    super(
+      remediation !== undefined
+        ? `${message}\n\nRemediation: ${remediation}`
+        : message,
+    );
     this.data = data;
     this.name = id;
     this.remediation = remediation;

@@ -36,6 +36,18 @@ export interface IErrorDefinitionFinal<
 export type DefaultErrorType = Record<string, unknown>;
 
 /**
+ * Runtime error shape thrown by r.error()/defineError() helpers.
+ * Consumers can use helper.is(error) to narrow unknown values to this type.
+ */
+export interface IRunnerError<
+  TData extends DefaultErrorType = DefaultErrorType,
+> extends Error {
+  id: string;
+  data: TData;
+  remediation?: string;
+}
+
+/**
  * Runtime helper returned by defineError()/r.error().
  * Contains helpers to throw typed errors and perform type-safe checks.
  */
@@ -47,7 +59,7 @@ export interface IErrorHelper<
   /** Throw a typed error with the given data */
   throw(data: TData): never;
   /** Type guard for checking if an unknown error is this error */
-  is(error: unknown): boolean;
+  is(error: unknown): error is IRunnerError<TData>;
   /** Brand symbol for runtime detection */
   [symbolError]: true;
   /** Return an optional dependency wrapper for this error */
