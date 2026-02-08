@@ -12,6 +12,7 @@ import { TagType } from "../../defs";
 import { run } from "../..";
 import z from "zod";
 import { isOneOf, onAnyOf } from "../../types/event";
+import type { Store } from "../../models/Store";
 
 // This is skipped because we mostly check typesafety.
 // eslint-disable-next-line jest/no-disabled-tests
@@ -657,6 +658,48 @@ describe.skip("typesafety", () => {
         return {};
       },
     });
+  });
+
+  it("should infer typed results for store.getTasksWithTag/getResourcesWithTag", async () => {
+    const store = null as unknown as Store;
+
+    const contractTag = defineTag<void, { tenantId: string }, { ok: boolean }>({
+      id: "types.tag.contract",
+    });
+
+    const taggedTasks = store.getTasksWithTag(contractTag);
+    const taggedResources = store.getResourcesWithTag(contractTag);
+    const firstTask = taggedTasks[0]!;
+    const firstResource = taggedResources[0]!;
+
+    type TaskInput = Parameters<typeof firstTask.run>[0];
+    const validTaskInput: TaskInput = { tenantId: "acme" };
+    // @ts-expect-error invalid task contract input
+    const invalidTaskInput: TaskInput = { nope: "x" };
+    void validTaskInput;
+    void invalidTaskInput;
+
+    type TaskOutput = Awaited<ReturnType<typeof firstTask.run>>;
+    const validTaskOutput: TaskOutput = { ok: true };
+    // @ts-expect-error invalid task contract output
+    const invalidTaskOutput: TaskOutput = { nope: true };
+    void validTaskOutput;
+    void invalidTaskOutput;
+
+    type ResourceInit = NonNullable<typeof firstResource.init>;
+    type ResourceConfig = Parameters<ResourceInit>[0];
+    const validResourceConfig: ResourceConfig = { tenantId: "acme" };
+    // @ts-expect-error invalid resource contract config
+    const invalidResourceConfig: ResourceConfig = { nope: "x" };
+    void validResourceConfig;
+    void invalidResourceConfig;
+
+    type ResourceValue = Awaited<ReturnType<ResourceInit>>;
+    const validResourceValue: ResourceValue = { ok: true };
+    // @ts-expect-error invalid resource contract value
+    const invalidResourceValue: ResourceValue = { nope: true };
+    void validResourceValue;
+    void invalidResourceValue;
   });
 
   it("should correctly infer schemas from validation options", async () => {

@@ -372,4 +372,53 @@ describe("Store", () => {
     const result2 = store.getResourcesWithTag("tags.test");
     expect(result2).toHaveLength(1);
   });
+
+  it("should discover tasks and resources by a contract tag at runtime", async () => {
+    const contractTag = defineTag<void, { tenantId: string }, { ok: boolean }>({
+      id: "tags.contract",
+    });
+
+    const taskWithContractTag = defineTask({
+      id: "task.contract",
+      tags: [contractTag],
+      run: async (input) => ({ ok: input.tenantId.length > 0 }),
+    });
+
+    const resourceWithContractTag = defineResource({
+      id: "resource.contract",
+      tags: [contractTag],
+      init: async (config) => ({ ok: config.tenantId.length > 0 }),
+    });
+
+    const rootResource = defineResource({
+      id: "root",
+      register: [contractTag, taskWithContractTag, resourceWithContractTag],
+      init: async () => "Root Value",
+    });
+
+    store.initializeStore(rootResource, {});
+
+    const tasks = store.getTasksWithTag(contractTag);
+    const resources = store.getResourcesWithTag(contractTag);
+
+    expect(tasks).toHaveLength(1);
+    expect(resources).toHaveLength(1);
+
+    const firstTask = tasks[0]!;
+    const firstResource = resources[0]!;
+    if (!firstTask || !firstResource || !firstResource.init) {
+      throw new Error("Expected one tagged task and one tagged resource");
+    }
+
+    await expect(
+      firstTask.run({ tenantId: "acme" } as any, {} as any),
+    ).resolves.toEqual({
+      ok: true,
+    });
+    await expect(
+      firstResource.init({ tenantId: "acme" } as any, {} as any, {} as any),
+    ).resolves.toEqual({
+      ok: true,
+    });
+  });
 });

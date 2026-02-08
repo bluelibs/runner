@@ -9,6 +9,9 @@ import {
   IEvent,
   ITag,
   IHook,
+  TaggedTask,
+  TaggedResource,
+  AnyResource,
 } from "../defs";
 import * as utils from "../define";
 import { unknownItemTypeError } from "../errors";
@@ -488,7 +491,11 @@ export class StoreRegistry {
     }
   }
 
-  getTasksWithTag(tag: string | ITag): AnyTask[] {
+  getTasksWithTag<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+  ): TaggedTask<TTag>[];
+  getTasksWithTag(tag: string): AnyTask[];
+  getTasksWithTag(tag: string | ITag<any, any, any>): AnyTask[] {
     const tagId = typeof tag === "string" ? tag : tag.id;
 
     return Array.from(this.tasks.values())
@@ -498,7 +505,11 @@ export class StoreRegistry {
       .map((x) => x.task);
   }
 
-  getResourcesWithTag(tag: string | ITag) {
+  getResourcesWithTag<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+  ): TaggedResource<TTag>[];
+  getResourcesWithTag(tag: string): AnyResource[];
+  getResourcesWithTag(tag: string | ITag<any, any, any>): AnyResource[] {
     const tagId = typeof tag === "string" ? tag : tag.id;
 
     return Array.from(this.resources.values())
