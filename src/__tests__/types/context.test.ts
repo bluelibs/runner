@@ -1,5 +1,6 @@
 import { createContext, task, run, resource } from "../../index";
 import { Logger } from "../../models/Logger";
+import { CONTRACT } from "../../types/contracts";
 
 describe("Context System", () => {
   const TestContext = createContext<{ id: string }>();
@@ -125,5 +126,9 @@ describe("Context System", () => {
     expect(typeof text).toBe("string");
     const back = TestContext.parse(text);
     expect(back).toEqual(raw);
+  });
+
+  test("contracts expose runtime symbol", () => {
+    expect(typeof CONTRACT).toBe("symbol");
   });
 });
