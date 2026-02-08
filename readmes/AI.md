@@ -85,7 +85,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 Use `.fork(newId, { register, reId })` to clone a resource definition under a new id (handy for multi-instance patterns).
 Forks keep the same implementation/types but get separate runtime instances (no shared state). Use `register: "drop"` to clear registered items, or `register: "deep"` to deep-fork **registered resources** (resource tree) with new ids (non-resource registerables are not cloned/kept).
 Prefer exporting forks so other tasks/resources can depend on them.
-Forked resources also expose provenance at `[definitions.symbolResourceForkedFrom]` (`fromId`, `forkedAtFilePath`) for tooling/debugging.
+Forked resources expose provenance at `[definitions.symbolForkedFrom]` (`fromId`) for tooling/debugging.
 
 ## Tasks
 

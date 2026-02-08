@@ -15,9 +15,9 @@ import { IResourceMeta } from "./meta";
 import type { ThrowsList } from "./error";
 import {
   symbolFilePath,
+  symbolForkedFrom,
   symbolResource,
   symbolResourceWithConfig,
-  symbolResourceForkedFrom,
 } from "./symbols";
 import {
   EnsureInputSatisfiesContracts,
@@ -59,8 +59,6 @@ export interface ResourceForkOptions {
 export interface ResourceForkInfo {
   /** The id of the resource that was forked. */
   readonly fromId: string;
-  /** Best-effort call-site file path for the fork operation. */
-  readonly forkedAtFilePath: string;
 }
 
 // Helper to detect `any` so we can treat it as "unspecified"
@@ -239,7 +237,7 @@ export interface IResource<
   [symbolFilePath]: string;
   [symbolResource]: true;
   /** Present only on forked resources. */
-  [symbolResourceForkedFrom]?: ResourceForkInfo;
+  [symbolForkedFrom]?: ResourceForkInfo;
   /** Normalized list of error ids declared via `throws`. */
   throws?: readonly string[];
   /** Return an optional dependency wrapper for this resource. */
