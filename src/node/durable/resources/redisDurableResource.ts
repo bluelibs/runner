@@ -8,6 +8,7 @@ import { disposeDurableService } from "../core/DurableService";
 import { durableEventsArray } from "../events";
 import type { DurableResource } from "../core/DurableResource";
 import { deriveDurableIsolation } from "./isolation";
+import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 
 export type RedisDurableResourceConfig = Omit<
   RunnerDurableRuntimeConfig,
@@ -37,7 +38,7 @@ interface RedisDurableResourceContext {
 
 export const redisDurableResource = r
   .resource<RedisDurableResourceConfig>("base.durable.redis")
-  .register(durableEventsArray)
+  .register([durableWorkflowTag, ...durableEventsArray])
   .dependencies({
     taskRunner: globals.resources.taskRunner,
     eventManager: globals.resources.eventManager,

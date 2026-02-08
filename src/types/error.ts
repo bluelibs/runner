@@ -14,6 +14,12 @@ export interface IErrorDefinition<
   parse?: (data: string) => TData;
   format?: (data: TData) => string;
   /**
+   * Optional advice on how to fix the error. Appears in the stringified
+   * error message after the main message. Can be a static string or a
+   * function that receives the error data and returns a string.
+   */
+  remediation?: string | ((data: TData) => string);
+  /**
    * Validate error data on throw(). If provided, data is parsed first.
    */
   dataSchema?: IValidationSchema<TData>;
@@ -24,6 +30,7 @@ export interface IErrorDefinitionFinal<
   TData extends DefaultErrorType,
 > extends IErrorDefinition<TData> {
   format: (data: TData) => string;
+  remediation?: string | ((data: TData) => string);
 }
 
 export type DefaultErrorType = Record<string, unknown>;

@@ -33,6 +33,11 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
       return makeErrorBuilder(next);
     },
 
+    remediation(advice: string | ((data: TData) => string)) {
+      const next = clone(state, { remediation: advice });
+      return makeErrorBuilder(next);
+    },
+
     meta<TNewMeta extends IErrorMeta>(m: TNewMeta) {
       const next = clone(state, { meta: m });
       return makeErrorBuilder(next);
@@ -46,6 +51,7 @@ export function makeErrorBuilder<TData extends DefaultErrorType>(
           parse: state.parse,
           dataSchema: state.dataSchema,
           format: state.format,
+          remediation: state.remediation,
           meta: state.meta,
         },
         state.filePath,

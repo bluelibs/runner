@@ -53,4 +53,4 @@ This package is a framework/runtime library. Primary concerns include:
 
 ## Contact & Disclosure
 
-If you believe you’ve found a vulnerability, please do not open a public issue. Use the channels above for private disclosure. We will credit reporters who wish to be acknowledged.
+If you believe you've found a vulnerability, please do not open a public issue. Use the channels above for private disclosure. We will credit reporters who wish to be acknowledged.

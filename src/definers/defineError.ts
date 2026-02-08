@@ -11,18 +11,30 @@ import {
 } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
 
+/** Resolves remediation advice from a static string or a data-dependent function. */
+function resolveRemediation<TData extends DefaultErrorType>(
+  remediation: string | ((data: TData) => string) | undefined,
+  data: TData,
+): string | undefined {
+  if (remediation === undefined) return undefined;
+  return typeof remediation === "function" ? remediation(data) : remediation;
+}
+
 class RunnerError<
   TData extends DefaultErrorType = DefaultErrorType,
 > extends Error {
   public readonly data!: TData;
+  public readonly remediation?: string;
   constructor(
     public readonly id: string,
     message: string,
     data: TData,
+    remediation?: string,
   ) {
-    super(message);
+    super(remediation ? `${message}\n\nRemediation: ${remediation}` : message);
     this.data = data;
     this.name = id;
+    this.remediation = remediation;
   }
 }
 
@@ -46,7 +58,8 @@ export class ErrorHelper<
       : data;
 
     const message = this.definition.format(parsed);
-    throw new RunnerError(this.definition.id, message, parsed);
+    const remediation = resolveRemediation(this.definition.remediation, parsed);
+    throw new RunnerError(this.definition.id, message, parsed, remediation);
   }
   is(error: unknown): error is RunnerError<TData> {
     return error instanceof RunnerError && error.name === this.definition.id;

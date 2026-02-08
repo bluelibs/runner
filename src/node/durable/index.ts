@@ -53,6 +53,10 @@ export { RedisEventBus } from "./bus/RedisEventBus";
 
 export { createDurableTestSetup, waitUntil } from "./test-utils";
 export type { DurableTestSetup, DurableTestSetupOptions } from "./test-utils";
+export {
+  durableWorkflowTag,
+  type DurableWorkflowTagConfig,
+} from "./tags/durableWorkflow.tag";
 
 export { memoryDurableResource } from "./resources/memoryDurableResource";
 export type { MemoryDurableResourceConfig } from "./resources/memoryDurableResource";

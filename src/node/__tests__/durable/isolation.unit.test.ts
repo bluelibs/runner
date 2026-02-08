@@ -45,7 +45,7 @@ describe("durable: isolation derivation", () => {
     }
 
     expect(validationError.is(captured)).toBe(true);
-    expect((captured as Error).message).toBe(
+    expect((captured as Error).message).toContain(
       "Durable isolation namespace validation failed for params.namespace: must be a non-empty string",
     );
   });

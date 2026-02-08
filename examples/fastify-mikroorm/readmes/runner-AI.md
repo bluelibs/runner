@@ -605,7 +605,7 @@ const registerRoutes = hook({
   `// inside a hook`
   `event.stopPropagation()`
 
-That’s it. Small surface area, strong primitives, great DX.
+That's it. Small surface area, strong primitives, great DX.
 
 ## Concurrency: Semaphore & Queue
 

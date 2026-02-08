@@ -1,4 +1,4 @@
-import { symbolResourceForkedFrom } from "../../defs";
+import { symbolFilePath, symbolForkedFrom } from "../../defs";
 import { r, run } from "../../index";
 
 describe("IResource.fork() (basic)", () => {
@@ -13,11 +13,9 @@ describe("IResource.fork() (basic)", () => {
     expect(forked.id).toBe("forked.resource");
     expect(base.id).toBe("base.resource");
 
-    expect(base[symbolResourceForkedFrom]).toBeUndefined();
-    expect(forked[symbolResourceForkedFrom]?.fromId).toBe("base.resource");
-    expect(forked[symbolResourceForkedFrom]?.forkedAtFilePath).toEqual(
-      expect.any(String),
-    );
+    expect(base[symbolForkedFrom]).toBeUndefined();
+    expect(forked[symbolForkedFrom]?.fromId).toBe("base.resource");
+    expect(forked[symbolFilePath]).toEqual(expect.any(String));
   });
 
   it("preserves the type signature and config shape", async () => {

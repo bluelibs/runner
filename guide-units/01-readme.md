@@ -29,7 +29,7 @@ npm i -D typescript tsx
 npx tsx index.ts
 ```
 
-**That’s it!** You now have a working `Runtime` and you can execute tasks with `runtime.runTask(...)`.
+**That's it!** You now have a working `Runtime` and you can execute tasks with `runtime.runTask(...)`.
 
 > **Tip:** If you prefer an end-to-end example with HTTP, OpenAPI, and persistence, jump to the examples below.
 

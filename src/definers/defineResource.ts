@@ -10,11 +10,11 @@ import type {
   ResourceForkOptions,
 } from "../types/resource";
 import {
+  symbolForkedFrom,
   symbolResource,
   symbolFilePath,
   symbolOptionalDependency,
   symbolResourceWithConfig,
-  symbolResourceForkedFrom,
 } from "../types/symbols";
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
@@ -118,6 +118,7 @@ export function defineResource<
       >;
     },
     fork(newId: string, options?: ResourceForkOptions) {
+      const forkCallerFilePath = getCallerFile();
       const forkedParts = resolveForkedRegisterAndDependencies({
         register: constConfig.register,
         dependencies: constConfig.dependencies,
@@ -129,11 +130,10 @@ export function defineResource<
         id: newId,
         register: forkedParts.register,
         dependencies: forkedParts.dependencies,
-        [symbolFilePath]: filePath,
+        [symbolFilePath]: forkCallerFilePath,
       });
-      forked[symbolResourceForkedFrom] = {
+      forked[symbolForkedFrom] = {
         fromId: id,
-        forkedAtFilePath: getCallerFile(),
       };
       return forked;
     },

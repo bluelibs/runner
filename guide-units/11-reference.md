@@ -231,7 +231,7 @@ After reading this far, here's what you've learned:
 - **Performance**: Middleware overhead is ~0.00026ms. Tests run in milliseconds
 - **Batteries included**: Caching, retry, timeouts, events, logging—all built in
 
-> **runtime:** "Why choose it? The bullets are persuasive. Keep your tasks small and your dependencies explicit, and the code stays tidy. Ignore the types and I can’t save you—but I’ll still log the crash with impeccable manners."
+> **runtime:** "Why choose it? The bullets are persuasive. Keep your tasks small and your dependencies explicit, and the code stays tidy. Ignore the types and I can't save you—but I'll still log the crash with impeccable manners."
 
 ## The Migration Path
 
@@ -265,7 +265,7 @@ await run(app);
 
 Repeat. Gradually, your spaghetti becomes lasagna.
 
-> **runtime:** "'No big bang rewrites.' Start with one resource and one task, then migrate incrementally. I’ll keep the wiring honest while you refactor—one small, reversible step at a time."
+> **runtime:** "'No big bang rewrites.' Start with one resource and one task, then migrate incrementally. I'll keep the wiring honest while you refactor—one small, reversible step at a time."
 
 ## Community & Support
 

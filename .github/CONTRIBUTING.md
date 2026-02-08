@@ -4,11 +4,11 @@ First off — thank you for taking the time to contribute! This guide keeps thin
 
 ## Filing Issues (the easy way)
 
-Please use the GitHub Issue Forms — they’re short, friendly, and help us help you quickly:
+Please use the GitHub Issue Forms — they're short, friendly, and help us help you quickly:
 
-- Bug reports → choose “Bug report”
-- Feature ideas → choose “Feature request”
-- Docs feedback → choose “Documentation issue”
+- Bug reports → choose "Bug report"
+- Feature ideas → choose "Feature request"
+- Docs feedback → choose "Documentation issue"
 - Discussions → for general questions or support
 
 Tips for a great issue:
@@ -22,7 +22,7 @@ Tips for a great issue:
 
 A minimal repro makes bugs fixable. Create single file reproduce-ables ([repomix](https://repomix.com/) might help).
 
-If you can’t isolate it, share what you tried — we’ll help.
+If you can't isolate it, share what you tried — we'll help.
 
 ## Security Issues
 
@@ -32,7 +32,7 @@ Please do NOT open a public issue. Follow the steps in SECURITY.md:
 
 ## Pull Requests (optional but welcome)
 
-If you’re opening a PR:
+If you're opening a PR:
 
 - Discuss significant changes first (issue or discussion)
 - Keep changes focused and small
@@ -63,4 +63,4 @@ If you use VS Code + Copilot, you can customize generated commit messages with w
 
 Note: `.vscode/` is gitignored in this repo, so this stays local to your workspace unless you choose to share it elsewhere.
 
-That’s it — thank you for making Runner better!
+That's it — thank you for making Runner better!

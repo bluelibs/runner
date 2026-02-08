@@ -401,7 +401,7 @@ _Happy coding!_
 
 ## Testing & Coverage Strategy (What We Practiced)
 
-Achieving reliable 100% coverage across Node, Browser, and Universal adapters requires a pragmatic test strategy. Here’s what we do and why it works.
+Achieving reliable 100% coverage across Node, Browser, and Universal adapters requires a pragmatic test strategy. Here's what we do and why it works.
 
 ### Environments and harnesses
 
@@ -464,14 +464,14 @@ All registration methods return disposers. Tests should:
 
 ### What to avoid (brittleness checklist)
 
-- Don’t monkey-patch compiled source files or ESM internals to coerce a branch.
-- Don’t override class prototypes to force impossible switch cases.
-- Don’t rely on non-deterministic global timing or browser features not modeled by JSDOM.
+- Don't monkey-patch compiled source files or ESM internals to coerce a branch.
+- Don't override class prototypes to force impossible switch cases.
+- Don't rely on non-deterministic global timing or browser features not modeled by JSDOM.
 
 ### CI and quality gates
 
 - 100% global thresholds enforced (statements, branches, functions, lines).
-- `npm run coverage` is the canonical command; it’s fast and deterministic.
+- `npm run coverage` is the canonical command; it's fast and deterministic.
 - If a branch is provably unreachable by design, prefer an `istanbul ignore` with a short comment rather than brittle tests.
 
 ### Minimal examples
