@@ -350,19 +350,23 @@ import { r } from "@bluelibs/runner";
 const AppError = r
   .error<{ code: number; message: string }>("app.errors.AppError")
   .dataSchema({ parse: (value) => value })
+  .format((d) => `[${d.code}] ${d.message}`)
+  .remediation("Check the request payload and retry with valid data.")
   .build();
 
 try {
   AppError.throw({ code: 400, message: "Oops" });
 } catch (err) {
   if (AppError.is(err)) {
-    // Do something
+    // err.message  → "[400] Oops\n\nRemediation: Check the request payload and retry with valid data."
+    // err.remediation → "Check the request payload and retry with valid data."
   }
 }
 ```
 
 - Recommended ids: `{domain}.errors.{PascalCaseName}` (for example: `app.errors.InvalidCredentials`).
 - The thrown `Error` has `name = id` and `message = format(data)`. If you don't provide `.format(...)`, the default is `JSON.stringify(data)`.
+- `.remediation(stringOrFn)` attaches fix-it advice. Accepts a static string or `(data) => string`. When present, `error.message` and `error.toString()` include `\n\nRemediation: <advice>`. The raw advice is also available via `error.remediation`.
 - `message` is not required in the data unless your custom formatter expects it.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
 - For HTTP/tunnel clients, you can pass an `errorRegistry` to rethrow remote errors as your typed helpers (optional):

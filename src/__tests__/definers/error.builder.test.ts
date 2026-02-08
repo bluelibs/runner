@@ -89,4 +89,92 @@ describe("error builder", () => {
       (E as unknown as Record<symbol, any>)[definitions.symbolFilePath],
     ).toContain("error.builder.test");
   });
+
+  describe("remediation", () => {
+    it("appends static remediation advice to message and toString()", () => {
+      const E = r
+        .error<{ code: number }>("tests.errors.remediation.static")
+        .format((d) => `Error code ${d.code}`)
+        .remediation("Try restarting the service.")
+        .build();
+
+      try {
+        E.throw({ code: 42 });
+        fail("Expected throw");
+      } catch (err) {
+        expect(E.is(err)).toBe(true);
+        if (!(err instanceof Error)) throw new Error("Expected Error");
+        expect(err.message).toBe(
+          "Error code 42\n\nRemediation: Try restarting the service.",
+        );
+        expect(err.toString()).toBe(
+          "tests.errors.remediation.static: Error code 42\n\nRemediation: Try restarting the service.",
+        );
+      }
+    });
+
+    it("supports data-dependent remediation function", () => {
+      const E = r
+        .error<{ field: string }>("tests.errors.remediation.dynamic")
+        .format((d) => `Missing field: ${d.field}`)
+        .remediation((d) => `Provide the "${d.field}" field in your input.`)
+        .build();
+
+      try {
+        E.throw({ field: "email" });
+        fail("Expected throw");
+      } catch (err) {
+        if (!(err instanceof Error)) throw new Error("Expected Error");
+        expect(err.message).toContain("Missing field: email");
+        expect(err.message).toContain(
+          'Remediation: Provide the "email" field in your input.',
+        );
+      }
+    });
+
+    it("omits remediation from message when not provided", () => {
+      const E = r
+        .error<{ code: number }>("tests.errors.remediation.none")
+        .format((d) => `Error ${d.code}`)
+        .build();
+
+      try {
+        E.throw({ code: 1 });
+        fail("Expected throw");
+      } catch (err) {
+        if (!(err instanceof Error)) throw new Error("Expected Error");
+        expect(err.message).toBe("Error 1");
+        expect(err.message).not.toContain("Remediation");
+      }
+    });
+
+    it("exposes remediation as a property on the thrown error", () => {
+      const E = r
+        .error<{ code: number }>("tests.errors.remediation.prop")
+        .format((d) => `Error ${d.code}`)
+        .remediation("Check the logs.")
+        .build();
+
+      try {
+        E.throw({ code: 99 });
+        fail("Expected throw");
+      } catch (err: any) {
+        expect(err.remediation).toBe("Check the logs.");
+      }
+    });
+
+    it("remediation property is undefined when not provided", () => {
+      const E = r
+        .error<{ code: number }>("tests.errors.remediation.undefined")
+        .format((d) => `Error ${d.code}`)
+        .build();
+
+      try {
+        E.throw({ code: 1 });
+        fail("Expected throw");
+      } catch (err: any) {
+        expect(err.remediation).toBeUndefined();
+      }
+    });
+  });
 });

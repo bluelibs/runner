@@ -14,5 +14,12 @@ export interface ErrorFluentBuilder<
   dataSchema(schema: IValidationSchema<TData>): ErrorFluentBuilder<TData>;
   build(): IErrorHelper<TData>;
   format(fn: (data: TData) => string): ErrorFluentBuilder<TData>;
+  /**
+   * Attach remediation advice that explains how to fix this error.
+   * Appears in the stringified error after the main message.
+   */
+  remediation(
+    advice: string | ((data: TData) => string),
+  ): ErrorFluentBuilder<TData>;
   meta<TNewMeta extends IErrorMeta>(m: TNewMeta): ErrorFluentBuilder<TData>;
 }

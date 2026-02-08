@@ -411,7 +411,7 @@ describe("Errors", () => {
           originalError: new Error("Required field missing"),
         }),
       );
-      expect(ve1.message).toBe(
+      expect(ve1.message).toContain(
         "Task input validation failed for test-task: Required field missing",
       );
 
@@ -422,7 +422,7 @@ describe("Errors", () => {
           originalError: "Invalid configuration",
         }),
       );
-      expect(ve2.message).toBe(
+      expect(ve2.message).toContain(
         "Resource config validation failed for test-resource: Invalid configuration",
       );
 

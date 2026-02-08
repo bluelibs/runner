@@ -10,6 +10,10 @@ export const duplicateRegistrationError = error<
     ({ type, id }) =>
       `${type} "${id.toString()}" already registered. You might have used the same 'id' in two different components or you may have registered the same element twice.`,
   )
+  .remediation(
+    ({ type }) =>
+      `Ensure each ${type} has a unique id. If you need the same definition in multiple places, use .fork() to create a copy with a new id.`,
+  )
   .build();
 
 // Dependency not found
@@ -19,6 +23,10 @@ export const dependencyNotFoundError = error<
   .format(
     ({ key }) =>
       `Dependency ${key.toString()} not found. Did you forget to register it through a resource?`,
+  )
+  .remediation(
+    ({ key }) =>
+      `Register the dependency "${key.toString()}" in a parent resource using .register([${key.toString()}]). If the dependency is optional, use .optional() when declaring it.`,
   )
   .build();
 
@@ -32,6 +40,9 @@ export const unknownItemTypeError = error<{ item: unknown } & DefaultErrorType>(
         item,
       )}. Please ensure you are not using different versions of '@bluelibs/runner'`,
   )
+  .remediation(
+    "Check that all packages depend on the same version of '@bluelibs/runner'. Run 'npm ls @bluelibs/runner' to detect duplicates.",
+  )
   .build();
 
 // Context error
@@ -39,6 +50,9 @@ export const contextError = error<{ details?: string } & DefaultErrorType>(
   "runner.errors.context",
 )
   .format(({ details }) => details ?? "Context error")
+  .remediation(
+    "Verify the async context is registered in a parent resource and that .provide() was called before .use(). If the context is optional, use .optional() when declaring the dependency.",
+  )
   .build();
 
 // Circular dependencies
@@ -63,6 +77,9 @@ export const circularDependenciesError = error<
 
     return `Circular dependencies detected:\n${cycleDetails}${guidance}`;
   })
+  .remediation(
+    "Break the cycle by extracting shared state into a new resource that both sides depend on, or use events for indirect communication.",
+  )
   .build();
 
 // Event not found
@@ -73,6 +90,10 @@ export const eventNotFoundError = error<{ id: string } & DefaultErrorType>(
     ({ id }) =>
       `Event "${id.toString()}" not found. Did you forget to register it?`,
   )
+  .remediation(
+    ({ id }) =>
+      `Add the event "${id.toString()}" to a parent resource via .register([yourEvent]). Ensure the event definition is built with r.event("${id.toString()}").build().`,
+  )
   .build();
 
 // Resource not found
@@ -82,6 +103,10 @@ export const resourceNotFoundError = error<{ id: string } & DefaultErrorType>(
   .format(
     ({ id }) =>
       `Resource "${id.toString()}" not found. Did you forget to register it or are you using the correct id?`,
+  )
+  .remediation(
+    ({ id }) =>
+      `Register the resource "${id.toString()}" in a parent resource via .register([yourResource]). Verify the id string matches exactly (ids are case-sensitive).`,
   )
   .build();
 
@@ -97,6 +122,10 @@ export const middlewareNotRegisteredError = error<
     ({ type, source, middlewareId }) =>
       `Middleware inside ${type} "${source}" depends on "${middlewareId}" but it's not registered. Did you forget to register it?`,
   )
+  .remediation(
+    ({ middlewareId }) =>
+      `Register the middleware "${middlewareId}" alongside its consumer in a parent resource via .register([yourMiddleware]).`,
+  )
   .build();
 
 // Tag not found
@@ -107,6 +136,10 @@ export const tagNotFoundError = error<{ id: string } & DefaultErrorType>(
     ({ id }) =>
       `Tag "${id}" not registered. Did you forget to register it inside a resource?`,
   )
+  .remediation(
+    ({ id }) =>
+      `Register the tag "${id}" in a parent resource via .register([yourTag]). Tags must be registered before they can be queried.`,
+  )
   .build();
 
 // Locked
@@ -116,6 +149,10 @@ export const lockedError = error<{ what: string } & DefaultErrorType>(
   .format(
     ({ what }) => `Cannot modify the ${what.toString()} when it is locked.`,
   )
+  .remediation(
+    ({ what }) =>
+      `The ${what.toString()} is locked after initialization. Perform all modifications before calling run().`,
+  )
   .build();
 
 // Store already initialized
@@ -123,6 +160,9 @@ export const storeAlreadyInitializedError = error<DefaultErrorType>(
   "runner.errors.storeAlreadyInitialized",
 )
   .format(() => "Store already initialized. Cannot reinitialize.")
+  .remediation(
+    "Do not call run() more than once on the same resource tree. Create a fresh resource if you need a separate runtime.",
+  )
   .build();
 
 // Validation error
@@ -140,6 +180,17 @@ export const validationError = error<
         : String(originalError);
     return `${subject} validation failed for ${id.toString()}: ${errorMessage}`;
   })
+  .remediation(({ subject, id }) => {
+    const lower = subject.toLowerCase();
+    const schemaHint = lower.includes("input")
+      ? "inputSchema"
+      : lower.includes("config")
+        ? "configSchema"
+        : lower.includes("result")
+          ? "resultSchema"
+          : "schema";
+    return `Check the ${subject} passed to "${id.toString()}". Ensure it matches the schema defined via .${schemaHint}().`;
+  })
   .build();
 
 // Event cycle (runtime)
@@ -150,6 +201,9 @@ export const eventCycleError = error<
     const chain = path.map((p) => `${p.id}←${p.source}`).join("  ->  ");
     return `Event emission cycle detected:\n  ${chain}\n\nBreak the cycle by changing hook logic (avoid mutual emits) or gate with conditions/tags.`;
   })
+  .remediation(
+    "Refactor hooks to avoid circular event emissions. Use conditional guards, split events into finer-grained signals, or introduce an intermediate task to break the cycle.",
+  )
   .build();
 
 // Event emission cycles (compile-time/dry-run)
@@ -160,6 +214,9 @@ export const eventEmissionCycleError = error<
     const list = cycles.map((c) => `  • ${c}`).join("\n");
     return `Event emission cycles detected between hooks and events:\n${list}\n\nThis was detected at compile time (dry-run). Break the cycle by avoiding mutual emits between hooks or scoping hooks using tags.`;
   })
+  .remediation(
+    "Redesign the event/hook graph so no hook emits an event that eventually triggers itself. Use tags or conditional logic to prevent re-entrant emissions.",
+  )
   .build();
 
 // Platform unsupported function
@@ -170,6 +227,10 @@ export const platformUnsupportedFunctionError = error<
     ({ functionName }) =>
       `Platform function not supported in this environment: ${functionName}. Detected platform: ${detectEnvironment()}.`,
   )
+  .remediation(
+    ({ functionName }) =>
+      `The function "${functionName}" requires a Node.js environment. If running in a browser or edge runtime, use a platform-compatible alternative or guard the call with a platform check.`,
+  )
   .build();
 
 // Cancellation error (maps to HTTP 499 in exposure)
@@ -177,6 +238,9 @@ export const cancellationError = error<{ reason?: string } & DefaultErrorType>(
   "runner.errors.cancellation",
 )
   .format(({ reason }) => reason || "Operation cancelled")
+  .remediation(
+    "The operation was cancelled, typically via an AbortController signal. If this is unexpected, check timeout middleware settings or ensure the caller is not aborting prematurely.",
+  )
   .build();
 
 // Tunnel ownership conflict (exclusive owner per task)
@@ -191,6 +255,10 @@ export const tunnelOwnershipConflictError = error<
     ({ taskId, currentOwnerId, attemptedOwnerId }) =>
       `Task "${taskId}" is already tunneled by resource "${currentOwnerId}". Resource "${attemptedOwnerId}" cannot tunnel it again. Ensure each task is owned by a single tunnel client.`,
   )
+  .remediation(
+    ({ taskId }) =>
+      `Each task can only be tunneled by one client. Remove the duplicate tunnel registration for "${taskId}" or split the task into separate definitions with distinct ids.`,
+  )
   .build();
 
 // Phantom task executed without a matching tunnel route
@@ -201,6 +269,10 @@ export const phantomTaskNotRoutedError = error<
     ({ taskId }) =>
       `Phantom task "${taskId}" is not routed through any tunnel. Ensure a tunnel client selects this task id (or avoid calling the phantom task directly).`,
   )
+  .remediation(
+    ({ taskId }) =>
+      `Configure a tunnel client resource to select "${taskId}" so it routes to a remote server. Phantom tasks cannot be executed locally — they only serve as local proxies for remote tasks.`,
+  )
   .build();
 
 // Task not registered in Store (internal invariant)
@@ -210,6 +282,10 @@ export const taskNotRegisteredError = error<
   .format(
     ({ taskId }) =>
       `Task "${taskId}" is not registered in the Store. This is an internal error—ensure the task is registered before execution.`,
+  )
+  .remediation(
+    ({ taskId }) =>
+      `Register the task "${taskId}" in a parent resource via .register([yourTask]) before calling run(). If this error persists, it may indicate an internal framework bug.`,
   )
   .build();
 
@@ -233,6 +309,10 @@ export const builderIncompleteError = error<
           : "Resource middleware";
     return `${typeLabel} "${builderId}" is incomplete. Missing required: ${missingFields.join(", ")}. Call ${missingFields.map((f) => `.${f}()`).join(" and ")} before .build().`;
   })
+  .remediation(
+    ({ missingFields }) =>
+      `Add the missing builder steps: ${missingFields.map((f) => `.${f}()`).join(", ")} before calling .build().`,
+  )
   .build();
 
 export function isCancellationError(err: unknown): boolean {

@@ -1463,7 +1463,7 @@ Key points:
 - **`.fork()` returns a built `IResource`** - no need to call `.build()` again
 - **Tags, middleware, and type parameters are inherited**
 - **Each fork gets independent runtime** - no shared state
-- **`register` defaults to `"keep"`**; use `"drop"` for leaf resources or `"deep"` when you want cloned *registered resources* (resource tree)
+- **`register` defaults to `"keep"`**; use `"drop"` for leaf resources or `"deep"` when you want cloned _registered resources_ (resource tree)
 - **Export forked resources** to use them as typed dependencies
 
 #### Optional Dependencies
@@ -2258,6 +2258,8 @@ import { r } from "@bluelibs/runner";
 const userNotFoundError = r
   .error<{ code: number; message: string }>("app.errors.userNotFound")
   .dataSchema(z.object({ ... }))
+  .format((d) => `[${d.code}] ${d.message}`)
+  .remediation("Verify the user ID exists before calling getUser.")
   .build();
 
 const getUser = r
@@ -2271,17 +2273,31 @@ const getUser = r
 const app = r.resource("app").register([userNotFoundError, getUser]).build();
 ```
 
-Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.
+The thrown `Error` has `name = id`. By default `message` is `JSON.stringify(data)`, but `.format(data => string)` lets you craft a human-friendly message instead. When `.remediation()` is provided, the fix-it advice is appended to `message` and `toString()`, and is also accessible as `error.remediation`.
 
 ```ts
 try {
   userNotFoundError.throw({ code: 404, message: "User not found" });
 } catch (err) {
   if (userNotFoundError.is(err)) {
-    // err.name === "app.errors.userNotFound", err.message === "User not found"
+    // err.name      === "app.errors.userNotFound"
+    // err.message   === "[404] User not found\n\nRemediation: Verify the user ID exists before calling getUser."
+    // err.remediation === "Verify the user ID exists before calling getUser."
     console.log(`Caught error: ${err.name} - ${err.message}`);
   }
 }
+```
+
+**Remediation** can also be a function when the advice depends on the error data:
+
+```ts
+const quotaExceeded = r
+  .error<{ limit: number; message: string }>("app.errors.QuotaExceeded")
+  .format((d) => d.message)
+  .remediation(
+    (d) => `Current limit is ${d.limit}. Upgrade your plan or reduce usage.`,
+  )
+  .build();
 ```
 
 ---

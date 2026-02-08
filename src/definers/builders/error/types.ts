@@ -12,6 +12,7 @@ export type BuilderState<TData extends DefaultErrorType> = Readonly<{
   id: string;
   filePath: string;
   format?: (data: TData) => string;
+  remediation?: string | ((data: TData) => string);
   serialize?: (data: TData) => string;
   parse?: (raw: string) => TData;
   dataSchema?: IValidationSchema<TData>;
