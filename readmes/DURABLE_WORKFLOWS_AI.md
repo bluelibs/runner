@@ -36,9 +36,9 @@ For user-facing status pages, you can read the durable execution on-demand from 
 
 Signals buffer if no waiter exists yet; the next `waitForSignal(...)` consumes the payload.
 
-## Tagging workflows for runtime discovery
+## Tagging workflows (required for discovery)
 
-Durable workflows are still regular Runner tasks. To make them discoverable, tag them with `durableWorkflowTag` and query at runtime from the durable resource:
+Durable workflows are regular Runner tasks, but **must be tagged with `durableWorkflowTag`** to make them discoverable at runtime. Always add this tag to your workflow tasks:
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -62,7 +62,7 @@ const onboarding = r
 // const workflows = durableRuntime.getWorkflows();
 ```
 
-`memoryDurableResource` / `redisDurableResource` / `durableResource` auto-register this tag, so tagged workflows are valid without extra manual tag registration.
+The `durableWorkflowTag` is **required** — workflows without this tag will not be discoverable via `getWorkflows()`. The durable resources (`memoryDurableResource` / `redisDurableResource` / `durableResource`) auto-register this tag definition, so you can use it immediately without manual tag registration.
 
 Recommended wiring (config-only resources):
 

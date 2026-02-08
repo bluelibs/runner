@@ -92,10 +92,10 @@ const app = r
 await run(app, { logs: { printThreshold: null } });
 ```
 
-## Tagging Workflows for Discovery
+## Tagging Workflows for Discovery (Required)
 
-Durable workflows are regular Runner tasks. To make them discoverable at runtime,
-tag them with `durableWorkflowTag` and query through the durable resource.
+Durable workflows are regular Runner tasks, but **must be tagged with `durableWorkflowTag`**
+to make them discoverable at runtime. Always add this tag to your workflow tasks:
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -122,8 +122,10 @@ const onboarding = r
 // const workflows = durableRuntime.getWorkflows();
 ```
 
-`durableResource`, `memoryDurableResource`, and `redisDurableResource` register
-this tag automatically, so tagged workflows work without manual tag registration.
+The `durableWorkflowTag` is **required** — workflows without this tag will not be discoverable
+via `getWorkflows()`. The durable resources (`durableResource`, `memoryDurableResource`,
+and `redisDurableResource`) auto-register this tag definition, so you can use it immediately
+without manual tag registration.
 
 ### Production wiring (Redis + RabbitMQ)
 
