@@ -10,6 +10,7 @@
 
 - [Start Here](#start-here)
 - [Quickstart](#quickstart)
+- [Tagging Workflows for Discovery](#tagging-workflows-for-discovery)
 - [Why You’d Want This (In One Minute)](#why-youd-want-this-in-one-minute)
 - [Core Insight](#core-insight)
 - [Abstract Interfaces](#abstract-interfaces)
@@ -68,7 +69,7 @@ const approveOrder = r
       timeoutMs: 86_400_000,
     });
     if (outcome.kind === "timeout") {
-      return { status: "timed_out" as const };
+      return { status: "timed_out" };
     }
 
     await ctx.step("ship", async () => {
@@ -77,7 +78,7 @@ const approveOrder = r
     });
 
     return {
-      status: "approved" as const,
+      status: "approved",
       approvedBy: outcome.payload.approvedBy,
     };
   })
@@ -90,6 +91,39 @@ const app = r
 
 await run(app, { logs: { printThreshold: null } });
 ```
+
+## Tagging Workflows for Discovery
+
+Durable workflows are regular Runner tasks. To make them discoverable at runtime,
+tag them with `durableWorkflowTag` and query through the durable resource.
+
+```ts
+import { r } from "@bluelibs/runner";
+import {
+  memoryDurableResource,
+  durableWorkflowTag,
+} from "@bluelibs/runner/node";
+
+const durable = memoryDurableResource.fork("app.durable");
+
+const onboarding = r
+  .task("app.workflows.onboarding")
+  .dependencies({ durable })
+  .tags([durableWorkflowTag.with({ category: "users" })])
+  .run(async (_input, { durable }) => {
+    const ctx = durable.use();
+    await ctx.step("create-user", async () => ({ ok: true }));
+    return { ok: true };
+  })
+  .build();
+
+// later, after run(...)
+// const durableRuntime = runtime.getResourceValue(durable);
+// const workflows = durableRuntime.getWorkflows();
+```
+
+`durableResource`, `memoryDurableResource`, and `redisDurableResource` register
+this tag automatically, so tagged workflows work without manual tag registration.
 
 ### Production wiring (Redis + RabbitMQ)
 
@@ -664,6 +698,38 @@ const result = await d.execute(processOrder, {
 5. **`durable.signal(executionId, signal, payload)`** completes the signal checkpoint and resumes the execution
 6. If process crashes, **`durableService.recover()`** resumes incomplete executions from their last checkpoint
 
+### What Happens with the Return Value
+
+Whatever your workflow function returns becomes the **execution result**, persisted in the durable store. You can retrieve it in three ways depending on your pattern:
+
+- **`execute(task, input)`** — starts the workflow **and** waits for it to finish, returning the result directly:
+
+  ```ts
+  const result = await d.execute(processOrder, { orderId: "order-123" });
+  // result = { success: true, orderId: "order-123", trackingId: "TRK-789" }
+  ```
+
+- **`startExecution(task, input)`** + **`wait(executionId)`** — start and wait separately (useful when a webhook or external event resumes the workflow later):
+
+  ```ts
+  const executionId = await d.startExecution(approveOrder, {
+    orderId: "order-123",
+  });
+  // ... later (eg. in a webhook handler) ...
+  await d.signal(executionId, Approved, { approvedBy: "admin@co.com" });
+  const result = await d.wait(executionId, { timeout: 30_000 });
+  // result = { status: "approved", approvedBy: "admin@co.com" }
+  ```
+
+- **Read from the store** — fetch the persisted result without blocking:
+  ```ts
+  const execution = await store.getExecution(executionId);
+  // execution.status = "completed" | "failed" | "running" | ...
+  // execution.result = the return value of your workflow
+  ```
+
+If the workflow throws an error instead of returning, the execution is marked as `failed` and `execute()`/`wait()` will reject with that error.
+
 ---
 
 ## Execution Flow
@@ -930,7 +996,7 @@ const fulfillOrder = r
           match: (tier) => tier === "premium",
           run: async () => {
             await ctx.step("express-ship", async () => shipping.express(order));
-            return "express-shipped" as const;
+            return "express-shipped";
           },
         },
         {
@@ -940,7 +1006,7 @@ const fulfillOrder = r
             await ctx.step("standard-ship", async () =>
               shipping.standard(order),
             );
-            return "standard-shipped" as const;
+            return "standard-shipped";
           },
         },
       ],
@@ -948,7 +1014,7 @@ const fulfillOrder = r
         id: "manual-review",
         run: async () => {
           await ctx.step("flag-review", async () => flagForReview(order));
-          return "needs-review" as const;
+          return "needs-review";
         },
       },
     );

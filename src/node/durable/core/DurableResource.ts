@@ -13,6 +13,7 @@ import type { Schedule } from "./types";
 import type { IDurableStore } from "./interfaces/store";
 import { DurableOperator } from "./DurableOperator";
 import { recordFlowShape, type DurableFlowShape } from "./flowShape";
+import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 
 export interface DurableResourceConfig {
   worker?: boolean;
@@ -63,6 +64,11 @@ export interface IDurableResource extends Pick<
    * (steps/audit/history and operator actions where supported by the store).
    */
   readonly operator: DurableOperator;
+
+  /**
+   * Returns all tasks tagged as durable workflows in the current runtime.
+   */
+  getWorkflows(): AnyTask[];
 }
 
 /**
@@ -133,6 +139,16 @@ export class DurableResource implements IDurableResource {
       const depsWithRecorder = this.injectRecorderIntoDurableDeps(deps, ctx);
       await effectiveTask.run(input as TInput, depsWithRecorder as any);
     });
+  }
+
+  getWorkflows(): AnyTask[] {
+    if (!this.runnerStore) {
+      throw new Error(
+        "Durable workflow discovery is not available: runner store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) instead of manually constructing DurableResource.",
+      );
+    }
+
+    return this.runnerStore.getTasksWithTag(durableWorkflowTag) as AnyTask[];
   }
 
   private injectRecorderIntoDurableDeps(

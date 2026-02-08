@@ -6,6 +6,7 @@ import type { IDurableService } from "../../durable/core/interfaces/service";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { event, r } from "../../..";
+import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
 
 /**
  * Creates a mock IDurableService for testing. Uses properly-typed functions
@@ -92,6 +93,52 @@ describe("durable: DurableResource", () => {
 
     await expect(durable.describe(task)).rejects.toThrow(
       "Durable describe API is not available: runner store was not provided to DurableResource.",
+    );
+  });
+
+  it("throws when getWorkflows() is called without runner store", () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const durable = new DurableResource(service, storage);
+
+    expect(() => durable.getWorkflows()).toThrow(
+      "Durable workflow discovery is not available: runner store was not provided to DurableResource.",
+    );
+  });
+
+  it("getWorkflows() returns tasks tagged with durable.workflow", () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+
+    const taggedTask = r
+      .task("durable.tests.resource.tagged")
+      .tags([durableWorkflowTag.with({ category: "orders" })])
+      .run(async () => "ok")
+      .build();
+
+    const untaggedTask = r
+      .task("durable.tests.resource.untagged")
+      .run(async () => "ok")
+      .build();
+
+    const runnerStore = {
+      getTasksWithTag: jest
+        .fn()
+        .mockImplementation((tag) =>
+          tag.id === durableWorkflowTag.id ? [taggedTask] : [untaggedTask],
+        ),
+    } as any;
+
+    const durable = new DurableResource(
+      service,
+      storage,
+      undefined,
+      runnerStore,
+    );
+
+    expect(durable.getWorkflows()).toEqual([taggedTask]);
+    expect(runnerStore.getTasksWithTag).toHaveBeenCalledWith(
+      durableWorkflowTag,
     );
   });
 
