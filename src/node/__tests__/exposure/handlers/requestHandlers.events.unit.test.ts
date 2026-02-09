@@ -27,6 +27,7 @@ describe("requestHandlers - event handling", () => {
     it("includes id and data for known application errors", async () => {
       const AppError = defineError<{ code: number; message: string }>({
         id: "tests.errors.app.ev",
+        httpCode: 410,
       });
       const deps: any = {
         store: {
@@ -62,9 +63,10 @@ describe("requestHandlers - event handling", () => {
       const json = res._buf
         ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
         : undefined;
-      expect(res._status).toBe(500);
+      expect(res._status).toBe(410);
       expect(json?.error?.id).toBe("tests.errors.app.ev");
       expect(json?.error?.data).toEqual({ code: 9, message: "Ev" });
+      expect(json?.error?.httpCode).toBe(410);
     });
 
     it("omits id when the matched error has a non-string name", async () => {

@@ -33,7 +33,7 @@ describe("durable: queue mode integration", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
 
-    const result = await service.execute(
+    const result = await service.startAndWait(
       task,
       { v: 2 },
       {
@@ -41,7 +41,10 @@ describe("durable: queue mode integration", () => {
         waitPollIntervalMs: 5,
       },
     );
-    expect(result).toEqual({ v: 4 });
+    expect(result).toEqual({
+      durable: { executionId: expect.any(String) },
+      data: { v: 4 },
+    });
 
     await runtime.dispose();
   });

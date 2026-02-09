@@ -38,7 +38,7 @@ export const temporalResource = defineResource({
  * and all callers receive the same result.
  */
 export const debounceTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.debounce",
+  id: "globals.middleware.task.debounce",
   dependencies: { state: temporalResource },
   async run({ task, next }, { state }, config: TemporalMiddlewareConfig) {
     const { debounceStates } = state;
@@ -86,7 +86,7 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
  * If calls occur within the window, the last one is scheduled for the end of the window.
  */
 export const throttleTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.throttle",
+  id: "globals.middleware.task.throttle",
   dependencies: { state: temporalResource },
   async run({ task, next }, { state }, config: TemporalMiddlewareConfig) {
     const { throttleStates } = state;

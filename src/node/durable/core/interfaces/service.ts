@@ -1,4 +1,5 @@
 import type { IEventDefinition } from "../../../../types/event";
+import type { ITask } from "../../../../types/task";
 import type { IDurableStore } from "./store";
 import type { IDurableQueue } from "./queue";
 import type { IEventBus } from "./bus";
@@ -6,21 +7,16 @@ import type { IDurableContext } from "./context";
 import type { Schedule } from "../types";
 import type { DurableAuditEmitter } from "../audit";
 
-export interface DurableTask<TInput = unknown, TResult = unknown> {
-  id: string;
-  run(input: TInput, ...args: any[]): Promise<TResult>;
-}
-
 export interface ITaskExecutor {
   run<TInput, TResult>(
-    task: DurableTask<TInput, TResult>,
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
   ): Promise<TResult>;
 }
 
 export interface ScheduleConfig<TInput = unknown> {
   id: string;
-  task: DurableTask<TInput, unknown>;
+  task: ITask<TInput, Promise<any>, any, any, any, any> | string;
   cron?: string;
   interval?: number;
   input: TInput;
@@ -61,7 +57,9 @@ export interface DurableServiceConfig {
    * Resolves tasks by id for resuming/recovering executions.
    * Useful in Runner environments where tasks are registered in the Store registry.
    */
-  taskResolver?: (taskId: string) => DurableTask<any, any> | undefined;
+  taskResolver?: (
+    taskId: string,
+  ) => ITask<any, Promise<any>, any, any, any, any> | undefined;
   audit?: {
     enabled?: boolean;
     emitter?: DurableAuditEmitter;
@@ -76,7 +74,7 @@ export interface DurableServiceConfig {
     maxAttempts?: number;
     timeout?: number;
     /**
-     * When a queue is configured, `startExecution()` persists the execution and then enqueues it.
+     * When a queue is configured, `start()` persists the execution and then enqueues it.
      * If enqueue fails (eg. broker outage), the execution would otherwise remain "pending" forever.
      *
      * This delay arms a small store-backed timer as a failsafe so workers can retry resuming it
@@ -85,7 +83,7 @@ export interface DurableServiceConfig {
     kickoffFailsafeDelayMs?: number;
   };
   schedules?: ScheduleConfig[];
-  tasks?: Array<DurableTask<any, any>>;
+  tasks?: Array<ITask<any, Promise<any>, any, any, any, any>>;
 }
 
 export interface ExecuteOptions {
@@ -107,10 +105,22 @@ export interface ScheduleOptions {
   interval?: number;
 }
 
+export interface DurableStartAndWaitResult<TResult = unknown> {
+  durable: {
+    executionId: string;
+  };
+  data: TResult;
+}
+
 export interface IDurableService {
-  startExecution<TInput>(
-    task: DurableTask<TInput, unknown>,
+  start<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
+    options?: ExecuteOptions,
+  ): Promise<string>;
+  start(
+    task: string,
+    input?: unknown,
     options?: ExecuteOptions,
   ): Promise<string>;
 
@@ -126,28 +136,29 @@ export interface IDurableService {
     options?: { timeout?: number; waitPollIntervalMs?: number },
   ): Promise<TResult>;
 
-  execute<TInput, TResult>(
-    task: DurableTask<TInput, TResult>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<TResult>;
-
   /**
-   * A stricter alternative to `execute()` that rejects tasks whose result type
-   * includes `undefined` (including `void`, `unknown`, and `any`).
-   *
-   * This mirrors the runtime contract where `wait()`/`execute()` treat
-   * "completed without result" as an error.
+   * Starts a workflow and waits for completion.
+   * Returns the started execution id together with the workflow result payload.
    */
-  executeStrict<TInput, TResult>(
-    task: undefined extends TResult ? never : DurableTask<TInput, TResult>,
+  startAndWait<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
-  ): Promise<TResult>;
+  ): Promise<DurableStartAndWaitResult<TResult>>;
+  startAndWait<TResult = unknown>(
+    task: string,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<DurableStartAndWaitResult<TResult>>;
 
-  schedule<TInput>(
-    task: DurableTask<TInput, unknown>,
+  schedule<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input: TInput | undefined,
+    options: ScheduleOptions,
+  ): Promise<string>;
+  schedule(
+    task: string,
+    input: unknown,
     options: ScheduleOptions,
   ): Promise<string>;
 
@@ -155,14 +166,22 @@ export interface IDurableService {
    * Idempotently create (or update) a recurring schedule (cron/interval) with a stable id.
    * Safe to call concurrently from multiple processes.
    */
-  ensureSchedule<TInput>(
-    task: DurableTask<TInput, unknown>,
+  ensureSchedule<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input: TInput | undefined,
+    options: ScheduleOptions & { id: string },
+  ): Promise<string>;
+  ensureSchedule(
+    task: string,
+    input: unknown,
     options: ScheduleOptions & { id: string },
   ): Promise<string>;
 
   recover(): Promise<void>;
 
+  /**
+   * Starts the durable polling loop (timers/schedules processing).
+   */
   start(): void;
 
   stop(): Promise<void>;

@@ -3,6 +3,7 @@ import { getCallerFile } from "../../../tools/getCallerFile";
 import { makeErrorBuilder } from "./fluent-builder";
 import type { ErrorFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
+import { RunnerError } from "../../defineError";
 
 export * from "./fluent-builder.interface";
 export * from "./fluent-builder";
@@ -19,6 +20,7 @@ export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
   const initial: BuilderState<TData> = Object.freeze({
     id,
     filePath,
+    httpCode: undefined,
     serialize: undefined,
     parse: undefined,
     dataSchema: undefined,
@@ -28,4 +30,15 @@ export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
   return makeErrorBuilder(initial);
 }
 
-export const error = errorBuilder;
+/**
+ * Check if an error is any Runner error (not just a specific one).
+ * @param error - The error to check
+ * @returns true if the error is a RunnerError instance
+ */
+function isRunnerError(error: unknown): error is RunnerError {
+  return error instanceof RunnerError;
+}
+
+export const error = Object.assign(errorBuilder, {
+  is: isRunnerError,
+});

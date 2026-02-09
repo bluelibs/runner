@@ -1,13 +1,14 @@
 import { NoopEventBus } from "../bus/NoopEventBus";
 import type {
+  DurableStartAndWaitResult,
   DurableServiceConfig,
-  DurableTask,
   ExecuteOptions,
   IDurableService,
   ScheduleOptions,
 } from "./interfaces/service";
 import { ExecutionStatus, type Schedule } from "./types";
 import type { IEventDefinition } from "../../../types/event";
+import type { ITask } from "../../../types/task";
 import { createExecutionId } from "./utils";
 
 import {
@@ -57,14 +58,24 @@ export class DurableService implements IDurableService {
     this.taskRegistry = new TaskRegistry(config.taskResolver);
 
     // Register initial tasks
-    if (config.schedules) {
-      for (const schedule of config.schedules) {
-        this.taskRegistry.register(schedule.task);
-      }
-    }
     if (config.tasks) {
       for (const task of config.tasks) {
         this.taskRegistry.register(task);
+      }
+    }
+    if (config.schedules) {
+      for (const schedule of config.schedules) {
+        if (typeof schedule.task === "string") {
+          const resolved = this.taskRegistry.find(schedule.task);
+          if (!resolved) {
+            throw new Error(
+              `Cannot initialize durable schedule "${schedule.id}": task "${schedule.task}" is not registered.`,
+            );
+          }
+          this.taskRegistry.register(resolved);
+          continue;
+        }
+        this.taskRegistry.register(schedule.task);
       }
     }
 
@@ -131,40 +142,62 @@ export class DurableService implements IDurableService {
 
   // ─── Public API (delegating to managers) ───────────────────────────────────
 
-  registerTask<TInput, TResult>(task: DurableTask<TInput, TResult>): void {
+  registerTask<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
+  ): void {
     this.taskRegistry.register(task);
   }
 
-  findTask(taskId: string): DurableTask<any, any> | undefined {
+  findTask(
+    taskId: string,
+  ): ITask<any, Promise<any>, any, any, any, any> | undefined {
     return this.taskRegistry.find(taskId);
   }
 
-  async startExecution<TInput>(
-    task: DurableTask<TInput, unknown>,
+  start<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
-  ): Promise<string> {
-    return this.executionManager.startExecution(task, input, options);
+  ): Promise<string>;
+  start(
+    task: string,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<string>;
+  start(): void;
+  start(
+    task?: string | ITask<any, Promise<any>, any, any, any, any>,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<string> | void {
+    if (task === undefined) {
+      this.pollingManager.start();
+      return;
+    }
+
+    return this.executionManager.start(task, input, options);
   }
 
   async cancelExecution(executionId: string, reason?: string): Promise<void> {
     await this.executionManager.cancelExecution(executionId, reason);
   }
 
-  async execute<TInput, TResult>(
-    task: DurableTask<TInput, TResult>,
+  startAndWait<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
-  ): Promise<TResult> {
-    return this.executionManager.execute(task, input, options);
-  }
-
-  async executeStrict<TInput, TResult>(
-    task: undefined extends TResult ? never : DurableTask<TInput, TResult>,
-    input?: TInput,
+  ): Promise<DurableStartAndWaitResult<TResult>>;
+  startAndWait<TResult = unknown>(
+    task: string,
+    input?: unknown,
     options?: ExecuteOptions,
-  ): Promise<TResult> {
-    return this.executionManager.executeStrict(task, input, options);
+  ): Promise<DurableStartAndWaitResult<TResult>>;
+  async startAndWait(
+    task: string | ITask<any, Promise<any>, any, any, any, any>,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<DurableStartAndWaitResult<unknown>> {
+    return this.executionManager.startAndWait(task, input, options);
   }
 
   wait<TResult>(
@@ -174,17 +207,37 @@ export class DurableService implements IDurableService {
     return this.waitManager.waitForResult(executionId, options);
   }
 
-  async schedule<TInput>(
-    task: DurableTask<TInput, unknown>,
+  schedule<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input: TInput | undefined,
+    options: ScheduleOptions,
+  ): Promise<string>;
+  schedule(
+    task: string,
+    input: unknown,
+    options: ScheduleOptions,
+  ): Promise<string>;
+  async schedule(
+    task: string | ITask<any, Promise<any>, any, any, any, any>,
+    input: unknown,
     options: ScheduleOptions,
   ): Promise<string> {
     return this.scheduleManager.schedule(task, input, options);
   }
 
-  async ensureSchedule<TInput>(
-    task: DurableTask<TInput, unknown>,
+  ensureSchedule<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input: TInput | undefined,
+    options: ScheduleOptions & { id: string },
+  ): Promise<string>;
+  ensureSchedule(
+    task: string,
+    input: unknown,
+    options: ScheduleOptions & { id: string },
+  ): Promise<string>;
+  async ensureSchedule(
+    task: string | ITask<any, Promise<any>, any, any, any, any>,
+    input: unknown,
     options: ScheduleOptions & { id: string },
   ): Promise<string> {
     return this.scheduleManager.ensureSchedule(task, input, options);
@@ -202,10 +255,6 @@ export class DurableService implements IDurableService {
         await this.executionManager.kickoffExecution(exec.id);
       }
     }
-  }
-
-  start(): void {
-    this.pollingManager.start();
   }
 
   async stop(): Promise<void> {

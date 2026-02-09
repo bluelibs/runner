@@ -34,7 +34,6 @@
     - [Multipart Upload (Node-like, conceptual curl)](#multipart-upload-node-like-conceptual-curl)
     - [Octet Duplex (Node-only, conceptual)](#octet-duplex-node-only-conceptual)
     - [Event Emission](#event-emission)
-  - [Versioning](#versioning)
   - [References](#references)
 
 ## Overview
@@ -294,14 +293,6 @@ curl -X POST http://localhost:7070/__runner/event/app.events.notify \
 ```
 
 Response: `{"ok": true}`
-
-## Versioning
-
-- **v1.0**: Current (Runner 5.x). Base: `/__runner`, serialized envelopes, modes as above.
-- **Future**:
-  - v2: Binary protocol (e.g., Protocol Buffers over HTTP/2).
-  - Headers: `X-Runner-Protocol-Version: 1.0`.
-- **Breaking Changes**: New base path or envelope; announce in changelog.
 
 ## References
 

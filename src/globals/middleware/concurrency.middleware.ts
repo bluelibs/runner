@@ -39,7 +39,7 @@ export const concurrencyResource = defineResource({
  * Middleware that limits concurrency of task executions using a Semaphore.
  */
 export const concurrencyTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.concurrency",
+  id: "globals.middleware.task.concurrency",
   dependencies: { state: concurrencyResource },
   async run({ task, next }, { state }, config: ConcurrencyMiddlewareConfig) {
     let semaphore = config.semaphore;

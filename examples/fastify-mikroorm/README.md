@@ -166,7 +166,7 @@ Notes:
 
 - For GET routes with no body, set `inputSchema: z.undefined()`.
 - You can access `request.query`, `request.params`, headers, etc. via `fastifyContext.use()`.
-- Prefer returning DTOs (plain objects) matching your `resultSchema` (don’t return ORM entities directly).
+- Prefer returning DTOs (plain objects) matching your `resultSchema` (don't return ORM entities directly).
 - Always include `meta.title` and `meta.description` for AI-friendly docs in Runner Dev.
 
 ### Error Handling
@@ -383,7 +383,7 @@ npm run test:watch
 
 ## Import Aliases (#/\*)
 
-To keep imports readable in examples and apps, we use a global path alias that maps `#/` to your package’s `src` directory. This lets you write short absolute imports like:
+To keep imports readable in examples and apps, we use a global path alias that maps `#/` to your package's `src` directory. This lets you write short absolute imports like:
 
 ```ts
 import { fastify } from "#/http/resources/fastify.resource";

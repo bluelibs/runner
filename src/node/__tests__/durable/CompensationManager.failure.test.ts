@@ -38,7 +38,7 @@ describe("durable: compensation failure", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
 
-    const executionId = await service.startExecution(task);
+    const executionId = await service.start(task);
     const execution = await store.getExecution(executionId);
     expect(execution?.status).toBe("compensation_failed");
     expect(execution?.error?.message).toContain(

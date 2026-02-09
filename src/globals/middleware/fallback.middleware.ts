@@ -17,17 +17,19 @@ export interface FallbackMiddlewareConfig {
 export const journalKeys = {
   /** Whether the fallback path was taken (true) or primary succeeded (false) */
   active: journalHelper.createKey<boolean>(
-    "globals.middleware.fallback.active",
+    "globals.middleware.task.fallback.active",
   ),
   /** The error that triggered the fallback (only set when active is true) */
-  error: journalHelper.createKey<Error>("globals.middleware.fallback.error"),
+  error: journalHelper.createKey<Error>(
+    "globals.middleware.task.fallback.error",
+  ),
 } as const;
 
 /**
  * Fallback middleware: provides a backup value or execution if the main task fails.
  */
 export const fallbackTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.fallback",
+  id: "globals.middleware.task.fallback",
   dependencies: {
     taskRunner: globalResources.taskRunner,
   },

@@ -10,7 +10,8 @@
 
 - [Start Here](#start-here)
 - [Quickstart](#quickstart)
-- [Why You’d Want This (In One Minute)](#why-youd-want-this-in-one-minute)
+- [Tagging Workflows for Discovery](#tagging-workflows-for-discovery-required)
+- [Why You'd Want This (In One Minute)](#why-youd-want-this-in-one-minute)
 - [Core Insight](#core-insight)
 - [Abstract Interfaces](#abstract-interfaces)
 - [API Design](#api-design)
@@ -26,7 +27,7 @@
 ## Start Here
 
 - If you want the short version: `readmes/DURABLE_WORKFLOWS_AI.md`
-- If you’re new to Runner concepts (tasks/resources/events/middleware): `readmes/AI.md`
+- If you're new to Runner concepts (tasks/resources/events/middleware): `readmes/AI.md`
 - Platform note (why this is Node-only): `readmes/MULTI_PLATFORM.md`
 
 ## Quickstart
@@ -68,7 +69,7 @@ const approveOrder = r
       timeoutMs: 86_400_000,
     });
     if (outcome.kind === "timeout") {
-      return { status: "timed_out" as const };
+      return { status: "timed_out" };
     }
 
     await ctx.step("ship", async () => {
@@ -77,7 +78,7 @@ const approveOrder = r
     });
 
     return {
-      status: "approved" as const,
+      status: "approved",
       approvedBy: outcome.payload.approvedBy,
     };
   })
@@ -89,6 +90,95 @@ const app = r
   .build();
 
 await run(app, { logs: { printThreshold: null } });
+```
+
+## Tagging Workflows for Discovery (Required)
+
+Durable workflows are regular Runner tasks, but **must be tagged with `durableWorkflowTag`**
+to make them discoverable at runtime. Always add this tag to your workflow tasks:
+
+```ts
+import { r } from "@bluelibs/runner";
+import {
+  memoryDurableResource,
+  durableWorkflowTag,
+} from "@bluelibs/runner/node";
+
+const durable = memoryDurableResource.fork("app.durable");
+
+const onboarding = r
+  .task("app.workflows.onboarding")
+  .dependencies({ durable })
+  .tags([durableWorkflowTag.with({ category: "users" })])
+  .run(async (_input, { durable }) => {
+    const ctx = durable.use();
+    await ctx.step("create-user", async () => ({ ok: true }));
+    return { ok: true };
+  })
+  .build();
+
+// later, after run(...)
+// const durableRuntime = runtime.getResourceValue(durable);
+// const workflows = durableRuntime.getWorkflows();
+```
+
+The `durableWorkflowTag` is **required** — workflows without this tag will not be discoverable
+via `getWorkflows()`. The durable resources (`durableResource`, `memoryDurableResource`,
+and `redisDurableResource`) auto-register this tag definition, so you can use it immediately
+without manual tag registration.
+
+`durableWorkflowTag` is discovery metadata only. The unified response envelope
+is produced by `durable.startAndWait(...)`:
+`{ durable: { executionId }, data }`.
+
+### Starting Durable Workflows From Resource Dependencies (HTTP route)
+
+Tagged workflow tasks are discoverable metadata only. Execution is explicit:
+start with `durable.start(...)` (fire-and-track) or
+`durable.startAndWait(...)` (start-and-wait).
+
+```ts
+import express from "express";
+import { r, run } from "@bluelibs/runner";
+import {
+  memoryDurableResource,
+  durableWorkflowTag,
+} from "@bluelibs/runner/node";
+
+const durable = memoryDurableResource.fork("app.durable");
+
+const approveOrder = r
+  .task("app.workflows.approveOrder")
+  .dependencies({ durable })
+  .tags([durableWorkflowTag.with({ category: "orders" })])
+  .run(async (input: { orderId: string }, { durable }) => {
+    const ctx = durable.use();
+    await ctx.step("approve", async () => ({ approved: true }));
+    return { orderId: input.orderId, status: "approved" as const };
+  })
+  .build();
+
+const api = r
+  .resource("app.api")
+  .register([durable.with({ worker: false }), approveOrder])
+  .dependencies({ durable, approveOrder })
+  .init(async (_cfg, { durable, approveOrder }) => {
+    const app = express();
+    app.use(express.json());
+
+    app.post("/orders/:id/approve", async (req, res) => {
+      const executionId = await durable.start(approveOrder, {
+        orderId: req.params.id,
+      });
+
+      res.status(202).json({ executionId });
+    });
+
+    app.listen(3000);
+  })
+  .build();
+
+await run(api);
 ```
 
 ### Production wiring (Redis + RabbitMQ)
@@ -123,7 +213,7 @@ const durableRegistration = durable.with({
 
 In a typical deployment:
 
-- API nodes call `startExecution()` / `signal()` / `wait()`.
+- API nodes call `start()` / `signal()` / `wait()`.
 - Worker nodes run the durable resource with `worker: true`.
 
 ### Scaling in production (recommended topology)
@@ -133,7 +223,7 @@ The core idea is: **the store is the source of truth**, and the queue distribute
 
 **Recommended split:**
 
-- **API nodes** (stateless): accept HTTP/webhooks, call `startExecution()` / `signal()` / `wait()`.
+- **API nodes** (stateless): accept HTTP/webhooks, call `start()` / `signal()` / `wait()`.
 - **Worker nodes** (scalable): consume the durable queue and run executions.
 
 **API node config (no background work):**
@@ -180,7 +270,7 @@ This is still designed to be safe (at-least-once), but it can increase load/nois
 ### 2) Start an execution (store the executionId)
 
 ```ts
-const executionId = await d.startExecution(approveOrder, {
+const executionId = await d.start(approveOrder, {
   orderId: "order-123",
 });
 // store executionId on the order record so your webhook can resume the workflow later
@@ -225,12 +315,12 @@ await d.signal(executionId, Approved, { approvedBy: "admin@company.com" });
 const result = await d.wait(executionId, { timeout: 30_000 });
 ```
 
-## Why You’d Want This (In One Minute)
+## Why You'd Want This (In One Minute)
 
 - Your workflow needs to span time: minutes, hours, days (payments, shipping, approvals).
 - You want deterministic retries without duplicating side-effects (charge twice, email twice, etc.).
-- You want horizontal scaling without “who owns this in-memory timeout?” problems.
-- You want explicit, type-safe “outside world pokes the workflow” via signals.
+- You want horizontal scaling without "who owns this in-memory timeout?" problems.
+- You want explicit, type-safe "outside world pokes the workflow" via signals.
 
 ## Core Insight
 
@@ -325,7 +415,7 @@ export interface IDurableStore {
     ttlMs: number,
   ): Promise<boolean>;
 
-  // Optional: Idempotency (dedupe startExecution calls)
+  // Optional: Idempotency (dedupe start calls)
   getExecutionIdByIdempotencyKey?(params: {
     taskId: string;
     idempotencyKey: string;
@@ -456,7 +546,7 @@ export interface IDurableQueue {
 
 ## Adapting to Your Flow: Custom Backends
 
-One of Runner’s core philosophies is **zero lock-in**. If your team uses Postgres for state or Kafka for queues, you shouldn't have to change your workflow logic to use them.
+One of Runner's core philosophies is **zero lock-in**. If your team uses Postgres for state or Kafka for queues, you shouldn't have to change your workflow logic to use them.
 
 ### Implementing a Custom Store
 
@@ -645,7 +735,7 @@ const runtime = await run(app);
 
 // 5. Execute durably
 const d = runtime.getResourceValue(durable);
-const result = await d.execute(processOrder, {
+const result = await d.startAndWait(processOrder, {
   orderId: "order-123",
   customerId: "cust-456",
 });
@@ -653,9 +743,9 @@ const result = await d.execute(processOrder, {
 
 ### How It Works
 
-1. **`durable.execute(task, input)`** creates an execution record and runs the task
-   - Prefer `execute()` when you want “start and wait for result” in one call.
-   - Prefer `startExecution()` + `signal()` + `wait()` when the outside world must resume the workflow later (webhooks, approvals).
+1. **`durable.startAndWait(task, input)`** creates an execution record and runs the task
+   - Prefer `startAndWait()` when you want "start and wait for result" in one call.
+   - Prefer `start()` + `signal()` + `wait()` when the outside world must resume the workflow later (webhooks, approvals).
 2. **`ctx.step(id, fn)`** checks if step was already executed:
    - If yes: returns cached result (replay)
    - If no: executes fn, caches result, returns result
@@ -663,6 +753,69 @@ const result = await d.execute(processOrder, {
 4. **`ctx.waitForSignal(signal)`** records a durable wait checkpoint and suspends execution
 5. **`durable.signal(executionId, signal, payload)`** completes the signal checkpoint and resumes the execution
 6. If process crashes, **`durableService.recover()`** resumes incomplete executions from their last checkpoint
+
+### `start()` vs `startAndWait()` (clear contract)
+
+- `start(taskOrTaskId, input)`:
+  returns immediately with `executionId` (`string`).
+- `startAndWait(taskOrTaskId, input)`:
+  convenience wrapper for `start(...)` + `wait(executionId)`; returns
+  `{ durable: { executionId }, data }`.
+
+`taskOrTaskId` can be:
+
+- an `ITask` (the built task object, returned by `.build()`)
+- a task id `string`
+
+It is **not** the injected dependency callable from `.dependencies({ someTask })`. That dependency is a function used to invoke the task directly, not an `ITask` reference.
+
+```ts
+// ✅ built task object
+const executionIdA = await d.start(approveOrder, { orderId: "o1" });
+
+// ✅ task id string
+const executionIdB = await d.start(approveOrder.id, {
+  orderId: "o2",
+});
+
+// ❌ injected callable dependency (different type)
+// await d.start(deps.approveOrder, { orderId: "o3" });
+```
+
+### What Happens with the Return Value
+
+Whatever your workflow function returns becomes the **execution result**, persisted in the durable store. You can retrieve it in three ways depending on your pattern:
+
+- **`startAndWait(task, input)`** — starts the workflow **and** waits for it to finish, returning `{ durable: { executionId }, data }`:
+
+  ```ts
+  const result = await d.startAndWait(processOrder, { orderId: "order-123" });
+  // result = {
+  //   durable: { executionId: "..." },
+  //   data: { success: true, orderId: "order-123", trackingId: "TRK-789" }
+  // }
+  ```
+
+- **`start(task, input)`** + **`wait(executionId)`** — start and wait separately (useful when a webhook or external event resumes the workflow later):
+
+  ```ts
+  const executionId = await d.start(approveOrder, {
+    orderId: "order-123",
+  });
+  // ... later (eg. in a webhook handler) ...
+  await d.signal(executionId, Approved, { approvedBy: "admin@co.com" });
+  const result = await d.wait(executionId, { timeout: 30_000 });
+  // result = { status: "approved", approvedBy: "admin@co.com" }
+  ```
+
+- **Read from the store** — fetch the persisted result without blocking:
+  ```ts
+  const execution = await store.getExecution(executionId);
+  // execution.status = "completed" | "failed" | "running" | ...
+  // execution.result = the return value of your workflow
+  ```
+
+If the workflow throws an error instead of returning, the execution is marked as `failed` and `startAndWait()`/`wait()` will reject with that error.
 
 ---
 
@@ -676,7 +829,7 @@ sequenceDiagram
     participant DC as DurableContext
     participant T as Task Function
 
-    C->>DS: execute(task, input)
+    C->>DS: startAndWait(task, input)
     DS->>S: createExecution(id, task, input)
     DS->>DC: create context for execution
     DS->>T: run task with context
@@ -756,7 +909,7 @@ This section summarizes the safety guarantees and expectations of the durable wo
 - **Reserved step ids**
   - Step ids starting with `__` and `rollback:` are reserved for durable internals. Avoid using them in `ctx.step(...)` to prevent collisions with system steps.
 
-These semantics intentionally favor **safety and debuggability** over perfect “exactly-once” guarantees at the infrastructure level. Application code remains explicit and testable, while the system provides strong, well-defined durability guarantees around that code.
+These semantics intentionally favor **safety and debuggability** over perfect "exactly-once" guarantees at the infrastructure level. Application code remains explicit and testable, while the system provides strong, well-defined durability guarantees around that code.
 
 ---
 
@@ -815,14 +968,14 @@ From an API webhook / callback handler:
 
 ```typescript
 // Store the workflow `executionId` in your domain data when you start it.
-// You can get it immediately via `await d.startExecution(task, input)`.
+// You can get it immediately via `await d.start(task, input)`.
 const d = runtime.getResourceValue(durable);
 await d.signal(executionId, Paid, { paidAt: Date.now() });
 ```
 
 ### Whichever comes first: signal or timeout
 
-If you need “wait for payment confirmation or continue after 1 day”, use the timeout variant:
+If you need "wait for payment confirmation or continue after 1 day", use the timeout variant:
 
 ```typescript
 const outcome = await ctx.waitForSignal(Paid, { timeoutMs: 86_400_000 });
@@ -930,7 +1083,7 @@ const fulfillOrder = r
           match: (tier) => tier === "premium",
           run: async () => {
             await ctx.step("express-ship", async () => shipping.express(order));
-            return "express-shipped" as const;
+            return "express-shipped";
           },
         },
         {
@@ -940,7 +1093,7 @@ const fulfillOrder = r
             await ctx.step("standard-ship", async () =>
               shipping.standard(order),
             );
-            return "standard-shipped" as const;
+            return "standard-shipped";
           },
         },
       ],
@@ -948,7 +1101,7 @@ const fulfillOrder = r
         id: "manual-review",
         run: async () => {
           await ctx.step("flag-review", async () => flagForReview(order));
-          return "needs-review" as const;
+          return "needs-review";
         },
       },
     );
@@ -1402,10 +1555,10 @@ export interface ScheduleOptions {
 
 export interface IDurableService {
   /**
-   * Execute a task with durability and wait for it to complete.
+   * Start a task durably and wait for it to complete.
    */
-  execute<TInput, TResult>(
-    task: DurableTask<TInput, TResult>,
+  startAndWait<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any> | string,
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<TResult>;
@@ -1413,8 +1566,8 @@ export interface IDurableService {
   /**
    * Start a task execution and return the ID immediately.
    */
-  startExecution<TInput>(
-    task: DurableTask<TInput, unknown>,
+  start<TInput>(
+    task: ITask<TInput, Promise<unknown>, any, any, any, any> | string,
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<string>;
@@ -1440,7 +1593,7 @@ export interface IDurableService {
    * Schedule a one-time task execution.
    */
   schedule<TInput>(
-    task: DurableTask<TInput, any>,
+    task: ITask<TInput, Promise<any>, any, any, any, any> | string,
     input: TInput,
     options: ScheduleOptions,
   ): Promise<string>;
@@ -1450,7 +1603,7 @@ export interface IDurableService {
    * Safe to call on every boot and concurrently across processes.
    */
   ensureSchedule<TInput>(
-    task: DurableTask<TInput, any>,
+    task: ITask<TInput, Promise<any>, any, any, any, any> | string,
     input: TInput,
     options: ScheduleOptions & { id: string },
   ): Promise<string>;
@@ -1576,7 +1729,7 @@ const durableRegistration = durable.with({
 });
 ```
 
-If you want API-only nodes to call `startExecution()` / `signal()` / `wait()` **without running the timer poller**, disable polling:
+If you want API-only nodes to call `start()` / `signal()` / `wait()` **without running the timer poller**, disable polling:
 
 ```ts
 const durable = durableResource.fork("app.durable");
@@ -1633,11 +1786,11 @@ export class RabbitMQQueue implements IDurableQueue {
 - **Concurrency & Atomicity**:
   - `updateExecution()` uses a Lua script to perform a read/merge/write update atomically.
   - Execution processing is guarded by `acquireLock()` so only one worker runs an execution attempt at a time.
-  - Signal delivery (`durable.signal`) and signal waits (`ctx.waitForSignal`) use a per-execution/per-signal lock when supported by the store, to prevent races between “signal arrives” and “wait is being recorded”.
+  - Signal delivery (`durable.signal`) and signal waits (`ctx.waitForSignal`) use a per-execution/per-signal lock when supported by the store, to prevent races between "signal arrives" and "wait is being recorded".
 
 ### Optimized Client Waiting
 
-When an `IEventBus` (like `RedisEventBus`) is present, calls to `durable.execute()` or `durable.wait()` use a **reactive event-driven approach**. The service subscribes to completion events for that specific execution ID, resulting in near-instant response times once the workflow finishes, without constant store polling.
+When an `IEventBus` (like `RedisEventBus`) is present, calls to `durable.startAndWait()` or `durable.wait()` use a **reactive event-driven approach**. The service subscribes to completion events for that specific execution ID, resulting in near-instant response times once the workflow finishes, without constant store polling.
 
 ### Horizontal Scaling
 
@@ -1864,7 +2017,7 @@ const app = r
 const runtime = await run(app);
 const durableRuntime = runtime.getResourceValue(durable);
 
-const executionId = await durableRuntime.startExecution(task);
+const executionId = await durableRuntime.start(task);
 
 await waitUntil(
   async () => (await store.getExecution(executionId))?.status === "sleeping",
@@ -2039,8 +2192,8 @@ const mirrorAudit = r
 - **Always put side effects inside `ctx.step(...)`**: anything outside a step can run multiple times on retries/replays.
 - **Keep step ids stable**: renaming a step id (or changing control-flow so a different call order happens) can break replay determinism for existing executions.
 - **Call-order indexing is real**: `emit()` and repeated `waitForSignal()` allocate `:<index>` internally based on call order; refactors that add/remove calls can shift indexes.
-- **Signals are “deliver to current wait”**: `durableService.signal(executionId, ...)` delivers to the base signal slot if it’s not completed yet (this can buffer the first signal even if the workflow hasn’t reached the wait). Additional signals only deliver to subsequent indexed waits; otherwise they are ignored.
-- **Don’t hang forever**: prefer `durableService.wait(executionId, { timeout: ... })` unless you intentionally want an unbounded wait.
+- **Signals are "deliver to current wait"**: `durableService.signal(executionId, ...)` delivers to the base signal slot if it's not completed yet (this can buffer the first signal even if the workflow hasn't reached the wait). Additional signals only deliver to subsequent indexed waits; otherwise they are ignored.
+- **Don't hang forever**: prefer `durableService.wait(executionId, { timeout: ... })` unless you intentionally want an unbounded wait.
 - **Compensation failures are terminal**: if `ctx.rollback()` fails, execution becomes `compensation_failed` and `wait()` rejects. Use `DurableOperator.retryRollback(executionId)` after fixing the underlying issue.
 - **Intervals can overlap**: interval schedules are currently measured from kickoff time, not completion time. If you need non-overlapping behavior, implement it via `ctx.sleep()` inside the workflow.
 - **Debugging**: inspect step results + timers in the dashboard, or query your `IDurableStore` implementation directly (Redis keys are prefixed by `durable:` by default).
@@ -2051,7 +2204,7 @@ There are two different "idempotency" problems:
 
 1. **Workflow-level deduplication (start only once)**
 
-- `startExecution(task, input, { idempotencyKey })` supports a store-backed **"start-or-get"** mode.
+- `start(task, input, { idempotencyKey })` supports a store-backed **"start-or-get"** mode.
 - It returns the same `executionId` for the same `{ taskId, idempotencyKey }` pair, even if multiple callers race.
 - Important: subsequent calls return the existing `executionId` and do **not** overwrite the originally stored `input`.
 - Store support: `MemoryStore` and `RedisStore` implement this. Custom stores must implement `getExecutionIdByIdempotencyKey` / `setExecutionIdByIdempotencyKey`.
@@ -2063,7 +2216,7 @@ There are two different "idempotency" problems:
 
 If you need workflow-level dedupe by business key (for example `orderId`), use it as the `idempotencyKey` (for example `order:${orderId}`), and store the returned `executionId` on the record as well.
 
-## Cancellation (and why it’s tricky)
+## Cancellation (and why it's tricky)
 
 Durable exposes a first-class cancellation API:
 
@@ -2072,7 +2225,7 @@ Durable exposes a first-class cancellation API:
 Semantics:
 
 - Cancellation is **cooperative**, not preemptive: Node cannot reliably interrupt arbitrary async work.
-- Cancelling marks the execution as terminal (`cancelled`), unblocks `wait()` / `execute()`, and prevents future resumes (timers/signals won't continue it).
+- Cancelling marks the execution as terminal (`cancelled`), unblocks `wait()` / `startAndWait()`, and prevents future resumes (timers/signals won't continue it).
 - Already-running code will only stop at the next durable checkpoint (for example the next `ctx.step(...)`, `ctx.sleep(...)`, `ctx.waitForSignal(...)`, or `ctx.emit(...)`).
 
 Administrative alternatives still exist:

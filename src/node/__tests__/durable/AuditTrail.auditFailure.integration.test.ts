@@ -38,8 +38,11 @@ describe("durable: audit trail failure tolerance (integration)", () => {
     const service = runtime.getResourceValue(durable);
 
     await expect(
-      service.execute(task, undefined, { timeout: 5_000 }),
-    ).resolves.toBe("ok");
+      service.startAndWait(task, undefined, { timeout: 5_000 }),
+    ).resolves.toEqual({
+      durable: { executionId: expect.any(String) },
+      data: "ok",
+    });
 
     await runtime.dispose();
   });

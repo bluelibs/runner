@@ -6,11 +6,11 @@
 
 Durable workflows are **Runner tasks with replay-safe checkpoints** (Node-only: `@bluelibs/runner/node`).
 
-They’re designed for flows that span time (minutes → days): approvals, payments, onboarding, shipping.
+They're designed for flows that span time (minutes → days): approvals, payments, onboarding, shipping.
 
 ## The mental model
 
-- A workflow does not “resume the instruction pointer”.
+- A workflow does not "resume the instruction pointer".
 - On every wake-up (sleep/signal/retry/recover), it **re-runs from the top** and fast-forwards using stored results:
   - `ctx.step("id", fn)` runs once, persists result, returns cached on replay.
   - `ctx.sleep(...)` and `ctx.waitForSignal(...)` persist durable checkpoints.
@@ -24,10 +24,9 @@ Rule: side effects belong inside `ctx.step(...)`.
    - stable `ctx.step("...")` ids
    - explicit `{ stepId }` for `sleep/emit/waitForSignal` in production
 3. **Start the workflow**:
-   - `executionId = await service.startExecution(task, input)`
+   - `executionId = await service.start(taskOrTaskId, input)`
    - persist `executionId` in your domain row (eg. `orders.execution_id`)
-   - or `await service.execute(task, input)` to start + wait in one call
-   - or `await service.executeStrict(task, input)` for stricter result typing
+   - or `await service.startAndWait(taskOrTaskId, input)` to start + wait in one call
 4. **Interact later via signals**:
    - look up `executionId`
    - `await service.signal(executionId, SignalDef, payload)`
@@ -35,6 +34,92 @@ Rule: side effects belong inside `ctx.step(...)`.
 For user-facing status pages, you can read the durable execution on-demand from the durable store using `executionId` (no need to mirror into Postgres): `store.getExecution(executionId)` (or `new DurableOperator(store).getExecutionDetail(executionId)` when supported).
 
 Signals buffer if no waiter exists yet; the next `waitForSignal(...)` consumes the payload.
+
+`taskOrTaskId` can be:
+
+- an `ITask` (recommended, keeps full input/result type-safety)
+- a task id `string` (resolved via runtime registry; fail-fast if not found)
+
+`taskOrTaskId` is the built task object (`.build()`) or its id string, not the injected dependency callable from `.dependencies({...})`.
+
+`start()` vs `startAndWait()`:
+
+- `start(taskOrTaskId, input)` returns `executionId` immediately.
+- `startAndWait(taskOrTaskId, input)` starts, waits, and returns `{ durable: { executionId }, data }`.
+
+## Tagging workflows (required for discovery)
+
+Durable workflows are regular Runner tasks, but **must be tagged with `durableWorkflowTag`** to make them discoverable at runtime. Always add this tag to your workflow tasks:
+
+```ts
+import { r } from "@bluelibs/runner";
+import { memoryDurableResource, durableWorkflowTag } from "@bluelibs/runner/node";
+
+const durable = memoryDurableResource.fork("app.durable");
+
+const onboarding = r
+  .task("app.workflows.onboarding")
+  .dependencies({ durable })
+  .tags([durableWorkflowTag.with({ category: "users" })])
+  .run(async (_input, { durable }) => {
+    const ctx = durable.use();
+    await ctx.step("create-user", async () => ({ ok: true }));
+    return { ok: true };
+  })
+  .build();
+
+// Later, after run(...):
+// const durableRuntime = runtime.getResourceValue(durable);
+// const workflows = durableRuntime.getWorkflows();
+```
+
+The `durableWorkflowTag` is **required** — workflows without this tag will not be discoverable via `getWorkflows()`. The durable resources (`memoryDurableResource` / `redisDurableResource` / `durableResource`) auto-register this tag definition, so you can use it immediately without manual tag registration.
+
+`durableWorkflowTag` is discovery metadata only. The unified response envelope is produced by `startAndWait(...)`: `{ durable: { executionId }, data }`.
+
+### Starting workflows from dependencies (HTTP route)
+
+Tagged tasks are discovery metadata only. Start workflows explicitly via `durable.start(...)` (or `durable.startAndWait(...)` when you want to wait for completion):
+
+```ts
+import express from "express";
+import { r, run } from "@bluelibs/runner";
+import { memoryDurableResource, durableWorkflowTag } from "@bluelibs/runner/node";
+
+const durable = memoryDurableResource.fork("app.durable");
+
+const approveOrder = r
+  .task("app.workflows.approveOrder")
+  .dependencies({ durable })
+  .tags([durableWorkflowTag.with({ category: "orders" })])
+  .run(async (input: { orderId: string }, { durable }) => {
+    const ctx = durable.use();
+    await ctx.step("approve", async () => ({ approved: true }));
+    return { orderId: input.orderId, status: "approved" as const };
+  })
+  .build();
+
+const api = r
+  .resource("app.api")
+  .register([durable.with({ worker: false }), approveOrder])
+  .dependencies({ durable, approveOrder })
+  .init(async (_cfg, { durable, approveOrder }) => {
+    const app = express();
+    app.use(express.json());
+
+    app.post("/orders/:id/approve", async (req, res) => {
+      const executionId = await durable.start(approveOrder, {
+        orderId: req.params.id,
+      });
+      res.status(202).json({ executionId });
+    });
+
+    app.listen(3000);
+  })
+  .build();
+
+await run(api);
+```
 
 Recommended wiring (config-only resources):
 
@@ -64,8 +149,8 @@ const durableProd = redisDurableResource.fork("app.durable").with({
 
 ## Scheduling
 
-- One-time: `service.schedule(task, input, { at } | { delay })`
-- Recurring: `service.ensureSchedule(task, input, { id, cron } | { id, interval })`
+- One-time: `service.schedule(taskOrTaskId, input, { at } | { delay })`
+- Recurring: `service.ensureSchedule(taskOrTaskId, input, { id, cron } | { id, interval })`
 - Manage: `pauseSchedule/resumeSchedule/getSchedule/listSchedules/updateSchedule/removeSchedule`
 
 ## Recovery
@@ -81,9 +166,9 @@ const durableProd = redisDurableResource.fork("app.durable").with({
   - `store.listAuditEntries(executionId)` → timeline (step_completed, signal_waiting, signal_delivered, sleeps, status changes)
 - `new DurableOperator(store).getExecutionDetail(executionId)` returns `{ execution, steps, audit }`.
 
-There’s also a dashboard middleware: `createDashboardMiddleware(service, new DurableOperator(store), { operatorAuth })` (operator actions are denied unless `operatorAuth` is provided; opt out with `dangerouslyAllowUnauthenticatedOperator: true`).
+There's also a dashboard middleware: `createDashboardMiddleware(service, new DurableOperator(store), { operatorAuth })` (operator actions are denied unless `operatorAuth` is provided; opt out with `dangerouslyAllowUnauthenticatedOperator: true`).
 
-“Internal steps” are recorded steps created by durable primitives (`sleep/waitForSignal/emit` and some bookkeeping). They typically use reserved step id prefixes like `__...` or `rollback:...`.
+"Internal steps" are recorded steps created by durable primitives (`sleep/waitForSignal/emit` and some bookkeeping). They typically use reserved step id prefixes like `__...` or `rollback:...`.
 
 Audit can be enabled via `audit: { enabled: true }`; inside workflows you can add replay-safe notes via `ctx.note("msg", meta)`. In Runner integration, audit entries are also emitted via `durableEvents.*`.
 
@@ -155,11 +240,11 @@ Notes:
 - `DurableFlowShape` and all `FlowNode` types are exported for type-safe consumption.
 - Conditional logic should be modeled with `ctx.switch()` (not JS `if/else`) for the shape to capture it.
 
-## Versioning (don’t get burned)
+## Versioning (don't get burned)
 
-- Step ids are part of the durable contract: don’t rename/reorder casually.
+- Step ids are part of the durable contract: don't rename/reorder casually.
 - For breaking behavior changes, ship a **new workflow task id** (eg. `...v2`) and route new starts to it while v1 drains.
-- A “dispatcher/alias” task is great for _new starts_, but in-flight stability requires the version choice to be stable (don’t silently change behavior under the same durable task id).
+- A "dispatcher/alias" task is great for _new starts_, but in-flight stability requires the version choice to be stable (don't silently change behavior under the same durable task id).
 
 ## Operational notes
 

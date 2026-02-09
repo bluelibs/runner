@@ -7,6 +7,7 @@ import { createRunnerDurableRuntime } from "../core/createRunnerDurableRuntime";
 import { disposeDurableService } from "../core/DurableService";
 import { durableEventsArray } from "../events";
 import type { DurableResource } from "../core/DurableResource";
+import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
 
 export type MemoryDurableResourceConfig = Omit<
   RunnerDurableRuntimeConfig,
@@ -26,7 +27,7 @@ interface MemoryDurableResourceContext {
 
 export const memoryDurableResource = r
   .resource<MemoryDurableResourceConfig>("base.durable.memory")
-  .register(durableEventsArray)
+  .register([durableWorkflowTag, ...durableEventsArray])
   .dependencies({
     taskRunner: globals.resources.taskRunner,
     eventManager: globals.resources.eventManager,

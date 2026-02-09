@@ -2,9 +2,13 @@ import {
   IResource,
   RegisterableItems,
   ITag,
+  AnyTask,
   ITaskMiddleware,
   IResourceMiddleware,
   DependencyMapType,
+  TaggedTask,
+  TaggedResource,
+  AnyResource,
 } from "../defs";
 import { findCircularDependencies } from "./utils/findCircularDependencies";
 import { globalEventsArray } from "../globals/globalEvents";
@@ -429,8 +433,14 @@ export class Store {
    * @param tag - The tag to filter by.
    * @returns The tasks with the given tag.
    */
-  public getTasksWithTag(tag: string | ITag<any, any, any>) {
-    return this.registry.getTasksWithTag(tag);
+  public getTasksWithTag<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+  ): TaggedTask<TTag>[];
+  public getTasksWithTag(tag: string): AnyTask[];
+  public getTasksWithTag(tag: string | ITag<any, any, any>): AnyTask[] {
+    return typeof tag === "string"
+      ? this.registry.getTasksWithTag(tag)
+      : this.registry.getTasksWithTag(tag);
   }
 
   /**
@@ -438,7 +448,13 @@ export class Store {
    * @param tag - The tag to filter by.
    * @returns The resources with the given tag.
    */
-  public getResourcesWithTag(tag: string | ITag<any, any, any>) {
-    return this.registry.getResourcesWithTag(tag);
+  public getResourcesWithTag<TTag extends ITag<any, any, any>>(
+    tag: TTag,
+  ): TaggedResource<TTag>[];
+  public getResourcesWithTag(tag: string): AnyResource[];
+  public getResourcesWithTag(tag: string | ITag<any, any, any>): AnyResource[] {
+    return typeof tag === "string"
+      ? this.registry.getResourcesWithTag(tag)
+      : this.registry.getResourcesWithTag(tag);
   }
 }

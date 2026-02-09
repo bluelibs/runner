@@ -11,18 +11,39 @@ import {
 } from "../types/symbols";
 import { getCallerFile } from "../tools/getCallerFile";
 
-class RunnerError<
+const isValidHttpCode = (value: number): boolean =>
+  Number.isInteger(value) && value >= 100 && value <= 599;
+
+const assertHttpCode = (value: number): void => {
+  if (!isValidHttpCode(value)) {
+    throw new Error(
+      `Error httpCode must be an integer between 100 and 599. Received: ${value}`,
+    );
+  }
+};
+
+export class RunnerError<
   TData extends DefaultErrorType = DefaultErrorType,
 > extends Error {
   public readonly data!: TData;
+  public readonly httpCode?: number;
+  public readonly remediation?: string;
   constructor(
     public readonly id: string,
     message: string,
     data: TData,
+    httpCode?: number,
+    remediation?: string,
   ) {
-    super(message);
+    super(
+      remediation !== undefined
+        ? `${message}\n\nRemediation: ${remediation}`
+        : message,
+    );
     this.data = data;
     this.name = id;
+    this.httpCode = httpCode;
+    this.remediation = remediation;
   }
 }
 
@@ -40,13 +61,26 @@ export class ErrorHelper<
   get id(): string {
     return this.definition.id;
   }
+  get httpCode(): number | undefined {
+    return this.definition.httpCode;
+  }
   throw(data: TData): never {
     const parsed = this.definition.dataSchema
       ? this.definition.dataSchema.parse(data)
       : data;
 
     const message = this.definition.format(parsed);
-    throw new RunnerError(this.definition.id, message, parsed);
+    const remediation =
+      typeof this.definition.remediation === "function"
+        ? this.definition.remediation(parsed)
+        : this.definition.remediation;
+    throw new RunnerError(
+      this.definition.id,
+      message,
+      parsed,
+      this.definition.httpCode,
+      remediation,
+    );
   }
   is(error: unknown): error is RunnerError<TData> {
     return error instanceof RunnerError && error.name === this.definition.id;
@@ -68,6 +102,10 @@ export function defineError<TData extends DefaultErrorType = DefaultErrorType>(
   definition: IErrorDefinition<TData>,
   filePath?: string,
 ) {
+  if (definition.httpCode !== undefined) {
+    assertHttpCode(definition.httpCode);
+  }
+
   if (!definition.format) {
     definition.format = (data) => `${JSON.stringify(data)}`;
   }

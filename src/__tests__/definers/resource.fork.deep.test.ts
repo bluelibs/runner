@@ -1,4 +1,4 @@
-import { symbolResourceForkedFrom } from "../../defs";
+import { symbolForkedFrom } from "../../defs";
 import { isOptional, isResource, isResourceWithConfig } from "../../define";
 import { r, run } from "../../index";
 import {
@@ -49,7 +49,7 @@ describe("IResource.fork() (deep)", () => {
       throw new Error("Expected forked.dependencies to include child");
     }
     expect(deps.child.id).toBe(reId(child.id));
-    expect(forked[symbolResourceForkedFrom]?.fromId).toBe(base.id);
+    expect(forked[symbolForkedFrom]?.fromId).toBe(base.id);
 
     const app = r.resource("app").register([forked, sharedTask]).build();
     const runtime = await run(app);

@@ -4,7 +4,8 @@ We take the security of @bluelibs/runner seriously. This document explains how t
 
 ## Supported Versions
 
-- 4.x (current): security fixes accepted
+- 5.x (current stable): security fixes accepted
+- 4.x (maintenance LTS): critical security fixes accepted
 - Older versions: not actively supported — please upgrade
 
 ## Reporting a Vulnerability
@@ -53,4 +54,4 @@ This package is a framework/runtime library. Primary concerns include:
 
 ## Contact & Disclosure
 
-If you believe you’ve found a vulnerability, please do not open a public issue. Use the channels above for private disclosure. We will credit reporters who wish to be acknowledged.
+If you believe you've found a vulnerability, please do not open a public issue. Use the channels above for private disclosure. We will credit reporters who wish to be acknowledged.

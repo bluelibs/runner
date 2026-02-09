@@ -38,7 +38,10 @@ describe("durable: durableResource + fork + with (integration)", () => {
       .mockResolvedValue(Promise.resolve("ok"));
 
     const d = runtime.getResourceValue(durable);
-    await expect(d.execute(task)).resolves.toBe("ok");
+    await expect(d.startAndWait(task)).resolves.toEqual({
+      durable: { executionId: expect.any(String) },
+      data: "ok",
+    });
 
     spy.mockRestore();
     await runtime.dispose();
@@ -60,7 +63,9 @@ describe("durable: durableResource + fork + with (integration)", () => {
     const spy = jest.spyOn(taskRunner, "run").mockResolvedValue(undefined);
 
     const d = runtime.getResourceValue(durable);
-    await expect(d.execute(task)).rejects.toBeInstanceOf(DurableExecutionError);
+    await expect(d.startAndWait(task)).rejects.toBeInstanceOf(
+      DurableExecutionError,
+    );
 
     spy.mockRestore();
     await runtime.dispose();
@@ -174,7 +179,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const d = runtime.getResourceValue(durable);
 
-    const executionId = await d.startExecution(task, undefined, {
+    const executionId = await d.start(task, undefined, {
       timeout: 5_000,
       waitPollIntervalMs: 5,
     });
@@ -245,7 +250,7 @@ describe("durable: durableResource + fork + with (integration)", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const d = runtime.getResourceValue(durable);
 
-    const executionId = await d.startExecution(task, undefined, {
+    const executionId = await d.start(task, undefined, {
       timeout: 5_000,
       waitPollIntervalMs: 5,
     });

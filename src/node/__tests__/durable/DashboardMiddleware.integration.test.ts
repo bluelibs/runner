@@ -18,14 +18,12 @@ function createUnusedService(): IDurableService {
   };
 
   return {
-    startExecution: async () => unused(),
+    start: ((..._args: unknown[]) => unused()) as any,
     cancelExecution: async () => unused(),
     wait: async () => unused(),
-    execute: async () => unused(),
-    executeStrict: async () => unused(),
+    startAndWait: async () => unused(),
     schedule: async () => unused(),
     recover: async () => unused(),
-    start: () => unused(),
     stop: async () => unused(),
     pauseSchedule: async () => unused(),
     resumeSchedule: async () => unused(),

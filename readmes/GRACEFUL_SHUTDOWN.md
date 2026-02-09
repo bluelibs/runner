@@ -9,7 +9,7 @@
   - One global handler for `uncaughtException` and `unhandledRejection` that dispatches to all active runs.
   - One global handler for `SIGINT`/`SIGTERM` that dispatches to all active runs.
 - Each `run()` registers/unregisters to these global dispatchers. Calling `dispose()` will:
-  - Unregister the current run’s process/shutdown hook registrations
+  - Unregister the current run's process/shutdown hook registrations
   - Dispose initialized resources (idempotent)
 
 #### Basic usage

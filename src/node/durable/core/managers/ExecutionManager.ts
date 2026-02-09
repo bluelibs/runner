@@ -2,11 +2,12 @@ import type { IDurableStore } from "../interfaces/store";
 import type { IDurableQueue } from "../interfaces/queue";
 import type { IEventBus } from "../interfaces/bus";
 import type {
+  DurableStartAndWaitResult,
   DurableServiceConfig,
-  DurableTask,
   ExecuteOptions,
   ITaskExecutor,
 } from "../interfaces/service";
+import type { ITask } from "../../../../types/task";
 import { DurableAuditEntryKind } from "../audit";
 import {
   ExecutionStatus,
@@ -55,119 +56,165 @@ export class ExecutionManager {
     private readonly waitManager: WaitManager,
   ) {}
 
-  async startExecution<TInput>(
-    task: DurableTask<TInput, unknown>,
-    input?: TInput,
+  async start(
+    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
+    input?: unknown,
     options?: ExecuteOptions,
   ): Promise<string> {
+    const task = this.resolveTaskReference(taskRef, "start");
     this.taskRegistry.register(task);
+    this.assertCanExecute();
 
+    if (options?.idempotencyKey) {
+      return this.startWithIdempotencyKey(
+        task,
+        input,
+        options.idempotencyKey,
+        options,
+      );
+    }
+
+    const executionId = await this.persistNewExecution(task, input, options);
+    await this.kickoffWithFailsafe(executionId);
+    return executionId;
+  }
+
+  // ─── Idempotent start ──────────────────────────────────────────────────────
+
+  /**
+   * Start a workflow with deduplication: if the same (taskId, idempotencyKey)
+   * was already started, returns the existing executionId instead of creating
+   * a duplicate. Uses a distributed lock to prevent concurrent races.
+   */
+  private async startWithIdempotencyKey(
+    task: ITask<any, Promise<any>, any, any, any, any>,
+    input: unknown | undefined,
+    idempotencyKey: string,
+    options: ExecuteOptions | undefined,
+  ): Promise<string> {
+    this.assertStoreSupportsIdempotency();
+
+    return this.withIdempotencyLock(task.id, idempotencyKey, async () => {
+      // Fast path: key already claimed by a previous caller
+      const existingId = await this.config.store
+        .getExecutionIdByIdempotencyKey!({
+        taskId: task.id,
+        idempotencyKey,
+      });
+      if (existingId) return existingId;
+
+      // Claim the key for a new execution
+      const executionId = createExecutionId();
+      const claimed = await this.config.store.setExecutionIdByIdempotencyKey!({
+        taskId: task.id,
+        idempotencyKey,
+        executionId,
+      });
+
+      if (!claimed) {
+        return this.resolveRacedIdempotencyKey(task.id, idempotencyKey);
+      }
+
+      await this.persistNewExecution(task, input, options, executionId);
+      await this.kickoffExecution(executionId);
+      return executionId;
+    });
+  }
+
+  private assertCanExecute(): void {
     if (!this.config.queue && !this.config.taskExecutor) {
       throw new Error(
         "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use `durableResource.fork(...).with(...)` in a Runner runtime, or provide a custom executor in config.",
       );
     }
+  }
 
-    const idempotencyKey = options?.idempotencyKey;
-    if (idempotencyKey) {
-      if (
-        !this.config.store.getExecutionIdByIdempotencyKey ||
-        !this.config.store.setExecutionIdByIdempotencyKey
-      ) {
-        throw new Error(
-          "Durable store does not support execution idempotency keys. Implement getExecutionIdByIdempotencyKey/setExecutionIdByIdempotencyKey on the store to use ExecuteOptions.idempotencyKey.",
-        );
-      }
+  private assertStoreSupportsIdempotency(): void {
+    if (
+      !this.config.store.getExecutionIdByIdempotencyKey ||
+      !this.config.store.setExecutionIdByIdempotencyKey
+    ) {
+      throw new Error(
+        "Durable store does not support execution idempotency keys. Implement getExecutionIdByIdempotencyKey/setExecutionIdByIdempotencyKey on the store to use ExecuteOptions.idempotencyKey.",
+      );
+    }
+  }
 
-      const lockTtlMs = 10_000;
-      const lockResource = `idempotency:${task.id}:${idempotencyKey}`;
-      const canLock =
-        !!this.config.store.acquireLock && !!this.config.store.releaseLock;
+  /**
+   * Acquires a distributed lock around the idempotency check-and-set,
+   * falling back to lock-free operation when the store has no locking support.
+   */
+  private async withIdempotencyLock<T>(
+    taskId: string,
+    idempotencyKey: string,
+    fn: () => Promise<T>,
+  ): Promise<T> {
+    const canLock =
+      !!this.config.store.acquireLock && !!this.config.store.releaseLock;
+    if (!canLock) return fn();
 
-      let lockId: string | null = null;
-      if (canLock) {
-        const maxAttempts = 50;
-        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-          lockId = await this.config.store.acquireLock!(
-            lockResource,
-            lockTtlMs,
-          );
-          if (lockId !== null) break;
-          await sleepMs(5);
-        }
-        if (lockId === null) {
-          throw new Error(
-            `Failed to acquire idempotency lock for '${task.id}:${idempotencyKey}'`,
-          );
-        }
-      }
+    const lockResource = `idempotency:${taskId}:${idempotencyKey}`;
+    const lockTtlMs = 10_000;
+    const maxAttempts = 50;
 
-      try {
-        const existing = await this.config.store.getExecutionIdByIdempotencyKey(
-          {
-            taskId: task.id,
-            idempotencyKey,
-          },
-        );
-        if (existing) return existing;
-
-        const executionId = createExecutionId();
-        const setOk = await this.config.store.setExecutionIdByIdempotencyKey({
-          taskId: task.id,
-          idempotencyKey,
-          executionId,
-        });
-
-        if (!setOk) {
-          const raced = await this.config.store.getExecutionIdByIdempotencyKey({
-            taskId: task.id,
-            idempotencyKey,
-          });
-          if (raced) return raced;
-          throw new Error(
-            "Failed to set idempotency mapping but no existing mapping found.",
-          );
-        }
-
-        const execution: Execution<TInput, unknown> = {
-          id: executionId,
-          taskId: task.id,
-          input,
-          status: ExecutionStatus.Pending,
-          attempt: 1,
-          maxAttempts: this.config.execution?.maxAttempts ?? 3,
-          timeout: options?.timeout ?? this.config.execution?.timeout,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-
-        await this.config.store.saveExecution(execution);
-        await this.auditLogger.log({
-          kind: DurableAuditEntryKind.ExecutionStatusChanged,
-          executionId,
-          taskId: task.id,
-          attempt: execution.attempt,
-          from: null,
-          to: ExecutionStatus.Pending,
-          reason: "created",
-        });
-
-        await this.kickoffExecution(executionId);
-        return executionId;
-      } finally {
-        if (canLock && lockId !== null) {
-          try {
-            await this.config.store.releaseLock!(lockResource, lockId);
-          } catch {
-            // best-effort cleanup; ignore
-          }
-        }
-      }
+    let lockId: string | null = null;
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+      lockId = await this.config.store.acquireLock!(lockResource, lockTtlMs);
+      if (lockId !== null) break;
+      await sleepMs(5);
     }
 
-    const executionId = createExecutionId();
-    const execution: Execution<TInput, unknown> = {
-      id: executionId,
+    if (lockId === null) {
+      throw new Error(
+        `Failed to acquire idempotency lock for '${taskId}:${idempotencyKey}'`,
+      );
+    }
+
+    try {
+      return await fn();
+    } finally {
+      try {
+        await this.config.store.releaseLock!(lockResource, lockId);
+      } catch {
+        // best-effort cleanup; ignore
+      }
+    }
+  }
+
+  /**
+   * Recovery path: `setExecutionIdByIdempotencyKey` returned false (another
+   * writer won the race), so we re-read the mapping to get their executionId.
+   */
+  private async resolveRacedIdempotencyKey(
+    taskId: string,
+    idempotencyKey: string,
+  ): Promise<string> {
+    const racedId = await this.config.store.getExecutionIdByIdempotencyKey!({
+      taskId,
+      idempotencyKey,
+    });
+    if (racedId) return racedId;
+
+    throw new Error(
+      "Failed to set idempotency mapping but no existing mapping found.",
+    );
+  }
+
+  // ─── Execution persistence ─────────────────────────────────────────────────
+
+  /**
+   * Creates a new execution record, persists it to the store, and logs an
+   * audit entry. Returns the executionId.
+   */
+  private async persistNewExecution(
+    task: ITask<any, Promise<any>, any, any, any, any>,
+    input: unknown | undefined,
+    options: ExecuteOptions | undefined,
+    executionId?: string,
+  ): Promise<string> {
+    const id = executionId ?? createExecutionId();
+    const execution: Execution<unknown, unknown> = {
+      id,
       taskId: task.id,
       input,
       status: ExecutionStatus.Pending,
@@ -181,7 +228,7 @@ export class ExecutionManager {
     await this.config.store.saveExecution(execution);
     await this.auditLogger.log({
       kind: DurableAuditEntryKind.ExecutionStatusChanged,
-      executionId,
+      executionId: id,
       taskId: task.id,
       attempt: execution.attempt,
       from: null,
@@ -189,37 +236,42 @@ export class ExecutionManager {
       reason: "created",
     });
 
-    const kickoffTimerId = `kickoff:${executionId}`;
-    const kickoffFailsafeDelayMs =
-      this.config.execution?.kickoffFailsafeDelayMs ?? 10_000;
-    const shouldArmKickoffFailsafe =
-      Boolean(this.config.queue) && kickoffFailsafeDelayMs > 0;
+    return id;
+  }
 
-    if (shouldArmKickoffFailsafe) {
+  /**
+   * Kicks off an execution with a failsafe timer for queue mode.
+   * If the queue enqueue succeeds, the timer is cleaned up immediately.
+   * If enqueue fails, the timer remains so the polling loop can retry later.
+   */
+  private async kickoffWithFailsafe(executionId: string): Promise<void> {
+    const failsafeDelayMs =
+      this.config.execution?.kickoffFailsafeDelayMs ?? 10_000;
+    const shouldArmFailsafe = Boolean(this.config.queue) && failsafeDelayMs > 0;
+
+    if (shouldArmFailsafe) {
+      const timerId = `kickoff:${executionId}`;
       await this.config.store.createTimer({
-        id: kickoffTimerId,
+        id: timerId,
         executionId,
         type: TimerType.Retry,
-        fireAt: new Date(Date.now() + kickoffFailsafeDelayMs),
+        fireAt: new Date(Date.now() + failsafeDelayMs),
         status: TimerStatus.Pending,
       });
-    }
 
-    try {
+      // If kickoffExecution throws (eg. broker outage), the failsafe timer
+      // stays in the store so the polling loop can retry.
       await this.kickoffExecution(executionId);
-      if (shouldArmKickoffFailsafe) {
-        try {
-          await this.config.store.deleteTimer(kickoffTimerId);
-        } catch {
-          // Best-effort cleanup; ignore.
-        }
+
+      try {
+        await this.config.store.deleteTimer(timerId);
+      } catch {
+        // Best-effort timer cleanup; ignore.
       }
-    } catch (error) {
-      // If enqueue fails, keep the failsafe timer so the poller can retry.
-      throw error;
+      return;
     }
 
-    return executionId;
+    await this.kickoffExecution(executionId);
   }
 
   async cancelExecution(executionId: string, reason?: string): Promise<void> {
@@ -261,25 +313,20 @@ export class ExecutionManager {
     });
   }
 
-  async execute<TInput, TResult>(
-    task: DurableTask<TInput, TResult>,
-    input?: TInput,
+  async startAndWait(
+    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
+    input?: unknown,
     options?: ExecuteOptions,
-  ): Promise<TResult> {
-    const executionId = await this.startExecution(task, input, options);
-    return await this.waitManager.waitForResult<TResult>(executionId, {
+  ): Promise<DurableStartAndWaitResult<unknown>> {
+    const executionId = await this.start(taskRef, input, options);
+    const data = await this.waitManager.waitForResult(executionId, {
       timeout: options?.timeout,
       waitPollIntervalMs: options?.waitPollIntervalMs,
     });
-  }
-
-  async executeStrict<TInput, TResult>(
-    task: undefined extends TResult ? never : DurableTask<TInput, TResult>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<TResult> {
-    const actualTask: DurableTask<TInput, TResult> = task;
-    return await this.execute(actualTask, input, options);
+    return {
+      durable: { executionId },
+      data,
+    };
   }
 
   async processExecution(executionId: string): Promise<void> {
@@ -360,7 +407,7 @@ export class ExecutionManager {
 
   private async runExecutionAttempt(
     execution: Execution<unknown, unknown>,
-    task: DurableTask<unknown, unknown>,
+    task: ITask<unknown, Promise<unknown>, any, any, any, any>,
   ): Promise<void> {
     const isCancelled = async (): Promise<boolean> => {
       const current = await this.config.store.getExecution(execution.id);
@@ -529,5 +576,22 @@ export class ExecutionManager {
         reason: "retry_scheduled",
       });
     }
+  }
+
+  private resolveTaskReference(
+    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
+    apiMethod: string,
+  ): ITask<any, Promise<any>, any, any, any, any> {
+    if (typeof taskRef !== "string") {
+      return taskRef;
+    }
+
+    const resolved = this.taskRegistry.find(taskRef);
+    if (!resolved) {
+      throw new Error(
+        `DurableService.${apiMethod}() could not resolve task id "${taskRef}". Ensure the task is registered in the runtime store.`,
+      );
+    }
+    return resolved;
   }
 }

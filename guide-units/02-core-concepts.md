@@ -255,7 +255,7 @@ Key points:
 - **`.fork()` returns a built `IResource`** - no need to call `.build()` again
 - **Tags, middleware, and type parameters are inherited**
 - **Each fork gets independent runtime** - no shared state
-- **`register` defaults to `"keep"`**; use `"drop"` for leaf resources or `"deep"` when you want cloned *registered resources* (resource tree)
+- **`register` defaults to `"keep"`**; use `"drop"` for leaf resources or `"deep"` when you want cloned _registered resources_ (resource tree)
 - **Export forked resources** to use them as typed dependencies
 
 #### Optional Dependencies
@@ -549,7 +549,7 @@ const emergencyHook = r
   .build();
 ```
 
-> **runtime:** "'A really good office messenger.' That’s me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
+> **runtime:** "'A really good office messenger.' That's me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
 
 ### Middleware
 
@@ -1041,7 +1041,7 @@ const profileTask = r
 
 ### Errors
 
-Typed errors can be declared once and injected anywhere. Register them alongside other items and consume via dependencies. The injected value is the error helper itself, exposing `.throw()`, `.is()`, `.toString()`, and `id`.
+Typed errors can be declared once and injected anywhere. Register them alongside other items and consume via dependencies. The injected value is the error helper itself, exposing `.throw()`, `.is()`, `id`, and optional `httpCode`.
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -1049,7 +1049,10 @@ import { r } from "@bluelibs/runner";
 // Fluent builder for errors
 const userNotFoundError = r
   .error<{ code: number; message: string }>("app.errors.userNotFound")
+  .httpCode(404)
   .dataSchema(z.object({ ... }))
+  .format((d) => `[${d.code}] ${d.message}`)
+  .remediation("Verify the user ID exists before calling getUser.")
   .build();
 
 const getUser = r
@@ -1063,18 +1066,60 @@ const getUser = r
 const app = r.resource("app").register([userNotFoundError, getUser]).build();
 ```
 
-Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.
+The thrown `Error` has `name = id`. By default `message` is `JSON.stringify(data)`, but `.format(data => string)` lets you craft a human-friendly message instead. When `.remediation()` is provided, the fix-it advice is appended to `message` and `toString()`, and is also accessible as `error.remediation`. If you set `.httpCode(...)`, the helper and thrown error expose `httpCode`.
 
 ```ts
 try {
   userNotFoundError.throw({ code: 404, message: "User not found" });
 } catch (err) {
   if (userNotFoundError.is(err)) {
-    // err.name === "app.errors.userNotFound", err.message === "User not found"
+    // err.name      === "app.errors.userNotFound"
+    // err.message   === "[404] User not found\n\nRemediation: Verify the user ID exists before calling getUser."
+    // err.httpCode  === 404
+    // err.remediation === "Verify the user ID exists before calling getUser."
+    // userNotFoundError.httpCode === 404
     console.log(`Caught error: ${err.name} - ${err.message}`);
   }
 }
 ```
+
+**Remediation** can also be a function when the advice depends on the error data:
+
+```ts
+const quotaExceeded = r
+  .error<{ limit: number; message: string }>("app.errors.QuotaExceeded")
+  .format((d) => d.message)
+  .remediation(
+    (d) => `Current limit is ${d.limit}. Upgrade your plan or reduce usage.`,
+  )
+  .build();
+```
+
+**Check for any Runner error (not just a specific one):**
+
+Use `r.error.is(error)` to detect whether an error is any Runner error, regardless of its specific type. This is useful in catch blocks, middleware, or error filters when you want to handle all Runner errors differently from standard JavaScript errors:
+
+```ts
+import { r } from "@bluelibs/runner";
+
+try {
+  // Some operation that might throw various errors
+  await riskyOperation();
+} catch (err) {
+  if (r.error.is(err)) {
+    // It's a Runner error - has id, data, httpCode, remediation
+    console.error(`Runner error: ${err.id} (${err.httpCode || "N/A"})`);
+    if (err.remediation) {
+      console.log(`Fix: ${err.remediation}`);
+    }
+  } else {
+    // It's a standard JavaScript error or other type
+    console.error("Unexpected error:", err);
+  }
+}
+```
+
+The `r.error.is()` type guard narrows the error to `RunnerError`, giving you access to `id`, `data`, `httpCode`, and `remediation`. You can also use `instanceof RunnerError` directly if you prefer, but `r.error.is()` is more consistent with the fluent API.
 
 ---
 

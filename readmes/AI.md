@@ -85,7 +85,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 Use `.fork(newId, { register, reId })` to clone a resource definition under a new id (handy for multi-instance patterns).
 Forks keep the same implementation/types but get separate runtime instances (no shared state). Use `register: "drop"` to clear registered items, or `register: "deep"` to deep-fork **registered resources** (resource tree) with new ids (non-resource registerables are not cloned/kept).
 Prefer exporting forks so other tasks/resources can depend on them.
-Forked resources also expose provenance at `[definitions.symbolResourceForkedFrom]` (`fromId`, `forkedAtFilePath`) for tooling/debugging.
+Forked resources expose provenance at `[definitions.symbolForkedFrom]` (`fromId`) for tooling/debugging.
 
 ## Tasks
 
@@ -204,7 +204,7 @@ const cacheResources = r.middleware
 
 Attach middleware using `.middleware([auditTasks])` on the definition that owns it, and register the middleware alongside the target resource or task at the root.
 
-- Contract middleware: middleware can declare `Config`, `Input`, `Output` generics; tasks using it must conform (contracts intersect across `.middleware([...])` and `.tags([...])`). Collisions surface as `InputContractViolationError` / `OutputContractViolationError` in TypeScript; if you add `.inputSchema()`, ensure the schema’s inferred type includes the contract shape.
+- Contract middleware: middleware can declare `Config`, `Input`, `Output` generics; tasks using it must conform (contracts intersect across `.middleware([...])` and `.tags([...])`). Collisions surface as `InputContractViolationError` / `OutputContractViolationError` in TypeScript; if you add `.inputSchema()`, ensure the schema's inferred type includes the contract shape.
 
 ```ts
 type AuthConfig = { requiredRole: string };
@@ -279,7 +279,9 @@ const getHealth = r
 
 Retrieve tagged items by using `globals.resources.store` inside a hook or resource and calling `store.getTasksWithTag(tag)`.
 
-- Contract tags (a “smart tag”): define type contracts for task input/output (or resource config/value) via `r.tag<TConfig, TInputContract, TOutputContract>(id)`. They don’t change runtime behavior; they shape the inferred types and compose with contract middleware.
+**Node durable workflows must be tagged** with `durableWorkflowTag` from `@bluelibs/runner/node` to be discoverable via `durable.getWorkflows()` at runtime. This tag is required, not optional. Workflow execution is explicit via the durable API (`durable.start(...)` / `durable.startAndWait(...)`). The tag is discovery metadata only; `startAndWait(...)` provides the unified result envelope `{ durable: { executionId }, data }`.
+
+- Contract tags (a "smart tag"): define type contracts for task input/output (or resource config/value) via `r.tag<TConfig, TInputContract, TOutputContract>(id)`. They don't change runtime behavior; they shape the inferred types and compose with contract middleware.
 - Smart tags: built-in tags like `globals.tags.system`, `globals.tags.debug`, and `globals.tags.excludeFromGlobalHooks` change framework behavior; use them for per-component debug or to opt out of global hooks.
 
 ```ts
@@ -325,7 +327,7 @@ r.task("task").middleware([requestContext.require()]);
 - `.configSchema(schema)` (optional) validates the value passed to `provide(...)`.
 - If you don't provide `serialize`/`parse`, Runner uses its default serializer to preserve Dates, RegExp, etc.
 - You can also inject async contexts as dependencies; the injected value is the helper itself. Contexts must be registered to be used.
-- Optional dependencies: `dependencies({ requestContext: requestContext.optional() })` injects `undefined` if the context isn’t registered.
+- Optional dependencies: `dependencies({ requestContext: requestContext.optional() })` injects `undefined` if the context isn't registered.
 
 ```ts
 const whoAmI = r
@@ -347,22 +349,36 @@ import { r } from "@bluelibs/runner";
 // Fluent builder
 const AppError = r
   .error<{ code: number; message: string }>("app.errors.AppError")
+  .httpCode(400)
   .dataSchema({ parse: (value) => value })
+  .format((d) => `[${d.code}] ${d.message}`)
+  .remediation("Check the request payload and retry with valid data.")
   .build();
 
 try {
   AppError.throw({ code: 400, message: "Oops" });
 } catch (err) {
   if (AppError.is(err)) {
-    // Do something
+    // err.message -> "[400] Oops\n\nRemediation: Check the request payload and retry with valid data."
+    // err.httpCode -> 400
+    // err.remediation -> "Check the request payload and retry with valid data."
+    // AppError.httpCode -> 400
   }
 }
 ```
 
 - Recommended ids: `{domain}.errors.{PascalCaseName}` (for example: `app.errors.InvalidCredentials`).
-- The thrown `Error` has `name = id` and `message = format(data)`. If you don’t provide `.format(...)`, the default is `JSON.stringify(data)`.
+- The thrown `Error` has `name = id` and `message = format(data)`. If you don't provide `.format(...)`, the default is `JSON.stringify(data)`.
+- `.httpCode(number)` sets an HTTP status for the error helper (must be an integer in `100..599`). The helper exposes `helper.httpCode`, and thrown typed errors expose `error.httpCode`.
+- `.remediation(stringOrFn)` attaches fix-it advice. Accepts a static string or `(data) => string`. When present, `error.message` and `error.toString()` include `\n\nRemediation: <advice>`. The raw advice is also available via `error.remediation`.
 - `message` is not required in the data unless your custom formatter expects it.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
+- Use `r.error.is(err)` to check if an error is _any_ Runner error (not just a specific one). This type guard narrows to `RunnerError` with `id`, `data`, `httpCode`, and `remediation` properties. Useful in catch blocks or error filters:
+  ```ts
+  if (r.error.is(err)) {
+    console.error(`Runner error: ${err.id} (${err.httpCode || "N/A"})`);
+  }
+  ```
 - For HTTP/tunnel clients, you can pass an `errorRegistry` to rethrow remote errors as your typed helpers (optional):
 
   ```ts
@@ -405,7 +421,7 @@ const app = r
 
 - `run(root, options)` wires dependencies, initializes resources, and returns helpers: `runTask`, `emitEvent`, `getResourceValue`, `getResourceConfig`, `store`, `logger`, and `dispose`.
 - Run options highlights: `debug` (normal/verbose or custom config), `logs` (printThreshold/strategy/buffer), `errorBoundary` and `onUnhandledError`, `shutdownHooks`, `dryRun`.
-- Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime (runs inside middleware; won’t run if middleware short-circuits).
+- Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime (runs inside middleware; won't run if middleware short-circuits).
 - Shutdown hooks: install signal listeners to call `dispose` (default in `run`).
 - Unhandled errors: `onUnhandledError` receives a structured context (kind and source) for telemetry or controlled shutdown.
 
@@ -457,7 +473,7 @@ const app = r
 
 Tunnels let you call Runner tasks/events across a process boundary over a small HTTP surface (Node-only exposure via `nodeExposure`), while preserving task ids, middleware, validation, typed errors, and async context.
 
-For “no call-site changes”, register a client-mode tunnel resource tagged with `globals.tags.tunnel` plus phantom tasks for the remote ids; the tunnel middleware auto-routes selected tasks/events to an HTTP client. For explicit boundaries, create a client once and call `client.task(id, input)` / `client.event(id, payload)` directly. Full guide: `readmes/TUNNELS.md`.
+For "no call-site changes", register a client-mode tunnel resource tagged with `globals.tags.tunnel` plus phantom tasks for the remote ids; the tunnel middleware auto-routes selected tasks/events to an HTTP client. For explicit boundaries, create a client once and call `client.task(id, input)` / `client.event(id, payload)` directly. Full guide: `readmes/TUNNELS.md`.
 
 Node client note: prefer `createHttpMixedClient` (it uses the serialized-JSON path via Runner `Serializer` + `fetch` when possible and switches to the streaming-capable Smart path when needed). If a task may return a stream even for plain JSON inputs (ex: downloads), set `forceSmart` on Mixed (or use `createHttpSmartClient` directly).
 
@@ -500,7 +516,7 @@ const serializerSetup = r
 
 Use `new Serializer()` when you need a standalone instance outside DI.
 
-Note on files: The “File” you see in tunnels is not a custom serializer type. Runner uses a dedicated `$runnerFile: "File"` sentinel in inputs which the tunnel client/server convert to multipart streams via a manifest. File handling is performed by the tunnel layer (manifest hydration and multipart), not by the serializer. Keep using `createWebFile`/`createNodeFile` for uploads.
+Note on files: The "File" you see in tunnels is not a custom serializer type. Runner uses a dedicated `$runnerFile: "File"` sentinel in inputs which the tunnel client/server convert to multipart streams via a manifest. File handling is performed by the tunnel layer (manifest hydration and multipart), not by the serializer. Keep using `createWebFile`/`createNodeFile` for uploads.
 
 ## Testing
 

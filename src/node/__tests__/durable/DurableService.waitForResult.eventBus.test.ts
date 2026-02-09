@@ -147,7 +147,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
       tasks: [task],
     });
 
-    const id = await service.startExecution(task);
+    const id = await service.start(task);
 
     const waitPromise = service.wait<string>(id, {
       timeout: 5_000,

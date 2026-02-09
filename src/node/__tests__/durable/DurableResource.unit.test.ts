@@ -6,6 +6,7 @@ import type { IDurableService } from "../../durable/core/interfaces/service";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { event, r } from "../../..";
+import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
 
 /**
  * Creates a mock IDurableService for testing. Uses properly-typed functions
@@ -21,10 +22,9 @@ function createMockService(
     : <T>(val: T) => jest.fn(async () => val);
 
   return {
-    startExecution: mockFn("e1"),
+    start: mockFn("e1"),
     wait: mockFn("ok"),
-    execute: mockFn("ok"),
-    executeStrict: mockFn("ok"),
+    startAndWait: mockFn({ durable: { executionId: "e1" }, data: "ok" }),
     schedule: mockFn("sched1"),
     ensureSchedule: mockFn("sched1"),
     pauseSchedule: mockFn(undefined),
@@ -35,7 +35,6 @@ function createMockService(
     removeSchedule: mockFn(undefined),
     recover: mockFn(undefined),
     signal: mockFn(undefined),
-    start: jest.fn(),
     stop: mockFn(undefined),
     // Cast is necessary because generic methods like wait<TResult>() can't be
     // satisfied by a mock returning a concrete type - this is a known TypeScript limitation
@@ -95,6 +94,52 @@ describe("durable: DurableResource", () => {
     );
   });
 
+  it("throws when getWorkflows() is called without runner store", () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+    const durable = new DurableResource(service, storage);
+
+    expect(() => durable.getWorkflows()).toThrow(
+      "Durable workflow discovery is not available: runner store was not provided to DurableResource.",
+    );
+  });
+
+  it("getWorkflows() returns tasks tagged with durable.workflow", () => {
+    const service = createMockService();
+    const storage = new AsyncLocalStorage<IDurableContext>();
+
+    const taggedTask = r
+      .task("durable.tests.resource.tagged")
+      .tags([durableWorkflowTag.with({ category: "orders" })])
+      .run(async () => "ok")
+      .build();
+
+    const untaggedTask = r
+      .task("durable.tests.resource.untagged")
+      .run(async () => "ok")
+      .build();
+
+    const runnerStore = {
+      getTasksWithTag: jest
+        .fn()
+        .mockImplementation((tag) =>
+          tag.id === durableWorkflowTag.id ? [taggedTask] : [untaggedTask],
+        ),
+    } as any;
+
+    const durable = new DurableResource(
+      service,
+      storage,
+      undefined,
+      runnerStore,
+    );
+
+    expect(durable.getWorkflows()).toEqual([taggedTask]);
+    expect(runnerStore.getTasksWithTag).toHaveBeenCalledWith(
+      durableWorkflowTag,
+    );
+  });
+
   it("throws when describe() is called and dependencies are missing in runner store", async () => {
     const service = createMockService();
     const storage = new AsyncLocalStorage<IDurableContext>();
@@ -132,28 +177,60 @@ describe("durable: DurableResource", () => {
       id: "durable.tests.resource.signal",
     });
 
-    expect(await durable.startExecution(task, { a: 1 })).toBe("e1");
-    expect(service.startExecution).toHaveBeenCalledWith(
-      task,
-      { a: 1 },
-      undefined,
-    );
+    expect(await durable.start(task, { a: 1 })).toBe("e1");
+    expect(service.start).toHaveBeenCalledWith(task, { a: 1 }, undefined);
+    expect(await durable.start(task.id, { a: 2 })).toBe("e1");
+    expect(service.start).toHaveBeenCalledWith(task.id, { a: 2 }, undefined);
 
     expect(await durable.wait<string>("e1")).toBe("ok");
     expect(service.wait).toHaveBeenCalledWith("e1", undefined);
 
-    expect(await durable.execute(task, { a: 1 })).toBe("ok");
-    expect(service.execute).toHaveBeenCalledWith(task, { a: 1 }, undefined);
-
-    expect(await durable.executeStrict(task, { a: 1 })).toBe("ok");
-    expect(service.executeStrict).toHaveBeenCalledWith(
+    expect(await durable.startAndWait(task, { a: 1 })).toEqual({
+      durable: { executionId: "e1" },
+      data: "ok",
+    });
+    expect(service.startAndWait).toHaveBeenCalledWith(
       task,
       { a: 1 },
+      undefined,
+    );
+    expect(await durable.startAndWait(task.id, { a: 2 })).toEqual({
+      durable: { executionId: "e1" },
+      data: "ok",
+    });
+    expect(service.startAndWait).toHaveBeenCalledWith(
+      task.id,
+      { a: 2 },
       undefined,
     );
 
     expect(await durable.schedule(task, { a: 1 }, { delay: 1 })).toBe("sched1");
     expect(service.schedule).toHaveBeenCalledWith(task, { a: 1 }, { delay: 1 });
+    expect(await durable.schedule(task.id, { a: 2 }, { delay: 2 })).toBe(
+      "sched1",
+    );
+    expect(service.schedule).toHaveBeenCalledWith(
+      task.id,
+      { a: 2 },
+      {
+        delay: 2,
+      },
+    );
+    expect(
+      await durable.ensureSchedule(
+        task.id,
+        { a: 3 },
+        { id: "s1", interval: 1 },
+      ),
+    ).toBe("sched1");
+    expect(service.ensureSchedule).toHaveBeenCalledWith(
+      task.id,
+      { a: 3 },
+      {
+        id: "s1",
+        interval: 1,
+      },
+    );
 
     await durable.pauseSchedule("s1");
     expect(service.pauseSchedule).toHaveBeenCalledWith("s1");

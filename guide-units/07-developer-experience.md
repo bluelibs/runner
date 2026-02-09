@@ -319,3 +319,69 @@ function withLogging<T extends ITask<any, Promise<any>, any>>(task: T) {
 | `ExtractEventPayload<T>`   | Payload type     | Event    |
 
 > **runtime:** "Type helpers: TypeScript's 'I told you so' toolkit. You extract the input type from a task, slap it on an API handler, and suddenly your frontend and backend are sworn blood brothers. Until someone uses `as any`. Then I cry."
+
+## Runner Dev Tools Quick Start
+
+Runner Dev Tools (`@bluelibs/runner-dev`) turns your runtime into an inspectable, queryable, and scriptable system while your app is running.
+
+If Runner gives you explicit wiring, Runner Dev Tools gives you visibility and control over that wiring in real time.
+
+### Why teams use it
+
+- **Visual DevTools UI**: inspect topology, call tasks, emit events, and debug behavior from the browser
+- **GraphQL introspection API**: query tasks/resources/events/middleware/dependencies programmatically
+- **Live telemetry**: stream logs, emissions, errors, and task runs with correlation-aware diagnostics
+- **Scaffolding CLI**: bootstrap projects and generate resources/tasks/events/tags/middleware quickly
+- **Dry-run query mode**: introspect local TypeScript entry files without running a server
+- **MCP server mode**: let AI tools query your runtime safely through a standard protocol
+- **Hot-swap debugging (dev-focused)**: replace task run functions temporarily to investigate edge cases quickly
+
+### Install
+
+```bash
+npm install -g @bluelibs/runner-dev
+# or run without global install
+npx @bluelibs/runner-dev --help
+```
+
+### Common CLI commands
+
+```bash
+# Scaffold a new Runner project
+runner-dev new my-app --install
+
+# Scaffold a task artifact
+runner-dev new task create-user --ns app.users --dir src --export
+
+# Query a local TypeScript entry in dry-run mode (no server)
+runner-dev query 'query { tasks { id } }' --entry-file ./src/main.ts
+
+# Generate a runtime overview from a live endpoint
+ENDPOINT=http://localhost:1337/graphql runner-dev overview --details 10
+
+# Start MCP bridge for AI tooling
+ENDPOINT=http://localhost:1337/graphql npx -y @bluelibs/runner-dev mcp
+```
+
+### Runtime integration
+
+Register `dev` in your app to expose the Dev UI and GraphQL endpoint:
+
+```ts
+import { r } from "@bluelibs/runner";
+import { dev } from "@bluelibs/runner-dev";
+
+const app = r
+  .resource("app")
+  .register([
+    dev.with({
+      port: 1337,
+      maxEntries: 1000,
+    }),
+  ])
+  .build();
+```
+
+When running, open `http://localhost:1337` for the visual DevTools.
+
+> **Note:** Runner Dev Tools is intended for development and controlled environments. Treat it as privileged operational access.

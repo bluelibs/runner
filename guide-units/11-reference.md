@@ -231,7 +231,7 @@ After reading this far, here's what you've learned:
 - **Performance**: Middleware overhead is ~0.00026ms. Tests run in milliseconds
 - **Batteries included**: Caching, retry, timeouts, events, logging—all built in
 
-> **runtime:** "Why choose it? The bullets are persuasive. Keep your tasks small and your dependencies explicit, and the code stays tidy. Ignore the types and I can’t save you—but I’ll still log the crash with impeccable manners."
+> **runtime:** "Why choose it? The bullets are persuasive. Keep your tasks small and your dependencies explicit, and the code stays tidy. Ignore the types and I can't save you—but I'll still log the crash with impeccable manners."
 
 ## The Migration Path
 
@@ -265,7 +265,85 @@ await run(app);
 
 Repeat. Gradually, your spaghetti becomes lasagna.
 
-> **runtime:** "'No big bang rewrites.' Start with one resource and one task, then migrate incrementally. I’ll keep the wiring honest while you refactor—one small, reversible step at a time."
+> **runtime:** "'No big bang rewrites.' Start with one resource and one task, then migrate incrementally. I'll keep the wiring honest while you refactor—one small, reversible step at a time."
+
+## Release, Support, and Deprecation Policy
+
+Use these links as the canonical upgrade entrypoints:
+
+- [GitHub Releases](https://github.com/bluelibs/runner/releases) - tagged releases and release assets
+- [Enterprise Policy](./readmes/ENTERPRISE.md) - support windows and governance
+
+Current support channels:
+
+- **Stable**: `5.x` (current feature line)
+- **Maintenance/LTS**: `4.x` (critical fixes only)
+
+### Deprecation lifecycle
+
+When a public API is deprecated, use this lifecycle:
+
+| Stage             | What Happens                                                        | Removal |
+| ----------------- | ------------------------------------------------------------------- | ------- |
+| **Announced**     | Release note entry + docs note with replacement path                | No      |
+| **Warned**        | Deprecated marker in docs/types and migration recommendation        | No      |
+| **Removed**       | Removed in next allowed major with migration notes in release notes | Yes     |
+
+If a behavior changes without breaking types (for example default values), document it in your release notes.
+
+## Production Readiness Checklist
+
+Use this list before promoting a Runner app to production:
+
+### Build and Runtime
+
+- Pin Node to a supported LTS line (`>=18`)
+- Build in CI with `npm run qa`
+- Run from compiled output (no ts-node in production path)
+
+### Security
+
+- Configure exposure auth for tunnels (`http.auth`) and avoid anonymous exposure
+- Use allow-lists for remotely callable task/event ids
+- Set payload limits for JSON/multipart traffic
+- Review logs for sensitive data before enabling external sinks
+
+### Reliability
+
+- Define timeout/retry/circuit-breaker defaults for external I/O tasks
+- Verify graceful shutdown path with `SIGTERM` in staging
+- Ensure resource disposal order is validated in integration tests
+
+### Observability
+
+- Emit structured logs with stable `source` ids
+- Track latency and error-rate metrics per critical task path
+- Export traces for cross-service flows
+- Configure baseline alerts for error-rate spikes and sustained p95 latency
+
+### Operations
+
+- Expose `/health` (or equivalent) and wire container/platform checks
+- Maintain runbooks for incident triage and rollback
+- Review release notes before upgrades and test migrations in staging
+
+## Node API Index
+
+Node-only entrypoint: `@bluelibs/runner/node`.
+
+| Export                                                | Purpose                                                                 |
+| ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| `nodeExposure`                                        | Expose tasks/events over HTTP                                           |
+| `createHttpMixedClient`, `createHttpSmartClient`      | Node tunnel clients (JSON + multipart + streaming modes)                |
+| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart tunnel calls                       |
+| `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path         |
+| `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                |
+| `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                           |
+
+See also:
+
+- [TUNNELS.md](./readmes/TUNNELS.md) for transport semantics
+- [DURABLE_WORKFLOWS.md](./readmes/DURABLE_WORKFLOWS.md) for workflow APIs
 
 ## Community & Support
 

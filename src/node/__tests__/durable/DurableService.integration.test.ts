@@ -38,7 +38,7 @@ describe("durable: DurableService integration", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
 
-    const res = await service.execute(
+    const res = await service.startAndWait(
       task,
       { v: 1 },
       {
@@ -46,7 +46,10 @@ describe("durable: DurableService integration", () => {
         waitPollIntervalMs: 5,
       },
     );
-    expect(res).toEqual({ before: "before", after: "after" });
+    expect(res).toEqual({
+      durable: { executionId: expect.any(String) },
+      data: { before: "before", after: "after" },
+    });
     expect(stepExecutions).toBe(1);
 
     await runtime.dispose();

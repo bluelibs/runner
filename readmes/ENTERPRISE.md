@@ -46,14 +46,16 @@ We align with enterprise change management: stability, predictability, and contr
   - Major: planned, documented changes with migration guides
 
 - LTS Policy (current)
-  - Version 4.x LTS (current)
-    - Released: August 2025
-    - Active support until: January 2027
-    - Security patches until: January 2029
+  - Version 5.x (stable/current feature line)
+  - Version 4.x (maintenance LTS line, critical fixes only)
+
+- Release channels
+  - Tagged releases: [GitHub Releases](https://github.com/bluelibs/runner/releases)
 
 - Governance and Change Management
   - Deprecation policy with advance notice
   - Documented migration guides for major versions
+  - Release note entry for every public behavior/API change
   - Optional dry-run to validate dependency graphs in CI
 
 ---
@@ -107,7 +109,8 @@ Security contact: theodor@bluelibs.com
 ## Compatibility & Environments
 
 - TypeScript-first (strong types across tasks/resources/events)
-- Node.js: modern LTS versions
+- Node.js: `>=18` (matches package engines)
+- TypeScript: `5.6+` recommended for best type inference and tooling parity
 - Integrations:
   - HTTP servers (e.g., Express)
   - Message/event systems

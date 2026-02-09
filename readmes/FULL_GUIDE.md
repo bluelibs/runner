@@ -79,6 +79,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
 | [AI-Friendly Docs](./AI.md)                                                                                 | Docs    | Compact summary (<5000 tokens)      |
 | [Full Guide](./FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
+| [Support & Release Policy](./ENTERPRISE.md)                                                                 | Docs    | Support windows and deprecation     |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
@@ -96,6 +97,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 - **Need Node-only capabilities**: See [Durable Workflows](./DURABLE_WORKFLOWS.md)
 - **Need remote execution**: See [HTTP Tunnels](./TUNNELS.md) (expose from Node.js, call from any `fetch` runtime)
 - **Care about portability**: Read [Multi-Platform Architecture](./MULTI_PLATFORM.md)
+- **Planning upgrades**: See [Support & Release Policy](./ENTERPRISE.md)
 - **Want the complete guide**: Read [FULL_GUIDE.md](./FULL_GUIDE.md)
 - **Want the short version**: Read [AI.md](./AI.md)
 
@@ -108,6 +110,21 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | Durable workflows (`@bluelibs/runner/node`) | Full    | None    | None | Node-only module                           |
 | Tunnels client (`createExposureFetch`)      | Full    | Full    | Full | Requires `fetch`                           |
 | Tunnels server (`@bluelibs/runner/node`)    | Full    | None    | None | Exposes tasks/events over HTTP             |
+
+---
+
+## Prerequisites
+
+Use these minimums before starting:
+
+| Requirement     | Minimum                  | Notes                                                                      |
+| --------------- | ------------------------ | -------------------------------------------------------------------------- |
+| Node.js         | `18.x`                   | Enforced by `package.json#engines.node`                                    |
+| TypeScript      | `5.6+` (recommended)     | Required for typed DX and examples in this repository                      |
+| Package manager | npm / pnpm / yarn / bun  | Examples use npm, but any modern package manager works                     |
+| `fetch` runtime | Built-in or polyfilled   | Required for tunnel clients (`createExposureFetch`, universal HTTP client) |
+
+If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
 ## Why Runner?
@@ -203,6 +220,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 
 **Getting Started**
 
+- [Prerequisites](#prerequisites) - Runtime/tooling requirements
 - [Why Runner?](#why-runner) - The problem we solve
 - [What Is This Thing?](#what-is-this-thing)
 - [When to Use Runner](#when-to-use-runner) - Is it right for you?
@@ -238,6 +256,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Retry](#retrying-failed-operations) - Resilience patterns
 - [Timeouts](#timeouts) - Operation time limits
 - [Logging](#logging) - Structured observability
+- [Observability Strategy](#observability-strategy-logs-metrics-and-traces) - Signals and alerting baseline
 - [Debug](#debug-resource) - Development tooling
 
 **Concurrency & Scheduling**
@@ -267,6 +286,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 
 - [Quick Reference Cheat Sheet](#quick-reference-cheat-sheet) - **Bookmark this!**
 - [Fluent Builders](#fluent-builders-r) - Ergonomic API
+- [Runner Dev Tools Quick Start](#runner-dev-tools-quick-start) - CLI and runtime introspection
 - [Type Helpers](#type-helpers) - TypeScript utilities
 - [Runtime Validation](#runtime-validation) - Schema validation
 - [Meta](#meta) - Component documentation
@@ -278,13 +298,16 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Internal Services](#internal-services) - Framework internals
 - [Why Choose BlueLibs Runner?](#why-choose-bluelibs-runner) - Framework comparison
 - [Migration Path](#the-migration-path) - Adopting Runner
+- [Release, Support, and Deprecation Policy](#release-support-and-deprecation-policy) - Upgrade governance
+- [Production Readiness Checklist](#production-readiness-checklist) - Framework-wide deploy checks
+- [Node API Index](#node-api-index) - Node-only exports at a glance
 - [Troubleshooting](#troubleshooting) - Common issues and solutions
 - [Under the Hood](#under-the-hood) - Architecture deep dive
 - [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
 ## What Is This Thing?
 
-BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It’s explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
+BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It's explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
 
 ### The Core
 
@@ -1463,7 +1486,7 @@ Key points:
 - **`.fork()` returns a built `IResource`** - no need to call `.build()` again
 - **Tags, middleware, and type parameters are inherited**
 - **Each fork gets independent runtime** - no shared state
-- **`register` defaults to `"keep"`**; use `"drop"` for leaf resources or `"deep"` when you want cloned *registered resources* (resource tree)
+- **`register` defaults to `"keep"`**; use `"drop"` for leaf resources or `"deep"` when you want cloned _registered resources_ (resource tree)
 - **Export forked resources** to use them as typed dependencies
 
 #### Optional Dependencies
@@ -1757,7 +1780,7 @@ const emergencyHook = r
   .build();
 ```
 
-> **runtime:** "'A really good office messenger.' That’s me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
+> **runtime:** "'A really good office messenger.' That's me in rollerblades. You launch a 'userRegistered' flare and I sprint across the building, high‑fiving hooks and dodging middleware. `stopPropagation` is you sweeping my legs mid‑stride. Rude. Effective. Slightly thrilling."
 
 ### Middleware
 
@@ -2249,7 +2272,7 @@ const profileTask = r
 
 ### Errors
 
-Typed errors can be declared once and injected anywhere. Register them alongside other items and consume via dependencies. The injected value is the error helper itself, exposing `.throw()`, `.is()`, `.toString()`, and `id`.
+Typed errors can be declared once and injected anywhere. Register them alongside other items and consume via dependencies. The injected value is the error helper itself, exposing `.throw()`, `.is()`, `id`, and optional `httpCode`.
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -2257,7 +2280,10 @@ import { r } from "@bluelibs/runner";
 // Fluent builder for errors
 const userNotFoundError = r
   .error<{ code: number; message: string }>("app.errors.userNotFound")
+  .httpCode(404)
   .dataSchema(z.object({ ... }))
+  .format((d) => `[${d.code}] ${d.message}`)
+  .remediation("Verify the user ID exists before calling getUser.")
   .build();
 
 const getUser = r
@@ -2271,18 +2297,60 @@ const getUser = r
 const app = r.resource("app").register([userNotFoundError, getUser]).build();
 ```
 
-Error data must include a `message: string`. The thrown `Error` has `name = id` and `message = data.message` for predictable matching and logging.
+The thrown `Error` has `name = id`. By default `message` is `JSON.stringify(data)`, but `.format(data => string)` lets you craft a human-friendly message instead. When `.remediation()` is provided, the fix-it advice is appended to `message` and `toString()`, and is also accessible as `error.remediation`. If you set `.httpCode(...)`, the helper and thrown error expose `httpCode`.
 
 ```ts
 try {
   userNotFoundError.throw({ code: 404, message: "User not found" });
 } catch (err) {
   if (userNotFoundError.is(err)) {
-    // err.name === "app.errors.userNotFound", err.message === "User not found"
+    // err.name      === "app.errors.userNotFound"
+    // err.message   === "[404] User not found\n\nRemediation: Verify the user ID exists before calling getUser."
+    // err.httpCode  === 404
+    // err.remediation === "Verify the user ID exists before calling getUser."
+    // userNotFoundError.httpCode === 404
     console.log(`Caught error: ${err.name} - ${err.message}`);
   }
 }
 ```
+
+**Remediation** can also be a function when the advice depends on the error data:
+
+```ts
+const quotaExceeded = r
+  .error<{ limit: number; message: string }>("app.errors.QuotaExceeded")
+  .format((d) => d.message)
+  .remediation(
+    (d) => `Current limit is ${d.limit}. Upgrade your plan or reduce usage.`,
+  )
+  .build();
+```
+
+**Check for any Runner error (not just a specific one):**
+
+Use `r.error.is(error)` to detect whether an error is any Runner error, regardless of its specific type. This is useful in catch blocks, middleware, or error filters when you want to handle all Runner errors differently from standard JavaScript errors:
+
+```ts
+import { r } from "@bluelibs/runner";
+
+try {
+  // Some operation that might throw various errors
+  await riskyOperation();
+} catch (err) {
+  if (r.error.is(err)) {
+    // It's a Runner error - has id, data, httpCode, remediation
+    console.error(`Runner error: ${err.id} (${err.httpCode || "N/A"})`);
+    if (err.remediation) {
+      console.log(`Fix: ${err.remediation}`);
+    }
+  } else {
+    // It's a standard JavaScript error or other type
+    console.error("Unexpected error:", err);
+  }
+}
+```
+
+The `r.error.is()` type guard narrows the error to `RunnerError`, giving you access to `id`, `data`, `httpCode`, and `remediation`. You can also use `instanceof RunnerError` directly if you prefer, but `r.error.is()` is more consistent with the fluent API.
 
 ---
 
@@ -2439,7 +2507,7 @@ const app = r
 await run(app);
 ```
 
-> **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You’re collapsing the waveform of a task at runtime and I’m Schrödinger’s runtime, praying the cat hasn’t overridden `run()` with `throw new Error('lol')`."
+> **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You're collapsing the waveform of a task at runtime and I'm Schrödinger's runtime, praying the cat hasn't overridden `run()` with `throw new Error('lol')`."
 
 ## Lifecycle Management
 
@@ -2587,7 +2655,7 @@ const { dispose, logger } = await run(app, {
 });
 ```
 
-> **runtime:** "You summon a 'graceful shutdown' with Ctrl‑C like a wizard casting Chill Vibes. Meanwhile I’m speed‑dating every socket, timer, and file handle to say goodbye before the OS pulls the plug. `dispose()`: now with 30% more dignity."
+> **runtime:** "You summon a 'graceful shutdown' with Ctrl‑C like a wizard casting Chill Vibes. Meanwhile I'm speed‑dating every socket, timer, and file handle to say goodbye before the OS pulls the plug. `dispose()`: now with 30% more dignity."
 
 ## Unhandled Errors
 
@@ -2638,7 +2706,7 @@ await run(app, {
 - Notify load balancers and health checks
 - Stop accepting new work before cleaning up
 
-> **runtime:** "An error boundary: a trampoline under your tightrope. I’m the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
+> **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
 ## Caching
 
 Avoid recomputing expensive work by caching task results with TTL-based eviction:
@@ -3015,7 +3083,7 @@ const myTask = r
   .build();
 ```
 
-> **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it’ll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I’ll keep the attempts ledger while your API cosplays a coin toss."
+> **runtime:** "Retry: the art of politely head‑butting reality. 'Surely it'll work the fourth time,' you declare, inventing exponential backoff and calling it strategy. I'll keep the attempts ledger while your API cosplays a coin toss."
 
 ---
 
@@ -3073,7 +3141,7 @@ Best practices:
 - Use longer timeouts for resource initialization than task execution
 - Consider network conditions when setting API call timeouts
 
-> **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It’s not me, it’s your molasses‑flavored endpoint. I just blow the whistle."
+> **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It's not me, it's your molasses‑flavored endpoint. I just blow the whistle."
 
 ## Concurrency Utilities
 
@@ -3389,6 +3457,55 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
 
 > **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
+## Observability Strategy (Logs, Metrics, and Traces)
+
+Runner gives you primitives for all three observability signals:
+
+- **Logs**: structured application/runtime events via `globals.resources.logger`
+- **Metrics**: numeric health and performance indicators from your resources/tasks/middleware
+- **Traces**: distributed timing and call-path correlation via OpenTelemetry
+
+Use all three together. Logs explain what happened, metrics tell you when it is happening repeatedly, and traces show where latency accumulates.
+
+### Naming conventions
+
+Keep names stable and low-cardinality:
+
+- **Metric names**: `{domain}_{unit}` or `{domain}_{action}_{unit}` (for example: `tasks_duration_ms`, `queue_wait_ms`, `http_requests_total`)
+- **Metric labels**: prefer bounded values (`task_id`, `result`, `env`), avoid user ids/emails/request bodies
+- **Trace spans**: `{component}:{operation}` (for example: `task:app.tasks.createUser`, `resource:app.db.init`)
+- **Log source**: always include a stable `source` (task/resource id)
+
+### Baseline production dashboard
+
+At minimum, chart these for every service:
+
+- Request/task throughput (`requests_total`, `tasks_total`)
+- Error rate (`requests_failed_total` / `tasks_failed_total`)
+- Latency percentiles (`p50`, `p95`, `p99`)
+- Resource saturation (queue depth, semaphore utilization, event-loop lag)
+- Dependency health (database/cache/external API failure and latency)
+
+### Baseline alerts
+
+Start with practical, non-noisy alerts:
+
+- Error rate above threshold for 5+ minutes
+- P95 latency above SLO for 10+ minutes
+- No successful requests/tasks for a critical service window
+- Dependency outage (consecutive failures crossing a threshold)
+- Event-loop lag sustained above operational limit
+
+### Correlation checklist
+
+For incident response, ensure each signal can be joined:
+
+- Emit `requestId` / `correlationId` in logs
+- Attach task/resource ids to spans and logs
+- Keep metric labels aligned with the same service/component ids
+
+---
+
 ## Logging
 
 _Structured logging with predictable shape and pluggable transports_
@@ -3837,7 +3954,7 @@ await paymentLogger.info("Processing payment", { data: paymentData });
 await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
-> **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it’s off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
+> **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
 ## Advanced Patterns
 
 This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
@@ -5317,6 +5434,72 @@ function withLogging<T extends ITask<any, Promise<any>, any>>(task: T) {
 | `ExtractEventPayload<T>`   | Payload type     | Event    |
 
 > **runtime:** "Type helpers: TypeScript's 'I told you so' toolkit. You extract the input type from a task, slap it on an API handler, and suddenly your frontend and backend are sworn blood brothers. Until someone uses `as any`. Then I cry."
+
+## Runner Dev Tools Quick Start
+
+Runner Dev Tools (`@bluelibs/runner-dev`) turns your runtime into an inspectable, queryable, and scriptable system while your app is running.
+
+If Runner gives you explicit wiring, Runner Dev Tools gives you visibility and control over that wiring in real time.
+
+### Why teams use it
+
+- **Visual DevTools UI**: inspect topology, call tasks, emit events, and debug behavior from the browser
+- **GraphQL introspection API**: query tasks/resources/events/middleware/dependencies programmatically
+- **Live telemetry**: stream logs, emissions, errors, and task runs with correlation-aware diagnostics
+- **Scaffolding CLI**: bootstrap projects and generate resources/tasks/events/tags/middleware quickly
+- **Dry-run query mode**: introspect local TypeScript entry files without running a server
+- **MCP server mode**: let AI tools query your runtime safely through a standard protocol
+- **Hot-swap debugging (dev-focused)**: replace task run functions temporarily to investigate edge cases quickly
+
+### Install
+
+```bash
+npm install -g @bluelibs/runner-dev
+# or run without global install
+npx @bluelibs/runner-dev --help
+```
+
+### Common CLI commands
+
+```bash
+# Scaffold a new Runner project
+runner-dev new my-app --install
+
+# Scaffold a task artifact
+runner-dev new task create-user --ns app.users --dir src --export
+
+# Query a local TypeScript entry in dry-run mode (no server)
+runner-dev query 'query { tasks { id } }' --entry-file ./src/main.ts
+
+# Generate a runtime overview from a live endpoint
+ENDPOINT=http://localhost:1337/graphql runner-dev overview --details 10
+
+# Start MCP bridge for AI tooling
+ENDPOINT=http://localhost:1337/graphql npx -y @bluelibs/runner-dev mcp
+```
+
+### Runtime integration
+
+Register `dev` in your app to expose the Dev UI and GraphQL endpoint:
+
+```ts
+import { r } from "@bluelibs/runner";
+import { dev } from "@bluelibs/runner-dev";
+
+const app = r
+  .resource("app")
+  .register([
+    dev.with({
+      port: 1337,
+      maxEntries: 1000,
+    }),
+  ])
+  .build();
+```
+
+When running, open `http://localhost:1337` for the visual DevTools.
+
+> **Note:** Runner Dev Tools is intended for development and controlled environments. Treat it as privileged operational access.
 ## Real-World Example: The Complete Package
 
 This example shows everything working together in a realistic Express application:
@@ -5618,6 +5801,34 @@ describe("User registration flow", () => {
     }
   });
 });
+```
+
+### Test Harness (`createTestResource`)
+
+`createTestResource(root, { overrides })` is a convenient way to run tasks in a fully initialized runtime while exposing a focused test facade (`runTask`, `getResource`, and internals when needed).
+
+```typescript
+import { createTestResource, run } from "@bluelibs/runner";
+
+const harness = createTestResource(app, { overrides: [mockDb] });
+const { value: testFacade, dispose } = await run(harness);
+
+try {
+  const result = await testFacade.runTask(registerUser, {
+    name: "Ada",
+    email: "ada@example.com",
+  });
+  expect(result).toBeDefined();
+} finally {
+  await dispose();
+}
+```
+
+Equivalent explicit setup with `run()`:
+
+```typescript
+const testApp = r.resource("test").register([app]).overrides([mockDb]).build();
+const { runTask, dispose } = await run(testApp);
 ```
 
 ### Testing Tips
@@ -7216,7 +7427,7 @@ After reading this far, here's what you've learned:
 - **Performance**: Middleware overhead is ~0.00026ms. Tests run in milliseconds
 - **Batteries included**: Caching, retry, timeouts, events, logging—all built in
 
-> **runtime:** "Why choose it? The bullets are persuasive. Keep your tasks small and your dependencies explicit, and the code stays tidy. Ignore the types and I can’t save you—but I’ll still log the crash with impeccable manners."
+> **runtime:** "Why choose it? The bullets are persuasive. Keep your tasks small and your dependencies explicit, and the code stays tidy. Ignore the types and I can't save you—but I'll still log the crash with impeccable manners."
 
 ## The Migration Path
 
@@ -7250,7 +7461,85 @@ await run(app);
 
 Repeat. Gradually, your spaghetti becomes lasagna.
 
-> **runtime:** "'No big bang rewrites.' Start with one resource and one task, then migrate incrementally. I’ll keep the wiring honest while you refactor—one small, reversible step at a time."
+> **runtime:** "'No big bang rewrites.' Start with one resource and one task, then migrate incrementally. I'll keep the wiring honest while you refactor—one small, reversible step at a time."
+
+## Release, Support, and Deprecation Policy
+
+Use these links as the canonical upgrade entrypoints:
+
+- [GitHub Releases](https://github.com/bluelibs/runner/releases) - tagged releases and release assets
+- [Enterprise Policy](./ENTERPRISE.md) - support windows and governance
+
+Current support channels:
+
+- **Stable**: `5.x` (current feature line)
+- **Maintenance/LTS**: `4.x` (critical fixes only)
+
+### Deprecation lifecycle
+
+When a public API is deprecated, use this lifecycle:
+
+| Stage             | What Happens                                                        | Removal |
+| ----------------- | ------------------------------------------------------------------- | ------- |
+| **Announced**     | Release note entry + docs note with replacement path                | No      |
+| **Warned**        | Deprecated marker in docs/types and migration recommendation        | No      |
+| **Removed**       | Removed in next allowed major with migration notes in release notes | Yes     |
+
+If a behavior changes without breaking types (for example default values), document it in your release notes.
+
+## Production Readiness Checklist
+
+Use this list before promoting a Runner app to production:
+
+### Build and Runtime
+
+- Pin Node to a supported LTS line (`>=18`)
+- Build in CI with `npm run qa`
+- Run from compiled output (no ts-node in production path)
+
+### Security
+
+- Configure exposure auth for tunnels (`http.auth`) and avoid anonymous exposure
+- Use allow-lists for remotely callable task/event ids
+- Set payload limits for JSON/multipart traffic
+- Review logs for sensitive data before enabling external sinks
+
+### Reliability
+
+- Define timeout/retry/circuit-breaker defaults for external I/O tasks
+- Verify graceful shutdown path with `SIGTERM` in staging
+- Ensure resource disposal order is validated in integration tests
+
+### Observability
+
+- Emit structured logs with stable `source` ids
+- Track latency and error-rate metrics per critical task path
+- Export traces for cross-service flows
+- Configure baseline alerts for error-rate spikes and sustained p95 latency
+
+### Operations
+
+- Expose `/health` (or equivalent) and wire container/platform checks
+- Maintain runbooks for incident triage and rollback
+- Review release notes before upgrades and test migrations in staging
+
+## Node API Index
+
+Node-only entrypoint: `@bluelibs/runner/node`.
+
+| Export                                                | Purpose                                                                 |
+| ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| `nodeExposure`                                        | Expose tasks/events over HTTP                                           |
+| `createHttpMixedClient`, `createHttpSmartClient`      | Node tunnel clients (JSON + multipart + streaming modes)                |
+| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart tunnel calls                       |
+| `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path         |
+| `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                |
+| `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                           |
+
+See also:
+
+- [TUNNELS.md](./TUNNELS.md) for transport semantics
+- [DURABLE_WORKFLOWS.md](./DURABLE_WORKFLOWS.md) for workflow APIs
 
 ## Community & Support
 

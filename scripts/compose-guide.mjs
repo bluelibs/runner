@@ -149,4 +149,3 @@ try {
   console.error(`[compose] Failed: ${error.message}`);
   process.exit(1);
 }
-

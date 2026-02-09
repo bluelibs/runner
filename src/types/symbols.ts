@@ -10,10 +10,8 @@ export const symbolPhantomTask: unique symbol = Symbol.for(
   "runner.task.phantom",
 );
 export const symbolResource: unique symbol = Symbol.for("runner.resource");
-/** @internal Marks forked resources and records fork provenance */
-export const symbolResourceForkedFrom: unique symbol = Symbol.for(
-  "runner.resourceForkedFrom",
-);
+/** @internal Generic fork provenance metadata for definitions that support `.fork()` */
+export const symbolForkedFrom: unique symbol = Symbol.for("runner.forkedFrom");
 export const symbolResourceWithConfig: unique symbol = Symbol.for(
   "runner.resourceWithConfig",
 );

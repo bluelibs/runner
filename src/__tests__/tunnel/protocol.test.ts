@@ -25,4 +25,14 @@ describe("tunnel protocol", () => {
     expect(err).toBeInstanceOf(TunnelError);
     expect(err.code).toBe("UNKNOWN");
   });
+
+  test("toTunnelError maps httpCode when present", () => {
+    const err = toTunnelError({
+      code: "BAD_REQUEST",
+      message: "bad",
+      httpCode: 400,
+    });
+    expect(err).toBeInstanceOf(TunnelError);
+    expect(err.httpCode).toBe(400);
+  });
 });

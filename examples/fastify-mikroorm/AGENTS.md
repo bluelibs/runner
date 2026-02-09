@@ -13,7 +13,7 @@ Authoritative guidance for working inside this repository as an agent. This app 
 - DB: `src/db` (MikroORM config, entities in `src/db/entities`, migrations in `src/db/migrations`)
 - App entry: `src/main.ts` (registers `env`, `db`, `fixtures`, `http`, `users`, `runner-dev`)
 - Test utils: `src/general/test/utils.ts` (`buildTestRunner`, `testOrmConfig`)
-- Import alias: use `#/` to refer to `src/` (see README “Import Aliases”).
+- Import alias: use `#/` to refer to `src/` (see README "Import Aliases").
 
 ## Golden Rules (Must Follow)
 
@@ -73,7 +73,7 @@ export const getUserById = task({
 
 ## Registration
 
-- Register new tasks/resources/middlewares in their feature `index.ts` (example: `src/users/index.ts` registers tasks, `auth` resource, and `authorize` middleware). Unregistered items won’t be discoverable by the router or other dependencies.
+- Register new tasks/resources/middlewares in their feature `index.ts` (example: `src/users/index.ts` registers tasks, `auth` resource, and `authorize` middleware). Unregistered items won't be discoverable by the router or other dependencies.
 - The HTTP layer is registered in `src/http/index.ts` and the app root in `src/main.ts`. Ensure your feature resource is included in the app if you add a new feature.
 - In tests, explicitly register what you need using `buildTestRunner({ register: [...] })` and include `httpRoute` + `fastify` + `fastifyRouter` when testing HTTP behavior.
 
@@ -113,7 +113,7 @@ const res = await rr.http.inject({ method: "GET", url: "/users" });
 expect(res.statusCode).toBe(200);
 ```
 
-- When testing task logic without HTTP, register only the task’s dependencies and run tasks directly with the runner’s `taskRunner` or by invoking the task function.
+- When testing task logic without HTTP, register only the task's dependencies and run tasks directly with the runner's `taskRunner` or by invoking the task function.
 - Ensure your tests cover: validation (bad inputs → 400), auth paths (401/403), happy paths (200), and error mapping (`HTTPError`).
 
 ## TypeScript & Style

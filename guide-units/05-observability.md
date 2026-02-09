@@ -1,3 +1,52 @@
+## Observability Strategy (Logs, Metrics, and Traces)
+
+Runner gives you primitives for all three observability signals:
+
+- **Logs**: structured application/runtime events via `globals.resources.logger`
+- **Metrics**: numeric health and performance indicators from your resources/tasks/middleware
+- **Traces**: distributed timing and call-path correlation via OpenTelemetry
+
+Use all three together. Logs explain what happened, metrics tell you when it is happening repeatedly, and traces show where latency accumulates.
+
+### Naming conventions
+
+Keep names stable and low-cardinality:
+
+- **Metric names**: `{domain}_{unit}` or `{domain}_{action}_{unit}` (for example: `tasks_duration_ms`, `queue_wait_ms`, `http_requests_total`)
+- **Metric labels**: prefer bounded values (`task_id`, `result`, `env`), avoid user ids/emails/request bodies
+- **Trace spans**: `{component}:{operation}` (for example: `task:app.tasks.createUser`, `resource:app.db.init`)
+- **Log source**: always include a stable `source` (task/resource id)
+
+### Baseline production dashboard
+
+At minimum, chart these for every service:
+
+- Request/task throughput (`requests_total`, `tasks_total`)
+- Error rate (`requests_failed_total` / `tasks_failed_total`)
+- Latency percentiles (`p50`, `p95`, `p99`)
+- Resource saturation (queue depth, semaphore utilization, event-loop lag)
+- Dependency health (database/cache/external API failure and latency)
+
+### Baseline alerts
+
+Start with practical, non-noisy alerts:
+
+- Error rate above threshold for 5+ minutes
+- P95 latency above SLO for 10+ minutes
+- No successful requests/tasks for a critical service window
+- Dependency outage (consecutive failures crossing a threshold)
+- Event-loop lag sustained above operational limit
+
+### Correlation checklist
+
+For incident response, ensure each signal can be joined:
+
+- Emit `requestId` / `correlationId` in logs
+- Attach task/resource ids to spans and logs
+- Keep metric labels aligned with the same service/component ids
+
+---
+
 ## Logging
 
 _Structured logging with predictable shape and pluggable transports_
@@ -446,4 +495,4 @@ await paymentLogger.info("Processing payment", { data: paymentData });
 await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
-> **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it’s off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
+> **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."

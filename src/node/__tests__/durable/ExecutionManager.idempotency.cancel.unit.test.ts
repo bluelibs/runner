@@ -6,11 +6,9 @@ import { NoopEventBus } from "../../durable/bus/NoopEventBus";
 import { SuspensionSignal } from "../../durable/core/interfaces/context";
 import { ExecutionStatus, type Execution } from "../../durable/core/types";
 import type { IDurableStore } from "../../durable/core/interfaces/store";
-import type {
-  DurableTask,
-  ITaskExecutor,
-} from "../../durable/core/interfaces/service";
+import type { ITaskExecutor } from "../../durable/core/interfaces/service";
 import type { IDurableQueue } from "../../durable/core/interfaces/queue";
+import type { ITask } from "../../../types/task";
 
 enum TaskId {
   T = "durable.tests.executionManager.t",
@@ -21,13 +19,13 @@ enum IdempotencyKey {
 }
 
 describe("durable: ExecutionManager (idempotency & cancellation)", () => {
-  const task: DurableTask<unknown, unknown> = {
+  const task: ITask<unknown, Promise<unknown>, any, any, any, any> = {
     id: TaskId.T,
   } as any;
 
   const createFixedTaskExecutor = <TValue>(value: TValue): ITaskExecutor => ({
     run: async <TInput, TResult>(
-      _task: DurableTask<TInput, TResult>,
+      _task: ITask<TInput, Promise<TResult>, any, any, any, any>,
       _input?: TInput,
     ): Promise<TResult> => value as unknown as TResult,
   });
@@ -82,7 +80,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
 
     await expect(
-      manager.startExecution(task, undefined, {
+      manager.start(task, undefined, {
         idempotencyKey: IdempotencyKey.K,
       }),
     ).rejects.toThrow("does not support execution idempotency keys");
@@ -118,7 +116,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
 
     await expect(
-      manager.startExecution(task, undefined, {
+      manager.start(task, undefined, {
         idempotencyKey: IdempotencyKey.K,
       }),
     ).rejects.toThrow("Failed to acquire idempotency lock");
@@ -163,7 +161,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
 
     await expect(
-      manager.startExecution(task, undefined, {
+      manager.start(task, undefined, {
         idempotencyKey: IdempotencyKey.K,
       }),
     ).resolves.toBe("existing");
@@ -202,7 +200,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
 
     await expect(
-      manager.startExecution(task, undefined, {
+      manager.start(task, undefined, {
         idempotencyKey: IdempotencyKey.K,
       }),
     ).rejects.toThrow("Failed to set idempotency mapping");

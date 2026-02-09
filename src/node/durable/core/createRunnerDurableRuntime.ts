@@ -1,4 +1,4 @@
-import type { DurableServiceConfig, DurableTask } from "./interfaces/service";
+import type { DurableServiceConfig } from "./interfaces/service";
 import { initDurableService } from "./DurableService";
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { IDurableContext } from "./interfaces/context";
@@ -64,13 +64,10 @@ export async function createRunnerDurableRuntime(
     },
     taskExecutor: {
       run: async <TInput, TResult>(
-        task: DurableTask<TInput, TResult>,
+        task: ITask<TInput, Promise<TResult>, any, any, any, any>,
         input?: TInput,
       ) => {
-        const outputPromise = await deps.taskRunner.run(
-          task as ITask<TInput, Promise<TResult>, any, any, any, any>,
-          input,
-        );
+        const outputPromise = await deps.taskRunner.run(task, input);
         if (outputPromise === undefined) {
           throw new Error(
             `Durable task '${task.id}' completed without a result promise.`,

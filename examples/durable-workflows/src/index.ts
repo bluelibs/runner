@@ -49,7 +49,7 @@ export async function runDurableWorkflowsDemo(): Promise<{
     // ── Workflow 1: Order Processing ──────────────────────────────────────
     console.log("\n=== Workflow 1: Order Processing ===\n");
 
-    const orderExecutionId = await service.startExecution(processOrder, {
+    const orderExecutionId = await service.start(processOrder, {
       orderId: "ORD-42",
       customerId: "CUST-7",
       amount: 99.99,
@@ -89,7 +89,7 @@ export async function runDurableWorkflowsDemo(): Promise<{
     // ── Workflow 2: User Onboarding (verified path) ──────────────────────
     console.log("\n=== Workflow 2: User Onboarding ===\n");
 
-    const onboardingExecutionId = await service.startExecution(userOnboarding, {
+    const onboardingExecutionId = await service.start(userOnboarding, {
       email: "ada@example.com",
       plan: "pro" as const,
     });

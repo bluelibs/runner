@@ -15,6 +15,8 @@ That's it. Now let's get you to a first successful run.
 
 This is the fastest way to run the TypeScript example at the top of this README:
 
+0. Confirm prerequisites from [Prerequisites](#prerequisites) (Node `18+`, TypeScript `5.6+` recommended)
+
 1. Install dependencies:
 
 ```bash
@@ -29,9 +31,38 @@ npm i -D typescript tsx
 npx tsx index.ts
 ```
 
-**That’s it!** You now have a working `Runtime` and you can execute tasks with `runtime.runTask(...)`.
+**That's it!** You now have a working `Runtime` and you can execute tasks with `runtime.runTask(...)`.
 
 > **Tip:** If you prefer an end-to-end example with HTTP, OpenAPI, and persistence, jump to the examples below.
+
+---
+
+## Runner Dev Tools Quick Start
+
+`@bluelibs/runner-dev` gives you CLI scaffolding and runtime introspection.
+
+1. Install (or run without install):
+
+```bash
+npm install -g @bluelibs/runner-dev
+# or
+npx @bluelibs/runner-dev --help
+```
+
+2. Three common commands:
+
+```bash
+# Scaffold a new Runner project
+runner-dev new my-app --install
+
+# Query tasks from a local TypeScript entry file (dry-run mode)
+runner-dev query 'query { tasks { id } }' --entry-file ./src/main.ts
+
+# Inspect a running app via GraphQL endpoint
+ENDPOINT=http://localhost:1337/graphql runner-dev overview --details 10
+```
+
+For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs/runner-dev).
 
 ---
 
@@ -56,6 +87,11 @@ npx tsx index.ts
 - **Node-only features**:
   - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
   - [HTTP Tunnels](./readmes/TUNNELS.md)
+- **Releases and upgrades**:
+  - [GitHub Releases](https://github.com/bluelibs/runner/releases)
+  - [Support & Release Policy](./readmes/ENTERPRISE.md)
+- **Operational baseline**:
+  - [Production Readiness Checklist](./readmes/FULL_GUIDE.md#production-readiness-checklist)
 - **Multi-platform architecture**: Read [MULTI_PLATFORM.md](./readmes/MULTI_PLATFORM.md)
 
 ---

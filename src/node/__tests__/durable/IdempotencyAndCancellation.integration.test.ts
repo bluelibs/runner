@@ -26,7 +26,7 @@ enum ResultValue {
 }
 
 describe("durable: idempotency & cancellation (integration)", () => {
-  it("dedupes startExecution when idempotencyKey matches", async () => {
+  it("dedupes start when idempotencyKey matches", async () => {
     const store = new MemoryStore();
     const bus = new MemoryEventBus();
 
@@ -48,13 +48,13 @@ describe("durable: idempotency & cancellation (integration)", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
 
-    const firstExecutionId = await service.startExecution(
+    const firstExecutionId = await service.start(
       task,
       { v: 1 },
       { idempotencyKey: IdempotencyKey.One },
     );
 
-    const secondExecutionId = await service.startExecution(
+    const secondExecutionId = await service.start(
       task,
       { v: 999 },
       { idempotencyKey: IdempotencyKey.One },
@@ -101,7 +101,7 @@ describe("durable: idempotency & cancellation (integration)", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
 
-    const executionId = await service.startExecution(task);
+    const executionId = await service.start(task);
     await service.cancelExecution(executionId, CancelReason.UserRequested);
 
     await expect(
