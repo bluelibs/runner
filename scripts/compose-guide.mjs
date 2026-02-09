@@ -76,10 +76,9 @@ function adjustPathsForReadmesDir(content) {
   content = content.replace(/\]\(\.\/readmes\/([^)]+)\)/g, "](./$1)");
 
   // Adjust paths to root-level files: [text](./FILE.md) -> [text](../FILE.md)
-  // But only for specific known root files (README.md, LICENSE.md, CHANGELOG.md)
+  // But only for specific known root files (README.md, LICENSE.md)
   content = content.replace(/\]\(\.\/README\.md\)/g, "](../README.md)");
   content = content.replace(/\]\(\.\/LICENSE\.md\)/g, "](../LICENSE.md)");
-  content = content.replace(/\]\(\.\/CHANGELOG\.md\)/g, "](../CHANGELOG.md)");
 
   // Adjust .github paths: [text](./.github/X) -> [text](../.github/X)
   content = content.replace(/\]\(\.\/.github\//g, "](../.github/");
