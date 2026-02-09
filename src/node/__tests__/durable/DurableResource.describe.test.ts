@@ -17,8 +17,8 @@ describe("durable: describe()", () => {
       .dependencies({ durable, other })
       .run(async (_input: undefined, deps) => {
         // Access a non-"use" property to cover the proxy passthrough path.
-        if (typeof (deps.durable as any).startExecution !== "function") {
-          throw new Error("unexpected durable.startExecution");
+        if (typeof (deps.durable as any).start !== "function") {
+          throw new Error("unexpected durable.start");
         }
 
         // This must work in describe mode; recorder uses real computed deps.

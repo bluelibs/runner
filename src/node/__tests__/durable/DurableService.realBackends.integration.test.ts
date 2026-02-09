@@ -51,7 +51,7 @@ const shouldRun = process.env.DURABLE_INTEGRATION === "1";
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
 
-    const result = await service.execute(task, { v: 1 });
+    const result = await service.startAndWait(task, { v: 1 });
     expect(result.ok).toBe(true);
     expect(result.ran).toBe(1);
 

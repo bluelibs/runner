@@ -28,7 +28,7 @@ test(TestName.OrderCompletesAfterSignal, async () => {
 
   try {
     const service = runtime.getResourceValue(durable);
-    const executionId = await service.startExecution(processOrder, {
+    const executionId = await service.start(processOrder, {
       orderId: "ORD-TEST-1",
       customerId: "CUST-TEST-1",
       amount: 49.99,
@@ -68,7 +68,7 @@ test(TestName.OnboardingVerifiedCompletesWithWorkspace, async () => {
 
   try {
     const service = runtime.getResourceValue(durable);
-    const executionId = await service.startExecution(userOnboarding, {
+    const executionId = await service.start(userOnboarding, {
       email: "test@example.com",
       plan: "pro" as const,
     });
@@ -112,7 +112,7 @@ test(TestName.OnboardingTimeoutSkipsProvisioning, async () => {
 
   try {
     const service = runtime.getResourceValue(durable);
-    const executionId = await service.startExecution(userOnboarding, {
+    const executionId = await service.start(userOnboarding, {
       email: "timeout@example.com",
       plan: "free" as const,
     });

@@ -17,7 +17,7 @@ export interface WaitConfig {
  * - otherwise (or on bus issues) fall back to polling the store
  *
  * The durable store remains the source of truth; this manager is purely a convenience layer
- * for callers that want `await durable.wait(...)` / `await durable.execute(...)`.
+ * for callers that want `await durable.wait(...)` / `await durable.startAndWait(...)`.
  */
 export class WaitManager {
   constructor(

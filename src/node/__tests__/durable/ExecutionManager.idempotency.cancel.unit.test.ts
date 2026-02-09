@@ -80,7 +80,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
 
     await expect(
-      manager.startExecution(task, undefined, {
+      manager.start(task, undefined, {
         idempotencyKey: IdempotencyKey.K,
       }),
     ).rejects.toThrow("does not support execution idempotency keys");
@@ -116,7 +116,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     });
 
     await expect(
-      manager.startExecution(task, undefined, {
+      manager.start(task, undefined, {
         idempotencyKey: IdempotencyKey.K,
       }),
     ).rejects.toThrow("Failed to acquire idempotency lock");
@@ -161,7 +161,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
 
     await expect(
-      manager.startExecution(task, undefined, {
+      manager.start(task, undefined, {
         idempotencyKey: IdempotencyKey.K,
       }),
     ).resolves.toBe("existing");
@@ -200,7 +200,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
     const manager = createManager({ store, taskExecutor });
 
     await expect(
-      manager.startExecution(task, undefined, {
+      manager.start(task, undefined, {
         idempotencyKey: IdempotencyKey.K,
       }),
     ).rejects.toThrow("Failed to set idempotency mapping");

@@ -22,10 +22,9 @@ function createMockService(
     : <T>(val: T) => jest.fn(async () => val);
 
   return {
-    startExecution: mockFn("e1"),
+    start: mockFn("e1"),
     wait: mockFn("ok"),
-    execute: mockFn("ok"),
-    executeStrict: mockFn("ok"),
+    startAndWait: mockFn("ok"),
     schedule: mockFn("sched1"),
     ensureSchedule: mockFn("sched1"),
     pauseSchedule: mockFn(undefined),
@@ -36,7 +35,6 @@ function createMockService(
     removeSchedule: mockFn(undefined),
     recover: mockFn(undefined),
     signal: mockFn(undefined),
-    start: jest.fn(),
     stop: mockFn(undefined),
     // Cast is necessary because generic methods like wait<TResult>() can't be
     // satisfied by a mock returning a concrete type - this is a known TypeScript limitation
@@ -182,35 +180,22 @@ describe("durable: DurableResource", () => {
       id: "durable.tests.resource.signal",
     });
 
-    expect(await durable.startExecution(task, { a: 1 })).toBe("e1");
-    expect(service.startExecution).toHaveBeenCalledWith(
-      task,
-      { a: 1 },
-      undefined,
-    );
-    expect(await durable.startExecution(task.id, { a: 2 })).toBe("e1");
-    expect(service.startExecution).toHaveBeenCalledWith(
-      task.id,
-      { a: 2 },
-      undefined,
-    );
+    expect(await durable.start(task, { a: 1 })).toBe("e1");
+    expect(service.start).toHaveBeenCalledWith(task, { a: 1 }, undefined);
+    expect(await durable.start(task.id, { a: 2 })).toBe("e1");
+    expect(service.start).toHaveBeenCalledWith(task.id, { a: 2 }, undefined);
 
     expect(await durable.wait<string>("e1")).toBe("ok");
     expect(service.wait).toHaveBeenCalledWith("e1", undefined);
 
-    expect(await durable.execute(task, { a: 1 })).toBe("ok");
-    expect(service.execute).toHaveBeenCalledWith(task, { a: 1 }, undefined);
-    expect(await durable.execute(task.id, { a: 2 })).toBe("ok");
-    expect(service.execute).toHaveBeenCalledWith(task.id, { a: 2 }, undefined);
-
-    expect(await durable.executeStrict(task, { a: 1 })).toBe("ok");
-    expect(service.executeStrict).toHaveBeenCalledWith(
+    expect(await durable.startAndWait(task, { a: 1 })).toBe("ok");
+    expect(service.startAndWait).toHaveBeenCalledWith(
       task,
       { a: 1 },
       undefined,
     );
-    expect(await durable.executeStrict(task.id, { a: 2 })).toBe("ok");
-    expect(service.executeStrict).toHaveBeenCalledWith(
+    expect(await durable.startAndWait(task.id, { a: 2 })).toBe("ok");
+    expect(service.startAndWait).toHaveBeenCalledWith(
       task.id,
       { a: 2 },
       undefined,

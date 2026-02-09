@@ -45,7 +45,7 @@ describe("durable: signals integration", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
 
-    const executionId = await service.startExecution(task, undefined, {
+    const executionId = await service.start(task, undefined, {
       timeout: 5_000,
       waitPollIntervalMs: 5,
     });
@@ -91,7 +91,7 @@ describe("durable: signals integration", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
 
-    const executionId = await service.startExecution(task, undefined, {
+    const executionId = await service.start(task, undefined, {
       timeout: 5_000,
       waitPollIntervalMs: 5,
     });

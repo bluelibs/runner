@@ -24,10 +24,9 @@ Rule: side effects belong inside `ctx.step(...)`.
    - stable `ctx.step("...")` ids
    - explicit `{ stepId }` for `sleep/emit/waitForSignal` in production
 3. **Start the workflow**:
-   - `executionId = await service.startExecution(taskOrTaskId, input)`
+   - `executionId = await service.start(taskOrTaskId, input)`
    - persist `executionId` in your domain row (eg. `orders.execution_id`)
-   - or `await service.execute(taskOrTaskId, input)` to start + wait in one call
-   - or `await service.executeStrict(taskOrTaskId, input)` for stricter result typing
+   - or `await service.startAndWait(taskOrTaskId, input)` to start + wait in one call
 4. **Interact later via signals**:
    - look up `executionId`
    - `await service.signal(executionId, SignalDef, payload)`
@@ -43,10 +42,10 @@ Signals buffer if no waiter exists yet; the next `waitForSignal(...)` consumes t
 
 `taskOrTaskId` is the built task object (`.build()`) or its id string, not the injected dependency callable from `.dependencies({...})`.
 
-`startExecution()` vs `execute()`:
+`start()` vs `startAndWait()`:
 
-- `startExecution(taskOrTaskId, input)` returns `executionId` immediately.
-- `execute(taskOrTaskId, input)` starts and waits for completion.
+- `start(taskOrTaskId, input)` returns `executionId` immediately.
+- `startAndWait(taskOrTaskId, input)` starts and waits for completion.
 
 ## Tagging workflows (required for discovery)
 
@@ -83,7 +82,7 @@ The `durableWorkflowTag` is **required** — workflows without this tag will not
 
 ### Starting workflows from dependencies (HTTP route)
 
-Tagged tasks are for discovery/contracts. Start workflows explicitly via `durable.startExecution(...)` (or `durable.execute(...)` when you want to wait for completion):
+Tagged tasks are for discovery/contracts. Start workflows explicitly via `durable.start(...)` (or `durable.startAndWait(...)` when you want to wait for completion):
 
 ```ts
 import express from "express";
@@ -115,7 +114,7 @@ const api = r
     app.use(express.json());
 
     app.post("/orders/:id/approve", async (req, res) => {
-      const executionId = await durable.startExecution(approveOrder, {
+      const executionId = await durable.start(approveOrder, {
         orderId: req.params.id,
       });
       res.status(202).json({ executionId });

@@ -43,6 +43,6 @@ npm test            # builds + runs the test suite
 | `ctx.waitForSignal(signal, { timeoutMs })` | User onboarding  |
 | `ctx.switch()` (replay-safe branching)     | User onboarding  |
 | `ctx.note()`                               | Both workflows   |
-| `service.startExecution()`                 | index.ts         |
+| `service.start()`                          | index.ts         |
 | `service.signal()`                         | index.ts         |
 | `service.wait()`                           | index.ts         |

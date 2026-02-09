@@ -74,7 +74,7 @@ export interface DurableServiceConfig {
     maxAttempts?: number;
     timeout?: number;
     /**
-     * When a queue is configured, `startExecution()` persists the execution and then enqueues it.
+     * When a queue is configured, `start()` persists the execution and then enqueues it.
      * If enqueue fails (eg. broker outage), the execution would otherwise remain "pending" forever.
      *
      * This delay arms a small store-backed timer as a failsafe so workers can retry resuming it
@@ -106,12 +106,12 @@ export interface ScheduleOptions {
 }
 
 export interface IDurableService {
-  startExecution<TInput, TResult>(
+  start<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<string>;
-  startExecution(
+  start(
     task: string,
     input?: unknown,
     options?: ExecuteOptions,
@@ -129,32 +129,12 @@ export interface IDurableService {
     options?: { timeout?: number; waitPollIntervalMs?: number },
   ): Promise<TResult>;
 
-  execute<TInput, TResult>(
+  startAndWait<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<TResult>;
-  execute(
-    task: string,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<unknown>;
-
-  /**
-   * A stricter alternative to `execute()` that rejects tasks whose result type
-   * includes `undefined` (including `void`, `unknown`, and `any`).
-   *
-   * This mirrors the runtime contract where `wait()`/`execute()` treat
-   * "completed without result" as an error.
-   */
-  executeStrict<TInput, TResult>(
-    task: undefined extends TResult
-      ? never
-      : ITask<TInput, Promise<TResult>, any, any, any, any>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<TResult>;
-  executeStrict(
+  startAndWait(
     task: string,
     input?: unknown,
     options?: ExecuteOptions,
@@ -188,6 +168,9 @@ export interface IDurableService {
 
   recover(): Promise<void>;
 
+  /**
+   * Starts the durable polling loop (timers/schedules processing).
+   */
   start(): void;
 
   stop(): Promise<void>;

@@ -20,11 +20,8 @@ export interface DurableResourceConfig {
 
 export interface IDurableResource extends Pick<
   IDurableService,
-  | "startExecution"
   | "cancelExecution"
   | "wait"
-  | "execute"
-  | "executeStrict"
   | "schedule"
   | "ensureSchedule"
   | "pauseSchedule"
@@ -36,6 +33,28 @@ export interface IDurableResource extends Pick<
   | "recover"
   | "signal"
 > {
+  start<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
+    input?: TInput,
+    options?: ExecuteOptions,
+  ): Promise<string>;
+  start(
+    task: string,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<string>;
+
+  startAndWait<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
+    input?: TInput,
+    options?: ExecuteOptions,
+  ): Promise<TResult>;
+  startAndWait(
+    task: string,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<unknown>;
+
   /**
    * Reads the durable context for the currently running workflow execution.
    * Throws if called outside of a durable execution.
@@ -72,7 +91,7 @@ export interface IDurableResource extends Pick<
 
 /**
  * A Runner-facing wrapper around `DurableService` that exposes a per-instance
- * context store and the public durable API (`execute`, `signal`, `wait`, etc.).
+ * context store and the public durable API (`start`, `startAndWait`, `signal`, `wait`, etc.).
  *
  * This enables tasks to depend on a specific durable instance and call
  * `durable.use()` to access the per-execution durable context.
@@ -174,25 +193,25 @@ export class DurableResource implements IDurableResource {
     return next;
   }
 
-  startExecution<TInput, TResult>(
+  start<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<string>;
-  startExecution(
+  start(
     task: string,
     input?: unknown,
     options?: ExecuteOptions,
   ): Promise<string>;
-  startExecution(
+  start(
     task: string | ITask<any, Promise<any>, any, any, any, any>,
     input?: unknown,
     options?: ExecuteOptions,
   ): Promise<string> {
     if (typeof task === "string") {
-      return this.service.startExecution(task, input, options);
+      return this.service.start(task, input, options);
     }
-    return this.service.startExecution(task, input, options);
+    return this.service.start(task, input, options);
   }
 
   cancelExecution(executionId: string, reason?: string): Promise<void> {
@@ -206,48 +225,25 @@ export class DurableResource implements IDurableResource {
     return this.service.wait<TResult>(executionId, options);
   }
 
-  execute<TInput, TResult>(
+  startAndWait<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<TResult>;
-  execute(
+  startAndWait(
     task: string,
     input?: unknown,
     options?: ExecuteOptions,
   ): Promise<unknown>;
-  execute(
+  startAndWait(
     task: string | ITask<any, Promise<any>, any, any, any, any>,
     input?: unknown,
     options?: ExecuteOptions,
   ): Promise<unknown> {
     if (typeof task === "string") {
-      return this.service.execute(task, input, options);
+      return this.service.startAndWait(task, input, options);
     }
-    return this.service.execute(task, input, options);
-  }
-
-  executeStrict<TInput, TResult>(
-    task: undefined extends TResult
-      ? never
-      : ITask<TInput, Promise<TResult>, any, any, any, any>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<TResult>;
-  executeStrict(
-    task: string,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<unknown>;
-  executeStrict(
-    task: string | ITask<any, Promise<any>, any, any, any, any>,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<unknown> {
-    if (typeof task === "string") {
-      return this.service.executeStrict(task, input, options);
-    }
-    return this.service.executeStrict(task as never, input, options);
+    return this.service.startAndWait(task, input, options);
   }
 
   schedule<TInput, TResult>(

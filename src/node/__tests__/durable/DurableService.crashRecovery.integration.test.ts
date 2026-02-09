@@ -77,7 +77,7 @@ describe("durable: crash recovery + resume (integration)", () => {
       handler,
     });
 
-    const executionId = await service1.startExecution(task);
+    const executionId = await service1.start(task);
     const suspended = await store.getExecution(executionId);
 
     expect(suspended?.status).toBe(ExecutionStatus.Sleeping);
@@ -143,7 +143,7 @@ describe("durable: crash recovery + resume (integration)", () => {
       execution: { maxAttempts: 2 },
     });
 
-    const executionId = await service1.startExecution(task);
+    const executionId = await service1.start(task);
     const retrying = await store.getExecution(executionId);
 
     expect(retrying?.status).toBe(ExecutionStatus.Retrying);

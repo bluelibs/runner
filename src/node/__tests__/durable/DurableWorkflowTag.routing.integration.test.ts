@@ -34,7 +34,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     await runtime.dispose();
   });
 
-  it("executes tagged workflows explicitly via durable.execute()", async () => {
+  it("executes tagged workflows explicitly via durable.startAndWait()", async () => {
     const durable = memoryDurableResource.fork("durable.tests.routing.execute");
     const durableRegistration = durable.with({ worker: false });
 
@@ -59,7 +59,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const runtime = await run(app, { logs: { printThreshold: null } });
     const durableRuntime = runtime.getResourceValue(durable);
 
-    await expect(durableRuntime.execute(task, { v: 2 })).resolves.toEqual(
+    await expect(durableRuntime.startAndWait(task, { v: 2 })).resolves.toEqual(
       expect.objectContaining({
         durable: { executionId: expect.any(String) },
         data: { value: 4 },
@@ -110,7 +110,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const runtime = await run(app, { logs: { printThreshold: null } });
     const durableRuntime = runtime.getResourceValue(durable);
 
-    const executionId = await durableRuntime.startExecution(task.id, { v: 3 });
+    const executionId = await durableRuntime.start(task.id, { v: 3 });
     const result = await durableRuntime.wait<{
       durable: { executionId: string | null };
       data: { value: number };

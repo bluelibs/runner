@@ -38,7 +38,7 @@ describe("durable: DurableService integration", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const service = runtime.getResourceValue(durable);
 
-    const res = await service.execute(
+    const res = await service.startAndWait(
       task,
       { v: 1 },
       {

@@ -153,64 +153,50 @@ export class DurableService implements IDurableService {
     return this.taskRegistry.find(taskId);
   }
 
-  startExecution<TInput, TResult>(
+  start<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<string>;
-  startExecution(
+  start(
     task: string,
     input?: unknown,
     options?: ExecuteOptions,
   ): Promise<string>;
-  async startExecution(
-    task: string | ITask<any, Promise<any>, any, any, any, any>,
+  start(): void;
+  start(
+    task?: string | ITask<any, Promise<any>, any, any, any, any>,
     input?: unknown,
     options?: ExecuteOptions,
-  ): Promise<string> {
-    return this.executionManager.startExecution(task, input, options);
+  ): Promise<string> | void {
+    if (task === undefined) {
+      this.pollingManager.start();
+      return;
+    }
+
+    return this.executionManager.start(task, input, options);
   }
 
   async cancelExecution(executionId: string, reason?: string): Promise<void> {
     await this.executionManager.cancelExecution(executionId, reason);
   }
 
-  execute<TInput, TResult>(
+  startAndWait<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<TResult>;
-  execute(
+  startAndWait(
     task: string,
     input?: unknown,
     options?: ExecuteOptions,
   ): Promise<unknown>;
-  async execute(
+  async startAndWait(
     task: string | ITask<any, Promise<any>, any, any, any, any>,
     input?: unknown,
     options?: ExecuteOptions,
   ): Promise<unknown> {
-    return this.executionManager.execute(task, input, options);
-  }
-
-  executeStrict<TInput, TResult>(
-    task: undefined extends TResult
-      ? never
-      : ITask<TInput, Promise<TResult>, any, any, any, any>,
-    input?: TInput,
-    options?: ExecuteOptions,
-  ): Promise<TResult>;
-  executeStrict(
-    task: string,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<unknown>;
-  async executeStrict(
-    task: string | ITask<any, Promise<any>, any, any, any, any>,
-    input?: unknown,
-    options?: ExecuteOptions,
-  ): Promise<unknown> {
-    return this.executionManager.executeStrict(task, input, options);
+    return this.executionManager.startAndWait(task, input, options);
   }
 
   wait<TResult>(
@@ -268,10 +254,6 @@ export class DurableService implements IDurableService {
         await this.executionManager.kickoffExecution(exec.id);
       }
     }
-  }
-
-  start(): void {
-    this.pollingManager.start();
   }
 
   async stop(): Promise<void> {

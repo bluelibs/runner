@@ -22,7 +22,7 @@ export interface IDurableStore {
 
   /**
    * Optional execution-level idempotency mapping.
-   * If supported, allows `startExecution(..., { idempotencyKey })` to dedupe workflow starts.
+   * If supported, allows `start(..., { idempotencyKey })` to dedupe workflow starts.
    */
   getExecutionIdByIdempotencyKey?(params: {
     taskId: string;
