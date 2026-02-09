@@ -2,7 +2,7 @@ import type { SerializerLike } from "./serializer";
 import type { ProtocolEnvelope } from "./globals/resources/tunnel/protocol";
 import { assertOkEnvelope } from "./globals/resources/tunnel/protocol";
 import { createExposureFetch } from "./http-fetch-tunnel.resource";
-import { buildUniversalManifest } from "./tunnels/buildUniversalManifest";
+import { buildUniversalManifest } from "./tools/buildUniversalManifest";
 import type { IAsyncContext } from "./types/asyncContext";
 import type { IErrorHelper } from "./types/error";
 

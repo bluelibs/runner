@@ -10,7 +10,7 @@ import { debugResource } from "./globals/resources/debug";
 import {
   registerProcessLevelSafetyNets,
   registerShutdownHook,
-} from "./processHooks";
+} from "./tools/processShutdownHooks";
 import {
   OnUnhandledError,
   createDefaultUnhandledError,
