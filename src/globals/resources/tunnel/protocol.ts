@@ -4,6 +4,7 @@ export interface ProtocolErrorShape {
   code: string;
   message: string;
   details?: unknown;
+  httpCode?: number;
   // Optional app error identity and payload (when server sends typed errors)
   id?: string;
   data?: unknown;
@@ -35,6 +36,7 @@ export interface EventRequest {
 export class TunnelError extends Error {
   public readonly code: string;
   public readonly details?: unknown;
+  public readonly httpCode?: number;
   public readonly id?: string;
   public readonly data?: unknown;
 
@@ -42,12 +44,13 @@ export class TunnelError extends Error {
     code: string,
     message: string,
     details?: unknown,
-    extras?: { id?: string; data?: unknown },
+    extras?: { id?: string; data?: unknown; httpCode?: number },
   ) {
     super(message);
     this.name = "TunnelError";
     this.code = code;
     this.details = details;
+    this.httpCode = extras?.httpCode;
     this.id = extras?.id;
     this.data = extras?.data;
   }
@@ -71,6 +74,7 @@ export function toTunnelError(
       const pe = input as ProtocolErrorShape;
       const msg = pe.message || fallbackMessage || "Tunnel error";
       return new TunnelError(pe.code, msg, pe.details, {
+        httpCode: pe.httpCode,
         id: pe.id,
         data: pe.data,
       });

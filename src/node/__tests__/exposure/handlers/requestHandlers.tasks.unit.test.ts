@@ -22,6 +22,7 @@ describe("requestHandlers - task handling", () => {
     it("includes id and data for known application errors", async () => {
       const AppError = defineError<{ code: number; message: string }>({
         id: "tests.errors.app",
+        httpCode: 409,
       });
       const deps: any = {
         store: {
@@ -55,9 +56,10 @@ describe("requestHandlers - task handling", () => {
       const json = res._buf
         ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
         : undefined;
-      expect(res._status).toBe(500);
+      expect(res._status).toBe(409);
       expect(json?.error?.id).toBe("tests.errors.app");
       expect(json?.error?.data).toEqual({ code: 7, message: "Nope" });
+      expect(json?.error?.httpCode).toBe(409);
     });
 
     it("omits id when the matched error has a non-string name", async () => {

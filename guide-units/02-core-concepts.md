@@ -1041,7 +1041,7 @@ const profileTask = r
 
 ### Errors
 
-Typed errors can be declared once and injected anywhere. Register them alongside other items and consume via dependencies. The injected value is the error helper itself, exposing `.throw()`, `.is()`, `.toString()`, and `id`.
+Typed errors can be declared once and injected anywhere. Register them alongside other items and consume via dependencies. The injected value is the error helper itself, exposing `.throw()`, `.is()`, `id`, and optional `httpCode`.
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -1049,6 +1049,7 @@ import { r } from "@bluelibs/runner";
 // Fluent builder for errors
 const userNotFoundError = r
   .error<{ code: number; message: string }>("app.errors.userNotFound")
+  .httpCode(404)
   .dataSchema(z.object({ ... }))
   .format((d) => `[${d.code}] ${d.message}`)
   .remediation("Verify the user ID exists before calling getUser.")
@@ -1065,7 +1066,7 @@ const getUser = r
 const app = r.resource("app").register([userNotFoundError, getUser]).build();
 ```
 
-The thrown `Error` has `name = id`. By default `message` is `JSON.stringify(data)`, but `.format(data => string)` lets you craft a human-friendly message instead. When `.remediation()` is provided, the fix-it advice is appended to `message` and `toString()`, and is also accessible as `error.remediation`.
+The thrown `Error` has `name = id`. By default `message` is `JSON.stringify(data)`, but `.format(data => string)` lets you craft a human-friendly message instead. When `.remediation()` is provided, the fix-it advice is appended to `message` and `toString()`, and is also accessible as `error.remediation`. If you set `.httpCode(...)`, the helper and thrown error expose `httpCode`.
 
 ```ts
 try {
@@ -1074,7 +1075,9 @@ try {
   if (userNotFoundError.is(err)) {
     // err.name      === "app.errors.userNotFound"
     // err.message   === "[404] User not found\n\nRemediation: Verify the user ID exists before calling getUser."
+    // err.httpCode  === 404
     // err.remediation === "Verify the user ID exists before calling getUser."
+    // userNotFoundError.httpCode === 404
     console.log(`Caught error: ${err.name} - ${err.message}`);
   }
 }

@@ -21,6 +21,7 @@ enum ExposureErrorField {
   Name = "name",
   Message = "message",
   Code = "code",
+  HttpCode = "httpCode",
   Id = "id",
   Data = "data",
   Stack = "stack",
@@ -47,6 +48,12 @@ const isJsonBody = (value: unknown): value is JsonBody =>
 
 const toErrorRecord = (value: unknown): Record<string, unknown> | undefined =>
   isRecord(value) ? value : undefined;
+
+const isValidHttpCode = (value: unknown): value is number =>
+  typeof value === "number" &&
+  Number.isInteger(value) &&
+  value >= 100 &&
+  value <= 599;
 
 /** Sanitizes 500 errors if they are not application-defined */
 export const sanitizeErrorResponse = (response: unknown): JsonResponse => {
@@ -116,6 +123,10 @@ export const sanitizeErrorResponse = (response: unknown): JsonResponse => {
         safeError.data = bodyError.data;
       }
 
+      if (isValidHttpCode(bodyError.httpCode)) {
+        safeError.httpCode = bodyError.httpCode;
+      }
+
       return {
         ok: false,
         error: safeError,
@@ -148,18 +159,39 @@ export interface HandleRequestErrorOptions {
   logKey: ExposureErrorLogKey;
 }
 
+interface AppErrorExtra extends Record<string, unknown> {
+  id?: string;
+  data?: unknown;
+  httpCode?: number;
+}
+
 const resolveAppErrorExtra = (
   store: Store,
   error: unknown,
-): Record<string, unknown> | undefined => {
+): AppErrorExtra | undefined => {
   try {
     for (const helper of store.errors.values()) {
       if (helper.is(error)) {
-        if (!isRecord(error)) return { id: undefined, data: undefined };
+        if (!isRecord(error)) {
+          return {
+            id: undefined,
+            data: undefined,
+            httpCode: isValidHttpCode(helper.httpCode)
+              ? helper.httpCode
+              : undefined,
+          };
+        }
+
         const name = error[ExposureErrorField.Name];
         const id = typeof name === "string" ? name : undefined;
         const data = error[ExposureErrorField.Data];
-        return { id, data };
+        const runtimeHttpCode = error[ExposureErrorField.HttpCode];
+        const httpCode = isValidHttpCode(runtimeHttpCode)
+          ? runtimeHttpCode
+          : isValidHttpCode(helper.httpCode)
+            ? helper.httpCode
+            : undefined;
+        return { id, data, httpCode };
       }
     }
   } catch {
@@ -173,6 +205,7 @@ export const handleRequestError = (
 ): void => {
   const { error, req, res, store, logger, cors, serializer, logKey } = options;
   const appErrorExtra = resolveAppErrorExtra(store, error);
+  const responseStatus = appErrorExtra?.httpCode ?? 500;
   const displayMessage =
     appErrorExtra && error instanceof Error && error.message
       ? error.message
@@ -183,7 +216,7 @@ export const handleRequestError = (
     res,
     sanitizeErrorResponse(
       jsonErrorResponse(
-        500,
+        responseStatus,
         displayMessage,
         ExposureErrorCode.InternalError,
         appErrorExtra,

@@ -19,6 +19,7 @@ export function errorBuilder<TData extends DefaultErrorType = DefaultErrorType>(
   const initial: BuilderState<TData> = Object.freeze({
     id,
     filePath,
+    httpCode: undefined,
     serialize: undefined,
     parse: undefined,
     dataSchema: undefined,

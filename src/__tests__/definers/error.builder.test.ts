@@ -110,6 +110,45 @@ describe("error builder", () => {
     ).toContain("error.builder.test");
   });
 
+  it("supports httpCode in builder and exposes it on helper and thrown error", () => {
+    const E = r
+      .error<{ reason: string }>("tests.errors.httpCode")
+      .httpCode(404)
+      .format((d) => d.reason)
+      .build();
+
+    expect(E.httpCode).toBe(404);
+
+    try {
+      E.throw({ reason: "missing" });
+      fail("Expected throw");
+    } catch (err) {
+      if (!E.is(err)) {
+        fail("Expected typed error");
+      }
+      expect(err.httpCode).toBe(404);
+      expect(err.message).toBe("missing");
+    }
+  });
+
+  it("fails fast when httpCode is below range", () => {
+    expect(() => r.error("tests.errors.httpCode.low").httpCode(99)).toThrow(
+      /httpCode must be an integer between 100 and 599/i,
+    );
+  });
+
+  it("fails fast when httpCode is above range", () => {
+    expect(() => r.error("tests.errors.httpCode.high").httpCode(600)).toThrow(
+      /httpCode must be an integer between 100 and 599/i,
+    );
+  });
+
+  it("fails fast when httpCode is not an integer", () => {
+    expect(() =>
+      r.error("tests.errors.httpCode.float").httpCode(400.5),
+    ).toThrow(/httpCode must be an integer between 100 and 599/i);
+  });
+
   describe("remediation", () => {
     it("appends static remediation advice to message and toString()", () => {
       const E = r

@@ -10,6 +10,7 @@ export interface IErrorDefinition<
   TData extends DefaultErrorType = DefaultErrorType,
 > {
   id: string;
+  httpCode?: number;
   serialize?: (data: TData) => string;
   parse?: (data: string) => TData;
   format?: (data: TData) => string;
@@ -30,6 +31,7 @@ export interface IErrorDefinitionFinal<
   TData extends DefaultErrorType,
 > extends IErrorDefinition<TData> {
   format: (data: TData) => string;
+  httpCode?: number;
   remediation?: string | ((data: TData) => string);
 }
 
@@ -43,6 +45,7 @@ export interface IRunnerError<
   TData extends DefaultErrorType = DefaultErrorType,
 > extends Error {
   id: string;
+  httpCode?: number;
   data: TData;
   remediation?: string;
 }
@@ -56,6 +59,8 @@ export interface IErrorHelper<
 > {
   /** Unique id for registration and DI */
   id: string;
+  /** Optional HTTP status code associated with this error helper */
+  httpCode?: number;
   /** Throw a typed error with the given data */
   throw(data: TData): never;
   /** Type guard for checking if an unknown error is this error */

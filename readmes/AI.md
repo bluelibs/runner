@@ -349,6 +349,7 @@ import { r } from "@bluelibs/runner";
 // Fluent builder
 const AppError = r
   .error<{ code: number; message: string }>("app.errors.AppError")
+  .httpCode(400)
   .dataSchema({ parse: (value) => value })
   .format((d) => `[${d.code}] ${d.message}`)
   .remediation("Check the request payload and retry with valid data.")
@@ -358,14 +359,17 @@ try {
   AppError.throw({ code: 400, message: "Oops" });
 } catch (err) {
   if (AppError.is(err)) {
-    // err.message  → "[400] Oops\n\nRemediation: Check the request payload and retry with valid data."
-    // err.remediation → "Check the request payload and retry with valid data."
+    // err.message -> "[400] Oops\n\nRemediation: Check the request payload and retry with valid data."
+    // err.httpCode -> 400
+    // err.remediation -> "Check the request payload and retry with valid data."
+    // AppError.httpCode -> 400
   }
 }
 ```
 
 - Recommended ids: `{domain}.errors.{PascalCaseName}` (for example: `app.errors.InvalidCredentials`).
 - The thrown `Error` has `name = id` and `message = format(data)`. If you don't provide `.format(...)`, the default is `JSON.stringify(data)`.
+- `.httpCode(number)` sets an HTTP status for the error helper (must be an integer in `100..599`). The helper exposes `helper.httpCode`, and thrown typed errors expose `error.httpCode`.
 - `.remediation(stringOrFn)` attaches fix-it advice. Accepts a static string or `(data) => string`. When present, `error.message` and `error.toString()` include `\n\nRemediation: <advice>`. The raw advice is also available via `error.remediation`.
 - `message` is not required in the data unless your custom formatter expects it.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
@@ -560,3 +564,4 @@ import { r, resource as classicResource } from "@bluelibs/runner";
 const classic = classicResource({ id: "legacy", init: async () => "ok" });
 const modern = r.resource("modern").register([classic]).build();
 ```
+

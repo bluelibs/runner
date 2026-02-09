@@ -54,4 +54,9 @@ describe("tunnel protocol - more branches", () => {
     expect(te.message).toBe("STR");
     expect(te.code).toBe("UNKNOWN");
   });
+
+  it("TunnelError stores httpCode from extras", () => {
+    const te = new TunnelError("X", "boom", undefined, { httpCode: 429 });
+    expect(te.httpCode).toBe(429);
+  });
 });

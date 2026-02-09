@@ -9,6 +9,7 @@ export interface ErrorFluentBuilder<
   TData extends DefaultErrorType = DefaultErrorType,
 > {
   id: string;
+  httpCode(code: number): ErrorFluentBuilder<TData>;
   serialize(fn: (data: TData) => string): ErrorFluentBuilder<TData>;
   parse(fn: (raw: string) => TData): ErrorFluentBuilder<TData>;
   dataSchema(schema: IValidationSchema<TData>): ErrorFluentBuilder<TData>;

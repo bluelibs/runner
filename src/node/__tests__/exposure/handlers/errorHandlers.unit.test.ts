@@ -129,6 +129,48 @@ describe("errorHandlers", () => {
     expect(error?.message).toBe(ErrorMessage.Internal);
   });
 
+  it("uses helper httpCode for non-object typed errors", () => {
+    const serializer = new Serializer();
+    const store = {
+      errors: new Map([
+        [
+          "helper",
+          {
+            httpCode: 410,
+            is: () => true,
+          },
+        ],
+      ]),
+    } as unknown as Store;
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "plain",
+      bufferLogs: true,
+    });
+    const req = { headers: {}, method: "POST", url: "/x" } as IncomingMessage;
+    let statusCode = 0;
+    const res = {
+      writableEnded: false,
+      statusCode: 0,
+      setHeader() {},
+      end() {
+        statusCode = this.statusCode;
+      },
+    } as unknown as ServerResponse;
+
+    handleRequestError({
+      error: "boom",
+      req,
+      res,
+      store,
+      logger,
+      serializer,
+      logKey: ExposureErrorLogKey.TaskError,
+    });
+
+    expect(statusCode).toBe(410);
+  });
+
   it("returns ok:true bodies unchanged", () => {
     const response = {
       statusCode: 200,
@@ -164,5 +206,126 @@ describe("errorHandlers", () => {
 
     const sanitized = sanitizeErrorResponse(response);
     expect(sanitized.status).toBe(500);
+  });
+
+  it("preserves httpCode in sanitized 500 typed error bodies", () => {
+    const response = {
+      status: 500,
+      body: {
+        ok: false,
+        error: {
+          id: "tests.errors.http",
+          message: "Typed",
+          code: ErrorCode.Internal,
+          httpCode: 409,
+        },
+      },
+    };
+
+    const sanitized = sanitizeErrorResponse(response);
+    const error = getErrorRecord(sanitized.body);
+    expect(error?.httpCode).toBe(409);
+  });
+
+  it("uses runtime error httpCode for response status when available", () => {
+    const serializer = new Serializer();
+    const store = {
+      errors: new Map([
+        [
+          "helper",
+          {
+            id: "helper",
+            httpCode: 418,
+            is: () => true,
+          },
+        ],
+      ]),
+    } as unknown as Store;
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "plain",
+      bufferLogs: true,
+    });
+    const req = { headers: {}, method: "POST", url: "/x" } as IncomingMessage;
+    let statusCode = 0;
+    let payload: Buffer | undefined;
+    const res = {
+      writableEnded: false,
+      statusCode: 0,
+      setHeader() {},
+      end(buf?: unknown) {
+        statusCode = this.statusCode;
+        if (buf != null) {
+          payload = Buffer.isBuffer(buf) ? buf : Buffer.from(String(buf));
+        }
+      },
+    } as unknown as ServerResponse;
+    const error = new Error("Boom");
+    (error as unknown as { name: string }).name = "tests.errors.http";
+    (error as unknown as { data: unknown }).data = { reason: "x" };
+    (error as unknown as { httpCode: number }).httpCode = 409;
+
+    handleRequestError({
+      error,
+      req,
+      res,
+      store,
+      logger,
+      serializer,
+      logKey: ExposureErrorLogKey.TaskError,
+    });
+
+    expect(statusCode).toBe(409);
+    const json = payload
+      ? (serializer.parse(payload.toString("utf8")) as Record<string, unknown>)
+      : undefined;
+    const responseError = getErrorRecord(json);
+    expect(responseError?.httpCode).toBe(409);
+  });
+
+  it("falls back to helper httpCode when runtime httpCode is missing", () => {
+    const serializer = new Serializer();
+    const store = {
+      errors: new Map([
+        [
+          "helper",
+          {
+            id: "helper",
+            httpCode: 422,
+            is: () => true,
+          },
+        ],
+      ]),
+    } as unknown as Store;
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "plain",
+      bufferLogs: true,
+    });
+    const req = { headers: {}, method: "POST", url: "/x" } as IncomingMessage;
+    let statusCode = 0;
+    const res = {
+      writableEnded: false,
+      statusCode: 0,
+      setHeader() {},
+      end() {
+        statusCode = this.statusCode;
+      },
+    } as unknown as ServerResponse;
+    const error = new Error("Boom");
+    (error as unknown as { name: string }).name = "tests.errors.http";
+    (error as unknown as { data: unknown }).data = { reason: "x" };
+
+    handleRequestError({
+      error,
+      req,
+      res,
+      store,
+      logger,
+      serializer,
+      logKey: ExposureErrorLogKey.TaskError,
+    });
+
+    expect(statusCode).toBe(422);
   });
 });
