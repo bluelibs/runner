@@ -15,7 +15,7 @@ export interface DurableWorkflowTagConfig {
  * Marks a task as a durable workflow for runtime discovery.
  */
 export const durableWorkflowTag = defineTag<DurableWorkflowTagConfig>({
-  id: "durable.workflow",
+  id: "globals.tags.durableWorkflow",
   meta: {
     title: "Durable Workflow",
     description:
