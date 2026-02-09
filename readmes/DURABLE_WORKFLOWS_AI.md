@@ -60,7 +60,12 @@ const durable = memoryDurableResource.fork("app.durable");
 const onboarding = r
   .task("app.workflows.onboarding")
   .dependencies({ durable })
-  .tags([durableWorkflowTag.with({ category: "users" })])
+  .tags([
+    durableWorkflowTag.with({
+      category: "users",
+      defaults: { invitedBy: "system" },
+    }),
+  ])
   .run(async (_input, { durable }) => {
     const ctx = durable.use();
     await ctx.step("create-user", async () => ({ ok: true }));
@@ -75,7 +80,9 @@ const onboarding = r
 
 The `durableWorkflowTag` is **required** — workflows without this tag will not be discoverable via `getWorkflows()`. The durable resources (`memoryDurableResource` / `redisDurableResource` / `durableResource`) auto-register this tag definition, so you can use it immediately without manual tag registration.
 
-`durableWorkflowTag` is discovery metadata only. The unified response envelope is produced by `startAndWait(...)`: `{ durable: { executionId }, data }`.
+`durableWorkflowTag` is discovery metadata, and can also carry optional `defaults` for `describe(...)`.
+The unified response envelope is produced by `startAndWait(...)`: `{ durable: { executionId }, data }`.
+`defaults` are applied only by `describe(task)` when no explicit describe input is passed.
 
 ### Starting workflows from dependencies (HTTP route)
 
@@ -232,6 +239,9 @@ const shape2 = await durableRuntime.describe<{ orderId: string }>(myTask, {
 ```
 
 The recorder shims `durable.use()` inside the task's `run` and records every `ctx.*` operation.
+
+If the task uses `durableWorkflowTag.with({ defaults: {...} })`, `describe(task)` uses those defaults.
+`describe(task, input)` always overrides tag defaults.
 
 Notes:
 

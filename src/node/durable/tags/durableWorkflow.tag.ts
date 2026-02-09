@@ -6,6 +6,11 @@ export interface DurableWorkflowTagConfig {
    */
   category?: string;
   /**
+   * Optional default input used by `durable.describe(task)` when no explicit
+   * input argument is provided.
+   */
+  defaults?: Record<string, unknown>;
+  /**
    * Optional metadata for dashboards/tooling.
    */
   metadata?: Record<string, unknown>;
