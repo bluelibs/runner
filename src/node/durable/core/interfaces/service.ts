@@ -105,6 +105,13 @@ export interface ScheduleOptions {
   interval?: number;
 }
 
+export interface DurableStartAndWaitResult<TResult = unknown> {
+  durable: {
+    executionId: string;
+  };
+  data: TResult;
+}
+
 export interface IDurableService {
   start<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
@@ -129,16 +136,20 @@ export interface IDurableService {
     options?: { timeout?: number; waitPollIntervalMs?: number },
   ): Promise<TResult>;
 
+  /**
+   * Starts a workflow and waits for completion.
+   * Returns the started execution id together with the workflow result payload.
+   */
   startAndWait<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
-  ): Promise<TResult>;
-  startAndWait(
+  ): Promise<DurableStartAndWaitResult<TResult>>;
+  startAndWait<TResult = unknown>(
     task: string,
     input?: unknown,
     options?: ExecuteOptions,
-  ): Promise<unknown>;
+  ): Promise<DurableStartAndWaitResult<TResult>>;
 
   schedule<TInput, TResult>(
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,

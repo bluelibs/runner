@@ -113,10 +113,7 @@ const onboarding = r
   .run(async (_input, { durable }) => {
     const ctx = durable.use();
     await ctx.step("create-user", async () => ({ ok: true }));
-    return {
-      durable: { executionId: ctx.executionId },
-      data: { ok: true },
-    };
+    return { ok: true };
   })
   .build();
 
@@ -130,7 +127,8 @@ via `getWorkflows()`. The durable resources (`durableResource`, `memoryDurableRe
 and `redisDurableResource`) auto-register this tag definition, so you can use it immediately
 without manual tag registration.
 
-`durableWorkflowTag` also enforces a unified workflow response shape:
+`durableWorkflowTag` is discovery metadata only. The unified response envelope
+is produced by `durable.startAndWait(...)`:
 `{ durable: { executionId }, data }`.
 
 ### Starting Durable Workflows From Resource Dependencies (HTTP route)
@@ -156,10 +154,7 @@ const approveOrder = r
   .run(async (input: { orderId: string }, { durable }) => {
     const ctx = durable.use();
     await ctx.step("approve", async () => ({ approved: true }));
-    return {
-      durable: { executionId: ctx.executionId },
-      data: { orderId: input.orderId, status: "approved" as const },
-    };
+    return { orderId: input.orderId, status: "approved" as const };
   })
   .build();
 
@@ -764,7 +759,8 @@ const result = await d.startAndWait(processOrder, {
 - `start(taskOrTaskId, input)`:
   returns immediately with `executionId` (`string`).
 - `startAndWait(taskOrTaskId, input)`:
-  convenience wrapper for `start(...)` + `wait(executionId)`; returns final workflow result.
+  convenience wrapper for `start(...)` + `wait(executionId)`; returns
+  `{ durable: { executionId }, data }`.
 
 `taskOrTaskId` can be:
 
@@ -790,11 +786,14 @@ const executionIdB = await d.start(approveOrder.id, {
 
 Whatever your workflow function returns becomes the **execution result**, persisted in the durable store. You can retrieve it in three ways depending on your pattern:
 
-- **`startAndWait(task, input)`** — starts the workflow **and** waits for it to finish, returning the result directly:
+- **`startAndWait(task, input)`** — starts the workflow **and** waits for it to finish, returning `{ durable: { executionId }, data }`:
 
   ```ts
   const result = await d.startAndWait(processOrder, { orderId: "order-123" });
-  // result = { success: true, orderId: "order-123", trackingId: "TRK-789" }
+  // result = {
+  //   durable: { executionId: "..." },
+  //   data: { success: true, orderId: "order-123", trackingId: "TRK-789" }
+  // }
   ```
 
 - **`start(task, input)`** + **`wait(executionId)`** — start and wait separately (useful when a webhook or external event resumes the workflow later):

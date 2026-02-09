@@ -24,7 +24,7 @@ function createMockService(
   return {
     start: mockFn("e1"),
     wait: mockFn("ok"),
-    startAndWait: mockFn("ok"),
+    startAndWait: mockFn({ durable: { executionId: "e1" }, data: "ok" }),
     schedule: mockFn("sched1"),
     ensureSchedule: mockFn("sched1"),
     pauseSchedule: mockFn(undefined),
@@ -111,10 +111,7 @@ describe("durable: DurableResource", () => {
     const taggedTask = r
       .task("durable.tests.resource.tagged")
       .tags([durableWorkflowTag.with({ category: "orders" })])
-      .run(async () => ({
-        durable: { executionId: null },
-        data: "ok",
-      }))
+      .run(async () => "ok")
       .build();
 
     const untaggedTask = r
@@ -188,13 +185,19 @@ describe("durable: DurableResource", () => {
     expect(await durable.wait<string>("e1")).toBe("ok");
     expect(service.wait).toHaveBeenCalledWith("e1", undefined);
 
-    expect(await durable.startAndWait(task, { a: 1 })).toBe("ok");
+    expect(await durable.startAndWait(task, { a: 1 })).toEqual({
+      durable: { executionId: "e1" },
+      data: "ok",
+    });
     expect(service.startAndWait).toHaveBeenCalledWith(
       task,
       { a: 1 },
       undefined,
     );
-    expect(await durable.startAndWait(task.id, { a: 2 })).toBe("ok");
+    expect(await durable.startAndWait(task.id, { a: 2 })).toEqual({
+      durable: { executionId: "e1" },
+      data: "ok",
+    });
     expect(service.startAndWait).toHaveBeenCalledWith(
       task.id,
       { a: 2 },

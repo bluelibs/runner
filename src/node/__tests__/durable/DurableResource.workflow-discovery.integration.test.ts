@@ -15,10 +15,7 @@ describe("durable: workflow discovery", () => {
       .run(async (_input: undefined, { durable }) => {
         const ctx = durable.use();
         await ctx.step("once", async () => "ok");
-        return {
-          durable: { executionId: ctx.executionId },
-          data: "ok",
-        };
+        return "ok";
       })
       .build();
 

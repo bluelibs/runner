@@ -1,5 +1,6 @@
 import { NoopEventBus } from "../bus/NoopEventBus";
 import type {
+  DurableStartAndWaitResult,
   DurableServiceConfig,
   ExecuteOptions,
   IDurableService,
@@ -185,17 +186,17 @@ export class DurableService implements IDurableService {
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
-  ): Promise<TResult>;
-  startAndWait(
+  ): Promise<DurableStartAndWaitResult<TResult>>;
+  startAndWait<TResult = unknown>(
     task: string,
     input?: unknown,
     options?: ExecuteOptions,
-  ): Promise<unknown>;
+  ): Promise<DurableStartAndWaitResult<TResult>>;
   async startAndWait(
     task: string | ITask<any, Promise<any>, any, any, any, any>,
     input?: unknown,
     options?: ExecuteOptions,
-  ): Promise<unknown> {
+  ): Promise<DurableStartAndWaitResult<unknown>> {
     return this.executionManager.startAndWait(task, input, options);
   }
 

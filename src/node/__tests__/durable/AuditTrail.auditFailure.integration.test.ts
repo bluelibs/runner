@@ -39,7 +39,10 @@ describe("durable: audit trail failure tolerance (integration)", () => {
 
     await expect(
       service.startAndWait(task, undefined, { timeout: 5_000 }),
-    ).resolves.toBe("ok");
+    ).resolves.toEqual({
+      durable: { executionId: expect.any(String) },
+      data: "ok",
+    });
 
     await runtime.dispose();
   });

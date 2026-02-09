@@ -38,7 +38,10 @@ describe("durable: durableResource + fork + with (integration)", () => {
       .mockResolvedValue(Promise.resolve("ok"));
 
     const d = runtime.getResourceValue(durable);
-    await expect(d.startAndWait(task)).resolves.toBe("ok");
+    await expect(d.startAndWait(task)).resolves.toEqual({
+      durable: { executionId: expect.any(String) },
+      data: "ok",
+    });
 
     spy.mockRestore();
     await runtime.dispose();

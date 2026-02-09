@@ -41,7 +41,10 @@ describe("durable: queue mode integration", () => {
         waitPollIntervalMs: 5,
       },
     );
-    expect(result).toEqual({ v: 4 });
+    expect(result).toEqual({
+      durable: { executionId: expect.any(String) },
+      data: { v: 4 },
+    });
 
     await runtime.dispose();
   });

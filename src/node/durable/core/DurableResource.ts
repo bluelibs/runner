@@ -4,6 +4,7 @@ import type { IEventDefinition } from "../../../types/event";
 import type { AnyTask, ITask } from "../../../types/task";
 import type { IDurableContext } from "./interfaces/context";
 import type {
+  DurableStartAndWaitResult,
   ExecuteOptions,
   IDurableService,
   ScheduleOptions,
@@ -48,12 +49,12 @@ export interface IDurableResource extends Pick<
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
-  ): Promise<TResult>;
-  startAndWait(
+  ): Promise<DurableStartAndWaitResult<TResult>>;
+  startAndWait<TResult = unknown>(
     task: string,
     input?: unknown,
     options?: ExecuteOptions,
-  ): Promise<unknown>;
+  ): Promise<DurableStartAndWaitResult<TResult>>;
 
   /**
    * Reads the durable context for the currently running workflow execution.
@@ -229,17 +230,17 @@ export class DurableResource implements IDurableResource {
     task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
-  ): Promise<TResult>;
-  startAndWait(
+  ): Promise<DurableStartAndWaitResult<TResult>>;
+  startAndWait<TResult = unknown>(
     task: string,
     input?: unknown,
     options?: ExecuteOptions,
-  ): Promise<unknown>;
+  ): Promise<DurableStartAndWaitResult<TResult>>;
   startAndWait(
     task: string | ITask<any, Promise<any>, any, any, any, any>,
     input?: unknown,
     options?: ExecuteOptions,
-  ): Promise<unknown> {
+  ): Promise<DurableStartAndWaitResult<unknown>> {
     if (typeof task === "string") {
       return this.service.startAndWait(task, input, options);
     }

@@ -46,7 +46,10 @@ describe("durable: DurableService integration", () => {
         waitPollIntervalMs: 5,
       },
     );
-    expect(res).toEqual({ before: "before", after: "after" });
+    expect(res).toEqual({
+      durable: { executionId: expect.any(String) },
+      data: { before: "before", after: "after" },
+    });
     expect(stepExecutions).toBe(1);
 
     await runtime.dispose();

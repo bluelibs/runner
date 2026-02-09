@@ -2,6 +2,7 @@ import type { IDurableStore } from "../interfaces/store";
 import type { IDurableQueue } from "../interfaces/queue";
 import type { IEventBus } from "../interfaces/bus";
 import type {
+  DurableStartAndWaitResult,
   DurableServiceConfig,
   ExecuteOptions,
   ITaskExecutor,
@@ -316,12 +317,16 @@ export class ExecutionManager {
     taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
     input?: unknown,
     options?: ExecuteOptions,
-  ): Promise<unknown> {
+  ): Promise<DurableStartAndWaitResult<unknown>> {
     const executionId = await this.start(taskRef, input, options);
-    return await this.waitManager.waitForResult(executionId, {
+    const data = await this.waitManager.waitForResult(executionId, {
       timeout: options?.timeout,
       waitPollIntervalMs: options?.waitPollIntervalMs,
     });
+    return {
+      durable: { executionId },
+      data,
+    };
   }
 
   async processExecution(executionId: string): Promise<void> {

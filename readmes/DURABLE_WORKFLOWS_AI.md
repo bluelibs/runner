@@ -45,7 +45,7 @@ Signals buffer if no waiter exists yet; the next `waitForSignal(...)` consumes t
 `start()` vs `startAndWait()`:
 
 - `start(taskOrTaskId, input)` returns `executionId` immediately.
-- `startAndWait(taskOrTaskId, input)` starts and waits for completion.
+- `startAndWait(taskOrTaskId, input)` starts, waits, and returns `{ durable: { executionId }, data }`.
 
 ## Tagging workflows (required for discovery)
 
@@ -64,10 +64,7 @@ const onboarding = r
   .run(async (_input, { durable }) => {
     const ctx = durable.use();
     await ctx.step("create-user", async () => ({ ok: true }));
-    return {
-      durable: { executionId: ctx.executionId },
-      data: { ok: true },
-    };
+    return { ok: true };
   })
   .build();
 
@@ -78,11 +75,11 @@ const onboarding = r
 
 The `durableWorkflowTag` is **required** — workflows without this tag will not be discoverable via `getWorkflows()`. The durable resources (`memoryDurableResource` / `redisDurableResource` / `durableResource`) auto-register this tag definition, so you can use it immediately without manual tag registration.
 
-`durableWorkflowTag` also enforces a unified response shape: `{ durable: { executionId }, data }`.
+`durableWorkflowTag` is discovery metadata only. The unified response envelope is produced by `startAndWait(...)`: `{ durable: { executionId }, data }`.
 
 ### Starting workflows from dependencies (HTTP route)
 
-Tagged tasks are for discovery/contracts. Start workflows explicitly via `durable.start(...)` (or `durable.startAndWait(...)` when you want to wait for completion):
+Tagged tasks are discovery metadata only. Start workflows explicitly via `durable.start(...)` (or `durable.startAndWait(...)` when you want to wait for completion):
 
 ```ts
 import express from "express";
@@ -98,10 +95,7 @@ const approveOrder = r
   .run(async (input: { orderId: string }, { durable }) => {
     const ctx = durable.use();
     await ctx.step("approve", async () => ({ approved: true }));
-    return {
-      durable: { executionId: ctx.executionId },
-      data: { orderId: input.orderId, status: "approved" as const },
-    };
+    return { orderId: input.orderId, status: "approved" as const };
   })
   .build();
 

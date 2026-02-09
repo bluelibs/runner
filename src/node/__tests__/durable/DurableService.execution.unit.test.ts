@@ -61,7 +61,7 @@ describe("durable: DurableService — execution (unit)", () => {
     ]);
   });
 
-  it("throws if execute is called without a taskExecutor", async () => {
+  it("throws if startAndWait is called without a taskExecutor", async () => {
     const store = new MemoryStore();
     const service = new DurableService({ store });
     const task = okTask("t");
@@ -69,7 +69,7 @@ describe("durable: DurableService — execution (unit)", () => {
     await expect(service.startAndWait(task)).rejects.toThrow("taskExecutor");
   });
 
-  it("resolves a task by id string for execute/schedule", async () => {
+  it("resolves a task by id string for startAndWait/schedule", async () => {
     const store = new MemoryStore();
     const task = r
       .task("t.by-id")
@@ -95,7 +95,8 @@ describe("durable: DurableService — execution (unit)", () => {
     });
 
     await expect(service.startAndWait(task.id, { v: 3 })).resolves.toEqual({
-      v: 6,
+      durable: { executionId: expect.any(String) },
+      data: { v: 6 },
     });
 
     const scheduleId = await service.schedule(task.id, { v: 2 }, { delay: 5 });
@@ -166,7 +167,10 @@ describe("durable: DurableService — execution (unit)", () => {
       execution: { maxAttempts: 1 },
     });
 
-    await expect(service.startAndWait(task)).resolves.toBe("ok");
+    await expect(service.startAndWait(task)).resolves.toEqual({
+      durable: { executionId: expect.any(String) },
+      data: "ok",
+    });
   });
 
   it("marks execution failed when task is not registered", async () => {

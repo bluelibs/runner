@@ -23,7 +23,8 @@ describe("durable test utils", () => {
     const durableRuntime = runtime.getResourceValue(durable);
 
     await expect(durableRuntime.startAndWait(task)).resolves.toEqual({
-      value: "ok",
+      durable: { executionId: expect.any(String) },
+      data: { value: "ok" },
     });
     expect((await store.listExecutions({})).length).toBeGreaterThan(0);
 
@@ -53,7 +54,10 @@ describe("durable test utils", () => {
     const runtime = await run(app, { logs: { printThreshold: null } });
     const durableRuntime = runtime.getResourceValue(durable);
 
-    await expect(durableRuntime.startAndWait(task)).resolves.toBe("done");
+    await expect(durableRuntime.startAndWait(task)).resolves.toEqual({
+      durable: { executionId: expect.any(String) },
+      data: "done",
+    });
 
     await runtime.dispose();
   });

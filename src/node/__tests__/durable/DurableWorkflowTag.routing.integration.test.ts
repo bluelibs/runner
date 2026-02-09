@@ -14,10 +14,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
       .run(async (input: { v: number }, { durable }) => {
         const ctx = durable.use();
         const value = await ctx.step("double", async () => input.v * 2);
-        return {
-          durable: { executionId: ctx.executionId },
-          data: { value },
-        };
+        return { value };
       })
       .build();
 
@@ -45,10 +42,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
       .run(async (input: { v: number }, { durable }) => {
         const ctx = durable.use();
         const value = await ctx.step("double", async () => input.v * 2);
-        return {
-          durable: { executionId: ctx.executionId },
-          data: { value },
-        };
+        return { value };
       })
       .build();
 
@@ -74,10 +68,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
         expect.objectContaining({
           taskId: task.id,
           status: "completed",
-          result: expect.objectContaining({
-            durable: { executionId: expect.any(String) },
-            data: { value: 4 },
-          }),
+          result: { value: 4 },
         }),
       ]),
     );
@@ -96,10 +87,7 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
       .run(async (input: { v: number }, { durable }) => {
         const ctx = durable.use();
         const value = await ctx.step("double", async () => input.v * 2);
-        return {
-          durable: { executionId: ctx.executionId },
-          data: { value },
-        };
+        return { value };
       })
       .build();
 
@@ -111,15 +99,8 @@ describe("durable: durableWorkflowTag execution boundaries (integration)", () =>
     const durableRuntime = runtime.getResourceValue(durable);
 
     const executionId = await durableRuntime.start(task.id, { v: 3 });
-    const result = await durableRuntime.wait<{
-      durable: { executionId: string | null };
-      data: { value: number };
-    }>(executionId);
-
-    expect(result).toEqual({
-      durable: { executionId },
-      data: { value: 6 },
-    });
+    const result = await durableRuntime.wait<{ value: number }>(executionId);
+    expect(result).toEqual({ value: 6 });
 
     await runtime.dispose();
   });
