@@ -4,7 +4,8 @@ We take the security of @bluelibs/runner seriously. This document explains how t
 
 ## Supported Versions
 
-- 4.x (current): security fixes accepted
+- 5.x (current stable): security fixes accepted
+- 4.x (maintenance LTS): critical security fixes accepted
 - Older versions: not actively supported — please upgrade
 
 ## Reporting a Vulnerability

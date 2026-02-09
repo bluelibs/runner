@@ -440,7 +440,8 @@ const sum = await client.task<{ a: number; b: number }, number>(
 
 Authorization rule:
 
-- if neither a token nor validator tasks exist, exposure is open (backwards compatible)
+- if neither a token nor validator tasks exist, exposure is **fail-closed** with `AUTH_NOT_CONFIGURED`
+- if you intentionally want anonymous access, set `http.auth.allowAnonymous: true`
 - otherwise, a request is allowed if **either** the static token matches **or** **any** validator approves
 
 Validator input includes `{ headers, method, url, path }`.
@@ -451,6 +452,9 @@ Production checklist:
 - enable server allow-lists (next section) so you only expose the task/event ids you intend to support
 - configure body limits (`http.limits`) to match your payload expectations
 - keep `/discovery` behind auth (and avoid exposing it publicly if you don't need it)
+
+> [!IMPORTANT]
+> Security default: auth is fail-closed unless you explicitly opt into anonymous access with `auth.allowAnonymous: true`.
 
 ---
 
@@ -586,6 +590,26 @@ export const upload = r
   .run(async (input: { file: InputFile<NodeJS.ReadableStream> }) => {
     const { path, bytesWritten } = await input.file.toTempFile();
     return { path, bytesWritten };
+  })
+  .build();
+```
+
+If you want ergonomic helpers for file persistence in Node, use:
+
+```ts
+import { r } from "@bluelibs/runner";
+import {
+  readInputFileToBuffer,
+  writeInputFileToPath,
+  type NodeInputFile,
+} from "@bluelibs/runner/node";
+
+export const upload = r
+  .task("app.tasks.upload")
+  .run(async (input: { file: NodeInputFile }) => {
+    const bytes = await readInputFileToBuffer(input.file);
+    const saved = await writeInputFileToPath(input.file, "/tmp/upload.bin");
+    return { size: bytes.length, path: saved.path };
   })
   .build();
 ```

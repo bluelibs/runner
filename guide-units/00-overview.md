@@ -91,6 +91,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 
 **Getting Started**
 
+- [Prerequisites](#prerequisites) - Runtime/tooling requirements
 - [Why Runner?](#why-runner) - The problem we solve
 - [What Is This Thing?](#what-is-this-thing)
 - [When to Use Runner](#when-to-use-runner) - Is it right for you?
@@ -126,6 +127,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Retry](#retrying-failed-operations) - Resilience patterns
 - [Timeouts](#timeouts) - Operation time limits
 - [Logging](#logging) - Structured observability
+- [Observability Strategy](#observability-strategy-logs-metrics-and-traces) - Signals and alerting baseline
 - [Debug](#debug-resource) - Development tooling
 
 **Concurrency & Scheduling**
@@ -155,6 +157,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 
 - [Quick Reference Cheat Sheet](#quick-reference-cheat-sheet) - **Bookmark this!**
 - [Fluent Builders](#fluent-builders-r) - Ergonomic API
+- [Runner Dev Tools Quick Start](#runner-dev-tools-quick-start) - CLI and runtime introspection
 - [Type Helpers](#type-helpers) - TypeScript utilities
 - [Runtime Validation](#runtime-validation) - Schema validation
 - [Meta](#meta) - Component documentation
@@ -166,6 +169,9 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Internal Services](#internal-services) - Framework internals
 - [Why Choose BlueLibs Runner?](#why-choose-bluelibs-runner) - Framework comparison
 - [Migration Path](#the-migration-path) - Adopting Runner
+- [Release, Support, and Deprecation Policy](#release-support-and-deprecation-policy) - Upgrade governance
+- [Production Readiness Checklist](#production-readiness-checklist) - Framework-wide deploy checks
+- [Node API Index](#node-api-index) - Node-only exports at a glance
 - [Troubleshooting](#troubleshooting) - Common issues and solutions
 - [Under the Hood](#under-the-hood) - Architecture deep dive
 - [Integration Recipes](#integration-recipes) - Docker, k8s, observability

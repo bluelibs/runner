@@ -79,6 +79,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
 | [AI-Friendly Docs](./readmes/AI.md)                                                                                 | Docs    | Compact summary (<5000 tokens)      |
 | [Full Guide](./readmes/FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
+| [Support & Release Policy](./readmes/ENTERPRISE.md)                                                                 | Docs    | Support windows and deprecation     |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
@@ -96,6 +97,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 - **Need Node-only capabilities**: See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
 - **Need remote execution**: See [HTTP Tunnels](./readmes/TUNNELS.md) (expose from Node.js, call from any `fetch` runtime)
 - **Care about portability**: Read [Multi-Platform Architecture](./readmes/MULTI_PLATFORM.md)
+- **Planning upgrades**: See [Support & Release Policy](./readmes/ENTERPRISE.md)
 - **Want the complete guide**: Read [FULL_GUIDE.md](./readmes/FULL_GUIDE.md)
 - **Want the short version**: Read [AI.md](./readmes/AI.md)
 
@@ -108,6 +110,21 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | Durable workflows (`@bluelibs/runner/node`) | Full    | None    | None | Node-only module                           |
 | Tunnels client (`createExposureFetch`)      | Full    | Full    | Full | Requires `fetch`                           |
 | Tunnels server (`@bluelibs/runner/node`)    | Full    | None    | None | Exposes tasks/events over HTTP             |
+
+---
+
+## Prerequisites
+
+Use these minimums before starting:
+
+| Requirement     | Minimum                  | Notes                                                                      |
+| --------------- | ------------------------ | -------------------------------------------------------------------------- |
+| Node.js         | `18.x`                   | Enforced by `package.json#engines.node`                                    |
+| TypeScript      | `5.6+` (recommended)     | Required for typed DX and examples in this repository                      |
+| Package manager | npm / pnpm / yarn / bun  | Examples use npm, but any modern package manager works                     |
+| `fetch` runtime | Built-in or polyfilled   | Required for tunnel clients (`createExposureFetch`, universal HTTP client) |
+
+If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
 ## Your First 5 Minutes
@@ -127,6 +144,8 @@ That's it. Now let's get you to a first successful run.
 
 This is the fastest way to run the TypeScript example at the top of this README:
 
+0. Confirm prerequisites from [Prerequisites](#prerequisites) (Node `18+`, TypeScript `5.6+` recommended)
+
 1. Install dependencies:
 
 ```bash
@@ -144,6 +163,35 @@ npx tsx index.ts
 **That's it!** You now have a working `Runtime` and you can execute tasks with `runtime.runTask(...)`.
 
 > **Tip:** If you prefer an end-to-end example with HTTP, OpenAPI, and persistence, jump to the examples below.
+
+---
+
+## Runner Dev Tools Quick Start
+
+`@bluelibs/runner-dev` gives you CLI scaffolding and runtime introspection.
+
+1. Install (or run without install):
+
+```bash
+npm install -g @bluelibs/runner-dev
+# or
+npx @bluelibs/runner-dev --help
+```
+
+2. Three common commands:
+
+```bash
+# Scaffold a new Runner project
+runner-dev new my-app --install
+
+# Query tasks from a local TypeScript entry file (dry-run mode)
+runner-dev query 'query { tasks { id } }' --entry-file ./src/main.ts
+
+# Inspect a running app via GraphQL endpoint
+ENDPOINT=http://localhost:1337/graphql runner-dev overview --details 10
+```
+
+For full CLI and Dev UI docs, see [Runner Dev Tools](https://github.com/bluelibs/runner-dev).
 
 ---
 
@@ -168,6 +216,11 @@ npx tsx index.ts
 - **Node-only features**:
   - [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md)
   - [HTTP Tunnels](./readmes/TUNNELS.md)
+- **Releases and upgrades**:
+  - [GitHub Releases](https://github.com/bluelibs/runner/releases)
+  - [Support & Release Policy](./readmes/ENTERPRISE.md)
+- **Operational baseline**:
+  - [Production Readiness Checklist](./readmes/FULL_GUIDE.md#production-readiness-checklist)
 - **Multi-platform architecture**: Read [MULTI_PLATFORM.md](./readmes/MULTI_PLATFORM.md)
 
 ---
