@@ -1279,7 +1279,7 @@ const database = resource({
 
 ```typescript
 const expensiveTask = task({
-  middleware: [globals.middleware.cache.with({ ttl: 60000 })],
+  middleware: [globals.middleware.task.cache.with({ ttl: 60000 })],
   run: async (input) => {
     // This expensive computation is cached
     return performExpensiveCalculation(input);

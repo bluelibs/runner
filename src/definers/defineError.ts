@@ -22,7 +22,7 @@ const assertHttpCode = (value: number): void => {
   }
 };
 
-class RunnerError<
+export class RunnerError<
   TData extends DefaultErrorType = DefaultErrorType,
 > extends Error {
   public readonly data!: TData;

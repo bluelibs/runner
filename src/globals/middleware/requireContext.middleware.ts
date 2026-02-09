@@ -6,7 +6,7 @@ export interface RequireContextMiddlewareConfig {
 }
 
 export const requireContextTaskMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.requireContext",
+  id: "globals.middleware.task.requireContext",
   async run({ task, next }, _deps, config: RequireContextMiddlewareConfig) {
     if (!config.context) {
       throw new Error(

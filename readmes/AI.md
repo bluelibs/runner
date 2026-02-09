@@ -373,6 +373,12 @@ try {
 - `.remediation(stringOrFn)` attaches fix-it advice. Accepts a static string or `(data) => string`. When present, `error.message` and `error.toString()` include `\n\nRemediation: <advice>`. The raw advice is also available via `error.remediation`.
 - `message` is not required in the data unless your custom formatter expects it.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
+- Use `r.error.is(err)` to check if an error is _any_ Runner error (not just a specific one). This type guard narrows to `RunnerError` with `id`, `data`, `httpCode`, and `remediation` properties. Useful in catch blocks or error filters:
+  ```ts
+  if (r.error.is(err)) {
+    console.error(`Runner error: ${err.id} (${err.httpCode || "N/A"})`);
+  }
+  ```
 - For HTTP/tunnel clients, you can pass an `errorRegistry` to rethrow remote errors as your typed helpers (optional):
 
   ```ts
@@ -564,4 +570,3 @@ import { r, resource as classicResource } from "@bluelibs/runner";
 const classic = classicResource({ id: "legacy", init: async () => "ok" });
 const modern = r.resource("modern").register([classic]).build();
 ```
-

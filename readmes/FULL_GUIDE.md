@@ -2326,6 +2326,32 @@ const quotaExceeded = r
   .build();
 ```
 
+**Check for any Runner error (not just a specific one):**
+
+Use `r.error.is(error)` to detect whether an error is any Runner error, regardless of its specific type. This is useful in catch blocks, middleware, or error filters when you want to handle all Runner errors differently from standard JavaScript errors:
+
+```ts
+import { r } from "@bluelibs/runner";
+
+try {
+  // Some operation that might throw various errors
+  await riskyOperation();
+} catch (err) {
+  if (r.error.is(err)) {
+    // It's a Runner error - has id, data, httpCode, remediation
+    console.error(`Runner error: ${err.id} (${err.httpCode || "N/A"})`);
+    if (err.remediation) {
+      console.log(`Fix: ${err.remediation}`);
+    }
+  } else {
+    // It's a standard JavaScript error or other type
+    console.error("Unexpected error:", err);
+  }
+}
+```
+
+The `r.error.is()` type guard narrows the error to `RunnerError`, giving you access to `id`, `data`, `httpCode`, and `remediation`. You can also use `instanceof RunnerError` directly if you prefer, but `r.error.is()` is more consistent with the fluent API.
+
 ---
 
 ### Beyond the Big Five

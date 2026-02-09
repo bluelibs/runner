@@ -36,7 +36,7 @@ type CacheMiddlewareConfig = {
  */
 export const journalKeys = {
   /** Whether the result was served from cache (true) or freshly computed (false) */
-  hit: journalHelper.createKey<boolean>("globals.middleware.cache.hit"),
+  hit: journalHelper.createKey<boolean>("globals.middleware.task.cache.hit"),
 } as const;
 
 export const cacheResource = defineResource({
@@ -68,7 +68,7 @@ const defaultKeyBuilder = (taskId: string, input: any) =>
   `${taskId}-${JSON.stringify(input)}`;
 
 export const cacheMiddleware = defineTaskMiddleware({
-  id: "globals.middleware.cache",
+  id: "globals.middleware.task.cache",
   dependencies: { cache: cacheResource },
   async run({ task, next, journal }, deps, config: CacheMiddlewareConfig) {
     const { cache } = deps;
