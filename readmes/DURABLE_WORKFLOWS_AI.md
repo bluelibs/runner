@@ -24,10 +24,10 @@ Rule: side effects belong inside `ctx.step(...)`.
    - stable `ctx.step("...")` ids
    - explicit `{ stepId }` for `sleep/emit/waitForSignal` in production
 3. **Start the workflow**:
-   - `executionId = await service.startExecution(task, input)`
+   - `executionId = await service.startExecution(taskOrTaskId, input)`
    - persist `executionId` in your domain row (eg. `orders.execution_id`)
-   - or `await service.execute(task, input)` to start + wait in one call
-   - or `await service.executeStrict(task, input)` for stricter result typing
+   - or `await service.execute(taskOrTaskId, input)` to start + wait in one call
+   - or `await service.executeStrict(taskOrTaskId, input)` for stricter result typing
 4. **Interact later via signals**:
    - look up `executionId`
    - `await service.signal(executionId, SignalDef, payload)`
@@ -35,6 +35,18 @@ Rule: side effects belong inside `ctx.step(...)`.
 For user-facing status pages, you can read the durable execution on-demand from the durable store using `executionId` (no need to mirror into Postgres): `store.getExecution(executionId)` (or `new DurableOperator(store).getExecutionDetail(executionId)` when supported).
 
 Signals buffer if no waiter exists yet; the next `waitForSignal(...)` consumes the payload.
+
+`taskOrTaskId` can be:
+
+- an `ITask` (recommended, keeps full input/result type-safety)
+- a task id `string` (resolved via runtime registry; fail-fast if not found)
+
+`taskOrTaskId` is the built task object (`.build()`) or its id string, not the injected dependency callable from `.dependencies({...})`.
+
+`startExecution()` vs `execute()`:
+
+- `startExecution(taskOrTaskId, input)` returns `executionId` immediately.
+- `execute(taskOrTaskId, input)` starts and waits for completion.
 
 ## Tagging workflows (required for discovery)
 
@@ -53,7 +65,10 @@ const onboarding = r
   .run(async (_input, { durable }) => {
     const ctx = durable.use();
     await ctx.step("create-user", async () => ({ ok: true }));
-    return { ok: true };
+    return {
+      durable: { executionId: ctx.executionId },
+      data: { ok: true },
+    };
   })
   .build();
 
@@ -63,6 +78,55 @@ const onboarding = r
 ```
 
 The `durableWorkflowTag` is **required** — workflows without this tag will not be discoverable via `getWorkflows()`. The durable resources (`memoryDurableResource` / `redisDurableResource` / `durableResource`) auto-register this tag definition, so you can use it immediately without manual tag registration.
+
+`durableWorkflowTag` also enforces a unified response shape: `{ durable: { executionId }, data }`.
+
+### Starting workflows from dependencies (HTTP route)
+
+Tagged tasks are for discovery/contracts. Start workflows explicitly via `durable.startExecution(...)` (or `durable.execute(...)` when you want to wait for completion):
+
+```ts
+import express from "express";
+import { r, run } from "@bluelibs/runner";
+import { memoryDurableResource, durableWorkflowTag } from "@bluelibs/runner/node";
+
+const durable = memoryDurableResource.fork("app.durable");
+
+const approveOrder = r
+  .task("app.workflows.approveOrder")
+  .dependencies({ durable })
+  .tags([durableWorkflowTag.with({ category: "orders" })])
+  .run(async (input: { orderId: string }, { durable }) => {
+    const ctx = durable.use();
+    await ctx.step("approve", async () => ({ approved: true }));
+    return {
+      durable: { executionId: ctx.executionId },
+      data: { orderId: input.orderId, status: "approved" as const },
+    };
+  })
+  .build();
+
+const api = r
+  .resource("app.api")
+  .register([durable.with({ worker: false }), approveOrder])
+  .dependencies({ durable, approveOrder })
+  .init(async (_cfg, { durable, approveOrder }) => {
+    const app = express();
+    app.use(express.json());
+
+    app.post("/orders/:id/approve", async (req, res) => {
+      const executionId = await durable.startExecution(approveOrder, {
+        orderId: req.params.id,
+      });
+      res.status(202).json({ executionId });
+    });
+
+    app.listen(3000);
+  })
+  .build();
+
+await run(api);
+```
 
 Recommended wiring (config-only resources):
 
@@ -92,8 +156,8 @@ const durableProd = redisDurableResource.fork("app.durable").with({
 
 ## Scheduling
 
-- One-time: `service.schedule(task, input, { at } | { delay })`
-- Recurring: `service.ensureSchedule(task, input, { id, cron } | { id, interval })`
+- One-time: `service.schedule(taskOrTaskId, input, { at } | { delay })`
+- Recurring: `service.ensureSchedule(taskOrTaskId, input, { id, cron } | { id, interval })`
 - Manage: `pauseSchedule/resumeSchedule/getSchedule/listSchedules/updateSchedule/removeSchedule`
 
 ## Recovery

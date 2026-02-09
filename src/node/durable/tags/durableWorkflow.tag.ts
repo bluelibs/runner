@@ -1,5 +1,12 @@
 import { defineTag } from "../../../define";
 
+export interface DurableWorkflowResponse<TResult = unknown> {
+  durable: {
+    executionId: string | null;
+  };
+  data: TResult;
+}
+
 export interface DurableWorkflowTagConfig {
   /**
    * Optional domain/category to group workflows (eg. "orders", "billing").
@@ -14,7 +21,11 @@ export interface DurableWorkflowTagConfig {
 /**
  * Marks a task as a durable workflow for runtime discovery.
  */
-export const durableWorkflowTag = defineTag<DurableWorkflowTagConfig>({
+export const durableWorkflowTag = defineTag<
+  DurableWorkflowTagConfig,
+  void,
+  DurableWorkflowResponse<unknown>
+>({
   id: "globals.tags.durableWorkflow",
   meta: {
     title: "Durable Workflow",

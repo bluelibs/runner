@@ -1,4 +1,5 @@
 import type { IEventDefinition } from "../../../../types/event";
+import type { ITask } from "../../../../types/task";
 import type { IDurableStore } from "./store";
 import type { IDurableQueue } from "./queue";
 import type { IEventBus } from "./bus";
@@ -6,21 +7,16 @@ import type { IDurableContext } from "./context";
 import type { Schedule } from "../types";
 import type { DurableAuditEmitter } from "../audit";
 
-export interface DurableTask<TInput = unknown, TResult = unknown> {
-  id: string;
-  run(input: TInput, ...args: any[]): Promise<TResult>;
-}
-
 export interface ITaskExecutor {
   run<TInput, TResult>(
-    task: DurableTask<TInput, TResult>,
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
   ): Promise<TResult>;
 }
 
 export interface ScheduleConfig<TInput = unknown> {
   id: string;
-  task: DurableTask<TInput, unknown>;
+  task: ITask<TInput, Promise<any>, any, any, any, any> | string;
   cron?: string;
   interval?: number;
   input: TInput;
@@ -61,7 +57,9 @@ export interface DurableServiceConfig {
    * Resolves tasks by id for resuming/recovering executions.
    * Useful in Runner environments where tasks are registered in the Store registry.
    */
-  taskResolver?: (taskId: string) => DurableTask<any, any> | undefined;
+  taskResolver?: (
+    taskId: string,
+  ) => ITask<any, Promise<any>, any, any, any, any> | undefined;
   audit?: {
     enabled?: boolean;
     emitter?: DurableAuditEmitter;
@@ -85,7 +83,7 @@ export interface DurableServiceConfig {
     kickoffFailsafeDelayMs?: number;
   };
   schedules?: ScheduleConfig[];
-  tasks?: Array<DurableTask<any, any>>;
+  tasks?: Array<ITask<any, Promise<any>, any, any, any, any>>;
 }
 
 export interface ExecuteOptions {
@@ -108,9 +106,14 @@ export interface ScheduleOptions {
 }
 
 export interface IDurableService {
-  startExecution<TInput>(
-    task: DurableTask<TInput, unknown>,
+  startExecution<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
+    options?: ExecuteOptions,
+  ): Promise<string>;
+  startExecution(
+    task: string,
+    input?: unknown,
     options?: ExecuteOptions,
   ): Promise<string>;
 
@@ -127,10 +130,15 @@ export interface IDurableService {
   ): Promise<TResult>;
 
   execute<TInput, TResult>(
-    task: DurableTask<TInput, TResult>,
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<TResult>;
+  execute(
+    task: string,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<unknown>;
 
   /**
    * A stricter alternative to `execute()` that rejects tasks whose result type
@@ -140,14 +148,26 @@ export interface IDurableService {
    * "completed without result" as an error.
    */
   executeStrict<TInput, TResult>(
-    task: undefined extends TResult ? never : DurableTask<TInput, TResult>,
+    task: undefined extends TResult
+      ? never
+      : ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<TResult>;
+  executeStrict(
+    task: string,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<unknown>;
 
-  schedule<TInput>(
-    task: DurableTask<TInput, unknown>,
+  schedule<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input: TInput | undefined,
+    options: ScheduleOptions,
+  ): Promise<string>;
+  schedule(
+    task: string,
+    input: unknown,
     options: ScheduleOptions,
   ): Promise<string>;
 
@@ -155,9 +175,14 @@ export interface IDurableService {
    * Idempotently create (or update) a recurring schedule (cron/interval) with a stable id.
    * Safe to call concurrently from multiple processes.
    */
-  ensureSchedule<TInput>(
-    task: DurableTask<TInput, unknown>,
+  ensureSchedule<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input: TInput | undefined,
+    options: ScheduleOptions & { id: string },
+  ): Promise<string>;
+  ensureSchedule(
+    task: string,
+    input: unknown,
     options: ScheduleOptions & { id: string },
   ): Promise<string>;
 

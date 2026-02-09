@@ -113,7 +113,10 @@ const onboarding = r
   .run(async (_input, { durable }) => {
     const ctx = durable.use();
     await ctx.step("create-user", async () => ({ ok: true }));
-    return { ok: true };
+    return {
+      durable: { executionId: ctx.executionId },
+      data: { ok: true },
+    };
   })
   .build();
 
@@ -126,6 +129,62 @@ The `durableWorkflowTag` is **required** — workflows without this tag will not
 via `getWorkflows()`. The durable resources (`durableResource`, `memoryDurableResource`,
 and `redisDurableResource`) auto-register this tag definition, so you can use it immediately
 without manual tag registration.
+
+`durableWorkflowTag` also enforces a unified workflow response shape:
+`{ durable: { executionId }, data }`.
+
+### Starting Durable Workflows From Resource Dependencies (HTTP route)
+
+Tagged workflow tasks are discoverable metadata only. Execution is explicit:
+start with `durable.startExecution(...)` (fire-and-track) or
+`durable.execute(...)` (start-and-wait).
+
+```ts
+import express from "express";
+import { r, run } from "@bluelibs/runner";
+import {
+  memoryDurableResource,
+  durableWorkflowTag,
+} from "@bluelibs/runner/node";
+
+const durable = memoryDurableResource.fork("app.durable");
+
+const approveOrder = r
+  .task("app.workflows.approveOrder")
+  .dependencies({ durable })
+  .tags([durableWorkflowTag.with({ category: "orders" })])
+  .run(async (input: { orderId: string }, { durable }) => {
+    const ctx = durable.use();
+    await ctx.step("approve", async () => ({ approved: true }));
+    return {
+      durable: { executionId: ctx.executionId },
+      data: { orderId: input.orderId, status: "approved" as const },
+    };
+  })
+  .build();
+
+const api = r
+  .resource("app.api")
+  .register([durable.with({ worker: false }), approveOrder])
+  .dependencies({ durable, approveOrder })
+  .init(async (_cfg, { durable, approveOrder }) => {
+    const app = express();
+    app.use(express.json());
+
+    app.post("/orders/:id/approve", async (req, res) => {
+      const executionId = await durable.startExecution(approveOrder, {
+        orderId: req.params.id,
+      });
+
+      res.status(202).json({ executionId });
+    });
+
+    app.listen(3000);
+  })
+  .build();
+
+await run(api);
+```
 
 ### Production wiring (Redis + RabbitMQ)
 
@@ -699,6 +758,33 @@ const result = await d.execute(processOrder, {
 4. **`ctx.waitForSignal(signal)`** records a durable wait checkpoint and suspends execution
 5. **`durable.signal(executionId, signal, payload)`** completes the signal checkpoint and resumes the execution
 6. If process crashes, **`durableService.recover()`** resumes incomplete executions from their last checkpoint
+
+### `startExecution()` vs `execute()` (clear contract)
+
+- `startExecution(taskOrTaskId, input)`:
+  returns immediately with `executionId` (`string`).
+- `execute(taskOrTaskId, input)`:
+  convenience wrapper for `startExecution(...)` + `wait(executionId)`; returns final workflow result.
+
+`taskOrTaskId` can be:
+
+- an `ITask` (the built task object, returned by `.build()`)
+- a task id `string`
+
+It is **not** the injected dependency callable from `.dependencies({ someTask })`. That dependency is a function used to invoke the task directly, not an `ITask` reference.
+
+```ts
+// ✅ built task object
+const executionIdA = await d.startExecution(approveOrder, { orderId: "o1" });
+
+// ✅ task id string
+const executionIdB = await d.startExecution(approveOrder.id, {
+  orderId: "o2",
+});
+
+// ❌ injected callable dependency (different type)
+// await d.startExecution(deps.approveOrder, { orderId: "o3" });
+```
 
 ### What Happens with the Return Value
 
@@ -1473,7 +1559,7 @@ export interface IDurableService {
    * Execute a task with durability and wait for it to complete.
    */
   execute<TInput, TResult>(
-    task: DurableTask<TInput, TResult>,
+    task: ITask<TInput, Promise<TResult>, any, any, any, any> | string,
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<TResult>;
@@ -1482,7 +1568,7 @@ export interface IDurableService {
    * Start a task execution and return the ID immediately.
    */
   startExecution<TInput>(
-    task: DurableTask<TInput, unknown>,
+    task: ITask<TInput, Promise<unknown>, any, any, any, any> | string,
     input?: TInput,
     options?: ExecuteOptions,
   ): Promise<string>;
@@ -1508,7 +1594,7 @@ export interface IDurableService {
    * Schedule a one-time task execution.
    */
   schedule<TInput>(
-    task: DurableTask<TInput, any>,
+    task: ITask<TInput, Promise<any>, any, any, any, any> | string,
     input: TInput,
     options: ScheduleOptions,
   ): Promise<string>;
@@ -1518,7 +1604,7 @@ export interface IDurableService {
    * Safe to call on every boot and concurrently across processes.
    */
   ensureSchedule<TInput>(
-    task: DurableTask<TInput, any>,
+    task: ITask<TInput, Promise<any>, any, any, any, any> | string,
     input: TInput,
     options: ScheduleOptions & { id: string },
   ): Promise<string>;

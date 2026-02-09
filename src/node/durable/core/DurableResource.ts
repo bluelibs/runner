@@ -4,7 +4,6 @@ import type { IEventDefinition } from "../../../types/event";
 import type { AnyTask, ITask } from "../../../types/task";
 import type { IDurableContext } from "./interfaces/context";
 import type {
-  DurableTask,
   ExecuteOptions,
   IDurableService,
   ScheduleOptions,
@@ -175,11 +174,24 @@ export class DurableResource implements IDurableResource {
     return next;
   }
 
-  startExecution<TInput>(
-    task: DurableTask<TInput, unknown>,
+  startExecution<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
+  ): Promise<string>;
+  startExecution(
+    task: string,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<string>;
+  startExecution(
+    task: string | ITask<any, Promise<any>, any, any, any, any>,
+    input?: unknown,
+    options?: ExecuteOptions,
   ): Promise<string> {
+    if (typeof task === "string") {
+      return this.service.startExecution(task, input, options);
+    }
     return this.service.startExecution(task, input, options);
   }
 
@@ -195,34 +207,88 @@ export class DurableResource implements IDurableResource {
   }
 
   execute<TInput, TResult>(
-    task: DurableTask<TInput, TResult>,
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
-  ): Promise<TResult> {
+  ): Promise<TResult>;
+  execute(
+    task: string,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<unknown>;
+  execute(
+    task: string | ITask<any, Promise<any>, any, any, any, any>,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<unknown> {
+    if (typeof task === "string") {
+      return this.service.execute(task, input, options);
+    }
     return this.service.execute(task, input, options);
   }
 
   executeStrict<TInput, TResult>(
-    task: undefined extends TResult ? never : DurableTask<TInput, TResult>,
+    task: undefined extends TResult
+      ? never
+      : ITask<TInput, Promise<TResult>, any, any, any, any>,
     input?: TInput,
     options?: ExecuteOptions,
-  ): Promise<TResult> {
-    return this.service.executeStrict(task, input, options);
+  ): Promise<TResult>;
+  executeStrict(
+    task: string,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<unknown>;
+  executeStrict(
+    task: string | ITask<any, Promise<any>, any, any, any, any>,
+    input?: unknown,
+    options?: ExecuteOptions,
+  ): Promise<unknown> {
+    if (typeof task === "string") {
+      return this.service.executeStrict(task, input, options);
+    }
+    return this.service.executeStrict(task as never, input, options);
   }
 
-  schedule<TInput>(
-    task: DurableTask<TInput, unknown>,
+  schedule<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input: TInput | undefined,
     options: ScheduleOptions,
+  ): Promise<string>;
+  schedule(
+    task: string,
+    input: unknown,
+    options: ScheduleOptions,
+  ): Promise<string>;
+  schedule(
+    task: string | ITask<any, Promise<any>, any, any, any, any>,
+    input: unknown,
+    options: ScheduleOptions,
   ): Promise<string> {
+    if (typeof task === "string") {
+      return this.service.schedule(task, input, options);
+    }
     return this.service.schedule(task, input, options);
   }
 
-  ensureSchedule<TInput>(
-    task: DurableTask<TInput, unknown>,
+  ensureSchedule<TInput, TResult>(
+    task: ITask<TInput, Promise<TResult>, any, any, any, any>,
     input: TInput | undefined,
     options: ScheduleOptions & { id: string },
+  ): Promise<string>;
+  ensureSchedule(
+    task: string,
+    input: unknown,
+    options: ScheduleOptions & { id: string },
+  ): Promise<string>;
+  ensureSchedule(
+    task: string | ITask<any, Promise<any>, any, any, any, any>,
+    input: unknown,
+    options: ScheduleOptions & { id: string },
   ): Promise<string> {
+    if (typeof task === "string") {
+      return this.service.ensureSchedule(task, input, options);
+    }
     return this.service.ensureSchedule(task, input, options);
   }
 

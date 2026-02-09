@@ -124,6 +124,66 @@ describe("durable: DurableService (unit)", () => {
     await expect(service.execute(task)).rejects.toThrow("taskExecutor");
   });
 
+  it("resolves a task by id string for execute/schedule", async () => {
+    const store = new MemoryStore();
+    const task = r
+      .task("t.by-id")
+      .run(async (input: { v: number }) => ({ v: input.v * 2 }))
+      .build();
+
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({
+        [task.id]: async (input) => {
+          if (
+            typeof input !== "object" ||
+            input === null ||
+            typeof (input as { v?: unknown }).v !== "number"
+          ) {
+            throw new Error("Expected { v: number } input");
+          }
+          return { v: (input as { v: number }).v * 2 };
+        },
+      }),
+      tasks: [task],
+      execution: { maxAttempts: 1 },
+    });
+
+    await expect(service.execute(task.id, { v: 3 })).resolves.toEqual({
+      v: 6,
+    });
+
+    const scheduleId = await service.schedule(task.id, { v: 2 }, { delay: 5 });
+    const timers = await store.getReadyTimers(new Date(Date.now() + 1000));
+    expect(scheduleId).toBeDefined();
+    expect(timers).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ taskId: task.id, id: `once:${scheduleId}` }),
+      ]),
+    );
+  });
+
+  it("fails fast when a string task id cannot be resolved", async () => {
+    const store = new MemoryStore();
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      tasks: [],
+    });
+
+    await expect(service.startExecution("missing.task.id")).rejects.toThrow(
+      'DurableService.startExecution() could not resolve task id "missing.task.id"',
+    );
+    await expect(
+      service.ensureSchedule("missing.task.id", undefined, {
+        id: "s.missing",
+        interval: 1000,
+      }),
+    ).rejects.toThrow(
+      'DurableService.ensureSchedule() could not resolve task id "missing.task.id"',
+    );
+  });
+
   it("covers passthrough accessors and task registration", () => {
     const store = new MemoryStore();
 
@@ -626,6 +686,40 @@ describe("durable: DurableService (unit)", () => {
     });
 
     expect(service.findTask(task.id)).toBeDefined();
+  });
+
+  it("resolves schedules that reference a task by string id", async () => {
+    const store = new MemoryStore();
+    const task = r
+      .task("t.sched.task.by-id")
+      .run(async (_input: unknown) => "ok")
+      .build();
+
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({}),
+      tasks: [task],
+      schedules: [{ id: "s1", task: task.id, interval: 1000, input: {} }],
+    });
+
+    expect(service.findTask(task.id)).toBe(task);
+  });
+
+  it("fails fast when schedules reference an unknown string task id", () => {
+    const store = new MemoryStore();
+
+    expect(
+      () =>
+        new DurableService({
+          store,
+          taskExecutor: createTaskExecutor({}),
+          schedules: [
+            { id: "s1", task: "missing.task", interval: 1000, input: {} },
+          ],
+        }),
+    ).toThrow(
+      'Cannot initialize durable schedule "s1": task "missing.task" is not registered.',
+    );
   });
 
   it("recovers incomplete executions", async () => {

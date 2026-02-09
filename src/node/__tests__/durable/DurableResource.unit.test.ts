@@ -113,7 +113,10 @@ describe("durable: DurableResource", () => {
     const taggedTask = r
       .task("durable.tests.resource.tagged")
       .tags([durableWorkflowTag.with({ category: "orders" })])
-      .run(async () => "ok")
+      .run(async () => ({
+        durable: { executionId: null },
+        data: "ok",
+      }))
       .build();
 
     const untaggedTask = r
@@ -185,12 +188,20 @@ describe("durable: DurableResource", () => {
       { a: 1 },
       undefined,
     );
+    expect(await durable.startExecution(task.id, { a: 2 })).toBe("e1");
+    expect(service.startExecution).toHaveBeenCalledWith(
+      task.id,
+      { a: 2 },
+      undefined,
+    );
 
     expect(await durable.wait<string>("e1")).toBe("ok");
     expect(service.wait).toHaveBeenCalledWith("e1", undefined);
 
     expect(await durable.execute(task, { a: 1 })).toBe("ok");
     expect(service.execute).toHaveBeenCalledWith(task, { a: 1 }, undefined);
+    expect(await durable.execute(task.id, { a: 2 })).toBe("ok");
+    expect(service.execute).toHaveBeenCalledWith(task.id, { a: 2 }, undefined);
 
     expect(await durable.executeStrict(task, { a: 1 })).toBe("ok");
     expect(service.executeStrict).toHaveBeenCalledWith(
@@ -198,9 +209,40 @@ describe("durable: DurableResource", () => {
       { a: 1 },
       undefined,
     );
+    expect(await durable.executeStrict(task.id, { a: 2 })).toBe("ok");
+    expect(service.executeStrict).toHaveBeenCalledWith(
+      task.id,
+      { a: 2 },
+      undefined,
+    );
 
     expect(await durable.schedule(task, { a: 1 }, { delay: 1 })).toBe("sched1");
     expect(service.schedule).toHaveBeenCalledWith(task, { a: 1 }, { delay: 1 });
+    expect(await durable.schedule(task.id, { a: 2 }, { delay: 2 })).toBe(
+      "sched1",
+    );
+    expect(service.schedule).toHaveBeenCalledWith(
+      task.id,
+      { a: 2 },
+      {
+        delay: 2,
+      },
+    );
+    expect(
+      await durable.ensureSchedule(
+        task.id,
+        { a: 3 },
+        { id: "s1", interval: 1 },
+      ),
+    ).toBe("sched1");
+    expect(service.ensureSchedule).toHaveBeenCalledWith(
+      task.id,
+      { a: 3 },
+      {
+        id: "s1",
+        interval: 1,
+      },
+    );
 
     await durable.pauseSchedule("s1");
     expect(service.pauseSchedule).toHaveBeenCalledWith("s1");

@@ -3,10 +3,10 @@ import type { IDurableQueue } from "../interfaces/queue";
 import type { IEventBus } from "../interfaces/bus";
 import type {
   DurableServiceConfig,
-  DurableTask,
   ExecuteOptions,
   ITaskExecutor,
 } from "../interfaces/service";
+import type { ITask } from "../../../../types/task";
 import { DurableAuditEntryKind } from "../audit";
 import {
   ExecutionStatus,
@@ -55,11 +55,12 @@ export class ExecutionManager {
     private readonly waitManager: WaitManager,
   ) {}
 
-  async startExecution<TInput>(
-    task: DurableTask<TInput, unknown>,
-    input?: TInput,
+  async startExecution(
+    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
+    input?: unknown,
     options?: ExecuteOptions,
   ): Promise<string> {
+    const task = this.resolveTaskReference(taskRef, "startExecution");
     this.taskRegistry.register(task);
 
     if (!this.config.queue && !this.config.taskExecutor) {
@@ -129,7 +130,7 @@ export class ExecutionManager {
           );
         }
 
-        const execution: Execution<TInput, unknown> = {
+        const execution: Execution<unknown, unknown> = {
           id: executionId,
           taskId: task.id,
           input,
@@ -166,7 +167,7 @@ export class ExecutionManager {
     }
 
     const executionId = createExecutionId();
-    const execution: Execution<TInput, unknown> = {
+    const execution: Execution<unknown, unknown> = {
       id: executionId,
       taskId: task.id,
       input,
@@ -261,25 +262,24 @@ export class ExecutionManager {
     });
   }
 
-  async execute<TInput, TResult>(
-    task: DurableTask<TInput, TResult>,
-    input?: TInput,
+  async execute(
+    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
+    input?: unknown,
     options?: ExecuteOptions,
-  ): Promise<TResult> {
-    const executionId = await this.startExecution(task, input, options);
-    return await this.waitManager.waitForResult<TResult>(executionId, {
+  ): Promise<unknown> {
+    const executionId = await this.startExecution(taskRef, input, options);
+    return await this.waitManager.waitForResult(executionId, {
       timeout: options?.timeout,
       waitPollIntervalMs: options?.waitPollIntervalMs,
     });
   }
 
-  async executeStrict<TInput, TResult>(
-    task: undefined extends TResult ? never : DurableTask<TInput, TResult>,
-    input?: TInput,
+  async executeStrict(
+    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
+    input?: unknown,
     options?: ExecuteOptions,
-  ): Promise<TResult> {
-    const actualTask: DurableTask<TInput, TResult> = task;
-    return await this.execute(actualTask, input, options);
+  ): Promise<unknown> {
+    return await this.execute(taskRef, input, options);
   }
 
   async processExecution(executionId: string): Promise<void> {
@@ -360,7 +360,7 @@ export class ExecutionManager {
 
   private async runExecutionAttempt(
     execution: Execution<unknown, unknown>,
-    task: DurableTask<unknown, unknown>,
+    task: ITask<unknown, Promise<unknown>, any, any, any, any>,
   ): Promise<void> {
     const isCancelled = async (): Promise<boolean> => {
       const current = await this.config.store.getExecution(execution.id);
@@ -529,5 +529,22 @@ export class ExecutionManager {
         reason: "retry_scheduled",
       });
     }
+  }
+
+  private resolveTaskReference(
+    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
+    apiMethod: string,
+  ): ITask<any, Promise<any>, any, any, any, any> {
+    if (typeof taskRef !== "string") {
+      return taskRef;
+    }
+
+    const resolved = this.taskRegistry.find(taskRef);
+    if (!resolved) {
+      throw new Error(
+        `DurableService.${apiMethod}() could not resolve task id "${taskRef}". Ensure the task is registered in the runtime store.`,
+      );
+    }
+    return resolved;
   }
 }

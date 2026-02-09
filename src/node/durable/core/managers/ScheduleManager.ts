@@ -1,5 +1,5 @@
 import type { IDurableStore } from "../interfaces/store";
-import type { DurableTask, ScheduleOptions } from "../interfaces/service";
+import type { ScheduleOptions } from "../interfaces/service";
 import {
   ScheduleStatus,
   ScheduleType,
@@ -10,6 +10,7 @@ import {
 import { CronParser } from "../CronParser";
 import { createExecutionId, sleepMs } from "../utils";
 import type { TaskRegistry } from "./TaskRegistry";
+import type { ITask } from "../../../../types/task";
 
 /**
  * Creates and maintains durable schedules.
@@ -24,15 +25,16 @@ export class ScheduleManager {
     private readonly taskRegistry: TaskRegistry,
   ) {}
 
-  async ensureSchedule<TInput>(
-    task: DurableTask<TInput, unknown>,
-    input: TInput | undefined,
+  async ensureSchedule(
+    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
+    input: unknown,
     options: ScheduleOptions & { id: string },
   ): Promise<string> {
     if (!options.cron && options.interval === undefined) {
       throw new Error("ensureSchedule() requires cron or interval");
     }
 
+    const task = this.resolveTaskReference(taskRef, "ensureSchedule");
     this.taskRegistry.register(task);
 
     const scheduleId = options.id;
@@ -83,7 +85,7 @@ export class ScheduleManager {
         return scheduleId;
       }
 
-      const schedule: Schedule<TInput> = {
+      const schedule: Schedule = {
         id: scheduleId,
         taskId: task.id,
         input,
@@ -108,17 +110,18 @@ export class ScheduleManager {
     }
   }
 
-  async schedule<TInput>(
-    task: DurableTask<TInput, unknown>,
-    input: TInput | undefined,
+  async schedule(
+    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
+    input: unknown,
     options: ScheduleOptions,
   ): Promise<string> {
+    const task = this.resolveTaskReference(taskRef, "schedule");
     this.taskRegistry.register(task);
 
     const id = options.id ?? createExecutionId();
 
     if (options.cron || options.interval !== undefined) {
-      const schedule: Schedule<TInput> = {
+      const schedule: Schedule = {
         id,
         taskId: task.id,
         input,
@@ -221,5 +224,22 @@ export class ScheduleManager {
 
   async remove(id: string): Promise<void> {
     await this.store.deleteSchedule(id);
+  }
+
+  private resolveTaskReference(
+    taskRef: string | ITask<any, Promise<any>, any, any, any, any>,
+    apiMethod: string,
+  ): ITask<any, Promise<any>, any, any, any, any> {
+    if (typeof taskRef !== "string") {
+      return taskRef;
+    }
+
+    const resolved = this.taskRegistry.find(taskRef);
+    if (!resolved) {
+      throw new Error(
+        `DurableService.${apiMethod}() could not resolve task id "${taskRef}". Ensure the task is registered in the runtime store.`,
+      );
+    }
+    return resolved;
   }
 }

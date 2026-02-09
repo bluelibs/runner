@@ -1,17 +1,17 @@
 import { r } from "../../..";
 import type { IDurableContext } from "../../durable/core/interfaces/context";
-import type { DurableTask } from "../../durable/core/interfaces/service";
 import { DurableService } from "../../durable/core/DurableService";
 import { ExecutionStatus, TimerType } from "../../durable/core/types";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import type { ITask } from "../../../types/task";
 
 type WorkflowHandler = (ctx: IDurableContext, input: unknown) => Promise<any>;
 
 function createContextCapturingService(params: {
   store: MemoryStore;
   eventBus: MemoryEventBus;
-  task: DurableTask<any, any>;
+  task: ITask<any, Promise<any>, any, any, any, any>;
   handler: WorkflowHandler;
   execution?: { maxAttempts?: number };
 }): DurableService {
