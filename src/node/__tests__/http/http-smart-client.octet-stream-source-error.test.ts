@@ -47,7 +47,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
       (res as any).headers = { "content-type": "application/octet-stream" };
       setImmediate(() => cb(res as any));
       // Writable sink
-      const sink: any = new (require("stream").Writable)({
+      const sink: any = new Writable({
         write(_c: any, _e: any, n: any) {
           n();
         },

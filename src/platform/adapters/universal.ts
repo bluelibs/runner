@@ -66,7 +66,15 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
     const global = globalThis as unknown as {
       document?: unknown;
       addEventListener?: unknown;
+      Deno?: unknown;
     };
+
+    // Deno exposes web-like globals (including addEventListener), but we keep
+    // it on the universal adapter path and let the generic adapter probe ALS.
+    if (typeof global.Deno !== "undefined") {
+      this.inner = new GenericUniversalPlatformAdapter();
+      return;
+    }
 
     if (
       typeof global.document !== "undefined" ||

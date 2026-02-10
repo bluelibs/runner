@@ -1,4 +1,4 @@
-import { getPlatform } from "./platform";
+import { getPlatform } from "../platform";
 
 const platform = getPlatform();
 

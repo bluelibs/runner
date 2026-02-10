@@ -18,7 +18,7 @@ import type {
   NodeExposureDeps,
   NodeExposureHttpCorsConfig,
 } from "../resourceTypes";
-import { isCancellationError } from "../../../errors";
+import { cancellationError } from "../../../errors";
 import { applyCorsActual } from "../cors";
 import { createAbortControllerForRequest, getContentType } from "../utils";
 import {
@@ -241,7 +241,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
       applyCorsActual(req, res, cors);
       respondJson(res, jsonOkResponse({ result }), serializer);
     } catch (error) {
-      if (isCancellationError(error)) {
+      if (cancellationError.is(error)) {
         if (!res.writableEnded && !res.headersSent) {
           applyCorsActual(req, res, cors);
           respondJson(

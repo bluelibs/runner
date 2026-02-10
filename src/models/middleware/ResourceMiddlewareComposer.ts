@@ -1,4 +1,8 @@
-import { IResource, DependencyMapType } from "../../defs";
+import {
+  IResource,
+  DependencyMapType,
+  ResourceDependencyValuesType,
+} from "../../defs";
 import { Store } from "../Store";
 import { InterceptorRegistry } from "./InterceptorRegistry";
 import { MiddlewareResolver } from "./MiddlewareResolver";
@@ -27,7 +31,7 @@ export class ResourceMiddlewareComposer {
   >(
     resource: IResource<TConfig, TValue, TDeps, TContext>,
     config: TConfig,
-    dependencies: any,
+    dependencies: ResourceDependencyValuesType<TDeps>,
     context: TContext,
   ): Promise<TValue | undefined> {
     // 1. Base init runner with validation
@@ -56,7 +60,7 @@ export class ResourceMiddlewareComposer {
     TContext,
   >(
     resource: IResource<TConfig, TValue, TDeps, TContext>,
-    dependencies: any,
+    dependencies: ResourceDependencyValuesType<TDeps>,
     context: TContext,
   ): (config: TConfig) => TValue {
     return (async (config: TConfig) => {

@@ -136,20 +136,7 @@ export function mergeRegister<TConfig>(
   ];
 }
 
-/**
- * Generic array merge with override support.
- */
-export function mergeArray<T>(
-  existing: ReadonlyArray<T> | undefined,
-  addition: ReadonlyArray<T>,
-  override: boolean,
-): T[] {
-  const toArray = [...addition];
-  if (override || !existing) {
-    return toArray as T[];
-  }
-  return [...existing, ...toArray] as T[];
-}
+export { mergeArray } from "../shared/mergeUtils";
 
 /**
  * Merges dependencies handling all combinations of objects and functions.

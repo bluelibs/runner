@@ -25,7 +25,7 @@ export class RunResult<V> {
   public runTask = <
     I = undefined,
     O extends Promise<any> = any,
-    D extends DependencyMapType = any,
+    D extends DependencyMapType = DependencyMapType,
   >(
     task: ITask<I, O, D> | string,
     ...args: I extends undefined | void ? [] : [I]

@@ -81,8 +81,10 @@ export * as definitions from "./defs";
 export * from "./models";
 export * from "./globals/types";
 export * as Errors from "./errors";
+export { cancellationError } from "./errors";
 export { PlatformAdapter, setPlatform } from "./platform";
 export { RunnerError } from "./definers/defineError";
+export { LockableMap } from "./tools/LockableMap";
 
 // HTTP and tunnel functionality
 export * from "./http-client";

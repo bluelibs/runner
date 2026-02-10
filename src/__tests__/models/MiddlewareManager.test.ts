@@ -14,6 +14,7 @@ import { OnUnhandledError } from "../../index";
 import { RunnerMode } from "../../types/runner";
 import { TaskStoreElementType } from "../../types/storeTypes";
 import { ITaskMiddleware, IResource } from "../../defs";
+import { globalTags } from "../../globals/globalTags";
 
 describe("MiddlewareManager", () => {
   let store: Store;
@@ -332,7 +333,6 @@ describe("MiddlewareManager", () => {
 
   it("should apply tunnel policy filter when task is tunneled", () => {
     // Test MiddlewareResolver branch for tunnel policy
-    const { globalTags } = require("../../globals/globalTags");
 
     const mw = defineTaskMiddleware({
       id: "test.mw.tunnel",

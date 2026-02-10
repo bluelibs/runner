@@ -109,7 +109,12 @@ const durable = memoryDurableResource.fork("app.durable");
 const onboarding = r
   .task("app.workflows.onboarding")
   .dependencies({ durable })
-  .tags([durableWorkflowTag.with({ category: "users" })])
+  .tags([
+    durableWorkflowTag.with({
+      category: "users",
+      defaults: { invitedBy: "system" },
+    }),
+  ])
   .run(async (_input, { durable }) => {
     const ctx = durable.use();
     await ctx.step("create-user", async () => ({ ok: true }));
@@ -130,6 +135,10 @@ without manual tag registration.
 `durableWorkflowTag` is discovery metadata only. The unified response envelope
 is produced by `durable.startAndWait(...)`:
 `{ durable: { executionId }, data }`.
+
+`durableWorkflowTag` also supports optional `defaults` used by
+`durable.describe(task)` **only when no explicit describe input is provided**.
+This does not affect `start()`, `startAndWait()`, `schedule()`, or `ensureSchedule()`.
 
 ### Starting Durable Workflows From Resource Dependencies (HTTP route)
 
@@ -1171,6 +1180,10 @@ console.log(shape.nodes);
 //   { kind: "emit", eventId: "app.events.shipped", stepId: "notify" },
 // ]
 ```
+
+If your task is tagged with `durableWorkflowTag.with({ defaults: {...} })`,
+`describe(task)` (without input) uses a cloned copy of those defaults.
+Passing `describe(task, input)` always wins and replaces tag defaults.
 
 That's it. No refactoring — just call `durable.describe(task)` and get the shape.
 

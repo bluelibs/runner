@@ -75,6 +75,13 @@ export function isUniversal(): boolean {
   return detectEnvironment() === "universal";
 }
 
+export function isEdge(): boolean {
+  if (typeof __TARGET__ !== "undefined" && __TARGET__ !== "universal") {
+    return __TARGET__ === "edge";
+  }
+  return detectEnvironment() === "edge";
+}
+
 export type {
   IPlatformAdapter,
   IAsyncLocalStorage,

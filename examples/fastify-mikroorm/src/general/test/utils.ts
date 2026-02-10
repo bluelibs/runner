@@ -1,6 +1,6 @@
 import { override, r, run } from "@bluelibs/runner";
 import { ormConfig } from "#/db/resources/orm.config";
-import { SqliteDriver } from "@mikro-orm/sqlite";
+import { BetterSqliteDriver } from "@mikro-orm/better-sqlite";
 import type { DebugConfig } from "@bluelibs/runner";
 import { env } from "#/general/resources/env.resource";
 
@@ -8,7 +8,7 @@ Error.stackTraceLimit = 100;
 // Override ORM config for tests to use in-memory SQLite
 export const testOrmConfig = override(ormConfig, {
   init: async (_cfg, { entitiesHolder }) => ({
-    driver: SqliteDriver,
+    driver: BetterSqliteDriver,
     dbName: ":memory:",
     entities: [...Object.values(entitiesHolder)],
     extensions: [],

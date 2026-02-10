@@ -1,5 +1,5 @@
 import { setPlatform } from "../../platform";
-import { registerShutdownHook } from "../../processHooks";
+import { registerShutdownHook } from "../../tools/processShutdownHooks";
 
 describe("process hooks on platform", () => {
   it("registerShutdownHook is a function", () => {

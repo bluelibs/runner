@@ -1,4 +1,5 @@
 import * as http from "http";
+import { Readable } from "stream";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { defineTask } from "../../../../definers/defineTask";
@@ -55,7 +56,7 @@ describe("nodeExposure response hijack (duplex)", () => {
 
     // Fake raw-body request
     const body = "abc";
-    const req: any = new (require("stream").Readable)({ read() {} });
+    const req: any = new Readable({ read() {} });
     req.method = "POST";
     req.url = `/__runner/task/${encodeURIComponent(duplexTask.id)}`;
     req.headers = { "content-type": "application/octet-stream" };

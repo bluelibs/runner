@@ -1,4 +1,4 @@
-import { buildUniversalManifest } from "../../tunnels/buildUniversalManifest";
+import { buildUniversalManifest } from "../../tools/buildUniversalManifest";
 import { createFile as createNodeFile } from "../../node/platform/createFile";
 import { createWebFile } from "../../platform/createWebFile";
 import { Readable } from "stream";

@@ -1,4 +1,5 @@
 import * as http from "http";
+import * as https from "https";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
 import { Serializer } from "../../../serializer";
@@ -343,7 +344,7 @@ describe("createHttpSmartClient (unit)", () => {
 
   it("uses https.request when baseUrl is https and includes auth header", async () => {
     const httpsReqSpy = jest
-      .spyOn(require("https"), "request")
+      .spyOn(https, "request")
       .mockImplementation((opts: unknown, cb: unknown) => {
         const callback = cb as (res: http.IncomingMessage) => void;
         const env = { ok: true, result: 7 };

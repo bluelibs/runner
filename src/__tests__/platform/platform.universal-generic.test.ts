@@ -7,6 +7,11 @@ interface TestGlobal {
   __ENV__?: any;
   process?: any;
   env?: any;
+  Deno?: unknown;
+  AsyncLocalStorage?: new <T>() => {
+    getStore(): T | undefined;
+    run<R>(store: T, callback: () => R): R;
+  };
 }
 const testGlobal = globalThis as unknown as TestGlobal;
 
@@ -219,8 +224,45 @@ describe("GenericUniversalPlatformAdapter", () => {
   });
 
   describe("hasAsyncLocalStorage", () => {
-    it("should always return false", () => {
+    it("should return false outside Deno", () => {
       expect(adapter.hasAsyncLocalStorage()).toBe(false);
+    });
+
+    it("should return true in Deno when AsyncLocalStorage is available", () => {
+      const originalDeno = testGlobal.Deno;
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+
+      testGlobal.Deno = {};
+      testGlobal.AsyncLocalStorage = class MockALS<T> {
+        getStore(): T | undefined {
+          return undefined;
+        }
+        run<R>(_store: T, callback: () => R): R {
+          return callback();
+        }
+      };
+
+      const denoAdapter = new GenericUniversalPlatformAdapter();
+      expect(denoAdapter.hasAsyncLocalStorage()).toBe(true);
+
+      testGlobal.Deno = originalDeno;
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
+    });
+
+    it("should probe node:async_hooks fallback once for Deno when global ALS is missing", () => {
+      const originalDeno = testGlobal.Deno;
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+
+      testGlobal.Deno = {};
+      delete testGlobal.AsyncLocalStorage;
+
+      const denoAdapter = new GenericUniversalPlatformAdapter();
+      expect(denoAdapter.hasAsyncLocalStorage()).toBe(true);
+      // second call covers the already-probed fast path
+      expect(denoAdapter.hasAsyncLocalStorage()).toBe(true);
+
+      testGlobal.Deno = originalDeno;
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
     });
   });
 
@@ -233,6 +275,36 @@ describe("GenericUniversalPlatformAdapter", () => {
 
       expect(() => als.getStore()).toThrow();
       expect(() => als.run(undefined as unknown as any, () => {})).toThrow();
+    });
+
+    it("should create a working ALS instance in Deno when available", () => {
+      const originalDeno = testGlobal.Deno;
+      const originalAsyncLocalStorage = testGlobal.AsyncLocalStorage;
+
+      testGlobal.Deno = {};
+      testGlobal.AsyncLocalStorage = class MockALS<T> {
+        private store: T | undefined;
+        getStore(): T | undefined {
+          return this.store;
+        }
+        run<R>(store: T, callback: () => R): R {
+          const previous = this.store;
+          this.store = store;
+          try {
+            return callback();
+          } finally {
+            this.store = previous;
+          }
+        }
+      };
+
+      const denoAdapter = new GenericUniversalPlatformAdapter();
+      const als = denoAdapter.createAsyncLocalStorage<{ id: string }>();
+      const result = als.run({ id: "deno" }, () => als.getStore());
+      expect(result).toEqual({ id: "deno" });
+
+      testGlobal.Deno = originalDeno;
+      testGlobal.AsyncLocalStorage = originalAsyncLocalStorage;
     });
   });
 

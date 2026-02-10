@@ -14,6 +14,7 @@ import {
   symbolOptionalDependency,
   symbolPhantomTask,
 } from "../types/symbols";
+import { phantomTaskNotRoutedError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { normalizeThrows } from "../tools/throws";
 
@@ -73,7 +74,7 @@ defineTask.phantom = <Input = undefined, Output extends Promise<any> = any>(
   const taskDef = defineTask({
     ...taskConfig,
     run: async (_input: any): Promise<any> => {
-      return undefined;
+      phantomTaskNotRoutedError.throw({ taskId: taskConfig.id });
     },
   });
 

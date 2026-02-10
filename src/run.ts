@@ -10,7 +10,7 @@ import { debugResource } from "./globals/resources/debug";
 import {
   registerProcessLevelSafetyNets,
   registerShutdownHook,
-} from "./processHooks";
+} from "./tools/processShutdownHooks";
 import {
   OnUnhandledError,
   createDefaultUnhandledError,
@@ -191,7 +191,7 @@ function extractResourceAndConfig<C, V extends Promise<any>>(
     | IResource<{ [K in any]?: any }, V, any, any>, // For optional config
 ) {
   let resource: IResource<any, any, any, any>;
-  let config: any;
+  let config: unknown;
   if (isResourceWithConfig(resourceOrResourceWithConfig)) {
     resource = resourceOrResourceWithConfig.resource;
     config = resourceOrResourceWithConfig.config;

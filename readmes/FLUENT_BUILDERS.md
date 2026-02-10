@@ -145,7 +145,7 @@ const calc = r
 
 ### Phantom Tasks
 
-Create a no-op task that is intended to be routed through a tunnel (HTTP or custom). When run locally without a matching tunnel, it returns `undefined`. Use it to strongly type calls to remote services.
+Create a task that is intended to be routed through a tunnel (HTTP or custom). When run locally without a matching tunnel, it throws `runner.errors.phantomTaskNotRouted`. Use it to strongly type calls to remote services.
 
 ```ts
 // Define a phantom task with typed input and resolved result
@@ -170,7 +170,7 @@ const app = r.resource("app").register([remoteHello, tunnel]).build();
 Notes:
 
 - Builder exposes the same knobs as normal tasks: `.dependencies()`, `.middleware()`, `.tags()`, `.meta()`, `.inputSchema()`, `.resultSchema()`.
-- The builder does not accept `.run()`; the runner injects a no-op function and brands the definition so tunnel middleware can intercept it.
+- The builder does not accept `.run()`; the runner injects a fail-fast function and brands the definition so tunnel middleware can intercept it.
 
 ---
 

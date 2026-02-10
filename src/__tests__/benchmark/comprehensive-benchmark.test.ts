@@ -5,6 +5,9 @@ import {
   defineHook,
   defineTaskMiddleware,
 } from "../../define";
+import fs from "fs";
+import os from "os";
+import path from "path";
 import { run } from "../../run";
 import { globals } from "../../index";
 
@@ -60,9 +63,6 @@ describe("Comprehensive Performance Benchmarks", () => {
     const outputPath = process.env.BENCHMARK_OUTPUT;
     if (outputPath) {
       try {
-        const fs = require("fs");
-        const path = require("path");
-        const os = require("os");
         const meta = {
           timestamp: new Date().toISOString(),
           node: process.version,

@@ -315,9 +315,5 @@ export const builderIncompleteError = error<
   )
   .build();
 
-export function isCancellationError(err: unknown): boolean {
-  return cancellationError.is(err);
-}
-
 // Backward-compatible namespace export for external imports (index.ts already re-exports * as Errors from here)
 export type { IErrorHelper } from "./types/error";

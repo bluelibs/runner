@@ -2,7 +2,7 @@ import type { SerializerLike } from "./serializer";
 import type { ProtocolEnvelope } from "./globals/resources/tunnel/protocol";
 import { assertOkEnvelope } from "./globals/resources/tunnel/protocol";
 import { createExposureFetch } from "./http-fetch-tunnel.resource";
-import { buildUniversalManifest } from "./tunnels/buildUniversalManifest";
+import { buildUniversalManifest } from "./tools/buildUniversalManifest";
 import type { IAsyncContext } from "./types/asyncContext";
 import type { IErrorHelper } from "./types/error";
 
@@ -36,6 +36,22 @@ function toHeaders(auth?: HttpClientAuth): Record<string, string> {
   if (auth?.token)
     headers[(auth.header ?? "x-runner-token").toLowerCase()] = auth.token;
   return headers;
+}
+
+/**
+ * Re-throws the caught error. When an error registry is configured,
+ * checks for a matching typed-error helper and re-throws via that helper first.
+ */
+function rethrowWithRegistry(
+  e: unknown,
+  errorRegistry: Map<string, IErrorHelper<any>> | undefined,
+): never {
+  const te = e as { id?: unknown; data?: unknown };
+  if (errorRegistry && te.id && te.data) {
+    const helper = errorRegistry.get(String(te.id));
+    if (helper) helper.throw(te.data);
+  }
+  throw e;
 }
 
 export function createHttpClient(cfg: HttpClientConfig): HttpClient {
@@ -117,12 +133,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
             fallbackMessage: "Tunnel task error",
           });
         } catch (e) {
-          const te = e as { id?: unknown; data?: unknown };
-          if (cfg.errorRegistry && te.id && te.data) {
-            const helper = cfg.errorRegistry.get(String(te.id));
-            if (helper) helper.throw(te.data);
-          }
-          throw e;
+          rethrowWithRegistry(e, cfg.errorRegistry);
         }
       }
 
@@ -137,12 +148,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       try {
         return await fetchClient.task<I, O>(id, input as I);
       } catch (e) {
-        const te = e as { id?: unknown; data?: unknown };
-        if (cfg.errorRegistry && te.id && te.data) {
-          const helper = cfg.errorRegistry.get(String(te.id));
-          if (helper) helper.throw(te.data);
-        }
-        throw e;
+        rethrowWithRegistry(e, cfg.errorRegistry);
       }
     },
 
@@ -150,12 +156,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       try {
         return await fetchClient.event<P>(id, payload);
       } catch (e) {
-        const te = e as { id?: unknown; data?: unknown };
-        if (cfg.errorRegistry && te.id && te.data) {
-          const helper = cfg.errorRegistry.get(String(te.id));
-          if (helper) helper.throw(te.data);
-        }
-        throw e;
+        rethrowWithRegistry(e, cfg.errorRegistry);
       }
     },
 
@@ -168,12 +169,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
         }
         return await fetchClient.eventWithResult<P>(id, payload);
       } catch (e) {
-        const te = e as { id?: unknown; data?: unknown };
-        if (cfg.errorRegistry && te.id && te.data) {
-          const helper = cfg.errorRegistry.get(String(te.id));
-          if (helper) helper.throw(te.data);
-        }
-        throw e;
+        rethrowWithRegistry(e, cfg.errorRegistry);
       }
     },
   };

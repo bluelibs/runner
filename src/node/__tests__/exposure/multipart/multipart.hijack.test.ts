@@ -1,4 +1,5 @@
 import * as http from "http";
+import { Readable } from "stream";
 import { defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { defineTask } from "../../../../definers/defineTask";
@@ -45,7 +46,7 @@ describe("nodeExposure multipart hijack", () => {
       "utf8",
     );
 
-    const req: any = new (require("stream").Readable)({ read() {} });
+    const req: any = new Readable({ read() {} });
     req.method = "POST";
     req.url = `/__runner/task/${encodeURIComponent(t.id)}`;
     req.headers = {

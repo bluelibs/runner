@@ -1,4 +1,5 @@
 import * as http from "http";
+import { Readable } from "stream";
 import { defineResource, defineTask } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
@@ -26,7 +27,7 @@ describe("nodeExposure - multipart early abort via signal", () => {
 
     // Prepare a request that claims multipart but will be aborted immediately
     const boundary = "----abortedBoundary";
-    const req: any = new (require("stream").Readable)({ read() {} });
+    const req: any = new Readable({ read() {} });
     req.method = "POST";
     req.url = `/__runner/task/${encodeURIComponent(t.id)}`;
     req.headers = {

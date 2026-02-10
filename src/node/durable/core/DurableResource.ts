@@ -153,10 +153,11 @@ export class DurableResource implements IDurableResource {
       );
     }
     const deps = storeTask.computedDependencies as Record<string, unknown>;
+    const resolvedInput = this.resolveDescribeInput(effectiveTask, input);
 
     return await recordFlowShape(async (ctx) => {
       const depsWithRecorder = this.injectRecorderIntoDurableDeps(deps, ctx);
-      await effectiveTask.run(input as TInput, depsWithRecorder as any);
+      await effectiveTask.run(resolvedInput as TInput, depsWithRecorder as any);
     });
   }
 
@@ -192,6 +193,32 @@ export class DurableResource implements IDurableResource {
     }
 
     return next;
+  }
+
+  private resolveDescribeInput<TInput>(
+    task: AnyTask,
+    input: TInput | undefined,
+  ): TInput | undefined {
+    if (input !== undefined) {
+      return input;
+    }
+
+    const tagConfig = durableWorkflowTag.extract(task.tags);
+    if (!tagConfig?.defaults) {
+      return undefined;
+    }
+
+    try {
+      return structuredClone(tagConfig.defaults) as TInput;
+    } catch (error) {
+      const originalMessage =
+        error instanceof Error ? error.message : String(error);
+
+      throw new Error(
+        `Cannot describe task "${task.id}": durableWorkflowTag.defaults could not be cloned. ` +
+          `Ensure defaults contain only structured-cloneable values. Original error: ${originalMessage}`,
+      );
+    }
   }
 
   start<TInput, TResult>(

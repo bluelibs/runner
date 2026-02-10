@@ -35,6 +35,12 @@ import {
   normalizeMaxDepth,
   normalizeMaxRegExpPatternLength,
 } from "./option-normalizers";
+import {
+  isBoundedQuantifier,
+  isQuantifierAt,
+  isQuantifierChar,
+  isRegExpPatternSafe,
+} from "./regexp-validator";
 
 const GRAPH_VERSION = 1;
 const DEFAULT_MAX_DEPTH = 1000;
@@ -192,9 +198,7 @@ export class Serializer {
    * @internal - Exposed for testing RegExp safety validation
    */
   public readonly isRegExpPatternSafe = (pattern: string): boolean => {
-    // Re-export from regexp-validator for backwards compatibility
-    const { isRegExpPatternSafe: check } = require("./regexp-validator");
-    return check(pattern);
+    return isRegExpPatternSafe(pattern);
   };
 
   /**
@@ -204,8 +208,7 @@ export class Serializer {
     pattern: string,
     index: number,
   ): boolean => {
-    const { isQuantifierAt: check } = require("./regexp-validator");
-    return check(pattern, index);
+    return isQuantifierAt(pattern, index);
   };
 
   /**
@@ -216,8 +219,7 @@ export class Serializer {
     pattern: string,
     index: number,
   ): boolean => {
-    const { isQuantifierChar: check } = require("./regexp-validator");
-    return check(char, pattern, index);
+    return isQuantifierChar(char, pattern, index);
   };
 
   /**
@@ -227,8 +229,7 @@ export class Serializer {
     pattern: string,
     index: number,
   ): boolean => {
-    const { isBoundedQuantifier: check } = require("./regexp-validator");
-    return check(pattern, index);
+    return isBoundedQuantifier(pattern, index);
   };
 
   /**

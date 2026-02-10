@@ -188,6 +188,33 @@ describe("UniversalPlatformAdapter", () => {
       else mutableGlobal.addEventListener = originalAddEventListener;
     });
 
+    it("should keep Deno on GenericUniversalPlatformAdapter even with addEventListener", async () => {
+      const originalDeno = mutableGlobal.Deno;
+      const originalAddEventListener = mutableGlobal.addEventListener;
+      const originalDocument = mutableGlobal.document;
+      const originalProcess = mutableGlobal.process;
+
+      delete mutableGlobal.document;
+      delete mutableGlobal.process;
+      mutableGlobal.Deno = {};
+      mutableGlobal.addEventListener = () => {};
+
+      await adapter.init();
+      expect((adapter as unknown as { inner: unknown }).inner).toBeInstanceOf(
+        GenericUniversalPlatformAdapter,
+      );
+
+      if (originalDeno === undefined) delete mutableGlobal.Deno;
+      else mutableGlobal.Deno = originalDeno;
+      if (originalAddEventListener === undefined)
+        delete mutableGlobal.addEventListener;
+      else mutableGlobal.addEventListener = originalAddEventListener;
+      if (originalDocument === undefined) delete mutableGlobal.document;
+      else mutableGlobal.document = originalDocument;
+      if (originalProcess === undefined) delete mutableGlobal.process;
+      else mutableGlobal.process = originalProcess;
+    });
+
     it("should use different adapters based on environment in init()", async () => {
       // Test browser case in init - document exists
       const originalDocument = mutableGlobal.document;
