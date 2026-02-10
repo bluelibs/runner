@@ -88,7 +88,6 @@ export { LockableMap } from "./tools/LockableMap";
 
 // HTTP and tunnel functionality
 export * from "./http-client";
-export * from "./http-fetch-tunnel.resource";
 
 export {
   Serializer,
