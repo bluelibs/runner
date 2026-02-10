@@ -2,9 +2,10 @@ import { r, run } from "../..";
 import { isTask, isPhantomTask } from "../../define";
 import { globalTags } from "../../globals/globalTags";
 import type { TunnelRunner } from "../../globals/resources/tunnel/types";
+import { phantomTaskNotRoutedError } from "../../errors";
 
 describe("Phantom tasks - fluent builders", () => {
-  it("creates a phantom task via builder and returns undefined when executed directly", async () => {
+  it("throws when executed directly without a tunnel route", async () => {
     const ph = r.task
       .phantom<{ v: string }, string>("app.tasks.phantom.builder.1")
       .build();
@@ -13,22 +14,31 @@ describe("Phantom tasks - fluent builders", () => {
     expect(isTask(ph)).toBe(true);
     expect(isPhantomTask(ph)).toBe(true);
 
-    const app = r
+    const appDirect = r
       .resource("app.phantom.builder.basic")
       .register([ph])
       .dependencies({ ph })
-      .init(async (_c, { ph }) => ph({ v: "x" }))
+      .init(async (_c, { ph }) => {
+        await ph({ v: "x" });
+      })
       .build();
 
-    const rr = await run(app);
-    expect(rr.value).toBeUndefined();
+    await expect(run(appDirect)).rejects.toMatchObject({
+      name: phantomTaskNotRoutedError.id,
+    });
 
-    const v: string | undefined = await rr.runTask(ph, { v: "y" });
-    expect(v).toBeUndefined();
+    const appRunTask = r
+      .resource("app.phantom.builder.basic.runTask")
+      .register([ph])
+      .build();
+    const rr = await run(appRunTask);
+    await expect(rr.runTask(ph, { v: "y" })).rejects.toMatchObject({
+      name: phantomTaskNotRoutedError.id,
+    });
     await rr.dispose();
   });
 
-  it("phantom task can be used as a dependency inside another task (builder)", async () => {
+  it("fails fast when used as a dependency without tunnel routing (builder)", async () => {
     const ph = r.task
       .phantom<{ x: number }, number>("app.tasks.phantom.builder.2")
       .build();
@@ -36,10 +46,7 @@ describe("Phantom tasks - fluent builders", () => {
     const usesPhantom = r
       .task("app.tasks.usesPhantom.builder")
       .dependencies({ ph })
-      .run(async (input: { n: number }, deps) => {
-        const r = await deps.ph({ x: input.n });
-        return (r as number) ?? 0;
-      })
+      .run(async (input: { n: number }, deps) => deps.ph({ x: input.n }))
       .build();
 
     const app = r
@@ -49,9 +56,9 @@ describe("Phantom tasks - fluent builders", () => {
       .init(async (_c, { usesPhantom }) => usesPhantom({ n: 3 }))
       .build();
 
-    const rr = await run(app);
-    expect(rr.value).toBe(0);
-    await rr.dispose();
+    await expect(run(app)).rejects.toMatchObject({
+      name: phantomTaskNotRoutedError.id,
+    });
   });
 
   it("phantom task is routed by tunnel middleware when selected (builder)", async () => {

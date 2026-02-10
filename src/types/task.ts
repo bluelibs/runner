@@ -130,7 +130,7 @@ export interface ITask<
 
 export type AnyTask = ITask<any, any, any, any, any, any>;
 
-/** Narrowed type for phantom tasks (no-op run by default). */
+/** Narrowed type for phantom tasks (throws unless routed through a tunnel). */
 export type IPhantomTask<
   TInput = any,
   TResolved = any,

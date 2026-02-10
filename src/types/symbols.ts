@@ -5,7 +5,7 @@
  * @internal
  */
 export const symbolTask: unique symbol = Symbol.for("runner.task");
-/** Marks a task as a phantom task (no-op run; meant to be tunneled/routed). */
+/** Marks a task as a phantom task (throws when unrouted; meant to be tunneled/routed). */
 export const symbolPhantomTask: unique symbol = Symbol.for(
   "runner.task.phantom",
 );

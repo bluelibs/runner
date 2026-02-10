@@ -122,7 +122,7 @@ There are two phases:
 graph TD
   App[App code] --> Call["Call task: add(input)"]
   Call --> Route{Tunnel route?}
-  Route -- "no" --> Local["Runs locally<br/>or returns undefined"]
+  Route -- "no" --> Local["Runs locally<br/>(phantom tasks throw)"]
   Route -- "yes" --> Client[HTTP tunnel client]
   Client --> Expo["nodeExposure<br/>/__runner/*"]
   Expo --> Guard["Parse + authenticate<br/>+ allow-list gate"]
@@ -287,7 +287,7 @@ export const app = r
 ```
 
 Now calling `await add({ a: 1, b: 2 })` will execute the server's `app.tasks.add` over HTTP.
-If the tunnel isn't registered (or doesn't select this id), the phantom resolves to `undefined`.
+If the tunnel isn't registered (or doesn't select this id), the phantom throws `runner.errors.phantomTaskNotRouted`.
 
 This is great when you want "remote" to be a configuration concern rather than a call-site concern.
 
@@ -715,7 +715,7 @@ Notes:
 Phantom tasks are **typed placeholders** intended to be executed through tunnels.
 
 - they do not have `.run()`
-- when called without a matching tunnel route, they resolve to `undefined`
+- when called without a matching tunnel route, they throw `runner.errors.phantomTaskNotRouted`
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -723,16 +723,6 @@ import { r } from "@bluelibs/runner";
 export const remoteHello = r.task
   .phantom<{ name: string }, string>("app.tasks.remoteHello")
   .build();
-```
-
-When you want "missing route" to be a hard error, check for `undefined`:
-
-```ts
-const value = await remoteHello({ name: "Ada" });
-if (value === undefined) {
-  throw new Error(`Task ${remoteHello.id} was not routed through a tunnel`);
-}
-return value;
 ```
 
 This pattern pairs well with client-mode tunnel resources: the phantom gives you type safety, the tunnel provides the transport.
