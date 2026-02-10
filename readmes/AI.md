@@ -298,9 +298,9 @@ const getUser = r
 
 ## Async Context
 
-Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node). Use the fluent builder under `r.asyncContext` or the classic `asyncContext({ ... })` export.
+Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node, and Deno when `AsyncLocalStorage` is available). Use the fluent builder under `r.asyncContext` or the classic `asyncContext({ ... })` export.
 
-> **Platform Note**: `AsyncLocalStorage` is Node.js-only. Async Context is unavailable in browsers/edge runtimes.
+> **Platform Note**: Async Context requires `AsyncLocalStorage`. It is available in Node.js and Deno (when exposed), and unavailable in browser runtimes.
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -338,6 +338,37 @@ const whoAmI = r
 
 const app = r.resource("app").register([requestContext, whoAmI]).build();
 ```
+
+## Queue
+
+`Queue` is a cooperative FIFO task queue. Tasks run one-after-another, with dead-lock detection and graceful disposal.
+
+The global resource `globals.resources.queue` provides a named queue factory — each `id` gets its own isolated `Queue` instance.
+
+**Key methods:**
+
+- `queue.run(id, task)` — schedule `task` (receives an `AbortSignal`) on the queue identified by `id`; creates the queue lazily.
+
+**Event lifecycle:** `enqueue` → `start` → `finish` | `error`. On disposal: `disposed`. On cancel: `cancel`.
+
+```ts
+import { r, run, globals } from "@bluelibs/runner";
+
+const processOrder = r
+  .task("app.tasks.processOrder")
+  .dependencies({ queue: globals.resources.queue })
+  .run(async (input: { orderId: string }, { queue }) => {
+    // Tasks with the same orderId run sequentially
+    return queue.run(input.orderId, async (signal) => {
+      if (signal.aborted) return;
+      // ... process order
+      return { processed: true };
+    });
+  })
+  .build();
+```
+
+For advanced usage, import `Queue` directly and use `on(type, handler)` / `once(type, handler)` to observe lifecycle events. Call `dispose({ cancel: true })` to abort in-flight work via the `AbortSignal`.
 
 ## Errors
 

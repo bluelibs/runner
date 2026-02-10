@@ -12,7 +12,7 @@ import type {
   NodeExposureDeps,
   NodeExposureHttpCorsConfig,
 } from "../resourceTypes";
-import { isCancellationError } from "../../../errors";
+import { cancellationError } from "../../../errors";
 import { applyCorsActual } from "../cors";
 import { createAbortControllerForRequest } from "../utils";
 import { withUserContexts } from "./contextWrapper";
@@ -131,7 +131,7 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
         serializer,
       );
     } catch (error) {
-      if (isCancellationError(error)) {
+      if (cancellationError.is(error)) {
         if (!res.writableEnded && !res.headersSent) {
           applyCorsActual(req, res, cors);
           respondJson(

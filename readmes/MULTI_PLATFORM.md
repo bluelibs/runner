@@ -41,6 +41,9 @@ interface IPlatformAdapter {
   // Timers (already universal!)
   setTimeout: typeof globalThis.setTimeout;
   clearTimeout: typeof globalThis.clearTimeout;
+
+  // Initialization hook (used by adapters that need setup, like Node ALS loading)
+  init(): Promise<void>;
 }
 ```
 
@@ -51,31 +54,48 @@ This interface captures **what every runtime needs to provide** for a dependency
 The magic starts with environment detection. We don't just guess - we carefully probe the global environment:
 
 ```typescript
-export function detectEnvironment(): PlatformEnv {
+export function detectEnvironment(): PlatformId {
   // Browser: has window and document
   if (typeof window !== "undefined" && typeof document !== "undefined") {
     return "browser";
   }
 
+  const global = globalThis as {
+    process?: { versions?: { node?: string; bun?: string } };
+    Deno?: unknown;
+    Bun?: unknown;
+    importScripts?: unknown;
+    WorkerGlobalScope?: new () => any;
+  };
+
   // Node.js: has process.versions.node
-  if (typeof process !== "undefined" && process.versions?.node) {
+  if (global.process?.versions?.node) {
     return "node";
   }
 
   // Deno: has global Deno object
-  if (typeof globalThis.Deno !== "undefined") {
+  if (typeof global.Deno !== "undefined") {
     return "universal";
   }
 
   // Bun: has process.versions.bun
-  if (typeof globalThis.Bun !== "undefined" || process.versions?.bun) {
+  if (typeof global.Bun !== "undefined" || global.process?.versions?.bun) {
     return "universal";
   }
 
-  // Edge Workers: has WorkerGlobalScope
+  // Edge/Worker-like heuristic: importScripts without window
   if (
-    typeof globalThis.WorkerGlobalScope !== "undefined" &&
-    self instanceof globalThis.WorkerGlobalScope
+    typeof global.importScripts === "function" &&
+    typeof window === "undefined"
+  ) {
+    return "edge";
+  }
+
+  // Edge Workers: WorkerGlobalScope + self instance
+  if (
+    typeof global.WorkerGlobalScope !== "undefined" &&
+    typeof self !== "undefined" &&
+    self instanceof global.WorkerGlobalScope
   ) {
     return "edge";
   }
@@ -86,6 +106,8 @@ export function detectEnvironment(): PlatformEnv {
 ```
 
 **Why this approach?** We check for the most specific features first, then fall back to broader categories. This means when new runtimes appear, they'll likely work out of the box.
+
+`isEdge()` is the public guard for edge/worker-like runtimes. Worker environments are intentionally modeled under the single `"edge"` platform id.
 
 ## Meet the Platform Adapters
 
@@ -121,6 +143,7 @@ export class NodePlatformAdapter implements IPlatformAdapter {
 ```
 
 **Why Node.js is special:** It has the richest feature set - real process control, proper signal handling, and native async context tracking.
+Deno can also expose `AsyncLocalStorage` via compatibility APIs, and the universal path can use it when present.
 
 ### BrowserPlatformAdapter
 
@@ -276,7 +299,7 @@ We didn't break existing code. The old `PlatformAdapter` class is now a wrapper:
 export class PlatformAdapter implements IPlatformAdapter {
   private inner: IPlatformAdapter;
 
-  constructor(env?: PlatformEnv) {
+  constructor(env?: PlatformId) {
     // Tests used to pass explicit environments
     const kind = env ?? detectEnvironment();
     switch (kind) {
@@ -455,7 +478,8 @@ All registration methods return disposers. Tests should:
 
 - AsyncLocalStorage
   - Node: calling `createAsyncLocalStorage` before `init()` throws an informative error; after `init()`, `run/getStore` work via the loaded ALS class.
-  - Browser/Universal generic: `hasAsyncLocalStorage()` is false, and `createAsyncLocalStorage().getStore/run` throw `PlatformUnsupportedFunction`.
+  - Deno (universal path): when `AsyncLocalStorage` is exposed (global or `node:async_hooks` compat), `hasAsyncLocalStorage()` is true and contexts work.
+  - Browser/Universal generic (without Deno ALS): `hasAsyncLocalStorage()` is false, and `createAsyncLocalStorage().getStore/run` throw `PlatformUnsupportedFunction`.
 
 ### Build-target tests and factory behavior
 

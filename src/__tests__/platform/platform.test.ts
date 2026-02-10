@@ -1,4 +1,3 @@
-import { isWebWorker } from "../../platform/types";
 /**
  * Simple test to verify platform abstraction works in different environments
  */
@@ -12,6 +11,7 @@ import {
   isNode,
   isBrowser,
   isUniversal,
+  isEdge,
 } from "../../platform";
 
 describe("Platform Abstraction", () => {
@@ -531,26 +531,29 @@ describe("Platform Abstraction", () => {
       (globalThis as any).document = originalDocument;
     });
 
-    it("should test isWebWorker utility", () => {
-      // Mock WebWorker environment
+    it("should test isEdge utility in worker-like environments", () => {
+      // Mock edge/worker environment
       const originalSelf = (globalThis as any).self;
       const originalImportScripts = (globalThis as any).importScripts;
       const originalWindow = (globalThis as any).window;
+      const originalProcess = (globalThis as any).process;
       (globalThis as any).self = {};
       (globalThis as any).importScripts = () => {};
       delete (globalThis as any).window;
+      delete (globalThis as any).process;
 
-      expect(isWebWorker()).toBe(true);
+      expect(isEdge()).toBe(true);
 
-      // Mock non-WebWorker environment
+      // Mock non-worker environment
       delete (globalThis as any).self;
       delete (globalThis as any).importScripts;
-      expect(isWebWorker()).toBe(false);
+      expect(isEdge()).toBe(false);
 
       // Restore
       (globalThis as any).self = originalSelf;
       (globalThis as any).importScripts = originalImportScripts;
       (globalThis as any).window = originalWindow;
+      (globalThis as any).process = originalProcess;
     });
 
     it("should work with require when module is cjs", async () => {

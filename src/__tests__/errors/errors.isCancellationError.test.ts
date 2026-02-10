@@ -1,6 +1,6 @@
-import { cancellationError, isCancellationError } from "../../errors";
+import { cancellationError } from "../../public";
 
-describe("errors.isCancellationError", () => {
+describe("cancellationError.is", () => {
   it("returns true for CancellationError instance", () => {
     let inst: any;
     try {
@@ -8,16 +8,16 @@ describe("errors.isCancellationError", () => {
     } catch (e) {
       inst = e;
     }
-    expect(isCancellationError(inst)).toBe(true);
+    expect(cancellationError.is(inst)).toBe(true);
   });
   it("returns false for non-cancellation error", () => {
-    expect(isCancellationError(new Error("x"))).toBe(false);
+    expect(cancellationError.is(new Error("x"))).toBe(false);
   });
   it("returns false for undefined/null and false for plain object without brand", () => {
-    expect(isCancellationError(undefined)).toBe(false);
-    expect(isCancellationError(null as unknown as Error)).toBe(false);
+    expect(cancellationError.is(undefined)).toBe(false);
+    expect(cancellationError.is(null as unknown as Error)).toBe(false);
     expect(
-      isCancellationError({ name: "CancellationError" } as unknown as Error),
+      cancellationError.is({ name: "CancellationError" } as unknown as Error),
     ).toBe(false);
   });
 });

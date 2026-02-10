@@ -40,7 +40,8 @@ export interface IAsyncLocalStorage<T> {
 }
 
 /**
- * Utility functions for environment detection
+ * Backward-compatible utility functions retained for consumers
+ * importing environment guards from `platform/types`.
  */
 export function isNode(): boolean {
   return !!(
@@ -51,11 +52,13 @@ export function isNode(): boolean {
 }
 
 export function isBrowser(): boolean {
-  // JSDOM environment in tests may define window/document as objects
-  // Treat their presence as browser-like
   return !!(typeof window !== "undefined" && typeof document !== "undefined");
 }
 
+/**
+ * Legacy alias kept for compatibility.
+ * Worker-like runtimes are now modeled under the "edge" platform id.
+ */
 export function isWebWorker(): boolean {
   return !!(
     typeof self !== "undefined" &&
@@ -66,6 +69,18 @@ export function isWebWorker(): boolean {
   );
 }
 
+export function isEdge(): boolean {
+  if (isWebWorker()) return true;
+  return !!(
+    typeof (globalThis as unknown as { WorkerGlobalScope?: new () => unknown })
+      .WorkerGlobalScope !== "undefined" &&
+    typeof self !== "undefined" &&
+    self instanceof
+      (globalThis as unknown as { WorkerGlobalScope: new () => unknown })
+        .WorkerGlobalScope
+  );
+}
+
 export function isUniversal(): boolean {
-  return !isNode() && !isBrowser() && !isWebWorker();
+  return !isNode() && !isBrowser() && !isEdge();
 }

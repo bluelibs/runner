@@ -25,24 +25,36 @@ import {
 } from "../defs";
 import { StoreValidator } from "./StoreValidator";
 import { Store } from "./Store";
-import { IDependentNode } from "./utils/findCircularDependencies";
+import {
+  buildDependencyGraph,
+  buildEventEmissionGraph as buildEmissionGraph,
+} from "./utils/buildDependencyGraph";
 import { IErrorHelper } from "../types/error";
 import type { IAsyncContext } from "../types/asyncContext";
 import { HookDependencyState } from "../types/storeTypes";
+import { LockableMap } from "../tools/LockableMap";
 
 type StoringMode = "normal" | "override";
 export class StoreRegistry {
-  public tasks: Map<string, TaskStoreElementType> = new Map();
-  public resources: Map<string, ResourceStoreElementType> = new Map();
-  public events: Map<string, EventStoreElementType> = new Map();
-  public taskMiddlewares: Map<string, TaskMiddlewareStoreElementType> =
-    new Map();
-  public resourceMiddlewares: Map<string, ResourceMiddlewareStoreElementType> =
-    new Map();
-  public hooks: Map<string, HookStoreElementType> = new Map();
-  public tags: Map<string, ITag> = new Map();
-  public asyncContexts: Map<string, IAsyncContext<any>> = new Map();
-  public errors: Map<string, IErrorHelper<any>> = new Map();
+  public tasks = new LockableMap<string, TaskStoreElementType>("tasks");
+  public resources = new LockableMap<string, ResourceStoreElementType>(
+    "resources",
+  );
+  public events = new LockableMap<string, EventStoreElementType>("events");
+  public taskMiddlewares = new LockableMap<
+    string,
+    TaskMiddlewareStoreElementType
+  >("taskMiddlewares");
+  public resourceMiddlewares = new LockableMap<
+    string,
+    ResourceMiddlewareStoreElementType
+  >("resourceMiddlewares");
+  public hooks = new LockableMap<string, HookStoreElementType>("hooks");
+  public tags = new LockableMap<string, ITag>("tags");
+  public asyncContexts = new LockableMap<string, IAsyncContext<any>>(
+    "asyncContexts",
+  );
+  public errors = new LockableMap<string, IErrorHelper<any>>("errors");
 
   private validator: StoreValidator;
 
@@ -52,6 +64,19 @@ export class StoreRegistry {
 
   getValidator(): StoreValidator {
     return this.validator;
+  }
+
+  /** Lock every map in the registry, preventing further mutations. */
+  lockAll(): void {
+    this.tasks.lock();
+    this.resources.lock();
+    this.events.lock();
+    this.taskMiddlewares.lock();
+    this.resourceMiddlewares.lock();
+    this.hooks.lock();
+    this.tags.lock();
+    this.asyncContexts.lock();
+    this.errors.lock();
   }
 
   storeGenericItem<_C>(item: RegisterableItems) {
@@ -239,152 +264,7 @@ export class StoreRegistry {
 
   // Feels like a dependencyProcessor task?
   getDependentNodes() {
-    const depenedants: IDependentNode[] = [];
-
-    // First, create all nodes
-    const nodeMap = new Map<string, IDependentNode>();
-
-    // Create nodes for tasks
-    this.setupBlankNodes(nodeMap, depenedants);
-
-    // Now, populate dependencies with references to actual nodes
-    for (const task of this.tasks.values()) {
-      const node = nodeMap.get(task.task.id)!;
-
-      // Add task dependencies
-      if (task.task.dependencies) {
-        for (const [depKey, depItem] of Object.entries(
-          task.task.dependencies,
-        )) {
-          const candidate = utils.isOptional(depItem) ? depItem.inner : depItem;
-          const depNode = nodeMap.get(candidate.id);
-          if (depNode) {
-            node.dependencies[depKey] = depNode;
-          }
-        }
-      }
-
-      // Add local middleware dependencies for tasks (hooks have no middleware)
-      const t = task.task;
-      for (const middleware of t.middleware) {
-        const middlewareNode = nodeMap.get(middleware.id);
-        if (middlewareNode) {
-          node.dependencies[middleware.id] = middlewareNode;
-        }
-      }
-    }
-
-    // Populate task middleware dependencies
-    for (const storeTaskMiddleware of this.taskMiddlewares.values()) {
-      const node = nodeMap.get(storeTaskMiddleware.middleware.id)!;
-      const { middleware } = storeTaskMiddleware;
-
-      if (middleware.dependencies) {
-        for (const [depKey, depItem] of Object.entries(
-          middleware.dependencies,
-        )) {
-          const candidate = utils.isOptional(depItem) ? depItem.inner : depItem;
-
-          const depNode = nodeMap.get(candidate.id);
-          if (depNode) {
-            node.dependencies[depKey] = depNode;
-          }
-        }
-      }
-
-      if (middleware.everywhere) {
-        const filter =
-          typeof middleware.everywhere === "function"
-            ? middleware.everywhere
-            : () => true;
-
-        for (const task of this.tasks.values()) {
-          if (filter(task.task)) {
-            const taskNode = nodeMap.get(task.task.id)!;
-            // node.dependencies[task.task.id] = taskNode;
-            taskNode.dependencies[`__middleware.${middleware.id}`] = node;
-          }
-        }
-      }
-    }
-
-    // Populate resource middleware dependencies
-    for (const storeResourceMiddleware of this.resourceMiddlewares.values()) {
-      const node = nodeMap.get(storeResourceMiddleware.middleware.id)!;
-      const { middleware } = storeResourceMiddleware;
-      if (middleware.dependencies) {
-        for (const [depKey, depItem] of Object.entries(
-          middleware.dependencies,
-        )) {
-          const candidate = utils.isOptional(depItem) ? depItem.inner : depItem;
-
-          const depNode = nodeMap.get(candidate.id);
-          if (depNode) {
-            node.dependencies[depKey] = depNode;
-          }
-        }
-      }
-
-      if (middleware.everywhere) {
-        const filter =
-          typeof middleware.everywhere === "function"
-            ? middleware.everywhere
-            : () => true;
-
-        for (const resource of this.resources.values()) {
-          if (filter(resource.resource)) {
-            const resourceNode = nodeMap.get(resource.resource.id)!;
-            // node.dependencies[resource.resource.id] = resourceNode;
-            resourceNode.dependencies[`__middleware.${middleware.id}`] = node;
-          }
-        }
-      }
-    }
-
-    // Populate resource dependencies
-    for (const resource of this.resources.values()) {
-      const node = nodeMap.get(resource.resource.id)!;
-
-      // Add resource dependencies
-      if (resource.resource.dependencies) {
-        for (const [depKey, depItem] of Object.entries(
-          resource.resource.dependencies,
-        )) {
-          const candidate = utils.isOptional(depItem) ? depItem.inner : depItem;
-
-          const depNode = nodeMap.get(candidate.id);
-          if (depNode) {
-            node.dependencies[depKey] = depNode;
-          }
-        }
-      }
-
-      // Add local middleware dependencies
-      for (const middleware of resource.resource.middleware) {
-        const middlewareNode = nodeMap.get(middleware.id);
-        if (middlewareNode) {
-          node.dependencies[middleware.id] = middlewareNode;
-        }
-      }
-    }
-
-    for (const hook of this.hooks.values()) {
-      const node = nodeMap.get(hook.hook.id)!;
-      if (hook.hook.dependencies) {
-        for (const [depKey, depItem] of Object.entries(
-          hook.hook.dependencies,
-        )) {
-          const candidate = utils.isOptional(depItem) ? depItem.inner : depItem;
-          const depNode = nodeMap.get(candidate.id);
-
-          if (depNode) {
-            node.dependencies[depKey] = depNode;
-          }
-        }
-      }
-    }
-
-    return depenedants;
+    return buildDependencyGraph(this);
   }
 
   /**
@@ -392,103 +272,7 @@ export class StoreRegistry {
    * and their dependencies on events (emission capability). Ignores wildcard hooks by default.
    */
   buildEventEmissionGraph() {
-    const nodes = new Map<string, IDependentNode>();
-
-    // Create nodes for all events
-    for (const e of this.events.values()) {
-      nodes.set(e.event.id, { id: e.event.id, dependencies: {} });
-    }
-
-    // For each hook, if it listens to concrete event(s) and depends on events, add edges listenedEvent -> depEvent
-    for (const h of this.hooks.values()) {
-      const listened: string[] = [];
-      const on = h.hook.on;
-      if (on === "*") continue; // avoid over-reporting for global hooks
-      if (Array.isArray(on))
-        listened.push(...(on as IEvent[]).map((e: IEvent) => e.id));
-      else listened.push((on as IEvent).id);
-
-      // Collect event dependencies from the hook
-      const depEvents: string[] = [];
-      const deps = h.hook.dependencies;
-      if (deps) {
-        for (const value of Object.values(deps)) {
-          // For optional wrappers, extract the inner value
-          const candidate: { id?: string } = utils.isOptional(value)
-            ? (value as { inner: { id?: string } }).inner
-            : (value as { id?: string });
-          if (candidate && utils.isEvent(candidate)) {
-            depEvents.push(candidate.id);
-          }
-        }
-      }
-
-      // Add edges
-      for (const srcId of listened) {
-        const srcNode = nodes.get(srcId);
-        if (!srcNode) continue; // skip unknown/unregistered events
-        for (const dstId of depEvents) {
-          if (srcId === dstId) continue; // ignore trivial self edge
-          const dstNode = nodes.get(dstId);
-          if (dstNode) {
-            srcNode.dependencies[dstId] = dstNode;
-          }
-        }
-      }
-    }
-
-    return Array.from(nodes.values());
-  }
-
-  private setupBlankNodes(
-    nodeMap: Map<string, IDependentNode>,
-    depenedants: IDependentNode[],
-  ) {
-    for (const task of this.tasks.values()) {
-      const node: IDependentNode = {
-        id: task.task.id,
-        dependencies: {},
-      };
-      nodeMap.set(task.task.id, node);
-      depenedants.push(node);
-    }
-
-    for (const middleware of this.taskMiddlewares.values()) {
-      const node: IDependentNode = {
-        id: middleware.middleware.id,
-        dependencies: {},
-      };
-      nodeMap.set(middleware.middleware.id, node);
-      depenedants.push(node);
-    }
-
-    for (const middleware of this.resourceMiddlewares.values()) {
-      const node: IDependentNode = {
-        id: middleware.middleware.id,
-        dependencies: {},
-      };
-      nodeMap.set(middleware.middleware.id, node);
-      depenedants.push(node);
-    }
-
-    // Create nodes for resources
-    for (const resource of this.resources.values()) {
-      const node: IDependentNode = {
-        id: resource.resource.id,
-        dependencies: {},
-      };
-      nodeMap.set(resource.resource.id, node);
-      depenedants.push(node);
-    }
-
-    for (const hook of this.hooks.values()) {
-      const node: IDependentNode = {
-        id: hook.hook.id,
-        dependencies: {},
-      };
-      nodeMap.set(hook.hook.id, node);
-      depenedants.push(node);
-    }
+    return buildEmissionGraph(this);
   }
 
   getTasksWithTag<TTag extends ITag<any, any, any>>(

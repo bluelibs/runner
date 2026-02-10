@@ -26,6 +26,7 @@ import {
   unknownItemTypeError,
 } from "../errors";
 import { Logger } from "./Logger";
+import { findDependencyStrategy } from "./utils/dependencyStrategies";
 
 /**
  * Resolves and caches computed dependencies for store items (resources, tasks, middleware, hooks).
@@ -163,7 +164,16 @@ export class DependencyProcessor {
       throw error;
     }
 
-    throw new Error(`${prefix}: ${String(error)}`);
+    const wrapper = new Error(`${prefix}: ${String(error)}`);
+    Object.defineProperty(wrapper, "resourceId", {
+      value: resourceId,
+      configurable: true,
+    });
+    Object.defineProperty(wrapper, "cause", {
+      value: error,
+      configurable: true,
+    });
+    throw wrapper;
   }
 
   /**
@@ -343,48 +353,47 @@ export class DependencyProcessor {
     return object;
   }
 
-  async extractDependency(object: any, source: string) {
-    this.logger.trace(`Extracting dependency -> ${source} -> ${object?.id}`);
+  async extractDependency(object: unknown, source: string) {
+    this.logger.trace(
+      `Extracting dependency -> ${source} -> ${(object as { id?: string })?.id}`,
+    );
+
+    let isOpt = false;
+    let item: unknown = object;
+
     if (utils.isOptional(object)) {
-      const inner = object.inner;
-      if (utils.isResource(inner)) {
-        const exists = this.store.resources.get(inner.id) !== undefined;
-        return exists ? this.extractResourceDependency(inner) : undefined;
-      } else if (utils.isTask(inner)) {
-        const exists = this.store.tasks.get(inner.id) !== undefined;
-        return exists ? this.extractTaskDependency(inner) : undefined;
-      } else if (utils.isEvent(inner)) {
-        const exists = this.store.events.get(inner.id) !== undefined;
-        return exists ? this.extractEventDependency(inner, source) : undefined;
-      } else if (utils.isError(inner)) {
-        const exists = this.store.errors.get(inner.id) !== undefined;
-        return exists ? inner : undefined;
-      } else if (utils.isAsyncContext(inner)) {
-        const exists = this.store.asyncContexts.get(inner.id) !== undefined;
-        return exists ? inner : undefined;
-      }
-      unknownItemTypeError.throw({ item: inner });
+      isOpt = true;
+      item = object.inner;
     }
-    if (utils.isResource(object)) {
-      return this.extractResourceDependency(object);
-    } else if (utils.isTask(object)) {
-      return this.extractTaskDependency(object);
-    } else if (utils.isEvent(object)) {
-      return this.extractEventDependency(object, source);
-    } else if (utils.isError(object)) {
-      if (this.store.errors.get(object.id) === undefined) {
-        dependencyNotFoundError.throw({ key: `Error ${object.id}` });
-      }
-      // For error helpers, the dependency value is the helper itself
-      return object;
-    } else if (utils.isAsyncContext(object)) {
-      if (this.store.asyncContexts.get(object.id) === undefined) {
-        dependencyNotFoundError.throw({ key: `AsyncContext ${object.id}` });
-      }
-      return object;
-    } else {
-      unknownItemTypeError.throw({ item: object });
+
+    const itemWithId = item as { id: string };
+    const strategy = findDependencyStrategy(item);
+    if (!strategy) {
+      return unknownItemTypeError.throw({ item });
     }
+
+    // For optional deps, check existence first
+    if (isOpt) {
+      const exists = strategy.getStoreMap(this.store).has(itemWithId.id);
+      if (!exists) return undefined;
+    }
+
+    // Dispatch to the appropriate extraction method
+    if (utils.isResource(item)) return this.extractResourceDependency(item);
+    if (utils.isTask(item)) return this.extractTaskDependency(item);
+    if (utils.isEvent(item)) return this.extractEventDependency(item, source);
+
+    // Errors and async contexts are their own value
+    // For non-optional deps, verify they exist in the store
+    if (!isOpt) {
+      const exists = strategy.getStoreMap(this.store).has(itemWithId.id);
+      if (!exists) {
+        const label = utils.isError(item) ? "Error" : "AsyncContext";
+        dependencyNotFoundError.throw({ key: `${label} ${itemWithId.id}` });
+      }
+    }
+
+    return item;
   }
 
   /**

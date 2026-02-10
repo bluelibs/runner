@@ -5,6 +5,7 @@ import {
   getDetectedEnvironment,
   isNode,
   isBrowser,
+  isEdge,
   isUniversal,
   PlatformAdapter,
 } from "../../platform";
@@ -340,6 +341,10 @@ describe("Platform Index", () => {
       it("should return false for isUniversal() when __TARGET__ is node", () => {
         expect(isUniversal()).toBe(false);
       });
+
+      it("should return false for isEdge() when __TARGET__ is node", () => {
+        expect(isEdge()).toBe(false);
+      });
     });
 
     describe("__TARGET__ = browser", () => {
@@ -363,6 +368,10 @@ describe("Platform Index", () => {
       it("should return false for isUniversal() when __TARGET__ is browser", () => {
         expect(isUniversal()).toBe(false);
       });
+
+      it("should return false for isEdge() when __TARGET__ is browser", () => {
+        expect(isEdge()).toBe(false);
+      });
     });
 
     describe("__TARGET__ = edge", () => {
@@ -385,6 +394,10 @@ describe("Platform Index", () => {
 
       it("should return false for isUniversal() when __TARGET__ is edge", () => {
         expect(isUniversal()).toBe(false);
+      });
+
+      it("should return true for isEdge() when __TARGET__ is edge", () => {
+        expect(isEdge()).toBe(true);
       });
     });
 
@@ -416,6 +429,12 @@ describe("Platform Index", () => {
         expect(typeof result).toBe("boolean");
         expect(result).toBe(getDetectedEnvironment() === "universal");
       });
+
+      it("should use runtime detection in isEdge() when __TARGET__ is universal", () => {
+        const result = isEdge();
+        expect(typeof result).toBe("boolean");
+        expect(result).toBe(getDetectedEnvironment() === "edge");
+      });
     });
 
     describe("__TARGET__ undefined cases", () => {
@@ -438,6 +457,10 @@ describe("Platform Index", () => {
 
       it("should return false for isUniversal() when __TARGET__ is undefined", () => {
         expect(isUniversal()).toBe(false);
+      });
+
+      it("should return false for isEdge() when __TARGET__ is undefined", () => {
+        expect(isEdge()).toBe(false);
       });
     });
   });

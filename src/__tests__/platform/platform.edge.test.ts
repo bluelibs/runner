@@ -41,4 +41,11 @@ describe("EdgePlatformAdapter", () => {
     // Cleanup should work without issues
     disposer();
   });
+
+  it("should be safe to init multiple times", async () => {
+    const adapter = new EdgePlatformAdapter();
+
+    await expect(adapter.init()).resolves.toBeUndefined();
+    await expect(adapter.init()).resolves.toBeUndefined();
+  });
 });

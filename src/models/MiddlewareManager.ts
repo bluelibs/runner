@@ -1,4 +1,9 @@
-import { DependencyMapType, ITask, IResource } from "../defs";
+import {
+  DependencyMapType,
+  ITask,
+  IResource,
+  ResourceDependencyValuesType,
+} from "../defs";
 import { Store } from "./Store";
 import { ITaskMiddleware, IResourceMiddleware } from "../defs";
 import { isResourceMiddleware, isTaskMiddleware } from "../define";
@@ -157,7 +162,7 @@ export class MiddlewareManager {
   >(
     resource: IResource<C, V, D, TContext>,
     config: C,
-    dependencies: any,
+    dependencies: ResourceDependencyValuesType<D>,
     context: TContext,
   ): Promise<V | undefined> {
     return this.resourceComposer.runInit(

@@ -8,18 +8,7 @@ export function cloneState<S, NS>(s: S, patch: Partial<NS>): NS {
   }) as NS;
 }
 
-// Merge arrays with optional override (replace vs append)
-export function mergeArray<T>(
-  existing: ReadonlyArray<T> | undefined,
-  addition: ReadonlyArray<T>,
-  override: boolean,
-): T[] {
-  const toArray = [...addition];
-  if (override || !existing) {
-    return toArray as T[];
-  }
-  return [...existing, ...toArray] as T[];
-}
+export { mergeArray } from "./shared/mergeUtils";
 
 // Merge dependency maps that may be objects or functions producing objects.
 export function mergeDepsNoConfig<

@@ -57,6 +57,17 @@ describe("Store", () => {
     );
   });
 
+  it("should lock all registry maps when the store is locked", () => {
+    store.lock();
+
+    expect(() => store.tasks.set("x", {} as any)).toThrow(/locked/);
+    expect(() => store.resources.set("x", {} as any)).toThrow(/locked/);
+    expect(() => store.events.set("x", {} as any)).toThrow(/locked/);
+    expect(() => store.hooks.set("x", {} as any)).toThrow(/locked/);
+    expect(() => store.tags.set("x", {} as any)).toThrow(/locked/);
+    expect(() => store.errors.set("x", {} as any)).toThrow(/locked/);
+  });
+
   it("should store a task and retrieve it", () => {
     const testTask = defineTask({
       id: "test.task",
