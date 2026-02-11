@@ -110,6 +110,9 @@ export class TypeRegistry {
     if (!typeDef || !typeDef.id) {
       throw new Error("Invalid type definition: id is required");
     }
+    if (typeof typeDef.is !== "function") {
+      throw new Error("Invalid type definition: is is required");
+    }
     if (!typeDef.serialize || !typeDef.deserialize) {
       throw new Error(
         "Invalid type definition: serialize and deserialize are required",

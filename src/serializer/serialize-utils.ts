@@ -19,6 +19,7 @@ export const serializeRecordEntries = <TSerializedValue>(
   source: Record<string, unknown>,
   unsafeKeys: ReadonlySet<string>,
   serializeNested: (value: unknown) => TSerializedValue,
+  mapKey: (key: string) => string = (key) => key,
 ): Record<string, TSerializedValue> => {
   const record: Record<string, TSerializedValue> = {};
   for (const key in source) {
@@ -28,7 +29,8 @@ export const serializeRecordEntries = <TSerializedValue>(
     if (isUnsafeKey(key, unsafeKeys)) {
       continue;
     }
-    record[key] = serializeNested(source[key]);
+    const outputKey = mapKey(key);
+    record[outputKey] = serializeNested(source[key]);
   }
   return record;
 };

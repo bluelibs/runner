@@ -11,6 +11,7 @@ import {
   assertDepth,
 } from "./validation";
 import type { TypeRegistry } from "./type-registry";
+import { unescapeReservedMarkerKey } from "./marker-key-escapes";
 
 const hasOwn = Object.prototype.hasOwnProperty;
 
@@ -119,7 +120,10 @@ export const deserializeValue = (
     return result;
   }
 
-  if (isObjectReference(value)) {
+  if (hasOwn.call(value, "__ref")) {
+    if (!isObjectReference(value)) {
+      throw new Error("Invalid object reference payload");
+    }
     return resolveReference(value.__ref, context, depth + 1, options);
   }
 
@@ -176,6 +180,9 @@ export const resolveReference = (
   switch (node.kind) {
     case "array": {
       const values = node.value;
+      if (!Array.isArray(values)) {
+        throw new Error("Invalid array node payload");
+      }
       const arr: unknown[] = new Array(values.length);
       context.resolved.set(id, arr);
       for (let index = 0; index < values.length; index += 1) {
@@ -338,14 +345,15 @@ export const deserializeLegacy = (
 
   const obj: Record<string, unknown> = {};
   const source = value as Record<string, unknown>;
-  for (const key in source) {
-    if (!hasOwn.call(source, key)) {
+  for (const rawKey in source) {
+    if (!hasOwn.call(source, rawKey)) {
       continue;
     }
+    const key = unescapeReservedMarkerKey(rawKey);
     if (isUnsafeKey(key, options.unsafeKeys)) {
       continue;
     }
-    obj[key] = deserializeLegacy(source[key], depth + 1, options);
+    obj[key] = deserializeLegacy(source[rawKey], depth + 1, options);
   }
   return obj;
 };

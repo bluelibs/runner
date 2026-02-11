@@ -7,6 +7,19 @@ const errorReservedPropertyNames = new Set([
   "stack",
   "cause",
 ]);
+const errorMethodShadowingPropertyNames = new Set([
+  "toString",
+  "toLocaleString",
+  "valueOf",
+  "hasOwnProperty",
+  "isPrototypeOf",
+  "propertyIsEnumerable",
+  "__defineGetter__",
+  "__defineSetter__",
+  "__lookupGetter__",
+  "__lookupSetter__",
+  "toJSON",
+]);
 
 interface RuntimeUrlConstructor {
   new (url: string, base?: string | URL): URL;
@@ -51,13 +64,15 @@ const isUnsafePropertyName = (propertyName: string): boolean =>
   propertyName === "constructor" ||
   propertyName === "prototype";
 
+const shouldBlockErrorCustomField = (propertyName: string): boolean =>
+  isUnsafePropertyName(propertyName) ||
+  errorReservedPropertyNames.has(propertyName) ||
+  errorMethodShadowingPropertyNames.has(propertyName);
+
 const collectErrorCustomFields = (error: Error): Record<string, unknown> => {
   const customFields: Record<string, unknown> = {};
   for (const propertyName of Object.getOwnPropertyNames(error)) {
-    if (errorReservedPropertyNames.has(propertyName)) {
-      continue;
-    }
-    if (isUnsafePropertyName(propertyName)) {
+    if (shouldBlockErrorCustomField(propertyName)) {
       continue;
     }
 
@@ -90,7 +105,7 @@ const assertSerializedErrorPayload = (value: unknown): ParsedErrorPayload => {
   const normalizedCustomFields: Record<string, unknown> = {};
   const customFieldEntries = Object.entries(customFields ?? {});
   for (const [propertyName, propertyValue] of customFieldEntries) {
-    if (isUnsafePropertyName(propertyName)) {
+    if (shouldBlockErrorCustomField(propertyName)) {
       continue;
     }
     normalizedCustomFields[propertyName] = propertyValue;
@@ -164,9 +179,6 @@ export const ErrorType: TypeDefinition<Error, SerializedErrorPayload> = {
     }
 
     for (const [propertyName, propertyValue] of Object.entries(customFields)) {
-      if (errorReservedPropertyNames.has(propertyName)) {
-        continue;
-      }
       (restoredError as unknown as Record<string, unknown>)[propertyName] =
         propertyValue;
     }
