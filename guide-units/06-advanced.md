@@ -267,9 +267,22 @@ const resilientTask = r
 
 ## Meta
 
-_The structured way to describe what your components do and control their behavior_
+Think about generating API documentation automatically from your tasks, or building an admin dashboard that shows what each task does without reading code. Or you need to categorize tasks by feature for billing purposes. How do you attach descriptive information to components?
 
-Metadata in BlueLibs Runner provides a systematic way to document, categorize, and control the behavior of your tasks, resources, events, and middleware. Think of it as your component's passport - it tells you and your tools everything they need to know about what this component does and how it should be treated.
+**The problem**: You need to document what components do and categorize them, but there's no standard place to store this metadata.
+
+**The naive solution**: Use naming conventions or external documentation. But this gets out of sync easily and doesn't integrate with tooling.
+
+**The better solution**: Use Meta, a structured way to describe what your components do.
+
+### When to use Meta
+
+| Use case | Why Meta helps |
+|----------|---------------|
+| API docs | Generate documentation from component metadata |
+| Admin dashboards | Display component descriptions |
+| Billing | Categorize tasks by feature for metering |
+| Discovery | Search components by title/description |
 
 ### Metadata Properties
 
@@ -534,7 +547,24 @@ const app = r
 
 ## Runtime Validation
 
-BlueLibs Runner includes a generic validation interface that works with any validation library, including [Zod](https://zod.dev/), [Yup](https://github.com/jquense/yup), [Joi](https://joi.dev/), and others. The framework provides runtime validation with excellent TypeScript inference while remaining library-agnostic.
+Here's the issue: TypeScript types only exist at compile time. When your API receives JSON from an HTTP request, or when data comes from a database, TypeScript can't help you validate it. Invalid data crashes your app or causes subtle bugs.
+
+**The problem**: You need to validate data at runtime (where TypeScript can't help), but you don't want to write validation logic twice.
+
+**The naive solution**: Use a separate validation library but manually map types. But this duplicates work and types can get out of sync.
+
+**The better solution**: Use runtime validation with libraries like Zod that infer types from validation schemas.
+
+### When to use Runtime Validation
+
+| Use case | Why Runtime Validation helps |
+|----------|-------------------------------|
+| API input | Validate HTTP request bodies |
+| Database data | Validate data loaded from DB |
+| External services | Validate responses from APIs |
+| User input | Validate form submissions |
+
+BlueLibs Runner includes a generic validation interface that works with any validation library, including [Zod](https://zod.dev/), [Yup](https://github.com/jquense/yup), [Joi](https://joi.dev/), and others.
 
 The framework defines a simple `IValidationSchema<T>` interface that any validation library can implement:
 
@@ -880,9 +910,22 @@ const createUser = r
 
 ## Type Contracts
 
-TypeScript is powerful, but sometimes you want to enforce that a component adheres to a specific contract in order to use it. For example, you might want to ensure that any Task that has the `@Authenticated` tag also accepts a `userId` in its input.
+Consider this: You have an authentication tag, and you want to ensure ALL tasks using it actually accept a `userId` in their input. TypeScript doesn't know about your tags—it can't enforce that every task using auth has the right input shape. How do you make this compile-time enforced?
 
-This is where Type Contracts come in. They allow you to define input/output contracts on **Tags** and **Middleware**, and the framework will enforce them on the Tasks/Resources that use them.
+**The problem**: You want to enforce that tasks using certain tags or middleware conform to specific input/output shapes, but plain TypeScript types can't express "any task with tag X must have property Y."
+
+**The naive solution**: Document the requirements and add runtime checks. But this is error-prone and bugs aren't caught until runtime.
+
+**The better solution**: Use Type Contracts, which allow Tags and Middleware to declare input/output contracts that are enforced at compile time.
+
+### When to use Type Contracts
+
+| Use case | Why Type Contracts help |
+|----------|------------------------|
+| Authentication | Ensure all auth tasks include userId |
+| API standardization | Enforce consistent response shapes |
+| Validation | Guarantee tasks return required fields |
+| Documentation | Make requirements self-enforcing |
 
 ### Concept
 
@@ -891,11 +934,11 @@ A **Tag** or **Middleware** can declare:
 - **Input Contract**: "Any task using me MUST accept at least specific properties in its input"
 - **Output Contract**: "Any task using me MUST return at least specific properties"
 
-The enforcement happens at **compile time**. If you try to attach an `@Authenticated` tag to a request that doesn't accept a `userId`, TypeScript will yell at you.
+The enforcement happens at **compile time**. If you try to use the `authorizedTag` on a task that doesn't accept a `userId`, TypeScript will yell at you.
 
 ### Example: Enforcing Authentication Identity
 
-Let's say we want to ensure that any task tagged with `@Authorized` receives a `userId`:
+Let's say we want to ensure that any task using the `authorizedTag` receives a `userId`:
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -950,7 +993,7 @@ const productTask = r
   .build();
 ```
 
-> **runtime:** "Type Contracts: The pre-nup of code. 'If you want to wear my @Authenticated ring, you _will_ bring a userId to the table.' It's not controlling; it's just... strictly typed love."
+> **runtime:** "Type Contracts: The pre-nup of code. 'If you want to use my authorizedTag, you _will_ bring a userId to the table.' It's not controlling; it's just... strictly typed love."
 
 ### Resource Contracts
 

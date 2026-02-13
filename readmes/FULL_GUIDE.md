@@ -1419,7 +1419,17 @@ Use function-based registration when:
 
 #### Resource Forking
 
-Use `.fork(newId)` to create multiple instances of a "template" resource with different identities. If the base resource registers other items, use `.fork(newId, { register: "drop" })` to avoid re-registering them, or `.fork(newId, { register: "deep", reId })` to deep-fork **registered resources** (resource tree) with new ids. This is perfect when you need several instances of the same resource type (e.g., multiple database connections, multiple mailers):
+**When you need multiple instances of the same resource type** — like connecting to multiple databases, sending through different SMTP providers, or handling multi-tenant setups — resource forking lets you define once and instantiate with different configs.
+
+**The naive approach gets tedious:**
+
+```typescript
+// Copy-paste and rename - error-prone and hard to maintain
+const txMailer = r.resource("app.mailers.tx").init(...).build();
+const mktMailer = r.resource("app.mailers.mkt").init(...).build();
+```
+
+**Fork instead:**
 
 ```typescript
 // Define a reusable template
@@ -1453,11 +1463,17 @@ const app = r
   .build();
 ```
 
-If the base resource registers other resources and you want a clean clone of the resource tree, use `register: "deep"` with a re-id function:
+##### Shallow vs Deep Fork
+
+| Type | Use when |
+|------|----------|
+| `fork("new.id")` | Simple resources with no registered children |
+| `fork("new.id", { register: "drop" })` | Resource that registers things you don't want cloned |
+| `fork("new.id", { register: "deep", reId: (id) => \`prefix.\${id}\` })` | You need a complete cloned resource tree (e.g., multi-tenant databases) |
+
+**Deep fork example:**
 
 ```typescript
-import { r } from "@bluelibs/runner";
-
 const child = r
   .resource("app.base.child")
   .init(async () => ({ ok: true }))
@@ -1478,15 +1494,14 @@ const forked = base.fork("app.base.forked", {
 const app = r.resource("app").register([base, forked]).build();
 ```
 
-Note: `register: "deep"` deep-forks registered **resources**; other registerables (tasks/events/hooks/middleware/tags/errors/async contexts) are not cloned.
-Resource dependencies that point to deep-forked resources are remapped inside the cloned tree.
+> **Note:** `register: "deep"` clones only **resources**; tasks, events, hooks, middleware, tags, errors, and async contexts are not cloned. Dependencies pointing to deep-forked resources are remapped inside the cloned tree.
 
-Key points:
+##### Key Points
 
-- **`.fork()` returns a built `IResource`** - no need to call `.build()` again
+- **`.fork()` returns a built `IResource`** — no need to call `.build()` again
 - **Tags, middleware, and type parameters are inherited**
-- **Each fork gets independent runtime** - no shared state
-- **`register` defaults to `"keep"`**; use `"drop"` for leaf resources or `"deep"` when you want cloned _registered resources_ (resource tree)
+- **Each fork gets independent runtime** — no shared state
+- **`register` defaults to `"keep"`**
 - **Export forked resources** to use them as typed dependencies
 
 #### Optional Dependencies
@@ -1978,7 +1993,24 @@ const adminTask = r
 
 #### Execution Journal
 
-The Execution Journal is a type-safe registry that travels with your task execution. It allows middleware and tasks to share state without polluting the task input/output.
+Consider this scenario: Your rate-limit middleware needs to share remaining quota with your logging middleware, or your timeout middleware needs to tell your retry middleware what went wrong. They need to communicate, but adding this to task input/output pollutes the API.
+
+**The problem**: Multiple middleware need to share state during execution, but passing data through task input/output makes the API messy and exposes internal concerns.
+
+**The naive solution**: Store shared state in a global variable or module-level map. But this causes race conditions, makes testing difficult, and breaks when tasks run in parallel.
+
+**The better solution**: Use the Execution Journal, a type-safe registry that travels with your task execution.
+
+### When to use the Execution Journal
+
+| Use case | Why Journal helps |
+|----------|-------------------|
+| Rate limiting | Share remaining quota between middleware |
+| Tracing | Propagate trace IDs through the call chain |
+| Retries | Pass error details to retry logic |
+| Caching | Indicate cache hits/misses to logging |
+
+### Code Example
 
 ```typescript
 import { r, journal } from "@bluelibs/runner";
@@ -2121,9 +2153,24 @@ if (customJournal.has(traceIdKey)) {
 
 ### Tags
 
-Tags are metadata that can influence system behavior. Unlike meta properties, tags can be queried at runtime to build dynamic functionality. They can be marker tags (no config) or configured tags.
+Imagine you want to automatically register all your HTTP routes without manually importing them into a list. Or you need to find all "cacheable" tasks to build a cache-warmer. How do you discover components at runtime based on their characteristics?
 
-#### Basic Usage
+**The problem**: You need to categorize tasks/resources and query them dynamically, but static metadata isn't enough.
+
+**The naive solution**: Maintain a manual registry or use naming conventions (e.g., tasks starting with "http."). But this is error-prone and couples naming to functionality.
+
+**The better solution**: Use Tags—metadata that can be queried at runtime to build dynamic functionality.
+
+### When to use Tags
+
+| Use case | Why Tags help |
+|----------|---------------|
+| Auto-discovery | Find all HTTP routes without manual imports |
+| Caching | Mark tasks as cacheable and query them |
+| Access control | Tag tasks requiring authorization |
+| Monitoring | Group tasks by feature for metrics |
+
+### Code Example
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -2252,7 +2299,23 @@ const internalEvent = r
 
 #### Contract Tags
 
-Enforce return value shapes at compile time:
+Consider this: You have an authentication tag, and you want to ensure ALL tasks using it actually accept a `userId` in their input. Or you need to ensure that every "searchable" task returns an `id` field. How do you enforce this at compile time?
+
+**The problem**: You want to ensure tasks using certain tags conform to specific input/output shapes, but plain tags don't enforce anything.
+
+**The naive solution**: Document the requirements and manually verify. But this doesn't scale and bugs slip through.
+
+**The better solution**: Use Contract Tags, which enforce type contracts at compile time.
+
+### When to use Contract Tags
+
+| Use case | Why Contract Tags help |
+|----------|----------------------|
+| Authentication | Ensure all auth tasks include userId |
+| API standardization | Enforce consistent response shapes |
+| Validation | Guarantee tasks return required fields |
+
+### Code Example
 
 ```typescript
 // Tags that enforce type contracts input/output for tasks or config/value for resources
@@ -2762,6 +2825,8 @@ const app = r
   .build();
 ```
 
+**Why would you need this?** For monitoring and metrics—you want to know cache hit rates to optimize your application.
+
 **Journal Introspection**: On cache hits the task `run()` isn't executed, but you can still detect cache hits from a wrapping middleware:
 
 ```typescript
@@ -2853,6 +2918,8 @@ const resilientTask = r
 3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
 4. **RECOVERY**: If the trial succeeds, it goes back to **CLOSED**. Otherwise, it returns to **OPEN**.
 
+**Why would you need this?** For alerting—you want to know when the circuit opens to alert on-call engineers.
+
 **Journal Introspection**: Access the circuit breaker's state and failure count within your task (when it runs):
 
 ```typescript
@@ -2942,6 +3009,8 @@ const getPrice = r
   .build();
 ```
 
+**Why would you need this?** For audit trails—you want to know when fallback values were used instead of real data.
+
 **Journal Introspection**: The original task that throws won't continue execution, but you can detect fallback activation from a wrapping middleware:
 
 ```typescript
@@ -3004,6 +3073,8 @@ const sensitiveTask = r
 - **Isolation**: Limits are tracked per task definition.
 - **Error handling**: Throws `RateLimitError` when the limit is exceeded.
 
+**Why would you need this?** For monitoring—you want to see remaining quota to implement client-side throttling.
+
 **Journal Introspection**: When the task runs (request allowed), you can read the rate limit state from the execution journal:
 
 ```typescript
@@ -3062,6 +3133,8 @@ The retry middleware can be configured with:
 - `retries`: The maximum number of retry attempts (default: 3).
 - `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
+
+**Why would you need this?** For logging—you want to log which attempt succeeded or what errors occurred during retries.
 
 **Journal Introspection**: Access the current retry attempt and the last error within your task:
 
@@ -3158,11 +3231,22 @@ Both ship with Runner—no external dependencies.
 
 ## Semaphore
 
-Limit how many operations can run at once. Perfect for:
+Imagine this: Your API has a rate limit of 100 requests/second, but 1,000 users are hammering it at once. Without controls, you get 429 errors. Or your database pool has 20 connections, but you're firing off 100 queries simultaneously—they queue up, time out, and crash your app.
 
-- Database connection pools (don't exceed pool size)
-- API rate limits (max 10 requests/second)
-- Resource-intensive tasks (limit CPU/memory pressure)
+**The problem**: You need to limit how many operations run concurrently, but JavaScript's async nature makes it hard to enforce.
+
+**The naive solution**: Use a simple counter and `Promise.all` with manual tracking. But this is error-prone—it's easy to forget to release a permit, leading to deadlocks.
+
+**The better solution**: Use a Semaphore, a concurrency primitive that automatically manages permits.
+
+### When to use Semaphore
+
+| Use case | Why Semaphore helps |
+|----------|---------------------|
+| API rate limiting | Prevents 429 errors by throttling requests |
+| Database connection pools | Keeps you within pool size limits |
+| Heavy CPU tasks | Prevents memory/CPU exhaustion |
+| Third-party service limits | Respects external service quotas |
 
 ### Basic usage
 
@@ -3277,11 +3361,22 @@ While `Semaphore` and `Queue` provide powerful manual control, Runner often wrap
 
 ## Queue
 
-Run operations one at a time, in order. Perfect for:
+Picture this: Two users register at the same time, and your code writes their data simultaneously. The file gets corrupted—half of one user, half of another. Or you run database migrations in parallel and the schema gets into an inconsistent state.
 
-- File system writes (prevent corruption)
-- Sequential API calls (maintain order)
-- Database migrations (one at a time)
+**The problem**: Concurrent operations can corrupt data, produce inconsistent results, or violate business rules that require sequence.
+
+**The naive solution**: Use `await` between operations or a simple array to queue them manually. But this is tedious and error-prone—easy to forget and skip a step.
+
+**The better solution**: Use a Queue, which serializes operations automatically, ensuring they run one-by-one in order.
+
+### When to use Queue
+
+| Use case | Why Queue helps |
+|----------|-----------------|
+| File system writes | Prevents file corruption from concurrent access |
+| Sequential API calls | Maintains request ordering |
+| Database migrations | Ensures schema changes apply in order |
+| Audit logs | Guarantees chronological ordering |
 
 ### Basic usage
 
@@ -4224,9 +4319,22 @@ const resilientTask = r
 
 ## Meta
 
-_The structured way to describe what your components do and control their behavior_
+Think about generating API documentation automatically from your tasks, or building an admin dashboard that shows what each task does without reading code. Or you need to categorize tasks by feature for billing purposes. How do you attach descriptive information to components?
 
-Metadata in BlueLibs Runner provides a systematic way to document, categorize, and control the behavior of your tasks, resources, events, and middleware. Think of it as your component's passport - it tells you and your tools everything they need to know about what this component does and how it should be treated.
+**The problem**: You need to document what components do and categorize them, but there's no standard place to store this metadata.
+
+**The naive solution**: Use naming conventions or external documentation. But this gets out of sync easily and doesn't integrate with tooling.
+
+**The better solution**: Use Meta, a structured way to describe what your components do.
+
+### When to use Meta
+
+| Use case | Why Meta helps |
+|----------|---------------|
+| API docs | Generate documentation from component metadata |
+| Admin dashboards | Display component descriptions |
+| Billing | Categorize tasks by feature for metering |
+| Discovery | Search components by title/description |
 
 ### Metadata Properties
 
@@ -4491,7 +4599,24 @@ const app = r
 
 ## Runtime Validation
 
-BlueLibs Runner includes a generic validation interface that works with any validation library, including [Zod](https://zod.dev/), [Yup](https://github.com/jquense/yup), [Joi](https://joi.dev/), and others. The framework provides runtime validation with excellent TypeScript inference while remaining library-agnostic.
+Here's the issue: TypeScript types only exist at compile time. When your API receives JSON from an HTTP request, or when data comes from a database, TypeScript can't help you validate it. Invalid data crashes your app or causes subtle bugs.
+
+**The problem**: You need to validate data at runtime (where TypeScript can't help), but you don't want to write validation logic twice.
+
+**The naive solution**: Use a separate validation library but manually map types. But this duplicates work and types can get out of sync.
+
+**The better solution**: Use runtime validation with libraries like Zod that infer types from validation schemas.
+
+### When to use Runtime Validation
+
+| Use case | Why Runtime Validation helps |
+|----------|-------------------------------|
+| API input | Validate HTTP request bodies |
+| Database data | Validate data loaded from DB |
+| External services | Validate responses from APIs |
+| User input | Validate form submissions |
+
+BlueLibs Runner includes a generic validation interface that works with any validation library, including [Zod](https://zod.dev/), [Yup](https://github.com/jquense/yup), [Joi](https://joi.dev/), and others.
 
 The framework defines a simple `IValidationSchema<T>` interface that any validation library can implement:
 
@@ -4837,9 +4962,22 @@ const createUser = r
 
 ## Type Contracts
 
-TypeScript is powerful, but sometimes you want to enforce that a component adheres to a specific contract in order to use it. For example, you might want to ensure that any Task that has the `@Authenticated` tag also accepts a `userId` in its input.
+Consider this: You have an authentication tag, and you want to ensure ALL tasks using it actually accept a `userId` in their input. TypeScript doesn't know about your tags—it can't enforce that every task using auth has the right input shape. How do you make this compile-time enforced?
 
-This is where Type Contracts come in. They allow you to define input/output contracts on **Tags** and **Middleware**, and the framework will enforce them on the Tasks/Resources that use them.
+**The problem**: You want to enforce that tasks using certain tags or middleware conform to specific input/output shapes, but plain TypeScript types can't express "any task with tag X must have property Y."
+
+**The naive solution**: Document the requirements and add runtime checks. But this is error-prone and bugs aren't caught until runtime.
+
+**The better solution**: Use Type Contracts, which allow Tags and Middleware to declare input/output contracts that are enforced at compile time.
+
+### When to use Type Contracts
+
+| Use case | Why Type Contracts help |
+|----------|------------------------|
+| Authentication | Ensure all auth tasks include userId |
+| API standardization | Enforce consistent response shapes |
+| Validation | Guarantee tasks return required fields |
+| Documentation | Make requirements self-enforcing |
 
 ### Concept
 
@@ -4848,11 +4986,11 @@ A **Tag** or **Middleware** can declare:
 - **Input Contract**: "Any task using me MUST accept at least specific properties in its input"
 - **Output Contract**: "Any task using me MUST return at least specific properties"
 
-The enforcement happens at **compile time**. If you try to attach an `@Authenticated` tag to a request that doesn't accept a `userId`, TypeScript will yell at you.
+The enforcement happens at **compile time**. If you try to use the `authorizedTag` on a task that doesn't accept a `userId`, TypeScript will yell at you.
 
 ### Example: Enforcing Authentication Identity
 
-Let's say we want to ensure that any task tagged with `@Authorized` receives a `userId`:
+Let's say we want to ensure that any task using the `authorizedTag` receives a `userId`:
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -4907,7 +5045,7 @@ const productTask = r
   .build();
 ```
 
-> **runtime:** "Type Contracts: The pre-nup of code. 'If you want to wear my @Authenticated ring, you _will_ bring a userId to the table.' It's not controlling; it's just... strictly typed love."
+> **runtime:** "Type Contracts: The pre-nup of code. 'If you want to use my authorizedTag, you _will_ bring a userId to the table.' It's not controlling; it's just... strictly typed love."
 
 ### Resource Contracts
 
