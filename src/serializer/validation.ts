@@ -26,13 +26,29 @@ export const isUnsafeKey = (
  * Check if a value is an object reference (has __ref property).
  */
 export const isObjectReference = (value: unknown): value is ObjectReference => {
-  return Boolean(
-    value &&
-    typeof value === "object" &&
-    value !== null &&
-    "__ref" in value &&
-    typeof (value as Record<"__ref", unknown>).__ref === "string",
-  );
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const record = value as Record<string, unknown>;
+
+  if (
+    !Object.prototype.hasOwnProperty.call(record, "__ref") ||
+    typeof record.__ref !== "string"
+  ) {
+    return false;
+  }
+
+  const ownPropertyNames = Object.getOwnPropertyNames(record);
+  if (ownPropertyNames.length !== 1 || ownPropertyNames[0] !== "__ref") {
+    return false;
+  }
+
+  if (Object.getOwnPropertySymbols(record).length > 0) {
+    return false;
+  }
+
+  return true;
 };
 
 /**

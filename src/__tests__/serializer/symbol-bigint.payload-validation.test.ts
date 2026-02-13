@@ -30,13 +30,23 @@ describe("Serializer BigInt/Symbol payload validation", () => {
 
   it("throws on invalid bigint payloads", () => {
     const serializer = new Serializer();
-    const payload = JSON.stringify({
+    const nonStringPayload = JSON.stringify({
       __type: SpecialTypeId.BigInt,
       value: 123,
     });
+    const invalidStringPayload = JSON.stringify({
+      __type: SpecialTypeId.BigInt,
+      value: "not-a-number",
+    });
 
-    expect(() => serializer.deserialize(payload)).toThrow(/bigint payload/i);
+    expect(() => serializer.deserialize(nonStringPayload)).toThrow(
+      /bigint payload/i,
+    );
+    expect(() => serializer.deserialize(invalidStringPayload)).toThrow(
+      /bigint payload/i,
+    );
     expect(() => assertBigIntPayload(123)).toThrow(/bigint payload/i);
+    expect(() => assertBigIntPayload("oops")).toThrow(/bigint payload/i);
   });
 
   it("throws on invalid symbol payloads (shape validation)", () => {

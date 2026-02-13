@@ -23,11 +23,17 @@ export type BigIntPayload = string;
 export const serializeBigIntPayload = (value: bigint): BigIntPayload =>
   value.toString(10);
 
+const BIGINT_PAYLOAD_PATTERN = /^[+-]?\d+$/;
+
 export const assertBigIntPayload = (value: unknown): BigIntPayload => {
-  if (typeof value === "string") {
-    return value;
+  if (typeof value !== "string") {
+    throw new Error("Invalid bigint payload");
   }
-  throw new Error("Invalid bigint payload");
+  const normalized = value.trim();
+  if (!BIGINT_PAYLOAD_PATTERN.test(normalized)) {
+    throw new Error("Invalid bigint payload");
+  }
+  return normalized;
 };
 
 export const serializeBigInt = (value: bigint): SerializedValue => ({

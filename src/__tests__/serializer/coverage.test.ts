@@ -267,6 +267,41 @@ describe("Serializer Coverage Tests", () => {
         value: 42,
       });
     });
+
+    it("preserves literal __type objects during stringify/parse round-trip", () => {
+      const original = {
+        literal: {
+          __type: "Date",
+          value: "not-a-real-date",
+        },
+      };
+
+      const text = serializer.stringify(original);
+      const decoded = serializer.parse<typeof original>(text);
+
+      expect(decoded).toEqual(original);
+      const encoded = JSON.parse(text) as Record<string, unknown>;
+      expect(Object.prototype.hasOwnProperty.call(encoded, "__type")).toBe(
+        false,
+      );
+    });
+
+    it("preserves literal __graph keys during stringify/parse round-trip", () => {
+      const original = {
+        __graph: true,
+        root: { value: 1 },
+        nodes: { anything: "goes" },
+      };
+
+      const text = serializer.stringify(original);
+      const decoded = serializer.parse<typeof original>(text);
+
+      expect(decoded).toEqual(original);
+      const encoded = JSON.parse(text) as Record<string, unknown>;
+      expect(Object.prototype.hasOwnProperty.call(encoded, "__graph")).toBe(
+        false,
+      );
+    });
   });
 
   describe("DeserializeValue Edge Cases", () => {
@@ -548,7 +583,23 @@ describe("Serializer Coverage Tests", () => {
       expect(isQuantifierChar.call(helpers, "?", "a?", 1)).toBe(true);
       expect(isRegExpPatternSafe.call(helpers, "((?:\\w+))[a-z]")).toBe(true);
       expect(isRegExpPatternSafe.call(helpers, "(a+)+")).toBe(false);
+      expect(isRegExpPatternSafe.call(helpers, "^(a|aa)+$")).toBe(false);
+      expect(isRegExpPatternSafe.call(helpers, "(ab|cd)+")).toBe(true);
       expect(isRegExpPatternSafe.call(helpers, "\\(?a")).toBe(true);
+      expect(isRegExpPatternSafe.call(helpers, "(ab)+")).toBe(true);
+      expect(isRegExpPatternSafe.call(helpers, "(a|)+")).toBe(false);
+      expect(isRegExpPatternSafe.call(helpers, "(a\\|b|aa)+")).toBe(true);
+      expect(isRegExpPatternSafe.call(helpers, "([a|b]|aa)+")).toBe(true);
+      expect(isRegExpPatternSafe.call(helpers, "((ab)|a)+")).toBe(true);
+      expect(isRegExpPatternSafe.call(helpers, "(?:a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe.call(helpers, "(?=a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe.call(helpers, "(?!a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe.call(helpers, "(?>a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe.call(helpers, "(?<=a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe.call(helpers, "(?<!a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe.call(helpers, "(?<name>a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe.call(helpers, "(?<a|aa)+")).toBe(true);
+      expect(isRegExpPatternSafe.call(helpers, ")a")).toBe(true);
     });
 
     it("covers node/key filtering helpers in graph and merge paths", () => {
@@ -727,6 +778,15 @@ describe("Serializer Coverage Tests", () => {
       expect(() => (serializer as any).addType({})).toThrow(
         "Invalid type definition: id is required",
       );
+
+      expect(() =>
+        serializer.addType({
+          id: "MissingIs",
+          is: undefined as any,
+          serialize: (value: unknown) => value,
+          deserialize: (value: unknown) => value,
+        }),
+      ).toThrow("Invalid type definition: is is required");
 
       expect(() =>
         serializer.addType({
