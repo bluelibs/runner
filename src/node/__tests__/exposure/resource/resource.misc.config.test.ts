@@ -24,7 +24,7 @@ describe("nodeExposure - misc config branches", () => {
       register: [dummyEvent, exposure1],
     });
     const rr1 = await run(app1);
-    const handlers1 = await rr1.getResourceValue(exposure1.resource as any);
+    const handlers1 = await rr1.getResourceValue(exposure1.resource);
     expect(handlers1.basePath).toBe("/runner");
     await rr1.dispose();
 
@@ -41,7 +41,7 @@ describe("nodeExposure - misc config branches", () => {
       register: [dummyEvent, exposure2],
     });
     const rr2 = await run(app2);
-    const handlers2 = await rr2.getResourceValue(exposure2.resource as any);
+    const handlers2 = await rr2.getResourceValue(exposure2.resource);
     expect(handlers2.basePath).toBe("/trimmed");
     await rr2.dispose();
     externalServer.close();
@@ -54,7 +54,7 @@ describe("nodeExposure - misc config branches", () => {
       register: [dummyEvent, exposure],
     });
     const rr = await run(app);
-    const handlers = await rr.getResourceValue(exposure.resource as any);
+    const handlers = await rr.getResourceValue(exposure.resource);
     expect(handlers.basePath).toBe("/__runner");
     expect(handlers.server).toBeNull();
     await rr.dispose();

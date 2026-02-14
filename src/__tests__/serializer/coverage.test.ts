@@ -768,10 +768,20 @@ describe("Serializer Coverage Tests", () => {
   });
 
   describe("Tree Mode & addType Validation Branches", () => {
-    it("throws when string overload is missing a factory", () => {
-      expect(() => (serializer as any).addType("MissingFactory")).toThrow(
-        'addType("MissingFactory", factory) requires a factory',
-      );
+    it("covers type-registry get() test helper", () => {
+      serializer.addType({
+        id: "CoverageGet",
+        is: (_obj: unknown): _obj is number => typeof _obj === "number",
+        serialize: (value) => value,
+        deserialize: (value) => value,
+        strategy: "value",
+      });
+
+      const registry = (serializer as any).typeRegistry as {
+        get: (typeId: string) => unknown;
+      };
+      expect(registry.get("CoverageGet")).toBeDefined();
+      expect(registry.get("MissingCoverageGet")).toBeUndefined();
     });
 
     it("throws for invalid type definitions", () => {
@@ -798,14 +808,6 @@ describe("Serializer Coverage Tests", () => {
       ).toThrow(
         "Invalid type definition: serialize and deserialize are required",
       );
-    });
-
-    it("covers value-type instance guards created by addType(name, factory)", () => {
-      serializer.addType("ValueType", (json: unknown) => ({ json }));
-
-      const registry = (serializer as any).typeRegistry as Map<string, any>;
-      const typeDef = registry.get("ValueType");
-      expect(typeDef.is(123)).toBe(false);
     });
 
     it("stringify handles undefined, Infinity, and circular objects", () => {

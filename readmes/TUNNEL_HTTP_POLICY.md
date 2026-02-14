@@ -76,7 +76,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - All JSON bodies/responses are serialized with Runner's serializer to preserve types like `Date`, `RegExp`, and custom classes (via `addType`).
 - Files are **not** custom serializer types: use sentinels `{"$runnerFile": "File", "id": "<uuid>", "meta": {...}}` (see Multipart Mode).
 - Charset: UTF-8.
-- Custom Types: Client/server must sync `addType(name, factory)` via DI (`globals.resources.serializer`).
+- Custom Types: Client/server must sync explicit `addType({ id, is, serialize, deserialize, ... })` registrations via DI (`globals.resources.serializer`).
 
 ### Authentication
 
@@ -87,6 +87,18 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 - **Dynamic headers**: Clients can override per-request via `onRequest({ headers })`.
 - **Allow-Lists**: Server restricts to tagged resources (`globals.tags.tunnel`, `mode: "server"`, `transport: "http"`). Unknown IDs → 403 Forbidden.
 - **Exposure disabled**: If no server-mode HTTP tunnel is registered, task/event requests return 403 (fail-closed), unless `http.dangerouslyAllowOpenExposure: true` is set.
+- **Auth audit logs**: Failed authentication attempts are logged (`exposure.auth.failure`) with request metadata and correlation id.
+
+### Header Reference
+
+| Header | Direction | Required | Description |
+| --- | --- | --- | --- |
+| `x-runner-token` | client -> server | Yes (unless `auth.allowAnonymous: true`) | Authentication token. Header name can be overridden by `auth.header`. |
+| `x-runner-request-id` | client <-> server | Optional | Correlation id. Server accepts valid incoming ids and otherwise generates one; response echoes final id. |
+| `x-runner-context` | client -> server | Optional | Serializer-encoded async-context map. Server restores only registered contexts; invalid entries are ignored. |
+| `content-type` | client -> server | Yes | Request mode selector (`application/json`, `multipart/form-data`, `application/octet-stream`). |
+| `X-Content-Type-Options` | server -> client | Always | Security header set to `nosniff`. |
+| `X-Frame-Options` | server -> client | Always | Security header set to `DENY`. |
 
 ### Error Handling
 
@@ -112,7 +124,8 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
   | 500 | STREAM_ERROR | Multipart stream error (sanitized). |
   | 500 | MISSING_FILE_PART | Expected file not in multipart. |
   | 500 | AUTH_NOT_CONFIGURED | No auth is configured and `allowAnonymous` is not enabled. |
-- **Logging**: Server logs errors via `globals.resources.logger` (e.g., "exposure.task.error").
+- **Logging**: Server logs errors via `globals.resources.logger` (e.g., "exposure.task.error"), plus auth failures.
+- **Correlation ID**: Requests carry/receive `x-runner-request-id` (generated when absent) for end-to-end tracing.
 - **Security headers**: `nodeExposure` sets `X-Content-Type-Options: nosniff` and `X-Frame-Options: DENY` on responses.
 
 ### CORS

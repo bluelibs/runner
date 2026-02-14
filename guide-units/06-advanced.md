@@ -136,18 +136,16 @@ class Money {
     public amount: number,
     public currency: string,
   ) {}
-
-  // Required methods for serialization
-  typeName() {
-    return "Money";
-  }
-  toJSONValue() {
-    return { amount: this.amount, currency: this.currency };
-  }
 }
 
 // Register the type
-serializer.addType("Money", (json) => new Money(json.amount, json.currency));
+serializer.addType({
+  id: "Money",
+  is: (obj): obj is Money => obj instanceof Money,
+  serialize: (money) => ({ amount: money.amount, currency: money.currency }),
+  deserialize: (json) => new Money(json.amount, json.currency),
+  strategy: "value",
+});
 
 // Now it round-trips correctly
 const price = new Money(99.99, "USD");

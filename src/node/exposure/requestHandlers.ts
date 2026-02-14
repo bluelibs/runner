@@ -8,7 +8,12 @@ import {
 } from "./httpResponse";
 import type { SerializerLike } from "../../serializer";
 import { requestUrl, resolveTargetFromRequest } from "./router";
-import type { Authenticator, AllowListGuard, RequestHandler } from "./types";
+import type {
+  Authenticator,
+  AllowListGuard,
+  RequestHandler,
+  JsonResponse,
+} from "./types";
 import type { ExposureRouter } from "./router";
 import type {
   NodeExposureDeps,
@@ -18,6 +23,12 @@ import { applyCorsActual, handleCorsPreflight } from "./cors";
 import { computeAllowList } from "../tunnel/allowlist";
 import { createTaskHandler } from "./handlers/taskHandler";
 import { createEventHandler } from "./handlers/eventHandler";
+import { safeLogWarn } from "./logging";
+import { ensureRequestId, getRequestId } from "./requestIdentity";
+
+enum ExposureAuditLogKey {
+  AuthFailure = "exposure.auth.failure",
+}
 
 export interface RequestProcessingDeps {
   store: NodeExposureDeps["store"];
@@ -58,11 +69,38 @@ export function createRequestHandlers(
   const serializer = deps.serializer;
   const cors = deps.cors;
 
+  const extractErrorCode = (response: JsonResponse): string | undefined => {
+    if (!response.body || typeof response.body !== "object") return;
+    const error = (response.body as { error?: unknown }).error;
+    if (!error || typeof error !== "object") return;
+    const code = (error as { code?: unknown }).code;
+    return typeof code === "string" ? code : undefined;
+  };
+
+  const auditedAuthenticator: Authenticator = async (req) => {
+    const authResult = await authenticator(req);
+    if (!authResult.ok) {
+      const path = requestUrl(req).pathname;
+      safeLogWarn(logger, ExposureAuditLogKey.AuthFailure, {
+        requestId: getRequestId(req),
+        method: req.method ?? "GET",
+        path,
+        status: authResult.response.status,
+        code: extractErrorCode(authResult.response),
+      });
+    }
+    return authResult;
+  };
+
+  const prepareRequest = (req: IncomingMessage, res: ServerResponse): void => {
+    ensureRequestId(req, res);
+  };
+
   const processTaskRequest = createTaskHandler({
     store,
     taskRunner,
     logger,
-    authenticator,
+    authenticator: auditedAuthenticator,
     allowList,
     router,
     cors,
@@ -74,7 +112,7 @@ export function createRequestHandlers(
     store,
     eventManager,
     logger,
-    authenticator,
+    authenticator: auditedAuthenticator,
     allowList,
     cors,
     serializer,
@@ -83,10 +121,11 @@ export function createRequestHandlers(
 
   const handleTask = async (req: IncomingMessage, res: ServerResponse) => {
     if (handleCorsPreflight(req, res, cors)) return;
+    prepareRequest(req, res);
     const target = resolveTargetFromRequest(req, router, "task");
     if (!target.ok) {
       applyCorsActual(req, res, cors);
-      respondJson(res, target.response);
+      respondJson(res, target.response, serializer);
       return;
     }
     await processTaskRequest(req, res, target.id);
@@ -94,10 +133,11 @@ export function createRequestHandlers(
 
   const handleEvent = async (req: IncomingMessage, res: ServerResponse) => {
     if (handleCorsPreflight(req, res, cors)) return;
+    prepareRequest(req, res);
     const target = resolveTargetFromRequest(req, router, "event");
     if (!target.ok) {
       applyCorsActual(req, res, cors);
-      respondJson(res, target.response);
+      respondJson(res, target.response, serializer);
       return;
     }
     await processEventRequest(req, res, target.id);
@@ -107,12 +147,13 @@ export function createRequestHandlers(
     req: IncomingMessage,
     res: ServerResponse,
   ): Promise<void> => {
+    prepareRequest(req, res);
     // Allow GET and POST for discovery
     if (req.method !== "GET" && req.method !== "POST") {
       respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
       return;
     }
-    const auth = await authenticator(req);
+    const auth = await auditedAuthenticator(req);
     if (!auth.ok) {
       applyCorsActual(req, res, cors);
       respondJson(res, auth.response, serializer);
@@ -143,19 +184,21 @@ export function createRequestHandlers(
         return false;
       }
       if (handleCorsPreflight(req, res, cors)) return true;
+      prepareRequest(req, res);
       applyCorsActual(req, res, cors);
       respondJson(res, NOT_FOUND_RESPONSE, serializer);
       return true;
     }
+    if (handleCorsPreflight(req, res, cors)) return true;
+    if (target.kind === "discovery") {
+      await handleDiscovery(req, res);
+      return true;
+    }
+    prepareRequest(req, res);
     if (target.kind === "task") {
-      if (handleCorsPreflight(req, res, cors)) return true;
       await processTaskRequest(req, res, target.id);
     } else if (target.kind === "event") {
-      if (handleCorsPreflight(req, res, cors)) return true;
       await processEventRequest(req, res, target.id);
-    } else if (target.kind === "discovery") {
-      if (handleCorsPreflight(req, res, cors)) return true;
-      await handleDiscovery(req, res);
     }
     return true;
   };

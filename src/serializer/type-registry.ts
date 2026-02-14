@@ -69,44 +69,7 @@ export class TypeRegistry {
    */
   addType<TInstance, TSerialized>(
     typeDef: TypeDefinition<TInstance, TSerialized>,
-  ): void;
-  addType<TJson = unknown, TInstance = unknown>(
-    name: string,
-    factory: (json: TJson) => TInstance,
-  ): void;
-  addType<TInstance, TSerialized>(
-    arg1: string | TypeDefinition<TInstance, TSerialized>,
-    arg2?: (json: unknown) => unknown,
   ): void {
-    if (typeof arg1 === "string") {
-      const name = arg1;
-      const factory = arg2;
-      if (!factory) {
-        throw new Error(`addType("${name}", factory) requires a factory`);
-      }
-
-      type ValueTypeInstance = { typeName(): string; toJSONValue(): unknown };
-      const isValueTypeInstance = (obj: unknown): obj is ValueTypeInstance => {
-        if (!obj || typeof obj !== "object") return false;
-        const rec = obj as Record<string, unknown>;
-        return (
-          typeof rec.typeName === "function" &&
-          typeof rec.toJSONValue === "function"
-        );
-      };
-
-      this.addType({
-        id: name,
-        is: (obj: unknown): obj is ValueTypeInstance =>
-          isValueTypeInstance(obj) && obj.typeName() === name,
-        serialize: (obj: ValueTypeInstance) => obj.toJSONValue(),
-        deserialize: (data: unknown) => factory(data) as ValueTypeInstance,
-        strategy: "value",
-      });
-      return;
-    }
-
-    const typeDef = arg1;
     if (!typeDef || !typeDef.id) {
       throw new Error("Invalid type definition: id is required");
     }
