@@ -8,6 +8,7 @@ import {
   BufferType,
   binaryBuiltInTypes,
 } from "../../serializer/binary-builtins";
+import { RegExpType } from "../../serializer/builtins";
 import type { TypeDefinition } from "../../serializer/types";
 
 const hasOwn = Object.prototype.hasOwnProperty;
@@ -95,6 +96,9 @@ describe("Serializer platform built-ins coverage", () => {
     const unsafeFields: Record<string, unknown> = Object.create(null);
     unsafeFields.__proto__ = "blocked";
     unsafeFields.name = "override";
+    unsafeFields["toString"] = "blocked-to-string";
+    unsafeFields["valueOf"] = "blocked-value-of";
+    unsafeFields["hasOwnProperty"] = "blocked-has-own";
     unsafeFields.ok = true;
 
     const restored = ErrorType.deserialize({
@@ -104,6 +108,15 @@ describe("Serializer platform built-ins coverage", () => {
     });
     expect(restored.name).toBe("base");
     expect((restored as unknown as Record<string, unknown>).ok).toBe(true);
+    expect((restored as unknown as Record<string, unknown>).toString).toBe(
+      Error.prototype.toString,
+    );
+    expect((restored as unknown as Record<string, unknown>).valueOf).toBe(
+      Error.prototype.valueOf,
+    );
+    expect(
+      (restored as unknown as Record<string, unknown>).hasOwnProperty,
+    ).toBe(Object.prototype.hasOwnProperty);
   });
 
   it("skips reserved and descriptor-only Error custom fields on serialize", () => {
@@ -119,6 +132,12 @@ describe("Serializer platform built-ins coverage", () => {
       configurable: true,
       enumerable: true,
     });
+    Object.defineProperty(original, "toString", {
+      value: "blocked",
+      writable: true,
+      configurable: true,
+      enumerable: true,
+    });
     (original as unknown as Record<string, unknown>).safe = "ok";
 
     const restored = ErrorType.deserialize(ErrorType.serialize(original));
@@ -126,6 +145,9 @@ describe("Serializer platform built-ins coverage", () => {
     expect(
       (restored as unknown as Record<string, unknown>).computed,
     ).toBeUndefined();
+    expect((restored as unknown as Record<string, unknown>).toString).toBe(
+      Error.prototype.toString,
+    );
     expect(restored.name).toBe("Error");
   });
 
@@ -209,5 +231,14 @@ describe("Serializer platform built-ins coverage", () => {
     expect(() => uint16Type.deserialize([1, 2, 3])).toThrow(
       "Invalid Uint16Array payload",
     );
+  });
+
+  it("rejects malformed RegExp payloads at built-in deserialize level", () => {
+    expect(() =>
+      RegExpType.deserialize({
+        pattern: "\\",
+        flags: "",
+      }),
+    ).toThrow("Invalid RegExp payload");
   });
 });

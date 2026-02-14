@@ -188,7 +188,17 @@ Use function-based registration when:
 
 #### Resource Forking
 
-Use `.fork(newId)` to create multiple instances of a "template" resource with different identities. If the base resource registers other items, use `.fork(newId, { register: "drop" })` to avoid re-registering them, or `.fork(newId, { register: "deep", reId })` to deep-fork **registered resources** (resource tree) with new ids. This is perfect when you need several instances of the same resource type (e.g., multiple database connections, multiple mailers):
+**When you need multiple instances of the same resource type** — like connecting to multiple databases, sending through different SMTP providers, or handling multi-tenant setups — resource forking lets you define once and instantiate with different configs.
+
+**The naive approach gets tedious:**
+
+```typescript
+// Copy-paste and rename - error-prone and hard to maintain
+const txMailer = r.resource("app.mailers.tx").init(...).build();
+const mktMailer = r.resource("app.mailers.mkt").init(...).build();
+```
+
+**Fork instead:**
 
 ```typescript
 // Define a reusable template
@@ -222,11 +232,17 @@ const app = r
   .build();
 ```
 
-If the base resource registers other resources and you want a clean clone of the resource tree, use `register: "deep"` with a re-id function:
+##### Shallow vs Deep Fork
+
+| Type | Use when |
+|------|----------|
+| `fork("new.id")` | Simple resources with no registered children |
+| `fork("new.id", { register: "drop" })` | Resource that registers things you don't want cloned |
+| `fork("new.id", { register: "deep", reId: (id) => \`prefix.\${id}\` })` | You need a complete cloned resource tree (e.g., multi-tenant databases) |
+
+**Deep fork example:**
 
 ```typescript
-import { r } from "@bluelibs/runner";
-
 const child = r
   .resource("app.base.child")
   .init(async () => ({ ok: true }))
@@ -247,15 +263,14 @@ const forked = base.fork("app.base.forked", {
 const app = r.resource("app").register([base, forked]).build();
 ```
 
-Note: `register: "deep"` deep-forks registered **resources**; other registerables (tasks/events/hooks/middleware/tags/errors/async contexts) are not cloned.
-Resource dependencies that point to deep-forked resources are remapped inside the cloned tree.
+> **Note:** `register: "deep"` clones only **resources**; tasks, events, hooks, middleware, tags, errors, and async contexts are not cloned. Dependencies pointing to deep-forked resources are remapped inside the cloned tree.
 
-Key points:
+##### Key Points
 
-- **`.fork()` returns a built `IResource`** - no need to call `.build()` again
+- **`.fork()` returns a built `IResource`** — no need to call `.build()` again
 - **Tags, middleware, and type parameters are inherited**
-- **Each fork gets independent runtime** - no shared state
-- **`register` defaults to `"keep"`**; use `"drop"` for leaf resources or `"deep"` when you want cloned _registered resources_ (resource tree)
+- **Each fork gets independent runtime** — no shared state
+- **`register` defaults to `"keep"`**
 - **Export forked resources** to use them as typed dependencies
 
 #### Optional Dependencies
@@ -747,7 +762,24 @@ const adminTask = r
 
 #### Execution Journal
 
-The Execution Journal is a type-safe registry that travels with your task execution. It allows middleware and tasks to share state without polluting the task input/output.
+Consider this scenario: Your rate-limit middleware needs to share remaining quota with your logging middleware, or your timeout middleware needs to tell your retry middleware what went wrong. They need to communicate, but adding this to task input/output pollutes the API.
+
+**The problem**: Multiple middleware need to share state during execution, but passing data through task input/output makes the API messy and exposes internal concerns.
+
+**The naive solution**: Store shared state in a global variable or module-level map. But this causes race conditions, makes testing difficult, and breaks when tasks run in parallel.
+
+**The better solution**: Use the Execution Journal, a type-safe registry that travels with your task execution.
+
+### When to use the Execution Journal
+
+| Use case | Why Journal helps |
+|----------|-------------------|
+| Rate limiting | Share remaining quota between middleware |
+| Tracing | Propagate trace IDs through the call chain |
+| Retries | Pass error details to retry logic |
+| Caching | Indicate cache hits/misses to logging |
+
+### Code Example
 
 ```typescript
 import { r, journal } from "@bluelibs/runner";
@@ -890,9 +922,24 @@ if (customJournal.has(traceIdKey)) {
 
 ### Tags
 
-Tags are metadata that can influence system behavior. Unlike meta properties, tags can be queried at runtime to build dynamic functionality. They can be marker tags (no config) or configured tags.
+Imagine you want to automatically register all your HTTP routes without manually importing them into a list. Or you need to find all "cacheable" tasks to build a cache-warmer. How do you discover components at runtime based on their characteristics?
 
-#### Basic Usage
+**The problem**: You need to categorize tasks/resources and query them dynamically, but static metadata isn't enough.
+
+**The naive solution**: Maintain a manual registry or use naming conventions (e.g., tasks starting with "http."). But this is error-prone and couples naming to functionality.
+
+**The better solution**: Use Tags—metadata that can be queried at runtime to build dynamic functionality.
+
+### When to use Tags
+
+| Use case | Why Tags help |
+|----------|---------------|
+| Auto-discovery | Find all HTTP routes without manual imports |
+| Caching | Mark tasks as cacheable and query them |
+| Access control | Tag tasks requiring authorization |
+| Monitoring | Group tasks by feature for metrics |
+
+### Code Example
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -1021,7 +1068,23 @@ const internalEvent = r
 
 #### Contract Tags
 
-Enforce return value shapes at compile time:
+Consider this: You have an authentication tag, and you want to ensure ALL tasks using it actually accept a `userId` in their input. Or you need to ensure that every "searchable" task returns an `id` field. How do you enforce this at compile time?
+
+**The problem**: You want to ensure tasks using certain tags conform to specific input/output shapes, but plain tags don't enforce anything.
+
+**The naive solution**: Document the requirements and manually verify. But this doesn't scale and bugs slip through.
+
+**The better solution**: Use Contract Tags, which enforce type contracts at compile time.
+
+### When to use Contract Tags
+
+| Use case | Why Contract Tags help |
+|----------|----------------------|
+| Authentication | Ensure all auth tasks include userId |
+| API standardization | Enforce consistent response shapes |
+| Validation | Guarantee tasks return required fields |
+
+### Code Example
 
 ```typescript
 // Tags that enforce type contracts input/output for tasks or config/value for resources

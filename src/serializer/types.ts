@@ -131,8 +131,7 @@ export interface SerializerOptions {
 export interface SerializerLike {
   stringify(value: unknown): string;
   parse<T = unknown>(text: string): T;
-  addType?<TJson = unknown, TInstance = unknown>(
-    name: string,
-    factory: (json: TJson) => TInstance,
+  addType?<TInstance, TSerialized>(
+    typeDef: TypeDefinition<TInstance, TSerialized>,
   ): void;
 }

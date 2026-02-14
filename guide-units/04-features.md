@@ -53,6 +53,8 @@ const app = r
   .build();
 ```
 
+**Why would you need this?** For monitoring and metrics—you want to know cache hit rates to optimize your application.
+
 **Journal Introspection**: On cache hits the task `run()` isn't executed, but you can still detect cache hits from a wrapping middleware:
 
 ```typescript
@@ -144,6 +146,8 @@ const resilientTask = r
 3. **HALF_OPEN**: After `resetTimeout`, one trial request is allowed.
 4. **RECOVERY**: If the trial succeeds, it goes back to **CLOSED**. Otherwise, it returns to **OPEN**.
 
+**Why would you need this?** For alerting—you want to know when the circuit opens to alert on-call engineers.
+
 **Journal Introspection**: Access the circuit breaker's state and failure count within your task (when it runs):
 
 ```typescript
@@ -233,6 +237,8 @@ const getPrice = r
   .build();
 ```
 
+**Why would you need this?** For audit trails—you want to know when fallback values were used instead of real data.
+
 **Journal Introspection**: The original task that throws won't continue execution, but you can detect fallback activation from a wrapping middleware:
 
 ```typescript
@@ -295,6 +301,8 @@ const sensitiveTask = r
 - **Isolation**: Limits are tracked per task definition.
 - **Error handling**: Throws `RateLimitError` when the limit is exceeded.
 
+**Why would you need this?** For monitoring—you want to see remaining quota to implement client-side throttling.
+
 **Journal Introspection**: When the task runs (request allowed), you can read the rate limit state from the execution journal:
 
 ```typescript
@@ -353,6 +361,8 @@ The retry middleware can be configured with:
 - `retries`: The maximum number of retry attempts (default: 3).
 - `delayStrategy`: A function that returns the delay in milliseconds before the next attempt.
 - `stopRetryIf`: A function to prevent retries for certain types of errors.
+
+**Why would you need this?** For logging—you want to log which attempt succeeded or what errors occurred during retries.
 
 **Journal Introspection**: Access the current retry attempt and the last error within your task:
 
@@ -449,11 +459,22 @@ Both ship with Runner—no external dependencies.
 
 ## Semaphore
 
-Limit how many operations can run at once. Perfect for:
+Imagine this: Your API has a rate limit of 100 requests/second, but 1,000 users are hammering it at once. Without controls, you get 429 errors. Or your database pool has 20 connections, but you're firing off 100 queries simultaneously—they queue up, time out, and crash your app.
 
-- Database connection pools (don't exceed pool size)
-- API rate limits (max 10 requests/second)
-- Resource-intensive tasks (limit CPU/memory pressure)
+**The problem**: You need to limit how many operations run concurrently, but JavaScript's async nature makes it hard to enforce.
+
+**The naive solution**: Use a simple counter and `Promise.all` with manual tracking. But this is error-prone—it's easy to forget to release a permit, leading to deadlocks.
+
+**The better solution**: Use a Semaphore, a concurrency primitive that automatically manages permits.
+
+### When to use Semaphore
+
+| Use case | Why Semaphore helps |
+|----------|---------------------|
+| API rate limiting | Prevents 429 errors by throttling requests |
+| Database connection pools | Keeps you within pool size limits |
+| Heavy CPU tasks | Prevents memory/CPU exhaustion |
+| Third-party service limits | Respects external service quotas |
 
 ### Basic usage
 
@@ -568,11 +589,22 @@ While `Semaphore` and `Queue` provide powerful manual control, Runner often wrap
 
 ## Queue
 
-Run operations one at a time, in order. Perfect for:
+Picture this: Two users register at the same time, and your code writes their data simultaneously. The file gets corrupted—half of one user, half of another. Or you run database migrations in parallel and the schema gets into an inconsistent state.
 
-- File system writes (prevent corruption)
-- Sequential API calls (maintain order)
-- Database migrations (one at a time)
+**The problem**: Concurrent operations can corrupt data, produce inconsistent results, or violate business rules that require sequence.
+
+**The naive solution**: Use `await` between operations or a simple array to queue them manually. But this is tedious and error-prone—easy to forget and skip a step.
+
+**The better solution**: Use a Queue, which serializes operations automatically, ensuring they run one-by-one in order.
+
+### When to use Queue
+
+| Use case | Why Queue helps |
+|----------|-----------------|
+| File system writes | Prevents file corruption from concurrent access |
+| Sequential API calls | Maintains request ordering |
+| Database migrations | Ensures schema changes apply in order |
+| Audit logs | Guarantees chronological ordering |
 
 ### Basic usage
 

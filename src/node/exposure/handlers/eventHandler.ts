@@ -17,6 +17,7 @@ import { applyCorsActual } from "../cors";
 import { createAbortControllerForRequest } from "../utils";
 import { withUserContexts } from "./contextWrapper";
 import { ExposureErrorLogKey, handleRequestError } from "./errorHandlers";
+import { getRequestId } from "../requestIdentity";
 
 interface EventHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -151,6 +152,7 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
         cors,
         serializer,
         logKey: ExposureErrorLogKey.EventError,
+        requestId: getRequestId(req),
       });
     }
   };

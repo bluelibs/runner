@@ -110,8 +110,13 @@ export const RegExpType: TypeDefinition<
     pattern: regex.source,
     flags: regex.flags,
   }),
-  deserialize: (data: { pattern: string; flags: string }) =>
-    new RegExp(data.pattern, data.flags),
+  deserialize: (data: { pattern: string; flags: string }) => {
+    try {
+      return new RegExp(data.pattern, data.flags);
+    } catch {
+      throw new Error("Invalid RegExp payload");
+    }
+  },
   strategy: "value",
 };
 

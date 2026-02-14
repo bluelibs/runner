@@ -508,6 +508,8 @@ For "no call-site changes", register a client-mode tunnel resource tagged with `
 
 Node client note: prefer `createHttpMixedClient` (it uses the serialized-JSON path via Runner `Serializer` + `fetch` when possible and switches to the streaming-capable Smart path when needed). If a task may return a stream even for plain JSON inputs (ex: downloads), set `forceSmart` on Mixed (or use `createHttpSmartClient` directly).
 
+Node exposure hardening: use `x-runner-request-id` for request correlation and enforce rate limiting at the edge/proxy layer.
+
 ## Serialization
 
 Runner ships with a serializer that round-trips Dates, RegExp, binary, and custom shapes across Node and web.
@@ -529,18 +531,15 @@ const serializerSetup = r
         public value: number,
         public unit: string,
       ) {}
-      typeName() {
-        return "Distance";
-      }
-      toJSONValue() {
-        return { value: this.value, unit: this.unit };
-      }
     }
 
-    serializer.addType(
-      "Distance",
-      (json) => new Distance(json.value, json.unit),
-    );
+    serializer.addType({
+      id: "Distance",
+      is: (obj): obj is Distance => obj instanceof Distance,
+      serialize: (d) => ({ value: d.value, unit: d.unit }),
+      deserialize: (json) => new Distance(json.value, json.unit),
+      strategy: "value",
+    });
   })
   .build();
 ```

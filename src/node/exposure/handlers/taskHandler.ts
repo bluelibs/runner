@@ -27,6 +27,7 @@ import {
   sanitizeErrorResponse,
 } from "./errorHandlers";
 import { withExposureContext } from "./contextWrapper";
+import { getRequestId } from "../requestIdentity";
 
 interface TaskHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -261,6 +262,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
         cors,
         serializer,
         logKey: ExposureErrorLogKey.TaskError,
+        requestId: getRequestId(req),
       });
     }
   };

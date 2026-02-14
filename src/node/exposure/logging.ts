@@ -24,6 +24,18 @@ export function safeLogInfo(
   }
 }
 
+export function safeLogWarn(
+  logger: Logger,
+  message: string,
+  data: Record<string, unknown>,
+): void {
+  try {
+    logger.warn(message, data);
+  } catch {
+    // Ignore logger failures
+  }
+}
+
 export function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }

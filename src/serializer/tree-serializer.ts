@@ -16,6 +16,7 @@ import {
   serializeRecordEntries,
   serializeSymbolValue,
 } from "./serialize-utils";
+import { escapeReservedMarkerKey } from "./marker-key-escapes";
 
 export interface TreeSerializeContext {
   stack: WeakSet<object>;
@@ -139,6 +140,7 @@ export const serializeTreeValue = (
       objectValue as Record<string, unknown>,
       options.unsafeKeys,
       (nested) => serializeTreeValue(nested, context, depth + 1, options),
+      escapeReservedMarkerKey,
     );
   } finally {
     context.stack.delete(objectValue);

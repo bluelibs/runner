@@ -108,7 +108,7 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
 | Async Context (`r.asyncContext`)            | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
 | Durable workflows (`@bluelibs/runner/node`) | Full    | None    | None | Node-only module                           |
-| Tunnels client (`createExposureFetch`)      | Full    | Full    | Full | Requires `fetch`                           |
+| Tunnels client (`createHttpClient`)         | Full    | Full    | Full | Requires `fetch`                           |
 | Tunnels server (`@bluelibs/runner/node`)    | Full    | None    | None | Exposes tasks/events over HTTP             |
 
 ---
@@ -122,7 +122,7 @@ Use these minimums before starting:
 | Node.js         | `18.x`                   | Enforced by `package.json#engines.node`                                    |
 | TypeScript      | `5.6+` (recommended)     | Required for typed DX and examples in this repository                      |
 | Package manager | npm / pnpm / yarn / bun  | Examples use npm, but any modern package manager works                     |
-| `fetch` runtime | Built-in or polyfilled   | Required for tunnel clients (`createExposureFetch`, universal HTTP client) |
+| `fetch` runtime | Built-in or polyfilled   | Required for tunnel clients (`createHttpClient`, universal HTTP client) |
 
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 

@@ -48,5 +48,23 @@ describe("Serializer Security Attacks", () => {
       expect(result.key_0).toBe(0);
       expect(result.key_9999).toBe(9999);
     });
+
+    it("should fail fast when array node payload is not an actual array", () => {
+      const payload = JSON.stringify({
+        __graph: true,
+        version: 1,
+        root: { __ref: "obj_1" },
+        nodes: {
+          obj_1: {
+            kind: "array",
+            value: { length: 10_000_000 },
+          },
+        },
+      });
+
+      expect(() => serializer.deserialize(payload)).toThrow(
+        /Invalid array node payload/,
+      );
+    });
   });
 });

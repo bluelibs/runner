@@ -26,25 +26,22 @@ describe("tunnel serializer", () => {
     expect(parsedFromSerializer.when.getTime()).toBe(payload.when.getTime());
   });
 
-  it("supports addType(name, factory) with typeName()/toJSONValue() value types", () => {
+  it("supports addType(typeDefinition) for custom value types", () => {
     class Distance {
       constructor(
         public value: number,
         public unit: string,
       ) {}
-      toJSONValue() {
-        return { value: this.value, unit: this.unit } as const;
-      }
-      typeName() {
-        return "Distance" as const;
-      }
     }
 
     const s = new Serializer();
-    s.addType(
-      "Distance",
-      (j: { value: number; unit: string }) => new Distance(j.value, j.unit),
-    );
+    s.addType({
+      id: "Distance",
+      is: (obj: unknown): obj is Distance => obj instanceof Distance,
+      serialize: (d) => ({ value: d.value, unit: d.unit }),
+      deserialize: (j) => new Distance(j.value, j.unit),
+      strategy: "value",
+    });
     const encoded = s.stringify({ d: new Distance(10, "km") });
     const decoded = s.parse<{ d: Distance }>(encoded);
     expect(decoded.d).toBeInstanceOf(Distance);

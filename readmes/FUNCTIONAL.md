@@ -72,56 +72,107 @@ const secureWallet = r
   .build();
 ```
 
-## Extension and Composition
+### Cleanup with `dispose`
 
-### Extension via `override`
-
-`override()` lets you replace or extend a resource. To extend, you can create the original resource inside your override's `init` and wrap it. This is the **Decorator Pattern**.
+Resources can define a `dispose` function to clean up private state when the container shuts down. This is the functional equivalent of a destructor.
 
 ```ts
+// Assume Connection and createConnection are defined elsewhere
+const connectionPool = r
+  .resource("app.db.pool")
+  .init(async (config: { connectionString: string }) => {
+    const connections: Connection[] = [];
+
+    return {
+      acquire() {
+        const conn = createConnection(config.connectionString);
+        connections.push(conn);
+        return conn;
+      },
+    };
+  })
+  .dispose(async (api) => {
+    // Cleanup: close all connections when the container shuts down
+    // The api parameter is the object returned from init
+  })
+  .build();
+```
+
+### Isolation Guarantee
+
+Each `run()` creates a completely isolated container. Closure state is **never shared** between containers, which makes Runner ideal for multi-tenant or test scenarios.
+
+```ts
+import { r, run } from "@bluelibs/runner";
+
+// Each app is a root resource that registers secureWallet with its own config
+const app1 = r
+  .resource("app.1")
+  .dependencies({ wallet: secureWallet })
+  .register([secureWallet.with({ initialBalance: 100 })])
+  .init(async (_, { wallet }) => ({ wallet }))
+  .build();
+
+const app2 = r
+  .resource("app.2")
+  .dependencies({ wallet: secureWallet })
+  .register([secureWallet.with({ initialBalance: 200 })])
+  .init(async (_, { wallet }) => ({ wallet }))
+  .build();
+
+// These two containers have completely separate wallet state
+const result1 = await run(app1);
+const result2 = await run(app2);
+
+result1.value.wallet.debit(50); // result2's wallet is unaffected
+
+await result1.dispose();
+await result2.dispose();
+```
+
+## Extension and Composition
+
+### Extension via `r.override()`
+
+`r.override()` is ideal for replacing behavior while keeping the same id. For decorator-style extension, prefer a wrapper resource composed through DI so lifecycle and dependencies stay explicit and predictable.
+
+```ts
+// Assume loggerService is a resource defined elsewhere
 const baseEmailer = r
   .resource("app.emailer")
-  id: "app.emailer",
-  init: async (config: { apiKey: string }) => ({
+  .init(async (config: { apiKey: string }) => ({
     async send(to: string, subject: string, body: string) {
       // Real email logic...
     },
-  }),
-  })
+  }))
   .build();
 
-// Decorate the base emailer with logging
-const loggingEmailer = override(baseEmailer, {
-  dependencies: {
-    ...baseEmailer.dependencies, // If you don't specify dependencies, the default will be inherited
-    logger: loggerService, // Expand them
-  },
-  init: async (config, { logger }, ctx) => {
-    // Manually init the original to decorate it
-    const originalEmailer = await baseEmailer.init(config, {}, ctx);
-
-    return {
-      async send(to: string, subject: string, body: string) {
-        logger.info(`Sending email to ${to}`);
-        await originalEmailer.send(to, subject, body);
-        logger.info(`Email sent to ${to}`);
-      },
-    };
-  },
-});
+// Decorate via composition (recommended for extension)
+const loggingEmailer = r
+  .resource("app.emailer.logging")
+  .dependencies({ emailer: baseEmailer, logger: loggerService })
+  .init(async (_config, { emailer, logger }) => ({
+    async send(to: string, subject: string, body: string) {
+      logger.info(`Sending email to ${to}`);
+      await emailer.send(to, subject, body);
+      logger.info(`Email sent to ${to}`);
+    },
+  }))
+  .build();
 
 // For testing, you can completely replace the implementation:
-const mockEmailer = override(baseEmailer, {
-  init: async () => {
+const mockEmailer = r
+  .override(baseEmailer)
+  .init(async () => {
     const sentEmails: any[] = [];
     return {
-      async send(to, subject, body) {
+      async send(to: string, subject: string, body: string) {
         sentEmails.push({ to, subject, body });
       },
       getSentEmails: () => sentEmails,
     };
-  },
-});
+  })
+  .build();
 ```
 
 ### Composition via Dependency Injection
@@ -131,12 +182,11 @@ The best way to compose resources is through dependency injection. For condition
 ```ts
 const smartUserService = r
   .resource("app.services.user.smart")
-  id: "app.services.user.smart",
-  dependencies: {
+  .dependencies({
     db: database,
     cache: cacheService.optional(), // Optional dependency
-  },
-  init: async (_, { db, cache }) => {
+  })
+  .init(async (_, { db, cache }) => {
     // Fallback to a simple cache if no cache resource is registered
     const effectiveCache = cache || new Map();
 
@@ -146,7 +196,6 @@ const smartUserService = r
         return cached || db.findUser(id);
       },
     };
-  },
   })
   .build();
 ```
@@ -191,16 +240,17 @@ This approach is more flexible than traditional interfaces because contracts can
 
 ## OOP vs. Runner Parallels
 
-| OOP Concept         | Runner Pattern                      | Example                                            |
-| ------------------- | ----------------------------------- | -------------------------------------------------- |
-| **Class**           | Resource returning API object       | `resource({ init: () => ({ method: ... }) })`      |
-| **Constructor**     | `init()` function                   | `init: async (config, deps) => { /* setup */ }`    |
-| **Private members** | Closured `const`/`let`              | `const secret = ...; return { /* public */ }`      |
-| **Public methods**  | Returned object methods             | `return { publicMethod: () => {} }`                |
-| **Inheritance**     | `override()` with decorator pattern | `override(base, { init: ... })`                    |
-| **Composition**     | Resource dependencies               | `dependencies: { db, logger }`                     |
-| **Interfaces**      | Contract tags                       | `tag<..., { shape }>()`                            |
-| **Encapsulation**   | Closure-based privacy               | Private state is inaccessible from outside `init`. |
+| OOP Concept         | Runner Pattern                | Example                                                                      |
+| ------------------- | ----------------------------- | ---------------------------------------------------------------------------- |
+| **Class**           | Resource returning API object | `r.resource("app.service").init(async () => ({ method: () => {} })).build()` |
+| **Constructor**     | `init()` function             | `.init(async (config, deps) => { /* setup */ })`                             |
+| **Destructor**      | `dispose()` function          | `.dispose(async (api) => { /* cleanup */ })`                                 |
+| **Private members** | Closured `const`/`let`        | `const secret = ...; return { /* public */ }`                                |
+| **Public methods**  | Returned object methods       | `return { publicMethod: () => {} }`                                          |
+| **Inheritance**     | `r.override()` with decorator | `r.override(base).init(...).build()`                                         |
+| **Composition**     | Resource dependencies         | `.dependencies({ db, logger })`                                              |
+| **Interfaces**      | Contract tags                 | `.tag<..., { shape }>()`                                                     |
+| **Encapsulation**   | Closure-based privacy         | Private state is inaccessible from outside `init`.                           |
 
 ## Advanced Patterns
 
@@ -211,6 +261,8 @@ The functional approach supports many classic design patterns.
 Use contract tags to discover and select implementations at runtime.
 
 ```ts
+import { r, globals } from "@bluelibs/runner";
+
 // 1. Define the strategy contract
 const paymentStrategyContract = r
   .tag<
@@ -225,13 +277,13 @@ const creditCardStrategy = r
   .resource("payment.strategies.creditCard")
   .tags([paymentStrategyContract])
   .init(async () => ({
-    async process(amount) {
-      /* ... */ return true;
+    async process(amount: number) {
+      /* charge credit card... */ return true;
     },
   }))
   .build();
 
-// 3. Use the strategies
+// 3. Use the strategies via the store
 const paymentProcessor = r
   .resource("app.payment.processor")
   .dependencies({ store: globals.resources.store })
@@ -253,7 +305,7 @@ Use events and hooks for decoupled communication.
 ```ts
 // 1. The subject emits events
 const userRegistered = r
-  .event("user.registered")
+  .event("app.events.userRegistered")
   .payloadSchema<{ userId: string }>({ parse: (v) => v })
   .build();
 
@@ -280,8 +332,10 @@ const welcomeEmailer = r
 
 1.  **Resources are factories** that return API objects.
 2.  **Closures create privacy** for state and helpers.
-3.  **`override` enables extension** via the decorator pattern.
-4.  **Prefer DI for composition** to keep components decoupled.
-5.  **Contract tags are configurable interfaces** that provide compile-time safety.
+3.  **`dispose` handles cleanup** — the functional destructor.
+4.  **`r.override()` enables extension** via the decorator pattern.
+5.  **Prefer DI for composition** to keep components decoupled.
+6.  **Contract tags are configurable interfaces** that provide compile-time safety.
+7.  **Each `run()` call is fully isolated** — closure state is never shared between containers.
 
 This functional approach gives you the power of OOP without the boilerplate, leading to simpler, more testable, and more composable code.

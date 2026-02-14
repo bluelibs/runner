@@ -178,20 +178,8 @@ export class Serializer {
    */
   public addType<TInstance, TSerialized>(
     typeDef: TypeDefinition<TInstance, TSerialized>,
-  ): void;
-  public addType<TJson = unknown, TInstance = unknown>(
-    name: string,
-    factory: (json: TJson) => TInstance,
-  ): void;
-  public addType<TInstance, TSerialized>(
-    arg1: string | TypeDefinition<TInstance, TSerialized>,
-    arg2?: (json: unknown) => unknown,
   ): void {
-    if (typeof arg1 === "string") {
-      this.typeRegistry.addType(arg1, arg2!);
-    } else {
-      this.typeRegistry.addType(arg1);
-    }
+    this.typeRegistry.addType(typeDef);
   }
 
   /**

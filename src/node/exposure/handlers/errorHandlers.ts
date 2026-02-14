@@ -157,6 +157,7 @@ export interface HandleRequestErrorOptions {
   cors?: NodeExposureHttpCorsConfig;
   serializer: SerializerLike;
   logKey: ExposureErrorLogKey;
+  requestId?: string;
 }
 
 interface AppErrorExtra extends Record<string, unknown> {
@@ -203,14 +204,28 @@ const resolveAppErrorExtra = (
 export const handleRequestError = (
   options: HandleRequestErrorOptions,
 ): void => {
-  const { error, req, res, store, logger, cors, serializer, logKey } = options;
+  const {
+    error,
+    req,
+    res,
+    store,
+    logger,
+    cors,
+    serializer,
+    logKey,
+    requestId,
+  } = options;
   const appErrorExtra = resolveAppErrorExtra(store, error);
   const responseStatus = appErrorExtra?.httpCode ?? 500;
   const displayMessage =
     appErrorExtra && error instanceof Error && error.message
       ? error.message
       : ExposureErrorMessage.InternalError;
-  safeLogError(logger, logKey, { error: errorMessage(error) });
+  const logData: Record<string, unknown> = { error: errorMessage(error) };
+  if (requestId) {
+    logData.requestId = requestId;
+  }
+  safeLogError(logger, logKey, logData);
   applyCorsActual(req, res, cors);
   respondJson(
     res,
