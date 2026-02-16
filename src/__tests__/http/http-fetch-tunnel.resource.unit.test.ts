@@ -51,6 +51,8 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     expect(calls[0].init.method).toBe("POST");
     // AbortController branch should have attached a signal
     expect(calls[0].init.signal).toBeDefined();
+    // Redirects are blocked to avoid forwarding auth headers.
+    expect(calls[0].init.redirect).toBe("error");
     // Header name is defaulted to x-runner-token
     expect(calls[0].init.headers["x-runner-token"]).toBe("T");
   });

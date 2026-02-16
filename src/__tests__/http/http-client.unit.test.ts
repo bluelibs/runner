@@ -139,7 +139,8 @@ describe("http-client (universal)", () => {
       blob,
       "F2",
     );
-    const calls: Array<{ url: string; headers: any; body: any }> = [];
+    const calls: Array<{ url: string; headers: any; body: any; init: any }> =
+      [];
     const fetchMock = jest.fn(async (url: any, init?: any) => {
       // Touch formdata to exercise code path (if available)
       const fd = init?.body as FormData;
@@ -149,6 +150,7 @@ describe("http-client (universal)", () => {
         url: String(url),
         headers: init?.headers ?? {},
         body: init?.body,
+        init,
       });
       const env = { ok: true, result: "UP" };
       return {
@@ -179,6 +181,7 @@ describe("http-client (universal)", () => {
     expect(onRequest).toHaveBeenCalledTimes(1);
     expect(calls[0].headers["x-runner-token"]).toBe("tok");
     expect(typeof calls[0].headers["x-runner-context"]).toBe("string");
+    expect(calls[0].init.redirect).toBe("error");
   });
 
   it("browser multipart fails fast when context serialization fails", async () => {

@@ -122,7 +122,13 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     if (contextHeader) headers["x-runner-context"] = contextHeader;
     if (cfg.onRequest) await cfg.onRequest({ url, headers });
     const fetchImpl = cfg.fetchImpl ?? (globalThis.fetch as typeof fetch);
-    const res = await fetchImpl(url, { method: "POST", body: fd, headers });
+    const res = await fetchImpl(url, {
+      method: "POST",
+      body: fd,
+      headers,
+      // Security: prevent automatic redirects from forwarding tunnel auth headers.
+      redirect: "error",
+    });
     const text = await res.text();
     const json = text ? cfg.serializer.parse(text) : undefined;
     return json as ProtocolEnvelope<any>;

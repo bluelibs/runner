@@ -58,6 +58,8 @@ async function postSerialized<T = any>(options: {
       headers: reqHeaders,
       body: serializer.stringify(body),
       signal: controller?.signal,
+      // Security: prevent automatic redirects from forwarding tunnel auth headers.
+      redirect: "error",
     });
 
     const text = await res.text();
