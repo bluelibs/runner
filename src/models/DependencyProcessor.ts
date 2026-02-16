@@ -5,6 +5,7 @@ import {
   IResource,
   IEvent,
   IEventEmission,
+  IEventEmitOptions,
   TaskLocalInterceptor,
   ResourceDependencyValuesType,
   TaskDependencyWithIntercept,
@@ -473,8 +474,8 @@ export class DependencyProcessor {
    * @returns
    */
   extractEventDependency(object: IEvent<any>, source: string) {
-    return async (input: any) => {
-      return this.eventManager.emit(object, input, source);
+    return async (input: any, options?: IEventEmitOptions) => {
+      return this.eventManager.emit(object, input, source, options);
     };
   }
 

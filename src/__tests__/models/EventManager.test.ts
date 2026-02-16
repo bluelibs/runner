@@ -1,4 +1,9 @@
-import { IEvent, IEventEmission, IHook } from "../../defs";
+import {
+  EventEmissionFailureMode,
+  IEvent,
+  IEventEmission,
+  IHook,
+} from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 import { globalTags } from "../../globals/globalTags";
@@ -418,6 +423,122 @@ describe("EventManager", () => {
 
     expect(first).toHaveBeenCalledTimes(1);
     expect(second).toHaveBeenCalledTimes(0);
+  });
+
+  it("returns emission report when report=true", async () => {
+    const ok = jest.fn();
+    const fail = jest.fn(() => {
+      throw new Error("bad");
+    });
+
+    eventManager.addListener(eventDefinition, ok, { order: 0, id: "ok" });
+    eventManager.addListener(eventDefinition, fail, { order: 1, id: "fail" });
+
+    const report = await eventManager.emit(
+      eventDefinition,
+      "testData",
+      "test",
+      {
+        report: true,
+        throwOnError: false,
+      },
+    );
+
+    expect(report.totalListeners).toBe(2);
+    expect(report.attemptedListeners).toBe(2);
+    expect(report.succeededListeners).toBe(1);
+    expect(report.failedListeners).toBe(1);
+    expect(report.errors).toHaveLength(1);
+    expect(report.errors[0].listenerId).toBe("fail");
+    expect(report.errors[0].listenerOrder).toBe(1);
+    expect(ok).toHaveBeenCalledTimes(1);
+    expect(fail).toHaveBeenCalledTimes(1);
+  });
+
+  it("aggregate mode continues sequential listeners and throws aggregate by default", async () => {
+    const calls: string[] = [];
+
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        calls.push("first");
+        throw new Error("first-failure");
+      },
+      { order: 0, id: "first" },
+    );
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        calls.push("second");
+      },
+      { order: 1, id: "second" },
+    );
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        calls.push("third");
+        throw new Error("third-failure");
+      },
+      { order: 2, id: "third" },
+    );
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData", "test", {
+        failureMode: EventEmissionFailureMode.Aggregate,
+      }),
+    ).rejects.toMatchObject({ name: "AggregateError" });
+    expect(calls).toEqual(["first", "second", "third"]);
+  });
+
+  it("aggregate mode with report=true and throwOnError=false returns all listener errors", async () => {
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        throw new Error("e1");
+      },
+      { order: 0, id: "l1" },
+    );
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        throw new Error("e2");
+      },
+      { order: 1, id: "l2" },
+    );
+
+    const report = await eventManager.emit(
+      eventDefinition,
+      "testData",
+      "test",
+      {
+        report: true,
+        throwOnError: false,
+        failureMode: EventEmissionFailureMode.Aggregate,
+      },
+    );
+
+    expect(report.failedListeners).toBe(2);
+    expect(report.errors).toHaveLength(2);
+    expect(report.errors.map((error) => error.listenerId)).toEqual([
+      "l1",
+      "l2",
+    ]);
+  });
+
+  it("aggregate mode throws original error when exactly one listener fails", async () => {
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        throw new Error("single-aggregate-error");
+      },
+      { order: 0, id: "only" },
+    );
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData", "test", {
+        failureMode: EventEmissionFailureMode.Aggregate,
+      }),
+    ).rejects.toThrow("single-aggregate-error");
   });
 
   it("throws first sequential listener failure and stops execution", async () => {

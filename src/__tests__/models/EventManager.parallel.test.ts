@@ -1,4 +1,4 @@
-import { IEvent } from "../../defs";
+import { EventEmissionFailureMode, IEvent } from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
 
@@ -367,5 +367,46 @@ describe("EventManager Parallel Execution", () => {
     ).rejects.toThrow("Batch 0 error");
 
     expect(results).not.toContain("batch1-should-not-run");
+  });
+
+  it("aggregate mode should continue later batches and report all failures", async () => {
+    const results: string[] = [];
+
+    eventManager.addListener(
+      parallelEvent,
+      async () => {
+        throw new Error("batch0-fail");
+      },
+      { order: 0, id: "b0" },
+    );
+    eventManager.addListener(
+      parallelEvent,
+      async () => {
+        results.push("batch1-ran");
+        throw new Error("batch1-fail");
+      },
+      { order: 1, id: "b1" },
+    );
+    eventManager.addListener(
+      parallelEvent,
+      async () => {
+        results.push("batch2-ran");
+      },
+      { order: 2, id: "b2" },
+    );
+
+    const report = await eventManager.emit(parallelEvent, "data", "test", {
+      report: true,
+      throwOnError: false,
+      failureMode: EventEmissionFailureMode.Aggregate,
+    });
+
+    expect(results).toEqual(["batch1-ran", "batch2-ran"]);
+    expect(report.failedListeners).toBe(2);
+    expect(report.errors).toHaveLength(2);
+    expect(report.errors.map((error) => error.listenerId)).toEqual([
+      "b0",
+      "b1",
+    ]);
   });
 });

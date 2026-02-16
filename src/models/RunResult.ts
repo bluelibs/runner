@@ -1,4 +1,10 @@
-import { DependencyMapType, IEvent, ITask } from "../defs";
+import {
+  DependencyMapType,
+  IEvent,
+  IEventEmitOptions,
+  IEventEmitReport,
+  ITask,
+} from "../defs";
 import { IResource } from "../defs";
 // For RunResult convenience API, preserve the original simple messages
 import { EventManager } from "./EventManager";
@@ -58,9 +64,10 @@ export class RunResult<V> {
    * @param event - The event to emit.
    * @param payload - The payload to emit.
    */
-  public emitEvent = <P>(
+  public emitEvent = (<P>(
     event: IEvent<P> | string,
     payload?: P extends undefined | void ? undefined : P,
+    options?: IEventEmitOptions,
   ) => {
     this.ensureRuntimeIsActive();
 
@@ -71,7 +78,22 @@ export class RunResult<V> {
       }
       event = this.store.events.get(eventId)!.event;
     }
-    return this.eventManager.emit(event, payload, "outside");
+    return this.eventManager.emit(event, payload, "outside", options);
+  }) as {
+    <P>(
+      event: IEvent<P> | string,
+      payload?: P extends undefined | void ? undefined : P,
+    ): Promise<void>;
+    <P>(
+      event: IEvent<P> | string,
+      payload: P extends undefined | void ? undefined : P,
+      options: IEventEmitOptions & { report: true },
+    ): Promise<IEventEmitReport>;
+    <P>(
+      event: IEvent<P> | string,
+      payload?: P extends undefined | void ? undefined : P,
+      options?: IEventEmitOptions,
+    ): Promise<void | IEventEmitReport>;
   };
 
   /**

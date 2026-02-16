@@ -67,6 +67,55 @@ describe("task/event/hook/middleware builders", () => {
     await rr.dispose();
   });
 
+  it("event dependency supports explicit undefined payload with report mode for void payload events", async () => {
+    const ev = r.event("tests.builder.event.dep.report").build();
+    const emitFromTask = r
+      .task("tests.builder.event.dep.report.emitter")
+      .dependencies({ ev })
+      .run(async (_input, deps) => {
+        const report = await deps.ev(undefined, {
+          report: true,
+          throwOnError: false,
+          failureMode: definitions.EventEmissionFailureMode.Aggregate,
+        });
+        if (!report) {
+          throw new Error("Expected event emission report");
+        }
+        return report;
+      })
+      .build();
+
+    const failingHookA = r
+      .hook("tests.builder.event.dep.report.hook.a")
+      .on(ev)
+      .run(async () => {
+        throw new Error("hook-a");
+      })
+      .build();
+
+    const failingHookB = r
+      .hook("tests.builder.event.dep.report.hook.b")
+      .on(ev)
+      .run(async () => {
+        throw new Error("hook-b");
+      })
+      .build();
+
+    const app = resource({
+      id: "tests.builder.event.dep.report.app",
+      register: [ev, emitFromTask, failingHookA, failingHookB],
+    });
+
+    const rr = await run(app);
+    const report = await rr.runTask(emitFromTask);
+    if (!report) {
+      throw new Error("Expected task to return an event emission report");
+    }
+    expect(report.failedListeners).toBe(2);
+    expect(report.errors).toHaveLength(2);
+    await rr.dispose();
+  });
+
   it("middleware builders produce branded middlewares and can be registered", async () => {
     const tmw = r.middleware
       .task("tests.builder.tm")

@@ -1604,6 +1604,38 @@ const highVolumeEvent = r
 - If any hook throws, subsequent batches don't run
 - `stopPropagation()` is checked between batches only
 
+#### Emission Reports and Failure Modes
+
+Event emitters (dependency-injected or `runtime.emitEvent`) accept optional emission controls:
+
+- `failureMode`: `"fail-fast"` (default) or `"aggregate"`
+- `throwOnError`: `true` by default
+- `report`: when `true`, emit returns `IEventEmitReport`
+
+```typescript
+import { r } from "@bluelibs/runner";
+
+const userRegistered = r.event("app.events.userRegistered").build();
+
+const registerUser = r
+  .task("app.tasks.registerUser")
+  .dependencies({ userRegistered })
+  .run(async (_input, { userRegistered }) => {
+    const report = await userRegistered(undefined, {
+      report: true,
+      throwOnError: false,
+      failureMode: "aggregate",
+    });
+
+    if (report.failedListeners > 0) {
+      // log, retry, or publish metrics based on report.errors
+    }
+  })
+  .build();
+```
+
+Use this when one failing hook should not block the entire emission path and you want full error visibility.
+
 ```typescript
 const registerUser = r
   .task("app.tasks.registerUser")
@@ -2458,7 +2490,7 @@ await result.dispose();
 | ----------------------- | ------------------------------------------------------------------ |
 | `value`                 | Value returned by the `app` resource's `init()`                    |
 | `runTask(...)`          | Run a task by reference or string id                               |
-| `emitEvent(...)`        | Emit events                                                        |
+| `emitEvent(...)`        | Emit events (supports `failureMode`, `throwOnError`, `report`)    |
 | `getResourceValue(...)` | Read a resource's value                                            |
 | `getResourceConfig(...)` | Read a resource's resolved config                                  |
 | `logger`                | Logger instance                                                    |

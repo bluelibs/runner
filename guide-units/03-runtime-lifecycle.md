@@ -29,7 +29,7 @@ await result.dispose();
 | ----------------------- | ------------------------------------------------------------------ |
 | `value`                 | Value returned by the `app` resource's `init()`                    |
 | `runTask(...)`          | Run a task by reference or string id                               |
-| `emitEvent(...)`        | Emit events                                                        |
+| `emitEvent(...)`        | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`) |
 | `getResourceValue(...)` | Read a resource's value                                            |
 | `getResourceConfig(...)` | Read a resource's resolved config                                  |
 | `logger`                | Logger instance                                                    |

@@ -1,112 +1,146 @@
-import { IEventEmission } from "../../defs";
+import {
+  EventEmissionFailureMode,
+  IEventEmission,
+  IEventEmitReport,
+  IEventListenerError,
+} from "../../defs";
 import { IListenerStorage } from "./types";
-
-/**
- * Error type with optional listener metadata attached.
- */
-interface ListenerError extends Error {
-  listenerId?: string;
-  listenerOrder?: number;
-}
-
-/**
- * Aggregate error containing multiple listener errors.
- */
-interface ListenerAggregateError extends Error {
-  errors: ListenerError[];
-}
 
 interface ExecuteOptions {
   listeners: IListenerStorage[];
   event: IEventEmission<any>;
-  isPropagationStopped: () => boolean;
+  isPropagationStopped?: () => boolean;
+  failureMode: EventEmissionFailureMode;
+}
+
+function toListenerError(
+  error: unknown,
+  listener: IListenerStorage,
+): IEventListenerError {
+  const errObj: IEventListenerError =
+    error && typeof error === "object"
+      ? (error as IEventListenerError)
+      : new Error(String(error));
+
+  if (errObj.listenerId === undefined) {
+    errObj.listenerId = listener.id;
+  }
+  if (errObj.listenerOrder === undefined) {
+    errObj.listenerOrder = listener.order;
+  }
+  return errObj;
+}
+
+function createReport(totalListeners: number): IEventEmitReport {
+  return {
+    totalListeners,
+    attemptedListeners: 0,
+    skippedListeners: 0,
+    succeededListeners: 0,
+    failedListeners: 0,
+    propagationStopped: false,
+    errors: [],
+  };
+}
+
+function createAggregateError(
+  errors: IEventListenerError[],
+  message: string,
+): Error {
+  return Object.assign(new Error(message), {
+    errors,
+    name: "AggregateError",
+  });
 }
 
 export async function executeSequentially({
   listeners,
   event,
   isPropagationStopped,
-}: ExecuteOptions): Promise<void> {
+  failureMode,
+}: ExecuteOptions): Promise<IEventEmitReport> {
+  const report = createReport(listeners.length);
+
   for (const listener of listeners) {
-    if (isPropagationStopped()) {
+    if (isPropagationStopped?.()) {
+      report.propagationStopped = true;
       break;
     }
 
     if (shouldExecuteListener(listener, event)) {
+      report.attemptedListeners += 1;
       try {
         await listener.handler(event);
+        report.succeededListeners += 1;
       } catch (error) {
-        const errObj: ListenerError =
-          error && typeof error === "object"
-            ? (error as ListenerError)
-            : new Error(String(error));
-
-        if (errObj.listenerId === undefined) {
-          errObj.listenerId = listener.id;
+        const errObj = toListenerError(error, listener);
+        report.failedListeners += 1;
+        report.errors.push(errObj);
+        if (failureMode === EventEmissionFailureMode.FailFast) {
+          throw errObj;
         }
-        if (errObj.listenerOrder === undefined) {
-          errObj.listenerOrder = listener.order;
-        }
-        throw errObj;
       }
+    } else {
+      report.skippedListeners += 1;
     }
   }
+
+  report.propagationStopped =
+    report.propagationStopped || event.isPropagationStopped();
+  return report;
 }
 
 export async function executeInParallel({
   listeners,
   event,
-}: Omit<ExecuteOptions, "isPropagationStopped">): Promise<void> {
+  failureMode,
+}: Omit<ExecuteOptions, "isPropagationStopped">): Promise<IEventEmitReport> {
+  const report = createReport(listeners.length);
+
   if (listeners.length === 0 || event.isPropagationStopped()) {
-    return;
+    report.propagationStopped = event.isPropagationStopped();
+    return report;
   }
 
   let currentOrder = listeners[0].order;
   let currentBatch: typeof listeners = [];
 
-  const executeBatch = async (batch: typeof listeners) => {
+  const executeBatch = async (batch: typeof listeners): Promise<void> => {
     const results = await Promise.allSettled(
       batch.map(async (listener) => {
-        if (shouldExecuteListener(listener, event)) {
+        if (!shouldExecuteListener(listener, event)) {
+          report.skippedListeners += 1;
+          return;
+        }
+
+        report.attemptedListeners += 1;
+        try {
           await listener.handler(event);
+          report.succeededListeners += 1;
+        } catch (error) {
+          const errObj = toListenerError(error, listener);
+          report.failedListeners += 1;
+          report.errors.push(errObj);
+          throw errObj;
         }
       }),
     );
 
-    const errors = results
-      .map((result, index) => ({ result, listener: batch[index] }))
-      .filter(
-        (
-          r,
-        ): r is { result: PromiseRejectedResult; listener: IListenerStorage } =>
-          r.result.status === "rejected",
-      )
-      .map(({ result, listener }) => {
-        const reason = result.reason;
-        const errObj: ListenerError =
-          reason && typeof reason === "object"
-            ? (reason as ListenerError)
-            : new Error(String(reason));
-
-        if (errObj.listenerId === undefined) {
-          errObj.listenerId = listener.id;
-        }
-        if (errObj.listenerOrder === undefined) {
-          errObj.listenerOrder = listener.order;
-        }
-
-        return errObj;
-      });
-
-    if (errors.length > 0) {
-      if (errors.length === 1) {
-        throw errors[0];
+    const errorsInBatch = results.filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    ).length;
+    if (
+      errorsInBatch > 0 &&
+      failureMode === EventEmissionFailureMode.FailFast
+    ) {
+      const batchErrors = report.errors.slice(-errorsInBatch);
+      if (batchErrors.length === 1) {
+        throw batchErrors[0];
       }
-      const aggregateError: ListenerAggregateError = Object.assign(
-        new Error(`${errors.length} listeners failed in parallel batch`),
-        { errors, name: "AggregateError" },
+      throw createAggregateError(
+        batchErrors,
+        `${batchErrors.length} listeners failed in parallel batch`,
       );
-      throw aggregateError;
     }
   };
 
@@ -117,6 +151,7 @@ export async function executeInParallel({
       currentOrder = listener.order;
 
       if (event.isPropagationStopped()) {
+        report.propagationStopped = true;
         break;
       }
     }
@@ -126,6 +161,10 @@ export async function executeInParallel({
   if (currentBatch.length > 0 && !event.isPropagationStopped()) {
     await executeBatch(currentBatch);
   }
+
+  report.propagationStopped =
+    report.propagationStopped || event.isPropagationStopped();
+  return report;
 }
 
 export function shouldExecuteListener(

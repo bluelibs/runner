@@ -166,6 +166,30 @@ const sendWelcomeEmail = r
   - All listeners in a failing batch run to completion; if multiple fail, an `AggregateError` with all errors is thrown
   - Propagation is checked between batches only (not mid-batch since parallel listeners can't be stopped mid-flight)
   - If any listener throws, subsequent batches will not run
+- Event emitters (dependency-injected or `runtime.emitEvent`) support options:
+  - `failureMode: "fail-fast" | "aggregate"`
+  - `throwOnError` (default `true`)
+  - `report` (when `true`, returns `IEventEmitReport`)
+- `report: true` is useful when you want to aggregate hook failures without throwing immediately:
+
+```ts
+import { r } from "@bluelibs/runner";
+
+const notify = r.event("app.events.notify").build();
+
+const task = r
+  .task("app.tasks.notify")
+  .dependencies({ notify })
+  .run(async (_input, { notify }) => {
+    const report = await notify(undefined, {
+      report: true,
+      throwOnError: false,
+      failureMode: "aggregate",
+    });
+    return report.failedListeners;
+  })
+  .build();
+```
 
 ## Middleware
 
@@ -451,6 +475,7 @@ const app = r
 ## Runtime & Lifecycle
 
 - `run(root, options)` wires dependencies, initializes resources, and returns helpers: `runTask`, `emitEvent`, `getResourceValue`, `getResourceConfig`, `store`, `logger`, and `dispose`.
+- `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
 - Run options highlights: `debug` (normal/verbose or custom config), `logs` (printThreshold/strategy/buffer), `errorBoundary` and `onUnhandledError`, `shutdownHooks`, `dryRun`.
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime (runs inside middleware; won't run if middleware short-circuits).
 - Shutdown hooks: install signal listeners to call `dispose` (default in `run`).

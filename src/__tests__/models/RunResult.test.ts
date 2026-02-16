@@ -4,6 +4,7 @@ import {
   defineEvent,
   defineHook,
 } from "../../define";
+import { EventEmissionFailureMode } from "../../defs";
 import { run } from "../../run";
 
 describe("RunResult", () => {
@@ -122,6 +123,49 @@ describe("RunResult", () => {
     expect(config).toEqual({ seed: 123 });
 
     await r.dispose();
+  });
+
+  it("emitEvent supports report mode for aggregated listener failures", async () => {
+    const ping = defineEvent<{ n: number }>({ id: "rr.report.ping" });
+
+    const failFirst = defineHook({
+      id: "rr.report.failFirst",
+      on: ping,
+      run: async () => {
+        throw new Error("first");
+      },
+    });
+
+    const failSecond = defineHook({
+      id: "rr.report.failSecond",
+      on: ping,
+      run: async () => {
+        throw new Error("second");
+      },
+    });
+
+    const app = defineResource({
+      id: "rr.report.app",
+      register: [ping, failFirst, failSecond],
+      async init() {
+        return "ok" as const;
+      },
+    });
+
+    const runtime = await run(app);
+    const report = await runtime.emitEvent(
+      ping,
+      { n: 1 },
+      {
+        report: true,
+        throwOnError: false,
+        failureMode: EventEmissionFailureMode.Aggregate,
+      },
+    );
+
+    expect(report.failedListeners).toBe(2);
+    expect(report.errors).toHaveLength(2);
+    await runtime.dispose();
   });
 
   it("throws helpful errors for missing string ids", async () => {
