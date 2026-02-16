@@ -302,7 +302,7 @@ RegExp payloads are validated:
 
 - `maxRegExpPatternLength` defaults to **1024**; `Infinity` disables length checking.
 - A safety heuristic rejects patterns with nested quantifiers (e.g., `(a+)+`) and dangerous quantified overlapping alternations (e.g., `^(a|aa)+$`) unless `allowUnsafeRegExp` is `true`.
-- `flags` must use a supported unique subset of `dgimsuy`.
+- `flags` must use a supported unique subset of `dgimsuvy`.
 
 ### Security protections
 
@@ -310,7 +310,7 @@ RegExp payloads are validated:
 - **Unknown types**: Type IDs must match registered types exactly; no dynamic resolution.
 - **Type whitelist**: When `allowedTypes` is set, only listed types are allowed during deserialization.
 - **Reference safety**: Reference objects must be canonical (`{ "__ref": "..." }`) and unsafe reference IDs are rejected.
-- **RegExp hardening**: Pattern length limits, safety heuristic checks, strict flag validation (`dgimsuy` unique set), and fail-fast invalid payload errors.
+- **RegExp hardening**: Pattern length limits, safety heuristic checks, strict flag validation (`dgimsuvy` unique set), and fail-fast invalid payload errors.
 - **BigInt hardening**: Payload must be a valid integer string before `BigInt(...)` is evaluated.
 - **Error custom field hardening**: Reserved/prototype-pollution/method-shadowing keys are filtered from Error custom fields.
 - **Type registration hardening**: `addType()` validates `id`, `is`, `serialize`, and `deserialize` at runtime.
