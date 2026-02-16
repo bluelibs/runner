@@ -101,7 +101,7 @@ describe("Queue Resource", () => {
 
     await result.dispose();
 
-    // Try to run a task on a disposed queue - should reject
+    // Try to run a task on a disposed queue resource - should reject
     await expect(
       result.value.run("test-queue", async () => "test"),
     ).rejects.toThrow(/disposed/);
@@ -137,5 +137,58 @@ describe("Queue Resource", () => {
     });
 
     await run(app);
+  });
+
+  it("evicts idle queues after inactivity timeout", async () => {
+    jest.useFakeTimers();
+
+    try {
+      const app = defineResource({
+        id: "queue-idle-eviction-app",
+        dependencies: { queue: queueResource },
+        async init(_, { queue }) {
+          await queue.run("idle-queue", async () => "ok");
+          expect(queue.map.has("idle-queue")).toBe(true);
+          return queue;
+        },
+      });
+
+      const runtime = await run(app);
+
+      jest.advanceTimersByTime(60_000);
+      await Promise.resolve();
+
+      expect(runtime.value.map.has("idle-queue")).toBe(false);
+
+      await runtime.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("handles idle cleanup timer when queue entry was removed manually", async () => {
+    jest.useFakeTimers();
+
+    try {
+      const app = defineResource({
+        id: "queue-manual-removal-app",
+        dependencies: { queue: queueResource },
+        async init(_, { queue }) {
+          await queue.run("manual-remove", async () => "ok");
+          return queue;
+        },
+      });
+
+      const runtime = await run(app);
+      runtime.value.map.delete("manual-remove");
+
+      jest.advanceTimersByTime(60_000);
+      await Promise.resolve();
+
+      expect(runtime.value.map.has("manual-remove")).toBe(false);
+      await runtime.dispose();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

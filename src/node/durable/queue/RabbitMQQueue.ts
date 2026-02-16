@@ -128,7 +128,20 @@ export class RabbitMQQueue implements IDurableQueue {
       async (msg: ConsumeMessage | null) => {
         if (msg === null) return;
 
-        const content = JSON.parse(msg.content.toString()) as QueueMessage<T>;
+        let content: QueueMessage<T>;
+        try {
+          const parsed = JSON.parse(msg.content.toString()) as Partial<
+            QueueMessage<T>
+          >;
+          if (!parsed || typeof parsed.id !== "string") {
+            channel.nack(msg, false, false);
+            return;
+          }
+          content = parsed as QueueMessage<T>;
+        } catch {
+          channel.nack(msg, false, false);
+          return;
+        }
         this.messageMap.set(content.id, msg);
 
         try {

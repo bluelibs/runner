@@ -1,4 +1,4 @@
-/* eslint-disable jest/valid-title */
+/* eslint-disable jest/valid-title -- Titles are centralized in enums for consistency across this suite. */
 import type { ITask } from "../../defs";
 import { r, run } from "../..";
 
@@ -502,10 +502,10 @@ describe(SuiteName.OverrideBuilder, () => {
       .run(async () => undefined)
       .build();
 
-    if (false) {
-      // @ts-expect-error hook overrides cannot change on()
-      r.override(hook).on(event);
-    }
+    const overridden = r.override(hook);
+    expect("on" in (overridden as unknown as Record<string, unknown>)).toBe(
+      false,
+    );
   });
 
   it(TestName.OverrideError, () => {

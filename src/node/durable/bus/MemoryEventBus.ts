@@ -28,7 +28,17 @@ export class MemoryEventBus implements IEventBus {
     subs.add(handler);
   }
 
-  async unsubscribe(channel: string): Promise<void> {
-    this.handlers.delete(channel);
+  async unsubscribe(channel: string, handler?: BusEventHandler): Promise<void> {
+    if (!handler) {
+      this.handlers.delete(channel);
+      return;
+    }
+
+    const subs = this.handlers.get(channel);
+    if (!subs) return;
+    subs.delete(handler);
+    if (subs.size === 0) {
+      this.handlers.delete(channel);
+    }
   }
 }

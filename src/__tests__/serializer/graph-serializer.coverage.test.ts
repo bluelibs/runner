@@ -11,6 +11,10 @@ import {
   serializeNonFiniteNumber,
   SpecialTypeId,
 } from "../../serializer/special-values";
+import type {
+  DeserializationContext,
+  SerializedNode,
+} from "../../serializer/types";
 
 describe("GraphSerializer coverage", () => {
   const serializer = new Serializer();
@@ -21,7 +25,19 @@ describe("GraphSerializer coverage", () => {
     obj.keep = "ok";
     obj.drop = undefined;
 
-    const payload = JSON.parse(serializer.serialize(obj)) as any;
+    const payload = JSON.parse(serializer.serialize(obj)) as {
+      root: { __ref: string };
+      nodes: Record<
+        string,
+        {
+          value: {
+            keep?: string;
+            drop?: { __type: string; value: null };
+            inherited?: unknown;
+          };
+        }
+      >;
+    };
     const rootId = payload.root.__ref;
     const rootNode = payload.nodes[rootId];
 
@@ -30,11 +46,11 @@ describe("GraphSerializer coverage", () => {
       drop: { __type: "Undefined", value: null },
     });
     expect(rootNode.value.inherited).toBeUndefined();
-    expect(rootNode.value.drop.__type).toBe("Undefined");
+    expect(rootNode.value.drop?.__type).toBe("Undefined");
   });
 
   it("handles malformed graph payload nodes defensively", () => {
-    const nodeRecord = (serializer as any).toNodeRecord(null);
+    const nodeRecord = serializer.toNodeRecord(null as never);
     expect(Object.keys(nodeRecord)).toHaveLength(0);
   });
 
@@ -54,56 +70,65 @@ describe("GraphSerializer coverage", () => {
       },
     });
 
-    const result = serializer.deserialize(payload) as any;
+    const result = serializer.deserialize(payload) as {
+      real: unknown[];
+      ghost?: unknown;
+    };
     expect(result).toEqual({ real: [] });
     expect(result.ghost).toBeUndefined();
 
-    const context = {
+    const context: DeserializationContext = {
       nodes: {},
       resolved: new Map(),
-      resolving: new Set(),
-      resolvingRefs: new Set(),
+      resolving: new Set<string>(),
+      resolvingRefs: new Set<string>(),
     };
     const protoObj = Object.create({ hidden: true });
     protoObj.visible = 5;
 
-    const value = (serializer as any).deserializeValue(protoObj, context);
+    const value = serializer.deserializeValue(protoObj, context) as {
+      visible: number;
+      hidden?: unknown;
+    };
     expect(value).toEqual({ visible: 5 });
-    expect((value as any).hidden).toBeUndefined();
+    expect(value.hidden).toBeUndefined();
   });
 
   it("mergePlaceholder covers identity and fallback branches", () => {
     const target = { k: 1 };
-    const merged = (serializer as any).mergePlaceholder(target, target);
+    const merged = serializer.mergePlaceholder(target, target);
     expect(merged).toBe(target);
 
-    const fallback = (serializer as any).mergePlaceholder(5, "x");
+    const fallback = serializer.mergePlaceholder(5, "x");
     expect(fallback).toBe("x");
   });
 
   it("isSerializedTypeRecord guards non-objects", () => {
-    expect((serializer as any).isSerializedTypeRecord(5)).toBe(false);
+    expect(serializer.isSerializedTypeRecord(5)).toBe(false);
   });
 
   it("skips inherited keys when resolving object references", () => {
-    const context = {
+    const context: DeserializationContext = {
       nodes: {
         obj: {
           kind: "object",
           value: Object.assign(Object.create({ ghost: { __ref: "leaf" } }), {
             own: { __ref: "leaf" },
           }),
-        },
-        leaf: { kind: "array", value: [] },
-      },
+        } as SerializedNode,
+        leaf: { kind: "array", value: [] } as SerializedNode,
+      } as Record<string, SerializedNode>,
       resolved: new Map(),
-      resolving: new Set(),
-      resolvingRefs: new Set(),
+      resolving: new Set<string>(),
+      resolvingRefs: new Set<string>(),
     };
 
-    const result = (serializer as any).resolveReference("obj", context);
+    const result = serializer.resolveReference("obj", context) as {
+      own: unknown[];
+      ghost?: unknown;
+    };
     expect(result).toEqual({ own: [] });
-    expect((result as any).ghost).toBeUndefined();
+    expect(result.ghost).toBeUndefined();
   });
 
   it("honors pretty option", () => {
@@ -121,7 +146,7 @@ describe("GraphSerializer coverage", () => {
   });
 
   it("mergePlaceholder handles Date instances", () => {
-    const merged = (serializer as any).mergePlaceholder(
+    const merged = serializer.mergePlaceholder(
       new Date(0),
       new Date("2024-01-01T00:00:00.000Z"),
     );
@@ -186,17 +211,14 @@ describe("GraphSerializer coverage", () => {
   });
 
   it("throws on unknown __type during deserializeValue", () => {
-    const ctx = {
+    const ctx: DeserializationContext = {
       nodes: {},
       resolved: new Map(),
-      resolving: new Set(),
-      resolvingRefs: new Set(),
+      resolving: new Set<string>(),
+      resolvingRefs: new Set<string>(),
     };
     expect(() =>
-      (serializer as any).deserializeValue(
-        { __type: "Missing", value: {} },
-        ctx,
-      ),
+      serializer.deserializeValue({ __type: "Missing", value: {} }, ctx),
     ).toThrow(/Unknown type/);
   });
 });

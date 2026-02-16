@@ -696,6 +696,53 @@ describe("Caching System", () => {
 
       await run(app);
     });
+
+    it("creates only one cache instance under concurrent first access", async () => {
+      class TestCache implements ICacheInstance {
+        private store = new Map<string, any>();
+        get(key: string) {
+          return this.store.get(key);
+        }
+        set(key: string, value: any) {
+          this.store.set(key, value);
+        }
+        clear() {
+          this.store.clear();
+        }
+      }
+
+      let factoryCalls = 0;
+      const slowFactoryTask = defineTask({
+        id: "globals.tasks.cacheFactory",
+        run: async () => {
+          factoryCalls += 1;
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          return new TestCache();
+        },
+      });
+
+      const task = defineTask({
+        id: "concurrent.cache.instance.task",
+        middleware: [cacheMiddleware],
+        run: async (input: number) => input * 10,
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [cacheResource, cacheMiddleware, task],
+        overrides: [slowFactoryTask],
+        dependencies: { task, cache: cacheResource },
+        async init(_, { task, cache }) {
+          const [a, b] = await Promise.all([task(1), task(2)]);
+          expect(a).toBe(10);
+          expect(b).toBe(20);
+          expect(factoryCalls).toBe(1);
+          expect(cache.map.size).toBe(1);
+        },
+      });
+
+      await run(app);
+    });
   });
 
   describe("Memory and Disposal", () => {

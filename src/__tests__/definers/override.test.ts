@@ -95,7 +95,9 @@ describe("override() helper", () => {
     // @ts-expect-error id cannot be overridden
     override(m, { id: "new" });
 
-    expect(true).toBe(true);
+    expect(t.id).toBe("tt");
+    expect(r.id).toBe("rr");
+    expect(m.id).toBe("mm");
   });
 
   it("should work correctly with hook overrides", async () => {

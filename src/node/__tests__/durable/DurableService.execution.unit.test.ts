@@ -15,6 +15,22 @@ import {
   pendingExecution,
 } from "./DurableService.unit.helpers";
 
+async function advanceTimers(ms: number): Promise<void> {
+  const asyncAdvance = (
+    jest as unknown as {
+      advanceTimersByTimeAsync?: (msToRun: number) => Promise<void>;
+    }
+  ).advanceTimersByTimeAsync;
+
+  if (asyncAdvance) {
+    await asyncAdvance(ms);
+    return;
+  }
+
+  jest.advanceTimersByTime(ms);
+  await Promise.resolve();
+}
+
 describe("durable: DurableService — execution (unit)", () => {
   it("arms a kickoff failsafe timer and removes it after enqueue succeeds", async () => {
     const store = new MemoryStore();
@@ -346,6 +362,159 @@ describe("durable: DurableService — execution (unit)", () => {
 
     await service.processExecution("e1");
     expect((await store.getExecution("e1"))?.status).toBe("pending");
+  });
+
+  it("processes execution without lock heartbeat when renewLock is unavailable", async () => {
+    const base = new MemoryStore();
+    const releaseLock = jest.fn(async () => {});
+    const store = createBareStore(base, {
+      acquireLock: async () => "lock-no-renew",
+      releaseLock,
+    });
+    const task = okTask("t.no-renew-lock");
+
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({
+        [task.id]: async () => "ok",
+      }),
+      tasks: [task],
+    });
+
+    await base.saveExecution(
+      pendingExecution({
+        id: "e-no-renew",
+        taskId: task.id,
+      }),
+    );
+
+    await expect(
+      service.processExecution("e-no-renew"),
+    ).resolves.toBeUndefined();
+    expect(releaseLock).toHaveBeenCalledWith(
+      "execution:e-no-renew",
+      "lock-no-renew",
+    );
+  });
+
+  it("renews execution lock while a long-running attempt is in progress", async () => {
+    jest.useFakeTimers();
+
+    try {
+      const store = new MemoryStore();
+      const renewLockSpy = jest.spyOn(store, "renewLock");
+      const task = okTask("t.long-running");
+
+      const service = new DurableService({
+        store,
+        taskExecutor: createTaskExecutor({
+          [task.id]: async () =>
+            await new Promise((resolve) => {
+              setTimeout(resolve, 35_000);
+            }),
+        }),
+        tasks: [task],
+      });
+
+      await store.saveExecution(pendingExecution({ taskId: task.id }));
+      const processing = service.processExecution("e1");
+
+      await advanceTimers(35_000);
+      await processing;
+
+      expect(renewLockSpy).toHaveBeenCalled();
+      expect(renewLockSpy).toHaveBeenCalledWith(
+        "execution:e1",
+        expect.any(String),
+        30_000,
+      );
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("continues processing when lock renewal rejects during heartbeat", async () => {
+    jest.useFakeTimers();
+
+    try {
+      const store = new MemoryStore();
+      const renewLockSpy = jest
+        .spyOn(store, "renewLock")
+        .mockRejectedValueOnce(new Error("renew failed"));
+      const task = okTask("t.renew-reject");
+
+      const service = new DurableService({
+        store,
+        taskExecutor: createTaskExecutor({
+          [task.id]: async () =>
+            await new Promise((resolve) => {
+              setTimeout(resolve, 35_000);
+            }),
+        }),
+        tasks: [task],
+      });
+
+      await store.saveExecution(
+        pendingExecution({ id: "e-renew-reject", taskId: task.id }),
+      );
+
+      const processing = service.processExecution("e-renew-reject");
+      await advanceTimers(35_000);
+      await expect(processing).resolves.toBeUndefined();
+      expect(renewLockSpy).toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it("continues execution when store supports locks but not lock renewal", async () => {
+    const base = new MemoryStore();
+    const store = createBareStore(base, {
+      acquireLock: base.acquireLock.bind(base),
+      releaseLock: base.releaseLock.bind(base),
+    });
+
+    const task = okTask("t.no-renew-lock");
+    const service = new DurableService({
+      store,
+      taskExecutor: createTaskExecutor({ [task.id]: async () => "ok" }),
+      tasks: [task],
+    });
+
+    await base.saveExecution(pendingExecution({ taskId: task.id }));
+    await service.processExecution("e1");
+
+    expect((await base.getExecution("e1"))?.status).toBe("completed");
+  });
+
+  it("ignores lock-renewal heartbeat failures", async () => {
+    jest.useFakeTimers();
+
+    try {
+      const store = new MemoryStore();
+      jest.spyOn(store, "renewLock").mockRejectedValue(new Error("renew-fail"));
+
+      const task = okTask("t.renew-fails");
+      const service = new DurableService({
+        store,
+        taskExecutor: createTaskExecutor({
+          [task.id]: async () =>
+            await new Promise((resolve) => {
+              setTimeout(resolve, 12_000);
+            }),
+        }),
+        tasks: [task],
+      });
+
+      await store.saveExecution(pendingExecution({ taskId: task.id }));
+      const processing = service.processExecution("e1");
+      await advanceTimers(12_000);
+      await processing;
+
+      expect((await store.getExecution("e1"))?.status).toBe("completed");
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it("throws if processExecution runs without a taskExecutor", async () => {

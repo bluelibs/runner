@@ -13,7 +13,7 @@ describe("resource builder - register function+function merge branch", () => {
 
     expect(typeof composed.register).toBe("function");
     if (typeof composed.register === "function") {
-      // @ts-expect-error test
+      // @ts-expect-error register() expects no config argument in this branch
       const ids = composed.register({}).map((it) => it.id);
       expect(ids).toEqual([a.id, b.id]);
     }

@@ -202,6 +202,23 @@ describe("durable: RedisEventBus", () => {
     expect(redisMock.quit).toHaveBeenCalled();
   });
 
+  it("unsubscribe(channel, handler) only removes that handler until last one", async () => {
+    const handlerA = jest.fn(async () => {});
+    const handlerB = jest.fn(async () => {});
+    await bus.subscribe("chan", handlerA);
+    await bus.subscribe("chan", handlerB);
+
+    await bus.unsubscribe("chan", handlerA);
+    expect(redisMock.unsubscribe).not.toHaveBeenCalled();
+
+    await bus.unsubscribe("chan", handlerB);
+    expect(redisMock.unsubscribe).toHaveBeenCalledWith("durable:bus:chan");
+  });
+
+  it("unsubscribe is a no-op for unknown channels", async () => {
+    await expect(bus.unsubscribe("missing")).resolves.toBeUndefined();
+  });
+
   it("supports string redis url and default redis in constructor", async () => {
     (
       ioredisOptional.createIORedisClient as unknown as jest.Mock

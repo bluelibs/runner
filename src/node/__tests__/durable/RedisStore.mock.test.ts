@@ -707,6 +707,12 @@ describe("durable: RedisStore", () => {
     const lockId = await store.acquireLock("res", 1000);
     expect(lockId).not.toBeNull();
 
+    redisMock.eval.mockResolvedValueOnce(1 as any);
+    await expect(store.renewLock("res", lockId!, 1000)).resolves.toBe(true);
+
+    redisMock.eval.mockResolvedValueOnce(0 as any);
+    await expect(store.renewLock("res", lockId!, 1000)).resolves.toBe(false);
+
     await store.releaseLock("res", lockId!);
     expect(redisMock.eval).toHaveBeenCalled();
 
@@ -726,6 +732,14 @@ describe("durable: RedisStore", () => {
 
     redisMock.set.mockResolvedValueOnce(null as any);
     await expect(store.claimTimer("t1", "worker-2", 1000)).resolves.toBe(false);
+  });
+
+  it("renews lock TTL only when Redis script confirms ownership", async () => {
+    redisMock.eval.mockResolvedValueOnce(1);
+    await expect(store.renewLock("res", "lock-1", 5000)).resolves.toBe(true);
+
+    redisMock.eval.mockResolvedValueOnce(0);
+    await expect(store.renewLock("res", "lock-1", 5000)).resolves.toBe(false);
   });
 
   it("supports string redis url and default redis in constructor", async () => {

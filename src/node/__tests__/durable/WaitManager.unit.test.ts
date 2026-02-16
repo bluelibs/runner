@@ -2,6 +2,7 @@ import { WaitManager } from "../../durable/core/managers/WaitManager";
 import type { Execution } from "../../durable/core/types";
 import { ExecutionStatus } from "../../durable/core/types";
 import * as utils from "../../durable/core/utils";
+import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 
 describe("WaitManager", () => {
@@ -114,5 +115,42 @@ describe("WaitManager", () => {
     await expect(waitManager.waitForResult("exec-1")).rejects.toThrow(
       "Execution cancelled",
     );
+  });
+
+  it("keeps other waiters subscribed when one waiter times out", async () => {
+    const store = new MemoryStore();
+    const bus = new MemoryEventBus();
+    const waitManager = new WaitManager(store, bus);
+
+    const executionId = "exec-shared-channel";
+    await store.saveExecution({
+      ...baseExecution,
+      id: executionId,
+      status: ExecutionStatus.Pending,
+    });
+
+    const firstWaiter = waitManager.waitForResult<string>(executionId, {
+      timeout: 30,
+      waitPollIntervalMs: 1000,
+    });
+    const secondWaiter = waitManager.waitForResult<string>(executionId, {
+      timeout: 1500,
+      waitPollIntervalMs: 1000,
+    });
+
+    await expect(firstWaiter).rejects.toThrow("Timeout waiting for execution");
+
+    await store.updateExecution(executionId, {
+      status: ExecutionStatus.Completed,
+      result: "ok",
+      completedAt: new Date(),
+    });
+    await bus.publish(`execution:${executionId}`, {
+      type: "finished",
+      payload: null,
+      timestamp: new Date(),
+    });
+
+    await expect(secondWaiter).resolves.toBe("ok");
   });
 });

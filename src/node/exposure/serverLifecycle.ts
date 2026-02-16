@@ -41,13 +41,45 @@ export async function startHttpServer(
   listen: { port: number; host?: string },
 ): Promise<void> {
   const host = listen.host ?? "127.0.0.1";
-  await new Promise<void>((resolve) => {
-    server.listen(listen.port, host, resolve);
+  await new Promise<void>((resolve, reject) => {
+    const hasEmitterApi =
+      typeof server.once === "function" &&
+      typeof server.removeListener === "function";
+    if (!hasEmitterApi) {
+      try {
+        server.listen(listen.port, host, resolve);
+      } catch (error) {
+        reject(error);
+      }
+      return;
+    }
+
+    const onError = (error: Error) => {
+      server.removeListener("error", onError);
+      reject(error);
+    };
+    const onListening = () => {
+      server.removeListener("error", onError);
+      resolve();
+    };
+    server.once("error", onError);
+    try {
+      server.listen(listen.port, host, onListening);
+    } catch (error) {
+      server.removeListener("error", onError);
+      reject(error);
+    }
   });
 }
 
 export async function stopHttpServer(server: http.Server): Promise<void> {
-  await new Promise<void>((resolve) => {
-    server.close(() => resolve());
+  await new Promise<void>((resolve, reject) => {
+    server.close((error?: Error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
   });
 }

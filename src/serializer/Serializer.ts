@@ -46,6 +46,14 @@ const GRAPH_VERSION = 1;
 const DEFAULT_MAX_DEPTH = 1000;
 const DEFAULT_MAX_REGEXP_PATTERN_LENGTH = 1024;
 
+function parseJsonPayload(payload: string): unknown {
+  try {
+    return JSON.parse(payload);
+  } catch {
+    throw new SyntaxError("Invalid JSON payload.");
+  }
+}
+
 export class Serializer {
   /** Type registry for managing custom types */
   private readonly typeRegistry: TypeRegistry;
@@ -152,7 +160,7 @@ export class Serializer {
    * Deserialize a JSON string back to its original value.
    */
   public deserialize<T = unknown>(payload: string): T {
-    const parsed = JSON.parse(payload);
+    const parsed = parseJsonPayload(payload);
 
     if (!isGraphPayload(parsed)) {
       return deserializeLegacy(parsed, 0, this.runtimeOptions) as T;

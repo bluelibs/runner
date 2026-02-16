@@ -42,7 +42,6 @@ describe("PlatformAdapter (Browser)", () => {
     expect(() => storage.run(new Map(), () => {})).toThrow();
 
     expect(adapter.hasAsyncLocalStorage()).toBe(false);
-    expect(adapter.hasAsyncLocalStorage()).toBe(false);
     const originalAdd = globalThis.addEventListener;
     const originalRemove = globalThis.removeEventListener;
     const addSpy = jest.fn();

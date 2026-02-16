@@ -564,6 +564,24 @@ export class RedisStore implements IDurableStore {
     await this.redis.eval(script, 1, key, lockId);
   }
 
+  async renewLock(
+    resource: string,
+    lockId: string,
+    ttlMs: number,
+  ): Promise<boolean> {
+    const key = this.k(`lock:${resource}`);
+    const script = `
+      if redis.call("get", KEYS[1]) == ARGV[1] then
+        return redis.call("pexpire", KEYS[1], ARGV[2])
+      else
+        return 0
+      end
+    `;
+
+    const result = await this.redis.eval(script, 1, key, lockId, `${ttlMs}`);
+    return Number(result) === 1;
+  }
+
   async dispose(): Promise<void> {
     await this.redis.quit();
   }

@@ -375,13 +375,45 @@ export class ExecutionManager {
 
     if (lockId === null) return;
 
+    const stopLockHeartbeat = this.startLockHeartbeat({
+      lockResource,
+      lockId,
+      lockTtlMs,
+    });
+
     try {
       await this.runExecutionAttempt(execution, task);
     } finally {
+      stopLockHeartbeat();
       if (lockId !== "no-lock" && this.config.store.releaseLock) {
         await this.config.store.releaseLock(lockResource, lockId);
       }
     }
+  }
+
+  private startLockHeartbeat(params: {
+    lockResource: string;
+    lockId: string | "no-lock";
+    lockTtlMs: number;
+  }): () => void {
+    if (params.lockId === "no-lock") return () => {};
+    if (!this.config.store.renewLock) return () => {};
+
+    const intervalMs = Math.max(1_000, Math.floor(params.lockTtlMs / 3));
+    const interval = setInterval(() => {
+      void this.config.store.renewLock!(
+        params.lockResource,
+        params.lockId,
+        params.lockTtlMs,
+      ).catch(() => {
+        // Best effort. If renewal fails, the lock TTL remains a safety net.
+      });
+    }, intervalMs);
+    interval.unref?.();
+
+    return () => {
+      clearInterval(interval);
+    };
   }
 
   async kickoffExecution(executionId: string): Promise<void> {

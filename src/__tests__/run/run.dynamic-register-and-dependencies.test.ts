@@ -628,7 +628,9 @@ describe("Dynamic Register and Dependencies", () => {
       const complexApp = defineResource({
         id: "app.complex",
         register: () => {
-          const services: any[] = [featureToggle];
+          const services: Array<
+            typeof featureToggle | typeof realService | typeof mockService
+          > = [featureToggle];
 
           // Add services based on feature flags and environment
           if (process.env.FEATURE_ADVANCED === "true") {
@@ -640,7 +642,10 @@ describe("Dynamic Register and Dependencies", () => {
           return services;
         },
         dependencies: () => {
-          const deps: any = { featureToggle };
+          const deps: {
+            featureToggle: typeof featureToggle;
+            service?: typeof realService | typeof mockService;
+          } = { featureToggle };
 
           // Same logic for dependencies
           if (process.env.FEATURE_ADVANCED === "true") {
@@ -667,7 +672,9 @@ describe("Dynamic Register and Dependencies", () => {
       const complexAppDisabled = defineResource({
         id: "app.complex.disabled",
         register: () => {
-          const services: any[] = [featureToggle];
+          const services: Array<
+            typeof featureToggle | typeof realService | typeof mockService
+          > = [featureToggle];
 
           if (process.env.FEATURE_ADVANCED === "true") {
             services.push(realService);
@@ -678,7 +685,10 @@ describe("Dynamic Register and Dependencies", () => {
           return services;
         },
         dependencies: () => {
-          const deps: any = { featureToggle };
+          const deps: {
+            featureToggle: typeof featureToggle;
+            service?: typeof realService | typeof mockService;
+          } = { featureToggle };
 
           if (process.env.FEATURE_ADVANCED === "true") {
             deps.service = realService;
@@ -818,7 +828,10 @@ describe("Dynamic Register and Dependencies", () => {
             emailProvider: string;
             smsProvider: string;
           },
-          deps: any,
+          deps: {
+            emailService?: { send: (to: string, message: string) => string };
+            smsService?: { send: (to: string, message: string) => string };
+          },
         ) => ({
           notify: (type: string, recipient: string, content: string) => {
             if (type === "email" && config.enableEmail && deps.emailService) {
@@ -982,7 +995,7 @@ describe("Dynamic Register and Dependencies", () => {
               : config.memory
                 ? `memory-${key}`
                 : null,
-          set: (key: string, value: any) => `cache-set-${key}`,
+          set: (key: string, _value: unknown) => `cache-set-${key}`,
         }),
       });
 
@@ -992,7 +1005,11 @@ describe("Dynamic Register and Dependencies", () => {
           environment: "dev" | "prod";
           features: { caching: boolean; readReplica: boolean };
         }) => {
-          const services: any[] = [
+          const services: Array<
+            | ReturnType<typeof primaryDb.with>
+            | ReturnType<typeof secondaryDb.with>
+            | ReturnType<typeof cacheLayer.with>
+          > = [
             primaryDb.with({
               host:
                 config.environment === "prod" ? "prod-primary" : "dev-primary",
@@ -1036,7 +1053,14 @@ describe("Dynamic Register and Dependencies", () => {
             environment: "dev" | "prod";
             features: { caching: boolean; readReplica: boolean };
           },
-          deps: any,
+          deps: {
+            primaryDb: { query: (sql: string) => string };
+            secondaryDb?: { query: (sql: string) => string };
+            cacheLayer?: {
+              get: (key: string) => string | null;
+              set: (key: string, value: string) => string;
+            };
+          },
         ) => ({
           getData: (query: string, useCache: boolean = false) => {
             const cacheResult =
@@ -1132,7 +1156,10 @@ describe("Dynamic Register and Dependencies", () => {
             enableMetrics: boolean;
             metricsEndpoint: string;
           },
-          deps: any,
+          deps: {
+            configService: { get: (key: string) => string };
+            metricsService?: { track: (event: string) => string };
+          },
         ) => ({
           process: (action: string) => {
             const configResult = deps.configService.get(action);
@@ -1164,7 +1191,7 @@ describe("Dynamic Register and Dependencies", () => {
               metricsEndpoint: string;
             };
           },
-          deps: any,
+          deps: { parent: { process: (action: string) => string } },
         ) => ({
           childProcess: (action: string) =>
             `child: ${deps.parent.process(action)}`,

@@ -140,6 +140,7 @@ describe("Temporal Middleware: Throttle", () => {
   });
 
   it("should clear a pending scheduled execution when window elapsed but timer is still pending", async () => {
+    jest.useFakeTimers();
     const config = { ms: 50 };
     let callCount = 0;
     const next = async (input?: string) => {
@@ -154,31 +155,31 @@ describe("Temporal Middleware: Throttle", () => {
       next,
     });
 
-    const deps = { state: { throttleStates: new WeakMap() } };
-    await expect(
-      throttleTaskMiddleware.run(inputFor("a") as any, deps as any, config),
-    ).resolves.toBe("a");
+    try {
+      const deps = { state: { throttleStates: new WeakMap() } };
+      await expect(
+        throttleTaskMiddleware.run(inputFor("a") as any, deps as any, config),
+      ).resolves.toBe("a");
 
-    const pending = throttleTaskMiddleware.run(
-      inputFor("b") as any,
-      deps as any,
-      config,
-    );
+      const pending = throttleTaskMiddleware.run(
+        inputFor("b") as any,
+        deps as any,
+        config,
+      );
 
-    // Block the event loop long enough for the throttle window to pass, but
-    // without allowing the scheduled setTimeout callback to run.
-    const start = Date.now();
-    while (Date.now() - start < 120) {
-      // busy-wait to block event loop
+      // Advance logical time without running pending timers.
+      jest.setSystemTime(Date.now() + 120);
+
+      await expect(
+        throttleTaskMiddleware.run(inputFor("c") as any, deps as any, config),
+      ).resolves.toBe("c");
+
+      // The previously scheduled caller should be resolved by the immediate execution.
+      await expect(pending).resolves.toBe("c");
+      expect(callCount).toBe(2);
+    } finally {
+      jest.useRealTimers();
     }
-
-    await expect(
-      throttleTaskMiddleware.run(inputFor("c") as any, deps as any, config),
-    ).resolves.toBe("c");
-
-    // The previously scheduled callers should be resolved by the immediate execution.
-    await expect(pending).resolves.toBe("c");
-    expect(callCount).toBe(2);
   });
 
   it("should reject scheduled callers when clearing a stale timeout and immediate execution fails", async () => {

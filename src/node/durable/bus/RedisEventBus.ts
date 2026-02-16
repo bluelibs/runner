@@ -147,8 +147,18 @@ export class RedisEventBus implements IEventBus {
     state.handlers.add(handler);
   }
 
-  async unsubscribe(channel: string): Promise<void> {
+  async unsubscribe(channel: string, handler?: BusEventHandler): Promise<void> {
     const fullChannel = this.k(channel);
+    const state = this.channels.get(fullChannel);
+    if (!state) return;
+
+    if (handler) {
+      state.handlers.delete(handler);
+      if (state.handlers.size > 0) {
+        return;
+      }
+    }
+
     await this.sub.unsubscribe(fullChannel);
     this.channels.delete(fullChannel);
   }

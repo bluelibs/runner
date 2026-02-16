@@ -37,6 +37,7 @@ export type QueueEvent = {
 export class Queue {
   private tail: Promise<unknown> = Promise.resolve();
   private disposed = false;
+  private pendingTaskCount = 0;
   private abortController = new AbortController();
   private readonly eventManager = new EventManager();
   private nextTaskId = 1;
@@ -70,6 +71,7 @@ export class Queue {
 
     const { signal } = this.abortController;
     const taskId = this.nextTaskId++;
+    this.pendingTaskCount += 1;
     this.emit("enqueue", taskId);
 
     // 3. chain task after the current tail
@@ -83,10 +85,12 @@ export class Queue {
     // 4. preserve the chain even if the task rejects (swallow internally)
     this.tail = result
       .then((value) => {
+        this.pendingTaskCount -= 1;
         this.emit("finish", taskId);
         return value;
       })
       .catch((error) => {
+        this.pendingTaskCount -= 1;
         this.emit("error", taskId, error as Error);
       });
 
@@ -160,6 +164,10 @@ export class Queue {
     return () => {
       this.activeListeners.delete(id);
     };
+  }
+
+  isIdle(): boolean {
+    return this.pendingTaskCount === 0;
   }
 
   private emit(type: QueueEventType, taskId: number, error?: Error): void {

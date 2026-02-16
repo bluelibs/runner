@@ -125,6 +125,50 @@ describe("durable: RabbitMQQueue", () => {
     await expect(consumer?.(null)).resolves.toBeUndefined();
   });
 
+  it("nacks malformed JSON messages and skips handler", async () => {
+    await queue.init();
+    let consumer:
+      | ((msg: { content: Buffer } | null) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(async (_q: string, h: any) => {
+      consumer = h;
+    });
+
+    const handler = jest.fn();
+    await queue.consume(handler);
+
+    await consumer?.({ content: Buffer.from("{invalid-json}") });
+
+    expect(handler).not.toHaveBeenCalled();
+    expect(channelMock.nack).toHaveBeenCalledWith(
+      expect.anything(),
+      false,
+      false,
+    );
+  });
+
+  it("nacks messages without a valid id and skips handler", async () => {
+    await queue.init();
+    let consumer:
+      | ((msg: { content: Buffer } | null) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(async (_q: string, h: any) => {
+      consumer = h;
+    });
+
+    const handler = jest.fn();
+    await queue.consume(handler);
+
+    await consumer?.({ content: Buffer.from(JSON.stringify({ payload: 1 })) });
+
+    expect(handler).not.toHaveBeenCalled();
+    expect(channelMock.nack).toHaveBeenCalledWith(
+      expect.anything(),
+      false,
+      false,
+    );
+  });
+
   it("disposes connections", async () => {
     await queue.init();
     await queue.dispose();

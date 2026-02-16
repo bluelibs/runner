@@ -123,9 +123,20 @@ export class WaitManager {
         let pollTimer: ReturnType<typeof setTimeout> | null = null;
         let done = false;
 
+        const handler = async (_event: BusEvent) => {
+          try {
+            const result = await check();
+            if (result !== undefined) {
+              await finalize({ ok: true, value: result });
+            }
+          } catch (err) {
+            await finalize({ ok: false, error: err });
+          }
+        };
+
         const safeUnsubscribe = async (): Promise<void> => {
           try {
-            await eventBus.unsubscribe(channel);
+            await eventBus.unsubscribe(channel, handler);
           } catch {
             // ignore
           }
@@ -174,17 +185,6 @@ export class WaitManager {
           }, timeoutMs);
           timer.unref();
         }
-
-        const handler = async (_event: BusEvent) => {
-          try {
-            const result = await check();
-            if (result !== undefined) {
-              await finalize({ ok: true, value: result });
-            }
-          } catch (err) {
-            await finalize({ ok: false, error: err });
-          }
-        };
 
         const pollOnce = async (): Promise<void> => {
           if (done) return;

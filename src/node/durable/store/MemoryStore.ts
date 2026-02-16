@@ -22,6 +22,14 @@ export class MemoryStore implements IDurableStore {
   private schedules = new Map<string, Schedule>();
   private locks = new Map<string, { id: string; expires: number }>();
 
+  private pruneExpiredLocks(now: number): void {
+    for (const [resource, lock] of this.locks.entries()) {
+      if (lock.expires <= now) {
+        this.locks.delete(resource);
+      }
+    }
+  }
+
   private getIdempotencyMapKey(taskId: string, idempotencyKey: string): string {
     return `${taskId}::${idempotencyKey}`;
   }
@@ -234,6 +242,7 @@ export class MemoryStore implements IDurableStore {
   ): Promise<boolean> {
     const claimKey = `timer:claim:${timerId}`;
     const now = Date.now();
+    this.pruneExpiredLocks(now);
     const existing = this.locks.get(claimKey);
     if (existing && existing.expires > now) {
       return false; // Already claimed by another worker
@@ -273,11 +282,28 @@ export class MemoryStore implements IDurableStore {
 
   async acquireLock(resource: string, ttlMs: number): Promise<string | null> {
     const now = Date.now();
+    this.pruneExpiredLocks(now);
     const lock = this.locks.get(resource);
     if (lock && lock.expires > now) return null;
     const lockId = Math.random().toString(36).substring(2, 10);
     this.locks.set(resource, { id: lockId, expires: now + ttlMs });
     return lockId;
+  }
+
+  async renewLock(
+    resource: string,
+    lockId: string,
+    ttlMs: number,
+  ): Promise<boolean> {
+    const now = Date.now();
+    this.pruneExpiredLocks(now);
+
+    const lock = this.locks.get(resource);
+    if (!lock) return false;
+    if (lock.id !== lockId) return false;
+
+    this.locks.set(resource, { id: lockId, expires: now + ttlMs });
+    return true;
   }
 
   async releaseLock(resource: string, lockId: string): Promise<void> {

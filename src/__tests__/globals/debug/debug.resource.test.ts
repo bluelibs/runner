@@ -127,7 +127,6 @@ describe("globals.resources.debug", () => {
     // Middleware observability messages
     // Allow for either ordering due to interleaving; just assert presence
     const joined = messages.join("\n");
-    console.log(messages);
     expect(joined.includes("Middleware triggered for task tests.task")).toBe(
       true,
     );
@@ -224,7 +223,6 @@ describe("globals.resources.debug", () => {
 
     await run(app);
 
-    console.log(logs);
     const resourceLogs = logs.filter((l) =>
       l.message.includes("Resource tests.resource.with.config"),
     );
@@ -335,7 +333,6 @@ describe("globals.resources.debug", () => {
     await expect(run(app)).rejects.toThrow("resource-bad");
 
     // Ensure error was logged by the middleware's resource error path
-    console.log(messages);
     expect(messages.some((m) => m.includes("Error: resource-bad"))).toBe(true);
   });
 

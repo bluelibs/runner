@@ -48,6 +48,7 @@ export const cacheResource = defineResource({
   init: async (config: CacheResourceConfig, { cacheFactoryTask }) => {
     return {
       map: new Map<string, ICacheInstance>(),
+      pendingCreates: new Map<string, Promise<ICacheInstance>>(),
       cacheFactoryTask,
       defaultOptions: {
         ttl: 10 * 1000,
@@ -58,6 +59,7 @@ export const cacheResource = defineResource({
     };
   },
   dispose: async (cache) => {
+    cache.pendingCreates?.clear();
     for (const cacheInstance of cache.map.values()) {
       await cacheInstance.clear();
     }
@@ -89,11 +91,26 @@ export const cacheMiddleware = defineTaskMiddleware({
         ...cache.defaultOptions,
         ...lruOptions,
       };
+      const pendingCreates =
+        cache.pendingCreates ??
+        (cache.pendingCreates = new Map<string, Promise<ICacheInstance>>());
 
-      // Use the factory task to create the cache instance
-      cacheHolderForTask = await cache.cacheFactoryTask(cacheOptions);
-
-      cache.map.set(taskId, cacheHolderForTask);
+      const pendingCreate = pendingCreates.get(taskId);
+      if (pendingCreate) {
+        cacheHolderForTask = await pendingCreate;
+      } else {
+        const createPromise = cache
+          .cacheFactoryTask(cacheOptions)
+          .then((instance) => {
+            cache.map.set(taskId, instance);
+            return instance;
+          })
+          .finally(() => {
+            pendingCreates.delete(taskId);
+          });
+        pendingCreates.set(taskId, createPromise);
+        cacheHolderForTask = await createPromise;
+      }
     }
 
     const key = config.keyBuilder!(taskId, task!.input);

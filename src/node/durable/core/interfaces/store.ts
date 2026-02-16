@@ -93,5 +93,10 @@ export interface IDurableStore {
   dispose?(): Promise<void>;
 
   acquireLock?(resource: string, ttlMs: number): Promise<string | null>;
+  /**
+   * Renews an existing lock if and only if `lockId` still owns `resource`.
+   * Returns true when renewed, false when lock is missing/expired/re-owned.
+   */
+  renewLock?(resource: string, lockId: string, ttlMs: number): Promise<boolean>;
   releaseLock?(resource: string, lockId: string): Promise<void>;
 }

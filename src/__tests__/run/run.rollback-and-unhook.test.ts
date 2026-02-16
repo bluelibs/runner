@@ -48,8 +48,8 @@ describe("run.ts rollback and unhooking", () => {
       "init failed",
     );
 
-    // dep and bad should have been disposed; never was not initialized.
-    // Note: bad.isInitialized becomes true before init is attempted, so it will be disposed on rollback.
+    // Only successfully initialized resources are disposed during rollback.
+    // `bad` throws during init and `never` is not initialized.
     expect(disposeCalls.sort()).toEqual(["dep:dep"].sort());
   });
 

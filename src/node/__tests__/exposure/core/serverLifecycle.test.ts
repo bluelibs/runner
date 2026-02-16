@@ -4,6 +4,7 @@ import {
   stopHttpServer,
 } from "../../../exposure/serverLifecycle";
 import { Logger } from "../../../../models/Logger";
+import { EventEmitter } from "events";
 
 describe("node exposure - server lifecycle", () => {
   describe("makeRequestListener", () => {
@@ -116,12 +117,12 @@ describe("node exposure - server lifecycle", () => {
   describe("server lifecycle helpers", () => {
     it("startHttpServer uses default host when host omitted", async () => {
       const calls: Array<{ port: number; host: string }> = [];
-      const fakeServer: any = {
+      const fakeServer: any = Object.assign(new EventEmitter(), {
         listen(port: number, host: string, cb: () => void) {
           calls.push({ port, host });
           cb();
         },
-      } as unknown as import("net").Server;
+      }) as unknown as import("net").Server;
       await startHttpServer(fakeServer, { port: 4321 });
       expect(calls).toEqual([{ port: 4321, host: "127.0.0.1" }]);
     });
@@ -129,7 +130,7 @@ describe("node exposure - server lifecycle", () => {
     it("startHttpServer uses provided host and stopHttpServer closes server", async () => {
       const calls: Array<{ port: number; host: string }> = [];
       let closed = false;
-      const fakeServer: any = {
+      const fakeServer: any = Object.assign(new EventEmitter(), {
         listen(port: number, host: string, cb: () => void) {
           calls.push({ port, host });
           cb();
@@ -138,11 +139,62 @@ describe("node exposure - server lifecycle", () => {
           closed = true;
           cb();
         },
-      } as unknown as import("net").Server;
+      }) as unknown as import("net").Server;
       await startHttpServer(fakeServer, { port: 1234, host: "0.0.0.0" });
       expect(calls).toEqual([{ port: 1234, host: "0.0.0.0" }]);
       await stopHttpServer(fakeServer);
       expect(closed).toBe(true);
+    });
+
+    it("startHttpServer rejects when server emits error", async () => {
+      const fakeServer: any = Object.assign(new EventEmitter(), {
+        listen(_port: number, _host: string, _cb: () => void) {
+          setImmediate(() => {
+            fakeServer.emit("error", new Error("listen failed"));
+          });
+        },
+      }) as unknown as import("net").Server;
+
+      await expect(startHttpServer(fakeServer, { port: 9999 })).rejects.toThrow(
+        "listen failed",
+      );
+    });
+
+    it("cleans temporary error listener when emitter-based listen throws", async () => {
+      const fakeServer = Object.assign(new EventEmitter(), {
+        listen() {
+          throw new Error("sync emitter listen failed");
+        },
+      });
+
+      await expect(
+        startHttpServer(fakeServer as unknown as import("http").Server, {
+          port: 6666,
+        }),
+      ).rejects.toThrow("sync emitter listen failed");
+      expect(fakeServer.listenerCount("error")).toBe(0);
+    });
+
+    it("startHttpServer rejects when fallback listen throws", async () => {
+      const fakeServer: any = {
+        listen() {
+          throw new Error("sync listen failed");
+        },
+      } as unknown as import("net").Server;
+
+      await expect(startHttpServer(fakeServer, { port: 7777 })).rejects.toThrow(
+        "sync listen failed",
+      );
+    });
+
+    it("stopHttpServer rejects when close callback receives an error", async () => {
+      const fakeServer: any = Object.assign(new EventEmitter(), {
+        close(cb: (error?: Error) => void) {
+          cb(new Error("close failed"));
+        },
+      }) as unknown as import("net").Server;
+
+      await expect(stopHttpServer(fakeServer)).rejects.toThrow("close failed");
     });
   });
 });

@@ -16,7 +16,9 @@ describe("Serializer Security Attacks", () => {
 
   describe("Malformed Payload Attacks", () => {
     it("should handle invalid JSON gracefully", () => {
-      expect(() => serializer.deserialize("{invalid json}")).toThrow();
+      expect(() => serializer.deserialize("{invalid json}")).toThrow(
+        /Invalid JSON payload/,
+      );
     });
 
     it("should handle missing graph root", () => {

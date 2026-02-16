@@ -271,5 +271,19 @@ describe("durable: memory backends", () => {
       });
       expect(handler).not.toHaveBeenCalled();
     });
+
+    it("supports unsubscribe with a handler and no-op on unknown channel", async () => {
+      const bus = new MemoryEventBus();
+      const handler = jest.fn(async () => {});
+      await bus.unsubscribe("missing", handler);
+      await bus.subscribe("topic", handler);
+      await bus.unsubscribe("topic", handler);
+      await bus.publish("topic", {
+        type: "t",
+        payload: {},
+        timestamp: new Date(),
+      });
+      expect(handler).not.toHaveBeenCalled();
+    });
   });
 });

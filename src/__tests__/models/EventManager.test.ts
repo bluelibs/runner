@@ -579,10 +579,10 @@ describe("EventManager", () => {
       const emptyEventDef = defineEvent<string>({ id: "emptyEvent" });
 
       // Should return immediately without creating event object
-      await eventManager.emit(emptyEventDef, "test", "source");
+      const result = await eventManager.emit(emptyEventDef, "test", "source");
 
       // No errors should occur
-      expect(true).toBe(true);
+      expect(result).toBeUndefined();
     });
 
     it("should handle high-frequency emissions efficiently", async () => {
@@ -759,19 +759,21 @@ describe("EventManager", () => {
   });
 
   describe("interceptEmission", () => {
-    it("should add emission interceptors", () => {
+    it("should add emission interceptors", async () => {
       const interceptor1 = jest.fn(async (next, event) => next(event));
       const interceptor2 = jest.fn(async (next, event) => next(event));
 
       eventManager.intercept(interceptor1);
       eventManager.intercept(interceptor2);
 
-      const interceptors = (
-        eventManager as unknown as { emissionInterceptors: any[] }
-      ).emissionInterceptors;
-      expect(interceptors).toHaveLength(2);
-      expect(interceptors[0]).toBe(interceptor1);
-      expect(interceptors[1]).toBe(interceptor2);
+      const handler = jest.fn();
+      eventManager.addListener(eventDefinition, handler);
+
+      await eventManager.emit(eventDefinition, "data", "source");
+
+      expect(interceptor1).toHaveBeenCalledTimes(1);
+      expect(interceptor2).toHaveBeenCalledTimes(1);
+      expect(handler).toHaveBeenCalledTimes(1);
     });
 
     it("should throw error when adding interceptors after lock", () => {
@@ -913,7 +915,7 @@ describe("EventManager", () => {
   });
 
   describe("interceptHook", () => {
-    it("should add hook interceptors", () => {
+    it("should add hook interceptors", async () => {
       const interceptor1 = jest.fn(async (next, hook, event) =>
         next(hook, event),
       );
@@ -924,12 +926,26 @@ describe("EventManager", () => {
       eventManager.interceptHook(interceptor1);
       eventManager.interceptHook(interceptor2);
 
-      const intercepts = (
-        eventManager as unknown as { hookInterceptors: any[] }
-      ).hookInterceptors;
-      expect(intercepts).toHaveLength(2);
-      expect(intercepts[0]).toBe(interceptor1);
-      expect(intercepts[1]).toBe(interceptor2);
+      const mockHook = {
+        id: "hook.add.interceptor",
+        run: jest.fn().mockResolvedValue(undefined),
+      };
+      const mockEvent = {
+        id: "event.add.interceptor",
+        data: "data",
+        timestamp: new Date(),
+        source: "source",
+        tags: [],
+      };
+      await eventManager.executeHookWithInterceptors(
+        mockHook as unknown as IHook<any, any>,
+        mockEvent as unknown as IEventEmission<any>,
+        {},
+      );
+
+      expect(interceptor1).toHaveBeenCalledTimes(1);
+      expect(interceptor2).toHaveBeenCalledTimes(1);
+      expect(mockHook.run).toHaveBeenCalledTimes(1);
     });
 
     it("should throw error when adding hook interceptors after lock", () => {
