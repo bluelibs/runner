@@ -332,4 +332,85 @@ describe("durable: dashboard middleware (e2e)", () => {
       await ui.cleanup();
     }
   });
+
+  it("rejects invalid dashboard query parameters with 400", async () => {
+    const ui = await createTempUiDist();
+
+    const store = new MemoryStore();
+    const operator = new DurableOperator(store);
+    const service = createUnusedService();
+
+    const app = express();
+    app.use(
+      "/durable-dashboard",
+      createDashboardMiddleware(service, operator, {
+        uiDistPath: ui.path,
+        operatorAuth: () => true,
+      }),
+    );
+
+    try {
+      const badStatus = await request(app, {
+        method: "GET",
+        url: "/durable-dashboard/api/executions?status=unknown",
+      });
+      expect(badStatus.status).toBe(400);
+
+      const badLimit = await request(app, {
+        method: "GET",
+        url: "/durable-dashboard/api/executions?limit=-1",
+      });
+      expect(badLimit.status).toBe(400);
+
+      const badOffset = await request(app, {
+        method: "GET",
+        url: "/durable-dashboard/api/executions?offset=abc",
+      });
+      expect(badOffset.status).toBe(400);
+    } finally {
+      await ui.cleanup();
+    }
+  });
+
+  it("rejects malformed operator payloads with 400", async () => {
+    const ui = await createTempUiDist();
+
+    const store = new MemoryStore();
+    const operator = new DurableOperator(store);
+    const service = createUnusedService();
+
+    const app = express();
+    app.use(
+      "/durable-dashboard",
+      createDashboardMiddleware(service, operator, {
+        uiDistPath: ui.path,
+        operatorAuth: () => true,
+      }),
+    );
+
+    try {
+      const missingExecutionId = await request(app, {
+        method: "POST",
+        url: "/durable-dashboard/api/operator/forceFail",
+        body: { reason: "manual" },
+      });
+      expect(missingExecutionId.status).toBe(400);
+
+      const missingStepId = await request(app, {
+        method: "POST",
+        url: "/durable-dashboard/api/operator/skipStep",
+        body: { executionId: "e1" },
+      });
+      expect(missingStepId.status).toBe(400);
+
+      const missingState = await request(app, {
+        method: "POST",
+        url: "/durable-dashboard/api/operator/editState",
+        body: { executionId: "e1", stepId: "s1" },
+      });
+      expect(missingState.status).toBe(400);
+    } finally {
+      await ui.cleanup();
+    }
+  });
 });
