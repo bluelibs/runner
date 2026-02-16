@@ -334,5 +334,26 @@ describe("Configurable Tags", () => {
       const extracted = optionalTag.extract([configuredTag]);
       expect(extracted).toEqual({});
     });
+
+    it("should allow null to override foundation config", () => {
+      const nullableTag = defineTag<{ value: number } | null>({
+        id: "nullable.config",
+        config: { value: 1 },
+      });
+
+      const configured = nullableTag.with(null);
+      expect(configured.config).toBeNull();
+    });
+
+    it("should replace array configs instead of merging", () => {
+      const arrayTag = defineTag<number[]>({
+        id: "array.config",
+        config: [1, 2],
+      });
+
+      const configured = arrayTag.with([3, 4]);
+      expect(Array.isArray(configured.config)).toBe(true);
+      expect(configured.config).toEqual([3, 4]);
+    });
   });
 });

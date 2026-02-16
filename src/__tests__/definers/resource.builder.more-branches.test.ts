@@ -179,4 +179,17 @@ describe("resource builder - register function+function merge branch", () => {
     expect(rr.value).toBe(3);
     await rr.dispose();
   });
+
+  it("falls back to the base resource when with() is called with detached this", () => {
+    const base = resource<{ name: string }>({
+      id: "tests.builder.resource.detached.with",
+      init: async (cfg) => ({ name: cfg.name }),
+    });
+
+    const detachedWith = base.with;
+    const configured = detachedWith.call(undefined, { name: "detached" });
+
+    expect(configured.resource).toBe(base);
+    expect(configured.config).toEqual({ name: "detached" });
+  });
 });

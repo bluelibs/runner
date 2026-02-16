@@ -197,9 +197,13 @@ export const resolveReference = (
     }
 
     case "object": {
+      const source = node.value;
+      if (!source || typeof source !== "object" || Array.isArray(source)) {
+        throw new Error("Invalid object node payload");
+      }
+
       const target: Record<string, unknown> = {};
       context.resolved.set(id, target);
-      const source = node.value;
       for (const key in source) {
         if (!hasOwn.call(source, key)) {
           continue;

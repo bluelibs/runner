@@ -55,8 +55,58 @@ describe("UnhandledError helpers", () => {
     const noisy = jest.fn(async () => {
       throw new Error("handler failed");
     });
+    const consoleSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
     await expect(
       safeReportUnhandledError(noisy, { error: new Error("x") }),
     ).resolves.toBeUndefined();
+    expect(consoleSpy).toHaveBeenCalled();
+  });
+
+  it("bindProcessErrorHandler reports reporter failures to console.error", async () => {
+    const reporter = jest.fn(async () => {
+      throw new Error("reporter failed");
+    });
+    const consoleSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    const wrapped = bindProcessErrorHandler(reporter);
+    await expect(
+      wrapped(new Error("proc"), "unhandledRejection"),
+    ).resolves.toBeUndefined();
+
+    expect(consoleSpy).toHaveBeenCalled();
+  });
+
+  it("safeReportUnhandledError reports reporter failures to console.error", async () => {
+    const reporter = jest.fn(async () => {
+      throw new Error("reporter failed");
+    });
+    const consoleSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    await expect(
+      safeReportUnhandledError(reporter, { error: new Error("task") }),
+    ).resolves.toBeUndefined();
+
+    expect(consoleSpy).toHaveBeenCalled();
+  });
+
+  it("normalizes non-Error reporter/original values for fallback logging", async () => {
+    const reporter = jest.fn(async () => {
+      throw "reporter failed";
+    });
+    const consoleSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    await expect(
+      safeReportUnhandledError(reporter, { error: "task failed" }),
+    ).resolves.toBeUndefined();
+
+    expect(consoleSpy).toHaveBeenCalled();
   });
 });

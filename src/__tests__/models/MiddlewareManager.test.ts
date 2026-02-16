@@ -585,6 +585,73 @@ describe("MiddlewareManager", () => {
       await expect(
         manager.runResourceInit(resource, { n: 3 }, {}, {}),
       ).rejects.toThrow("interceptor error");
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatchObject({
+        kind: "resourceInit",
+        source: resource.id,
+      });
+    });
+
+    it("should report base resource init errors through onUnhandledError", async () => {
+      const errors: any[] = [];
+      const store = new Store(
+        eventManager,
+        logger,
+        (e) => {
+          errors.push(e);
+        },
+        RunnerMode.TEST,
+      );
+      const manager = new MiddlewareManager(store, eventManager, logger);
+
+      const resource = defineResource<{ n: number }, Promise<number>>({
+        id: "resource_with_init_error_reporting",
+        init: async () => {
+          throw new Error("resource init failed");
+        },
+      });
+
+      await expect(
+        manager.runResourceInit(resource, { n: 1 }, {}, {}),
+      ).rejects.toThrow("resource init failed");
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatchObject({
+        kind: "resourceInit",
+        source: resource.id,
+      });
+    });
+
+    it("should report global resource interceptor errors through onUnhandledError", async () => {
+      const errors: any[] = [];
+      const store = new Store(
+        eventManager,
+        logger,
+        (e) => {
+          errors.push(e);
+        },
+        RunnerMode.TEST,
+      );
+      const manager = new MiddlewareManager(store, eventManager, logger);
+
+      manager.intercept("resource", async () => {
+        throw new Error("global resource interceptor failed");
+      });
+
+      const resource = defineResource<{ n: number }, Promise<number>>({
+        id: "resource_with_global_interceptor_error",
+        init: async (cfg) => cfg.n * 2,
+      });
+
+      await expect(
+        manager.runResourceInit(resource, { n: 2 }, {}, {}),
+      ).rejects.toThrow("global resource interceptor failed");
+
+      expect(errors).toHaveLength(1);
+      expect(errors[0]).toMatchObject({
+        kind: "resourceInit",
+        source: resource.id,
+      });
     });
 
     it("should work without any interceptors", async () => {
@@ -718,6 +785,71 @@ describe("MiddlewareManager", () => {
       ]);
     });
 
+    it("should apply per-task middleware interceptors in registration order", async () => {
+      const order: string[] = [];
+      const taskMiddleware = defineTaskMiddleware({
+        id: "test_task_middleware_ordering",
+        run: async ({ next, task }) => {
+          order.push("middleware:run");
+          return next(task?.input);
+        },
+      });
+
+      manager.interceptMiddleware(
+        taskMiddleware,
+        async (next: any, input: any) => {
+          order.push("task-interceptor1:before");
+          const result = await next(input);
+          order.push("task-interceptor1:after");
+          return result;
+        },
+      );
+
+      manager.interceptMiddleware(
+        taskMiddleware,
+        async (next: any, input: any) => {
+          order.push("task-interceptor2:before");
+          const result = await next(input);
+          order.push("task-interceptor2:after");
+          return result;
+        },
+      );
+
+      const task = defineTask({
+        id: "task_with_per_mw_interceptor_ordering",
+        middleware: [taskMiddleware],
+        run: async (input: number) => {
+          order.push("task:run");
+          return input + 1;
+        },
+      });
+
+      store.tasks.set(task.id, {
+        task,
+        computedDependencies: {},
+        isInitialized: true,
+      });
+
+      store.taskMiddlewares.set(taskMiddleware.id, {
+        middleware: taskMiddleware,
+        computedDependencies: {},
+        isInitialized: true,
+      });
+
+      const runner = manager.composeTaskRunner(task);
+      const result = await runner(5);
+
+      expect(result).toBe(6);
+      expect(order).toEqual([
+        "task-interceptor1:before",
+        "task-interceptor2:before",
+        "middleware:run",
+        "task:run",
+        "task-interceptor2:after",
+        "task-interceptor1:after",
+      ]);
+    });
+
     it("should use original input when executionInput.next is called with undefined", async () => {
       const order: string[] = [];
       const taskMiddleware = defineTaskMiddleware({
@@ -776,7 +908,7 @@ describe("MiddlewareManager", () => {
       ]);
     });
 
-    it("should apply per-resource middleware interceptors in reverse order and modify result", async () => {
+    it("should apply per-resource middleware interceptors in registration order and modify result", async () => {
       const order: string[] = [];
 
       const resourceMiddleware = defineResourceMiddleware({
@@ -830,12 +962,12 @@ describe("MiddlewareManager", () => {
       // init: 3*2=6, middleware adds +1 => 7
       expect(result).toBe(7);
       expect(order).toEqual([
-        "resource-interceptor2:before",
         "resource-interceptor1:before",
+        "resource-interceptor2:before",
         "resource-middleware:run",
         "resource:init",
-        "resource-interceptor1:after",
         "resource-interceptor2:after",
+        "resource-interceptor1:after",
       ]);
     });
 

@@ -29,19 +29,28 @@ export class OverrideManager {
 
   constructor(private readonly registry: StoreRegistry) {}
 
-  storeOverridesDeeply<C>(element: IResource<C, any, any>) {
+  storeOverridesDeeply<C>(
+    element: IResource<C, any, any>,
+    visited: Set<string> = new Set(),
+  ) {
+    if (visited.has(element.id)) {
+      return;
+    }
+
+    visited.add(element.id);
+
     element.overrides.forEach((override) => {
       if (!override) {
         return;
       }
 
       if (utils.isResource(override)) {
-        this.storeOverridesDeeply(override);
+        this.storeOverridesDeeply(override, visited);
       }
 
       let id: string;
       if (utils.isResourceWithConfig(override)) {
-        this.storeOverridesDeeply(override.resource);
+        this.storeOverridesDeeply(override.resource, visited);
         id = override.resource.id;
       } else {
         id = override.id;

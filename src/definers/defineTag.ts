@@ -34,6 +34,8 @@ export function defineTag<
 ): ITag<TConfig, TEnforceInputContract, TEnforceOutputContract> {
   const id = definition.id;
   const filePath = getCallerFile();
+  const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
   const foundation = {
     id,
     meta: definition.meta,
@@ -63,8 +65,8 @@ export function defineTag<
         }
       }
       let config: TConfig;
-      if (typeof tagConfig === "object") {
-        if (typeof foundation.config === "object") {
+      if (isPlainObject(tagConfig)) {
+        if (isPlainObject(foundation.config)) {
           config = {
             ...foundation.config,
             ...tagConfig,

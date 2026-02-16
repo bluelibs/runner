@@ -38,6 +38,29 @@ function toHeaders(auth?: HttpClientAuth): Record<string, string> {
   return headers;
 }
 
+function buildContextHeaderOrThrow(
+  serializer: SerializerLike,
+  contexts?: Array<IAsyncContext<unknown>>,
+): string | undefined {
+  if (!contexts || contexts.length === 0) return undefined;
+
+  const map: Record<string, string> = {};
+  for (const ctx of contexts) {
+    try {
+      const value = ctx.use();
+      map[ctx.id] = ctx.serialize(value);
+    } catch (error) {
+      const normalizedError =
+        error instanceof Error ? error : new Error(String(error));
+      throw new Error(
+        `Failed to serialize async context "${ctx.id}" for HTTP request: ${normalizedError.message}`,
+      );
+    }
+  }
+
+  return serializer.stringify(map);
+}
+
 /**
  * Re-throws the caught error. When an error registry is configured,
  * checks for a matching typed-error helper and re-throws via that helper first.
@@ -46,9 +69,15 @@ function rethrowWithRegistry(
   e: unknown,
   errorRegistry: Map<string, IErrorHelper<any>> | undefined,
 ): never {
-  const te = e as { id?: unknown; data?: unknown };
+  const te = e as { id?: unknown; data?: unknown; name?: unknown };
   if (errorRegistry && te.id && te.data) {
-    const helper = errorRegistry.get(String(te.id));
+    const id = String(te.id);
+    // Idempotency: if the error already looks like a typed Runner error
+    // from this registry, do not remap it again.
+    if (te.name === id && errorRegistry.has(id)) {
+      throw e;
+    }
+    const helper = errorRegistry.get(id);
     if (helper) helper.throw(te.data);
   }
   throw e;
@@ -86,18 +115,11 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
       fd.append(`file:${f.id}`, f.blob as unknown as Blob, filename);
     }
     const headers = toHeaders(cfg.auth);
-    if (cfg.contexts && cfg.contexts.length > 0) {
-      const map: Record<string, string> = {};
-      for (const ctx of cfg.contexts) {
-        try {
-          const v = ctx.use();
-          map[ctx.id] = ctx.serialize(v);
-        } catch {}
-      }
-      if (Object.keys(map).length > 0) {
-        headers["x-runner-context"] = cfg.serializer.stringify(map);
-      }
-    }
+    const contextHeader = buildContextHeaderOrThrow(
+      cfg.serializer,
+      cfg.contexts,
+    );
+    if (contextHeader) headers["x-runner-context"] = contextHeader;
     if (cfg.onRequest) await cfg.onRequest({ url, headers });
     const fetchImpl = cfg.fetchImpl ?? (globalThis.fetch as typeof fetch);
     const res = await fetchImpl(url, { method: "POST", body: fd, headers });

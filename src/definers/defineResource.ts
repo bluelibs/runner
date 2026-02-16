@@ -62,7 +62,7 @@ export function defineResource<
   const filePath: string = constConfig[symbolFilePath] || getCallerFile();
   const id = constConfig.id;
 
-  return {
+  const base = {
     [symbolResource]: true,
     [symbolFilePath]: filePath,
     id,
@@ -76,27 +76,19 @@ export function defineResource<
     resultSchema: constConfig.resultSchema,
     tags: constConfig.tags || ([] as unknown as TTags),
     throws: normalizeThrows({ kind: "resource", id }, constConfig.throws),
-    with: function (config: TConfig) {
-      // Validate config with schema if provided (fail fast)
-      if (constConfig.configSchema) {
-        try {
-          config = constConfig.configSchema.parse(config);
-        } catch (error) {
-          validationError.throw({
-            subject: "Resource config",
-            id,
-            originalError:
-              error instanceof Error ? error : new Error(String(error)),
-          });
-        }
-      }
+    meta: (constConfig.meta || {}) as TMeta,
+    middleware: constConfig.middleware || ([] as unknown as TMiddleware),
+  } as IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>;
 
-      return {
-        [symbolResourceWithConfig]: true,
-        id: this.id,
-        resource: this,
-        config,
-      } satisfies IResourceWithConfig<
+  const resolveCurrent = (
+    candidate: unknown,
+  ): IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware> => {
+    if (
+      candidate &&
+      typeof candidate === "object" &&
+      symbolResource in candidate
+    ) {
+      return candidate as IResource<
         TConfig,
         TValue,
         TDeps,
@@ -105,37 +97,111 @@ export function defineResource<
         TTags,
         TMiddleware
       >;
-    },
-
-    meta: (constConfig.meta || {}) as TMeta,
-    middleware: constConfig.middleware || ([] as unknown as TMiddleware),
-    optional() {
-      return {
-        inner: this,
-        [symbolOptionalDependency]: true,
-      } as IOptionalDependency<
-        IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>
-      >;
-    },
-    fork(newId: string, options?: ResourceForkOptions) {
-      const forkCallerFilePath = getCallerFile();
-      const forkedParts = resolveForkedRegisterAndDependencies({
-        register: constConfig.register,
-        dependencies: constConfig.dependencies,
-        forkId: newId,
-        options,
-      });
-      const forked = defineResource({
-        ...constConfig,
-        id: newId,
-        register: forkedParts.register,
-        dependencies: forkedParts.dependencies,
-        [symbolFilePath]: forkCallerFilePath,
-      });
-      forked[symbolForkedFrom] = {
-        fromId: id,
-      };
-      return forked;
-    },
+    }
+    return base;
   };
+
+  const buildDefinition = (
+    current: IResource<
+      TConfig,
+      TValue,
+      TDeps,
+      TPrivate,
+      TMeta,
+      TTags,
+      TMiddleware
+    >,
+  ): IResourceDefinition<
+    TConfig,
+    TValue,
+    TDeps,
+    TPrivate,
+    any,
+    any,
+    TMeta,
+    TTags,
+    TMiddleware
+  > => ({
+    id: current.id,
+    dependencies: current.dependencies,
+    register: current.register,
+    overrides: current.overrides,
+    init: current.init,
+    context: current.context,
+    configSchema: current.configSchema,
+    resultSchema: current.resultSchema,
+    tags: current.tags,
+    throws: current.throws,
+    middleware: current.middleware,
+    dispose: current.dispose,
+    meta: current.meta,
+  });
+
+  base.with = function (config: TConfig) {
+    const current = resolveCurrent(this);
+    const currentId = current.id;
+
+    // Validate config with schema if provided (fail fast)
+    if (current.configSchema) {
+      try {
+        config = current.configSchema.parse(config);
+      } catch (error) {
+        validationError.throw({
+          subject: "Resource config",
+          id: currentId,
+          originalError:
+            error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    }
+
+    return {
+      [symbolResourceWithConfig]: true,
+      id: currentId,
+      resource: current,
+      config,
+    } satisfies IResourceWithConfig<
+      TConfig,
+      TValue,
+      TDeps,
+      TPrivate,
+      TMeta,
+      TTags,
+      TMiddleware
+    >;
+  };
+
+  base.optional = function () {
+    const current = resolveCurrent(this);
+    return {
+      inner: current,
+      [symbolOptionalDependency]: true,
+    } as IOptionalDependency<
+      IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>
+    >;
+  };
+
+  base.fork = function (newId: string, options?: ResourceForkOptions) {
+    const current = resolveCurrent(this);
+    const forkCallerFilePath = getCallerFile();
+    const forkedParts = resolveForkedRegisterAndDependencies({
+      register: current.register,
+      dependencies: current.dependencies,
+      forkId: newId,
+      options,
+    });
+    const forked = defineResource({
+      ...buildDefinition(current),
+      id: newId,
+      register: forkedParts.register,
+      dependencies: forkedParts.dependencies,
+      [symbolFilePath]: forkCallerFilePath,
+    });
+    forked[symbolForkedFrom] = {
+      fromId: current.id,
+    };
+    return forked;
+  };
+
+  return base;
 }

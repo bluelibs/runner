@@ -111,6 +111,33 @@ describe("Queue", () => {
     await expect(disposeDone).resolves.toBeUndefined();
   });
 
+  it("dispose({ cancel: true }) skips queued tasks that did not start", async () => {
+    const q = new Queue();
+    let startedQueuedTask = false;
+
+    const running = q.run(
+      async (signal) =>
+        new Promise<void>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("aborted")), {
+            once: true,
+          });
+        }),
+    );
+
+    const queued = q.run(async () => {
+      startedQueuedTask = true;
+      return "should-not-run";
+    });
+
+    await flushMicroTasks();
+    const disposeDone = q.dispose({ cancel: true });
+
+    await expect(running).rejects.toThrow("aborted");
+    await expect(queued).rejects.toThrow("Operation was aborted");
+    expect(startedQueuedTask).toBe(false);
+    await expect(disposeDone).resolves.toBeUndefined();
+  });
+
   it("dispose() is idempotent - multiple calls should be safe", async () => {
     const q = new Queue();
 

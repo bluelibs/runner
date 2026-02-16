@@ -257,6 +257,61 @@ describe("Caching System", () => {
       await run(app);
     });
 
+    it("should await async has() implementations", async () => {
+      class AsyncHasCache implements ICacheInstance {
+        private store = new Map<string, number>();
+
+        get(key: string) {
+          return this.store.get(key);
+        }
+
+        set(key: string, value: number) {
+          this.store.set(key, value);
+        }
+
+        async has(key: string) {
+          await Promise.resolve();
+          return this.store.has(key);
+        }
+
+        clear() {
+          this.store.clear();
+        }
+      }
+
+      const cacheFactoryTask = defineTask({
+        id: "globals.tasks.cacheFactory",
+        run: async () => new AsyncHasCache(),
+      });
+
+      let callCount = 0;
+      const testTask = defineTask({
+        id: "cache.async-has.task",
+        middleware: [cacheMiddleware],
+        run: async () => {
+          callCount += 1;
+          return callCount;
+        },
+      });
+
+      const app = defineResource({
+        id: "cache.async-has.app",
+        register: [cacheResource, cacheMiddleware, testTask],
+        overrides: [cacheFactoryTask],
+        dependencies: { testTask },
+        async init(_, { testTask }) {
+          const first = await testTask();
+          const second = await testTask();
+
+          expect(first).toBe(1);
+          expect(second).toBe(1);
+          expect(callCount).toBe(1);
+        },
+      });
+
+      await run(app);
+    });
+
     it("should respect TTL configuration", async () => {
       let callCount = 0;
       const testTask = defineTask({
@@ -420,6 +475,60 @@ describe("Caching System", () => {
           await expect(errorTask()).rejects.toThrow("Cached error");
           await expect(errorTask()).rejects.toThrow("Cached error");
           expect(callCount).toBe(2); // Called twice since errors aren't cached
+        },
+      });
+
+      await run(app);
+    });
+
+    it("should return task result even when cache set fails", async () => {
+      class SetFailingCache implements ICacheInstance {
+        private store = new Map<string, number>();
+
+        get(key: string) {
+          return this.store.get(key);
+        }
+
+        set(_key: string, _value: number) {
+          throw new Error("cache write failed");
+        }
+
+        has(key: string) {
+          return this.store.has(key);
+        }
+
+        clear() {
+          this.store.clear();
+        }
+      }
+
+      const cacheFactoryTask = defineTask({
+        id: "globals.tasks.cacheFactory",
+        run: async () => new SetFailingCache(),
+      });
+
+      let callCount = 0;
+      const task = defineTask({
+        id: "cache.set-fail-open.task",
+        middleware: [cacheMiddleware],
+        run: async () => {
+          callCount += 1;
+          return callCount;
+        },
+      });
+
+      const app = defineResource({
+        id: "cache.set-fail-open.app",
+        register: [cacheResource, cacheMiddleware, task],
+        overrides: [cacheFactoryTask],
+        dependencies: { task },
+        async init(_, { task }) {
+          const first = await task();
+          const second = await task();
+
+          expect(first).toBe(1);
+          expect(second).toBe(2);
+          expect(callCount).toBe(2);
         },
       });
 

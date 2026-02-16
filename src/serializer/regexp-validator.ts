@@ -13,7 +13,7 @@ export interface RegExpValidatorOptions {
   allowUnsafe: boolean;
 }
 
-const ALLOWED_REGEXP_FLAGS = new Set(["d", "g", "i", "m", "s", "u", "y"]);
+const ALLOWED_REGEXP_FLAGS = new Set(["d", "g", "i", "m", "s", "u", "v", "y"]);
 
 const assertRegExpFlags = (flags: string): string => {
   const seen = new Set<string>();

@@ -54,9 +54,14 @@ export class RedisEventBus implements IEventBus {
       const event = this.deserializeEvent(message);
       if (!event) return;
 
-      state.handlers.forEach((h) =>
-        h(event).catch((error) => console.error(error)),
-      );
+      state.handlers.forEach((h) => {
+        try {
+          const maybePromise = h(event);
+          Promise.resolve(maybePromise).catch((error) => console.error(error));
+        } catch (error) {
+          console.error(error);
+        }
+      });
     });
   }
 

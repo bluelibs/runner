@@ -265,11 +265,10 @@ export class TaskMiddlewareComposer {
       return middlewareRunner;
     }
 
-    const reversedInterceptors = [...interceptors].reverse();
     let wrapped = middlewareRunner;
 
-    for (let i = reversedInterceptors.length - 1; i >= 0; i--) {
-      const interceptor = reversedInterceptors[i];
+    for (let i = interceptors.length - 1; i >= 0; i--) {
+      const interceptor = interceptors[i];
       const nextFunction = wrapped;
 
       wrapped = (async (input: TInput, journal: ExecutionJournal) => {

@@ -122,6 +122,7 @@ export class WaitManager {
         let timer: ReturnType<typeof setTimeout> | null = null;
         let pollTimer: ReturnType<typeof setTimeout> | null = null;
         let done = false;
+        let skipEventBusSubscription = false;
 
         const handler = async (_event: BusEvent) => {
           try {
@@ -164,26 +165,53 @@ export class WaitManager {
           }
         };
 
+        // Preflight store check before wiring timers/subscriptions.
+        // This reduces race windows and keeps timeout metadata checks consistent.
+        void (async () => {
+          try {
+            const result = await check();
+            if (result !== undefined) {
+              await finalize({ ok: true, value: result });
+            }
+          } catch (err) {
+            await finalize({ ok: false, error: err });
+          }
+        })();
+
+        const buildTimeoutError = async (): Promise<DurableExecutionError> => {
+          const exec = await this.store.getExecution(executionId);
+          return new DurableExecutionError(
+            `Timeout waiting for execution ${executionId}`,
+            executionId,
+            exec?.taskId || "unknown",
+            exec?.attempt || 0,
+          );
+        };
+
         if (timeoutMs !== undefined) {
-          timer = setTimeout(() => {
+          const elapsedMs = Date.now() - startedAt;
+          const remainingTimeoutMs = timeoutMs - elapsedMs;
+
+          const timeoutHandler = () => {
             void (async () => {
               try {
-                const exec = await this.store.getExecution(executionId);
                 await finalize({
                   ok: false,
-                  error: new DurableExecutionError(
-                    `Timeout waiting for execution ${executionId}`,
-                    executionId,
-                    exec?.taskId || "unknown",
-                    exec?.attempt || 0,
-                  ),
+                  error: await buildTimeoutError(),
                 });
               } catch (err) {
                 await finalize({ ok: false, error: err });
               }
             })();
-          }, timeoutMs);
-          timer.unref();
+          };
+
+          if (remainingTimeoutMs <= 0) {
+            skipEventBusSubscription = true;
+            timeoutHandler();
+          } else {
+            timer = setTimeout(timeoutHandler, remainingTimeoutMs);
+            timer.unref();
+          }
         }
 
         const pollOnce = async (): Promise<void> => {
@@ -199,13 +227,15 @@ export class WaitManager {
             return;
           }
 
-          if (done) return;
           pollTimer = setTimeout(() => void pollOnce(), pollEveryMs);
           pollTimer.unref();
         };
 
         void (async () => {
           try {
+            if (skipEventBusSubscription) {
+              return;
+            }
             await eventBus.subscribe(channel, handler);
             await handler({
               type: "subscribed",

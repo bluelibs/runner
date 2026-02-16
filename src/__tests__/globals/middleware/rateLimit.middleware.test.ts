@@ -79,6 +79,39 @@ describe("Rate Limit Middleware", () => {
     expect(callCount).toBe(2);
   });
 
+  it("should reset exactly at window boundary", async () => {
+    jest.useFakeTimers();
+    let callCount = 0;
+    const config = { windowMs: 100, max: 1 };
+    const task = defineTask({
+      id: "rateLimit.boundary",
+      middleware: [rateLimitTaskMiddleware.with(config)],
+      run: async () => {
+        callCount += 1;
+        return "ok";
+      },
+    });
+
+    const app = defineResource({
+      id: "app.boundary",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        jest.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+        await task();
+        jest.setSystemTime(new Date("2026-01-01T00:00:00.100Z"));
+        await task();
+      },
+    });
+
+    try {
+      await run(app);
+      expect(callCount).toBe(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it("should validate config on with()", () => {
     const configured = rateLimitTaskMiddleware.with({
       windowMs: 1000,

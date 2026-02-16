@@ -144,4 +144,32 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
     );
     expect(JSON.parse(map["ctx.demo"]).k).toBe(1);
   });
+
+  it("fails fast when JSON context serialization fails", async () => {
+    const requestSpy = jest.spyOn(http, "request").mockImplementation(() => {
+      throw new Error("request should not run");
+    }) as any;
+
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: new Serializer(),
+      contexts: [
+        {
+          id: "ctx.bad",
+          use: () => {
+            throw "missing context";
+          },
+          serialize: (v: unknown) => JSON.stringify(v),
+          parse: (s: string) => JSON.parse(s),
+          provide: (_v: unknown, fn: () => unknown) => fn(),
+          require: () => ({}) as any,
+        } as any,
+      ],
+    });
+
+    await expect(client.task("t.json.bad", { a: 1 } as any)).rejects.toThrow(
+      /Failed to serialize async context "ctx.bad"/,
+    );
+    expect(requestSpy).not.toHaveBeenCalled();
+  });
 });

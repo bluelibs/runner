@@ -201,6 +201,59 @@ describe("DependencyProcessor Consistency", () => {
     await runtime.dispose();
   });
 
+  it("should deliver events emitted while hook dependencies are still computing", async () => {
+    const seen: string[] = [];
+
+    const event = r.event<{ ok: true }>("hook.buffer.event").build();
+
+    const earlyEmitter = r
+      .resource("hook.buffer.emitter")
+      .dependencies({ event })
+      .init(async (_config, { event }) => {
+        await event({ ok: true });
+        await event({ ok: true });
+        return "emitted";
+      })
+      .build();
+
+    const secondaryDep = r
+      .resource("hook.buffer.dep")
+      .init(async () => ({ value: "dep" }))
+      .build();
+
+    const hookA = r
+      .hook("hook.buffer.hookA")
+      .on(event)
+      .dependencies({ earlyEmitter })
+      .run(async () => {
+        seen.push("A");
+      })
+      .build();
+
+    const hookB = r
+      .hook("hook.buffer.hookB")
+      .on(event)
+      .dependencies({ secondaryDep })
+      .run(async (_input, { secondaryDep }) => {
+        seen.push(secondaryDep.value);
+      })
+      .build();
+
+    const root = r
+      .resource("hook.buffer.root")
+      .register([hookA, hookB, earlyEmitter, secondaryDep, event])
+      .init(async () => "root")
+      .build();
+
+    const runtime = await run(root);
+
+    expect(seen).toHaveLength(4);
+    expect(seen.filter((entry) => entry === "A")).toHaveLength(2);
+    expect(seen.filter((entry) => entry === "dep")).toHaveLength(2);
+
+    await runtime.dispose();
+  });
+
   it("should use the store task definition when resolving early task dependencies", async () => {
     const service = r
       .resource(ResourceId.Service)
@@ -311,5 +364,75 @@ describe("DependencyProcessor Consistency", () => {
 
     await eventManager.emit(event, { ok: true }, "test");
     expect(runHook).not.toHaveBeenCalled();
+  });
+
+  it("covers buffered hook flush guards and self-source filtering", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+    );
+    type HookEvent = { source: string; data: unknown };
+    type HookStoreElementShape = {
+      hook: { id: string; run: () => Promise<void> };
+      computedDependencies: Record<string, never>;
+      dependencyState: string;
+    };
+    type DependencyProcessorInternals = {
+      flushBufferedHookEvents: (
+        hookStoreElement: HookStoreElementShape,
+      ) => Promise<void>;
+      pendingHookEvents: Map<string, HookEvent[]>;
+      drainingHookIds: Set<string>;
+    };
+    const internals = processor as unknown as DependencyProcessorInternals;
+
+    const hook = {
+      id: "test.hook.flush",
+      run: jest.fn(async () => undefined),
+    };
+    const hookStoreElement = {
+      hook,
+      computedDependencies: {},
+      dependencyState: "pending",
+    };
+
+    await expect(
+      internals.flushBufferedHookEvents(hookStoreElement),
+    ).resolves.toBeUndefined();
+
+    hookStoreElement.dependencyState = "ready";
+    internals.pendingHookEvents.set(hook.id, [{ source: "outside", data: {} }]);
+    internals.drainingHookIds.add(hook.id);
+
+    await expect(
+      internals.flushBufferedHookEvents(hookStoreElement),
+    ).resolves.toBeUndefined();
+    expect(internals.pendingHookEvents.get(hook.id)).toHaveLength(1);
+
+    internals.drainingHookIds.delete(hook.id);
+    internals.pendingHookEvents.set(hook.id, [
+      { source: hook.id, data: { skip: true } },
+      { source: "outside", data: { run: true } },
+    ]);
+
+    const executeSpy = jest
+      .spyOn(eventManager, "executeHookWithInterceptors")
+      .mockResolvedValue(undefined);
+
+    await internals.flushBufferedHookEvents(hookStoreElement);
+
+    expect(executeSpy).toHaveBeenCalledTimes(1);
+    expect(executeSpy).toHaveBeenCalledWith(
+      hook,
+      expect.objectContaining({ source: "outside" }),
+      {},
+    );
   });
 });

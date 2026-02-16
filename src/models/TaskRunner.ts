@@ -40,11 +40,13 @@ export class TaskRunner {
     input?: TInput,
     options?: TaskCallOptions,
   ): Promise<TOutput | undefined> {
-    let runner = this.runnerStore.get(task.id);
+    const canUseCachedRunner = this.store.isLocked;
+    let runner = canUseCachedRunner ? this.runnerStore.get(task.id) : undefined;
     if (!runner) {
       runner = this.createRunnerWithMiddleware<TInput, TOutput, TDeps>(task);
-
-      this.runnerStore.set(task.id, runner);
+      if (canUseCachedRunner) {
+        this.runnerStore.set(task.id, runner);
+      }
     }
 
     try {

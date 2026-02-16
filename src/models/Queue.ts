@@ -76,6 +76,10 @@ export class Queue {
 
     // 3. chain task after the current tail
     const result = this.tail.then(() => {
+      if (signal.aborted) {
+        this.emit("cancel", taskId);
+        throw new Error("Operation was aborted");
+      }
       this.emit("start", taskId);
       return this.hasAsyncLocalStorage
         ? this.executionContext.run(true, () => task(signal))

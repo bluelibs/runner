@@ -181,6 +181,84 @@ describe("http-client (universal)", () => {
     expect(typeof calls[0].headers["x-runner-context"]).toBe("string");
   });
 
+  it("browser multipart fails fast when context serialization fails", async () => {
+    const blob = new Blob([new Uint8Array(Buffer.from("abc"))], {
+      type: "text/plain",
+    });
+    const file = createWebFile(
+      { name: "bad.txt", type: "text/plain" },
+      blob,
+      "FBAD",
+    );
+    const fetchMock = jest.fn(async () => {
+      return {
+        text: async () =>
+          new Serializer().stringify({ ok: true, result: "UP" }),
+      } as unknown as Response;
+    });
+    const client = createHttpClient({
+      baseUrl,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      serializer: new Serializer(),
+      contexts: [
+        {
+          id: "ctx.bad",
+          use: () => {
+            throw "missing context";
+          },
+          serialize: (v: unknown) => JSON.stringify(v),
+          parse: (s: string) => JSON.parse(s),
+          provide: (_v: unknown, fn: () => unknown) => fn(),
+          require: () => ({}) as any,
+        } as unknown as any,
+      ],
+    });
+
+    await expect(client.task("t.upload.bad", { file })).rejects.toThrow(
+      /Failed to serialize async context "ctx.bad"/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("browser multipart preserves Error context failures", async () => {
+    const blob = new Blob([new Uint8Array(Buffer.from("abc"))], {
+      type: "text/plain",
+    });
+    const file = createWebFile(
+      { name: "bad-err.txt", type: "text/plain" },
+      blob,
+      "FBAD_ERR",
+    );
+    const fetchMock = jest.fn(async () => {
+      return {
+        text: async () =>
+          new Serializer().stringify({ ok: true, result: "UP" }),
+      } as unknown as Response;
+    });
+    const client = createHttpClient({
+      baseUrl,
+      fetchImpl: fetchMock as unknown as typeof fetch,
+      serializer: new Serializer(),
+      contexts: [
+        {
+          id: "ctx.bad.error",
+          use: () => {
+            throw new Error("missing context error");
+          },
+          serialize: (v: unknown) => JSON.stringify(v),
+          parse: (s: string) => JSON.parse(s),
+          provide: (_v: unknown, fn: () => unknown) => fn(),
+          require: () => ({}) as any,
+        } as unknown as any,
+      ],
+    });
+
+    await expect(client.task("t.upload.bad.error", { file })).rejects.toThrow(
+      /Failed to serialize async context "ctx.bad.error"/,
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("browser multipart uses default filename when meta.name missing", async () => {
     const blob = new Blob([new Uint8Array(Buffer.from("abc"))], {
       type: "application/octet-stream",
@@ -380,5 +458,36 @@ describe("http-client (universal)", () => {
     await expect(client.task("t.json", { a: 1 } as any)).rejects.toThrow(
       /typed:5/,
     );
+  });
+
+  it("does not remap errors that are already typed by the same registry helper", async () => {
+    const alreadyTyped = Object.assign(new Error("already-typed"), {
+      id: "tests.errors.app",
+      name: "tests.errors.app",
+      data: { code: 99, message: "x" },
+    });
+    exposureState.task.mockImplementationOnce(async () => {
+      throw alreadyTyped;
+    });
+
+    const helper = {
+      id: "tests.errors.app",
+      throw: jest.fn((data: any) => {
+        throw new Error("should-not-remap:" + String(data?.code));
+      }),
+      is: () => false,
+      toString: () => "",
+    } as any;
+
+    const client = createHttpClient({
+      baseUrl,
+      serializer: new Serializer(),
+      errorRegistry: new Map([["tests.errors.app", helper]]),
+    });
+
+    await expect(client.task("t.json", { a: 1 } as any)).rejects.toBe(
+      alreadyTyped,
+    );
+    expect(helper.throw).not.toHaveBeenCalled();
   });
 });

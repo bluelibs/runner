@@ -439,15 +439,20 @@ export class RedisStore implements IDurableStore {
   }
 
   async createTimer(timer: Timer): Promise<void> {
-    await this.redis.hset(
+    const script = `
+      redis.call("hset", KEYS[1], ARGV[1], ARGV[2])
+      redis.call("zadd", KEYS[2], ARGV[3], ARGV[1])
+      return "OK"
+    `;
+
+    await this.redis.eval(
+      script,
+      2,
       this.k("timers"),
+      this.k("timers_schedule"),
       timer.id,
       serializer.stringify(timer),
-    );
-    await this.redis.zadd(
-      this.k("timers_schedule"),
       timer.fireAt.getTime(),
-      timer.id,
     );
   }
 

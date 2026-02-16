@@ -64,7 +64,7 @@ export const createEventHandler = (deps: EventHandlerDeps) => {
     const allowError = allowList.ensureEvent(eventId);
     if (allowError) {
       applyCorsActual(req, res, cors);
-      respondJson(res, allowError);
+      respondJson(res, allowError, serializer);
       return;
     }
 

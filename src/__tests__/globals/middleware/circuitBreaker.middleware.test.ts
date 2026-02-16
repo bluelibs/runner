@@ -147,6 +147,58 @@ describe("Circuit Breaker Middleware", () => {
     await run(app);
   });
 
+  it("should reject concurrent HALF_OPEN probes while one probe is in flight", async () => {
+    let mode: "fail" | "probe" | "closed" = "fail";
+    let resolveProbe: (() => void) | undefined;
+
+    const task = defineTask({
+      id: "task.halfOpenProbeGate",
+      middleware: [
+        circuitBreakerMiddleware.with({
+          failureThreshold: 1,
+          resetTimeout: 1000,
+        }),
+      ],
+      run: async () => {
+        if (mode === "fail") {
+          throw new Error("fail");
+        }
+        if (mode === "probe") {
+          await new Promise<void>((resolve) => {
+            resolveProbe = resolve;
+          });
+          return "probe-ok";
+        }
+        return "ok";
+      },
+    });
+
+    const app = defineResource({
+      id: "app.halfOpenProbeGate",
+      register: [task],
+      dependencies: { task },
+      async init(_, { task }) {
+        await expect(task()).rejects.toThrow("fail");
+        await expect(task()).rejects.toThrow(CircuitBreakerOpenError);
+
+        jest.advanceTimersByTime(1000);
+        mode = "probe";
+
+        const inFlightProbe = task();
+        await expect(task()).rejects.toThrow(
+          'Circuit is HALF_OPEN for task "task.halfOpenProbeGate" (probe in progress)',
+        );
+
+        mode = "closed";
+        resolveProbe?.();
+        await expect(inFlightProbe).resolves.toBe("probe-ok");
+        await expect(task()).resolves.toBe("ok");
+      },
+    });
+
+    await run(app);
+  });
+
   it("should isolate states between different tasks", async () => {
     const task1 = defineTask({
       id: "task.isolate1",

@@ -103,11 +103,8 @@ export async function parseMultipartInput(
   const files = new Map<string, FileEntry>();
   let manifestRaw = "";
   let manifestBytes = 0;
-  let _manifestSeen = false;
   let readyResolved = false;
   let finalizeSettled = false;
-  // Track if upstream request aborted/errored to give it precedence
-  let _requestAborted = false;
 
   let resolveReady: (value: MultipartResult) => void;
   const readyPromise = new Promise<MultipartResult>((resolve) => {
@@ -231,7 +228,6 @@ export async function parseMultipartInput(
       return;
     }
     if (name !== "__manifest") return;
-    _manifestSeen = true;
     try {
       // Safely coerce to string; this may throw for exotic objects
       const text = typeof value === "string" ? value : String(value);
@@ -360,7 +356,6 @@ export async function parseMultipartInput(
   busboyInst.on("finish", handleCompletion);
 
   const onAbort = () => {
-    _requestAborted = true;
     fail(jsonErrorResponse(499, "Client Closed Request", "REQUEST_ABORTED"));
   };
   req.on("error", onAbort);

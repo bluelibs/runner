@@ -47,6 +47,28 @@ describe("Serializer Security Attacks", () => {
       );
     });
 
+    it("should accept the ES2024 v RegExp flag when runtime supports it", () => {
+      let supportsVFlag = false;
+      try {
+        new RegExp("a", "v");
+        supportsVFlag = true;
+      } catch {
+        supportsVFlag = false;
+      }
+      if (!supportsVFlag) {
+        return;
+      }
+
+      const payload = JSON.stringify({
+        __type: "RegExp",
+        value: { pattern: "a", flags: "v" },
+      });
+
+      const result = serializer.deserialize<RegExp>(payload);
+      expect(result).toBeInstanceOf(RegExp);
+      expect(result.flags.includes("v")).toBe(true);
+    });
+
     it("should detect unsafe nested quantifiers by default", () => {
       // Patterns like (a+)+ can cause catastrophic backtracking
       const unsafePattern = "(a+)+";

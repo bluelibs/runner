@@ -47,7 +47,12 @@ export class ResourceMiddlewareComposer {
     // 3. Apply global resource interceptors
     runner = this.applyGlobalInterceptors<TConfig, TValue>(runner, resource);
 
-    return runner(config);
+    try {
+      return await runner(config);
+    } catch (error: unknown) {
+      await this.reportUnhandledResourceInitError(resource.id, error);
+      throw error;
+    }
   }
 
   /**
@@ -102,33 +107,20 @@ export class ResourceMiddlewareComposer {
       )!;
       const nextFunction = next;
 
-      // Create base middleware runner with error handling
+      // Create base middleware runner
       const baseMiddlewareRunner = async (cfg: any) => {
-        try {
-          return await storeMiddleware.middleware.run(
-            {
-              resource: {
-                definition: resource,
-                config: cfg,
-              },
-              next: (...args: [TConfig?]) =>
-                nextFunction((args.length > 0 ? args[0] : cfg) as TConfig),
+        return storeMiddleware.middleware.run(
+          {
+            resource: {
+              definition: resource,
+              config: cfg,
             },
-            storeMiddleware.computedDependencies,
-            middleware.config,
-          );
-        } catch (error: unknown) {
-          try {
-            await this.store.onUnhandledError({
-              error,
-              kind: "resourceInit",
-              source: resource.id,
-            });
-          } catch (_) {
-            // Ignore errors from error handler
-          }
-          throw error;
-        }
+            next: (...args: [TConfig?]) =>
+              nextFunction((args.length > 0 ? args[0] : cfg) as TConfig),
+          },
+          storeMiddleware.computedDependencies,
+          middleware.config,
+        );
       };
 
       // Get and apply per-middleware interceptors
@@ -204,11 +196,10 @@ export class ResourceMiddlewareComposer {
       return middlewareRunner;
     }
 
-    const reversedInterceptors = [...interceptors].reverse();
     let wrapped = middlewareRunner;
 
-    for (let i = reversedInterceptors.length - 1; i >= 0; i--) {
-      const interceptor = reversedInterceptors[i];
+    for (let i = interceptors.length - 1; i >= 0; i--) {
+      const interceptor = interceptors[i];
       const nextFunction = wrapped;
 
       wrapped = (async (config: TConfig) => {
@@ -234,5 +225,20 @@ export class ResourceMiddlewareComposer {
     }
 
     return wrapped;
+  }
+
+  private async reportUnhandledResourceInitError(
+    source: string,
+    error: unknown,
+  ): Promise<void> {
+    try {
+      await this.store.onUnhandledError({
+        error,
+        kind: "resourceInit",
+        source,
+      });
+    } catch (_) {
+      // Ignore errors from error handler
+    }
   }
 }

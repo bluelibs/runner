@@ -61,8 +61,61 @@ async function postSerialized<T = any>(options: {
     });
 
     const text = await res.text();
-    const json = text ? serializer.parse<T>(text) : (undefined as unknown as T);
-    return json;
+    const status =
+      typeof (res as { status?: unknown }).status === "number"
+        ? (res as { status: number }).status
+        : 200;
+    const statusText =
+      typeof (res as { statusText?: unknown }).statusText === "string"
+        ? (res as { statusText: string }).statusText
+        : "";
+    const ok =
+      typeof (res as { ok?: unknown }).ok === "boolean"
+        ? (res as { ok: boolean }).ok
+        : status >= 200 && status < 300;
+    const contentType =
+      typeof (res as { headers?: { get?: (name: string) => string | null } })
+        .headers?.get === "function"
+        ? ((
+            res as { headers: { get: (name: string) => string | null } }
+          ).headers.get("content-type") ?? undefined)
+        : undefined;
+
+    if (!text) {
+      if (!ok) {
+        throw new TunnelError(
+          "HTTP_ERROR",
+          statusText
+            ? `Tunnel HTTP ${status} ${statusText}`
+            : `Tunnel HTTP ${status}`,
+          { statusCode: status, statusText, contentType },
+          { httpCode: status },
+        );
+      }
+      return undefined as unknown as T;
+    }
+
+    try {
+      const json = serializer.parse<T>(text);
+      return json;
+    } catch (error) {
+      if (!ok) {
+        throw new TunnelError(
+          "HTTP_ERROR",
+          statusText
+            ? `Tunnel HTTP ${status} ${statusText}`
+            : `Tunnel HTTP ${status}`,
+          {
+            statusCode: status,
+            statusText,
+            contentType,
+            bodyPreview: text.slice(0, 512),
+          },
+          { httpCode: status },
+        );
+      }
+      throw error;
+    }
   } finally {
     if (timeout) clearTimeout(timeout);
   }

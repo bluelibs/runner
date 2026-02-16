@@ -191,5 +191,58 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
 
       await runtime.dispose();
     });
+
+    it("should expose post-execution state transitions in journal", async () => {
+      let mode: "fail" | "success" = "fail";
+      let observedState: CircuitBreakerState | undefined;
+      let observedFailures: number | undefined;
+
+      const observer = defineTaskMiddleware({
+        id: "test.journal.circuitBreaker.observer",
+        async run({ task, next, journal }) {
+          try {
+            return await next(task.input);
+          } finally {
+            observedState = journal.get(circuitBreakerJournalKeys.state);
+            observedFailures = journal.get(circuitBreakerJournalKeys.failures);
+          }
+        },
+      });
+
+      const task = defineTask({
+        id: "test.journal.circuitBreaker.transitions",
+        middleware: [
+          observer,
+          globals.middleware.task.circuitBreaker.with({
+            failureThreshold: 1,
+            resetTimeout: 1,
+          }),
+        ],
+        run: async () => {
+          if (mode === "fail") {
+            throw new Error("boom");
+          }
+          return "ok";
+        },
+      });
+
+      const app = defineResource({
+        id: "test.journal.circuitBreaker.transitions.app",
+        register: [observer, task],
+      });
+      const runtime = await run(app);
+
+      await expect(runtime.runTask(task)).rejects.toThrow("boom");
+      expect(observedState).toBe(CircuitBreakerState.OPEN);
+      expect(observedFailures).toBe(1);
+
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      mode = "success";
+      await expect(runtime.runTask(task)).resolves.toBe("ok");
+      expect(observedState).toBe(CircuitBreakerState.CLOSED);
+      expect(observedFailures).toBe(0);
+
+      await runtime.dispose();
+    });
   });
 });

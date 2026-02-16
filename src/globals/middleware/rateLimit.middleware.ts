@@ -111,7 +111,7 @@ export const rateLimitTaskMiddleware = defineTaskMiddleware({
     let limitState = states.get(config);
     const now = Date.now();
 
-    if (!limitState || now > limitState.resetTime) {
+    if (!limitState || now >= limitState.resetTime) {
       limitState = {
         count: 0,
         resetTime: now + config.windowMs,

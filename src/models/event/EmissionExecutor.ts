@@ -33,7 +33,22 @@ export async function executeSequentially({
     }
 
     if (shouldExecuteListener(listener, event)) {
-      await listener.handler(event);
+      try {
+        await listener.handler(event);
+      } catch (error) {
+        const errObj: ListenerError =
+          error && typeof error === "object"
+            ? (error as ListenerError)
+            : new Error(String(error));
+
+        if (errObj.listenerId === undefined) {
+          errObj.listenerId = listener.id;
+        }
+        if (errObj.listenerOrder === undefined) {
+          errObj.listenerOrder = listener.order;
+        }
+        throw errObj;
+      }
     }
   }
 }

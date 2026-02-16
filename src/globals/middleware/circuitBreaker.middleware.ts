@@ -41,6 +41,7 @@ export interface CircuitBreakerStatus {
   state: CircuitBreakerState;
   failures: number;
   lastFailureTime: number;
+  halfOpenProbeInFlight: boolean;
 }
 
 /**
@@ -88,60 +89,84 @@ export const circuitBreakerMiddleware = defineTaskMiddleware({
         state: CircuitBreakerState.CLOSED,
         failures: 0,
         lastFailureTime: 0,
+        halfOpenProbeInFlight: false,
       };
       statusMap.set(taskId, status);
     }
 
     const now = Date.now();
+    const syncJournal = () => {
+      journal.set(journalKeys.state, status.state, { override: true });
+      journal.set(journalKeys.failures, status.failures, { override: true });
+    };
 
     // Handle OPEN state transition to HALF_OPEN
     if (status.state === CircuitBreakerState.OPEN) {
       if (now - status.lastFailureTime >= resetTimeout) {
         status.state = CircuitBreakerState.HALF_OPEN;
+        status.halfOpenProbeInFlight = false;
       } else {
         // Set journal values before throwing
-        journal.set(journalKeys.state, status.state, { override: true });
-        journal.set(journalKeys.failures, status.failures, { override: true });
+        syncJournal();
         throw new CircuitBreakerOpenError(
           `Circuit is OPEN for task "${taskId}"`,
         );
       }
     }
 
+    let acquiredHalfOpenProbe = false;
+    if (status.state === CircuitBreakerState.HALF_OPEN) {
+      if (status.halfOpenProbeInFlight) {
+        syncJournal();
+        throw new CircuitBreakerOpenError(
+          `Circuit is HALF_OPEN for task "${taskId}" (probe in progress)`,
+        );
+      }
+      status.halfOpenProbeInFlight = true;
+      acquiredHalfOpenProbe = true;
+    }
+
     // Set journal values before executing
-    journal.set(journalKeys.state, status.state, { override: true });
-    journal.set(journalKeys.failures, status.failures, { override: true });
+    syncJournal();
 
     try {
       const result = await next(task!.input);
 
       // If successful, we reset the failures counter
-      if (
-        status.state === CircuitBreakerState.HALF_OPEN ||
-        status.state === CircuitBreakerState.CLOSED
-      ) {
+      if (status.state === CircuitBreakerState.CLOSED) {
         status.failures = 0;
       }
 
       if (status.state === CircuitBreakerState.HALF_OPEN) {
         status.state = CircuitBreakerState.CLOSED;
+        status.failures = 0;
+        status.lastFailureTime = 0;
       }
 
+      syncJournal();
       return result;
     } catch (error) {
-      status.failures++;
-      status.lastFailureTime = Date.now();
+      if (status.state === CircuitBreakerState.HALF_OPEN) {
+        status.state = CircuitBreakerState.OPEN;
+        status.failures = Math.max(status.failures + 1, failureThreshold);
+        status.lastFailureTime = Date.now();
+      } else {
+        status.failures++;
+        status.lastFailureTime = Date.now();
 
-      if (
-        status.state === CircuitBreakerState.CLOSED &&
-        status.failures >= failureThreshold
-      ) {
-        status.state = CircuitBreakerState.OPEN;
-      } else if (status.state === CircuitBreakerState.HALF_OPEN) {
-        status.state = CircuitBreakerState.OPEN;
+        if (status.state === CircuitBreakerState.CLOSED) {
+          if (status.failures >= failureThreshold) {
+            status.state = CircuitBreakerState.OPEN;
+          }
+        }
       }
 
+      syncJournal();
       throw error;
+    } finally {
+      if (acquiredHalfOpenProbe) {
+        status.halfOpenProbeInFlight = false;
+      }
     }
   },
 });

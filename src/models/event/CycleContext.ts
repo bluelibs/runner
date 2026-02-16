@@ -41,11 +41,15 @@ export class CycleContext {
         // Allow re-emission of the same event by the same hook ("idempotent re-emit"),
         // BUT ONLY IF the source is changing (e.g. initial->hook).
         // If the source is unchanged (hook->hook), it means the hook triggered itself, which is an infinite loop.
+        const hasSameSourceInCycle = currentStack
+          .slice(cycleStart)
+          .some((f) => f.source === source);
         const isSafeReEmit =
           top.id === frame.id &&
           currentHookId &&
           currentHookId === source &&
-          top.source !== source;
+          top.source !== source &&
+          !hasSameSourceInCycle;
 
         if (!isSafeReEmit) {
           eventCycleError.throw({

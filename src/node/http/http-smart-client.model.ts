@@ -77,8 +77,68 @@ function toHeaders(auth?: HttpSmartClientAuthConfig): Record<string, string> {
   return headers;
 }
 
+function buildContextHeaderOrThrow(options: {
+  serializer: SerializerLike;
+  contexts?: Array<IAsyncContext<unknown>>;
+}): string | undefined {
+  const { serializer, contexts } = options;
+  if (!contexts || contexts.length === 0) return undefined;
+
+  const map: Record<string, string> = {};
+  for (const ctx of contexts) {
+    try {
+      const value = ctx.use();
+      map[ctx.id] = ctx.serialize(value);
+    } catch (error) {
+      const normalizedError =
+        error instanceof Error ? error : new Error(String(error));
+      throw new Error(
+        `Failed to serialize async context "${ctx.id}" for HTTP smart client request: ${normalizedError.message}`,
+      );
+    }
+  }
+
+  return serializer.stringify(map);
+}
+
 function requestLib(url: URL): typeof http {
   return url.protocol === "https:" ? (https as unknown as typeof http) : http;
+}
+
+function toHttpStatusError(options: {
+  statusCode: number;
+  statusMessage?: string;
+  contentType?: string;
+  bodyPreview?: string;
+}): TunnelError {
+  const { statusCode, statusMessage, contentType, bodyPreview } = options;
+  const message = statusMessage
+    ? `Tunnel HTTP ${statusCode} ${statusMessage}`
+    : `Tunnel HTTP ${statusCode}`;
+  return new TunnelError(
+    "HTTP_ERROR",
+    message,
+    {
+      statusCode,
+      statusMessage,
+      contentType,
+      bodyPreview,
+    },
+    { httpCode: statusCode },
+  );
+}
+
+function toTimeoutError(url: string, timeoutMs?: number): TunnelError {
+  const detail =
+    typeof timeoutMs === "number" && timeoutMs > 0
+      ? ` after ${timeoutMs}ms`
+      : "";
+  return new TunnelError(
+    "REQUEST_TIMEOUT",
+    `Tunnel request timeout${detail}`,
+    { url, timeoutMs },
+    { httpCode: 408 },
+  );
 }
 
 async function postJson<T = any>(
@@ -93,20 +153,25 @@ async function postJson<T = any>(
     "content-type": "application/json; charset=utf-8",
     ...toHeaders(cfg.auth),
   } as Record<string, string>;
-  if (cfg.contexts && cfg.contexts.length > 0) {
-    const map: Record<string, string> = {};
-    for (const ctx of cfg.contexts) {
-      try {
-        const v = ctx.use();
-        map[ctx.id] = ctx.serialize(v);
-      } catch {}
-    }
-    if (Object.keys(map).length > 0) {
-      headers["x-runner-context"] = cfg.serializer.stringify(map);
-    }
-  }
+  const contextHeader = buildContextHeaderOrThrow({
+    serializer: cfg.serializer,
+    contexts: cfg.contexts,
+  });
+  if (contextHeader) headers["x-runner-context"] = contextHeader;
   if (cfg.onRequest) await cfg.onRequest({ url, headers });
   return await new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const resolveOnce = (value: T) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const rejectOnce = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      reject(error instanceof Error ? error : new Error(String(error)));
+    };
+
     const req = lib.request(
       {
         method: "POST",
@@ -126,14 +191,46 @@ async function postJson<T = any>(
           const text = Buffer.concat(chunks as readonly Uint8Array[]).toString(
             "utf8",
           );
-          const json = text
-            ? (serializer.parse(text) as T)
-            : (undefined as unknown as T);
-          resolve(json);
+          const statusCode = res.statusCode ?? 0;
+          if (!text) {
+            if (statusCode >= 400) {
+              rejectOnce(
+                toHttpStatusError({
+                  statusCode,
+                  statusMessage: res.statusMessage,
+                  contentType: String(res.headers["content-type"] ?? ""),
+                }),
+              );
+              return;
+            }
+            resolveOnce(undefined as unknown as T);
+            return;
+          }
+          try {
+            const json = serializer.parse(text) as T;
+            resolveOnce(json);
+          } catch (error) {
+            if (statusCode >= 400) {
+              rejectOnce(
+                toHttpStatusError({
+                  statusCode,
+                  statusMessage: res.statusMessage,
+                  contentType: String(res.headers["content-type"] ?? ""),
+                  bodyPreview: text.slice(0, 512),
+                }),
+              );
+              return;
+            }
+            rejectOnce(error);
+          }
         });
+        res.on("error", rejectOnce);
       },
     );
-    req.on("error", reject);
+    req.on("error", rejectOnce);
+    req.on("timeout", () => {
+      req.destroy(toTimeoutError(url, cfg.timeoutMs));
+    });
     req.write(serializer.stringify(body));
     req.end();
   });
@@ -216,22 +313,29 @@ async function postMultipart(
     "content-type": `multipart/form-data; boundary=${boundary}`,
     ...toHeaders(cfg.auth),
   };
-  if (cfg.contexts && cfg.contexts.length > 0) {
-    const map: Record<string, string> = {};
-    for (const ctx of cfg.contexts) {
-      try {
-        const v = ctx.use();
-        map[ctx.id] = ctx.serialize(v);
-      } catch {}
-    }
-    if (Object.keys(map).length > 0) {
-      headers["x-runner-context"] = cfg.serializer.stringify(map);
-    }
-  }
+  const contextHeader = buildContextHeaderOrThrow({
+    serializer: cfg.serializer,
+    contexts: cfg.contexts,
+  });
+  if (contextHeader) headers["x-runner-context"] = contextHeader;
   if (cfg.onRequest) await cfg.onRequest({ url, headers });
 
   return await new Promise<{ stream: Readable; res: http.IncomingMessage }>(
     (resolve, reject) => {
+      let settled = false;
+      const resolveOnce = (value: {
+        stream: Readable;
+        res: http.IncomingMessage;
+      }) => {
+        if (settled) return;
+        settled = true;
+        resolve(value);
+      };
+      const rejectOnce = (error: unknown) => {
+        if (settled) return;
+        settled = true;
+        reject(error instanceof Error ? error : new Error(String(error)));
+      };
       const req = lib.request(
         {
           method: "POST",
@@ -242,9 +346,12 @@ async function postMultipart(
           headers,
           timeout: cfg.timeoutMs,
         },
-        (res) => resolve({ stream: res as unknown as Readable, res }),
+        (res) => resolveOnce({ stream: res as unknown as Readable, res }),
       );
-      req.on("error", reject);
+      req.on("error", rejectOnce);
+      req.on("timeout", () => {
+        req.destroy(toTimeoutError(url, cfg.timeoutMs));
+      });
       body.on("error", (e) => req.destroy(e as Error));
       body.pipe(req);
     },
@@ -262,18 +369,11 @@ async function postOctetStream(
     "content-type": "application/octet-stream",
     ...toHeaders(cfg.auth),
   };
-  if (cfg.contexts && cfg.contexts.length > 0) {
-    const map: Record<string, string> = {};
-    for (const ctx of cfg.contexts) {
-      try {
-        const v = ctx.use();
-        map[ctx.id] = ctx.serialize(v);
-      } catch {}
-    }
-    if (Object.keys(map).length > 0) {
-      headers["x-runner-context"] = cfg.serializer.stringify(map);
-    }
-  }
+  const contextHeader = buildContextHeaderOrThrow({
+    serializer: cfg.serializer,
+    contexts: cfg.contexts,
+  });
+  if (contextHeader) headers["x-runner-context"] = contextHeader;
   if (cfg.onRequest) await cfg.onRequest({ url, headers });
   return await new Promise<{ stream: Readable; res: http.IncomingMessage }>(
     (resolve, reject) => {
@@ -318,6 +418,10 @@ async function postOctetStream(
       const onReqError = (e: unknown) => rejectOnce(e);
       req.on("error", onReqError);
       cleanup.push(() => req.removeListener("error", onReqError));
+      const onReqTimeout = () =>
+        req.destroy(toTimeoutError(url, cfg.timeoutMs));
+      req.on("timeout", onReqTimeout);
+      cleanup.push(() => req.removeListener("timeout", onReqTimeout));
 
       // Use pipeline to safely wire errors between source and request,
       // preventing unhandled 'error' on the source stream.
@@ -334,6 +438,7 @@ function parseMaybeJsonResponse<T = any>(
   serializer: SerializerLike,
 ): Promise<T | Readable> {
   const contentType = String(res.headers["content-type"]);
+  const statusCode = res.statusCode ?? 0;
   if (/^application\/json/i.test(contentType)) {
     const chunks: Buffer[] = [];
     return new Promise<T>((resolve, reject) => {
@@ -341,20 +446,53 @@ function parseMaybeJsonResponse<T = any>(
         chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(String(c)));
       });
       res.on("end", () => {
+        const text = Buffer.concat(chunks as readonly Uint8Array[]).toString(
+          "utf8",
+        );
         try {
-          const text = Buffer.concat(chunks as readonly Uint8Array[]).toString(
-            "utf8",
-          );
+          if (!text && statusCode >= 400) {
+            reject(
+              toHttpStatusError({
+                statusCode,
+                statusMessage: res.statusMessage,
+                contentType,
+              }),
+            );
+            return;
+          }
           const json = text
             ? (serializer.parse(text) as T)
             : (undefined as unknown as T);
           resolve(json);
         } catch (e) {
+          if (statusCode >= 400) {
+            reject(
+              toHttpStatusError({
+                statusCode,
+                statusMessage: res.statusMessage,
+                contentType,
+                bodyPreview: text.slice(0, 512),
+              }),
+            );
+            return;
+          }
           reject(e);
         }
       });
       res.on("error", reject);
     });
+  }
+  if (statusCode >= 400) {
+    if (typeof (res as { resume?: () => void }).resume === "function") {
+      (res as { resume: () => void }).resume();
+    }
+    return Promise.reject(
+      toHttpStatusError({
+        statusCode,
+        statusMessage: res.statusMessage,
+        contentType,
+      }),
+    );
   }
   return Promise.resolve(res as unknown as Readable);
 }
@@ -387,8 +525,14 @@ export function createHttpSmartClient(
       // A) Duplex raw-body: input itself is a Node Readable
       if (isReadable(input)) {
         const { res } = await postOctetStream(cfg, url, input);
-        // For streaming duplex, we just return the response stream
-        return res as unknown as Readable;
+        const maybe = await parseMaybeJsonResponse<ProtocolEnvelope<O>>(
+          res,
+          serializer,
+        );
+        if (isReadable(maybe)) return maybe;
+        return assertOkEnvelope<O>(maybe as ProtocolEnvelope<O>, {
+          fallbackMessage: "Tunnel task error",
+        }) as O;
       }
 
       // B) Multipart: detect File sentinels with local Node sources

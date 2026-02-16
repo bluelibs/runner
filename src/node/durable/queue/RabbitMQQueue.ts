@@ -137,7 +137,12 @@ export class RabbitMQQueue implements IDurableQueue {
             channel.nack(msg, false, false);
             return;
           }
-          content = parsed as QueueMessage<T>;
+          const currentAttempts =
+            typeof parsed.attempts === "number" ? parsed.attempts : 0;
+          content = {
+            ...parsed,
+            attempts: currentAttempts + 1,
+          } as QueueMessage<T>;
         } catch {
           channel.nack(msg, false, false);
           return;

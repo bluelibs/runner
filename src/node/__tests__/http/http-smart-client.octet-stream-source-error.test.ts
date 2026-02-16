@@ -83,4 +83,37 @@ describe("createHttpSmartClient - octet-stream source error", () => {
     const hdrs = captured[0] as Record<string, string>;
     expect(typeof hdrs["x-runner-context"]).toBe("string");
   });
+
+  it("fails fast when octet-stream context serialization fails", async () => {
+    const requestSpy = jest.spyOn(http, "request").mockImplementation(() => {
+      throw new Error("request should not run");
+    }) as any;
+    const client = createHttpSmartClient({
+      baseUrl,
+      serializer: new Serializer(),
+      contexts: [
+        {
+          id: "ctx.bad",
+          use: () => {
+            throw new Error("missing context");
+          },
+          serialize: (v: unknown) => JSON.stringify(v),
+          parse: (s: string) => JSON.parse(s),
+          provide: (_v: unknown, fn: () => unknown) => fn(),
+          require: () => ({}) as any,
+        } as any,
+      ],
+    });
+
+    const src = new Readable({
+      read() {
+        this.push(null);
+      },
+    });
+
+    await expect(client.task("duplex.bad", src as any)).rejects.toThrow(
+      /Failed to serialize async context "ctx.bad"/,
+    );
+    expect(requestSpy).not.toHaveBeenCalled();
+  });
 });

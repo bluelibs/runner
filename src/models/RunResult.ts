@@ -7,6 +7,10 @@ import { Store } from "./Store";
 import { TaskRunner } from "./TaskRunner";
 
 export class RunResult<V> {
+  #disposed = false;
+  #disposing = false;
+  #disposePromise: Promise<void> | undefined;
+
   constructor(
     public readonly value: V,
     public readonly logger: Logger,
@@ -15,6 +19,12 @@ export class RunResult<V> {
     private readonly taskRunner: TaskRunner,
     private readonly disposeFn: () => Promise<void>,
   ) {}
+
+  private ensureRuntimeIsActive() {
+    if (this.#disposed || this.#disposing) {
+      throw new Error("RunResult has been disposed.");
+    }
+  }
 
   /**
    * Run a task within the context of the run result.
@@ -30,6 +40,8 @@ export class RunResult<V> {
     task: ITask<I, O, D> | string,
     ...args: I extends undefined | void ? [] : [I]
   ) => {
+    this.ensureRuntimeIsActive();
+
     if (typeof task === "string") {
       const taskId = task;
       if (!this.store.tasks.has(taskId)) {
@@ -50,6 +62,8 @@ export class RunResult<V> {
     event: IEvent<P> | string,
     payload?: P extends undefined | void ? undefined : P,
   ) => {
+    this.ensureRuntimeIsActive();
+
     if (typeof event === "string") {
       const eventId = event;
       if (!this.store.events.has(eventId)) {
@@ -68,6 +82,8 @@ export class RunResult<V> {
   public getResourceValue = <Output extends Promise<any>>(
     resource: string | IResource<any, Output, any, any, any>,
   ): Output extends Promise<infer U> ? U : Output => {
+    this.ensureRuntimeIsActive();
+
     const resourceId = typeof resource === "string" ? resource : resource.id;
     if (!this.store.resources.has(resourceId)) {
       throw new Error(`Resource "${resourceId}" not found.`);
@@ -84,6 +100,8 @@ export class RunResult<V> {
   public getResourceConfig = <Config>(
     resource: string | IResource<Config, any, any, any, any>,
   ): Config => {
+    this.ensureRuntimeIsActive();
+
     const resourceId = typeof resource === "string" ? resource : resource.id;
     if (!this.store.resources.has(resourceId)) {
       throw new Error(`Resource "${resourceId}" not found.`);
@@ -93,6 +111,26 @@ export class RunResult<V> {
   };
 
   public dispose = () => {
-    return this.disposeFn();
+    if (this.#disposed) {
+      return Promise.resolve();
+    }
+
+    if (this.#disposePromise) {
+      return this.#disposePromise;
+    }
+
+    this.#disposing = true;
+
+    this.#disposePromise = Promise.resolve()
+      .then(() => this.disposeFn())
+      .then(() => {
+        this.#disposed = true;
+      })
+      .finally(() => {
+        this.#disposing = false;
+        this.#disposePromise = undefined;
+      });
+
+    return this.#disposePromise;
   };
 }

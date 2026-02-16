@@ -14,6 +14,7 @@ import { Store } from "./Store";
 import {
   ResourceStoreElementType,
   TaskStoreElementType,
+  HookStoreElementType,
   HookDependencyState,
 } from "../types/storeTypes";
 import * as utils from "../define";
@@ -34,6 +35,9 @@ import { findDependencyStrategy } from "./utils/dependencyStrategies";
 export class DependencyProcessor {
   protected readonly resourceInitializer: ResourceInitializer;
   protected readonly logger!: Logger;
+  private readonly pendingHookEvents = new Map<string, IEventEmission<any>[]>();
+  private readonly drainingHookIds = new Set<string>();
+
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
@@ -84,6 +88,7 @@ export class DependencyProcessor {
         hook.id,
       );
       hookStoreElement.dependencyState = HookDependencyState.Ready;
+      await this.flushBufferedHookEvents(hookStoreElement);
     }
 
     for (const resource of this.store.resources.values()) {
@@ -182,7 +187,7 @@ export class DependencyProcessor {
   protected async processResourceDependencies<TD extends DependencyMapType>(
     resource: ResourceStoreElementType<any, any, TD>,
   ) {
-    if (Object.keys(resource.computedDependencies || {}).length > 0) {
+    if (resource.computedDependencies !== undefined) {
       return;
     }
 
@@ -234,7 +239,7 @@ export class DependencyProcessor {
   >(original: ITask<I, O, D>): TaskDependencyWithIntercept<I, O> {
     const taskId = original.id;
     const fn: (input: I, options?: TaskCallOptions) => O = (input, options) => {
-      const storeTask = this.store.tasks.get(taskId)!;
+      const storeTask = this.getStoreTaskOrThrow(taskId);
       const effective: ITask<I, O, D> = storeTask.task;
 
       return this.taskRunner.run(effective, input, options) as O;
@@ -242,12 +247,22 @@ export class DependencyProcessor {
     return Object.assign(fn, {
       intercept: (middleware: TaskLocalInterceptor<I, O>) => {
         this.store.checkLock();
-        const storeTask = this.store.tasks.get(taskId)!;
+        const storeTask = this.getStoreTaskOrThrow(taskId);
 
         if (!storeTask.interceptors) storeTask.interceptors = [];
         storeTask.interceptors.push(middleware);
       },
     }) as unknown as TaskDependencyWithIntercept<I, O>;
+  }
+
+  private getStoreTaskOrThrow(
+    taskId: string,
+  ): TaskStoreElementType<any, any, any> {
+    const storeTask = this.store.tasks.get(taskId);
+    if (storeTask === undefined) {
+      return dependencyNotFoundError.throw({ key: `Task ${taskId}` });
+    }
+    return storeTask;
   }
 
   public async initializeRoot() {
@@ -282,8 +297,10 @@ export class DependencyProcessor {
             return;
           }
           if (hookStoreElement.dependencyState !== HookDependencyState.Ready) {
+            this.enqueueBufferedHookEvent(hook.id, receivedEvent);
             return;
           }
+          await this.flushBufferedHookEvents(hookStoreElement);
           return this.eventManager.executeHookWithInterceptors(
             hook,
             receivedEvent,
@@ -321,6 +338,60 @@ export class DependencyProcessor {
           );
         }
       }
+    }
+  }
+
+  private enqueueBufferedHookEvent(
+    hookId: string,
+    event: IEventEmission<any>,
+  ): void {
+    const queue = this.pendingHookEvents.get(hookId);
+    if (queue) {
+      queue.push(event);
+      return;
+    }
+    this.pendingHookEvents.set(hookId, [event]);
+  }
+
+  private async flushBufferedHookEvents(
+    hookStoreElement: HookStoreElementType,
+  ): Promise<void> {
+    if (hookStoreElement.dependencyState !== HookDependencyState.Ready) {
+      return;
+    }
+
+    const hook = hookStoreElement.hook;
+    if (this.drainingHookIds.has(hook.id)) {
+      return;
+    }
+
+    if (!this.pendingHookEvents.has(hook.id)) {
+      return;
+    }
+
+    this.drainingHookIds.add(hook.id);
+    try {
+      while (true) {
+        const queue = this.pendingHookEvents.get(hook.id);
+        if (!queue || queue.length === 0) {
+          this.pendingHookEvents.delete(hook.id);
+          break;
+        }
+        this.pendingHookEvents.delete(hook.id);
+
+        for (const queuedEvent of queue) {
+          if (queuedEvent.source === hook.id) {
+            continue;
+          }
+          await this.eventManager.executeHookWithInterceptors(
+            hook,
+            queuedEvent,
+            hookStoreElement.computedDependencies,
+          );
+        }
+      }
+    } finally {
+      this.drainingHookIds.delete(hook.id);
     }
   }
 
@@ -447,7 +518,7 @@ export class DependencyProcessor {
         sr.computedDependencies as ResourceDependencyValuesType<any>;
 
       // If not already computed, compute and cache it!
-      if (!wrapped || Object.keys(wrapped).length === 0) {
+      if (wrapped === undefined) {
         const raw = await this.extractDependencies(depMap, resource.id);
         wrapped = this.wrapResourceDependencies(depMap, raw);
         sr.computedDependencies = wrapped;

@@ -97,4 +97,39 @@ describe("run.ts shutdown hooks & error boundary", () => {
     // restore
     (process as unknown as { exit: unknown }).exit = originalExit;
   });
+
+  it("exits with code 1 when shutdown disposers fail", async () => {
+    const app = defineResource({
+      id: "tests.app.shutdown.fail",
+      async init() {
+        return "ok" as const;
+      },
+      async dispose() {
+        throw new Error("dispose failed");
+      },
+    });
+
+    const originalExit = process.exit;
+    const exitCalls: any[] = [];
+    (process as unknown as { exit: unknown }).exit = ((code?: number) => {
+      exitCalls.push(code);
+      return undefined as unknown as never;
+    }) as unknown as never;
+
+    const consoleSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    await run(app, {
+      errorBoundary: false,
+      shutdownHooks: true,
+    });
+
+    process.emit("SIGTERM");
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(exitCalls[0]).toBe(1);
+    expect(consoleSpy).toHaveBeenCalled();
+
+    (process as unknown as { exit: unknown }).exit = originalExit;
+  });
 });

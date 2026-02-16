@@ -66,6 +66,9 @@ export class Semaphore {
     if (maxPermits <= 0) {
       throw new Error("maxPermits must be greater than 0");
     }
+    if (!Number.isInteger(maxPermits)) {
+      throw new Error("maxPermits must be an integer");
+    }
     this.permits = maxPermits;
     this.maxPermits = maxPermits;
   }
@@ -104,7 +107,7 @@ export class Semaphore {
         operation.timeout = setTimeout(() => {
           this.removeFromQueue(operation);
           this.emit("timeout");
-          reject(
+          operation.reject(
             new Error(`Semaphore acquire timeout after ${options.timeout}ms`),
           );
         }, options.timeout);

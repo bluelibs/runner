@@ -181,8 +181,8 @@ describe("EventManager", () => {
     const handler1 = jest.fn();
     const handler2 = jest.fn();
 
-    eventManager.addListener(eventDefinition, handler1);
-    eventManager.addListener(eventDefinition, handler2);
+    eventManager.addListener(eventDefinition, handler1, { order: 1 });
+    eventManager.addListener(eventDefinition, handler2, { order: 2 });
 
     await eventManager.emit(eventDefinition, "testData", "test");
 
@@ -387,21 +387,79 @@ describe("EventManager", () => {
     ).rejects.toThrow("Handler error");
   });
 
-  it("should continue calling other handlers if one fails", async () => {
+  it("should stop calling other handlers if one fails", async () => {
     const handler1 = jest.fn().mockImplementation(() => {
       throw new Error("Handler error");
     });
     const handler2 = jest.fn();
 
-    eventManager.addListener(eventDefinition, handler1);
-    eventManager.addListener(eventDefinition, handler2);
+    eventManager.addListener(eventDefinition, handler1, { order: -10 });
+    eventManager.addListener(eventDefinition, handler2, { order: 10 });
 
     await expect(
       eventManager.emit(eventDefinition, "testData", "test"),
     ).rejects.toThrow("Handler error");
 
-    // The second handler should have been called despite the error in the first
-    expect(handler2).toHaveBeenCalledTimes(1);
+    expect(handler2).toHaveBeenCalledTimes(0);
+  });
+
+  it("should stop sequential handlers when the first-by-order fails", async () => {
+    const first = jest.fn().mockImplementation(() => {
+      throw new Error("first failed");
+    });
+    const second = jest.fn();
+
+    eventManager.addListener(eventDefinition, first, { order: -10 });
+    eventManager.addListener(eventDefinition, second, { order: 10 });
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData", "test"),
+    ).rejects.toThrow("first failed");
+
+    expect(first).toHaveBeenCalledTimes(1);
+    expect(second).toHaveBeenCalledTimes(0);
+  });
+
+  it("throws first sequential listener failure and stops execution", async () => {
+    const first = jest.fn().mockImplementation(() => {
+      throw new Error("first failed");
+    });
+    const second = jest.fn().mockImplementation(() => {
+      throw new Error("second failed");
+    });
+
+    eventManager.addListener(eventDefinition, first, { order: 1, id: "first" });
+    eventManager.addListener(eventDefinition, second, {
+      order: 2,
+      id: "second",
+    });
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData", "test"),
+    ).rejects.toMatchObject({
+      message: "first failed",
+      listenerId: "first",
+      listenerOrder: 1,
+    });
+    expect(second).toHaveBeenCalledTimes(0);
+  });
+
+  it("annotates primitive sequential errors with listener metadata", async () => {
+    eventManager.addListener(
+      eventDefinition,
+      () => {
+        throw "seq-primitive-error";
+      },
+      { id: "seq-primitive", order: 3 },
+    );
+
+    await expect(
+      eventManager.emit(eventDefinition, "testData", "test"),
+    ).rejects.toMatchObject({
+      message: "seq-primitive-error",
+      listenerId: "seq-primitive",
+      listenerOrder: 3,
+    });
   });
 
   it("should not allow modification after lock", () => {

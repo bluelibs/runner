@@ -102,4 +102,25 @@ describe("CycleContext", () => {
       ),
     ).rejects.toThrow(/cycle detected/i);
   });
+
+  it("detects alternating hook re-emits on the same event", async () => {
+    const ctx = new CycleContext(true);
+    const frameInitial = { id: "evt", source: "initial" };
+    const frameA = { id: "evt", source: "hook-A" };
+    const frameB = { id: "evt", source: "hook-B" };
+
+    await expect(
+      ctx.runHook("hook-A", () =>
+        ctx.runEmission(frameInitial, "hook-A", async () =>
+          ctx.runHook("hook-B", () =>
+            ctx.runEmission(frameA, "hook-B", async () =>
+              ctx.runHook("hook-A", () =>
+                ctx.runEmission(frameB, "hook-A", async () => {}),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ).rejects.toThrow(/cycle detected/i);
+  });
 });

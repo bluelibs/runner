@@ -3,6 +3,7 @@ import {
   defineEvent,
   defineHook,
   defineResource,
+  defineResourceMiddleware,
   defineTaskMiddleware,
 } from "../../define";
 
@@ -49,6 +50,41 @@ describe("override() helper", () => {
     expect(changed.meta?.description).toBe("Updated");
   });
 
+  it("should validate config using overridden resource schema", () => {
+    const base = resource<string>({
+      id: "test.resource.schema.base",
+      configSchema: {
+        parse: () => {
+          throw new Error("base schema");
+        },
+      },
+    });
+
+    const changed = override(base, {
+      configSchema: {
+        parse: (value: string) => value,
+      },
+    });
+
+    expect(() => changed.with("ok")).not.toThrow();
+  });
+
+  it("should fork overridden resources using overridden definition", async () => {
+    const base = resource<{ name: string }>({
+      id: "test.resource.fork.base",
+      init: async (cfg) => `base:${cfg.name}`,
+    });
+
+    const changed = override(base, {
+      init: async (cfg) => `changed:${cfg.name}`,
+    });
+
+    const forked = changed.fork("test.resource.fork.changed");
+    const value = await forked.init!({ name: "Ada" }, {}, undefined);
+
+    expect(value).toBe("changed:Ada");
+  });
+
   it("should preserve id and override run for task middleware", async () => {
     const mw = defineTaskMiddleware({
       id: "test.middleware",
@@ -76,6 +112,50 @@ describe("override() helper", () => {
     const changedResult = await changed.run(input, {}, undefined);
     expect(baseResult).toBe(456);
     expect(changedResult).toEqual({ wrapped: 456 });
+  });
+
+  it("should keep middleware overrides when configuring with .with()", async () => {
+    const taskMiddleware = defineTaskMiddleware<{ label: string }>({
+      id: "test.middleware.with.task",
+      run: async ({ next }) => `base:${await next()}`,
+    });
+    const resourceMiddleware = defineResourceMiddleware<{ label: string }>({
+      id: "test.middleware.with.resource",
+      run: async ({ next }) => `base:${await next()}`,
+    });
+
+    const taskOverride = override(taskMiddleware, {
+      run: async ({ next }) => `changed:${await next()}`,
+    });
+    const resourceOverride = override(resourceMiddleware, {
+      run: async ({ next }) => `changed:${await next()}`,
+    });
+
+    const taskConfigured = taskOverride.with({ label: "task" });
+    const resourceConfigured = resourceOverride.with({ label: "resource" });
+
+    const taskInput: definitions.ITaskMiddlewareExecutionInput<any> = {
+      task: { definition: undefined as any, input: "payload" },
+      next: async () => "ok",
+    } as any;
+    const resourceInput: definitions.IResourceMiddlewareExecutionInput<any> = {
+      resource: { definition: undefined as any, config: {} },
+      next: async () => "ok",
+    } as any;
+
+    const taskResult = await taskConfigured.run(
+      taskInput,
+      {},
+      taskConfigured.config,
+    );
+    const resourceResult = await resourceConfigured.run(
+      resourceInput,
+      {},
+      resourceConfigured.config,
+    );
+
+    expect(taskResult).toBe("changed:ok");
+    expect(resourceResult).toBe("changed:ok");
   });
 
   it("should be type-safe: cannot override id on task/resource/middleware", () => {

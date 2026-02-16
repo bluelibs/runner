@@ -9,7 +9,7 @@ export interface ICacheInstance {
   get(key: string): any;
   clear(): void;
   /** Optional presence check to disambiguate cached undefined values */
-  has?(key: string): boolean;
+  has?(key: string): boolean | Promise<boolean>;
 }
 
 // Default cache factory task that can be overridden
@@ -118,7 +118,7 @@ export const cacheMiddleware = defineTaskMiddleware({
     const cachedValue = await cacheHolderForTask.get(key);
     const hasCachedEntry =
       typeof cacheHolderForTask.has === "function"
-        ? cacheHolderForTask.has(key)
+        ? await cacheHolderForTask.has(key)
         : cachedValue !== undefined;
 
     if (hasCachedEntry) {
@@ -129,7 +129,11 @@ export const cacheMiddleware = defineTaskMiddleware({
     journal.set(journalKeys.hit, false, { override: true });
     const result = await next(task!.input);
 
-    await cacheHolderForTask.set(key, result);
+    try {
+      await cacheHolderForTask.set(key, result);
+    } catch {
+      // Fail-open: preserve successful task result even if cache backend write fails.
+    }
 
     return result;
   },

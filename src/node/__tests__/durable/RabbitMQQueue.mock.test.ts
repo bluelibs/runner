@@ -147,6 +147,39 @@ describe("durable: RabbitMQQueue", () => {
     );
   });
 
+  it("increments attempts before passing messages to the handler", async () => {
+    await queue.init();
+    let consumer:
+      | ((msg: { content: Buffer } | null) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(async (_q: string, h: any) => {
+      consumer = h;
+    });
+
+    const handler = jest.fn(async () => {});
+    await queue.consume(handler);
+
+    await consumer?.({
+      content: Buffer.from(
+        JSON.stringify({
+          id: "attempt-msg",
+          type: "execute",
+          payload: { a: 1 },
+          attempts: 0,
+          maxAttempts: 3,
+          createdAt: new Date().toISOString(),
+        }),
+      ),
+    });
+
+    expect(handler).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "attempt-msg",
+        attempts: 1,
+      }),
+    );
+  });
+
   it("nacks messages without a valid id and skips handler", async () => {
     await queue.init();
     let consumer:

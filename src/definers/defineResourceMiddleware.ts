@@ -59,24 +59,53 @@ export function defineResourceMiddleware<
     TEnforceOutputContract,
     TDependencies
   > => {
+    const resolveCurrent = (
+      candidate: unknown,
+    ): IResourceMiddleware<
+      TConfig,
+      TEnforceInputContract,
+      TEnforceOutputContract,
+      TDependencies
+    > & {
+      [symbolMiddlewareConfigured]?: true;
+    } => {
+      if (
+        candidate &&
+        typeof candidate === "object" &&
+        symbolResourceMiddleware in candidate
+      ) {
+        return candidate as IResourceMiddleware<
+          TConfig,
+          TEnforceInputContract,
+          TEnforceOutputContract,
+          TDependencies
+        > & {
+          [symbolMiddlewareConfigured]?: true;
+        };
+      }
+      return obj;
+    };
+
     return {
       ...obj,
-      with: (config: TConfig) => {
-        if (obj.configSchema) {
+      with: function (config: TConfig) {
+        const current = resolveCurrent(this);
+
+        if (current.configSchema) {
           try {
-            config = obj.configSchema.parse(config);
+            config = current.configSchema.parse(config);
           } catch (error) {
             validationError.throw({
               subject: "Middleware config",
-              id: obj.id,
+              id: current.id,
               originalError: error as Error,
             });
           }
         }
         return wrap({
-          ...obj,
+          ...current,
           [symbolMiddlewareConfigured]: true,
-          config: mergeMiddlewareConfig(obj.config as TConfig, config),
+          config: mergeMiddlewareConfig(current.config as TConfig, config),
         } satisfies IResourceMiddlewareConfigured<
           TConfig,
           TEnforceInputContract,

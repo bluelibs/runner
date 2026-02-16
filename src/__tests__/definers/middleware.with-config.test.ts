@@ -38,6 +38,17 @@ describe("middleware .with(config)", () => {
       const configured = mw.with(5);
       expect(configured.config).toBe(5);
     });
+
+    it("falls back to the base middleware when with() is called with detached this", () => {
+      const mw = defineTaskMiddleware<{ value: number }>({
+        id: "tests.mw.task.detached",
+        run: async ({ next }) => next(),
+      });
+
+      const detachedWith = mw.with;
+      const configured = detachedWith.call(undefined, { value: 42 });
+      expect(configured.config).toEqual({ value: 42 });
+    });
   });
 
   describe("defineResourceMiddleware", () => {
@@ -75,6 +86,17 @@ describe("middleware .with(config)", () => {
 
       const configured = mw.with(5);
       expect(configured.config).toBe(5);
+    });
+
+    it("falls back to the base resource middleware when with() is called with detached this", () => {
+      const mw = defineResourceMiddleware<{ value: number }>({
+        id: "tests.mw.resource.detached",
+        run: async ({ next }) => next(),
+      });
+
+      const detachedWith = mw.with;
+      const configured = detachedWith.call(undefined, { value: 7 });
+      expect(configured.config).toEqual({ value: 7 });
     });
   });
 });

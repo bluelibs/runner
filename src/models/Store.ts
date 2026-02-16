@@ -5,7 +5,6 @@ import {
   AnyTask,
   ITaskMiddleware,
   IResourceMiddleware,
-  DependencyMapType,
   TaggedTask,
   TaggedResource,
   AnyResource,
@@ -260,7 +259,7 @@ export class Store {
 
     this.root = {
       resource: root,
-      computedDependencies: {},
+      computedDependencies: undefined,
       config,
       value: undefined,
       isInitialized: false,
@@ -308,15 +307,40 @@ export class Store {
   }
 
   public async dispose() {
+    const disposalErrors: Error[] = [];
+
     for (const resource of this.getResourcesInDisposeOrder()) {
-      if (resource.isInitialized && resource.resource.dispose) {
-        await resource.resource.dispose(
-          resource.value,
-          resource.config,
-          resource.computedDependencies as unknown as DependencyMapType,
-          resource.context,
+      try {
+        if (resource.isInitialized && resource.resource.dispose) {
+          await resource.resource.dispose(
+            resource.value,
+            resource.config,
+            resource.computedDependencies ?? {},
+            resource.context,
+          );
+        }
+      } catch (error) {
+        disposalErrors.push(
+          error instanceof Error ? error : new Error(String(error)),
         );
       }
+    }
+
+    this.clearRuntimeStateAfterDispose();
+    this.eventManager.dispose();
+
+    if (disposalErrors.length === 1) {
+      throw disposalErrors[0];
+    }
+
+    if (disposalErrors.length > 1) {
+      throw Object.assign(
+        new Error("One or more resources failed to dispose."),
+        {
+          name: "AggregateError",
+          errors: disposalErrors,
+        },
+      );
     }
   }
 
@@ -335,6 +359,17 @@ export class Store {
 
   private getResourcesInDisposeOrder(): ResourceStoreElementType[] {
     return computeDisposeOrder(this.resources, this.initializedResourceIds);
+  }
+
+  private clearRuntimeStateAfterDispose() {
+    for (const resource of this.resources.values()) {
+      resource.value = undefined;
+      resource.context = undefined;
+      resource.computedDependencies = undefined;
+      resource.isInitialized = false;
+    }
+
+    this.initializedResourceIds.length = 0;
   }
 
   /**

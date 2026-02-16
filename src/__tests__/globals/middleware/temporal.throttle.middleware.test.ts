@@ -226,4 +226,73 @@ describe("Temporal Middleware: Throttle", () => {
     await expect(pending).rejects.toThrow("boom");
     expect(callCount).toBe(2);
   });
+
+  it("should clear latestInput after scheduled execution completes", async () => {
+    type ThrottleRunInput = Parameters<typeof throttleTaskMiddleware.run>[0];
+    type ThrottleRunDeps = Parameters<typeof throttleTaskMiddleware.run>[1];
+    type ThrottleRunConfig = Parameters<typeof throttleTaskMiddleware.run>[2];
+
+    const config = { ms: 50 };
+    const deps = {
+      state: {
+        throttleStates: new WeakMap(),
+        trackedThrottleStates: new Set(),
+        isDisposed: false,
+      },
+    } as unknown as ThrottleRunDeps;
+
+    const next = async (input?: string) => input;
+    const inputFor = (input: string): ThrottleRunInput =>
+      ({
+        task: {
+          definition: {
+            id: "throttle.unit.latest-input",
+          } as unknown as ThrottleRunInput["task"]["definition"],
+          input,
+        },
+        next,
+      }) as unknown as ThrottleRunInput;
+
+    const setTimeoutSpy = jest.spyOn(globalThis, "setTimeout");
+    try {
+      let scheduled: (() => Promise<void>) | undefined;
+      setTimeoutSpy.mockImplementation(((
+        fn: TimerHandler,
+      ): ReturnType<typeof setTimeout> => {
+        if (typeof fn !== "function") {
+          throw new Error("Expected function timer callback");
+        }
+        scheduled = fn as () => Promise<void>;
+        return 1 as unknown as ReturnType<typeof setTimeout>;
+      }) as unknown as typeof setTimeout);
+
+      await expect(
+        throttleTaskMiddleware.run(
+          inputFor("a"),
+          deps,
+          config as ThrottleRunConfig,
+        ),
+      ).resolves.toBe("a");
+
+      const pending = throttleTaskMiddleware.run(
+        inputFor("b"),
+        deps,
+        config as ThrottleRunConfig,
+      );
+
+      expect(scheduled).toBeDefined();
+      await scheduled?.();
+      await expect(pending).resolves.toBe("b");
+
+      const throttleState = (
+        deps.state.throttleStates as unknown as WeakMap<
+          ThrottleRunConfig,
+          { latestInput?: unknown }
+        >
+      ).get(config);
+      expect(throttleState?.latestInput).toBeUndefined();
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+  });
 });

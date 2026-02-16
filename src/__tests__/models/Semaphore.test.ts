@@ -32,6 +32,7 @@ describe("Semaphore", () => {
       expect(() => new Semaphore(-1)).toThrow(
         "maxPermits must be greater than 0",
       );
+      expect(() => new Semaphore(1.5)).toThrow("maxPermits must be an integer");
     });
   });
 
@@ -341,6 +342,31 @@ describe("Semaphore", () => {
       await expect(queuedOperation).rejects.toThrow("timeout");
 
       expect(semaphore.getWaitingCount()).toBe(0);
+    });
+
+    it("should not emit aborted after a timeout settled the operation", async () => {
+      await semaphore.acquire();
+      await semaphore.acquire();
+
+      let abortedEvents = 0;
+      semaphore.on("aborted", () => {
+        abortedEvents += 1;
+      });
+
+      const controller = new AbortController();
+      const queuedOperation = semaphore.acquire({
+        timeout: 10,
+        signal: controller.signal,
+      });
+
+      jest.advanceTimersByTime(20);
+      await Promise.resolve();
+      await expect(queuedOperation).rejects.toThrow("timeout");
+
+      controller.abort();
+      await Promise.resolve();
+
+      expect(abortedEvents).toBe(0);
     });
 
     it("should handle both timeout and cancellation", async () => {

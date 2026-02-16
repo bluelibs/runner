@@ -28,6 +28,11 @@ export async function readRequestBody(
       })();
       reject(err);
     };
+    const onClose = () => {
+      const complete = Boolean((req as { complete?: unknown }).complete);
+      if (complete) return;
+      onAbort();
+    };
     const onError = (err: unknown) => {
       cleanup();
       reject(err instanceof Error ? err : new Error(String(err)));
@@ -74,14 +79,14 @@ export async function readRequestBody(
       remove("data", onData);
       remove("end", onEnd);
       remove("error", onError);
-      remove("aborted", onAbort);
+      remove("close", onClose);
       signal?.removeEventListener("abort", onAbort);
     };
 
     req.on("data", onData);
     req.on("end", onEnd);
     req.on("error", onError);
-    req.on("aborted", onAbort);
+    req.on("close", onClose);
     if (signal) {
       if (signal.aborted) return onAbort();
       signal.addEventListener("abort", onAbort, {

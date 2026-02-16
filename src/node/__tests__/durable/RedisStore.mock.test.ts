@@ -616,8 +616,15 @@ describe("durable: RedisStore", () => {
       status: "pending",
     };
     await store.createTimer(timer);
-    expect(redisMock.hset).toHaveBeenCalled();
-    expect(redisMock.zadd).toHaveBeenCalled();
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("hset"'),
+      2,
+      "durable:timers",
+      "durable:timers_schedule",
+      "t1",
+      expect.any(String),
+      timer.fireAt.getTime(),
+    );
 
     redisMock.zrangebyscore.mockResolvedValue(["t1"]);
     redisMock.pipeline.mockReturnValue({
@@ -637,6 +644,27 @@ describe("durable: RedisStore", () => {
 
     await store.deleteTimer("t1");
     expect(redisMock.hdel).toHaveBeenCalledWith("durable:timers", "t1");
+  });
+
+  it("creates timers atomically to avoid ghost timer entries", async () => {
+    const timer: Timer = {
+      id: "t-atomic",
+      type: "sleep",
+      fireAt: new Date("2024-01-01T00:00:00.000Z"),
+      status: "pending",
+    };
+
+    await store.createTimer(timer);
+
+    expect(redisMock.eval).toHaveBeenCalledWith(
+      expect.stringContaining('redis.call("hset"'),
+      2,
+      "durable:timers",
+      "durable:timers_schedule",
+      "t-atomic",
+      expect.any(String),
+      timer.fireAt.getTime(),
+    );
   });
 
   it("handles empty/null timer lookups", async () => {
