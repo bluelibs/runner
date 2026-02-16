@@ -76,13 +76,17 @@ export const httpTunnel = r
     const baseUrl = process.env[EnvVar.TunnelBaseUrl];
     const token = process.env[EnvVar.TunnelToken] ?? "dev-secret";
 
-    const client = clientFactory({ baseUrl, auth: { token } });
+    const client =
+      mode === "client"
+        ? clientFactory({ baseUrl, auth: { token } })
+        : undefined;
 
     return {
       transport: "http",
       mode,
       tasks: [add.id],
-      run: async (task, input) => client.task(task.id, input);
+      run: async (task, input) =>
+        mode === "client" ? client?.task(task.id, input) : task(input),
     };
   })
   .build();
@@ -237,10 +241,10 @@ Notes:
 
 `nodeExposure` auth supports more than a single token:
 
-- `token` can be `string` or `string[]` (token rotation / multiple clients).
-- `header` lets you override `x-runner-token`.
+- The `token` can be `string` or `string[]` (token rotation / multiple clients).
+- The `header` setting lets you override `x-runner-token`.
 - Validator tasks tagged `globals.tags.authValidator` authorize incoming requests on the server exposure path (`nodeExposure` with tunnel `mode: "server"` or `"both"`).
-- Default is fail-closed: if no token and no validators, requests are rejected unless `allowAnonymous: true`.
+- The default is fail-closed: if no token and no validators, requests are rejected unless `allowAnonymous: true`.
 
 In short: validator tasks are a server-side gate for exposed HTTP calls, not a client-side tunnel selector.
 

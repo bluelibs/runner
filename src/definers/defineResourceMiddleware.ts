@@ -98,7 +98,8 @@ export function defineResourceMiddleware<
             validationError.throw({
               subject: "Middleware config",
               id: current.id,
-              originalError: error as Error,
+              originalError:
+                error instanceof Error ? error : new Error(String(error)),
             });
           }
         }

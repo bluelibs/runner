@@ -991,7 +991,7 @@ const productTask = r
   .build();
 ```
 
-> **runtime:** "Type Contracts: The pre-nup of code. 'If you want to use my authorizedTag, you _will_ bring a userId to the table.' It's not controlling; it's just... strictly typed love."
+> **runtime:** "Type Contracts: The prenup of code. 'If you want to use my authorizedTag, you _will_ bring a userId to the table.' It's not controlling; it's just... strictly typed love."
 
 ### Resource Contracts
 

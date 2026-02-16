@@ -101,13 +101,14 @@ export const serializeTreeValue = (
       );
       if (typeDef) {
         context.serializingValueTypes.add(objectValue);
-        const serializedPayload = typeDef.serialize(objectValue);
-        const shouldExcludeCurrentType =
-          options.typeRegistry.shouldExcludeTypeFromPayload(
-            typeDef,
-            serializedPayload,
-          );
+        let shouldExcludeCurrentType = false;
         try {
+          const serializedPayload = typeDef.serialize(objectValue);
+          shouldExcludeCurrentType =
+            options.typeRegistry.shouldExcludeTypeFromPayload(
+              typeDef,
+              serializedPayload,
+            );
           if (shouldExcludeCurrentType) {
             context.excludedTypeIds.push(typeDef.id);
           }

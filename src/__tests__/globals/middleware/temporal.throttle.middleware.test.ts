@@ -235,11 +235,13 @@ describe("Temporal Middleware: Throttle", () => {
     const config = { ms: 50 };
     const deps = {
       state: {
+        debounceStates: new WeakMap(),
         throttleStates: new WeakMap(),
+        trackedDebounceStates: new Set(),
         trackedThrottleStates: new Set(),
         isDisposed: false,
       },
-    } as unknown as ThrottleRunDeps;
+    } satisfies ThrottleRunDeps;
 
     const next = async (input?: string) => input;
     const inputFor = (input: string): ThrottleRunInput =>

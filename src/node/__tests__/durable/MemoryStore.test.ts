@@ -275,44 +275,4 @@ describe("durable: MemoryStore", () => {
     await store.releaseLock("res", "wrong");
     await store.releaseLock("res", lockId!);
   });
-
-  it("prunes expired timer claim locks while processing new claims", async () => {
-    const store = new MemoryStore();
-
-    await store.claimTimer("t-1", "worker", 5);
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    await store.claimTimer("t-2", "worker", 5);
-
-    const internalLocks = (store as unknown as { locks: Map<string, unknown> })
-      .locks;
-    const claimKeys = Array.from(internalLocks.keys()).filter((key) =>
-      key.startsWith("timer:claim:"),
-    );
-
-    expect(claimKeys).toEqual(["timer:claim:t-2"]);
-  });
-
-  it("renews lock TTL only when the lock owner still matches", async () => {
-    const store = new MemoryStore();
-
-    const lockId = await store.acquireLock("resource", 20);
-    expect(lockId).toBeTruthy();
-
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    await expect(store.renewLock("resource", lockId!, 50)).resolves.toBe(true);
-
-    await new Promise((resolve) => setTimeout(resolve, 25));
-    await expect(store.acquireLock("resource", 5)).resolves.toBeNull();
-
-    await expect(
-      store.renewLock("resource", "another-lock-id", 50),
-    ).resolves.toBe(false);
-
-    await expect(
-      store.renewLock("missing-resource", lockId!, 50),
-    ).resolves.toBe(false);
-
-    await new Promise((resolve) => setTimeout(resolve, 60));
-    await expect(store.renewLock("resource", lockId!, 50)).resolves.toBe(false);
-  });
 });

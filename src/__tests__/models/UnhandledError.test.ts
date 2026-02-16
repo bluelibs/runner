@@ -13,6 +13,10 @@ describe("UnhandledError helpers", () => {
       bufferLogs: false,
     });
 
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
   it("normalizes non-Error values and includes kind in data", async () => {
     const logger = makeLogger();
     const spy = jest.spyOn(logger, "error").mockResolvedValue();

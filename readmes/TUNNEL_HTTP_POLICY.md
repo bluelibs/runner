@@ -97,8 +97,8 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 | `x-runner-request-id` | client <-> server | Optional | Correlation id. Server accepts valid incoming ids and otherwise generates one; response echoes final id. |
 | `x-runner-context` | client -> server | Optional | Serializer-encoded async-context map. Server restores only registered contexts; invalid entries are ignored. |
 | `content-type` | client -> server | Yes | Request mode selector (`application/json`, `multipart/form-data`, `application/octet-stream`). |
-| `X-Content-Type-Options` | server -> client | Always | Security header set to `nosniff`. |
-| `X-Frame-Options` | server -> client | Always | Security header set to `DENY`. |
+| `x-content-type-options` | server -> client | Always | Security header set to `nosniff`. |
+| `x-frame-options` | server -> client | Always | Security header set to `DENY`. |
 
 ### Error Handling
 

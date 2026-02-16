@@ -82,20 +82,21 @@ describe("run.ts shutdown hooks & error boundary", () => {
       return undefined as unknown as never;
     }) as unknown as never;
 
-    const { value } = await run(app, {
-      errorBoundary: false,
-      shutdownHooks: true,
-    });
+    try {
+      const { value } = await run(app, {
+        errorBoundary: false,
+        shutdownHooks: true,
+      });
 
-    process.emit("SIGTERM");
+      process.emit("SIGTERM");
 
-    await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
 
-    expect(disposed).toContain(String(value));
-    expect(exitCalls[0]).toBe(0);
-
-    // restore
-    (process as unknown as { exit: unknown }).exit = originalExit;
+      expect(disposed).toContain(String(value));
+      expect(exitCalls[0]).toBe(0);
+    } finally {
+      (process as unknown as { exit: unknown }).exit = originalExit;
+    }
   });
 
   it("exits with code 1 when shutdown disposers fail", async () => {
@@ -119,17 +120,20 @@ describe("run.ts shutdown hooks & error boundary", () => {
     const consoleSpy = jest
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
-    await run(app, {
-      errorBoundary: false,
-      shutdownHooks: true,
-    });
+    try {
+      await run(app, {
+        errorBoundary: false,
+        shutdownHooks: true,
+      });
 
-    process.emit("SIGTERM");
-    await new Promise((r) => setTimeout(r, 0));
+      process.emit("SIGTERM");
+      await new Promise((r) => setTimeout(r, 0));
 
-    expect(exitCalls[0]).toBe(1);
-    expect(consoleSpy).toHaveBeenCalled();
-
-    (process as unknown as { exit: unknown }).exit = originalExit;
+      expect(exitCalls[0]).toBe(1);
+      expect(consoleSpy).toHaveBeenCalled();
+    } finally {
+      consoleSpy.mockRestore();
+      (process as unknown as { exit: unknown }).exit = originalExit;
+    }
   });
 });

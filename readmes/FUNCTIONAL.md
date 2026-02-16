@@ -89,11 +89,17 @@ const connectionPool = r
         connections.push(conn);
         return conn;
       },
+      getConnections() {
+        return connections;
+      },
     };
   })
   .dispose(async (api) => {
     // Cleanup: close all connections when the container shuts down
     // The api parameter is the object returned from init
+    for (const conn of api.getConnections()) {
+      await conn.close();
+    }
   })
   .build();
 ```

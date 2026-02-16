@@ -391,11 +391,10 @@ const userRegistered = r
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userRegistered })
-  .run(async (_input, { userRegistered }) => {
+  .run(async (input, { userRegistered }) => {
     // ...
     const report = await userRegistered(
-      // Use the id you registered with (hypothetical user ID here)
-      { userId },
+      { userId: input.userId },
       {
         report: true,
         throwOnError: false,
@@ -818,7 +817,7 @@ Consider this scenario: Your rate-limit middleware needs to share remaining quot
 | Retries       | Pass error details to retry logic          |
 | Caching       | Indicate cache hits/misses to logging      |
 
-### Code Example
+### Journaling Code Example
 
 ```typescript
 import { r, journal } from "@bluelibs/runner";
@@ -978,7 +977,7 @@ Imagine you want to automatically register all your HTTP routes without manually
 | Access control | Tag tasks requiring authorization           |
 | Monitoring     | Group tasks by feature for metrics          |
 
-### Code Example
+### Tags Code Example
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -1123,7 +1122,7 @@ Consider this: You have an authentication tag, and you want to ensure ALL tasks 
 | API standardization | Enforce consistent response shapes     |
 | Validation          | Guarantee tasks return required fields |
 
-### Code Example
+### Contract Tags Code Example
 
 ```typescript
 // Tags that enforce type contracts input/output for tasks or config/value for resources

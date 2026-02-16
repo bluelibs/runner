@@ -4,7 +4,19 @@ import {
   debounceTaskMiddleware,
   temporalResource,
   throttleTaskMiddleware,
+  type TemporalResourceState,
 } from "../../../globals/middleware/temporal.middleware";
+
+const createTemporalState = (
+  overrides: Partial<TemporalResourceState> = {},
+): TemporalResourceState => ({
+  isDisposed: false,
+  debounceStates: new WeakMap(),
+  throttleStates: new WeakMap(),
+  trackedDebounceStates: new Set(),
+  trackedThrottleStates: new Set(),
+  ...overrides,
+});
 
 describe("Temporal Middleware: Dispose", () => {
   it("rejects pending debounce callers when runtime is disposed", async () => {
@@ -64,11 +76,8 @@ describe("Temporal Middleware: Dispose", () => {
 
   it("throws immediately when debounce middleware state is already disposed", async () => {
     const deps = {
-      state: {
-        isDisposed: true,
-        debounceStates: new WeakMap(),
-      },
-    };
+      state: createTemporalState({ isDisposed: true }),
+    } satisfies Parameters<typeof debounceTaskMiddleware.run>[1];
 
     await expect(
       debounceTaskMiddleware.run(
@@ -79,7 +88,7 @@ describe("Temporal Middleware: Dispose", () => {
           },
           next: async () => "ok",
         } as any,
-        deps as any,
+        deps,
         { ms: 10 },
       ),
     ).rejects.toThrow("Temporal middleware resource has been disposed.");
@@ -87,11 +96,8 @@ describe("Temporal Middleware: Dispose", () => {
 
   it("throws immediately when throttle middleware state is already disposed", async () => {
     const deps = {
-      state: {
-        isDisposed: true,
-        throttleStates: new WeakMap(),
-      },
-    };
+      state: createTemporalState({ isDisposed: true }),
+    } satisfies Parameters<typeof throttleTaskMiddleware.run>[1];
 
     await expect(
       throttleTaskMiddleware.run(
@@ -102,17 +108,14 @@ describe("Temporal Middleware: Dispose", () => {
           },
           next: async () => "ok",
         } as any,
-        deps as any,
+        deps,
         { ms: 10 },
       ),
     ).rejects.toThrow("Temporal middleware resource has been disposed.");
   });
 
   it("rejects debounce callers when callback runs after state becomes disposed", async () => {
-    const state = {
-      isDisposed: false,
-      debounceStates: new WeakMap(),
-    };
+    const state = createTemporalState();
     const deps = { state };
 
     let scheduled: (() => Promise<void>) | undefined;
@@ -131,7 +134,7 @@ describe("Temporal Middleware: Dispose", () => {
           },
           next: async () => "ok",
         } as any,
-        deps as any,
+        deps,
         { ms: 10 },
       );
 
@@ -147,10 +150,7 @@ describe("Temporal Middleware: Dispose", () => {
   });
 
   it("rejects throttle callers when callback runs after state becomes disposed", async () => {
-    const state = {
-      isDisposed: false,
-      throttleStates: new WeakMap(),
-    };
+    const state = createTemporalState();
     const deps = { state };
 
     let scheduled: (() => Promise<void>) | undefined;
@@ -171,7 +171,7 @@ describe("Temporal Middleware: Dispose", () => {
             },
             next: async (input?: string) => input,
           } as any,
-          deps as any,
+          deps,
           config,
         ),
       ).resolves.toBe("a");
@@ -184,7 +184,7 @@ describe("Temporal Middleware: Dispose", () => {
           },
           next: async (input?: string) => input,
         } as any,
-        deps as any,
+        deps,
         config,
       );
 
@@ -229,5 +229,39 @@ describe("Temporal Middleware: Dispose", () => {
         {} as TemporalDisposeArgs[3],
       ),
     ).resolves.toBeUndefined();
+  });
+
+  it("recreates tracked debounce state set when missing", async () => {
+    jest.useFakeTimers();
+    try {
+      const state = createTemporalState();
+      Object.defineProperty(state, "trackedDebounceStates", {
+        value: undefined,
+        configurable: true,
+        writable: true,
+      });
+      const deps = { state } as Parameters<
+        typeof debounceTaskMiddleware.run
+      >[1];
+
+      const pending = debounceTaskMiddleware.run(
+        {
+          task: {
+            definition: { id: "debounce.recreate.tracked-set" } as any,
+            input: "x",
+          },
+          next: async () => "ok",
+        } as any,
+        deps,
+        { ms: 10 },
+      );
+
+      jest.advanceTimersByTime(10);
+      await Promise.resolve();
+      await expect(pending).resolves.toBe("ok");
+      expect(state.trackedDebounceStates).toBeInstanceOf(Set);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

@@ -4,6 +4,7 @@ import {
   defineEvent,
   defineHook,
   defineTaskMiddleware,
+  defineResourceMiddleware,
 } from "../../define";
 import { run } from "../../run";
 import { IValidationSchema } from "../../defs";
@@ -84,6 +85,24 @@ describe("Validation Edge Cases", () => {
       middleware.with({ invalid: "config" });
     }).toThrow(
       "Middleware config validation failed for middleware.nonErrorValidation: Middleware config error string",
+    );
+  });
+
+  it("should handle non-Error thrown from resource middleware config validation", async () => {
+    const configSchema = new MockValidationSchema<any>((_input: unknown) => {
+      throw "Resource middleware config error string";
+    });
+
+    const middleware = defineResourceMiddleware({
+      id: "resource.middleware.nonErrorValidation",
+      configSchema: configSchema,
+      run: async ({ next }) => next(),
+    });
+
+    expect(() => {
+      middleware.with({ invalid: "config" });
+    }).toThrow(
+      "Middleware config validation failed for resource.middleware.nonErrorValidation: Resource middleware config error string",
     );
   });
 

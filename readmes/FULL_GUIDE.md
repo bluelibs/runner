@@ -1465,10 +1465,10 @@ const app = r
 
 ##### Shallow vs Deep Fork
 
-| Type | Use when |
-|------|----------|
-| `fork("new.id")` | Simple resources with no registered children |
-| `fork("new.id", { register: "drop" })` | Resource that registers things you don't want cloned |
+| Type                                                                    | Use when                                                                |
+| ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `fork("new.id")`                                                        | Simple resources with no registered children                            |
+| `fork("new.id", { register: "drop" })`                                  | Resource that registers things you don't want cloned                    |
 | `fork("new.id", { register: "deep", reId: (id) => \`prefix.\${id}\` })` | You need a complete cloned resource tree (e.g., multi-tenant databases) |
 
 **Deep fork example:**
@@ -1615,17 +1615,23 @@ Event emitters (dependency-injected or `runtime.emitEvent`) accept optional emis
 ```typescript
 import { r } from "@bluelibs/runner";
 
-const userRegistered = r.event("app.events.userRegistered").build();
+const userRegistered = r
+  .event<{ userId: string }>("app.events.userRegistered")
+  .build();
 
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userRegistered })
-  .run(async (_input, { userRegistered }) => {
-    const report = await userRegistered(undefined, {
-      report: true,
-      throwOnError: false,
-      failureMode: "aggregate",
-    });
+  .run(async (input, { userRegistered }) => {
+    // ...
+    const report = await userRegistered(
+      { userId: input.userId },
+      {
+        report: true,
+        throwOnError: false,
+        failureMode: "aggregate",
+      },
+    );
 
     if (report.failedListeners > 0) {
       // log, retry, or publish metrics based on report.errors
@@ -2035,14 +2041,14 @@ Consider this scenario: Your rate-limit middleware needs to share remaining quot
 
 ### When to use the Execution Journal
 
-| Use case | Why Journal helps |
-|----------|-------------------|
-| Rate limiting | Share remaining quota between middleware |
-| Tracing | Propagate trace IDs through the call chain |
-| Retries | Pass error details to retry logic |
-| Caching | Indicate cache hits/misses to logging |
+| Use case      | Why Journal helps                          |
+| ------------- | ------------------------------------------ |
+| Rate limiting | Share remaining quota between middleware   |
+| Tracing       | Propagate trace IDs through the call chain |
+| Retries       | Pass error details to retry logic          |
+| Caching       | Indicate cache hits/misses to logging      |
 
-### Code Example
+### Journaling Code Example
 
 ```typescript
 import { r, journal } from "@bluelibs/runner";
@@ -2195,14 +2201,14 @@ Imagine you want to automatically register all your HTTP routes without manually
 
 ### When to use Tags
 
-| Use case | Why Tags help |
-|----------|---------------|
+| Use case       | Why Tags help                               |
+| -------------- | ------------------------------------------- |
 | Auto-discovery | Find all HTTP routes without manual imports |
-| Caching | Mark tasks as cacheable and query them |
-| Access control | Tag tasks requiring authorization |
-| Monitoring | Group tasks by feature for metrics |
+| Caching        | Mark tasks as cacheable and query them      |
+| Access control | Tag tasks requiring authorization           |
+| Monitoring     | Group tasks by feature for metrics          |
 
-### Code Example
+### Tags Code Example
 
 ```typescript
 import { r } from "@bluelibs/runner";
@@ -2341,13 +2347,13 @@ Consider this: You have an authentication tag, and you want to ensure ALL tasks 
 
 ### When to use Contract Tags
 
-| Use case | Why Contract Tags help |
-|----------|----------------------|
-| Authentication | Ensure all auth tasks include userId |
-| API standardization | Enforce consistent response shapes |
-| Validation | Guarantee tasks return required fields |
+| Use case            | Why Contract Tags help                 |
+| ------------------- | -------------------------------------- |
+| Authentication      | Ensure all auth tasks include userId   |
+| API standardization | Enforce consistent response shapes     |
+| Validation          | Guarantee tasks return required fields |
 
-### Code Example
+### Contract Tags Code Example
 
 ```typescript
 // Tags that enforce type contracts input/output for tasks or config/value for resources
@@ -2490,7 +2496,7 @@ await result.dispose();
 | ----------------------- | ------------------------------------------------------------------ |
 | `value`                 | Value returned by the `app` resource's `init()`                    |
 | `runTask(...)`          | Run a task by reference or string id                               |
-| `emitEvent(...)`        | Emit events (supports `failureMode`, `throwOnError`, `report`)    |
+| `emitEvent(...)`        | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`) |
 | `getResourceValue(...)` | Read a resource's value                                            |
 | `getResourceConfig(...)` | Read a resource's resolved config                                  |
 | `logger`                | Logger instance                                                    |
@@ -5075,7 +5081,7 @@ const productTask = r
   .build();
 ```
 
-> **runtime:** "Type Contracts: The pre-nup of code. 'If you want to use my authorizedTag, you _will_ bring a userId to the table.' It's not controlling; it's just... strictly typed love."
+> **runtime:** "Type Contracts: The prenup of code. 'If you want to use my authorizedTag, you _will_ bring a userId to the table.' It's not controlling; it's just... strictly typed love."
 
 ### Resource Contracts
 
