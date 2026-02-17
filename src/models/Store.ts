@@ -63,6 +63,7 @@ import { RunnerMode } from "../types/runner";
 import { detectRunnerMode } from "../tools/detectRunnerMode";
 import { Serializer } from "../serializer";
 import { getResourcesInDisposeOrder as computeDisposeOrder } from "./utils/disposeOrder";
+import { createRuntimeServices } from "../globals/resources/runtime.resource";
 
 // Re-export types for backward compatibility
 export type {
@@ -177,6 +178,14 @@ export class Store {
     builtInResourcesMap.set(
       globalResources.middlewareManager,
       this.middlewareManager,
+    );
+    builtInResourcesMap.set(
+      globalResources.runtime,
+      createRuntimeServices({
+        store: this,
+        eventManager: this.eventManager,
+        taskRunner: this.taskRunner,
+      }),
     );
 
     this.registry.storeGenericItem(globalResources.queue);

@@ -613,7 +613,7 @@ test("sends welcome email", async () => {
 - **Conditional registration:** `.register((config) => (config.enableFeature ? [featureResource] : []))`.
 - **Async coordination:** `Semaphore` (O(1) linked queue for heavy contention) and `Queue` live in the main package. Both use isolated EventManagers internally for their lifecycle events, separate from the global EventManager used for business-level application events.
 - **Event safety:** Runner detects event emission cycles and throws an `EventCycleError` with the offending chain.
-- **Internal services:** access `globals.resources.store`, `globals.resources.taskRunner`, and `globals.resources.eventManager` for advanced introspection or custom tooling.
+- **Internal services:** access `globals.resources.runtime` for a safe runtime facade inside resources (`runTask`, `emitEvent`, `getResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`), plus `globals.resources.store`, `globals.resources.taskRunner`, and `globals.resources.eventManager` for lower-level introspection or custom tooling.
 
 ## Interop With Classic APIs
 

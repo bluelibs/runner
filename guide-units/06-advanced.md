@@ -1050,12 +1050,15 @@ import { globals } from "@bluelibs/runner";
 const advancedTask = r
   .task("app.advanced")
   .dependencies({
+    runtime: globals.resources.runtime,
     store: globals.resources.store,
     taskRunner: globals.resources.taskRunner,
     eventManager: globals.resources.eventManager,
   })
-  .run(async (_param, { store, taskRunner, eventManager }) => {
+  .run(async (_param, { runtime, store, taskRunner, eventManager }) => {
     // Direct access to the framework internals
+    // runtime gives a safe facade inside resources:
+    // runTask, emitEvent, getResourceValue/getResourceConfig, and root helpers.
     // (Use with caution!)
   })
   .build();

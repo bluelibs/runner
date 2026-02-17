@@ -9,6 +9,7 @@ import { concurrencyResource } from "./middleware/concurrency.middleware";
 import { rateLimitResource } from "./middleware/rateLimit.middleware";
 import { temporalResource } from "./middleware/temporal.middleware";
 import { queueResource } from "./resources/queue.resource";
+import { runtimeResource } from "./resources/runtime.resource";
 import { globalTags } from "./globalTags";
 import { MiddlewareManager } from "../models/MiddlewareManager";
 import type { SerializerLike as Serializer } from "../serializer";
@@ -80,6 +81,7 @@ export const globalResources = {
   serializer,
   cache: cacheResource,
   queue: queueResource,
+  runtime: runtimeResource,
   httpClientFactory: httpClientFactory,
 
   // Middleware State Resources
