@@ -5,6 +5,7 @@ import { Serializer } from "../../../../serializer";
 import * as multipartModule from "../../../exposure/multipart";
 import * as requestBodyModule from "../../../exposure/requestBody";
 import * as errorHandlers from "../../../exposure/handlers/errorHandlers";
+import { createMessageError } from "../../../../errors";
 
 enum TaskId {
   T = "t",
@@ -101,7 +102,7 @@ describe("taskHandler", () => {
     const res = createRes();
     const taskRunner = {
       run: async () => {
-        throw new Error(ErrorMessage.Boom);
+        throw createMessageError(ErrorMessage.Boom);
       },
     };
 

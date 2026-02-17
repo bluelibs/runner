@@ -3,6 +3,7 @@ import type { BusEvent } from "../../durable/core/interfaces/bus";
 import type { Execution, Schedule, Timer } from "../../durable/core/types";
 import { MemoryQueue } from "../../durable/queue/MemoryQueue";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { createMessageError } from "../../../errors";
 
 describe("durable: memory backends", () => {
   describe("MemoryStore", () => {
@@ -242,7 +243,7 @@ describe("durable: memory backends", () => {
         timestamp: new Date(),
       });
       await bus.subscribe("topic", async () => {
-        throw new Error("handler-fail");
+        throw createMessageError("handler-fail");
       });
 
       await bus.publish("topic", {

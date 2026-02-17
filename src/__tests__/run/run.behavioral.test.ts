@@ -1,6 +1,7 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
 import { ResourceInitMode } from "../../types/runner";
+import { createMessageError } from "../../errors";
 
 describe("run behavioral scenarios", () => {
   const waitFor = async (
@@ -54,7 +55,7 @@ describe("run behavioral scenarios", () => {
       init: async () => "bad",
       dispose: async () => {
         order.push("bad");
-        throw new Error("Disposal failed");
+        throw createMessageError("Disposal failed");
       },
     });
 
@@ -204,14 +205,14 @@ describe("run behavioral scenarios", () => {
     const first = defineResource({
       id: "init.mode.parallel.fail.first",
       async init() {
-        throw new Error("first failed");
+        throw createMessageError("first failed");
       },
     });
 
     const second = defineResource({
       id: "init.mode.parallel.fail.second",
       async init() {
-        throw new Error("second failed");
+        throw createMessageError("second failed");
       },
     });
 

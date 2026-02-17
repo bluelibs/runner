@@ -9,6 +9,7 @@ import {
 import { run } from "../../run";
 // error helpers migrated to message-based checks
 import z from "zod";
+import { createMessageError } from "../../errors";
 
 describe("Middleware", () => {
   it("should be able to register the middleware and execute it", async () => {
@@ -511,7 +512,7 @@ describe("Middleware behavior (no lifecycle)", () => {
     const mw = defineTaskMiddleware({
       id: "mw.error",
       run: async () => {
-        throw new Error("boom");
+        throw createMessageError("boom");
       },
     });
 
@@ -540,7 +541,7 @@ describe("Middleware behavior (no lifecycle)", () => {
     const mw = defineTaskMiddleware({
       id: "mw.error.global.listener",
       run: async () => {
-        throw new Error("boom-global");
+        throw createMessageError("boom-global");
       },
     });
 

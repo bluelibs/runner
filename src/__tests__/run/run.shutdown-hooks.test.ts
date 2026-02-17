@@ -1,5 +1,6 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
+import { createMessageError } from "../../errors";
 
 describe("run.ts shutdown hooks & error boundary", () => {
   it("installs process safety nets and calls onUnhandledError for uncaughtException", async () => {
@@ -106,7 +107,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
         return "ok" as const;
       },
       async dispose() {
-        throw new Error("dispose failed");
+        throw createMessageError("dispose failed");
       },
     });
 

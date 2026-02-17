@@ -7,12 +7,13 @@ import { DurableService } from "../../durable/core/DurableService";
 import type { Timer } from "../../durable/core/types";
 import { TimerStatus, TimerType } from "../../durable/core/types";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { createMessageError } from "../../../errors";
 
 class ThrowingQueue implements IDurableQueue {
   async enqueue<T>(
     _message: Omit<QueueMessage<T>, "id" | "createdAt" | "attempts">,
   ): Promise<string> {
-    throw new Error("queue-down");
+    throw createMessageError("queue-down");
   }
 
   async consume<T>(_handler: MessageHandler<T>): Promise<void> {}

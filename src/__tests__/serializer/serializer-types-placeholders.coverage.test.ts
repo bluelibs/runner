@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
 import { Serializer } from "../../serializer/index";
 import type { TypeDefinition } from "../../serializer/index";
+import { createMessageError } from "../../errors";
 
 describe("Serializer types/placeholders coverage", () => {
   let serializer: Serializer;
@@ -84,7 +85,7 @@ describe("Serializer types/placeholders coverage", () => {
         id: "ThrowingType",
         is: (obj: unknown): obj is ThrowingType => {
           if (obj && typeof obj === "object" && (obj as any).trigger === true) {
-            throw new Error("boom");
+            throw createMessageError("boom");
           }
           return obj instanceof ThrowingType;
         },

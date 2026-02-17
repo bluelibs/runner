@@ -1,6 +1,7 @@
 import { createExposureFetch } from "../../http-fetch-tunnel.resource";
 import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
+import { createMessageError } from "../../errors";
 
 describe("http-fetch-tunnel.resource - HTTP status handling", () => {
   it("throws HTTP_ERROR when non-2xx response body is not serializer-parsable", async () => {
@@ -129,7 +130,7 @@ describe("http-fetch-tunnel.resource - HTTP status handling", () => {
     const helper = {
       id: "tests.errors.status",
       throw: (data: any) => {
-        throw new Error("typed-status:" + String(data?.code));
+        throw createMessageError("typed-status:" + String(data?.code));
       },
       is: () => false,
       toString: () => "",

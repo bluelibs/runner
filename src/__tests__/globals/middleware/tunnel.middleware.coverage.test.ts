@@ -3,6 +3,7 @@ import type { TunnelRunner } from "../../../globals/resources/tunnel/types";
 import { run } from "../../../run";
 import { globalTags } from "../../../globals/globalTags";
 import { defineEvent, defineHook } from "../../../define";
+import { createMessageError } from "../../../errors";
 
 describe("tunnel.middleware coverage", () => {
   it("mirror mode propagates remote error after local", async () => {
@@ -24,7 +25,7 @@ describe("tunnel.middleware coverage", () => {
         events: [ev.id],
         eventDeliveryMode: "mirror",
         emit: async () => {
-          throw new Error("remote boom");
+          throw createMessageError("remote boom");
         },
       }),
     });
@@ -75,5 +76,49 @@ describe("tunnel.middleware coverage", () => {
     });
     await expect(run(app)).resolves.toBeDefined();
     expect(seen).toEqual([]);
+  });
+
+  it("uses String(item) fallback when event selector has unsupported item type", async () => {
+    const tunnel = defineResource({
+      id: "cov.tunnel.res.invalid-selector",
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        events: [123 as unknown as string],
+        emit: async () => undefined,
+      }),
+    });
+
+    const app = defineResource({
+      id: "cov.tunnel.app.invalid-selector",
+      register: [tunnel],
+      init: async () => undefined,
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      "Event 123 not found while trying to resolve events for tunnel.",
+    );
+  });
+
+  it("uses object.id branch when event selector item is an object", async () => {
+    const tunnel = defineResource({
+      id: "cov.tunnel.res.object-selector",
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "client",
+        events: [{ id: "cov.tunnel.missing.event" } as any],
+        emit: async () => undefined,
+      }),
+    });
+
+    const app = defineResource({
+      id: "cov.tunnel.app.object-selector",
+      register: [tunnel],
+      init: async () => undefined,
+    });
+
+    await expect(run(app)).rejects.toThrow(
+      "Event cov.tunnel.missing.event not found while trying to resolve events for tunnel.",
+    );
   });
 });

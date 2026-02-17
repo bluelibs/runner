@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach } from "@jest/globals";
 import { Serializer } from "../../serializer/index";
 import type { TypeDefinition } from "../../serializer/index";
+import { createMessageError } from "../../errors";
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null;
@@ -256,14 +257,14 @@ describe("Serializer", () => {
       const dateValue = deserialized.get("date");
       expect(dateValue).toBeInstanceOf(Date);
       if (!(dateValue instanceof Date)) {
-        throw new Error("Expected date entry to be a Date");
+        throw createMessageError("Expected date entry to be a Date");
       }
       expect(dateValue.getTime()).toBe(originalDate.getTime());
 
       const regexValue = deserialized.get("regex");
       expect(regexValue).toBeInstanceOf(RegExp);
       if (!(regexValue instanceof RegExp)) {
-        throw new Error("Expected regex entry to be a RegExp");
+        throw createMessageError("Expected regex entry to be a RegExp");
       }
       expect(regexValue.source).toBe(originalRegex.source);
       expect(regexValue.flags).toBe(originalRegex.flags);
@@ -271,13 +272,13 @@ describe("Serializer", () => {
       const innerMapValue = deserialized.get("innerMap");
       expect(innerMapValue).toBeInstanceOf(Map);
       if (!(innerMapValue instanceof Map)) {
-        throw new Error("Expected innerMap entry to be a Map");
+        throw createMessageError("Expected innerMap entry to be a Map");
       }
 
       const innerDateValue = innerMapValue.get("innerDate");
       expect(innerDateValue).toBeInstanceOf(Date);
       if (!(innerDateValue instanceof Date)) {
-        throw new Error("Expected innerDate entry to be a Date");
+        throw createMessageError("Expected innerDate entry to be a Date");
       }
       expect(innerDateValue.toISOString()).toBe("2024-02-02T00:00:00.000Z");
     });
@@ -338,19 +339,19 @@ describe("Serializer", () => {
       const referenced = deserialized.referenced;
       expect(referenced).toBeDefined();
       if (!referenced) {
-        throw new Error("Expected referenced node to be defined");
+        throw createMessageError("Expected referenced node to be defined");
       }
       expect(referenced.id).toBe(4);
       const parent = referenced.parent;
       expect(parent).toBeDefined();
       if (!parent) {
-        throw new Error("Expected parent node to be defined");
+        throw createMessageError("Expected parent node to be defined");
       }
       expect(parent.id).toBe(3);
       const grandParent = parent.parent;
       expect(grandParent).toBeDefined();
       if (!grandParent) {
-        throw new Error("Expected grandparent node to be defined");
+        throw createMessageError("Expected grandparent node to be defined");
       }
       expect(grandParent.id).toBe(2);
       expect(grandParent.parent).toBe(deserialized);

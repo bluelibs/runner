@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import { durableScheduleConfigError } from "../../../errors";
 
 /**
  * Cron helper used by `ScheduleManager`.
@@ -83,7 +84,9 @@ export class CronParser {
   } {
     const parts = cron.trim().split(/\s+/g);
     if (parts.length !== 5) {
-      throw new Error(`Invalid cron expression (expected 5 fields): '${cron}'`);
+      durableScheduleConfigError.throw({
+        message: `Invalid cron expression (expected 5 fields): '${cron}'`,
+      });
     }
 
     const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
@@ -113,9 +116,9 @@ export class CronParser {
       cursor.setMinutes(cursor.getMinutes() + 1);
     }
 
-    throw new Error(
-      `Cron expression did not match any time within 366 days: '${cron}'`,
-    );
+    return durableScheduleConfigError.throw({
+      message: `Cron expression did not match any time within 366 days: '${cron}'`,
+    });
   }
 }
 
@@ -134,7 +137,9 @@ function parseField(
   if (stepMatch) {
     const step = Number(stepMatch[1]);
     if (!Number.isInteger(step) || step <= 0) {
-      throw new Error(`Invalid ${range.name} step: '${raw}'`);
+      durableScheduleConfigError.throw({
+        message: `Invalid ${range.name} step: '${raw}'`,
+      });
     }
     return { kind: "step", step };
   }
@@ -142,14 +147,16 @@ function parseField(
   if (/^\d+$/.test(raw)) {
     const value = Number(raw);
     if (!Number.isInteger(value) || value < range.min || value > range.max) {
-      throw new Error(`Invalid ${range.name} value: '${raw}'`);
+      durableScheduleConfigError.throw({
+        message: `Invalid ${range.name} value: '${raw}'`,
+      });
     }
     return { kind: "value", value };
   }
 
-  throw new Error(
-    `Unsupported ${range.name} field '${raw}' (supported: '*', '*/n', 'n')`,
-  );
+  return durableScheduleConfigError.throw({
+    message: `Unsupported ${range.name} field '${raw}' (supported: '*', '*/n', 'n')`,
+  });
 }
 
 function matches(

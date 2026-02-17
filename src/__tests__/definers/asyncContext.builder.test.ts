@@ -1,4 +1,5 @@
 import { definitions, r, asyncContext, createContext } from "../..";
+import { createMessageError } from "../../errors";
 
 describe("async context builder and defineAsyncContext", () => {
   it("builder.build produces context with id and custom serializer/parse", () => {
@@ -8,7 +9,7 @@ describe("async context builder and defineAsyncContext", () => {
       .configSchema({
         parse(input: unknown) {
           const d = input as Ctx;
-          if (typeof d?.id !== "number") throw new Error("invalid");
+          if (typeof d?.id !== "number") throw createMessageError("invalid");
           return d;
         },
       })
@@ -31,7 +32,7 @@ describe("async context builder and defineAsyncContext", () => {
       configSchema: {
         parse(input: unknown) {
           const d = input as { v: string };
-          if (typeof d?.v !== "string") throw new Error("invalid");
+          if (typeof d?.v !== "string") throw createMessageError("invalid");
           return d;
         },
       },
@@ -61,7 +62,7 @@ describe("async context builder and defineAsyncContext", () => {
       .configSchema({
         parse(input: unknown) {
           const d = input as { id: number };
-          if (typeof d?.id !== "number") throw new Error("invalid");
+          if (typeof d?.id !== "number") throw createMessageError("invalid");
           return d;
         },
       })

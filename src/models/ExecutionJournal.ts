@@ -3,6 +3,7 @@ import {
   JournalKey,
   JournalSetOptions,
 } from "../types/executionJournal";
+import { journalDuplicateKeyError } from "../errors";
 
 /**
  * Implementation of ExecutionJournal.
@@ -17,9 +18,7 @@ export class ExecutionJournalImpl implements ExecutionJournal {
    */
   set<T>(key: JournalKey<T>, value: T, options?: JournalSetOptions): void {
     if (this.store.has(key.id) && !options?.override) {
-      throw new Error(
-        `Journal key "${key.id}" already exists. Use { override: true } to overwrite.`,
-      );
+      journalDuplicateKeyError.throw({ keyId: key.id });
     }
     this.store.set(key.id, value);
   }

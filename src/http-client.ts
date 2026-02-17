@@ -5,6 +5,12 @@ import { createExposureFetch } from "./http-fetch-tunnel.resource";
 import { buildUniversalManifest } from "./tools/buildUniversalManifest";
 import type { IAsyncContext } from "./types/asyncContext";
 import type { IErrorHelper } from "./types/error";
+import {
+  httpBaseUrlRequiredError,
+  httpClientInputUnsupportedError,
+  httpContextSerializationError,
+  httpEventWithResultUnavailableError,
+} from "./errors";
 
 export interface HttpClientAuth {
   header?: string;
@@ -52,9 +58,10 @@ function buildContextHeaderOrThrow(
     } catch (error) {
       const normalizedError =
         error instanceof Error ? error : new Error(String(error));
-      throw new Error(
-        `Failed to serialize async context "${ctx.id}" for HTTP request: ${normalizedError.message}`,
-      );
+      httpContextSerializationError.throw({
+        contextId: ctx.id,
+        reason: normalizedError.message,
+      });
     }
   }
 
@@ -85,7 +92,9 @@ function rethrowWithRegistry(
 
 export function createHttpClient(cfg: HttpClientConfig): HttpClient {
   const baseUrl = cfg.baseUrl.replace(/\/$/, "");
-  if (!baseUrl) throw new Error("createHttpClient requires baseUrl");
+  if (!baseUrl) {
+    httpBaseUrlRequiredError.throw({ clientFactory: "createHttpClient" });
+  }
 
   const isNodeReadable = (
     value: unknown,
@@ -140,9 +149,10 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
 
       // Guard: raw Node Readable-like inputs are not supported in universal client
       if (isNodeReadable(input)) {
-        throw new Error(
-          "createHttpClient (universal) cannot send a Node stream. Use @bluelibs/runner/node createHttpSmartClient or createHttpMixedClient for duplex/streaming.",
-        );
+        httpClientInputUnsupportedError.throw({
+          message:
+            "createHttpClient (universal) cannot send a Node stream. Use @bluelibs/runner/node createHttpSmartClient or createHttpMixedClient for duplex/streaming.",
+        });
       }
 
       // Multipart path: browser files only (FormData). Node files are not supported here.
@@ -167,9 +177,10 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
 
       // If Node files were detected, instruct user to use Node clients
       if (manifest.nodeFiles.length > 0) {
-        throw new Error(
-          "createHttpClient (universal) detected Node file input. Use @bluelibs/runner/node createHttpSmartClient or createHttpMixedClient for Node streaming/multipart.",
-        );
+        httpClientInputUnsupportedError.throw({
+          message:
+            "createHttpClient (universal) detected Node file input. Use @bluelibs/runner/node createHttpSmartClient or createHttpMixedClient for Node streaming/multipart.",
+        });
       }
 
       // JSON fallback
@@ -191,11 +202,11 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     async eventWithResult<P>(id: string, payload?: P): Promise<P> {
       try {
         if (!fetchClient.eventWithResult) {
-          throw new Error(
-            "createHttpClient: eventWithResult not available on underlying tunnel client.",
-          );
+          httpEventWithResultUnavailableError.throw({
+            clientFactory: "createHttpClient",
+          });
         }
-        return await fetchClient.eventWithResult<P>(id, payload);
+        return await fetchClient.eventWithResult!<P>(id, payload);
       } catch (e) {
         rethrowWithRegistry(e, cfg.errorRegistry);
       }

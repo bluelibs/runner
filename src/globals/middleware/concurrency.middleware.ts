@@ -1,6 +1,7 @@
 import { defineTaskMiddleware, defineResource } from "../../define";
 import { Semaphore } from "../../models/Semaphore";
 import { globalTags } from "../globalTags";
+import { middlewareConcurrencyConflictError } from "../../errors";
 
 export interface ConcurrencyMiddlewareConfig {
   /**
@@ -49,9 +50,11 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
         const existing = state.semaphoresByKey.get(config.key);
         if (existing) {
           if (existing.limit !== config.limit) {
-            throw new Error(
-              `Concurrency middleware key "${config.key}" is already registered with limit ${existing.limit}, but got ${config.limit}`,
-            );
+            middlewareConcurrencyConflictError.throw({
+              key: config.key,
+              existingLimit: existing.limit,
+              attemptedLimit: config.limit,
+            });
           }
           semaphore = existing.semaphore;
         } else {

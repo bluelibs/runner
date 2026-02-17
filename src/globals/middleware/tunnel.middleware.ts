@@ -14,7 +14,12 @@ import type {
   TunnelEventSelector,
 } from "../resources/tunnel/types";
 import { symbolTunneledBy } from "../../types/symbols";
-import { tunnelOwnershipConflictError } from "../../errors";
+import {
+  tunnelClientContractError,
+  tunnelEventNotFoundError,
+  tunnelOwnershipConflictError,
+  tunnelTaskNotFoundError,
+} from "../../errors";
 
 export const tunnelResourceMiddleware = defineResourceMiddleware<
   void,
@@ -47,14 +52,16 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
 
     if (mode === "client" || mode === "both") {
       if (tasks.length > 0 && typeof value.run !== "function") {
-        throw new Error(
-          "Tunnel resource value must implement run(task, input) when tasks[] is configured.",
-        );
+        tunnelClientContractError.throw({
+          message:
+            "Tunnel resource value must implement run(task, input) when tasks[] is configured.",
+        });
       }
       if (events.length > 0 && typeof value.emit !== "function") {
-        throw new Error(
-          "Tunnel resource value must implement emit(event, payload) when events[] is configured.",
-        );
+        tunnelClientContractError.throw({
+          message:
+            "Tunnel resource value must implement emit(event, payload) when events[] is configured.",
+        });
       }
     }
 
@@ -155,20 +162,14 @@ function resolveTasks(store: Store, selector: TunnelTaskSelector): ITask[] {
   for (const item of selector) {
     if (typeof item === "string") {
       const st = store.tasks.get(item);
-      if (!st)
-        throw new Error(
-          `Task ${item} not found while trying to resolve tasks for tunnel.`,
-        );
-      out.push(st.task);
+      if (!st) tunnelTaskNotFoundError.throw({ taskId: item });
+      out.push(st!.task);
     } else if (item && typeof item === "object") {
       // Assume it's a task definition
       const st = store.tasks.get(item.id);
-      if (!st)
-        throw new Error(
-          `Task ${item} not found while trying to resolve tasks for tunnel.`,
-        );
+      if (!st) tunnelTaskNotFoundError.throw({ taskId: String(item) });
 
-      out.push(st.task);
+      out.push(st!.task);
     }
   }
 
@@ -196,11 +197,16 @@ function resolveEvents(store: Store, selector: TunnelEventSelector): IEvent[] {
       st = store.events.get(item.id);
     }
 
-    if (!st)
-      throw new Error(
-        `Event ${item} not found while trying to resolve events for tunnel.`,
-      );
-    out.push(st.event);
+    if (!st) {
+      const eventId =
+        typeof item === "string"
+          ? item
+          : typeof item === "object" && item
+            ? item.id
+            : String(item);
+      tunnelEventNotFoundError.throw({ eventId });
+    }
+    out.push(st!.event);
   }
 
   return out;

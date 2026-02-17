@@ -4,6 +4,10 @@ import type { SerializerLike } from "../../serializer";
 import { createHttpSmartClient } from "./http-smart-client.model";
 import type { IAsyncContext } from "../../types/asyncContext";
 import type { IErrorHelper } from "../../types/error";
+import {
+  httpBaseUrlRequiredError,
+  httpEventWithResultUnavailableError,
+} from "../../errors";
 
 export interface MixedHttpClientAuthConfig {
   header?: string; // default: x-runner-token
@@ -101,7 +105,9 @@ export function createHttpMixedClient(
   cfg: MixedHttpClientConfig,
 ): MixedHttpClient {
   const baseUrl = cfg.baseUrl?.replace(/\/$/, "");
-  if (!baseUrl) throw new Error("createMixedHttpClient requires baseUrl");
+  if (!baseUrl) {
+    httpBaseUrlRequiredError.throw({ clientFactory: "createMixedHttpClient" });
+  }
 
   // Lazy singletons for underlying clients
   const fetchClient = createExposureFetch({
@@ -146,11 +152,11 @@ export function createHttpMixedClient(
     },
     async eventWithResult<P>(id: string, payload?: P): Promise<P> {
       if (!fetchClient.eventWithResult) {
-        throw new Error(
-          "createHttpMixedClient: eventWithResult not available on underlying tunnel client.",
-        );
+        httpEventWithResultUnavailableError.throw({
+          clientFactory: "createHttpMixedClient",
+        });
       }
-      return await fetchClient.eventWithResult<P>(id, payload);
+      return await fetchClient.eventWithResult!<P>(id, payload);
     },
   };
 }

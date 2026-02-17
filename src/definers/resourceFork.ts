@@ -5,6 +5,7 @@ import type {
   ResourceForkOptions,
 } from "../types/resource";
 import { isOptional, isResource, isResourceWithConfig } from "./tools";
+import { resourceForkInvalidIdError } from "../errors";
 
 type AnyResource = IResource<any, any, any, any, any, any, any>;
 
@@ -22,7 +23,7 @@ function resolveReId(
   return (id: string) => {
     const next = reId(id);
     if (typeof next !== "string" || next.length === 0) {
-      throw new Error(`fork(reId) must return a non-empty string for "${id}"`);
+      resourceForkInvalidIdError.throw({ id });
     }
     return next;
   };

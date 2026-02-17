@@ -4,6 +4,7 @@
 
 import { describe, it, expect, beforeEach } from "@jest/globals";
 import { Serializer } from "../../serializer/index";
+import { createMessageError } from "../../errors";
 
 interface SelfReferential {
   id: number;
@@ -97,7 +98,7 @@ describe("Circular Reference Tests", () => {
       const other = deserialized.other;
       expect(other).toBeDefined();
       if (!other) {
-        throw new Error("Expected other node to be defined");
+        throw createMessageError("Expected other node to be defined");
       }
       expect(other.id).toBe(2);
       expect(other.other).toBe(deserialized);
@@ -119,13 +120,13 @@ describe("Circular Reference Tests", () => {
       const secondNode = deserialized.next;
       expect(secondNode).toBeDefined();
       if (!secondNode) {
-        throw new Error("Expected second node to be defined");
+        throw createMessageError("Expected second node to be defined");
       }
       expect(secondNode.id).toBe(2);
       const thirdNode = secondNode.next;
       expect(thirdNode).toBeDefined();
       if (!thirdNode) {
-        throw new Error("Expected third node to be defined");
+        throw createMessageError("Expected third node to be defined");
       }
       expect(thirdNode.id).toBe(3);
       expect(thirdNode.next).toBe(deserialized);
@@ -206,7 +207,7 @@ describe("Circular Reference Tests", () => {
       const previousNode = deserialized.prev;
       expect(previousNode).toBeDefined();
       if (!previousNode) {
-        throw new Error("Expected previous node to be defined");
+        throw createMessageError("Expected previous node to be defined");
       }
       expect(previousNode.id).toBe(98);
     });

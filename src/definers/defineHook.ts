@@ -8,6 +8,7 @@ import {
   symbolFilePath,
 } from "../defs";
 import { getCallerFile } from "../tools/getCallerFile";
+import { normalizeThrows } from "../tools/throws";
 
 /**
  * Define a hook (event listeners).
@@ -30,5 +31,6 @@ export function defineHook<
     run: hookDef.run,
     meta: hookDef.meta || ({} as TMeta),
     tags: hookDef.tags || [],
+    throws: normalizeThrows({ kind: "hook", id: hookDef.id }, hookDef.throws),
   } as IHook<D, TOn, TMeta>;
 }

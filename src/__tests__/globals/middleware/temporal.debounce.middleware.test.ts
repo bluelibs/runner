@@ -1,6 +1,7 @@
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { debounceTaskMiddleware } from "../../../globals/middleware/temporal.middleware";
+import { createMessageError } from "../../../errors";
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -68,7 +69,7 @@ describe("Temporal Middleware: Debounce", () => {
       middleware: [debounceTaskMiddleware.with({ ms: 50 })],
       run: async () => {
         callCount++;
-        throw new Error("Debounce error");
+        throw createMessageError("Debounce error");
       },
     });
 

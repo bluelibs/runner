@@ -20,6 +20,7 @@ import {
   ExecutionManager,
   PollingManager,
 } from "./managers";
+import { durableExecutionInvariantError } from "../../../errors";
 
 export { DurableExecutionError } from "./utils";
 
@@ -68,11 +69,11 @@ export class DurableService implements IDurableService {
         if (typeof schedule.task === "string") {
           const resolved = this.taskRegistry.find(schedule.task);
           if (!resolved) {
-            throw new Error(
-              `Cannot initialize durable schedule "${schedule.id}": task "${schedule.task}" is not registered.`,
-            );
+            durableExecutionInvariantError.throw({
+              message: `Cannot initialize durable schedule "${schedule.id}": task "${schedule.task}" is not registered.`,
+            });
           }
-          this.taskRegistry.register(resolved);
+          this.taskRegistry.register(resolved!);
           continue;
         }
         this.taskRegistry.register(schedule.task);

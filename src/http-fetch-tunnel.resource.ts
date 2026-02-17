@@ -8,6 +8,7 @@ import type {
   ExposureFetchConfig,
   ExposureFetchClient,
 } from "./globals/resources/tunnel/types";
+import { httpBaseUrlRequiredError, httpFetchUnavailableError } from "./errors";
 export { normalizeError } from "./globals/resources/tunnel/error-utils";
 export type {
   ExposureFetchAuthConfig,
@@ -134,7 +135,9 @@ export function createExposureFetch(
   cfg: ExposureFetchConfig,
 ): ExposureFetchClient {
   const baseUrl = cfg?.baseUrl?.replace(/\/$/, "");
-  if (!baseUrl) throw new Error("createExposureFetch requires baseUrl");
+  if (!baseUrl) {
+    httpBaseUrlRequiredError.throw({ clientFactory: "createExposureFetch" });
+  }
 
   const headerName = (cfg?.auth?.header ?? "x-runner-token").toLowerCase();
   const buildHeaders = () => {
@@ -145,9 +148,7 @@ export function createExposureFetch(
 
   const fetchImpl = cfg.fetchImpl ?? (globalThis.fetch as typeof fetch);
   if (typeof fetchImpl !== "function") {
-    throw new Error(
-      "global fetch is not available; provide fetchImpl in config",
-    );
+    httpFetchUnavailableError.throw({ clientFactory: "createExposureFetch" });
   }
 
   const buildContextHeader = () => {

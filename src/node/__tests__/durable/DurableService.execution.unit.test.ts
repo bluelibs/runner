@@ -14,6 +14,7 @@ import {
   okTask,
   pendingExecution,
 } from "./DurableService.unit.helpers";
+import { createMessageError } from "../../../errors";
 
 async function advanceTimers(ms: number): Promise<void> {
   const asyncAdvance = (
@@ -53,7 +54,7 @@ describe("durable: DurableService — execution (unit)", () => {
       store,
       queue: {
         async enqueue() {
-          throw new Error("queue-down");
+          throw createMessageError("queue-down");
         },
         async consume() {},
         async ack() {},
@@ -101,7 +102,7 @@ describe("durable: DurableService — execution (unit)", () => {
             input === null ||
             typeof (input as { v?: unknown }).v !== "number"
           ) {
-            throw new Error("Expected { v: number } input");
+            throw createMessageError("Expected { v: number } input");
           }
           return { v: (input as { v: number }).v * 2 };
         },
@@ -224,7 +225,7 @@ describe("durable: DurableService — execution (unit)", () => {
     const task = r
       .task("t.fail")
       .run(async () => {
-        throw new Error("x");
+        throw createMessageError("x");
       })
       .build();
 
@@ -232,7 +233,7 @@ describe("durable: DurableService — execution (unit)", () => {
       store,
       taskExecutor: createTaskExecutor({
         [task.id]: async () => {
-          throw new Error("x");
+          throw createMessageError("x");
         },
       }),
       tasks: [task],
@@ -263,14 +264,14 @@ describe("durable: DurableService — execution (unit)", () => {
     const task = r
       .task("t.throw")
       .run(async () => {
-        throw new Error("boom");
+        throw createMessageError("boom");
       })
       .build();
     const service = new DurableService({
       store,
       taskExecutor: createTaskExecutor({
         [task.id]: async () => {
-          throw new Error("boom");
+          throw createMessageError("boom");
         },
       }),
       tasks: [task],

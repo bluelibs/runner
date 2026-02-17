@@ -46,6 +46,7 @@ export function taskMiddlewareBuilder<
       Out,
       D
     >["everywhere"],
+    throws: undefined,
   });
 
   return makeTaskMiddlewareBuilder(initial);
@@ -75,6 +76,7 @@ export function resourceMiddlewareBuilder<
     meta: {} as IMiddlewareMeta,
     tags: [] as TagType[],
     everywhere: undefined as unknown as ResMwState<C, In, Out, D>["everywhere"],
+    throws: undefined,
   });
 
   return makeResourceMiddlewareBuilder(initial);

@@ -1,6 +1,7 @@
 import { RedisEventBus } from "../../durable/bus/RedisEventBus";
 import { Serializer } from "../../../serializer";
 import * as ioredisOptional from "../../durable/optionalDeps/ioredis";
+import { createMessageError } from "../../../errors";
 
 describe("durable: RedisEventBus", () => {
   let redisMock: any;
@@ -66,7 +67,7 @@ describe("durable: RedisEventBus", () => {
 
     try {
       await bus.subscribe("chan", async () => {
-        throw new Error("boom");
+        throw createMessageError("boom");
       });
 
       const event = { type: "t", payload: {}, timestamp: new Date() };
@@ -85,7 +86,7 @@ describe("durable: RedisEventBus", () => {
 
     try {
       await bus.subscribe("chan", () => {
-        throw new Error("sync-boom");
+        throw createMessageError("sync-boom");
       });
 
       const event = { type: "t", payload: {}, timestamp: new Date() };

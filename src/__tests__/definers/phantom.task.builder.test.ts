@@ -5,6 +5,12 @@ import type { TunnelRunner } from "../../globals/resources/tunnel/types";
 import { phantomTaskNotRoutedError } from "../../errors";
 
 describe("Phantom tasks - fluent builders", () => {
+  it("does not throw builderIncompleteError when building phantom task without run()", () => {
+    expect(() =>
+      r.task.phantom("app.tasks.phantom.builder.no-run-needed").build(),
+    ).not.toThrow();
+  });
+
   it("throws when executed directly without a tunnel route", async () => {
     const ph = r.task
       .phantom<{ v: string }, string>("app.tasks.phantom.builder.1")

@@ -10,6 +10,7 @@ import type { TaskRunner } from "../../../models/TaskRunner";
 import type { Store } from "../../../models/Store";
 import type { ITask } from "../../../types/task";
 import { initDurableWorker } from "./DurableWorker";
+import { durableExecutionInvariantError } from "../../../errors";
 
 export type RunnerDurableRuntimeConfig = Omit<
   DurableServiceConfig,
@@ -67,13 +68,13 @@ export async function createRunnerDurableRuntime(
         task: ITask<TInput, Promise<TResult>, any, any, any, any>,
         input?: TInput,
       ) => {
-        const outputPromise = await deps.taskRunner.run(task, input);
-        if (outputPromise === undefined) {
-          throw new Error(
-            `Durable task '${task.id}' completed without a result promise.`,
-          );
+        const output = await deps.taskRunner.run(task, input);
+        if (output === undefined) {
+          durableExecutionInvariantError.throw({
+            message: `Durable task '${task.id}' completed without a result promise.`,
+          });
         }
-        return await outputPromise;
+        return output as TResult;
       },
     },
     taskResolver: (taskId) => {

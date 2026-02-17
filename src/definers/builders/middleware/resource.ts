@@ -6,6 +6,7 @@ import type {
   TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 import { builderIncompleteError } from "../../../errors";
 import { defineResourceMiddleware } from "../../defineResourceMiddleware";
 import type { ResourceMiddlewareFluentBuilder } from "./resource.interface";
@@ -90,6 +91,11 @@ export function makeResourceMiddlewareBuilder<
 
     everywhere(flag) {
       const next = cloneRes(state, { everywhere: flag });
+      return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
+    },
+
+    throws(list: ThrowsList) {
+      const next = cloneRes(state, { throws: list });
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);
     },
 

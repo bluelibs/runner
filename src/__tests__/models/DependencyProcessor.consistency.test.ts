@@ -2,6 +2,7 @@ import { r } from "../../index";
 import { run } from "../../run";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { createTestFixture } from "../test-utils";
+import { createMessageError } from "../../errors";
 
 enum ResourceId {
   Broken = "broken.resource",
@@ -299,7 +300,7 @@ describe("DependencyProcessor Consistency", () => {
     const broken = r
       .resource(ResourceId.BrokenViaDependency)
       .init(async () => {
-        throw new Error(ErrorMessage.Boom);
+        throw createMessageError(ErrorMessage.Boom);
       })
       .build();
 

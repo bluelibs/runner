@@ -7,6 +7,7 @@ import {
   createErroringRequest,
   createRequestFromBody,
 } from "./multipart.test.utils";
+import { createMessageError } from "../../../../errors";
 
 const serializer = new Serializer();
 
@@ -26,7 +27,9 @@ describe("parseMultipartInput - Errors", () => {
     ]);
     const parsed = await parseMultipartInput(req, undefined, serializer);
     if (parsed.ok)
-      throw new Error("Expected multipart failure for missing manifest");
+      throw createMessageError(
+        "Expected multipart failure for missing manifest",
+      );
     expectErrorCode(parsed.response, "MISSING_MANIFEST");
   });
 
@@ -43,7 +46,9 @@ describe("parseMultipartInput - Errors", () => {
     ]);
     const parsed = await parseMultipartInput(req, undefined, serializer);
     if (parsed.ok)
-      throw new Error("Expected multipart failure for invalid manifest");
+      throw createMessageError(
+        "Expected multipart failure for invalid manifest",
+      );
     expectErrorCode(parsed.response, "INVALID_MULTIPART");
   });
 
@@ -53,7 +58,7 @@ describe("parseMultipartInput - Errors", () => {
     if (parsed.ok) {
       const finalize = await parsed.finalize;
       if (finalize.ok)
-        throw new Error("Expected finalize to report request abort");
+        throw createMessageError("Expected finalize to report request abort");
       expectErrorCode(finalize.response, "REQUEST_ABORTED");
       return;
     }
@@ -68,7 +73,9 @@ describe("parseMultipartInput - Errors", () => {
     if (parsed.ok) {
       const finalize = await parsed.finalize;
       if (finalize.ok)
-        throw new Error("Expected missing boundary to be treated as invalid");
+        throw createMessageError(
+          "Expected missing boundary to be treated as invalid",
+        );
       expectErrorCode(finalize.response, "INVALID_MULTIPART");
       return;
     }
@@ -92,10 +99,11 @@ describe("parseMultipartInput - Errors", () => {
       ),
     ]);
     const parsed = await parseMultipartInput(req, undefined, serializer);
-    if (!parsed.ok) throw new Error("Expected success before finalize");
+    if (!parsed.ok)
+      throw createMessageError("Expected success before finalize");
     const finalize = await parsed.finalize;
     if (finalize.ok)
-      throw new Error("Expected finalize to report missing file part");
+      throw createMessageError("Expected finalize to report missing file part");
     expectErrorCode(finalize.response, "MISSING_FILE_PART");
   });
 });

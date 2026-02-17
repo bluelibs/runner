@@ -1,6 +1,7 @@
 import type { SwitchBranch } from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
 import { DurableAuditEntryKind, type DurableAuditEntryInput } from "../audit";
+import { durableExecutionInvariantError } from "../../../../errors";
 
 /**
  * Persisted result shape for a durable switch evaluation.
@@ -69,13 +70,15 @@ export async function switchDurably<TValue, TResult>(params: {
   }
 
   if (!matchedBranch) {
-    throw new Error(
-      `Durable switch '${params.stepId}': no branch matched and no default provided`,
-    );
+    return durableExecutionInvariantError.throw({
+      message: `Durable switch '${params.stepId}': no branch matched and no default provided`,
+    });
   }
 
+  const selectedBranch = matchedBranch;
+
   // Execute the selected branch
-  const result = await matchedBranch.run(params.value);
+  const result = await selectedBranch.run(params.value);
   const durationMs = Date.now() - startedAt;
 
   // Persist the outcome for replay
@@ -83,7 +86,7 @@ export async function switchDurably<TValue, TResult>(params: {
     executionId: params.executionId,
     stepId: params.stepId,
     result: {
-      branchId: matchedBranch.id,
+      branchId: selectedBranch.id,
       result,
     } satisfies SwitchStepResult<TResult>,
     completedAt: new Date(),
@@ -92,7 +95,7 @@ export async function switchDurably<TValue, TResult>(params: {
   await params.appendAuditEntry({
     kind: DurableAuditEntryKind.SwitchEvaluated,
     stepId: params.stepId,
-    branchId: matchedBranch.id,
+    branchId: selectedBranch.id,
     durationMs,
   });
 

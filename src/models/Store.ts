@@ -15,6 +15,8 @@ import {
   circularDependenciesError,
   storeAlreadyInitializedError,
   eventEmissionCycleError,
+  lockedError,
+  taskRunnerNotSetError,
 } from "../errors";
 import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
@@ -64,6 +66,8 @@ import { detectRunnerMode } from "../tools/detectRunnerMode";
 import { Serializer } from "../serializer";
 import { getResourcesInDisposeOrder as computeDisposeOrder } from "./utils/disposeOrder";
 import { RunResult } from "./RunResult";
+import { getAllThrows } from "../tools/getAllThrows";
+import type { ITask } from "../types/task";
 
 // Re-export types for backward compatibility
 export type {
@@ -155,15 +159,13 @@ export class Store {
 
   checkLock() {
     if (this.#isLocked) {
-      throw new Error("Cannot modify the Store when it is locked.");
+      lockedError.throw({ what: "Store" });
     }
   }
 
   private registerGlobalComponents(runtimeResult: RunResult<unknown>) {
     if (!this.taskRunner) {
-      throw new Error(
-        "TaskRunner is not set. Call store.setTaskRunner() before initializeStore().",
-      );
+      taskRunnerNotSetError.throw();
     }
 
     const builtInResourcesMap = new Map<
@@ -300,7 +302,7 @@ export class Store {
     runtimeResult: RunResult<unknown>,
   ) {
     if (this.#isInitialized) {
-      storeAlreadyInitializedError.throw({});
+      storeAlreadyInitializedError.throw();
     }
 
     this.registerGlobalComponents(runtimeResult);
@@ -426,5 +428,17 @@ export class Store {
     return typeof tag === "string"
       ? this.registry.getResourcesWithTag(tag)
       : this.registry.getResourcesWithTag(tag);
+  }
+
+  /**
+   * Returns all error ids declared across a task or resource and its full
+   * dependency chain: own throws, middleware throws (local + everywhere),
+   * resource dependency throws, and — for tasks — hook throws on events
+   * the task can emit. Deduplicated.
+   */
+  public getAllThrows(
+    target: ITask<any, any, any, any, any, any> | IResource<any, any, any, any>,
+  ): readonly string[] {
+    return getAllThrows(this.registry, target);
   }
 }

@@ -1,5 +1,9 @@
 import { createRequire } from "node:module";
 import { join } from "node:path";
+import {
+  optionalDependencyInvalidExportError,
+  optionalDependencyMissingError,
+} from "../../../errors";
 
 type AmqplibModule = {
   connect: (url: string) => Promise<unknown>;
@@ -15,19 +19,26 @@ function getAmqplib(): AmqplibModule {
   try {
     const mod = requireFn("amqplib") as unknown;
     if (!mod || typeof mod !== "object") {
-      throw new Error("Invalid 'amqplib' export");
+      optionalDependencyInvalidExportError.throw({
+        dependency: "amqplib",
+        details: "",
+      });
     }
     const connect = (mod as { connect?: unknown }).connect;
     if (typeof connect !== "function") {
-      throw new Error("Invalid 'amqplib.connect' export");
+      optionalDependencyInvalidExportError.throw({
+        dependency: "amqplib",
+        details: ".connect",
+      });
     }
     cachedAmqplib = { connect: connect as AmqplibModule["connect"] };
     return cachedAmqplib;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(
-      `Missing optional dependency 'amqplib'. Install it to use RabbitMQQueue. Original error: ${message}`,
-    );
+    return optionalDependencyMissingError.throw({
+      dependency: "amqplib",
+      details: ` Install it to use RabbitMQQueue. Original error: ${message}`,
+    });
   }
 }
 

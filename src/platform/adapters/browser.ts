@@ -104,12 +104,9 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
   createAsyncLocalStorage<T>(): IAsyncLocalStorage<T> {
     // Return a wrapper that throws on use; creation itself shouldn't crash callers
     const throwUnsupported = (): never => {
-      platformUnsupportedFunctionError.throw({
+      return platformUnsupportedFunctionError.throw({
         functionName: "createAsyncLocalStorage",
       });
-      // TypeScript knows this is unreachable but we need to satisfy the return type
-      /* istanbul ignore next -- unreachable: throw() always throws */
-      throw new Error("Unreachable");
     };
 
     return {

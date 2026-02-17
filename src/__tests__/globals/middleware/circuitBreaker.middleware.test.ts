@@ -4,6 +4,7 @@ import {
   circuitBreakerMiddleware,
   CircuitBreakerOpenError,
 } from "../../../globals/middleware/circuitBreaker.middleware";
+import { createMessageError } from "../../../errors";
 
 describe("Circuit Breaker Middleware", () => {
   beforeEach(() => {
@@ -44,7 +45,7 @@ describe("Circuit Breaker Middleware", () => {
       id: "task.tripping",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 2 })],
       run: async () => {
-        if (shouldFail) throw new Error("fail");
+        if (shouldFail) throw createMessageError("fail");
         return "ok";
       },
     });
@@ -77,7 +78,7 @@ describe("Circuit Breaker Middleware", () => {
         }),
       ],
       run: async () => {
-        if (shouldFail) throw new Error("fail");
+        if (shouldFail) throw createMessageError("fail");
         return "ok";
       },
     });
@@ -119,7 +120,7 @@ describe("Circuit Breaker Middleware", () => {
         }),
       ],
       run: async () => {
-        if (shouldFail) throw new Error("fail");
+        if (shouldFail) throw createMessageError("fail");
         return "ok";
       },
     });
@@ -161,7 +162,7 @@ describe("Circuit Breaker Middleware", () => {
       ],
       run: async () => {
         if (mode === "fail") {
-          throw new Error("fail");
+          throw createMessageError("fail");
         }
         if (mode === "probe") {
           await new Promise<void>((resolve) => {
@@ -204,7 +205,7 @@ describe("Circuit Breaker Middleware", () => {
       id: "task.isolate1",
       middleware: [circuitBreakerMiddleware.with({ failureThreshold: 1 })],
       run: async () => {
-        throw new Error("fail");
+        throw createMessageError("fail");
       },
     });
 
@@ -237,7 +238,7 @@ describe("Circuit Breaker Middleware", () => {
       id: "task.defaults",
       middleware: [circuitBreakerMiddleware],
       run: async () => {
-        throw new Error("fail");
+        throw createMessageError("fail");
       },
     });
 

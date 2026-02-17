@@ -1,5 +1,6 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
+import { createMessageError } from "../../errors";
 
 describe("run.ts rollback and unhooking", () => {
   it("rolls back initialized resources on init error and skips uninitialized", async () => {
@@ -19,7 +20,7 @@ describe("run.ts rollback and unhooking", () => {
       id: "tests.rollback.bad",
       dependencies: { dep },
       async init() {
-        throw new Error("init failed");
+        throw createMessageError("init failed");
       },
       async dispose() {
         disposeCalls.push("bad");

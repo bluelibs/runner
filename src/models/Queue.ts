@@ -2,6 +2,11 @@ import { getPlatform } from "../platform";
 import { EventManager } from "./EventManager";
 import { defineEvent } from "../definers/defineEvent";
 import { IEventDefinition, IEventEmission } from "../defs";
+import {
+  queueDisposedError,
+  queueDeadlockError,
+  cancellationError,
+} from "../errors";
 
 export type QueueEventType =
   | "enqueue"
@@ -57,16 +62,20 @@ export class Queue {
   public run<T>(task: (signal: AbortSignal) => Promise<T>): Promise<T> {
     // 1. refuse new work if we've disposed
     if (this.disposed) {
-      return Promise.reject(new Error("Queue has been disposed"));
+      try {
+        queueDisposedError.throw();
+      } catch (e) {
+        return Promise.reject(e);
+      }
     }
 
     // 2. detect dead‑locks (a queued task adding another queued task)
     if (this.hasAsyncLocalStorage && this.executionContext.getStore()) {
-      return Promise.reject(
-        new Error(
-          "Dead‑lock detected: a queued task attempted to queue another task",
-        ),
-      );
+      try {
+        queueDeadlockError.throw();
+      } catch (e) {
+        return Promise.reject(e);
+      }
     }
 
     const { signal } = this.abortController;
@@ -78,7 +87,7 @@ export class Queue {
     const result = this.tail.then(() => {
       if (signal.aborted) {
         this.emit("cancel", taskId);
-        throw new Error("Operation was aborted");
+        cancellationError.throw({ reason: "Operation was aborted" });
       }
       this.emit("start", taskId);
       return this.hasAsyncLocalStorage

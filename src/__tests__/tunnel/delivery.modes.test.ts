@@ -3,6 +3,7 @@ import { run } from "../../run";
 import { globalTags } from "../../globals/globalTags";
 import { event, hook, task, globals } from "../../index";
 import type { TunnelRunner } from "../../globals/resources/tunnel/types";
+import { createMessageError } from "../../errors";
 
 describe("Tunnel delivery modes", () => {
   const ev = event<{ v: number }>({ id: "unit.tunnel.ev" });
@@ -41,7 +42,8 @@ describe("Tunnel delivery modes", () => {
         events: [overrides.eventId],
         eventDeliveryMode: overrides.delivery,
         emit: async () => {
-          if (overrides.emitBehavior === "fail") throw new Error("RFAIL");
+          if (overrides.emitBehavior === "fail")
+            throw createMessageError("RFAIL");
         },
       }),
     });

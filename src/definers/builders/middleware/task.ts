@@ -6,6 +6,7 @@ import type {
   TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 import { builderIncompleteError } from "../../../errors";
 import { defineTaskMiddleware } from "../../defineTaskMiddleware";
 import type { TaskMiddlewareFluentBuilder } from "./task.interface";
@@ -90,6 +91,11 @@ export function makeTaskMiddlewareBuilder<
 
     everywhere(flag) {
       const next = cloneTask(state, { everywhere: flag });
+      return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
+    },
+
+    throws(list: ThrowsList) {
+      const next = cloneTask(state, { throws: list });
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);
     },
 

@@ -39,7 +39,7 @@ An object with the following properties and methods:
 | `getRootConfig()`           | Read the root resource config                                                              |
 | `getRootValue()`            | Read the initialized root resource value                                                   |
 | `logger`                    | Logger instance                                                                            |
-| `store`                     | Runtime store with registered resources, tasks, middleware, events                         |
+| `store`                     | Runtime store with registered resources, tasks, middleware, events, and introspection helpers (for example, `getAllThrows(task \| resource)`) |
 | `dispose()`                 | Gracefully dispose resources and unhook process listeners                                  |
 
 Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.

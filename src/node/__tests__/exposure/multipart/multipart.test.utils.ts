@@ -3,6 +3,7 @@ import { Readable } from "stream";
 import { type MultipartRequest } from "../../../exposure/multipart";
 import type { JsonResponse } from "../../../exposure/types";
 import type { InputFile } from "../../../../types/inputFile";
+import { createMessageError } from "../../../../errors";
 
 export const CRLF = "\r\n";
 
@@ -86,7 +87,7 @@ export function assertInputFile(
   label: string,
 ): asserts value is InputFile {
   if (!value || typeof value !== "object") {
-    throw new Error(`${label} is not an object`);
+    throw createMessageError(`${label} is not an object`);
   }
   const candidate = value as {
     name?: unknown;
@@ -95,16 +96,16 @@ export function assertInputFile(
     toTempFile?: unknown;
   };
   if (typeof candidate.name !== "string") {
-    throw new Error(`${label} is missing required name`);
+    throw createMessageError(`${label} is missing required name`);
   }
   if (typeof candidate.resolve !== "function") {
-    throw new Error(`${label} is missing resolve()`);
+    throw createMessageError(`${label} is missing resolve()`);
   }
   if (typeof candidate.stream !== "function") {
-    throw new Error(`${label} is missing stream()`);
+    throw createMessageError(`${label} is missing stream()`);
   }
   if (typeof candidate.toTempFile !== "function") {
-    throw new Error(`${label} is missing toTempFile()`);
+    throw createMessageError(`${label} is missing toTempFile()`);
   }
 }
 
@@ -114,15 +115,15 @@ export function expectErrorCode(
 ): void {
   const body = response.body;
   if (!body || typeof body !== "object") {
-    throw new Error("Error response body is missing");
+    throw createMessageError("Error response body is missing");
   }
   const error = (body as { error?: { code?: unknown } }).error;
   if (!error || typeof error !== "object") {
-    throw new Error("Error payload is missing details");
+    throw createMessageError("Error payload is missing details");
   }
   const code = (error as { code?: unknown }).code;
   if (typeof code !== "string") {
-    throw new Error("Error code is not a string");
+    throw createMessageError("Error code is not a string");
   }
   expect(code).toBe(expected);
 }

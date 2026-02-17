@@ -5,6 +5,7 @@ import { globalTags } from "../../../globals/globalTags";
 import { globalResources } from "../../../globals/globalResources";
 import type { TunnelRunner } from "../../../globals/resources/tunnel/types";
 import { computeAllowList } from "../../tunnel";
+import { createMessageError } from "../../../errors";
 
 describe("computeAllowList (server-mode http tunnels)", () => {
   it("returns disabled allow list when store lacks resources map", () => {
@@ -227,13 +228,13 @@ describe("computeAllowList (server-mode http tunnels)", () => {
               transport: "http",
               tasks: (task: { id: string }) => {
                 if (task.id.endsWith("bad")) {
-                  throw new Error("task selector failure");
+                  throw createMessageError("task selector failure");
                 }
                 return task.id.endsWith("good");
               },
               events: (event: { id: string }) => {
                 if (event.id.endsWith("bad")) {
-                  throw new Error("event selector failure");
+                  throw createMessageError("event selector failure");
                 }
                 return event.id.endsWith("good");
               },

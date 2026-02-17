@@ -9,6 +9,8 @@ import type {
 import { defineOverride } from "../../defineOverride";
 import type { ResourceMiddlewareFluentBuilder } from "../middleware/resource.interface";
 import { mergeArray, mergeDependencies } from "../middleware/utils";
+import type { ThrowsList } from "../../../types/error";
+import { normalizeThrows } from "../../../tools/throws";
 
 type AnyResourceMiddleware = IResourceMiddleware<any, any, any, any>;
 
@@ -129,10 +131,20 @@ function makeResourceMiddlewareOverrideBuilder<
       return makeResourceMiddlewareOverrideBuilder(base, next);
     },
 
+    throws(list: ThrowsList) {
+      const next = cloneResourceMiddlewareState(state, { throws: list });
+      return makeResourceMiddlewareOverrideBuilder(base, next);
+    },
+
     build() {
+      const normalizedThrows = normalizeThrows(
+        { kind: "resource-middleware", id: state.id },
+        state.throws,
+      );
       const { id: _id, ...patch } = state;
       return defineOverride<IResourceMiddleware<C, In, Out, D>>(base, {
         ...patch,
+        throws: normalizedThrows,
       });
     },
   };
@@ -157,6 +169,7 @@ export function resourceMiddlewareOverrideBuilder<
       meta: base.meta,
       tags: base.tags,
       everywhere: base.everywhere,
+      throws: base.throws,
     },
   );
 

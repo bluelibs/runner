@@ -429,6 +429,9 @@ try {
 - `message` is not required in the data unless your custom formatter expects it.
 - `helper.is(err, partialData?)` accepts an optional partial data filter and performs shallow strict matching (`===`) on each provided key.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
+- `.throws()` is also available on hooks, task middleware, and resource middleware builders — same semantics.
+- `.throws([...])` accepts error helpers or string ids, normalizes to ids, and deduplicates repeated declarations.
+- `store.getAllThrows(task | resource)` aggregates all declared error ids from a task or resource and its full dependency chain: own throws, local + everywhere middleware throws, resource dependency throws (with their middleware), and — for tasks — hook throws for events the task can emit. Returns a deduplicated `readonly string[]`.
 - Use `r.error.is(err)` to check if an error is _any_ Runner error (not just a specific one). This type guard narrows to `RunnerError` with `id`, `data`, `httpCode`, and `remediation` properties. Useful in catch blocks or error filters:
   ```ts
   if (r.error.is(err, { code: 400 })) {

@@ -4,6 +4,7 @@ import {
   createDefaultUnhandledError,
   safeReportUnhandledError,
 } from "../../models/UnhandledError";
+import { createMessageError } from "../../errors";
 
 describe("UnhandledError helpers", () => {
   const makeLogger = () =>
@@ -57,7 +58,7 @@ describe("UnhandledError helpers", () => {
 
   it("safeReportUnhandledError swallows handler errors", async () => {
     const noisy = jest.fn(async () => {
-      throw new Error("handler failed");
+      throw createMessageError("handler failed");
     });
     const consoleSpy = jest
       .spyOn(console, "error")
@@ -70,7 +71,7 @@ describe("UnhandledError helpers", () => {
 
   it("bindProcessErrorHandler reports reporter failures to console.error", async () => {
     const reporter = jest.fn(async () => {
-      throw new Error("reporter failed");
+      throw createMessageError("reporter failed");
     });
     const consoleSpy = jest
       .spyOn(console, "error")
@@ -86,7 +87,7 @@ describe("UnhandledError helpers", () => {
 
   it("safeReportUnhandledError reports reporter failures to console.error", async () => {
     const reporter = jest.fn(async () => {
-      throw new Error("reporter failed");
+      throw createMessageError("reporter failed");
     });
     const consoleSpy = jest
       .spyOn(console, "error")

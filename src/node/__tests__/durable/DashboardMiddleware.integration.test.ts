@@ -11,10 +11,11 @@ import type { IDurableService } from "../../durable/core/interfaces/service";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { DurableOperator } from "../../durable/core/DurableOperator";
 import { createDashboardMiddleware } from "../../durable/dashboard/server";
+import { createMessageError } from "../../../errors";
 
 function createUnusedService(): IDurableService {
   const unused = (): never => {
-    throw new Error("Not used by createDashboardMiddleware");
+    throw createMessageError("Not used by createDashboardMiddleware");
   };
 
   return {

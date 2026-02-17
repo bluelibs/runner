@@ -7,6 +7,7 @@ import type {
   TagType,
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 import { builderIncompleteError } from "../../../errors";
 import { defineHook } from "../../defineHook";
 import type { HookFluentBuilder } from "./fluent-builder.interface";
@@ -97,6 +98,11 @@ export function makeHookBuilder<
 
     run(fn) {
       const next = clone(state, { run: fn as NonNullable<typeof state.run> });
+      return makeHookBuilder<TDeps, TOn, TMeta>(next);
+    },
+
+    throws(list: ThrowsList) {
+      const next = clone(state, { throws: list });
       return makeHookBuilder<TDeps, TOn, TMeta>(next);
     },
 

@@ -2,6 +2,7 @@ import { RedisEventBus } from "../../durable/bus/RedisEventBus";
 import type * as IoredisMod from "../../durable/optionalDeps/ioredis";
 import type * as AmqplibMod from "../../durable/optionalDeps/amqplib";
 import type * as CronParserMod from "../../durable/core/CronParser";
+import { createMessageError } from "../../../errors";
 
 describe("durable: optional deps helpers", () => {
   it("createIORedisClient() throws when ioredis is missing", () => {
@@ -10,7 +11,7 @@ describe("durable: optional deps helpers", () => {
       jest.doMock(
         "ioredis",
         () => {
-          throw new Error("Cannot find module 'ioredis'");
+          throw createMessageError("Cannot find module 'ioredis'");
         },
         { virtual: true },
       );
@@ -119,7 +120,7 @@ describe("durable: optional deps helpers", () => {
     jest.doMock(
       "amqplib",
       () => {
-        throw new Error("Cannot find module 'amqplib'");
+        throw createMessageError("Cannot find module 'amqplib'");
       },
       { virtual: true },
     );
@@ -230,7 +231,7 @@ describe("durable: CronParser", () => {
 
       mockNodeCreateRequire((id) => {
         if (id === "cron-parser") return { CronExpressionParser: { parse } };
-        throw new Error(`Cannot find module '${id}'`);
+        throw createMessageError(`Cannot find module '${id}'`);
       });
 
       const {
@@ -248,9 +249,9 @@ describe("durable: CronParser", () => {
     jest.isolateModules(() => {
       mockNodeCreateRequire((id) => {
         if (id === "cron-parser") {
-          throw new Error("Cannot find module 'cron-parser'");
+          throw createMessageError("Cannot find module 'cron-parser'");
         }
-        throw new Error(`Cannot find module '${id}'`);
+        throw createMessageError(`Cannot find module '${id}'`);
       });
 
       const {
@@ -271,9 +272,9 @@ describe("durable: CronParser", () => {
     jest.isolateModules(() => {
       mockNodeCreateRequire((id) => {
         if (id === "cron-parser") {
-          throw new Error("Cannot find module 'cron-parser'");
+          throw createMessageError("Cannot find module 'cron-parser'");
         }
-        throw new Error(`Cannot find module '${id}'`);
+        throw createMessageError(`Cannot find module '${id}'`);
       });
 
       const {
@@ -292,9 +293,9 @@ describe("durable: CronParser", () => {
     jest.isolateModules(() => {
       mockNodeCreateRequire((id) => {
         if (id === "cron-parser") {
-          throw new Error("Cannot find module 'cron-parser'");
+          throw createMessageError("Cannot find module 'cron-parser'");
         }
-        throw new Error(`Cannot find module '${id}'`);
+        throw createMessageError(`Cannot find module '${id}'`);
       });
 
       const {
@@ -311,9 +312,9 @@ describe("durable: CronParser", () => {
     jest.isolateModules(() => {
       mockNodeCreateRequire((id) => {
         if (id === "cron-parser") {
-          throw new Error("Cannot find module 'cron-parser'");
+          throw createMessageError("Cannot find module 'cron-parser'");
         }
-        throw new Error(`Cannot find module '${id}'`);
+        throw createMessageError(`Cannot find module '${id}'`);
       });
 
       const {
@@ -331,7 +332,7 @@ describe("durable: CronParser", () => {
     jest.isolateModules(() => {
       mockNodeCreateRequire((id) => {
         if (id === "cron-parser") return 123;
-        throw new Error(`Cannot find module '${id}'`);
+        throw createMessageError(`Cannot find module '${id}'`);
       });
       const {
         CronParser,
@@ -348,7 +349,7 @@ describe("durable: CronParser", () => {
       mockNodeCreateRequire((id) => {
         if (id === "cron-parser")
           return { CronExpressionParser: { parse: 123 } };
-        throw new Error(`Cannot find module '${id}'`);
+        throw createMessageError(`Cannot find module '${id}'`);
       });
       const {
         CronParser,
@@ -364,9 +365,9 @@ describe("durable: CronParser", () => {
     jest.isolateModules(() => {
       mockNodeCreateRequire((id) => {
         if (id === "cron-parser") {
-          throw new Error("Cannot find module 'cron-parser'");
+          throw createMessageError("Cannot find module 'cron-parser'");
         }
-        throw new Error(`Cannot find module '${id}'`);
+        throw createMessageError(`Cannot find module '${id}'`);
       });
 
       const {
@@ -383,9 +384,9 @@ describe("durable: CronParser", () => {
     jest.isolateModules(() => {
       mockNodeCreateRequire((id) => {
         if (id === "cron-parser") {
-          throw new Error("Cannot find module 'cron-parser'");
+          throw createMessageError("Cannot find module 'cron-parser'");
         }
-        throw new Error(`Cannot find module '${id}'`);
+        throw createMessageError(`Cannot find module '${id}'`);
       });
 
       const {

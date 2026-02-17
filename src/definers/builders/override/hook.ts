@@ -8,6 +8,8 @@ import type {
 } from "../../../defs";
 import { defineOverride } from "../../defineOverride";
 import { mergeArray, mergeDependencies } from "../hook/utils";
+import type { ThrowsList } from "../../../types/error";
+import { normalizeThrows } from "../../../tools/throws";
 
 export type HookOn =
   | "*"
@@ -42,6 +44,8 @@ export interface HookOverrideBuilder<
   run(
     fn: IHookDefinition<TDeps, TOn, TMeta>["run"],
   ): HookOverrideBuilder<TDeps, TOn, TMeta>;
+  /** Declare which typed errors this hook may throw (declarative only). */
+  throws(list: ThrowsList): HookOverrideBuilder<TDeps, TOn, TMeta>;
   build(): IHook<TDeps, TOn, TMeta>;
 }
 
@@ -131,9 +135,21 @@ function makeHookOverrideBuilder<
       return makeHookOverrideBuilder(base, next);
     },
 
+    throws(list: ThrowsList) {
+      const next = cloneHookState(state, { throws: list });
+      return makeHookOverrideBuilder(base, next);
+    },
+
     build() {
+      const normalizedThrows = normalizeThrows(
+        { kind: "hook", id: state.id },
+        state.throws,
+      );
       const { id: _id, on: _on, ...patch } = state;
-      return defineOverride<IHook<TDeps, TOn, TMeta>>(base, { ...patch });
+      return defineOverride<IHook<TDeps, TOn, TMeta>>(base, {
+        ...patch,
+        throws: normalizedThrows,
+      });
     },
   };
 
@@ -153,6 +169,7 @@ export function hookOverrideBuilder<
     meta: base.meta,
     run: base.run,
     tags: base.tags,
+    throws: base.throws,
   });
 
   return makeHookOverrideBuilder(base, initial);

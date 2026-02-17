@@ -8,6 +8,7 @@ import {
   journalKeys as timeoutJournalKeys,
 } from "../../globals/middleware/timeout.middleware";
 import { run } from "../../run";
+import { createMessageError } from "../../errors";
 
 describe("Retry Middleware", () => {
   describe("Retry Task Middleware", () => {
@@ -23,7 +24,7 @@ describe("Retry Middleware", () => {
         ],
         run: async () => {
           attempt++;
-          if (attempt < 3) throw new Error("Temporary failure");
+          if (attempt < 3) throw createMessageError("Temporary failure");
           return "Success";
         },
       });
@@ -53,7 +54,7 @@ describe("Retry Middleware", () => {
           }),
         ],
         run: async () => {
-          throw new Error("FATAL");
+          throw createMessageError("FATAL");
         },
       });
 
@@ -64,7 +65,7 @@ describe("Retry Middleware", () => {
         async init(_, { task }) {
           await expect(task()).rejects.toThrow("FATAL");
           expect(errorSpy).not.toHaveBeenCalled();
-          throw new Error("FATAL");
+          throw createMessageError("FATAL");
         },
       });
 
@@ -85,7 +86,7 @@ describe("Retry Middleware", () => {
           }),
         ],
         run: async () => {
-          throw new Error("Retry me");
+          throw createMessageError("Retry me");
         },
       });
 
@@ -116,7 +117,7 @@ describe("Retry Middleware", () => {
         middleware: [retryTaskMiddleware],
         run: async () => {
           attempt++;
-          throw new Error("Temporary failure");
+          throw createMessageError("Temporary failure");
         },
       });
 
@@ -184,7 +185,7 @@ describe("Retry Middleware", () => {
             // Abort it immediately so retry sees it as aborted on next catch
             abortController.abort();
           }
-          throw new Error("Should not retry after abort");
+          throw createMessageError("Should not retry after abort");
         },
       });
 
@@ -215,7 +216,7 @@ describe("Retry Middleware", () => {
         ],
         async init() {
           attempts++;
-          if (attempts < 2) throw new Error("Resource init failed");
+          if (attempts < 2) throw createMessageError("Resource init failed");
           return "Resource ready";
         },
       });
@@ -245,7 +246,7 @@ describe("Retry Middleware", () => {
         ],
         async init() {
           attempt++;
-          if (attempt < 3) throw new Error("Temporary failure");
+          if (attempt < 3) throw createMessageError("Temporary failure");
           return "Success";
         },
       });
@@ -275,7 +276,7 @@ describe("Retry Middleware", () => {
           }),
         ],
         async init() {
-          throw new Error("FATAL");
+          throw createMessageError("FATAL");
         },
       });
 
@@ -317,7 +318,7 @@ describe("Retry Middleware", () => {
         }
       } catch (error) {
         // The operation rejected before the timeout. This is a failure.
-        throw new Error(
+        throw createMessageError(
           `Function threw an error within ${timeoutMs}ms: ${
             (error as Error).message
           }`,
@@ -339,7 +340,7 @@ describe("Retry Middleware", () => {
           }),
         ],
         async init() {
-          throw new Error("Retry me");
+          throw createMessageError("Retry me");
         },
       });
 
@@ -367,7 +368,7 @@ describe("Retry Middleware", () => {
         middleware: [retryResourceMiddleware],
         async init() {
           attempt++;
-          throw new Error("Temporary failure");
+          throw createMessageError("Temporary failure");
         },
       });
 

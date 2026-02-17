@@ -9,6 +9,7 @@ import {
 } from "../../../index";
 import { ExposureRequestContext } from "../../../exposure/requestContext";
 import { storage } from "../../../../definers/defineAsyncContext";
+import { createMessageError } from "../../../../errors";
 
 describe("nodeExposure request context (raw-body)", () => {
   it("provides req/res via useExposureContext() and allows raw-body streaming when content-type is application/octet-stream", async () => {
@@ -17,7 +18,8 @@ describe("nodeExposure request context (raw-body)", () => {
       run: async () => {
         const { req, basePath, url, method, headers } = useExposureContext();
         // Basic sanity assertions on context
-        if (!basePath || !url || !method || !headers) throw new Error("no ctx");
+        if (!basePath || !url || !method || !headers)
+          throw createMessageError("no ctx");
         return await new Promise<string>((resolve, reject) => {
           const chunks: Buffer[] = [];
           req

@@ -3,6 +3,11 @@
  * Extracted from Serializer.ts as a standalone module.
  */
 
+import {
+  invalidPayloadError,
+  referenceResolutionError,
+  validationError,
+} from "./errors";
 import type { SerializedValue, DeserializationContext } from "./types";
 import {
   isObjectReference,
@@ -56,7 +61,7 @@ const mergeTypePlaceholderWithoutFactory = (
 
   if (result === null || typeof result !== "object") {
     if (hasCircularReference) {
-      throw new Error(
+      throw validationError(
         "Cannot preserve circular references for a type without create() that deserializes to a non-object value",
       );
     }
@@ -73,7 +78,7 @@ const mergeTypePlaceholderWithoutFactory = (
     result instanceof RegExp
   ) {
     if (hasCircularReference) {
-      throw new Error(
+      throw validationError(
         "Cannot preserve circular references for a type without create(); provide create() for identity-safe placeholders",
       );
     }
@@ -122,7 +127,7 @@ export const deserializeValue = (
 
   if (hasOwn.call(value, "__ref")) {
     if (!isObjectReference(value)) {
-      throw new Error("Invalid object reference payload");
+      throw invalidPayloadError("Invalid object reference payload");
     }
     return resolveReference(value.__ref, context, depth + 1, options);
   }
@@ -163,7 +168,7 @@ export const resolveReference = (
 ): unknown => {
   assertDepth(depth, options.maxDepth);
   if (isUnsafeKey(id, options.unsafeKeys)) {
-    throw new Error(`Unresolved reference id "${id}"`);
+    throw referenceResolutionError(`Unresolved reference id "${id}"`);
   }
   if (context.resolved.has(id)) {
     if (context.resolving.has(id)) {
@@ -174,14 +179,14 @@ export const resolveReference = (
 
   const node = context.nodes[id];
   if (!node) {
-    throw new Error(`Unresolved reference id "${id}"`);
+    throw referenceResolutionError(`Unresolved reference id "${id}"`);
   }
 
   switch (node.kind) {
     case "array": {
       const values = node.value;
       if (!Array.isArray(values)) {
-        throw new Error("Invalid array node payload");
+        throw invalidPayloadError("Invalid array node payload");
       }
       const arr: unknown[] = new Array(values.length);
       context.resolved.set(id, arr);
@@ -199,7 +204,7 @@ export const resolveReference = (
     case "object": {
       const source = node.value;
       if (!source || typeof source !== "object" || Array.isArray(source)) {
-        throw new Error("Invalid object node payload");
+        throw invalidPayloadError("Invalid object node payload");
       }
 
       const target: Record<string, unknown> = {};
@@ -260,7 +265,7 @@ export const resolveReference = (
     }
 
     default: {
-      throw new Error("Unsupported node kind");
+      throw validationError("Unsupported node kind");
     }
   }
 };

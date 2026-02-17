@@ -6,7 +6,7 @@ import { defineResource, defineEvent, defineHook } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
 import * as requestBody from "../../../exposure/requestBody";
-import { cancellationError } from "../../../../errors";
+import { cancellationError, createMessageError } from "../../../../errors";
 import {
   createReqRes,
   HeaderName,
@@ -432,7 +432,7 @@ describe("requestHandlers - event handling", () => {
         id: "tests.ev.err.hook",
         on: ev,
         async run() {
-          throw new Error("boom");
+          throw createMessageError("boom");
         },
       });
       const exposure = nodeExposure.with({

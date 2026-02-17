@@ -7,6 +7,7 @@ import type {
   IMiddlewareMeta,
   TagType,
 } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 
 export interface TaskMiddlewareFluentBuilder<
   C = any,
@@ -38,6 +39,8 @@ export interface TaskMiddlewareFluentBuilder<
     t: TNewTags,
     options?: { override?: boolean },
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;
+  /** Declare which typed errors this middleware may throw (declarative only). */
+  throws(list: ThrowsList): TaskMiddlewareFluentBuilder<C, In, Out, D>;
   everywhere(
     flag: boolean | ((task: ITask<any, any, any, any>) => boolean),
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;

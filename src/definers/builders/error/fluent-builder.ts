@@ -3,15 +3,14 @@ import { defineError } from "../../defineError";
 import type { ErrorFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState } from "./types";
 import { clone } from "./utils";
+import { builderInvalidHttpCodeError } from "../../../errors";
 
 const isValidHttpCode = (value: number): boolean =>
   Number.isInteger(value) && value >= 100 && value <= 599;
 
 const assertHttpCode = (value: number): void => {
   if (!isValidHttpCode(value)) {
-    throw new Error(
-      `Error httpCode must be an integer between 100 and 599. Received: ${value}`,
-    );
+    builderInvalidHttpCodeError.throw({ value });
   }
 };
 

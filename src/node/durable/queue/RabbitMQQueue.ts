@@ -4,6 +4,7 @@ import type {
   QueueMessage,
 } from "../core/interfaces/queue";
 import { connectAmqplib } from "../optionalDeps/amqplib";
+import { durableQueueNotInitializedError } from "../../../errors";
 
 type ConsumeMessage = { content: Buffer };
 
@@ -100,7 +101,7 @@ export class RabbitMQQueue implements IDurableQueue {
     message: Omit<QueueMessage<T>, "id" | "createdAt" | "attempts">,
   ): Promise<string> {
     const channel = this.channel;
-    if (!channel) throw new Error("Queue not initialized");
+    if (!channel) durableQueueNotInitializedError.throw();
 
     const id = Math.random().toString(36).substring(2, 10);
     const fullMessage: QueueMessage<T> = {
@@ -110,7 +111,7 @@ export class RabbitMQQueue implements IDurableQueue {
       attempts: 0,
     };
 
-    channel.sendToQueue(
+    channel!.sendToQueue(
       this.queueName,
       Buffer.from(JSON.stringify(fullMessage)),
       { persistent: true },
@@ -121,9 +122,9 @@ export class RabbitMQQueue implements IDurableQueue {
 
   async consume<T>(handler: MessageHandler<T>): Promise<void> {
     const channel = this.channel;
-    if (!channel) throw new Error("Queue not initialized");
+    if (!channel) durableQueueNotInitializedError.throw();
 
-    await channel.consume(
+    await channel!.consume(
       this.queueName,
       async (msg: ConsumeMessage | null) => {
         if (msg === null) return;
@@ -134,7 +135,7 @@ export class RabbitMQQueue implements IDurableQueue {
             QueueMessage<T>
           >;
           if (!parsed || typeof parsed.id !== "string") {
-            channel.nack(msg, false, false);
+            channel!.nack(msg, false, false);
             return;
           }
           const currentAttempts =
@@ -144,7 +145,7 @@ export class RabbitMQQueue implements IDurableQueue {
             attempts: currentAttempts + 1,
           } as QueueMessage<T>;
         } catch {
-          channel.nack(msg, false, false);
+          channel!.nack(msg, false, false);
           return;
         }
         this.messageMap.set(content.id, msg);

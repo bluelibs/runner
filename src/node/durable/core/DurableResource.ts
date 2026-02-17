@@ -14,6 +14,7 @@ import type { IDurableStore } from "./interfaces/store";
 import { DurableOperator } from "./DurableOperator";
 import { recordFlowShape, type DurableFlowShape } from "./flowShape";
 import { durableWorkflowTag } from "../tags/durableWorkflow.tag";
+import { durableExecutionInvariantError } from "../../../errors";
 
 export interface DurableResourceConfig {
   worker?: boolean;
@@ -109,12 +110,13 @@ export class DurableResource implements IDurableResource {
 
   get operator(): DurableOperator {
     if (!this.store) {
-      throw new Error(
-        "Durable operator API is not available: store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) or construct a DurableOperator(store) directly.",
-      );
+      durableExecutionInvariantError.throw({
+        message:
+          "Durable operator API is not available: store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) or construct a DurableOperator(store) directly.",
+      });
     }
     if (!this.operatorInstance) {
-      this.operatorInstance = new DurableOperator(this.store);
+      this.operatorInstance = new DurableOperator(this.store!);
     }
     return this.operatorInstance;
   }
@@ -122,11 +124,12 @@ export class DurableResource implements IDurableResource {
   use(): IDurableContext {
     const ctx = this.contextStorage.getStore();
     if (!ctx) {
-      throw new Error(
-        "Durable context is not available. Did you call durable.use() outside a durable task execution?",
-      );
+      durableExecutionInvariantError.throw({
+        message:
+          "Durable context is not available. Did you call durable.use() outside a durable task execution?",
+      });
     }
-    return ctx;
+    return ctx!;
   }
 
   async describe<TInput>(
@@ -134,25 +137,26 @@ export class DurableResource implements IDurableResource {
     input?: TInput,
   ): Promise<DurableFlowShape> {
     if (!this.runnerStore) {
-      throw new Error(
-        "Durable describe API is not available: runner store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) instead of manually constructing DurableResource.",
-      );
+      durableExecutionInvariantError.throw({
+        message:
+          "Durable describe API is not available: runner store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) instead of manually constructing DurableResource.",
+      });
     }
 
-    const storeTask = this.runnerStore.tasks.get(task.id);
+    const storeTask = this.runnerStore!.tasks.get(task.id);
     if (!storeTask) {
-      throw new Error(
-        `Cannot describe task "${task.id}": task is not registered in the runtime store.`,
-      );
+      durableExecutionInvariantError.throw({
+        message: `Cannot describe task "${task.id}": task is not registered in the runtime store.`,
+      });
     }
 
-    const effectiveTask = storeTask.task as AnyTask;
-    if (!storeTask.computedDependencies) {
-      throw new Error(
-        `Cannot describe task "${task.id}": task dependencies are not available in the runtime store.`,
-      );
+    const effectiveTask = storeTask!.task as AnyTask;
+    if (!storeTask!.computedDependencies) {
+      durableExecutionInvariantError.throw({
+        message: `Cannot describe task "${task.id}": task dependencies are not available in the runtime store.`,
+      });
     }
-    const deps = storeTask.computedDependencies as Record<string, unknown>;
+    const deps = storeTask!.computedDependencies as Record<string, unknown>;
     const resolvedInput = this.resolveDescribeInput(effectiveTask, input);
 
     return await recordFlowShape(async (ctx) => {
@@ -163,12 +167,13 @@ export class DurableResource implements IDurableResource {
 
   getWorkflows(): AnyTask[] {
     if (!this.runnerStore) {
-      throw new Error(
-        "Durable workflow discovery is not available: runner store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) instead of manually constructing DurableResource.",
-      );
+      durableExecutionInvariantError.throw({
+        message:
+          "Durable workflow discovery is not available: runner store was not provided to DurableResource. Use a Runner durable resource (durableResource/memoryDurableResource/redisDurableResource) instead of manually constructing DurableResource.",
+      });
     }
 
-    return this.runnerStore.getTasksWithTag(durableWorkflowTag);
+    return this.runnerStore!.getTasksWithTag(durableWorkflowTag);
   }
 
   private injectRecorderIntoDurableDeps(
@@ -214,10 +219,11 @@ export class DurableResource implements IDurableResource {
       const originalMessage =
         error instanceof Error ? error.message : String(error);
 
-      throw new Error(
-        `Cannot describe task "${task.id}": durableWorkflowTag.defaults could not be cloned. ` +
+      durableExecutionInvariantError.throw({
+        message:
+          `Cannot describe task "${task.id}": durableWorkflowTag.defaults could not be cloned. ` +
           `Ensure defaults contain only structured-cloneable values. Original error: ${originalMessage}`,
-      );
+      });
     }
   }
 

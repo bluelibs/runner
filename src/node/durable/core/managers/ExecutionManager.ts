@@ -21,6 +21,7 @@ import type { WaitManager } from "./WaitManager";
 import { DurableContext } from "../DurableContext";
 import { SuspensionSignal } from "../interfaces/context";
 import { createExecutionId, sleepMs, withTimeout } from "../utils";
+import { durableExecutionInvariantError } from "../../../../errors";
 
 export interface ExecutionManagerConfig {
   store: IDurableStore;
@@ -123,9 +124,10 @@ export class ExecutionManager {
 
   private assertCanExecute(): void {
     if (!this.config.queue && !this.config.taskExecutor) {
-      throw new Error(
-        "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use `durableResource.fork(...).with(...)` in a Runner runtime, or provide a custom executor in config.",
-      );
+      durableExecutionInvariantError.throw({
+        message:
+          "DurableService requires `taskExecutor` to execute Runner tasks (when no queue is configured). Use `durableResource.fork(...).with(...)` in a Runner runtime, or provide a custom executor in config.",
+      });
     }
   }
 
@@ -134,9 +136,10 @@ export class ExecutionManager {
       !this.config.store.getExecutionIdByIdempotencyKey ||
       !this.config.store.setExecutionIdByIdempotencyKey
     ) {
-      throw new Error(
-        "Durable store does not support execution idempotency keys. Implement getExecutionIdByIdempotencyKey/setExecutionIdByIdempotencyKey on the store to use ExecuteOptions.idempotencyKey.",
-      );
+      durableExecutionInvariantError.throw({
+        message:
+          "Durable store does not support execution idempotency keys. Implement getExecutionIdByIdempotencyKey/setExecutionIdByIdempotencyKey on the store to use ExecuteOptions.idempotencyKey.",
+      });
     }
   }
 
@@ -165,16 +168,16 @@ export class ExecutionManager {
     }
 
     if (lockId === null) {
-      throw new Error(
-        `Failed to acquire idempotency lock for '${taskId}:${idempotencyKey}'`,
-      );
+      durableExecutionInvariantError.throw({
+        message: `Failed to acquire idempotency lock for '${taskId}:${idempotencyKey}'`,
+      });
     }
 
     try {
       return await fn();
     } finally {
       try {
-        await this.config.store.releaseLock!(lockResource, lockId);
+        await this.config.store.releaseLock!(lockResource, lockId!);
       } catch {
         // best-effort cleanup; ignore
       }
@@ -195,9 +198,10 @@ export class ExecutionManager {
     });
     if (racedId) return racedId;
 
-    throw new Error(
-      "Failed to set idempotency mapping but no existing mapping found.",
-    );
+    return durableExecutionInvariantError.throw({
+      message:
+        "Failed to set idempotency mapping but no existing mapping found.",
+    });
   }
 
   // ─── Execution persistence ─────────────────────────────────────────────────
@@ -449,9 +453,10 @@ export class ExecutionManager {
     if (await isCancelled()) return;
 
     if (!this.config.taskExecutor) {
-      throw new Error(
-        "DurableService cannot run executions without `taskExecutor` in config.",
-      );
+      durableExecutionInvariantError.throw({
+        message:
+          "DurableService cannot run executions without `taskExecutor` in config.",
+      });
     }
 
     await this.config.store.updateExecution(execution.id, {
@@ -496,7 +501,9 @@ export class ExecutionManager {
         const remainingTimeout = Math.max(0, execution.timeout - elapsed);
 
         if (remainingTimeout === 0 && execution.timeout > 0) {
-          throw new Error(`Execution ${execution.id} timed out`);
+          durableExecutionInvariantError.throw({
+            message: `Execution ${execution.id} timed out`,
+          });
         }
 
         result = await withTimeout(
@@ -620,10 +627,10 @@ export class ExecutionManager {
 
     const resolved = this.taskRegistry.find(taskRef);
     if (!resolved) {
-      throw new Error(
-        `DurableService.${apiMethod}() could not resolve task id "${taskRef}". Ensure the task is registered in the runtime store.`,
-      );
+      durableExecutionInvariantError.throw({
+        message: `DurableService.${apiMethod}() could not resolve task id "${taskRef}". Ensure the task is registered in the runtime store.`,
+      });
     }
-    return resolved;
+    return resolved!;
   }
 }

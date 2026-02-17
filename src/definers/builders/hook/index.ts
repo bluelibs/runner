@@ -26,6 +26,7 @@ export function hookBuilder(
     meta: {} as ITaskMeta,
     run: undefined,
     tags: [] as TagType[],
+    throws: undefined,
   });
 
   return makeHookBuilder(initial);

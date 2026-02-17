@@ -6,6 +6,7 @@ import {
   ICacheInstance,
   journalKeys as cacheJournalKeys,
 } from "../../globals/middleware/cache.middleware";
+import { createMessageError } from "../../errors";
 
 enum CacheNoHasId {
   App = "cache.nohas.app",
@@ -433,7 +434,7 @@ describe("Caching System", () => {
         middleware: [cacheMiddleware],
         run: async () => {
           callCount++;
-          throw new Error("Failed");
+          throw createMessageError("Failed");
         },
       });
 
@@ -463,7 +464,7 @@ describe("Caching System", () => {
         ],
         run: async () => {
           callCount++;
-          throw new Error("Cached error");
+          throw createMessageError("Cached error");
         },
       });
 
@@ -490,7 +491,7 @@ describe("Caching System", () => {
         }
 
         set(_key: string, _value: number) {
-          throw new Error("cache write failed");
+          throw createMessageError("cache write failed");
         }
 
         has(key: string) {
@@ -861,12 +862,12 @@ describe("Caching System", () => {
         disposed = false;
 
         async get(key: string) {
-          if (this.disposed) throw new Error("Cache disposed");
+          if (this.disposed) throw createMessageError("Cache disposed");
           return this.store.get(key);
         }
 
         async set(key: string, value: any) {
-          if (this.disposed) throw new Error("Cache disposed");
+          if (this.disposed) throw createMessageError("Cache disposed");
           this.store.set(key, value);
         }
 

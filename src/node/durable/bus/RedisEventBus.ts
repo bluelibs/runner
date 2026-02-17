@@ -5,6 +5,7 @@ import type {
 } from "../core/interfaces/bus";
 import { Serializer } from "../../../serializer";
 import { createIORedisClient } from "../optionalDeps/ioredis";
+import { durableExecutionInvariantError } from "../../../errors";
 
 export interface RedisEventBusConfig {
   prefix?: string;
@@ -39,9 +40,10 @@ export class RedisEventBus implements IEventBus {
         : config.redis;
 
     if (!this.pub.duplicate) {
-      throw new Error(
-        "RedisEventBus requires a redis client that supports duplicate()",
-      );
+      durableExecutionInvariantError.throw({
+        message:
+          "RedisEventBus requires a redis client that supports duplicate()",
+      });
     }
 
     this.sub = this.pub.duplicate();

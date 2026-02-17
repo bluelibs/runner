@@ -1,6 +1,7 @@
 import { r, run } from "../../..";
 import { memoryDurableResource } from "../../durable/resources/memoryDurableResource";
 import { durableWorkflowTag } from "../../durable/tags/durableWorkflow.tag";
+import { createMessageError } from "../../../errors";
 
 describe("durable: describe() defaults", () => {
   it("uses durableWorkflowTag.defaults when describe() input is omitted", async () => {
@@ -250,7 +251,7 @@ describe("durable: describe() defaults", () => {
     const cloneSpy = jest
       .spyOn(globalThis, "structuredClone")
       .mockImplementation(() => {
-        throw new Error("error-clone-failure");
+        throw createMessageError("error-clone-failure");
       });
 
     try {

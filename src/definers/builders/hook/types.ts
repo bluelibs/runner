@@ -4,6 +4,7 @@ import type {
   IHookDefinition,
   ITaskMeta,
 } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 
 /**
  * Internal state for the HookFluentBuilder.
@@ -34,5 +35,7 @@ export type BuilderState<
     on: TOn;
     /** Hook handler function. Required before build(). */
     run: IHookDefinition<TDeps, NonNullable<TOn>, TMeta>["run"] | undefined;
+    /** Declarative error contract. */
+    throws?: ThrowsList;
   }
 >;

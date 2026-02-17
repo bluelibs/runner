@@ -2,6 +2,7 @@ import * as http from "http";
 import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
 import { Serializer } from "../../../serializer";
+import { createMessageError } from "../../../errors";
 
 describe("createHttpSmartClient - octet-stream source error", () => {
   const baseUrl = "http://127.0.0.1:7777/__runner";
@@ -86,7 +87,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
 
   it("fails fast when octet-stream context serialization fails", async () => {
     const requestSpy = jest.spyOn(http, "request").mockImplementation(() => {
-      throw new Error("request should not run");
+      throw createMessageError("request should not run");
     }) as any;
     const client = createHttpSmartClient({
       baseUrl,
@@ -95,7 +96,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
         {
           id: "ctx.bad",
           use: () => {
-            throw new Error("missing context");
+            throw createMessageError("missing context");
           },
           serialize: (v: unknown) => JSON.stringify(v),
           parse: (s: string) => JSON.parse(s),

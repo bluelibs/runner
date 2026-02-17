@@ -1,5 +1,6 @@
 import { defineEvent, defineResource, defineTask } from "../../define";
 import { run } from "../../run";
+import { createMessageError } from "../../errors";
 
 describe("RunResult disposal guards", () => {
   it("throws clear errors when accessed after dispose and allows idempotent double-dispose", async () => {
@@ -62,7 +63,7 @@ describe("RunResult disposal guards", () => {
     expect(secondDispose).toBe(firstDispose);
 
     if (!releaseDispose) {
-      throw new Error("Dispose release handler was not initialized");
+      throw createMessageError("Dispose release handler was not initialized");
     }
     releaseDispose();
 
@@ -87,7 +88,7 @@ describe("RunResult disposal guards", () => {
       .mockImplementation(async () => {
         disposeAttempts += 1;
         if (disposeAttempts === 1) {
-          throw new Error("first dispose failure");
+          throw createMessageError("first dispose failure");
         }
       });
 

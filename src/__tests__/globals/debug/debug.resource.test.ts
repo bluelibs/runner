@@ -10,6 +10,7 @@ import { debugResource } from "../../../globals/resources/debug/debug.resource";
 import { globalResources } from "../../../globals/globalResources";
 import { debug } from "../../../globals/debug";
 import { ILog } from "../../../models";
+import { createMessageError } from "../../../errors";
 
 const { verbose: levelVerbose } = debug.levels;
 
@@ -247,7 +248,7 @@ describe("globals.resources.debug", () => {
     const failingTask = defineTask({
       id: "tests.failing.task",
       async run() {
-        throw new Error("boom");
+        throw createMessageError("boom");
       },
     });
 
@@ -316,7 +317,7 @@ describe("globals.resources.debug", () => {
     const failingResource = defineResource({
       id: "tests.failing.resource",
       async init() {
-        throw new Error("resource-bad");
+        throw createMessageError("resource-bad");
       },
     });
 

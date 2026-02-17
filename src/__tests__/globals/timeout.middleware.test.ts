@@ -6,6 +6,7 @@ import {
   journalKeys as timeoutJournalKeys,
 } from "../../globals/middleware/timeout.middleware";
 import { journal as executionJournal } from "../../models/ExecutionJournal";
+import { createMessageError } from "../../errors";
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -172,7 +173,7 @@ describe("Timeout Middleware", () => {
       async run({ task, journal, next }) {
         const controller = journal.get(timeoutJournalKeys.abortController);
         if (!controller) {
-          throw new Error("AbortController not set");
+          throw createMessageError("AbortController not set");
         }
         setTimeout(() => controller.abort(), 5);
         return next(task.input);
@@ -205,7 +206,7 @@ describe("Timeout Middleware", () => {
       id: "timeout.errorTask",
       middleware: [timeoutMiddleware.with({ ttl: 100 })],
       async run() {
-        throw new Error("boom");
+        throw createMessageError("boom");
       },
     });
 
@@ -226,7 +227,7 @@ describe("Timeout Middleware", () => {
       id: "timeout.errorResource",
       middleware: [timeoutResourceMiddleware.with({ ttl: 100 })],
       async init() {
-        throw new Error("kaboom");
+        throw createMessageError("kaboom");
       },
     });
 

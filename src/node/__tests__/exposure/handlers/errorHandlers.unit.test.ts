@@ -8,6 +8,7 @@ import {
   handleRequestError,
   sanitizeErrorResponse,
 } from "../../../exposure/handlers/errorHandlers";
+import { createMessageError } from "../../../../errors";
 
 enum ErrorCode {
   Bad = "BAD",
@@ -181,7 +182,7 @@ describe("errorHandlers", () => {
     expect(sanitized.status).toBe(200);
     expect(sanitized.body.ok).toBe(true);
     if (!isRecord(sanitized.body)) {
-      throw new Error("Expected sanitized.body to be a record");
+      throw createMessageError("Expected sanitized.body to be a record");
     }
     expect(sanitized.body.result).toEqual({ value: 1 });
   });

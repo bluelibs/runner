@@ -26,6 +26,7 @@ import {
   dependencyNotFoundError,
   eventNotFoundError,
   unknownItemTypeError,
+  parallelInitSchedulingError,
 } from "../errors";
 import { Logger } from "./Logger";
 import { findDependencyStrategy } from "./utils/dependencyStrategies";
@@ -190,9 +191,7 @@ export class DependencyProcessor {
       );
 
       if (readyWave.length === 0) {
-        throw new Error(
-          "Could not schedule pending resources for initialization in parallel mode.",
-        );
+        parallelInitSchedulingError.throw();
       }
 
       const results = await Promise.allSettled(

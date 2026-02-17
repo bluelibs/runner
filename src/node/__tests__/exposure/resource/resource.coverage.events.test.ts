@@ -3,6 +3,7 @@ import { defineEvent, defineHook, defineResource } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
 import { createReqRes } from "./resource.test.utils";
+import { createMessageError } from "../../../../errors";
 
 describe("nodeExposure Coverage - Events", () => {
   it("covers event not-found branches", async () => {
@@ -51,7 +52,7 @@ describe("nodeExposure Coverage - Events", () => {
       id: "coverage.event.error.hook",
       on: evt,
       run: async () => {
-        throw new Error("emit failure");
+        throw createMessageError("emit failure");
       },
     });
     const exposure = nodeExposure.with({

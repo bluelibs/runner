@@ -36,6 +36,11 @@ export interface IErrorDefinitionFinal<
 }
 
 export type DefaultErrorType = Record<string, unknown>;
+type RequiredKeys<T extends object> = {
+  [K in keyof T]-?: {} extends Pick<T, K> ? never : K;
+}[keyof T];
+export type ErrorThrowArgs<TData extends DefaultErrorType> =
+  RequiredKeys<TData> extends never ? [data?: TData] : [data: TData];
 
 /**
  * Runtime error shape thrown by r.error()/defineError() helpers.
@@ -62,7 +67,7 @@ export interface IErrorHelper<
   /** Optional HTTP status code associated with this error helper */
   httpCode?: number;
   /** Throw a typed error with the given data */
-  throw(data: TData): never;
+  throw(...args: ErrorThrowArgs<TData>): never;
   /**
    * Type guard for checking if an unknown error is this error.
    * Optionally provide a partial data object to require shallow strict matches.

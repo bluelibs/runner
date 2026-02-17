@@ -5,6 +5,7 @@ import {
 } from "../../../exposure/serverLifecycle";
 import { Logger } from "../../../../models/Logger";
 import { EventEmitter } from "events";
+import { createMessageError } from "../../../../errors";
 
 describe("node exposure - server lifecycle", () => {
   describe("makeRequestListener", () => {
@@ -83,7 +84,7 @@ describe("node exposure - server lifecycle", () => {
       const res = createResponse();
       const listener = makeRequestListener({
         handler: async () => {
-          throw new Error("boom");
+          throw createMessageError("boom");
         },
         respondOnMiss: false,
         logger,
@@ -103,7 +104,7 @@ describe("node exposure - server lifecycle", () => {
       res.writableEnded = true;
       const listener = makeRequestListener({
         handler: async () => {
-          throw new Error("late");
+          throw createMessageError("late");
         },
         respondOnMiss: true,
         logger,
@@ -163,7 +164,7 @@ describe("node exposure - server lifecycle", () => {
     it("cleans temporary error listener when emitter-based listen throws", async () => {
       const fakeServer = Object.assign(new EventEmitter(), {
         listen() {
-          throw new Error("sync emitter listen failed");
+          throw createMessageError("sync emitter listen failed");
         },
       });
 
@@ -178,7 +179,7 @@ describe("node exposure - server lifecycle", () => {
     it("startHttpServer rejects when fallback listen throws", async () => {
       const fakeServer: any = {
         listen() {
-          throw new Error("sync listen failed");
+          throw createMessageError("sync listen failed");
         },
       } as unknown as import("net").Server;
 

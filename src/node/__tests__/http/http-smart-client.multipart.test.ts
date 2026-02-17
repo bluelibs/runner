@@ -3,6 +3,7 @@ import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
 import { createNodeFile } from "../../files";
 import { Serializer } from "../../../serializer";
+import { createMessageError } from "../../../errors";
 
 function asIncoming(
   res: Readable,
@@ -242,7 +243,7 @@ describe("createHttpSmartClient - multipart", () => {
 
   it("fails fast when multipart context serialization fails", async () => {
     const reqSpy = jest.spyOn(http, "request").mockImplementation(() => {
-      throw new Error("request should not run");
+      throw createMessageError("request should not run");
     }) as any;
 
     const client = createHttpSmartClient({
@@ -252,7 +253,7 @@ describe("createHttpSmartClient - multipart", () => {
         {
           id: "ctx.bad",
           use: () => {
-            throw new Error("missing context");
+            throw createMessageError("missing context");
           },
           serialize: (v: unknown) => JSON.stringify(v),
           parse: (s: string) => JSON.parse(s),

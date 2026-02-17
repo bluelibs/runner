@@ -2,6 +2,7 @@ import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { concurrencyTaskMiddleware } from "../../../globals/middleware/concurrency.middleware";
 import { Semaphore } from "../../../models/Semaphore";
+import { createMessageError } from "../../../errors";
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -234,7 +235,7 @@ describe("Concurrency Middleware", () => {
       run: async () => {
         callCount++;
         if (callCount === 1) {
-          throw new Error("Failed");
+          throw createMessageError("Failed");
         }
         return "ok";
       },

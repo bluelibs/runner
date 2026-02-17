@@ -5,9 +5,40 @@ import {
   dependencyNotFoundError,
   duplicateRegistrationError,
   validationError,
+  createMessageError,
+  taskRunnerNotSetError,
+  queueDisposedError,
+  queueDeadlockError,
+  semaphoreInvalidPermitsError,
+  semaphoreNonIntegerPermitsError,
+  semaphoreDisposedError,
+  semaphoreAcquireTimeoutError,
+  journalDuplicateKeyError,
+  unknownMiddlewareTypeError,
+  parallelInitSchedulingError,
+  platformUnreachableError,
+  dashboardApiRequestError,
 } from "../../errors";
 
 describe("error helpers extra branches", () => {
+  it("createMessageError preserves Error semantics", () => {
+    try {
+      createMessageError("boom");
+      fail("Expected throw");
+    } catch (e: any) {
+      expect(e).toBeInstanceOf(Error);
+      expect(e.name).toBe("Error");
+      expect(e.message).toBe("boom");
+    }
+
+    try {
+      createMessageError();
+      fail("Expected throw");
+    } catch (e: any) {
+      expect(e.message).toBe("");
+    }
+  });
+
   it("contextError default message branch", () => {
     try {
       // no details -> uses fallback branch
@@ -37,6 +68,64 @@ describe("error helpers extra branches", () => {
   });
 
   describe("remediation in framework errors", () => {
+    it("covers new model-related error helpers", () => {
+      const captureMessage = (fn: () => void): string => {
+        try {
+          fn();
+          return "";
+        } catch (e: any) {
+          return String(e?.message);
+        }
+      };
+
+      expect(captureMessage(() => taskRunnerNotSetError.throw({}))).toContain(
+        "TaskRunner is not set",
+      );
+      expect(captureMessage(() => queueDisposedError.throw({}))).toContain(
+        "Queue has been disposed",
+      );
+      expect(captureMessage(() => queueDeadlockError.throw({}))).toContain(
+        "Dead‑lock detected",
+      );
+      expect(
+        captureMessage(() =>
+          semaphoreInvalidPermitsError.throw({ maxPermits: 0 }),
+        ),
+      ).toContain("maxPermits must be greater than 0");
+      expect(
+        captureMessage(() =>
+          semaphoreNonIntegerPermitsError.throw({ maxPermits: 1.5 }),
+        ),
+      ).toContain("maxPermits must be an integer");
+      expect(captureMessage(() => semaphoreDisposedError.throw({}))).toContain(
+        "Semaphore has been disposed",
+      );
+      expect(
+        captureMessage(() =>
+          semaphoreAcquireTimeoutError.throw({ timeoutMs: 100 }),
+        ),
+      ).toContain("Semaphore acquire timeout after 100ms");
+      expect(
+        captureMessage(() =>
+          journalDuplicateKeyError.throw({ keyId: "session.user" }),
+        ),
+      ).toContain('Journal key "session.user" already exists');
+      expect(
+        captureMessage(() => unknownMiddlewareTypeError.throw({})),
+      ).toContain("Unknown middleware type");
+      expect(
+        captureMessage(() => parallelInitSchedulingError.throw({})),
+      ).toContain("Could not schedule pending resources");
+      expect(
+        captureMessage(() => platformUnreachableError.throw({})),
+      ).toContain("Unreachable");
+      expect(
+        captureMessage(() =>
+          dashboardApiRequestError.throw({ message: "dashboard failed" }),
+        ),
+      ).toContain("dashboard failed");
+    });
+
     it("includes remediation advice in the message", () => {
       try {
         dependencyNotFoundError.throw({ key: "myService" });

@@ -1,6 +1,7 @@
 import { defineResource, defineTask } from "../../../define";
 import { run } from "../../../run";
 import { throttleTaskMiddleware } from "../../../globals/middleware/temporal.middleware";
+import { createMessageError } from "../../../errors";
 
 const sleep = (ms: number) => new Promise((res) => setTimeout(res, ms));
 
@@ -73,7 +74,7 @@ describe("Temporal Middleware: Throttle", () => {
       middleware: [throttleTaskMiddleware.with({ ms: 50 })],
       run: async () => {
         callCount++;
-        throw new Error("Throttle error");
+        throw createMessageError("Throttle error");
       },
     });
 
@@ -99,7 +100,7 @@ describe("Temporal Middleware: Throttle", () => {
 
     const next = async (input?: string) => {
       if (input === "b") {
-        throw new Error("Throttle error");
+        throw createMessageError("Throttle error");
       }
       return input;
     };
@@ -188,7 +189,7 @@ describe("Temporal Middleware: Throttle", () => {
     const next = async (input?: string) => {
       callCount += 1;
       if (input === "c") {
-        throw new Error("boom");
+        throw createMessageError("boom");
       }
       return input;
     };
@@ -262,7 +263,7 @@ describe("Temporal Middleware: Throttle", () => {
         fn: TimerHandler,
       ): ReturnType<typeof setTimeout> => {
         if (typeof fn !== "function") {
-          throw new Error("Expected function timer callback");
+          throw createMessageError("Expected function timer callback");
         }
         scheduled = fn as () => Promise<void>;
         return 1 as unknown as ReturnType<typeof setTimeout>;

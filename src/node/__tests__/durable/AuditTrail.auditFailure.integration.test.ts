@@ -2,12 +2,13 @@ import { r, run } from "../../..";
 import { durableResource } from "../../durable/core/resource";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { createMessageError } from "../../../errors";
 
 describe("durable: audit trail failure tolerance (integration)", () => {
   it("does not break execution when audit persistence fails", async () => {
     class ThrowingAuditStore extends MemoryStore {
       override async appendAuditEntry(): Promise<void> {
-        throw new Error("audit-down");
+        throw createMessageError("audit-down");
       }
     }
 

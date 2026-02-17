@@ -1,6 +1,7 @@
 import { EventEmissionFailureMode, IEvent } from "../../defs";
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
+import { createMessageError } from "../../errors";
 
 describe("EventManager Parallel Execution", () => {
   let eventManager: EventManager;
@@ -168,7 +169,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw new Error("Parallel Error");
+        throw createMessageError("Parallel Error");
       },
       { order: 0 },
     );
@@ -190,7 +191,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw new Error("Error 1");
+        throw createMessageError("Error 1");
       },
       { order: 0 },
     );
@@ -198,7 +199,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw new Error("Error 2");
+        throw createMessageError("Error 2");
       },
       { order: 0 },
     );
@@ -206,7 +207,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw new Error("Error 3");
+        throw createMessageError("Error 3");
       },
       { order: 0 },
     );
@@ -348,7 +349,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw new Error("Batch 0 error");
+        throw createMessageError("Batch 0 error");
       },
       { order: 0 },
     );
@@ -375,7 +376,7 @@ describe("EventManager Parallel Execution", () => {
     eventManager.addListener(
       parallelEvent,
       async () => {
-        throw new Error("batch0-fail");
+        throw createMessageError("batch0-fail");
       },
       { order: 0, id: "b0" },
     );
@@ -383,7 +384,7 @@ describe("EventManager Parallel Execution", () => {
       parallelEvent,
       async () => {
         results.push("batch1-ran");
-        throw new Error("batch1-fail");
+        throw createMessageError("batch1-fail");
       },
       { order: 1, id: "b1" },
     );

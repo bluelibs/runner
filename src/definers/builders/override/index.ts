@@ -28,6 +28,7 @@ import { resourceOverrideBuilder } from "./resource";
 import { resourceMiddlewareOverrideBuilder } from "./resource-middleware";
 import { taskOverrideBuilder } from "./task";
 import { taskMiddlewareOverrideBuilder } from "./task-middleware";
+import { overrideUnsupportedBaseError } from "../../../errors";
 
 enum OverrideBuilderErrorMessage {
   UnsupportedBase = "r.override() supports tasks, resources, hooks, and middleware only.",
@@ -96,5 +97,7 @@ export function override(base: OverrideBuilderBase) {
   if (isResourceMiddleware(base)) {
     return resourceMiddlewareOverrideBuilder(base);
   }
-  throw new Error(OverrideBuilderErrorMessage.UnsupportedBase);
+  overrideUnsupportedBaseError.throw({
+    message: OverrideBuilderErrorMessage.UnsupportedBase,
+  });
 }

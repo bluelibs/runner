@@ -6,6 +6,7 @@ import {
   defineResourceMiddleware,
   defineTaskMiddleware,
 } from "../../define";
+import { createMessageError } from "../../errors";
 
 describe("override() helper", () => {
   it("should preserve id and override run for tasks", async () => {
@@ -55,7 +56,7 @@ describe("override() helper", () => {
       id: "test.resource.schema.base",
       configSchema: {
         parse: () => {
-          throw new Error("base schema");
+          throw createMessageError("base schema");
         },
       },
     });

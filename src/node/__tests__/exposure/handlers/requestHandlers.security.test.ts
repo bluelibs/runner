@@ -4,7 +4,7 @@ import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
 import { error } from "../../../../definers/builders/error";
 import { useExposureContext } from "../../../exposure/requestContext";
-import { cancellationError } from "../../../../errors";
+import { cancellationError, createMessageError } from "../../../../errors";
 import { createReqRes } from "./security.test.utils";
 
 describe("requestHandlers - Security", () => {
@@ -397,7 +397,7 @@ describe("requestHandlers - Security", () => {
       const t = defineTask<void, Promise<void>>({
         id: "tests.security.error.masking",
         async run() {
-          throw new Error("SECRET_DATA");
+          throw createMessageError("SECRET_DATA");
         },
       });
       const exposure = nodeExposure.with({
@@ -548,7 +548,7 @@ describe("requestHandlers - Security", () => {
       const t = defineTask<void, Promise<void>>({
         id: "tests.security.error.nocode",
         async run() {
-          throw new Error("plain");
+          throw createMessageError("plain");
         },
       });
       const exposure = nodeExposure.with({

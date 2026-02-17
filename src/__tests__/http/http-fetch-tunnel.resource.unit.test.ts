@@ -1,6 +1,7 @@
 import { createExposureFetch } from "../../http-fetch-tunnel.resource";
 import { Serializer } from "../../serializer";
 import { IErrorHelper } from "../../defs";
+import { createMessageError } from "../../errors";
 
 describe("http-fetch-tunnel.resource (unit)", () => {
   it("createExposureFetch: throws when baseUrl is empty or '/'", () => {
@@ -156,7 +157,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const helper = {
       id: "tests.errors.evr",
       throw: (data: any) => {
-        throw new Error("typed-evr:" + String(data?.code));
+        throw createMessageError("typed-evr:" + String(data?.code));
       },
       is: () => false,
       toString: () => "",

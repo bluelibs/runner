@@ -9,6 +9,7 @@ import type { IDurableStore } from "../../durable/core/interfaces/store";
 import type { ITaskExecutor } from "../../durable/core/interfaces/service";
 import type { IDurableQueue } from "../../durable/core/interfaces/queue";
 import type { ITask } from "../../../types/task";
+import { createMessageError } from "../../../errors";
 
 enum TaskId {
   T = "durable.tests.executionManager.t",
@@ -127,7 +128,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const store: IDurableStore = {
       saveExecution: async () => {
-        throw new Error("should not create execution");
+        throw createMessageError("should not create execution");
       },
       getExecution: async () => null,
       updateExecution: async () => {},
@@ -154,7 +155,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const taskExecutor: ITaskExecutor = {
       run: async () => {
-        throw new Error("should not execute");
+        throw createMessageError("should not execute");
       },
     };
 
@@ -170,7 +171,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
   it("throws if setExecutionIdByIdempotencyKey fails without an existing mapping", async () => {
     const store: IDurableStore = {
       saveExecution: async () => {
-        throw new Error("should not create execution");
+        throw createMessageError("should not create execution");
       },
       getExecution: async () => null,
       updateExecution: async () => {},
@@ -193,7 +194,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const taskExecutor: ITaskExecutor = {
       run: async () => {
-        throw new Error("should not execute");
+        throw createMessageError("should not execute");
       },
     };
 
@@ -211,7 +212,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
       saveExecution: async () => {},
       getExecution: async () => null,
       updateExecution: async () => {
-        throw new Error("should not update");
+        throw createMessageError("should not update");
       },
       listIncompleteExecutions: async () => [],
       getStepResult: async () => null,
@@ -586,7 +587,7 @@ describe("durable: ExecutionManager (idempotency & cancellation)", () => {
 
     const taskExecutor: ITaskExecutor = {
       run: async () => {
-        throw new Error("boom");
+        throw createMessageError("boom");
       },
     };
 

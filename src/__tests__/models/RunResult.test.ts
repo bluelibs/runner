@@ -9,6 +9,7 @@ import { EventEmissionFailureMode } from "../../defs";
 import { TaskRunner } from "../../models";
 import { run } from "../../run";
 import { createTestFixture } from "../test-utils";
+import { createMessageError } from "../../errors";
 
 describe("RunResult", () => {
   it("exposes runTask, emitEvent, getResourceValue, getResourceConfig, logger and they work", async () => {
@@ -136,7 +137,7 @@ describe("RunResult", () => {
       id: "rr.report.failFirst",
       on: ping,
       run: async () => {
-        throw new Error("first");
+        throw createMessageError("first");
       },
     });
 
@@ -144,7 +145,7 @@ describe("RunResult", () => {
       id: "rr.report.failSecond",
       on: ping,
       run: async () => {
-        throw new Error("second");
+        throw createMessageError("second");
       },
     });
 
@@ -274,7 +275,7 @@ describe("RunResult", () => {
     fixture.store.storeGenericItem(resource);
     const resourceEntry = fixture.store.resources.get(resource.id);
     if (!resourceEntry) {
-      throw new Error("Expected resource entry to exist");
+      throw createMessageError("Expected resource entry to exist");
     }
     resourceEntry.value = { ok: true };
 

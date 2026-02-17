@@ -12,6 +12,7 @@ import {
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
+import { normalizeThrows } from "../tools/throws";
 
 export function defineTaskMiddleware<
   TConfig = any,
@@ -39,6 +40,10 @@ export function defineTaskMiddleware<
     configSchema: middlewareDef.configSchema,
     ...middlewareDef,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
+    throws: normalizeThrows(
+      { kind: "task-middleware", id: middlewareDef.id },
+      middlewareDef.throws,
+    ),
   } as ITaskMiddleware<
     TConfig,
     TEnforceInputContract,

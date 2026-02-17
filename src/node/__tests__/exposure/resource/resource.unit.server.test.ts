@@ -9,6 +9,7 @@ import {
   testEvent,
   TOKEN,
 } from "./resource.unit.test.utils";
+import { createMessageError } from "../../../../errors";
 
 const D = process.env.RUNNER_TEST_NET === "1" ? describe : describe.skip;
 
@@ -21,7 +22,8 @@ D("nodeExposure - unit server", () => {
       server.listen(0, "127.0.0.1", resolve),
     );
     const addr = server.address();
-    if (!addr || typeof addr === "string") throw new Error("No server address");
+    if (!addr || typeof addr === "string")
+      throw createMessageError("No server address");
     const origin = `http://127.0.0.1:${addr.port}`;
 
     const miss = await request({
@@ -58,7 +60,8 @@ D("nodeExposure - unit server", () => {
     );
     const detach = handlers.attachTo(external);
     const addr = external.address();
-    if (!addr || typeof addr === "string") throw new Error("No server address");
+    if (!addr || typeof addr === "string")
+      throw createMessageError("No server address");
     const base = `http://127.0.0.1:${addr.port}${handlers.basePath}`;
     const headers = {
       "x-runner-token": TOKEN,
@@ -95,7 +98,8 @@ D("nodeExposure - unit server", () => {
     const extra = handlers.createServer();
     await new Promise<void>((resolve) => extra.listen(0, "127.0.0.1", resolve));
     const addr = extra.address();
-    if (!addr || typeof addr === "string") throw new Error("No server address");
+    if (!addr || typeof addr === "string")
+      throw createMessageError("No server address");
     const origin = `http://127.0.0.1:${addr.port}`;
     const headers = {
       "x-runner-token": TOKEN,
@@ -140,7 +144,8 @@ D("nodeExposure - unit server", () => {
     const handlers = await rr.getResourceValue(exposure.resource as any);
     expect(handlers.server).toBe(externalServer);
     const addr = externalServer.address();
-    if (!addr || typeof addr === "string") throw new Error("No server address");
+    if (!addr || typeof addr === "string")
+      throw createMessageError("No server address");
     const base = `http://127.0.0.1:${addr.port}${handlers.basePath}`;
 
     const headers = {

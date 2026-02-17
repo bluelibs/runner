@@ -1,3 +1,4 @@
+import { createMessageError } from "../../errors";
 describe("NodePlatformAdapter require('async_hooks') throws coverage", () => {
   afterEach(() => {
     jest.resetModules();
@@ -6,7 +7,7 @@ describe("NodePlatformAdapter require('async_hooks') throws coverage", () => {
 
   it("handles require failure and falls back to no-op", async () => {
     jest.doMock("async_hooks", () => {
-      throw new Error("fail");
+      throw createMessageError("fail");
     });
 
     const { PlatformAdapter } = await import("../../platform");

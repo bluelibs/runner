@@ -1,3 +1,5 @@
+import { invalidPayloadError, validationError } from "./errors";
+
 /**
  * RegExp pattern safety validation for ReDoS protection.
  * Extracted from Serializer.ts as a standalone module.
@@ -19,7 +21,7 @@ const assertRegExpFlags = (flags: string): string => {
   const seen = new Set<string>();
   for (const flag of flags) {
     if (!ALLOWED_REGEXP_FLAGS.has(flag) || seen.has(flag)) {
-      throw new Error("Invalid RegExp flags");
+      throw invalidPayloadError("Invalid RegExp flags");
     }
     seen.add(flag);
   }
@@ -268,19 +270,19 @@ export const assertRegExpPayload = (
   options: RegExpValidatorOptions,
 ): RegExpPayload => {
   if (!value || typeof value !== "object") {
-    throw new Error("Invalid RegExp payload");
+    throw invalidPayloadError("Invalid RegExp payload");
   }
   const record = value as Record<string, unknown>;
   if (typeof record.pattern !== "string" || typeof record.flags !== "string") {
-    throw new Error("Invalid RegExp payload");
+    throw invalidPayloadError("Invalid RegExp payload");
   }
   if (record.pattern.length > options.maxPatternLength) {
-    throw new Error(
+    throw validationError(
       `RegExp pattern exceeds limit (${options.maxPatternLength})`,
     );
   }
   if (!options.allowUnsafe && !isRegExpPatternSafe(record.pattern)) {
-    throw new Error("Unsafe RegExp pattern");
+    throw validationError("Unsafe RegExp pattern");
   }
   return {
     pattern: record.pattern,

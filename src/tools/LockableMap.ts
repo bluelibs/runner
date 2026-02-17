@@ -1,3 +1,4 @@
+import { lockableMapLockedError } from "../errors";
 /**
  * A Map that can be permanently locked to prevent further mutations.
  *
@@ -27,7 +28,7 @@ export class LockableMap<K, V> extends Map<K, V> {
   /** @throws if the map is locked */
   private throwIfLocked(): void {
     if (this.#locked) {
-      throw new Error(`Cannot modify "${this.#name}" — the map is locked.`);
+      lockableMapLockedError.throw({ mapName: this.#name });
     }
   }
 

@@ -17,6 +17,7 @@ import {
 } from "../../models";
 import { RunnerMode } from "../../types/runner";
 import { createTestFixture } from "../test-utils";
+import { createMessageError } from "../../errors";
 
 describe("Store", () => {
   let eventManager: EventManager;
@@ -461,7 +462,9 @@ describe("Store", () => {
     const firstTask = tasks[0]!;
     const firstResource = resources[0]!;
     if (!firstTask || !firstResource || !firstResource.init) {
-      throw new Error("Expected one tagged task and one tagged resource");
+      throw createMessageError(
+        "Expected one tagged task and one tagged resource",
+      );
     }
 
     await expect(

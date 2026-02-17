@@ -18,6 +18,7 @@ import {
   type DurableAuditEntry,
 } from "../core/audit";
 import { createIORedisClient } from "../optionalDeps/ioredis";
+import { durableStoreShapeError } from "../../../errors";
 
 const serializer = new Serializer();
 
@@ -124,10 +125,11 @@ export class RedisStore implements IDurableStore {
       );
       const parsed = this.parseScanResponse(scanned);
       if (!parsed) {
-        throw new Error("Unexpected Redis SCAN response shape");
+        durableStoreShapeError.throw({
+          message: "Unexpected Redis SCAN response shape",
+        });
       }
-
-      const [newCursor, scannedKeys] = parsed;
+      const [newCursor, scannedKeys] = parsed!;
       cursor = newCursor;
       keys.push(...scannedKeys);
     } while (cursor !== "0");
@@ -141,10 +143,11 @@ export class RedisStore implements IDurableStore {
       const scanned = await this.redis.sscan(setKey, cursor, "COUNT", 100);
       const parsed = this.parseScanResponse(scanned);
       if (!parsed) {
-        throw new Error("Unexpected Redis SSCAN response shape");
+        durableStoreShapeError.throw({
+          message: "Unexpected Redis SSCAN response shape",
+        });
       }
-
-      const [newCursor, scannedMembers] = parsed;
+      const [newCursor, scannedMembers] = parsed!;
       cursor = newCursor;
       members.push(...scannedMembers);
     } while (cursor !== "0");

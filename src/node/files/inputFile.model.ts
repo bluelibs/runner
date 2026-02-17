@@ -4,6 +4,10 @@ import * as os from "os";
 import * as path from "path";
 import { pipeline } from "stream";
 import { Readable, PassThrough } from "stream";
+import {
+  nodeInputFileConsumedError,
+  nodeInputFileUnavailableError,
+} from "../../errors";
 
 export type NodeReadable = Readable;
 
@@ -35,13 +39,13 @@ export class NodeInputFile implements InputFile<NodeReadable> {
 
   stream(): NodeReadable {
     if (this._consumed) {
-      throw new Error("InputFile stream already consumed");
+      nodeInputFileConsumedError.throw();
     }
     if (!this._stream) {
-      throw new Error("InputFile stream is not available");
+      nodeInputFileUnavailableError.throw();
     }
     this._consumed = true;
-    return this._stream;
+    return this._stream!;
   }
 
   async toTempFile(

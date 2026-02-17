@@ -3,6 +3,7 @@ import { Readable, Writable } from "stream";
 import { createHttpSmartClient } from "../../http/http-smart-client.model";
 import { Serializer } from "../../../serializer";
 import { createNodeFile } from "../../files";
+import { createMessageError } from "../../../errors";
 
 function asIncoming(
   res: Readable,
@@ -147,7 +148,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
 
   it("fails fast when JSON context serialization fails", async () => {
     const requestSpy = jest.spyOn(http, "request").mockImplementation(() => {
-      throw new Error("request should not run");
+      throw createMessageError("request should not run");
     }) as any;
 
     const client = createHttpSmartClient({

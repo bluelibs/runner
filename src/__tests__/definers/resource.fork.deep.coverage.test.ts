@@ -1,5 +1,6 @@
 import { r, run } from "../../index";
 import { resolveForkedRegisterAndDependencies } from "../../definers/resourceFork";
+import { createMessageError } from "../../errors";
 
 describe("IResource.fork() (deep) coverage", () => {
   it("deep-forks nested resources registered by a deep-forked resource (register fn + configs)", async () => {
@@ -57,7 +58,7 @@ describe("IResource.fork() (deep) coverage", () => {
     });
 
     if (typeof forked.dependencies !== "function") {
-      throw new Error("Expected forked.dependencies to be a function");
+      throw createMessageError("Expected forked.dependencies to be a function");
     }
     expect(forked.dependencies(undefined).child.id).toBe(
       "forked.test.deep.depsfn.child",

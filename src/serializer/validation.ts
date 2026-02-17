@@ -3,6 +3,7 @@
  * Extracted from Serializer.ts as a standalone module.
  */
 
+import { depthExceededError } from "./errors";
 import type { ObjectReference, SerializedGraph, SerializedNode } from "./types";
 
 /** Default keys to block for prototype pollution protection */
@@ -122,6 +123,6 @@ export const toNodeRecord = (
  */
 export const assertDepth = (depth: number, maxDepth: number): void => {
   if (depth > maxDepth) {
-    throw new Error(`Maximum depth exceeded (${maxDepth})`);
+    throw depthExceededError(maxDepth);
   }
 };

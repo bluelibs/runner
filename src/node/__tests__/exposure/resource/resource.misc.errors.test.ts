@@ -4,6 +4,7 @@ import { defineResource, defineTask, defineEvent } from "../../../../define";
 import { run } from "../../../../run";
 import { nodeExposure } from "../../../exposure/resource";
 import { createReqRes } from "./resource.test.utils";
+import { createMessageError } from "../../../../errors";
 
 describe("nodeExposure - misc error branches", () => {
   const TOKEN = "unit-secret";
@@ -70,7 +71,7 @@ describe("nodeExposure - misc error branches", () => {
     });
     const rr = await run(app);
     (rr.logger as any).error = () => {
-      throw new Error("logger-fail");
+      throw createMessageError("logger-fail");
     };
     const handlers = await rr.getResourceValue(exposure.resource as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;
@@ -100,7 +101,7 @@ describe("nodeExposure - misc error branches", () => {
     });
     const rr = await run(app);
     (rr.logger as any).error = () => {
-      throw new Error("logger-fail");
+      throw createMessageError("logger-fail");
     };
     const handlers = await rr.getResourceValue(exposure.resource as any);
     const headers = { "x-runner-token": TOKEN } as Record<string, string>;

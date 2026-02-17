@@ -7,6 +7,7 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { IValidationSchema } from "../../defs";
+import { createMessageError } from "../../errors";
 
 // Simple mock validation schemas for testing the interface
 class MockValidationSchema<T> implements IValidationSchema<T> {
@@ -19,7 +20,7 @@ class MockValidationSchema<T> implements IValidationSchema<T> {
     try {
       return this.validator(input);
     } catch (error) {
-      throw new Error(this.errorMessage || "Validation failed");
+      throw createMessageError(this.errorMessage || "Validation failed");
     }
   }
 }
@@ -31,18 +32,18 @@ const mockSchema = {
   ): IValidationSchema<T> => {
     return new MockValidationSchema((input: unknown) => {
       if (typeof input !== "object" || input === null) {
-        throw new Error("Expected object");
+        throw createMessageError("Expected object");
       }
       const obj = input as Record<string, unknown>;
       for (const [key, expectedType] of Object.entries(shape)) {
         if (expectedType === "string" && typeof obj[key] !== "string") {
-          throw new Error(`${key} must be string`);
+          throw createMessageError(`${key} must be string`);
         }
         if (expectedType === "number" && typeof obj[key] !== "number") {
-          throw new Error(`${key} must be number`);
+          throw createMessageError(`${key} must be number`);
         }
         if (expectedType === "boolean" && typeof obj[key] !== "boolean") {
-          throw new Error(`${key} must be boolean`);
+          throw createMessageError(`${key} must be boolean`);
         }
       }
       return obj as T;
@@ -52,7 +53,7 @@ const mockSchema = {
   string: (): IValidationSchema<string> => {
     return new MockValidationSchema((input: unknown) => {
       if (typeof input !== "string") {
-        throw new Error("Expected string");
+        throw createMessageError("Expected string");
       }
       return input;
     });
@@ -61,7 +62,7 @@ const mockSchema = {
   number: (): IValidationSchema<number> => {
     return new MockValidationSchema((input: unknown) => {
       if (typeof input !== "number") {
-        throw new Error("Expected number");
+        throw createMessageError("Expected number");
       }
       return input;
     });
@@ -70,7 +71,7 @@ const mockSchema = {
   boolean: (): IValidationSchema<boolean> => {
     return new MockValidationSchema((input: unknown) => {
       if (typeof input !== "boolean") {
-        throw new Error("Expected boolean");
+        throw createMessageError("Expected boolean");
       }
       return input;
     });
@@ -132,14 +133,14 @@ describe("Generic Validation Interface", () => {
     it("should throw validation error for invalid task input", async () => {
       const userSchema = new MockValidationSchema((input: unknown) => {
         if (typeof input !== "object" || input === null) {
-          throw new Error("Expected object");
+          throw createMessageError("Expected object");
         }
         const obj = input as Record<string, unknown>;
         if (typeof obj.name !== "string") {
-          throw new Error("name must be string");
+          throw createMessageError("name must be string");
         }
         if (typeof obj.age !== "number" || obj.age < 0) {
-          throw new Error("age must be positive number");
+          throw createMessageError("age must be positive number");
         }
         return obj;
       });
@@ -203,14 +204,14 @@ describe("Generic Validation Interface", () => {
     it("should validate resource config when .with() is called (fail fast)", async () => {
       const configSchema = new MockValidationSchema((input: unknown) => {
         if (typeof input !== "object" || input === null) {
-          throw new Error("Expected object");
+          throw createMessageError("Expected object");
         }
         const obj = input as Record<string, unknown>;
         if (typeof obj.host !== "string") {
-          throw new Error("host must be string");
+          throw createMessageError("host must be string");
         }
         if (typeof obj.port !== "number" || obj.port < 1 || obj.port > 65535) {
-          throw new Error("port must be number between 1-65535");
+          throw createMessageError("port must be number between 1-65535");
         }
         return obj;
       });
@@ -279,11 +280,11 @@ describe("Generic Validation Interface", () => {
     it("should validate event payload when emitted", async () => {
       const payloadSchema = new MockValidationSchema((input: unknown) => {
         if (typeof input !== "object" || input === null) {
-          throw new Error("Expected object");
+          throw createMessageError("Expected object");
         }
         const obj = input as Record<string, unknown>;
         if (typeof obj.message !== "string") {
-          throw new Error("message must be string");
+          throw createMessageError("message must be string");
         }
         return obj;
       });
@@ -327,11 +328,11 @@ describe("Generic Validation Interface", () => {
     it("should validate middleware config when .with() is called (fail fast)", async () => {
       const configSchema = new MockValidationSchema((input: unknown) => {
         if (typeof input !== "object" || input === null) {
-          throw new Error("Expected object");
+          throw createMessageError("Expected object");
         }
         const obj = input as Record<string, unknown>;
         if (typeof obj.timeout !== "number" || obj.timeout <= 0) {
-          throw new Error("timeout must be positive number");
+          throw createMessageError("timeout must be positive number");
         }
         return obj;
       });

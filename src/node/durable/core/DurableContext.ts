@@ -30,6 +30,7 @@ import { emitDurably } from "./durable-context/DurableContext.emit";
 import { sleepDurably } from "./durable-context/DurableContext.sleep";
 import { waitForSignalDurably } from "./durable-context/DurableContext.waitForSignal";
 import { switchDurably } from "./durable-context/DurableContext.switch";
+import { durableContextCancelledError } from "../../../errors";
 
 /**
  * Per-execution workflow toolkit used by durable tasks.
@@ -98,7 +99,9 @@ export class DurableContext implements IDurableContext {
   private async assertNotCancelled(): Promise<void> {
     const exec = await this.store.getExecution(this.executionId);
     if (exec?.status === ExecutionStatus.Cancelled) {
-      throw new Error(exec.error?.message || "Execution cancelled");
+      durableContextCancelledError.throw({
+        message: exec.error?.message || "Execution cancelled",
+      });
     }
   }
 

@@ -83,6 +83,9 @@ enum TagId {
 enum ErrorId {
   Task = "tests.override.builder.error.task",
   Resource = "tests.override.builder.error.resource",
+  Hook = "tests.override.builder.error.hook",
+  TaskMiddleware = "tests.override.builder.error.task-middleware",
+  ResourceMiddleware = "tests.override.builder.error.resource-middleware",
 }
 
 enum MetaKey {
@@ -354,6 +357,25 @@ describe(SuiteName.OverrideBuilder, () => {
     expect(overrideHook.order).toBe(TaskValue.DepA);
   });
 
+  it("hook override builder supports throws", () => {
+    const event = r.event(EventId.Details).build();
+    const errorHelper = r.error(ErrorId.Hook).build();
+
+    const baseHook = r
+      .hook(HookId.Details)
+      .on(event)
+      .run(async () => undefined)
+      .build();
+
+    const overrideHook = r
+      .override(baseHook)
+      .throws([errorHelper])
+      .run(async () => undefined)
+      .build();
+
+    expect(overrideHook.throws).toEqual([ErrorId.Hook]);
+  });
+
   it(TestName.TaskMiddleware, async () => {
     const taskMiddleware = r.middleware
       .task(MiddlewareId.Task)
@@ -424,6 +446,23 @@ describe(SuiteName.OverrideBuilder, () => {
     expect(overrideMiddleware.everywhere).toBe(true);
   });
 
+  it("task middleware override builder supports throws", () => {
+    const errorHelper = r.error(ErrorId.TaskMiddleware).build();
+
+    const baseMiddleware = r.middleware
+      .task(MiddlewareId.TaskDetails)
+      .run(async ({ next }) => next())
+      .build();
+
+    const overrideMiddleware = r
+      .override(baseMiddleware)
+      .throws([errorHelper])
+      .run(async ({ next }) => next())
+      .build();
+
+    expect(overrideMiddleware.throws).toEqual([ErrorId.TaskMiddleware]);
+  });
+
   it(TestName.ResourceMiddleware, async () => {
     const resourceMiddleware = r.middleware
       .resource(MiddlewareId.Resource)
@@ -492,6 +531,23 @@ describe(SuiteName.OverrideBuilder, () => {
       [MetaKey.Label]: ResourceValue.Base,
     });
     expect(overrideMiddleware.everywhere).toBe(true);
+  });
+
+  it("resource middleware override builder supports throws", () => {
+    const errorHelper = r.error(ErrorId.ResourceMiddleware).build();
+
+    const baseMiddleware = r.middleware
+      .resource(MiddlewareId.ResourceDetails)
+      .run(async ({ next }) => next())
+      .build();
+
+    const overrideMiddleware = r
+      .override(baseMiddleware)
+      .throws([errorHelper])
+      .run(async ({ next }) => next())
+      .build();
+
+    expect(overrideMiddleware.throws).toEqual([ErrorId.ResourceMiddleware]);
   });
 
   it(TestName.HookOn, () => {

@@ -5,6 +5,7 @@ import {
 } from "../../../define";
 import { globals, run } from "../../../index";
 import { CircuitBreakerState } from "../../../globals/middleware/circuitBreaker.middleware";
+import { createMessageError } from "../../../errors";
 
 const fallbackJournalKeys = globals.middleware.task.fallback.journalKeys;
 const rateLimitJournalKeys = globals.middleware.task.rateLimit.journalKeys;
@@ -27,7 +28,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
         ],
         run: async (_input: void, _deps, context) => {
           capturedActive = context?.journal.get(fallbackJournalKeys.active);
-          throw new Error("Primary failed");
+          throw createMessageError("Primary failed");
         },
       });
 
@@ -69,7 +70,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
           globals.middleware.task.fallback.with({ fallback: "default" }),
         ],
         run: async () => {
-          throw new Error("Primary failed");
+          throw createMessageError("Primary failed");
         },
       });
 
@@ -220,7 +221,7 @@ describe("Middleware Journal Keys (Fallback + RateLimit + CircuitBreaker)", () =
         ],
         run: async () => {
           if (mode === "fail") {
-            throw new Error("boom");
+            throw createMessageError("boom");
           }
           return "ok";
         },

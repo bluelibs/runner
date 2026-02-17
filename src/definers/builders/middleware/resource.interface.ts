@@ -7,6 +7,7 @@ import type {
   IMiddlewareMeta,
   TagType,
 } from "../../../defs";
+import type { ThrowsList } from "../../../types/error";
 
 export interface ResourceMiddlewareFluentBuilder<
   C = any,
@@ -38,6 +39,8 @@ export interface ResourceMiddlewareFluentBuilder<
     t: TNewTags,
     options?: { override?: boolean },
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
+  /** Declare which typed errors this middleware may throw (declarative only). */
+  throws(list: ThrowsList): ResourceMiddlewareFluentBuilder<C, In, Out, D>;
   everywhere(
     flag: boolean | ((resource: IResource<any, any, any, any, any>) => boolean),
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;

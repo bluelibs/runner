@@ -3,6 +3,7 @@
  * Extracted from Serializer.ts as a standalone module.
  */
 
+import { symbolPolicyError, typeRegistryError } from "./errors";
 import type { TypeDefinition } from "./types";
 import { SymbolPolicy, SymbolPolicyErrorMessage } from "./types";
 import {
@@ -71,18 +72,18 @@ export class TypeRegistry {
     typeDef: TypeDefinition<TInstance, TSerialized>,
   ): void {
     if (!typeDef || !typeDef.id) {
-      throw new Error("Invalid type definition: id is required");
+      throw typeRegistryError("Invalid type definition: id is required");
     }
     if (typeof typeDef.is !== "function") {
-      throw new Error("Invalid type definition: is is required");
+      throw typeRegistryError("Invalid type definition: is is required");
     }
     if (!typeDef.serialize || !typeDef.deserialize) {
-      throw new Error(
+      throw typeRegistryError(
         "Invalid type definition: serialize and deserialize are required",
       );
     }
     if (this.typeRegistry.has(typeDef.id)) {
-      throw new Error(`Type with id "${typeDef.id}" already exists`);
+      throw typeRegistryError(`Type with id "${typeDef.id}" already exists`);
     }
 
     this.typeRegistry.set(
@@ -120,11 +121,11 @@ export class TypeRegistry {
    */
   getTypeDefinition(typeId: string): TypeDefinition<unknown, unknown> {
     if (this.allowedTypes && !this.allowedTypes.has(typeId)) {
-      throw new Error(`Type "${typeId}" is not allowed`);
+      throw typeRegistryError(`Type "${typeId}" is not allowed`);
     }
     const typeDef = this.typeMap.get(typeId);
     if (!typeDef) {
-      throw new Error(`Unknown type: ${typeId}`);
+      throw typeRegistryError(`Unknown type: ${typeId}`);
     }
     return typeDef;
   }
@@ -182,7 +183,7 @@ export class TypeRegistry {
 
   private assertSymbolPolicyValue(policy: SymbolPolicy): void {
     if (!Object.values(SymbolPolicy).includes(policy)) {
-      throw new Error(SymbolPolicyErrorMessage.UnsupportedSymbolPolicy);
+      throw symbolPolicyError(SymbolPolicyErrorMessage.UnsupportedSymbolPolicy);
     }
   }
 
@@ -192,11 +193,13 @@ export class TypeRegistry {
         return;
       case SymbolPolicy.WellKnownOnly:
         if (payload.kind === SymbolPayloadKind.For) {
-          throw new Error(SymbolPolicyErrorMessage.GlobalSymbolsNotAllowed);
+          throw symbolPolicyError(
+            SymbolPolicyErrorMessage.GlobalSymbolsNotAllowed,
+          );
         }
         return;
       case SymbolPolicy.Disabled:
-        throw new Error(SymbolPolicyErrorMessage.SymbolsNotAllowed);
+        throw symbolPolicyError(SymbolPolicyErrorMessage.SymbolsNotAllowed);
     }
   }
 }

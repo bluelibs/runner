@@ -1,6 +1,7 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
 import { queueResource } from "../../globals/resources/queue.resource";
+import { createMessageError } from "../../errors";
 
 describe("Queue Resource", () => {
   it("should provide queue functionality with proper isolation and disposal", async () => {
@@ -74,7 +75,7 @@ describe("Queue Resource", () => {
 
         // Test 6: Handle errors in tasks without breaking the queue
         const errorTask = async () => {
-          throw new Error("Task failed");
+          throw createMessageError("Task failed");
         };
 
         const successTask = async () => {
@@ -114,7 +115,7 @@ describe("Queue Resource", () => {
       async init(_, { queue }) {
         // Test that exceptions from tasks are properly propagated
         const errorTask = async () => {
-          throw new Error("Queue resource task error");
+          throw createMessageError("Queue resource task error");
         };
 
         const successTask = async () => "success";

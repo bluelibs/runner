@@ -1,5 +1,6 @@
 import {
   DefaultErrorType,
+  ErrorThrowArgs,
   IErrorDefinition,
   IErrorHelper,
   IErrorDefinitionFinal,
@@ -16,8 +17,10 @@ const isValidHttpCode = (value: number): boolean =>
 
 const assertHttpCode = (value: number): void => {
   if (!isValidHttpCode(value)) {
-    throw new Error(
+    throw new RunnerError(
+      "runner.errors.error.invalidHttpCode",
       `Error httpCode must be an integer between 100 and 599. Received: ${value}`,
+      { value },
     );
   }
 };
@@ -86,7 +89,8 @@ export class ErrorHelper<
   get httpCode(): number | undefined {
     return this.definition.httpCode;
   }
-  throw(data: TData): never {
+  throw(...args: ErrorThrowArgs<TData>): never {
+    const data = (args[0] ?? ({} as TData)) as TData;
     const parsed = this.definition.dataSchema
       ? this.definition.dataSchema.parse(data)
       : data;

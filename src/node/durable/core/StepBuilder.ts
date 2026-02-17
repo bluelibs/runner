@@ -1,5 +1,6 @@
 import type { IStepBuilder, StepOptions } from "./interfaces/context";
 import type { DurableContext } from "./DurableContext";
+import { durableStepDefinitionError } from "../../../errors";
 
 /**
  * Fluent helper for building a durable step.
@@ -32,13 +33,13 @@ export class StepBuilder<T> implements IStepBuilder<T> {
 
   private async execute(): Promise<T> {
     if (!this.upFn) {
-      throw new Error(`Step ${this.stepId} has no up() function defined.`);
+      durableStepDefinitionError.throw({ stepId: this.stepId });
     }
 
     return await this.context._executeStep(
       this.stepId,
       this.options,
-      this.upFn,
+      this.upFn!,
       this.downFn,
     );
   }

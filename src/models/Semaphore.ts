@@ -1,6 +1,13 @@
 import { EventManager } from "./EventManager";
 import { defineEvent } from "../definers/defineEvent";
 import { IEventDefinition, IEventEmission } from "../defs";
+import {
+  semaphoreInvalidPermitsError,
+  semaphoreNonIntegerPermitsError,
+  semaphoreDisposedError,
+  semaphoreAcquireTimeoutError,
+  cancellationError,
+} from "../errors";
 
 export type SemaphoreEventType =
   | "queued"
@@ -64,10 +71,10 @@ export class Semaphore {
 
   constructor(maxPermits: number) {
     if (maxPermits <= 0) {
-      throw new Error("maxPermits must be greater than 0");
+      semaphoreInvalidPermitsError.throw({ maxPermits });
     }
     if (!Number.isInteger(maxPermits)) {
-      throw new Error("maxPermits must be an integer");
+      semaphoreNonIntegerPermitsError.throw({ maxPermits });
     }
     this.permits = maxPermits;
     this.maxPermits = maxPermits;
@@ -81,11 +88,11 @@ export class Semaphore {
     signal?: AbortSignal;
   }): Promise<void> {
     if (this.disposed) {
-      throw new Error("Semaphore has been disposed");
+      semaphoreDisposedError.throw();
     }
 
     if (options?.signal?.aborted) {
-      throw new Error("Operation was aborted");
+      cancellationError.throw({ reason: "Operation was aborted" });
     }
 
     if (this.permits > 0) {
@@ -107,9 +114,11 @@ export class Semaphore {
         operation.timeout = setTimeout(() => {
           this.removeFromQueue(operation);
           this.emit("timeout");
-          operation.reject(
-            new Error(`Semaphore acquire timeout after ${options.timeout}ms`),
-          );
+          try {
+            semaphoreAcquireTimeoutError.throw({ timeoutMs: options.timeout! });
+          } catch (error: unknown) {
+            operation.reject(error as Error);
+          }
         }, options.timeout);
       }
 
@@ -118,7 +127,11 @@ export class Semaphore {
         const abortHandler = () => {
           this.removeFromQueue(operation);
           this.emit("aborted");
-          reject(new Error("Operation was aborted"));
+          try {
+            cancellationError.throw({ reason: "Operation was aborted" });
+          } catch (error: unknown) {
+            operation.reject(error as Error);
+          }
         };
         options.signal.addEventListener("abort", abortHandler, { once: true });
 
@@ -228,7 +241,11 @@ export class Semaphore {
         clearTimeout(operation.timeout);
       }
 
-      operation.reject(new Error("Semaphore has been disposed"));
+      try {
+        semaphoreDisposedError.throw();
+      } catch (e: unknown) {
+        operation.reject(e as Error);
+      }
     }
 
     this.emit("disposed");

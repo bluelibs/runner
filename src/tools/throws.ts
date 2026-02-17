@@ -2,7 +2,12 @@ import type { ThrowsList } from "../types/error";
 import { isError } from "../definers/tools";
 
 type ThrowOwner = {
-  kind: "task" | "resource";
+  kind:
+    | "task"
+    | "resource"
+    | "hook"
+    | "task-middleware"
+    | "resource-middleware";
   id: string;
 };
 

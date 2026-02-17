@@ -9,6 +9,8 @@ import type {
 import { defineOverride } from "../../defineOverride";
 import type { TaskMiddlewareFluentBuilder } from "../middleware/task.interface";
 import { mergeArray, mergeDependencies } from "../middleware/utils";
+import type { ThrowsList } from "../../../types/error";
+import { normalizeThrows } from "../../../tools/throws";
 
 type AnyTaskMiddleware = ITaskMiddleware<any, any, any, any>;
 
@@ -126,9 +128,21 @@ function makeTaskMiddlewareOverrideBuilder<
       return makeTaskMiddlewareOverrideBuilder(base, next);
     },
 
+    throws(list: ThrowsList) {
+      const next = cloneTaskMiddlewareState(state, { throws: list });
+      return makeTaskMiddlewareOverrideBuilder(base, next);
+    },
+
     build() {
+      const normalizedThrows = normalizeThrows(
+        { kind: "task-middleware", id: state.id },
+        state.throws,
+      );
       const { id: _id, ...patch } = state;
-      return defineOverride<ITaskMiddleware<C, In, Out, D>>(base, { ...patch });
+      return defineOverride<ITaskMiddleware<C, In, Out, D>>(base, {
+        ...patch,
+        throws: normalizedThrows,
+      });
     },
   };
 
@@ -151,6 +165,7 @@ export function taskMiddlewareOverrideBuilder<
     meta: base.meta,
     tags: base.tags,
     everywhere: base.everywhere,
+    throws: base.throws,
   });
 
   return makeTaskMiddlewareOverrideBuilder(base, initial);

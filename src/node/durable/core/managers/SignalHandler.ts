@@ -5,6 +5,7 @@ import type { AuditLogger } from "./AuditLogger";
 import { DurableAuditEntryKind } from "../audit";
 import { ExecutionStatus } from "../types";
 import { isRecord, sleepMs, parseSignalState } from "../utils";
+import { durableExecutionInvariantError } from "../../../../errors";
 
 export interface SignalHandlerCallbacks {
   processExecution: (executionId: string) => Promise<void>;
@@ -139,9 +140,9 @@ export class SignalHandler {
 
           const state = parseSignalState(existing.result);
           if (!state) {
-            throw new Error(
-              `Invalid signal step state for '${signalId}' at '${stepId}'`,
-            );
+            return durableExecutionInvariantError.throw({
+              message: `Invalid signal step state for '${signalId}' at '${stepId}'`,
+            });
           }
 
           if (state.state === "waiting") {
@@ -158,9 +159,9 @@ export class SignalHandler {
       }
 
       if (!completedStepId) {
-        throw new Error(
-          `Too many signal slots for '${signalId}' (exceeded ${maxSignalSlotsToScan})`,
-        );
+        return durableExecutionInvariantError.throw({
+          message: `Too many signal slots for '${signalId}' (exceeded ${maxSignalSlotsToScan})`,
+        });
       }
 
       await this.store.saveStepResult({
@@ -170,7 +171,7 @@ export class SignalHandler {
         completedAt: new Date(),
       });
 
-      return { completedStepId, shouldResume };
+      return { completedStepId: completedStepId!, shouldResume };
     };
 
     let delivered: { completedStepId: string; shouldResume: boolean };
@@ -188,16 +189,16 @@ export class SignalHandler {
       }
 
       if (lockId === null) {
-        throw new Error(
-          `Failed to acquire signal lock for '${signalId}' on execution '${executionId}'`,
-        );
+        return durableExecutionInvariantError.throw({
+          message: `Failed to acquire signal lock for '${signalId}' on execution '${executionId}'`,
+        });
       }
 
       try {
         delivered = await deliver();
       } finally {
         try {
-          await this.store.releaseLock!(lockResource, lockId);
+          await this.store.releaseLock!(lockResource, lockId!);
         } catch {
           // best-effort cleanup; ignore
         }

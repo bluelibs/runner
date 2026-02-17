@@ -1,5 +1,6 @@
 import { EventManager } from "../../models/EventManager";
 import { defineEvent } from "../../define";
+import { createMessageError } from "../../errors";
 
 describe("EventManager Consistency", () => {
   describe("Snapshot Isolation", () => {
@@ -49,7 +50,7 @@ describe("EventManager Consistency", () => {
         run: async () => {
           callCount++;
           if (callCount > 5)
-            throw new Error(
+            throw createMessageError(
               "Infinite Loop Detected manually - CycleContext failed to stop it",
             );
           // Emit same event, claiming to be this hook (source=hook.id)

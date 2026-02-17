@@ -3,6 +3,7 @@ import { Execution } from "./types";
 import type { DurableAuditEntry } from "./audit";
 import type { StepResult } from "./types";
 import type { ListExecutionsOptions } from "./interfaces/store";
+import { durableOperatorUnsupportedStoreCapabilityError } from "../../../errors";
 
 /**
  * Administrative / operator API for durable workflows.
@@ -49,9 +50,11 @@ export class DurableOperator {
    */
   async retryRollback(executionId: string): Promise<void> {
     if (!this.store.retryRollback) {
-      throw new Error("Store does not support retryRollback");
+      durableOperatorUnsupportedStoreCapabilityError.throw({
+        operation: "retryRollback",
+      });
     }
-    await this.store.retryRollback(executionId);
+    await this.store.retryRollback!(executionId);
   }
 
   /**
@@ -60,9 +63,11 @@ export class DurableOperator {
    */
   async skipStep(executionId: string, stepId: string): Promise<void> {
     if (!this.store.skipStep) {
-      throw new Error("Store does not support skipStep");
+      durableOperatorUnsupportedStoreCapabilityError.throw({
+        operation: "skipStep",
+      });
     }
-    await this.store.skipStep(executionId, stepId);
+    await this.store.skipStep!(executionId, stepId);
   }
 
   /**
@@ -70,9 +75,11 @@ export class DurableOperator {
    */
   async forceFail(executionId: string, reason: string): Promise<void> {
     if (!this.store.forceFail) {
-      throw new Error("Store does not support forceFail");
+      durableOperatorUnsupportedStoreCapabilityError.throw({
+        operation: "forceFail",
+      });
     }
-    await this.store.forceFail(executionId, { message: reason });
+    await this.store.forceFail!(executionId, { message: reason });
   }
 
   /**
@@ -85,9 +92,11 @@ export class DurableOperator {
     newState: unknown,
   ): Promise<void> {
     if (!this.store.editStepResult) {
-      throw new Error("Store does not support editStepResult");
+      durableOperatorUnsupportedStoreCapabilityError.throw({
+        operation: "editStepResult",
+      });
     }
-    await this.store.editStepResult(executionId, stepId, newState);
+    await this.store.editStepResult!(executionId, stepId, newState);
   }
 
   /**
@@ -95,8 +104,10 @@ export class DurableOperator {
    */
   async listStuckExecutions(): Promise<Execution[]> {
     if (!this.store.listStuckExecutions) {
-      throw new Error("Store does not support listStuckExecutions");
+      durableOperatorUnsupportedStoreCapabilityError.throw({
+        operation: "listStuckExecutions",
+      });
     }
-    return await this.store.listStuckExecutions();
+    return await this.store.listStuckExecutions!();
   }
 }

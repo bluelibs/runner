@@ -3,6 +3,7 @@ import { durableResource } from "./core/resource";
 import { MemoryEventBus } from "./bus/MemoryEventBus";
 import { MemoryQueue } from "./queue/MemoryQueue";
 import { MemoryStore } from "./store/MemoryStore";
+import { durableExecutionInvariantError } from "../../errors";
 
 type DurableResource = ReturnType<typeof durableResource.fork>;
 type DurableResourceRegistration = ReturnType<DurableResource["with"]>;
@@ -68,7 +69,7 @@ export async function waitUntil(
   const startedAt = Date.now();
   while (!(await predicate())) {
     if (Date.now() - startedAt > options.timeoutMs) {
-      throw new Error("waitUntil timed out");
+      durableExecutionInvariantError.throw({ message: "waitUntil timed out" });
     }
     await new Promise((resolve) => setTimeout(resolve, options.intervalMs));
   }

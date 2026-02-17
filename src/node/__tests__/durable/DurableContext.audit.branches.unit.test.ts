@@ -4,6 +4,7 @@ import type { IDurableStore } from "../../durable/core/interfaces/store";
 import { SuspensionSignal } from "../../durable/core/interfaces/context";
 import { event } from "../../..";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { createMessageError } from "../../../errors";
 
 describe("durable: DurableContext audit branches", () => {
   it("note is a no-op when the store does not support audit", async () => {
@@ -55,7 +56,7 @@ describe("durable: DurableContext audit branches", () => {
   it("audit persistence failures do not break workflow operations", async () => {
     class ThrowingAuditStore extends MemoryStore {
       override async appendAuditEntry(): Promise<void> {
-        throw new Error("audit-down");
+        throw createMessageError("audit-down");
       }
     }
 

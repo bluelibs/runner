@@ -11,6 +11,7 @@ import {
 } from "../../durable/core/DurableService";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { createMessageError } from "../../../errors";
 
 function createTaskExecutor(
   handlers: Record<string, (input: unknown) => Promise<any>>,
@@ -19,7 +20,7 @@ function createTaskExecutor(
     run: async (task, input) => {
       const handler = handlers[task.id];
       if (!handler) {
-        throw new Error(`No task handler registered for: ${task.id}`);
+        throw createMessageError(`No task handler registered for: ${task.id}`);
       }
       return await handler(input);
     },
@@ -163,7 +164,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
     const bus = new MemoryEventBus();
 
     const subscribe = jest.fn(async () => {
-      throw new Error("subscribe failed");
+      throw createMessageError("subscribe failed");
     });
 
     const eventBus = {
@@ -289,7 +290,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
         override async getExecution(_id: string) {
           this.callCount += 1;
           if (this.callCount >= 3) {
-            throw new Error("boom-getExecution");
+            throw createMessageError("boom-getExecution");
           }
           return await super.getExecution(_id);
         }
@@ -413,7 +414,7 @@ describe("durable: DurableService waitForResult (eventBus)", () => {
           if (this.callCount === 1) {
             return await super.getExecution(id);
           }
-          throw new Error("boom");
+          throw createMessageError("boom");
         }
       }
 

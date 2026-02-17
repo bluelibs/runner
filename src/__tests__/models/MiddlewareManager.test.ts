@@ -15,6 +15,7 @@ import { RunnerMode } from "../../types/runner";
 import { TaskStoreElementType } from "../../types/storeTypes";
 import { ITaskMiddleware, IResource } from "../../defs";
 import { globalTags } from "../../globals/globalTags";
+import { createMessageError } from "../../errors";
 
 describe("MiddlewareManager", () => {
   let store: Store;
@@ -543,7 +544,7 @@ describe("MiddlewareManager", () => {
       const manager = new MiddlewareManager(store, eventManager, logger);
 
       manager.intercept("task", async (next: any, input: any) => {
-        throw new Error("interceptor error");
+        throw createMessageError("interceptor error");
       });
 
       const task = defineTask({
@@ -574,7 +575,7 @@ describe("MiddlewareManager", () => {
       const manager = new MiddlewareManager(store, eventManager, logger);
 
       manager.intercept("resource", async (next: any, input: any) => {
-        throw new Error("interceptor error");
+        throw createMessageError("interceptor error");
       });
 
       const resource = defineResource<{ n: number }, Promise<number>>({
@@ -607,7 +608,7 @@ describe("MiddlewareManager", () => {
       const resource = defineResource<{ n: number }, Promise<number>>({
         id: "resource_with_init_error_reporting",
         init: async () => {
-          throw new Error("resource init failed");
+          throw createMessageError("resource init failed");
         },
       });
 
@@ -635,7 +636,7 @@ describe("MiddlewareManager", () => {
       const manager = new MiddlewareManager(store, eventManager, logger);
 
       manager.intercept("resource", async () => {
-        throw new Error("global resource interceptor failed");
+        throw createMessageError("global resource interceptor failed");
       });
 
       const resource = defineResource<{ n: number }, Promise<number>>({

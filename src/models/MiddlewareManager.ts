@@ -15,6 +15,7 @@ import {
   TaskMiddlewareInterceptor,
   ResourceMiddlewareInterceptor,
 } from "./middleware/types";
+import { unknownMiddlewareTypeError } from "../errors";
 
 // Re-export types for backwards compatibility
 export type { TaskMiddlewareInterceptor, ResourceMiddlewareInterceptor };
@@ -135,7 +136,7 @@ export class MiddlewareManager {
         interceptor as ResourceMiddlewareInterceptor,
       );
     } else {
-      throw new Error("Unknown middleware type");
+      unknownMiddlewareTypeError.throw();
     }
   }
 

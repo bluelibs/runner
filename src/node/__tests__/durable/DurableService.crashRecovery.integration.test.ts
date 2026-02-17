@@ -5,6 +5,7 @@ import { ExecutionStatus, TimerType } from "../../durable/core/types";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import type { ITask } from "../../../types/task";
+import { createMessageError } from "../../../errors";
 
 type WorkflowHandler = (ctx: IDurableContext, input: unknown) => Promise<any>;
 
@@ -33,10 +34,10 @@ function createContextCapturingService(params: {
     taskExecutor: {
       run: async (task, input): Promise<any> => {
         if (task.id !== params.task.id) {
-          throw new Error(`Unexpected task: ${task.id}`);
+          throw createMessageError(`Unexpected task: ${task.id}`);
         }
         if (activeContext === null) {
-          throw new Error("Durable context missing in taskExecutor");
+          throw createMessageError("Durable context missing in taskExecutor");
         }
         return await params.handler(activeContext, input);
       },
@@ -124,7 +125,7 @@ describe("durable: crash recovery + resume (integration)", () => {
 
       if (shouldFail) {
         shouldFail = false;
-        throw new Error("boom");
+        throw createMessageError("boom");
       }
 
       const after = await ctx.step("after", async () => {

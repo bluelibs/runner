@@ -5,6 +5,7 @@ import type { IStepBuilder, StepOptions } from "../interfaces/context";
 import type { IDurableStore } from "../interfaces/store";
 import { ExecutionStatus } from "../types";
 import { sleepMs, withTimeout } from "../utils";
+import { durableExecutionInvariantError } from "../../../../errors";
 
 export type DurableCompensation = {
   stepId: string;
@@ -141,6 +142,8 @@ export async function rollbackDurableCompensations(params: {
       updatedAt: new Date(),
     });
 
-    throw new Error("Compensation failed: " + errorInfo.message);
+    durableExecutionInvariantError.throw({
+      message: "Compensation failed: " + errorInfo.message,
+    });
   }
 }

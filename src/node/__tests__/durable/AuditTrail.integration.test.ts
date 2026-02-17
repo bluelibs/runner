@@ -2,6 +2,7 @@ import { event, r, run } from "../../..";
 import { durableResource } from "../../durable/core/resource";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { createMessageError } from "../../../errors";
 
 async function waitUntil(
   predicate: () => boolean | Promise<boolean>,
@@ -10,7 +11,7 @@ async function waitUntil(
   const startedAt = Date.now();
   while (!(await predicate())) {
     if (Date.now() - startedAt > options.timeoutMs) {
-      throw new Error("waitUntil timed out");
+      throw createMessageError("waitUntil timed out");
     }
     await new Promise((r) => setTimeout(r, options.intervalMs));
   }

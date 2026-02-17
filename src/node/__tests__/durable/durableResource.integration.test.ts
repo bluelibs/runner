@@ -5,6 +5,7 @@ import { durableEvents } from "../../durable/events";
 import { MemoryEventBus } from "../../durable/bus/MemoryEventBus";
 import { MemoryQueue } from "../../durable/queue/MemoryQueue";
 import { MemoryStore } from "../../durable/store/MemoryStore";
+import { createMessageError } from "../../../errors";
 
 async function waitUntil(
   predicate: () => boolean | Promise<boolean>,
@@ -13,7 +14,7 @@ async function waitUntil(
   const startedAt = Date.now();
   while (!(await predicate())) {
     if (Date.now() - startedAt > options.timeoutMs) {
-      throw new Error("waitUntil timed out");
+      throw createMessageError("waitUntil timed out");
     }
     await new Promise((resolve) => setTimeout(resolve, options.intervalMs));
   }

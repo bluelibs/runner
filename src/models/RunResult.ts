@@ -150,7 +150,7 @@ export class RunResult<V> {
    */
   private ensureRuntimeIsActive() {
     if (this.#disposed || this.#disposing) {
-      runResultDisposedError.throw({});
+      runResultDisposedError.throw();
     }
   }
 
@@ -161,7 +161,7 @@ export class RunResult<V> {
    */
   private getRootOrThrow() {
     if (!this.store.root) {
-      runtimeRootNotAvailableError.throw({});
+      runtimeRootNotAvailableError.throw();
     }
 
     return this.store.root;
@@ -360,7 +360,7 @@ export class RunResult<V> {
   ): Promise<Output extends Promise<infer U> ? U : Output> => {
     this.ensureRuntimeIsActive();
     if (!this.lazyOptions.lazyMode) {
-      lazyResourceAccessDisabledError.throw({});
+      lazyResourceAccessDisabledError.throw();
     }
 
     const resourceId = this.getResourceId(resource);
@@ -484,7 +484,7 @@ export class RunResult<V> {
    */
   public dispose = () => {
     if (this.#isBootstrapping) {
-      runResultDisposeDuringBootstrapError.throw({});
+      runResultDisposeDuringBootstrapError.throw();
     }
 
     if (this.#disposed) {

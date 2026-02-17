@@ -10,6 +10,7 @@ import {
 import { validationError } from "../errors";
 import { getCallerFile } from "../tools/getCallerFile";
 import { mergeMiddlewareConfig } from "./middlewareConfig";
+import { normalizeThrows } from "../tools/throws";
 
 export function defineResourceMiddleware<
   TConfig = any,
@@ -37,6 +38,10 @@ export function defineResourceMiddleware<
     configSchema: middlewareDef.configSchema,
     ...middlewareDef,
     dependencies: middlewareDef.dependencies || ({} as TDependencies),
+    throws: normalizeThrows(
+      { kind: "resource-middleware", id: middlewareDef.id },
+      middlewareDef.throws,
+    ),
   } as IResourceMiddleware<
     TConfig,
     TEnforceInputContract,

@@ -5,6 +5,7 @@ import {
   assertRegisterArray,
   assertRegisterFn,
 } from "./resource.fork.test.utils";
+import { createMessageError } from "../../errors";
 
 describe("IResource.fork() (deep)", () => {
   it("deep-forks registered resources with reId and remaps dependencies", async () => {
@@ -46,7 +47,7 @@ describe("IResource.fork() (deep)", () => {
         ? forked.dependencies(undefined)
         : forked.dependencies;
     if (!deps || !("child" in deps)) {
-      throw new Error("Expected forked.dependencies to include child");
+      throw createMessageError("Expected forked.dependencies to include child");
     }
     expect(deps.child.id).toBe(reId(child.id));
     expect(forked[symbolForkedFrom]?.fromId).toBe(base.id);
@@ -89,7 +90,7 @@ describe("IResource.fork() (deep)", () => {
     );
     expect(forkedB).toBeDefined();
     if (!forkedB || !isResource(forkedB)) {
-      throw new Error("Expected forkedB to be a resource");
+      throw createMessageError("Expected forkedB to be a resource");
     }
 
     const deps =
@@ -97,7 +98,7 @@ describe("IResource.fork() (deep)", () => {
         ? forkedB.dependencies(undefined)
         : forkedB.dependencies;
     if (!deps || !("a" in deps)) {
-      throw new Error("Expected forkedB.dependencies to include a");
+      throw createMessageError("Expected forkedB.dependencies to include a");
     }
     expect(deps.a.id).toBe("forked.test.deep.sibling.a");
 
@@ -131,7 +132,7 @@ describe("IResource.fork() (deep)", () => {
     expect(forkedRegister).toHaveLength(1);
     const item = forkedRegister[0];
     if (!isResourceWithConfig(item)) {
-      throw new Error(
+      throw createMessageError(
         "Expected forked register item to be a resource with config",
       );
     }
@@ -186,7 +187,7 @@ describe("IResource.fork() (deep)", () => {
     expect(forkedRegister[0].id).toBe("forked.test.deep.fn.child");
 
     if (typeof forked.dependencies !== "function") {
-      throw new Error("Expected forked.dependencies to be a function");
+      throw createMessageError("Expected forked.dependencies to be a function");
     }
     expect(forked.dependencies(undefined).child.id).toBe(
       "forked.test.deep.fn.child",
@@ -216,11 +217,13 @@ describe("IResource.fork() (deep)", () => {
         ? forked.dependencies(undefined)
         : forked.dependencies;
     if (!deps || !("child" in deps)) {
-      throw new Error("Expected forked.dependencies to include child");
+      throw createMessageError("Expected forked.dependencies to include child");
     }
     const dep = deps.child;
     if (!isOptional(dep)) {
-      throw new Error("Expected forked.dependencies.child to be optional");
+      throw createMessageError(
+        "Expected forked.dependencies.child to be optional",
+      );
     }
     expect(dep.inner.id).toBe("forked.test.deep.optional.child");
 
@@ -265,7 +268,7 @@ describe("IResource.fork() (deep)", () => {
     });
 
     if (typeof forked.dependencies !== "function") {
-      throw new Error("Expected forked.dependencies to be a function");
+      throw createMessageError("Expected forked.dependencies to be a function");
     }
     expect(forked.dependencies(undefined).child.id).toBe(
       "forked.test.deep.fn.objdeps.child",

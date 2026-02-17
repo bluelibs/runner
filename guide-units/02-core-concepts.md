@@ -1224,6 +1224,43 @@ try {
 
 The `r.error.is()` type guard narrows the error to `RunnerError`, giving you access to `id`, `data`, `httpCode`, and `remediation`. You can also use `instanceof RunnerError` directly if you prefer, but `r.error.is()` is more consistent with the fluent API.
 
+### Declaring Error Contracts with `.throws()`
+
+Use `.throws()` to declare the error ids a definition may produce. This is declarative metadata for documentation and tooling, not runtime enforcement.
+
+`.throws()` is available on task, resource, hook, and middleware builders.
+
+```ts
+import { r, run } from "@bluelibs/runner";
+
+const unauthorized = r
+  .error<{ reason: string }>("app.errors.Unauthorized")
+  .build();
+
+const userNotFound = r
+  .error<{ userId: string }>("app.errors.UserNotFound")
+  .build();
+
+const getUser = r
+  .task("app.tasks.getUser")
+  .throws([unauthorized, userNotFound, "app.errors.Unauthorized"])
+  .run(async () => ({ ok: true }))
+  .build();
+
+const app = r
+  .resource("app")
+  .register([unauthorized, userNotFound, getUser])
+  .build();
+
+const runtime = await run(app);
+const ids = runtime.store.getAllThrows(getUser);
+
+console.log(ids);
+// ["app.errors.Unauthorized", "app.errors.UserNotFound"]
+```
+
+The returned ids are deduplicated and, when applicable, include declarations across the middleware/resource/event-hook chain.
+
 ---
 
 ### Beyond the Big Five

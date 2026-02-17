@@ -10,6 +10,7 @@ import {
 } from "../../serializer/binary-builtins";
 import { RegExpType } from "../../serializer/builtins";
 import type { TypeDefinition } from "../../serializer/types";
+import { createMessageError } from "../../errors";
 
 const hasOwn = Object.prototype.hasOwnProperty;
 
@@ -54,7 +55,7 @@ const getRuntimeBufferConstructor = (): RuntimeBufferConstructor | null => {
 const getTypeById = (typeId: string): TypeDefinition<unknown, unknown> => {
   const match = binaryBuiltInTypes.find((typeDef) => typeDef.id === typeId);
   if (!match) {
-    throw new Error(`Missing binary built-in type "${typeId}"`);
+    throw createMessageError(`Missing binary built-in type "${typeId}"`);
   }
   return match;
 };

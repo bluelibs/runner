@@ -1,3 +1,4 @@
+import { invalidPayloadError, unsupportedFeatureError } from "./errors";
 import type { TypeDefinition } from "./types";
 
 const hasOwn = Object.prototype.hasOwnProperty;
@@ -88,18 +89,18 @@ const collectErrorCustomFields = (error: Error): Record<string, unknown> => {
 
 const assertSerializedErrorPayload = (value: unknown): ParsedErrorPayload => {
   if (!isRecord(value)) {
-    throw new Error("Invalid Error payload");
+    throw invalidPayloadError("Invalid Error payload");
   }
 
   const { name, message, stack, customFields } = value;
   if (typeof name !== "string" || typeof message !== "string") {
-    throw new Error("Invalid Error payload");
+    throw invalidPayloadError("Invalid Error payload");
   }
   if (stack !== undefined && typeof stack !== "string") {
-    throw new Error("Invalid Error payload");
+    throw invalidPayloadError("Invalid Error payload");
   }
   if (customFields !== undefined && !isRecord(customFields)) {
-    throw new Error("Invalid Error payload");
+    throw invalidPayloadError("Invalid Error payload");
   }
 
   const normalizedCustomFields: Record<string, unknown> = {};
@@ -199,11 +200,11 @@ export const URLType: TypeDefinition<URL, string> = {
   serialize: (value: URL): string => value.href,
   deserialize: (payload: string): URL => {
     if (typeof payload !== "string") {
-      throw new Error("Invalid URL payload");
+      throw invalidPayloadError("Invalid URL payload");
     }
     const runtimeUrlConstructor = getUrlConstructor();
     if (!runtimeUrlConstructor) {
-      throw new Error("URL is not available in this runtime");
+      throw unsupportedFeatureError("URL is not available in this runtime");
     }
     return new runtimeUrlConstructor(payload);
   },
@@ -222,11 +223,13 @@ export const URLSearchParamsType: TypeDefinition<URLSearchParams, string> = {
   serialize: (value: URLSearchParams): string => value.toString(),
   deserialize: (payload: string): URLSearchParams => {
     if (typeof payload !== "string") {
-      throw new Error("Invalid URLSearchParams payload");
+      throw invalidPayloadError("Invalid URLSearchParams payload");
     }
     const runtimeUrlSearchParamsConstructor = getUrlSearchParamsConstructor();
     if (!runtimeUrlSearchParamsConstructor) {
-      throw new Error("URLSearchParams is not available in this runtime");
+      throw unsupportedFeatureError(
+        "URLSearchParams is not available in this runtime",
+      );
     }
     return new runtimeUrlSearchParamsConstructor(payload);
   },

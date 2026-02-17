@@ -11,6 +11,10 @@ import type { IAsyncContext } from "../../types/asyncContext";
 import type { IErrorHelper } from "../../types/error";
 // Avoid `.node` bare import which triggers tsup native addon resolver
 import { buildNodeManifest } from "../upload/manifest";
+import {
+  httpBaseUrlRequiredError,
+  httpContextSerializationError,
+} from "../../errors";
 
 export interface HttpSmartClientAuthConfig {
   header?: string; // default: x-runner-token
@@ -92,9 +96,10 @@ function buildContextHeaderOrThrow(options: {
     } catch (error) {
       const normalizedError =
         error instanceof Error ? error : new Error(String(error));
-      throw new Error(
-        `Failed to serialize async context "${ctx.id}" for HTTP smart client request: ${normalizedError.message}`,
-      );
+      httpContextSerializationError.throw({
+        contextId: ctx.id,
+        reason: normalizedError.message,
+      });
     }
   }
 
@@ -515,7 +520,11 @@ export function createHttpSmartClient(
   cfg: HttpSmartClientConfig,
 ): HttpSmartClient {
   const baseUrl = cfg.baseUrl.replace(/\/$/, "");
-  if (!baseUrl) throw new Error("createHttpSmartClient requires baseUrl");
+  if (!baseUrl) {
+    httpBaseUrlRequiredError.throw({
+      clientFactory: "createHttpSmartClient",
+    });
+  }
   const serializer = cfg.serializer;
 
   return {
