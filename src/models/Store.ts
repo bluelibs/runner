@@ -82,6 +82,7 @@ export class Store {
   private taskRunner?: TaskRunner;
   private middlewareManager!: MiddlewareManager;
   private readonly initializedResourceIds: string[] = [];
+  private preferInitOrderDisposal = true;
 
   #isLocked = false;
   #isInitialized = false;
@@ -246,6 +247,10 @@ export class Store {
     this.taskRunner = taskRunner;
   }
 
+  public setPreferInitOrderDisposal(prefer: boolean) {
+    this.preferInitOrderDisposal = prefer;
+  }
+
   private setupRootResource(rootDefinition: IResource<any>, config: unknown) {
     // Clone the root definition so per-run dependency/register resolution
     // never mutates the reusable user definition object.
@@ -358,7 +363,9 @@ export class Store {
   }
 
   private getResourcesInDisposeOrder(): ResourceStoreElementType[] {
-    return computeDisposeOrder(this.resources, this.initializedResourceIds);
+    return computeDisposeOrder(this.resources, this.initializedResourceIds, {
+      preferInitOrderFastPath: this.preferInitOrderDisposal,
+    });
   }
 
   private clearRuntimeStateAfterDispose() {

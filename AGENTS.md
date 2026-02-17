@@ -38,5 +38,6 @@
 - When building new features/enhancements/changes, must be implemented with care without affecting the system and not over-polute files.
 - Code retain 100% test coverage.
 - Ensure readmes/AI.md (minimal version of README)
+- Document 'why' in comments, not 'what' or 'how', as the code should be self-descriptive enough to explain those.
 - Read guide-units/DOCS_STYLE_GUIDE.md to understand how we compose the main documentation.
   </new_feature>

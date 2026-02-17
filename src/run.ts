@@ -17,7 +17,7 @@ import {
   bindProcessErrorHandler,
 } from "./models/UnhandledError";
 import { RunResult } from "./models/RunResult";
-import { RunOptions } from "./types/runner";
+import { ResourceInitMode, RunOptions } from "./types/runner";
 import { getPlatform } from "./platform";
 
 /**
@@ -44,6 +44,7 @@ export async function run<C, V extends Promise<any>>(
     dryRun = false,
     onUnhandledError: onUnhandledErrorOpt,
     runtimeEventCycleDetection = true,
+    initMode = ResourceInitMode.Sequential,
   } = options || {};
 
   const {
@@ -89,7 +90,10 @@ export async function run<C, V extends Promise<any>>(
     eventManager,
     taskRunner,
     logger,
+    initMode,
   );
+
+  store.setPreferInitOrderDisposal(initMode === ResourceInitMode.Sequential);
 
   // We may install shutdown hooks; capture unhook function to remove them on dispose
   let unhookShutdown: (() => void) | undefined;

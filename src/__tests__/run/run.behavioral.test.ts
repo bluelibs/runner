@@ -1,7 +1,23 @@
 import { defineResource } from "../../define";
 import { run } from "../../run";
+import { ResourceInitMode } from "../../types/runner";
 
 describe("run behavioral scenarios", () => {
+  const waitFor = async (
+    condition: () => boolean,
+    timeoutMs = 100,
+    intervalMs = 5,
+  ) => {
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < timeoutMs) {
+      if (condition()) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+    return condition();
+  };
+
   it("should ensure parallel run() isolation", async () => {
     // We'll use a resource that increments a counter in a shared object
     // to see if they bleed.
@@ -93,5 +109,143 @@ describe("run behavioral scenarios", () => {
     const result = await run(app);
     expect(result.value).toBe("ok");
     await result.dispose();
+  });
+
+  it("defaults to sequential resource initialization", async () => {
+    let releaseFirstInit!: () => void;
+    const firstInitGate = new Promise<void>((resolve) => {
+      releaseFirstInit = resolve;
+    });
+    let firstStarted = false;
+    let secondStarted = false;
+
+    const first = defineResource({
+      id: "init.mode.default.sequential.first",
+      async init() {
+        firstStarted = true;
+        await firstInitGate;
+        return "first";
+      },
+    });
+
+    const second = defineResource({
+      id: "init.mode.default.sequential.second",
+      async init() {
+        secondStarted = true;
+        return "second";
+      },
+    });
+
+    const app = defineResource({
+      id: "init.mode.default.sequential.app",
+      register: [first, second],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtimePromise = run(app, { shutdownHooks: false });
+    const firstHasStarted = await waitFor(() => firstStarted, 100);
+    expect(firstHasStarted).toBe(true);
+    expect(secondStarted).toBe(false);
+
+    releaseFirstInit();
+    const runtime = await runtimePromise;
+    await runtime.dispose();
+  });
+
+  it("can initialize independent resources in parallel when initMode is parallel", async () => {
+    let releaseParallelInits!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      releaseParallelInits = resolve;
+    });
+    let firstStarted = false;
+    let secondStarted = false;
+
+    const first = defineResource({
+      id: "init.mode.parallel.first",
+      async init() {
+        firstStarted = true;
+        await gate;
+        return "first";
+      },
+    });
+
+    const second = defineResource({
+      id: "init.mode.parallel.second",
+      async init() {
+        secondStarted = true;
+        await gate;
+        return "second";
+      },
+    });
+
+    const app = defineResource({
+      id: "init.mode.parallel.app",
+      register: [first, second],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtimePromise = run(app, {
+      initMode: ResourceInitMode.Parallel,
+      shutdownHooks: false,
+    });
+    const bothStarted = await waitFor(() => firstStarted && secondStarted, 100);
+    expect(bothStarted).toBe(true);
+
+    releaseParallelInits();
+    const runtime = await runtimePromise;
+    await runtime.dispose();
+  });
+
+  it("aggregates parallel resource initialization failures", async () => {
+    const first = defineResource({
+      id: "init.mode.parallel.fail.first",
+      async init() {
+        throw new Error("first failed");
+      },
+    });
+
+    const second = defineResource({
+      id: "init.mode.parallel.fail.second",
+      async init() {
+        throw new Error("second failed");
+      },
+    });
+
+    const app = defineResource({
+      id: "init.mode.parallel.fail.app",
+      register: [first, second],
+      async init() {
+        return "ok";
+      },
+    });
+
+    let caught: unknown;
+    try {
+      await run(app, {
+        initMode: ResourceInitMode.Parallel,
+        shutdownHooks: false,
+      });
+    } catch (error: unknown) {
+      caught = error;
+    }
+
+    const aggregate = caught as Error & {
+      name: string;
+      errors: Error[];
+    };
+    expect(aggregate.name).toBe("AggregateError");
+    expect(aggregate.errors).toHaveLength(2);
+    expect(
+      aggregate.errors.map((error) => Reflect.get(error, "resourceId")),
+    ).toEqual(
+      expect.arrayContaining([
+        "init.mode.parallel.fail.first",
+        "init.mode.parallel.fail.second",
+      ]),
+    );
   });
 });

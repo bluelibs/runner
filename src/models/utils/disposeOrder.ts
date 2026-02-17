@@ -1,5 +1,9 @@
 import { ResourceStoreElementType } from "../../types/storeTypes";
-import { isOptional, isResource } from "../../define";
+import { getResourceDependencyIds } from "./resourceDependencyIds";
+
+type DisposeOrderOptions = {
+  preferInitOrderFastPath?: boolean;
+};
 
 /**
  * Returns initialized resources sorted in dispose order (dependents first).
@@ -9,7 +13,9 @@ import { isOptional, isResource } from "../../define";
 export function getResourcesInDisposeOrder(
   resources: Map<string, ResourceStoreElementType>,
   initializedResourceIds: readonly string[],
+  options: DisposeOrderOptions = {},
 ): ResourceStoreElementType[] {
+  const { preferInitOrderFastPath = true } = options;
   const initializedResources = Array.from(resources.values()).filter(
     (r) => r.isInitialized,
   );
@@ -22,7 +28,7 @@ export function getResourcesInDisposeOrder(
     initializedResources.every((r) =>
       initializedResourceIds.includes(r.resource.id),
     );
-  if (initOrderHasAllInitialized) {
+  if (preferInitOrderFastPath && initOrderHasAllInitialized) {
     const byId = new Map(
       initializedResources.map((r) => [r.resource.id, r] as const),
     );
@@ -41,24 +47,7 @@ export function getResourcesInDisposeOrder(
   let cycleDetected = false;
 
   const getDependencyIds = (resource: ResourceStoreElementType): string[] => {
-    const raw = resource.resource.dependencies;
-    if (!raw) return [];
-    const deps = raw as unknown;
-    if (!deps || typeof deps !== "object") return [];
-
-    const out: string[] = [];
-    const collect = (value: unknown): void => {
-      if (isOptional(value)) {
-        collect((value as { inner: unknown }).inner);
-        return;
-      }
-      if (isResource(value)) {
-        out.push(value.id);
-      }
-    };
-
-    Object.values(deps as Record<string, unknown>).forEach(collect);
-    return out;
+    return getResourceDependencyIds(resource.resource.dependencies);
   };
 
   const visit = (resourceId: string): void => {

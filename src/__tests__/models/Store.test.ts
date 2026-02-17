@@ -216,6 +216,39 @@ describe("Store", () => {
     expect(callOrder).toEqual(["app", "dep"]);
   });
 
+  it("should ignore tracked init order when deterministic disposal is forced", async () => {
+    const callOrder: string[] = [];
+
+    const dependency = defineResource({
+      id: "dispose.parallel.dep",
+      dispose: async () => {
+        callOrder.push("dep");
+      },
+    });
+
+    const dependent = defineResource({
+      id: "dispose.parallel.dependent",
+      dependencies: { dependency },
+      dispose: async () => {
+        callOrder.push("dependent");
+      },
+    });
+
+    store.storeGenericItem(dependency);
+    store.storeGenericItem(dependent);
+
+    store.resources.get(dependency.id)!.isInitialized = true;
+    store.resources.get(dependent.id)!.isInitialized = true;
+
+    // Simulate non-deterministic init completion order under parallel startup.
+    store.recordResourceInitialized(dependent.id);
+    store.recordResourceInitialized(dependency.id);
+    store.setPreferInitOrderDisposal(false);
+
+    await store.dispose();
+    expect(callOrder).toEqual(["dependent", "dep"]);
+  });
+
   it("should ignore non-object dependencies when ordering disposal", async () => {
     const disposeFn = jest.fn();
     const weirdDepsResource = defineResource({

@@ -29,6 +29,8 @@ import {
 } from "../errors";
 import { Logger } from "./Logger";
 import { findDependencyStrategy } from "./utils/dependencyStrategies";
+import { ResourceInitMode } from "../types/runner";
+import { getResourceDependencyIds } from "./utils/resourceDependencyIds";
 
 /**
  * Resolves and caches computed dependencies for store items (resources, tasks, middleware, hooks).
@@ -36,16 +38,23 @@ import { findDependencyStrategy } from "./utils/dependencyStrategies";
 export class DependencyProcessor {
   protected readonly resourceInitializer: ResourceInitializer;
   protected readonly logger!: Logger;
+  protected readonly initMode: ResourceInitMode;
   private readonly pendingHookEvents = new Map<string, IEventEmission<any>[]>();
   private readonly drainingHookIds = new Set<string>();
+  private readonly inFlightResourceInitializations = new Map<
+    string,
+    Promise<void>
+  >();
 
   constructor(
     protected readonly store: Store,
     protected readonly eventManager: EventManager,
     protected readonly taskRunner: TaskRunner,
     logger: Logger,
+    initMode: ResourceInitMode = ResourceInitMode.Sequential,
   ) {
     this.logger = logger.with({ source: "dependencyProcessor" });
+    this.initMode = initMode;
     this.resourceInitializer = new ResourceInitializer(
       store,
       eventManager,
@@ -57,52 +66,30 @@ export class DependencyProcessor {
    * Computes and caches dependencies for all registered store items.
    */
   async computeAllDependencies() {
-    for (const middleware of this.store.resourceMiddlewares.values()) {
-      const computedDependencies = await this.extractDependencies(
-        middleware.middleware.dependencies,
-        middleware.middleware.id,
-      );
-
-      middleware.computedDependencies = computedDependencies;
-      middleware.isInitialized = true;
-    }
-
-    for (const middleware of this.store.taskMiddlewares.values()) {
-      const computedDependencies = await this.extractDependencies(
-        middleware.middleware.dependencies,
-        middleware.middleware.id,
-      );
-
-      middleware.computedDependencies = computedDependencies;
-      middleware.isInitialized = true;
-    }
+    await this.computeResourceMiddlewareDependencies();
+    await this.computeTaskMiddlewareDependencies();
 
     // Compute hook dependencies before traversing resource/task dependencies.
     // Resource/task dependency extraction can initialize resources that emit
     // events; hooks must be dependency-ready before that happens.
-    for (const hookStoreElement of this.store.hooks.values()) {
-      const hook = hookStoreElement.hook;
-      const deps = hook.dependencies as DependencyMapType;
-      hookStoreElement.dependencyState = HookDependencyState.Computing;
-      hookStoreElement.computedDependencies = await this.extractDependencies(
-        deps,
-        hook.id,
-      );
-      hookStoreElement.dependencyState = HookDependencyState.Ready;
-      await this.flushBufferedHookEvents(hookStoreElement);
-    }
+    await this.computeHookDependencies();
 
-    for (const resource of this.store.resources.values()) {
-      await this.processResourceDependencies(resource);
+    if (this.initMode === ResourceInitMode.Parallel) {
+      await this.initializeUninitializedResourcesParallel();
+    } else {
+      for (const resource of this.store.resources.values()) {
+        await this.processResourceDependencies(resource);
+      }
+      // leftovers that were registered but not depended upon, except root
+      // they should still be initialized as they might extend other
+      await this.initializeUninitializedResources();
     }
 
     for (const task of this.store.tasks.values()) {
       await this.computeTaskDependencies(task);
     }
 
-    // leftovers that were registered but not depended upon, except root
-    // they should still be initialized as they might extend other
-    await this.initializeUninitializedResources();
+    await this.processResourceDependencies(this.store.root);
   }
 
   private async computeTaskDependencies(
@@ -130,22 +117,164 @@ export class DependencyProcessor {
         // The root is the last one to be initialized and is done in a separate process.
         resource.resource.id !== this.store.root.resource.id
       ) {
-        try {
-          await this.processResourceDependencies(resource);
-          const { value, context } =
-            await this.resourceInitializer.initializeResource(
-              resource.resource,
-              resource.config,
-              resource.computedDependencies!,
-            );
-          resource.context = context;
-          resource.value = value;
-          resource.isInitialized = true;
-          this.store.recordResourceInitialized(resource.resource.id);
-        } catch (error: unknown) {
-          this.rethrowResourceInitError(resource.resource.id, error);
-        }
+        await this.ensureResourceInitialized(resource);
       }
+    }
+  }
+
+  private async computeResourceMiddlewareDependencies() {
+    await Promise.all(
+      Array.from(this.store.resourceMiddlewares.values()).map(
+        async (middleware) => {
+          const computedDependencies = await this.extractDependencies(
+            middleware.middleware.dependencies,
+            middleware.middleware.id,
+          );
+
+          middleware.computedDependencies = computedDependencies;
+          middleware.isInitialized = true;
+        },
+      ),
+    );
+  }
+
+  private async computeTaskMiddlewareDependencies() {
+    await Promise.all(
+      Array.from(this.store.taskMiddlewares.values()).map(
+        async (middleware) => {
+          const computedDependencies = await this.extractDependencies(
+            middleware.middleware.dependencies,
+            middleware.middleware.id,
+          );
+
+          middleware.computedDependencies = computedDependencies;
+          middleware.isInitialized = true;
+        },
+      ),
+    );
+  }
+
+  private async computeHookDependencies() {
+    await Promise.all(
+      Array.from(this.store.hooks.values()).map(async (hookStoreElement) => {
+        const hook = hookStoreElement.hook;
+        const deps = hook.dependencies as DependencyMapType;
+        hookStoreElement.dependencyState = HookDependencyState.Computing;
+        hookStoreElement.computedDependencies = await this.extractDependencies(
+          deps,
+          hook.id,
+        );
+        hookStoreElement.dependencyState = HookDependencyState.Ready;
+        await this.flushBufferedHookEvents(hookStoreElement);
+      }),
+    );
+  }
+
+  private async initializeUninitializedResourcesParallel() {
+    const rootId = this.store.root.resource.id;
+
+    while (true) {
+      const pending = Array.from(this.store.resources.values()).filter(
+        (resource) =>
+          resource.resource.id !== rootId && resource.isInitialized === false,
+      );
+      if (pending.length === 0) {
+        return;
+      }
+
+      const readyWave = pending.filter((resource) =>
+        this.isResourceReadyForParallelInit(resource),
+      );
+
+      if (readyWave.length === 0) {
+        throw new Error(
+          "Could not schedule pending resources for initialization in parallel mode.",
+        );
+      }
+
+      const results = await Promise.allSettled(
+        readyWave.map((resource) => this.ensureResourceInitialized(resource)),
+      );
+      const failures = results
+        .filter(
+          (result): result is PromiseRejectedResult =>
+            result.status === "rejected",
+        )
+        .map((result) =>
+          result.reason instanceof Error
+            ? result.reason
+            : new Error(String(result.reason)),
+        );
+
+      if (failures.length === 1) {
+        throw failures[0];
+      }
+
+      if (failures.length > 1) {
+        throw Object.assign(
+          new Error(
+            `${failures.length} resources failed during parallel initialization.`,
+          ),
+          {
+            name: "AggregateError",
+            errors: failures,
+          },
+        );
+      }
+    }
+  }
+
+  private isResourceReadyForParallelInit(
+    resource: ResourceStoreElementType<any, any, any>,
+  ): boolean {
+    const dependencyIds = getResourceDependencyIds(
+      resource.resource.dependencies,
+    );
+    return dependencyIds.every((dependencyId) => {
+      const dependencyResource = this.store.resources.get(dependencyId);
+      return dependencyResource?.isInitialized === true;
+    });
+  }
+
+  private async ensureResourceInitialized(
+    resource: ResourceStoreElementType<any, any, any>,
+  ) {
+    if (resource.isInitialized) {
+      return;
+    }
+
+    const resourceId = resource.resource.id;
+    const existingInitialization =
+      this.inFlightResourceInitializations.get(resourceId);
+    if (existingInitialization) {
+      await existingInitialization;
+      return;
+    }
+
+    const initialization = (async () => {
+      try {
+        await this.processResourceDependencies(resource);
+        const { value, context } =
+          await this.resourceInitializer.initializeResource(
+            resource.resource,
+            resource.config,
+            resource.computedDependencies!,
+          );
+        resource.context = context;
+        resource.value = value;
+        resource.isInitialized = true;
+        this.store.recordResourceInitialized(resourceId);
+      } catch (error: unknown) {
+        this.rethrowResourceInitError(resourceId, error);
+      }
+    })();
+
+    this.inFlightResourceInitializations.set(resourceId, initialization);
+
+    try {
+      await initialization;
+    } finally {
+      this.inFlightResourceInitializations.delete(resourceId);
     }
   }
 
@@ -267,20 +396,7 @@ export class DependencyProcessor {
   }
 
   public async initializeRoot() {
-    const rootResource = this.store.root;
-
-    const { value, context } =
-      await this.resourceInitializer.initializeResource(
-        rootResource.resource,
-        rootResource.config,
-        // They are already computed
-        rootResource.computedDependencies!,
-      );
-
-    rootResource.context = context;
-    rootResource.value = value;
-    rootResource.isInitialized = true;
-    this.store.recordResourceInitialized(rootResource.resource.id);
+    await this.ensureResourceInitialized(this.store.root);
   }
 
   /**
@@ -510,39 +626,7 @@ export class DependencyProcessor {
     }
 
     const sr = storeResource!;
-    const { resource, config } = sr;
-
-    if (!sr.isInitialized) {
-      const depMap = (resource.dependencies || {}) as DependencyMapType;
-
-      let wrapped =
-        sr.computedDependencies as ResourceDependencyValuesType<any>;
-
-      // If not already computed, compute and cache it!
-      if (wrapped === undefined) {
-        const raw = await this.extractDependencies(depMap, resource.id);
-        wrapped = this.wrapResourceDependencies(depMap, raw);
-        sr.computedDependencies = wrapped;
-      }
-
-      try {
-        const { value, context } =
-          await this.resourceInitializer.initializeResource(
-            resource,
-            config,
-            wrapped,
-          );
-
-        sr.context = context;
-        sr.value = value;
-
-        // we need to initialize the resource
-        sr.isInitialized = true;
-        this.store.recordResourceInitialized(resource.id);
-      } catch (error: unknown) {
-        this.rethrowResourceInitError(resource.id, error);
-      }
-    }
+    await this.ensureResourceInitialized(sr);
 
     return sr.value;
   }

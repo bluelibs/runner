@@ -95,4 +95,39 @@ describe("DependencyProcessor zero-dependency caching", () => {
       /Dependency Task dependency\.processor\.missing\.task\.dep not found/,
     );
   });
+
+  it("uses single-flight resource initialization for concurrent extractions", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const initSpy = jest.fn(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return "ready";
+    });
+
+    const resource = defineResource({
+      id: "dependency.processor.single.flight.resource",
+      init: initSpy,
+    });
+
+    store.storeGenericItem(resource);
+
+    const processor = new TestDependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+    );
+
+    const [v1, v2] = await Promise.all([
+      processor.extractResourceDependency(resource),
+      processor.extractResourceDependency(resource),
+    ]);
+
+    expect(v1).toBe("ready");
+    expect(v2).toBe("ready");
+    expect(initSpy).toHaveBeenCalledTimes(1);
+  });
 });

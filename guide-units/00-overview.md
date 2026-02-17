@@ -12,16 +12,13 @@ import { z } from "zod";
 
 const logger = globals.resources.logger;
 
-// resources are singletons with lifecycle management
+// resources are singletons with lifecycle management and async construction
 const db = r
   .resource("app.db")
   .init(async () => ({
-    users: {
-      insert: async (input: { name: string; email: string }) => ({
-        id: "user-1",
-        ...input,
-      }),
-    },
+    const conn = await postgres.connect(process.env.DB_URL);
+
+    return conn;
   }))
   .build();
 

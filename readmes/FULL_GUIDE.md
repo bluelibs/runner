@@ -28,15 +28,12 @@ The goal is simple: keep dependencies explicit, keep lifecycle predictable, and 
 import { r, run, globals } from "@bluelibs/runner";
 import { z } from "zod";
 
+// resources are singletons with lifecycle management and async construction
 const db = r
   .resource("app.db")
   .init(async () => ({
-    users: {
-      insert: async (input: { name: string; email: string }) => ({
-        id: "user-1",
-        ...input,
-      }),
-    },
+    const conn = await postgres.connect(process.env.DB_URL);
+    return conn;
   }))
   .build();
 
@@ -103,13 +100,13 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 ## Platform Support (Quick Summary)
 
-| Capability                                              | Node.js | Browser | Edge | Notes                                      |
-| ------------------------------------------------------- | ------- | ------- | ---- | ------------------------------------------ |
+| Capability                                             | Node.js | Browser | Edge | Notes                                      |
+| ------------------------------------------------------ | ------- | ------- | ---- | ------------------------------------------ |
 | Core runtime (tasks/resources/middleware/events/hooks) | Full    | Full    | Full | Platform adapters hide runtime differences |
-| Async Context (`r.asyncContext`)            | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
-| Durable workflows (`@bluelibs/runner/node`) | Full    | None    | None | Node-only module                           |
-| Tunnels client (`createHttpClient`)         | Full    | Full    | Full | Requires `fetch`                           |
-| Tunnels server (`@bluelibs/runner/node`)    | Full    | None    | None | Exposes tasks/events over HTTP             |
+| Async Context (`r.asyncContext`)                       | Full    | None    | None | Requires Node.js `AsyncLocalStorage`       |
+| Durable workflows (`@bluelibs/runner/node`)            | Full    | None    | None | Node-only module                           |
+| Tunnels client (`createHttpClient`)                    | Full    | Full    | Full | Requires `fetch`                           |
+| Tunnels server (`@bluelibs/runner/node`)               | Full    | None    | None | Exposes tasks/events over HTTP             |
 
 ---
 
@@ -117,12 +114,12 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 
 Use these minimums before starting:
 
-| Requirement     | Minimum                  | Notes                                                                      |
-| --------------- | ------------------------ | -------------------------------------------------------------------------- |
-| Node.js         | `18.x`                   | Enforced by `package.json#engines.node`                                    |
-| TypeScript      | `5.6+` (recommended)     | Required for typed DX and examples in this repository                      |
-| Package manager | npm / pnpm / yarn / bun  | Examples use npm, but any modern package manager works                     |
-| `fetch` runtime | Built-in or polyfilled   | Required for tunnel clients (`createHttpClient`, universal HTTP client) |
+| Requirement     | Minimum                 | Notes                                                                   |
+| --------------- | ----------------------- | ----------------------------------------------------------------------- |
+| Node.js         | `18.x`                  | Enforced by `package.json#engines.node`                                 |
+| TypeScript      | `5.6+` (recommended)    | Required for typed DX and examples in this repository                   |
+| Package manager | npm / pnpm / yarn / bun | Examples use npm, but any modern package manager works                  |
+| `fetch` runtime | Built-in or polyfilled  | Required for tunnel clients (`createHttpClient`, universal HTTP client) |
 
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
@@ -141,16 +138,13 @@ import { z } from "zod";
 
 const logger = globals.resources.logger;
 
-// resources are singletons with lifecycle management
+// resources are singletons with lifecycle management and async construction
 const db = r
   .resource("app.db")
   .init(async () => ({
-    users: {
-      insert: async (input: { name: string; email: string }) => ({
-        id: "user-1",
-        ...input,
-      }),
-    },
+    const conn = await postgres.connect(process.env.DB_URL);
+
+    return conn;
   }))
   .build();
 
@@ -6469,7 +6463,7 @@ flowchart TD
 
 1. **Leaf resources first** — resources with no dependencies initialize first
 2. **Dependent resources after** — each resource waits for its dependencies
-3. **Parallel when possible** — independent branches initialize concurrently
+3. **Initialization strategy** — sequential by default, or parallel for dependency-ready branches when using `run(app, { initMode: "parallel" })`
 4. **Middleware registration** — happens after resources are available
 5. **Ready event** — signals all initialization complete
 
@@ -6485,7 +6479,7 @@ app
     └── database ← already initialized, skipped
 ```
 
-Initialization order: `config` → `database` → `server`, `userService` (parallel)
+Initialization order: `config` → `database` → `server`, `userService` (if `initMode: "parallel"`, `server` and `userService` can initialize in the same wave)
 
 ---
 

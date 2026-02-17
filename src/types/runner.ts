@@ -54,6 +54,11 @@ export type RunOptions = {
    */
   runtimeEventCycleDetection?: boolean;
   /**
+   * Defaults to `sequential`.
+   * Controls how resources are initialized during startup.
+   */
+  initMode?: ResourceInitMode;
+  /**
    * Specify in which mode to run "dev", "prod" or "test".
    * If inside Node this is automatically detected from the NODE_ENV environment variable if not provided.
    */
@@ -67,4 +72,12 @@ export enum RunnerMode {
   TEST = "test",
   DEV = "dev",
   PROD = "prod",
+}
+
+/**
+ * Resource initialization strategy during run() bootstrap.
+ */
+export enum ResourceInitMode {
+  Sequential = "sequential",
+  Parallel = "parallel",
 }
