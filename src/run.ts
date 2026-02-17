@@ -118,6 +118,13 @@ export async function run<C, V extends Promise<any>>(
       await store.dispose();
     }
   };
+  const runtimeResult = new RunResult<any>(
+    logger,
+    store,
+    eventManager,
+    taskRunner,
+    disposeAll,
+  );
 
   try {
     if (debug) {
@@ -125,7 +132,7 @@ export async function run<C, V extends Promise<any>>(
     }
 
     // In the registration phase we register deeply all the resources, tasks, middleware and events
-    store.initializeStore(resource, config);
+    store.initializeStore(resource, config, runtimeResult);
 
     // the overrides that were registered now will override the other registered resources
     await store.processOverrides();
@@ -137,14 +144,8 @@ export async function run<C, V extends Promise<any>>(
     const boundedLogger = logger.with({ source: "run" });
     if (dryRun) {
       await boundedLogger.debug("Dry run mode. Skipping initialization...");
-      return new RunResult(
-        store.root.value,
-        logger,
-        store,
-        eventManager,
-        taskRunner,
-        disposeAll,
-      );
+      runtimeResult.setValue(store.root.value);
+      return runtimeResult as RunResult<V extends Promise<infer U> ? U : V>;
     }
 
     // Beginning initialization
@@ -182,22 +183,17 @@ export async function run<C, V extends Promise<any>>(
       unhookShutdown = registerShutdownHook(() => store.dispose());
     }
 
-    return new RunResult(
-      store.root.value,
-      logger,
-      store,
-      eventManager,
-      taskRunner,
-      disposeAll,
-      {
-        lazyMode: lazy,
-        startupUnusedResourceIds,
-        lazyResourceLoader: async (resourceId: string) => {
-          const resource = store.resources.get(resourceId)!.resource;
-          return processor.extractResourceDependency(resource);
-        },
+    runtimeResult.setLazyOptions({
+      lazyMode: lazy,
+      startupUnusedResourceIds,
+      lazyResourceLoader: async (resourceId: string) => {
+        const resource = store.resources.get(resourceId)!.resource;
+        return processor.extractResourceDependency(resource);
       },
-    );
+    });
+    runtimeResult.setValue(store.root.value);
+
+    return runtimeResult;
   } catch (err) {
     // Rollback initialized resources
     await disposeAll();

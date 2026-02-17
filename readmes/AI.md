@@ -77,7 +77,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 
 - `r.*.with(config)` produces a configured copy of the definition.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` creates a new resource with a different id but the same definition. Use `register: "drop"` to avoid re-registering nested items, or `register: "deep"` to deep-fork **registered resources** with new ids via `reId` (other registerables are not kept; resource dependencies pointing to deep-forked resources are remapped to those forks). Export forked resources to use as dependencies.
-- `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns helpers such as `runTask`, `getResourceValue`, `getResourceConfig`, and `dispose`.
+- `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object with helpers such as `runTask`, `getResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
 
 ### Resource Forking
@@ -413,7 +413,7 @@ const AppError = r
 try {
   AppError.throw({ code: 400, message: "Oops" });
 } catch (err) {
-  if (AppError.is(err)) {
+  if (AppError.is(err, { code: 400 })) {
     // err.message -> "[400] Oops\n\nRemediation: Check the request payload and retry with valid data."
     // err.httpCode -> 400
     // err.remediation -> "Check the request payload and retry with valid data."
@@ -427,10 +427,11 @@ try {
 - `.httpCode(number)` sets an HTTP status for the error helper (must be an integer in `100..599`). The helper exposes `helper.httpCode`, and thrown typed errors expose `error.httpCode`.
 - `.remediation(stringOrFn)` attaches fix-it advice. Accepts a static string or `(data) => string`. When present, `error.message` and `error.toString()` include `\n\nRemediation: <advice>`. The raw advice is also available via `error.remediation`.
 - `message` is not required in the data unless your custom formatter expects it.
+- `helper.is(err, partialData?)` accepts an optional partial data filter and performs shallow strict matching (`===`) on each provided key.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
 - Use `r.error.is(err)` to check if an error is _any_ Runner error (not just a specific one). This type guard narrows to `RunnerError` with `id`, `data`, `httpCode`, and `remediation` properties. Useful in catch blocks or error filters:
   ```ts
-  if (r.error.is(err)) {
+  if (r.error.is(err, { code: 400 })) {
     console.error(`Runner error: ${err.id} (${err.httpCode || "N/A"})`);
   }
   ```
@@ -474,7 +475,7 @@ const app = r
 
 ## Runtime & Lifecycle
 
-- `run(root, options)` wires dependencies, initializes resources, and returns helpers: `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `store`, `logger`, and `dispose`.
+- `run(root, options)` wires dependencies, initializes resources, and returns the runtime object: `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, `store`, `logger`, and `dispose`. `getLazyResourceValue` is available only when `run(..., { lazy: true })` is enabled.
 - `emitEvent(event, payload, options?)` accepts the same emission options (`failureMode`, `throwOnError`, `report`) as dependency emitters.
 - Run options highlights: `debug` (normal/verbose or custom config), `logs` (printThreshold/strategy/buffer), `errorBoundary` and `onUnhandledError`, `shutdownHooks`, `dryRun`, `lazy`, and `initMode` (`"sequential"` or `"parallel"`; string literal values work without importing enums).
 - Task interceptors: inside resource init, call `deps.someTask.intercept(async (next, input) => next(input))` to wrap a single task execution at runtime (runs inside middleware; won't run if middleware short-circuits).
@@ -613,7 +614,7 @@ test("sends welcome email", async () => {
 - **Conditional registration:** `.register((config) => (config.enableFeature ? [featureResource] : []))`.
 - **Async coordination:** `Semaphore` (O(1) linked queue for heavy contention) and `Queue` live in the main package. Both use isolated EventManagers internally for their lifecycle events, separate from the global EventManager used for business-level application events.
 - **Event safety:** Runner detects event emission cycles and throws an `EventCycleError` with the offending chain.
-- **Internal services:** access `globals.resources.runtime` for a safe runtime facade inside resources (`runTask`, `emitEvent`, `getResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`), plus `globals.resources.store`, `globals.resources.taskRunner`, and `globals.resources.eventManager` for lower-level introspection or custom tooling.
+- **Internal services:** `globals.resources.runtime` resolves to the same runtime object returned by `run(...)`. It supports `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`. Bootstrap note: when injected inside a resource `init()`, only that resource's dependencies are guaranteed initialized; unrelated resources may still be pending.
 
 ## Interop With Classic APIs
 

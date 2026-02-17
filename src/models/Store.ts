@@ -63,7 +63,7 @@ import { RunnerMode } from "../types/runner";
 import { detectRunnerMode } from "../tools/detectRunnerMode";
 import { Serializer } from "../serializer";
 import { getResourcesInDisposeOrder as computeDisposeOrder } from "./utils/disposeOrder";
-import { createRuntimeServices } from "../globals/resources/runtime.resource";
+import { RunResult } from "./RunResult";
 
 // Re-export types for backward compatibility
 export type {
@@ -159,7 +159,7 @@ export class Store {
     }
   }
 
-  private registerGlobalComponents() {
+  private registerGlobalComponents(runtimeResult: RunResult<unknown>) {
     if (!this.taskRunner) {
       throw new Error(
         "TaskRunner is not set. Call store.setTaskRunner() before initializeStore().",
@@ -179,14 +179,7 @@ export class Store {
       globalResources.middlewareManager,
       this.middlewareManager,
     );
-    builtInResourcesMap.set(
-      globalResources.runtime,
-      createRuntimeServices({
-        store: this,
-        eventManager: this.eventManager,
-        taskRunner: this.taskRunner,
-      }),
-    );
+    builtInResourcesMap.set(globalResources.runtime, runtimeResult);
 
     this.registry.storeGenericItem(globalResources.queue);
     this.registry.storeGenericItem(globalResources.httpClientFactory);
@@ -304,12 +297,13 @@ export class Store {
   public initializeStore(
     root: IResource<any, any, any, any, any>,
     config: unknown,
+    runtimeResult: RunResult<unknown>,
   ) {
     if (this.#isInitialized) {
       storeAlreadyInitializedError.throw({});
     }
 
-    this.registerGlobalComponents();
+    this.registerGlobalComponents(runtimeResult);
     this.setupRootResource(root, config);
     this.validator.runSanityChecks();
 

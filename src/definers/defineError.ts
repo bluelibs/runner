@@ -22,6 +22,28 @@ const assertHttpCode = (value: number): void => {
   }
 };
 
+export const matchesRunnerErrorData = <
+  TData extends DefaultErrorType = DefaultErrorType,
+>(
+  data: TData,
+  partialData?: Partial<TData>,
+): boolean => {
+  if (partialData === undefined) {
+    return true;
+  }
+
+  for (const [key, value] of Object.entries(partialData)) {
+    if (data[key] !== value) {
+      return false;
+    }
+  }
+
+  return true;
+};
+
+const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
+  value !== null && typeof value === "object";
+
 export class RunnerError<
   TData extends DefaultErrorType = DefaultErrorType,
 > extends Error {
@@ -82,8 +104,18 @@ export class ErrorHelper<
       remediation,
     );
   }
-  is(error: unknown): error is RunnerError<TData> {
-    return error instanceof RunnerError && error.name === this.definition.id;
+  is(error: unknown): error is RunnerError<TData>;
+  is(error: unknown, partialData: Partial<TData>): error is RunnerError<TData>;
+  is(error: unknown, partialData?: unknown): error is RunnerError<TData> {
+    const safePartialData = isObjectRecord(partialData)
+      ? (partialData as Partial<TData>)
+      : undefined;
+
+    return (
+      error instanceof RunnerError &&
+      error.name === this.definition.id &&
+      matchesRunnerErrorData(error.data, safePartialData)
+    );
   }
   optional() {
     return {

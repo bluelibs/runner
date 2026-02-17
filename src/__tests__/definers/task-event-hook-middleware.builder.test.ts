@@ -773,6 +773,39 @@ describe("task/event/hook/middleware builders", () => {
     });
   });
 
+  describe("task builder validation", () => {
+    it("covers explicit override=false branches for task tags and middleware", () => {
+      const tagA = r.tag("tests.builder.task.coverage.tagA").build();
+      const tagB = r.tag("tests.builder.task.coverage.tagB").build();
+      const mwA = r.middleware
+        .task("tests.builder.task.coverage.mwA")
+        .run(async ({ next, task }) => next(task.input))
+        .build();
+      const mwB = r.middleware
+        .task("tests.builder.task.coverage.mwB")
+        .run(async ({ next, task }) => next(task.input))
+        .build();
+
+      const task = r
+        .task("tests.builder.task.coverage")
+        .tags([tagA], { override: false })
+        .tags([tagB])
+        .middleware([mwA], { override: false })
+        .middleware([mwB])
+        .run(async () => "ok")
+        .build();
+
+      expect(task.tags).toEqual([tagA, tagB]);
+      expect(task.middleware).toEqual([mwA, mwB]);
+    });
+
+    it("throws when building task without run()", () => {
+      expect(() => r.task("tests.builder.task.no-run").build()).toThrow(
+        /Task.*Missing required.*run/,
+      );
+    });
+  });
+
   describe("middleware builder validation", () => {
     it("throws when building task middleware without run()", () => {
       expect(() =>

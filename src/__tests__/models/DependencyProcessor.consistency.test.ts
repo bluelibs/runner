@@ -339,6 +339,7 @@ describe("DependencyProcessor Consistency", () => {
     const { store, eventManager, logger } = fixture;
     const taskRunner = fixture.createTaskRunner();
     store.setTaskRunner(taskRunner);
+    const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
     const event = r.event<{ ok: true }>("hook.pending.event").build();
     const runHook = jest.fn(async () => undefined);
@@ -352,7 +353,7 @@ describe("DependencyProcessor Consistency", () => {
       .register([event, hook])
       .build();
 
-    store.initializeStore(root, {});
+    store.initializeStore(root, {}, runtimeResult);
 
     const processor = new DependencyProcessor(
       store,

@@ -8,7 +8,13 @@ import {
   defineTaskMiddleware,
 } from "../../define";
 import { run } from "../../run";
-import { Logger, MiddlewareManager, OnUnhandledError } from "../../models";
+import {
+  Logger,
+  MiddlewareManager,
+  OnUnhandledError,
+  RunResult,
+  TaskRunner,
+} from "../../models";
 import { RunnerMode } from "../../types/runner";
 import { createTestFixture } from "../test-utils";
 
@@ -17,11 +23,15 @@ describe("Store", () => {
   let store: Store;
   let logger: Logger;
   let onUnhandledError: OnUnhandledError;
+  let runtimeResult: RunResult<unknown>;
+  let taskRunner: TaskRunner;
 
   beforeEach(() => {
     const fixture = createTestFixture();
     ({ eventManager, logger, onUnhandledError, store } = fixture);
-    store.setTaskRunner(fixture.createTaskRunner());
+    taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+    runtimeResult = fixture.createRuntimeResult(taskRunner);
   });
 
   it("should expose some helpers", () => {
@@ -41,7 +51,7 @@ describe("Store", () => {
       init: async () => "Root Value",
     });
 
-    store.initializeStore(rootResource, {});
+    store.initializeStore(rootResource, {}, runtimeResult);
 
     expect(store.root.resource.id).toBe(rootResource.id);
     expect(store.root.resource).not.toBe(rootResource);
@@ -337,11 +347,11 @@ describe("Store", () => {
       init: async () => "Root Value",
     });
 
-    store.initializeStore(rootResource, {});
+    store.initializeStore(rootResource, {}, runtimeResult);
 
-    expect(() => store.initializeStore(rootResource, {})).toThrow(
-      /Store already initialized/i,
-    );
+    expect(() =>
+      store.initializeStore(rootResource, {}, runtimeResult),
+    ).toThrow(/Store already initialized/i);
   });
 
   it("should access overrides and overrideRequests getters", () => {
@@ -382,7 +392,7 @@ describe("Store", () => {
       init: async () => "Root Value",
     });
 
-    store.initializeStore(rootResource, {});
+    store.initializeStore(rootResource, {}, runtimeResult);
     const result = store.getTasksWithTag(tag);
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
@@ -409,7 +419,7 @@ describe("Store", () => {
       init: async () => "Root Value",
     });
 
-    store.initializeStore(rootResource, {});
+    store.initializeStore(rootResource, {}, runtimeResult);
     const result = store.getResourcesWithTag(tag);
     expect(Array.isArray(result)).toBe(true);
     expect(result).toHaveLength(1);
@@ -440,7 +450,7 @@ describe("Store", () => {
       init: async () => "Root Value",
     });
 
-    store.initializeStore(rootResource, {});
+    store.initializeStore(rootResource, {}, runtimeResult);
 
     const tasks = store.getTasksWithTag(contractTag);
     const resources = store.getResourcesWithTag(contractTag);

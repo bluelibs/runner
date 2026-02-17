@@ -2398,7 +2398,7 @@ The thrown `Error` has `name = id`. By default `message` is `JSON.stringify(data
 try {
   userNotFoundError.throw({ code: 404, message: "User not found" });
 } catch (err) {
-  if (userNotFoundError.is(err)) {
+  if (userNotFoundError.is(err, { code: 404 })) {
     // err.name      === "app.errors.userNotFound"
     // err.message   === "[404] User not found\n\nRemediation: Verify the user ID exists before calling getUser."
     // err.httpCode  === 404
@@ -2408,6 +2408,8 @@ try {
   }
 }
 ```
+
+`errorHelper.is(err, partialData?)` accepts an optional partial data filter and performs shallow strict matching (`===`) on each provided key.
 
 **Remediation** can also be a function when the advice depends on the error data:
 
@@ -2423,7 +2425,7 @@ const quotaExceeded = r
 
 **Check for any Runner error (not just a specific one):**
 
-Use `r.error.is(error)` to detect whether an error is any Runner error, regardless of its specific type. This is useful in catch blocks, middleware, or error filters when you want to handle all Runner errors differently from standard JavaScript errors:
+Use `r.error.is(error, partialData?)` to detect whether an error is any Runner error, regardless of its specific type. You can optionally filter by a subset of `error.data` using shallow strict matching (`===`) on the provided keys. This is useful in catch blocks, middleware, or error filters when you want to handle all Runner errors differently from standard JavaScript errors:
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -2432,7 +2434,7 @@ try {
   // Some operation that might throw various errors
   await riskyOperation();
 } catch (err) {
-  if (r.error.is(err)) {
+  if (r.error.is(err, { code: 404 })) {
     // It's a Runner error - has id, data, httpCode, remediation
     console.error(`Runner error: ${err.id} (${err.httpCode || "N/A"})`);
     if (err.remediation) {
@@ -2486,34 +2488,45 @@ await result.dispose();
 
 ### What `run()` returns
 
-| Property                | Description                                                        |
-| ----------------------- | ------------------------------------------------------------------ |
-| `value`                 | Value returned by the `app` resource's `init()`                    |
-| `runTask(...)`          | Run a task by reference or string id                               |
-| `emitEvent(...)`        | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`) |
-| `getResourceValue(...)` | Read a resource's value                                            |
-| `getLazyResourceValue(...)` | Initialize/read a resource on demand (useful with `lazy: true`) |
-| `getResourceConfig(...)` | Read a resource's resolved config                                  |
-| `logger`                | Logger instance                                                    |
-| `store`                 | Runtime store with registered resources, tasks, middleware, events |
-| `dispose()`             | Gracefully dispose resources and unhook process listeners          |
+An object with the following properties and methods:
+
+| Property                    | Description                                                                                |
+| --------------------------- | ------------------------------------------------------------------------------------------ |
+| `value`                     | Value returned by the `app` resource's `init()`                                            |
+| `runTask(...)`              | Run a task by reference or string id                                                       |
+| `emitEvent(...)`            | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`) |
+| `getResourceValue(...)`     | Read a resource's value                                                                    |
+| `getLazyResourceValue(...)` | Initialize/read a resource on demand. Available only when `run(..., { lazy: true })` is enabled. |
+| `getResourceConfig(...)`    | Read a resource's resolved config                                                          |
+| `getRootId()`               | Read the root resource id                                                                  |
+| `getRootConfig()`           | Read the root resource config                                                              |
+| `getRootValue()`            | Read the initialized root resource value                                                   |
+| `logger`                    | Logger instance                                                                            |
+| `store`                     | Runtime store with registered resources, tasks, middleware, events                         |
+| `dispose()`                 | Gracefully dispose resources and unhook process listeners                                  |
+
+Note: `dispose()` is blocked while `run()` is still bootstrapping and becomes available once initialization completes.
+
+This object is your main interface to interact with the running application. Can also be injected as dependency via `globals.resources.runtime`.
+
+Important bootstrap note: when `runtime` is injected inside a resource `init()`, startup may still be in progress. You are guaranteed your current resource dependencies are ready, but not that all registered resources in the container are already initialized.
 
 ### RunOptions
 
 Pass as the second argument to `run(app, options)`.
 
-| Option                       | Type                                            | Description                                                                                                                                                                                                                   |
-| ---------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug`                      | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                          |
-| `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete. |
-| `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                        |
-| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                            |
-| `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                 |
-| `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                          |
-| `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. Access these via `await result.getLazyResourceValue(...)`. In lazy mode, `getResourceValue(...)` throws for startup-unused resources. |
-| `initMode`                   | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup scheduling strategy. Use string values directly (for example `initMode: "parallel"`), no enum import required.                                                                       |
-| `runtimeEventCycleDetection` | `boolean`                                       | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                  |
-| `mode`                       | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                             |
+| Option                       | Type                                            | Description                                                                                                                                                                                                                             |
+| ---------------------------- | ----------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug`                      | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                                    |
+| `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.           |
+| `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                  |
+| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                                      |
+| `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                           |
+| `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                    |
+| `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. |
+| `initMode`                   | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup scheduling strategy. Use string values directly (for example `initMode: "parallel"`), no enum import required.                                                                               |
+| `runtimeEventCycleDetection` | `boolean`                                       | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                            |
+| `mode`                       | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                       |
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
 
@@ -5138,12 +5151,19 @@ const invalidDb = r
 
 We expose the internal services for advanced use cases (but try not to use them unless you really need to):
 
+When you call `run(app)`, Runner creates an isolated runtime container for that specific run. During bootstrap, it registers built-in global resources for that container, including `globals.resources.runtime`.
+
+`globals.resources.runtime` resolves to the same runtime object returned by `run(app)`, scoped to that container only. This lets code running *inside* the container inject `runtime` and perform runtime operations (`runTask`, `emitEvent`, `getResourceValue`, root helpers, etc.) without passing the outer runtime object around manually.
+
+Bootstrap timing note: inside resource `init()`, `runtime` is available early, but that does **not** mean every registered resource is initialized yet. Runner guarantees dependency readiness for the currently initializing resource; unrelated resources may still be pending (especially with `initMode: "parallel"` or `lazy: true`).
+
 ```typescript
 import { globals } from "@bluelibs/runner";
 
 const advancedTask = r
   .task("app.advanced")
   .dependencies({
+    // Available because run(app) injects this resource into the current container.
     runtime: globals.resources.runtime,
     store: globals.resources.store,
     taskRunner: globals.resources.taskRunner,

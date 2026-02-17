@@ -6,8 +6,7 @@ import {
 } from "../../define";
 import { run } from "../../run";
 import { globalResources } from "../../globals/globalResources";
-import type { RuntimeServices } from "../../globals/types";
-import { createRuntimeServices } from "../../globals/resources/runtime.resource";
+import { RunResult } from "../../models/RunResult";
 
 describe("globals.resources.runtime", () => {
   it("works inside resource init and after boot with task/event/resource/root helpers", async () => {
@@ -98,9 +97,8 @@ describe("globals.resources.runtime", () => {
       rootConfig: { mode: "alpha" },
     });
 
-    const runtime = runtimeResult.getResourceValue(
-      globalResources.runtime,
-    ) as RuntimeServices;
+    const runtime = runtimeResult.getResourceValue(globalResources.runtime);
+    expect(runtime).toBe(runtimeResult);
     expect(runtime.getRootId()).toBe("runtime.app");
     expect(runtime.getRootConfig<{ mode: string }>()).toEqual({
       mode: "alpha",
@@ -143,9 +141,7 @@ describe("globals.resources.runtime", () => {
       register: [lazyOnly],
       dependencies: { runtime: globalResources.runtime },
       init: async (_, { runtime }) => {
-        expect(() => runtime.getResourceValue(lazyOnly)).toThrow(
-          'Resource "runtime.lazy.only" is not initialized yet.',
-        );
+        expect(runtime.getResourceValue(lazyOnly)).toBeUndefined();
         return "ok";
       },
     });
@@ -155,22 +151,24 @@ describe("globals.resources.runtime", () => {
 
     const runtime = runtimeResult.getResourceValue(globalResources.runtime);
     expect(() => runtime.getResourceValue(lazyOnly)).toThrow(
-      'Resource "runtime.lazy.only" is not initialized yet.',
+      /getLazyResourceValue/,
     );
 
     await runtimeResult.dispose();
   });
 
   it("fails fast when root is not available yet", () => {
-    const runtime = createRuntimeServices({
-      store: {
+    const runtime = new RunResult<unknown>(
+      {} as any,
+      {
         tasks: new Map(),
         events: new Map(),
         resources: new Map(),
       } as any,
-      eventManager: {} as any,
-      taskRunner: {} as any,
-    });
+      {} as any,
+      {} as any,
+      async () => {},
+    );
 
     expect(() => runtime.getRootId()).toThrow(
       "Root resource is not available.",
@@ -181,5 +179,27 @@ describe("globals.resources.runtime", () => {
     expect(() => runtime.getRootValue()).toThrow(
       "Root resource is not available.",
     );
+  });
+
+  it("blocks dispose during bootstrap from injected runtime", async () => {
+    const probe = defineResource({
+      id: "runtime.dispose.probe",
+      dependencies: { runtime: globalResources.runtime },
+      init: async (_config, { runtime }) => {
+        expect(() => runtime.dispose()).toThrow(
+          "RunResult.dispose() is not available during bootstrap. Wait for run() to finish initialization.",
+        );
+        return "ok";
+      },
+    });
+
+    const app = defineResource({
+      id: "runtime.dispose.app",
+      register: [probe],
+      init: async () => "ready",
+    });
+
+    const runtime = await run(app, { shutdownHooks: false });
+    await runtime.dispose();
   });
 });

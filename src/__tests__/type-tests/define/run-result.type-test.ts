@@ -116,3 +116,25 @@ void (async () => {
   // @ts-expect-error dynamic report option yields union
   const mustBeReport: IEventEmitReport = dynamic;
 })();
+
+// Scenario: RunResult root helpers preserve typing.
+void (async () => {
+  type RootConfig = { mode: "dev" | "prod" };
+  type RootValue = { ready: true };
+
+  const app = defineResource<RootConfig, Promise<RootValue>>({
+    id: "types.root.app",
+    init: async () => ({ ready: true }),
+  });
+
+  const rr = await run(app.with({ mode: "dev" }));
+  const rootId: string = rr.getRootId();
+  const rootConfig = rr.getRootConfig<RootConfig>();
+  const mode: "dev" | "prod" = rootConfig.mode;
+  const rootValue = rr.getRootValue<RootValue>();
+  const ready: true = rootValue.ready;
+
+  void rootId;
+  void mode;
+  void ready;
+})();

@@ -63,8 +63,16 @@ export interface IErrorHelper<
   httpCode?: number;
   /** Throw a typed error with the given data */
   throw(data: TData): never;
-  /** Type guard for checking if an unknown error is this error */
+  /**
+   * Type guard for checking if an unknown error is this error.
+   * Optionally provide a partial data object to require shallow strict matches.
+   */
   is(error: unknown): error is IRunnerError<TData>;
+  /**
+   * Type guard for checking if an unknown error is this error,
+   * with shallow strict matching (`===`) on provided data keys.
+   */
+  is(error: unknown, partialData: Partial<TData>): error is IRunnerError<TData>;
   /** Brand symbol for runtime detection */
   [symbolError]: true;
   /** Return an optional dependency wrapper for this error */

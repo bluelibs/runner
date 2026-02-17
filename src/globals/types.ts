@@ -35,4 +35,3 @@ export type {
   HttpClientFactory,
 } from "./resources/httpClientFactory.resource";
 export type { HttpClientAuthConfig, HttpCreateClientConfig } from "./tunnels";
-export type { RuntimeServices } from "./resources/runtime.resource";

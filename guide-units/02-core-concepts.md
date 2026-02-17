@@ -1173,7 +1173,7 @@ The thrown `Error` has `name = id`. By default `message` is `JSON.stringify(data
 try {
   userNotFoundError.throw({ code: 404, message: "User not found" });
 } catch (err) {
-  if (userNotFoundError.is(err)) {
+  if (userNotFoundError.is(err, { code: 404 })) {
     // err.name      === "app.errors.userNotFound"
     // err.message   === "[404] User not found\n\nRemediation: Verify the user ID exists before calling getUser."
     // err.httpCode  === 404
@@ -1183,6 +1183,8 @@ try {
   }
 }
 ```
+
+`errorHelper.is(err, partialData?)` accepts an optional partial data filter and performs shallow strict matching (`===`) on each provided key.
 
 **Remediation** can also be a function when the advice depends on the error data:
 
@@ -1198,7 +1200,7 @@ const quotaExceeded = r
 
 **Check for any Runner error (not just a specific one):**
 
-Use `r.error.is(error)` to detect whether an error is any Runner error, regardless of its specific type. This is useful in catch blocks, middleware, or error filters when you want to handle all Runner errors differently from standard JavaScript errors:
+Use `r.error.is(error, partialData?)` to detect whether an error is any Runner error, regardless of its specific type. You can optionally filter by a subset of `error.data` using shallow strict matching (`===`) on the provided keys. This is useful in catch blocks, middleware, or error filters when you want to handle all Runner errors differently from standard JavaScript errors:
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -1207,7 +1209,7 @@ try {
   // Some operation that might throw various errors
   await riskyOperation();
 } catch (err) {
-  if (r.error.is(err)) {
+  if (r.error.is(err, { code: 404 })) {
     // It's a Runner error - has id, data, httpCode, remediation
     console.error(`Runner error: ${err.id} (${err.httpCode || "N/A"})`);
     if (err.remediation) {

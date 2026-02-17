@@ -1,4 +1,5 @@
 import { defineResource } from "../../define";
+import { RunResult } from "../../models";
 import { createTestFixture } from "../test-utils";
 
 enum ResourceId {
@@ -7,13 +8,21 @@ enum ResourceId {
 
 describe("Store regressions", () => {
   it("fails fast when taskRunner is missing during initialization", () => {
-    const { store } = createTestFixture();
+    const { store, logger, eventManager, createTaskRunner } =
+      createTestFixture();
+    const runtimeResult = new RunResult<unknown>(
+      logger,
+      store,
+      eventManager,
+      createTaskRunner(),
+      async () => store.dispose(),
+    );
     const root = defineResource({
       id: ResourceId.Root,
       init: async () => "root",
     });
 
-    expect(() => store.initializeStore(root, {})).toThrow(
+    expect(() => store.initializeStore(root, {}, runtimeResult)).toThrow(
       /TaskRunner is not set/i,
     );
   });

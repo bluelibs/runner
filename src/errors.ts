@@ -124,6 +124,18 @@ export const lazyResourceSyncAccessError = error<
   )
   .build();
 
+export const lazyResourceAccessDisabledError = error<DefaultErrorType>(
+  "runner.errors.lazyResourceAccessDisabled",
+)
+  .format(
+    () =>
+      "RunResult.getLazyResourceValue() is only available when run(..., { lazy: true }) is enabled.",
+  )
+  .remediation(
+    "Enable lazy mode via run(app, { lazy: true }) to use getLazyResourceValue(), or use getResourceValue() in non-lazy runtimes.",
+  )
+  .build();
+
 // Middleware not registered
 export const middlewareNotRegisteredError = error<
   {
@@ -303,8 +315,52 @@ export const taskNotRegisteredError = error<
   )
   .build();
 
+// RunResult/runtime surface errors (kept message-compatible with existing API expectations)
+export const runResultDisposedError = error<DefaultErrorType>(
+  "runner.errors.runResultDisposed",
+)
+  .format(() => "RunResult has been disposed.")
+  .build();
+
+export const runtimeRootNotAvailableError = error<DefaultErrorType>(
+  "runner.errors.runtimeRootNotAvailable",
+)
+  .format(() => "Root resource is not available.")
+  .build();
+
+export const runtimeRootNotInitializedError = error<
+  { rootId: string } & DefaultErrorType
+>("runner.errors.runtimeRootNotInitialized")
+  .format(
+    ({ rootId }) =>
+      `Root resource "${rootId.toString()}" is not initialized yet.`,
+  )
+  .build();
+
+export const runResultDisposeDuringBootstrapError = error<DefaultErrorType>(
+  "runner.errors.runResultDisposeDuringBootstrap",
+)
+  .format(
+    () =>
+      "RunResult.dispose() is not available during bootstrap. Wait for run() to finish initialization.",
+  )
+  .build();
+
+export const runtimeElementNotFoundError = error<
+  { type: string; elementId: string } & DefaultErrorType
+>("runner.errors.runtimeElementNotFound")
+  .format(
+    ({ type, elementId }) =>
+      `${type.toString()} "${elementId.toString()}" not found.`,
+  )
+  .build();
+
 /** Builder types that require validation before build() */
-export type BuilderType = "hook" | "task-middleware" | "resource-middleware";
+export type BuilderType =
+  | "task"
+  | "hook"
+  | "task-middleware"
+  | "resource-middleware";
 
 // Builder incomplete (missing required fields)
 export const builderIncompleteError = error<
@@ -316,11 +372,13 @@ export const builderIncompleteError = error<
 >("runner.errors.builderIncomplete")
   .format(({ type, builderId, missingFields }) => {
     const typeLabel =
-      type === "hook"
-        ? "Hook"
-        : type === "task-middleware"
-          ? "Task middleware"
-          : "Resource middleware";
+      type === "task"
+        ? "Task"
+        : type === "hook"
+          ? "Hook"
+          : type === "task-middleware"
+            ? "Task middleware"
+            : "Resource middleware";
     return `${typeLabel} "${builderId}" is incomplete. Missing required: ${missingFields.join(", ")}. Call ${missingFields.map((f) => `.${f}()`).join(" and ")} before .build().`;
   })
   .remediation(

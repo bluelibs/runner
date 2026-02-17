@@ -5,7 +5,9 @@ describe("OverrideManager override graph recursion", () => {
   it("handles cyclic override references without overflowing the call stack", () => {
     const fixture = createTestFixture();
     const { store } = fixture;
-    store.setTaskRunner(fixture.createTaskRunner());
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+    const runtimeResult = fixture.createRuntimeResult(taskRunner);
 
     const first = defineResource({
       id: "override.cycle.first",
@@ -24,6 +26,6 @@ describe("OverrideManager override graph recursion", () => {
       register: [first, second],
     });
 
-    expect(() => store.initializeStore(root, {})).not.toThrow();
+    expect(() => store.initializeStore(root, {}, runtimeResult)).not.toThrow();
   });
 });

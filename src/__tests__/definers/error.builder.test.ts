@@ -1,6 +1,17 @@
 import { definitions, r, RunnerError } from "../..";
+import { builderIncompleteError } from "../../errors";
 
 describe("error builder", () => {
+  it("covers builderIncompleteError task label branch", () => {
+    expect(() =>
+      builderIncompleteError.throw({
+        type: "task",
+        builderId: "tests.errors.builderIncomplete.task",
+        missingFields: ["run"],
+      }),
+    ).toThrow(/Task "tests\.errors\.builderIncomplete\.task" is incomplete/);
+  });
+
   it("build() returns an ErrorHelper that can throw and type-narrow via is()", () => {
     const AppError = r
       .error<{ code: number; message: string }>("tests.errors.app")
@@ -55,6 +66,35 @@ describe("error builder", () => {
       expect(code).toBe(7);
       expect(remediation).toBe("Use a valid code.");
     }
+  });
+
+  it("supports shallow partial data matching in helper is(error, partialData)", () => {
+    const E = r
+      .error<{
+        type: string;
+        code: number;
+        nested: { level: number };
+      }>("tests.errors.partial.match")
+      .build();
+
+    let caught: unknown;
+
+    try {
+      E.throw({
+        type: "task",
+        code: 404,
+        nested: { level: 1 },
+      });
+      fail("Expected throw");
+    } catch (err) {
+      caught = err;
+    }
+
+    expect(E.is(caught, { type: "task" })).toBe(true);
+    expect(E.is(caught, { code: 404 })).toBe(true);
+    expect(E.is(caught, { type: "resource" })).toBe(false);
+    expect(E.is(caught, { nested: { level: 1 } })).toBe(false);
+    expect(E.is(caught, {})).toBe(true);
   });
 
   it("validates data via dataSchema.parse before throwing", () => {
@@ -306,6 +346,36 @@ describe("error builder", () => {
       expect(r.error.is("string")).toBe(false);
       expect(r.error.is(123)).toBe(false);
       expect(r.error.is({})).toBe(false);
+    });
+
+    it("supports shallow partial data matching in static r.error.is(error, partialData)", () => {
+      const E = r
+        .error<{
+          type: string;
+          code: number;
+          nested: { level: number };
+        }>("tests.errors.static.is.partial")
+        .build();
+
+      let caught: unknown;
+
+      try {
+        E.throw({
+          type: "task",
+          code: 400,
+          nested: { level: 2 },
+        });
+        fail("Expected throw");
+      } catch (err) {
+        caught = err;
+      }
+
+      expect(r.error.is(caught, { type: "task" })).toBe(true);
+      expect(r.error.is(caught, { code: 400 })).toBe(true);
+      expect(r.error.is(caught, { type: "hook" })).toBe(false);
+      expect(r.error.is(caught, { nested: { level: 2 } })).toBe(false);
+      expect(r.error.is(new Error("x"), { type: "task" })).toBe(false);
+      expect(r.error.is(caught, {})).toBe(true);
     });
 
     it("narrows to RunnerError type with accessible properties", () => {

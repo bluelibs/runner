@@ -9,6 +9,7 @@ import type {
 } from "../../../defs";
 import { symbolFilePath } from "../../../defs";
 import type { ThrowsList } from "../../../types/error";
+import { builderIncompleteError } from "../../../errors";
 import { defineTask } from "../../defineTask";
 import type { TaskFluentBuilder } from "./fluent-builder.interface";
 import type { BuilderState, ResolveInput } from "./types";
@@ -241,6 +242,16 @@ export function makeTaskBuilder<
     },
 
     build() {
+      // Fail-fast: task definitions require a run handler.
+      if (state.run === undefined) {
+        builderIncompleteError.throw({
+          type: "task",
+          builderId: state.id,
+          missingFields: ["run"],
+          message: `Task "${state.id}" is incomplete`,
+        });
+      }
+
       const definition: ITaskDefinition<
         TInput,
         TOutput,

@@ -4,8 +4,11 @@ import {
   defineEvent,
   defineHook,
 } from "../../define";
+import { globalResources } from "../../globals/globalResources";
 import { EventEmissionFailureMode } from "../../defs";
+import { TaskRunner } from "../../models";
 import { run } from "../../run";
+import { createTestFixture } from "../test-utils";
 
 describe("RunResult", () => {
   it("exposes runTask, emitEvent, getResourceValue, getResourceConfig, logger and they work", async () => {
@@ -184,7 +187,7 @@ describe("RunResult", () => {
       'Resource "nope.res" not found.',
     );
     await expect(r.getLazyResourceValue("nope.res")).rejects.toThrow(
-      'Resource "nope.res" not found.',
+      /only available when run\(\.\.\., \{ lazy: true \}\)/,
     );
 
     await r.dispose();
@@ -224,7 +227,7 @@ describe("RunResult", () => {
     await runtime.dispose();
   });
 
-  it("returns stored value for getLazyResourceValue when runtime has no lazy loader", async () => {
+  it("fails fast when getLazyResourceValue is called outside lazy mode", async () => {
     const only = defineResource({
       id: "rr.lazy.dryrun.only",
       async init() {
@@ -240,8 +243,80 @@ describe("RunResult", () => {
     });
 
     const runtime = await run(app, { dryRun: true, shutdownHooks: false });
-    const value = await runtime.getLazyResourceValue(only);
-    expect(value).toBeUndefined();
+    await expect(runtime.getLazyResourceValue(only)).rejects.toThrow(
+      /only available when run\(\.\.\., \{ lazy: true \}\)/,
+    );
+    await runtime.dispose();
+  });
+
+  it("throws not-found for lazy resource access in lazy mode", async () => {
+    const fixture = createTestFixture();
+    const taskRunner = fixture.createTaskRunner();
+    fixture.store.setTaskRunner(taskRunner);
+    const runtime = fixture.createRuntimeResult(taskRunner);
+    runtime.setLazyOptions({ lazyMode: true });
+
+    await expect(
+      runtime.getLazyResourceValue("rr.lazy.missing"),
+    ).rejects.toThrow('Resource "rr.lazy.missing" not found.');
+  });
+
+  it("returns stored value in lazy mode when no lazy loader is configured", async () => {
+    const fixture = createTestFixture();
+    const taskRunner: TaskRunner = fixture.createTaskRunner();
+    fixture.store.setTaskRunner(taskRunner);
+    const runtime = fixture.createRuntimeResult(taskRunner);
+    runtime.setLazyOptions({ lazyMode: true });
+
+    const resource = defineResource({
+      id: "rr.lazy.manual.resource",
+    });
+    fixture.store.storeGenericItem(resource);
+    const resourceEntry = fixture.store.resources.get(resource.id);
+    if (!resourceEntry) {
+      throw new Error("Expected resource entry to exist");
+    }
+    resourceEntry.value = { ok: true };
+
+    await expect(runtime.getLazyResourceValue(resource)).resolves.toEqual({
+      ok: true,
+    });
+  });
+
+  it("exposes root helpers and blocks dispose during bootstrap", async () => {
+    const probe = defineResource({
+      id: "rr.root.probe",
+      dependencies: { runtime: globalResources.runtime },
+      init: async (_config, { runtime }) => {
+        expect(runtime.getRootId()).toBe("rr.root.app");
+        expect(runtime.getRootConfig<{ mode: "alpha" }>()).toEqual({
+          mode: "alpha",
+        });
+        expect(() => runtime.getRootValue()).toThrow(
+          'Root resource "rr.root.app" is not initialized yet.',
+        );
+        expect(() => runtime.dispose()).toThrow(
+          "RunResult.dispose() is not available during bootstrap. Wait for run() to finish initialization.",
+        );
+        return "probe-ready";
+      },
+    });
+
+    const app = defineResource<{ mode: "alpha" }, Promise<string>>({
+      id: "rr.root.app",
+      register: [probe],
+      init: async () => "app-ready",
+    });
+
+    const runtime = await run(app.with({ mode: "alpha" }), {
+      shutdownHooks: false,
+    });
+    expect(runtime.getRootId()).toBe("rr.root.app");
+    expect(runtime.getRootConfig<{ mode: "alpha" }>()).toEqual({
+      mode: "alpha",
+    });
+    expect(runtime.getRootValue<string>()).toBe("app-ready");
+
     await runtime.dispose();
   });
 });
