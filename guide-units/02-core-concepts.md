@@ -1142,7 +1142,7 @@ const profileTask = r
 
 ### Errors
 
-Typed errors can be declared once and injected anywhere. Register them alongside other items and consume via dependencies. The injected value is the error helper itself, exposing `.throw()`, `.is()`, `id`, and optional `httpCode`.
+Typed errors can be declared once and injected anywhere. Register them alongside other items and consume via dependencies. The injected value is the error helper itself, exposing `.new()`, `.create()`, `.throw()`, `.is()`, `id`, and optional `httpCode`.
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -1182,9 +1182,22 @@ try {
     console.log(`Caught error: ${err.name} - ${err.message}`);
   }
 }
+
+const error = userNotFoundError.new({
+  code: 404,
+  message: "User not found",
+});
+throw error;
+
+// Alias:
+throw userNotFoundError.create({
+  code: 404,
+  message: "User not found",
+});
 ```
 
 `errorHelper.is(err, partialData?)` accepts an optional partial data filter and performs shallow strict matching (`===`) on each provided key.
+`errorHelper.new(data)` constructs and returns the typed `RunnerError` without throwing, and `errorHelper.create(data)` is an alias.
 
 **Remediation** can also be a function when the advice depends on the error data:
 

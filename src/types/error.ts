@@ -66,6 +66,10 @@ export interface IErrorHelper<
   id: string;
   /** Optional HTTP status code associated with this error helper */
   httpCode?: number;
+  /** Construct a typed error with the given data without throwing it */
+  "new"(...args: ErrorThrowArgs<TData>): IRunnerError<TData>;
+  /** Alias for .new() */
+  create(...args: ErrorThrowArgs<TData>): IRunnerError<TData>;
   /** Throw a typed error with the given data */
   throw(...args: ErrorThrowArgs<TData>): never;
   /**

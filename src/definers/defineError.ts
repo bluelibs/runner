@@ -89,7 +89,7 @@ export class ErrorHelper<
   get httpCode(): number | undefined {
     return this.definition.httpCode;
   }
-  throw(...args: ErrorThrowArgs<TData>): never {
+  private buildRunnerError(...args: ErrorThrowArgs<TData>): RunnerError<TData> {
     const data = (args[0] ?? ({} as TData)) as TData;
     const parsed = this.definition.dataSchema
       ? this.definition.dataSchema.parse(data)
@@ -100,13 +100,22 @@ export class ErrorHelper<
       typeof this.definition.remediation === "function"
         ? this.definition.remediation(parsed)
         : this.definition.remediation;
-    throw new RunnerError(
+    return new RunnerError(
       this.definition.id,
       message,
       parsed,
       this.definition.httpCode,
       remediation,
     );
+  }
+  ["new"](...args: ErrorThrowArgs<TData>): RunnerError<TData> {
+    return this.buildRunnerError(...args);
+  }
+  create(...args: ErrorThrowArgs<TData>): RunnerError<TData> {
+    return this["new"](...args);
+  }
+  throw(...args: ErrorThrowArgs<TData>): never {
+    throw this.buildRunnerError(...args);
   }
   is(error: unknown): error is RunnerError<TData>;
   is(error: unknown, partialData: Partial<TData>): error is RunnerError<TData>;

@@ -48,6 +48,77 @@ describe("error builder", () => {
     }
   });
 
+  it("new() constructs a typed RunnerError without throwing", () => {
+    const AppError = r
+      .error<{ code: number; message: string }>("tests.errors.new")
+      .httpCode(409)
+      .format((d) => `[${d.code}] ${d.message}`)
+      .remediation((d) => `Resolve conflict for code ${d.code}.`)
+      .build();
+
+    const error = AppError.new({ code: 409, message: "Conflict" });
+
+    expect(error).toBeInstanceOf(RunnerError);
+    expect(error.name).toBe("tests.errors.new");
+    expect(error.id).toBe("tests.errors.new");
+    expect(error.httpCode).toBe(409);
+    expect(error.data).toEqual({ code: 409, message: "Conflict" });
+    expect(error.remediation).toBe("Resolve conflict for code 409.");
+    expect(error.message).toBe(
+      "[409] Conflict\n\nRemediation: Resolve conflict for code 409.",
+    );
+    expect(AppError.is(error)).toBe(true);
+    expect(r.error.is(error)).toBe(true);
+  });
+
+  it("create() is an alias for new()", () => {
+    const AppError = r
+      .error<{ code: number }>("tests.errors.create.alias")
+      .format((d) => `Code ${d.code}`)
+      .build();
+
+    const createdError = AppError.create({ code: 7 });
+
+    expect(createdError).toBeInstanceOf(RunnerError);
+    expect(createdError.id).toBe("tests.errors.create.alias");
+    expect(createdError.message).toBe("Code 7");
+    expect(AppError.is(createdError, { code: 7 })).toBe(true);
+  });
+
+  it("applies dataSchema.parse on new() and create()", () => {
+    const TypedError = r
+      .error<{ code: number; message: string }>("tests.errors.new.schema")
+      .dataSchema({
+        parse(input: unknown) {
+          const d = input as { code: number; message: string };
+          if (typeof d?.code !== "number" || typeof d?.message !== "string") {
+            throw createMessageError("invalid");
+          }
+          return d;
+        },
+      })
+      .build();
+
+    expect(() =>
+      TypedError.new({ code: "x" as any, message: 1 as any }),
+    ).toThrow("invalid");
+    expect(() =>
+      TypedError.create({ code: "x" as any, message: 1 as any }),
+    ).toThrow("invalid");
+  });
+
+  it("allows zero-arg new()/create() when data has no required keys", () => {
+    const OptionalError = r
+      .error<{ code?: number }>("tests.errors.new.optional")
+      .build();
+
+    const fromNew = OptionalError.new();
+    const fromCreate = OptionalError.create();
+
+    expect(fromNew.data).toEqual({});
+    expect(fromCreate.data).toEqual({});
+  });
+
   it("is() narrows unknown to a typed runner error shape", () => {
     const E = r
       .error<{ code: number }>("tests.errors.narrowing")

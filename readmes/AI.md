@@ -396,7 +396,7 @@ For advanced usage, import `Queue` directly and use `on(type, handler)` / `once(
 
 ## Errors
 
-Define typed, namespaced errors with a fluent builder. Built helpers expose `throw` and `is`:
+Define typed, namespaced errors with a fluent builder. Built helpers expose `new`, `create` (alias), `throw`, and `is`:
 
 ```ts
 import { r } from "@bluelibs/runner";
@@ -420,6 +420,12 @@ try {
     // AppError.httpCode -> 400
   }
 }
+
+const error = AppError.new({ code: 400, message: "Oops" });
+throw error;
+
+// Alias:
+throw AppError.create({ code: 400, message: "Oops" });
 ```
 
 - Recommended ids: `{domain}.errors.{PascalCaseName}` (for example: `app.errors.InvalidCredentials`).
@@ -427,6 +433,8 @@ try {
 - `.httpCode(number)` sets an HTTP status for the error helper (must be an integer in `100..599`). The helper exposes `helper.httpCode`, and thrown typed errors expose `error.httpCode`.
 - `.remediation(stringOrFn)` attaches fix-it advice. Accepts a static string or `(data) => string`. When present, `error.message` and `error.toString()` include `\n\nRemediation: <advice>`. The raw advice is also available via `error.remediation`.
 - `message` is not required in the data unless your custom formatter expects it.
+- `helper.new(data)` constructs and returns a typed `RunnerError` without throwing (useful for `throw helper.new(data)` semantics).
+- `helper.create(data)` is an alias for `helper.new(data)`.
 - `helper.is(err, partialData?)` accepts an optional partial data filter and performs shallow strict matching (`===`) on each provided key.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
 - `.throws()` is also available on hooks, task middleware, and resource middleware builders — same semantics.
