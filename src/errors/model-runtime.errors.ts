@@ -29,7 +29,7 @@ export const queueDeadlockError = error<DefaultErrorType>(
   "runner.errors.queue.deadlock",
 )
   .format(
-    () => "Dead‑lock detected: a queued task attempted to queue another task",
+    () => "Deadlock detected: a queued task attempted to queue another task",
   )
   .remediation(
     "Avoid calling queue.run() from within another queued task. If you need to chain tasks, consider using task dependencies or hooks instead.",
@@ -106,6 +106,9 @@ export const unknownMiddlewareTypeError = error<DefaultErrorType>(
     "Ensure you are passing a valid task or resource middleware to interceptMiddleware(). Check that the middleware was created using r.taskMiddleware() or r.resourceMiddleware().",
   )
   .build();
+
+// Clearer alias for interceptMiddleware() error semantics.
+export const middlewareInterceptUnknownTypeError = unknownMiddlewareTypeError;
 
 // DependencyProcessor: Parallel initialization scheduling failure
 export const parallelInitSchedulingError = error<DefaultErrorType>(

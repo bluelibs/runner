@@ -122,7 +122,10 @@ export const tunnelClientContractError = error<
 export const resourceForkInvalidIdError = error<
   { id: string } & DefaultErrorType
 >(RunnerErrorId.ResourceForkInvalidId)
-  .format(({ id }) => `fork(reId) must return a non-empty string for "${id}"`)
+  .format(
+    ({ id }) =>
+      `resourceFork reId() must return a non-empty string for "${id}"`,
+  )
   .remediation(
     "Provide a reId function that always returns a non-empty string for each registered item id.",
   )
@@ -152,11 +155,14 @@ export const overrideUnsupportedBaseError = error<
 export const platformUnreachableError = error<DefaultErrorType>(
   RunnerErrorId.PlatformUnreachable,
 )
-  .format(() => "Unreachable")
+  .format(() => "Platform adapter reached an unreachable branch.")
   .remediation(
     "This indicates an internal control-flow bug. Please report with a minimal reproduction.",
   )
   .build();
+
+// Clearer alias for the same helper; keep original export for compatibility.
+export const platformInvariantError = platformUnreachableError;
 
 export const serializerInvalidPayloadError = error<
   { message: string } & DefaultErrorType
@@ -173,6 +179,9 @@ export const serializerValidationError = error<
   .format(({ message }) => message)
   .remediation("Ensure serializer input satisfies validation constraints.")
   .build();
+
+// Clearer alias for serializer-specific validation semantics.
+export const serializerPayloadValidationError = serializerValidationError;
 
 export const serializerDepthExceededError = error<
   { maxDepth: number } & DefaultErrorType

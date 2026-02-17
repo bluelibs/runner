@@ -59,7 +59,7 @@ describe("Queue", () => {
 
     const deadlock = () => q.run(async () => "nested"); // <-- illegal
 
-    await expect(q.run(deadlock)).rejects.toThrow(/Dead‑lock/);
+    await expect(q.run(deadlock)).rejects.toThrow(/Deadlock/);
   });
 
   it("dispose() drains pending tasks and rejects new ones", async () => {

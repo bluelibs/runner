@@ -85,7 +85,7 @@ describe("error helpers extra branches", () => {
         "Queue has been disposed",
       );
       expect(captureMessage(() => queueDeadlockError.throw({}))).toContain(
-        "Dead‑lock detected",
+        "Deadlock detected",
       );
       expect(
         captureMessage(() =>
@@ -118,7 +118,7 @@ describe("error helpers extra branches", () => {
       ).toContain("Could not schedule pending resources");
       expect(
         captureMessage(() => platformUnreachableError.throw({})),
-      ).toContain("Unreachable");
+      ).toContain("unreachable branch");
       expect(
         captureMessage(() =>
           dashboardApiRequestError.throw({ message: "dashboard failed" }),

@@ -166,7 +166,7 @@ describe("IResource.fork() (deep)", () => {
         register: "deep",
         reId: () => "",
       }),
-    ).toThrow("fork(reId) must return a non-empty string");
+    ).toThrow("resourceFork reId() must return a non-empty string");
   });
 
   it("deep-fork supports register functions", () => {

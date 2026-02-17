@@ -60,19 +60,19 @@ export const circularDependenciesError = error<
   { cycles: string[] } & DefaultErrorType
 >("runner.errors.circularDependencies")
   .format(({ cycles }) => {
-    const cycleDetails = cycles.map((cycle) => `  • ${cycle}`).join("\n");
+    const cycleDetails = cycles.map((cycle) => `  - ${cycle}`).join("\n");
     const hasMiddleware = cycles.some((cycle) => cycle.includes("middleware"));
 
     let guidance = "\n\nTo resolve circular dependencies:";
     guidance +=
-      "\n  • Consider refactoring to reduce coupling between components";
-    guidance += "\n  • Extract shared dependencies into separate resources";
+      "\n  - Consider refactoring to reduce coupling between components";
+    guidance += "\n  - Extract shared dependencies into separate resources";
 
     if (hasMiddleware) {
       guidance +=
-        "\n  • For middleware: you can filter out tasks/resources using everywhere(fn)";
+        "\n  - For middleware: you can filter out tasks/resources using everywhere(fn)";
       guidance +=
-        "\n  • Consider using events for communication instead of direct dependencies";
+        "\n  - Consider using events for communication instead of direct dependencies";
     }
 
     return `Circular dependencies detected:\n${cycleDetails}${guidance}`;
@@ -224,7 +224,7 @@ export const eventCycleError = error<
   { path: Array<{ id: string; source: string }> } & DefaultErrorType
 >("runner.errors.eventCycle")
   .format(({ path }) => {
-    const chain = path.map((p) => `${p.id}←${p.source}`).join("  ->  ");
+    const chain = path.map((p) => `${p.id}<-${p.source}`).join("  ->  ");
     return `Event emission cycle detected:\n  ${chain}\n\nBreak the cycle by changing hook logic (avoid mutual emits) or gate with conditions/tags.`;
   })
   .remediation(
@@ -237,7 +237,7 @@ export const eventEmissionCycleError = error<
   { cycles: string[] } & DefaultErrorType
 >("runner.errors.eventEmissionCycle")
   .format(({ cycles }) => {
-    const list = cycles.map((c) => `  • ${c}`).join("\n");
+    const list = cycles.map((c) => `  - ${c}`).join("\n");
     return `Event emission cycles detected between hooks and events:\n${list}\n\nThis was detected at compile time (dry-run). Break the cycle by avoiding mutual emits between hooks or scoping hooks using tags.`;
   })
   .remediation(
@@ -297,7 +297,7 @@ export const phantomTaskNotRoutedError = error<
   )
   .remediation(
     ({ taskId }) =>
-      `Configure a tunnel client resource to select "${taskId}" so it routes to a remote server. Phantom tasks cannot be executed locally — they only serve as local proxies for remote tasks.`,
+      `Configure a tunnel client resource to select "${taskId}" so it routes to a remote server. Phantom tasks cannot be executed locally - they only serve as local proxies for remote tasks.`,
   )
   .build();
 
@@ -307,7 +307,7 @@ export const taskNotRegisteredError = error<
 >("runner.errors.taskNotRegistered")
   .format(
     ({ taskId }) =>
-      `Task "${taskId}" is not registered in the Store. This is an internal error—ensure the task is registered before execution.`,
+      `Task "${taskId}" is not registered in the Store. This is an internal error-ensure the task is registered before execution.`,
   )
   .remediation(
     ({ taskId }) =>
