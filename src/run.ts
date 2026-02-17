@@ -42,10 +42,12 @@ export async function run<C, V extends Promise<any>>(
     errorBoundary = true,
     shutdownHooks = true,
     dryRun = false,
+    lazy = false,
     onUnhandledError: onUnhandledErrorOpt,
     runtimeEventCycleDetection = true,
     initMode = ResourceInitMode.Sequential,
   } = options || {};
+  const normalizedInitMode = normalizeResourceInitMode(initMode);
 
   const {
     printThreshold = getPlatform().getEnv("NODE_ENV") === "test"
@@ -90,10 +92,13 @@ export async function run<C, V extends Promise<any>>(
     eventManager,
     taskRunner,
     logger,
-    initMode,
+    normalizedInitMode,
+    lazy,
   );
 
-  store.setPreferInitOrderDisposal(initMode === ResourceInitMode.Sequential);
+  store.setPreferInitOrderDisposal(
+    normalizedInitMode === ResourceInitMode.Sequential,
+  );
 
   // We may install shutdown hooks; capture unhook function to remove them on dispose
   let unhookShutdown: (() => void) | undefined;
@@ -158,6 +163,12 @@ export async function run<C, V extends Promise<any>>(
     // Now we can initialise the root resource
     await processor.initializeRoot();
 
+    const startupUnusedResourceIds = new Set<string>(
+      Array.from(store.resources.values())
+        .filter((resource) => !resource.isInitialized)
+        .map((resource) => resource.resource.id),
+    );
+
     // disallow manipulation or attaching more
     store.lock();
     eventManager.lock();
@@ -178,6 +189,14 @@ export async function run<C, V extends Promise<any>>(
       eventManager,
       taskRunner,
       disposeAll,
+      {
+        lazyMode: lazy,
+        startupUnusedResourceIds,
+        lazyResourceLoader: async (resourceId: string) => {
+          const resource = store.resources.get(resourceId)!.resource;
+          return processor.extractResourceDependency(resource);
+        },
+      },
     );
   } catch (err) {
     // Rollback initialized resources
@@ -204,4 +223,13 @@ function extractResourceAndConfig<C, V extends Promise<any>>(
     config = undefined;
   }
   return { resource, config };
+}
+
+function normalizeResourceInitMode(
+  mode: ResourceInitMode | "sequential" | "parallel",
+): ResourceInitMode {
+  if (mode === ResourceInitMode.Parallel) {
+    return ResourceInitMode.Parallel;
+  }
+  return ResourceInitMode.Sequential;
 }

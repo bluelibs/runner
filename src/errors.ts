@@ -110,6 +110,20 @@ export const resourceNotFoundError = error<{ id: string } & DefaultErrorType>(
   )
   .build();
 
+// Lazy resource sync access blocked
+export const lazyResourceSyncAccessError = error<
+  { id: string } & DefaultErrorType
+>("runner.errors.lazyResourceSyncAccess")
+  .format(
+    ({ id }) =>
+      `Resource "${id.toString()}" was not used during startup and cannot be read via getResourceValue() in lazy mode.`,
+  )
+  .remediation(
+    ({ id }) =>
+      `Use await runResult.getLazyResourceValue("${id.toString()}") to initialize and read this resource on demand, or disable lazy mode in run(..., { lazy: false }).`,
+  )
+  .build();
+
 // Middleware not registered
 export const middlewareNotRegisteredError = error<
   {

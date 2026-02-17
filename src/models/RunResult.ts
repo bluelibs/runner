@@ -11,6 +11,13 @@ import { EventManager } from "./EventManager";
 import { Logger } from "./Logger";
 import { Store } from "./Store";
 import { TaskRunner } from "./TaskRunner";
+import { lazyResourceSyncAccessError } from "../errors";
+
+type RunResultLazyOptions = {
+  lazyMode?: boolean;
+  startupUnusedResourceIds?: ReadonlySet<string>;
+  lazyResourceLoader?: (resourceId: string) => Promise<unknown>;
+};
 
 export class RunResult<V> {
   #disposed = false;
@@ -24,6 +31,7 @@ export class RunResult<V> {
     private readonly eventManager: EventManager,
     private readonly taskRunner: TaskRunner,
     private readonly disposeFn: () => Promise<void>,
+    private readonly lazyOptions: RunResultLazyOptions = {},
   ) {}
 
   private ensureRuntimeIsActive() {
@@ -106,12 +114,39 @@ export class RunResult<V> {
   ): Output extends Promise<infer U> ? U : Output => {
     this.ensureRuntimeIsActive();
 
-    const resourceId = typeof resource === "string" ? resource : resource.id;
+    const resourceId = this.getResourceId(resource);
+    if (!this.store.resources.has(resourceId)) {
+      throw new Error(`Resource "${resourceId}" not found.`);
+    }
+    if (
+      this.lazyOptions.lazyMode &&
+      this.lazyOptions.startupUnusedResourceIds?.has(resourceId)
+    ) {
+      lazyResourceSyncAccessError.throw({ id: resourceId });
+    }
+
+    return this.store.resources.get(resourceId)!.value;
+  };
+
+  /**
+   * Initializes and returns the value of a resource on-demand.
+   */
+  public getLazyResourceValue = async <Output extends Promise<any>>(
+    resource: string | IResource<any, Output, any, any, any>,
+  ): Promise<Output extends Promise<infer U> ? U : Output> => {
+    this.ensureRuntimeIsActive();
+
+    const resourceId = this.getResourceId(resource);
     if (!this.store.resources.has(resourceId)) {
       throw new Error(`Resource "${resourceId}" not found.`);
     }
 
-    return this.store.resources.get(resourceId)!.value;
+    if (!this.lazyOptions.lazyResourceLoader) {
+      return this.store.resources.get(resourceId)!.value;
+    }
+
+    const value = await this.lazyOptions.lazyResourceLoader(resourceId);
+    return value as Output extends Promise<infer U> ? U : Output;
   };
 
   /**
@@ -131,6 +166,12 @@ export class RunResult<V> {
 
     return this.store.resources.get(resourceId)!.config;
   };
+
+  private getResourceId(
+    resource: string | IResource<any, any, any, any, any>,
+  ): string {
+    return typeof resource === "string" ? resource : resource.id;
+  }
 
   public dispose = () => {
     if (this.#disposed) {

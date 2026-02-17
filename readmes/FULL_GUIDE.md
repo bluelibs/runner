@@ -2492,6 +2492,7 @@ await result.dispose();
 | `runTask(...)`          | Run a task by reference or string id                               |
 | `emitEvent(...)`        | Emit events (supports `failureMode: "fail-fast" \| "aggregate"`, `throwOnError`, `report`) |
 | `getResourceValue(...)` | Read a resource's value                                            |
+| `getLazyResourceValue(...)` | Initialize/read a resource on demand (useful with `lazy: true`) |
 | `getResourceConfig(...)` | Read a resource's resolved config                                  |
 | `logger`                | Logger instance                                                    |
 | `store`                 | Runtime store with registered resources, tasks, middleware, events |
@@ -2509,6 +2510,8 @@ Pass as the second argument to `run(app, options)`.
 | `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                            |
 | `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                 |
 | `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                          |
+| `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. Access these via `await result.getLazyResourceValue(...)`. In lazy mode, `getResourceValue(...)` throws for startup-unused resources. |
+| `initMode`                   | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup scheduling strategy. Use string values directly (for example `initMode: "parallel"`), no enum import required.                                                                       |
 | `runtimeEventCycleDetection` | `boolean`                                       | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                  |
 | `mode`                       | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                             |
 
@@ -2545,6 +2548,13 @@ await run(app, { debug: "verbose", logs: { printStrategy: "json-pretty" } });
 
 ```ts
 await run(app, { dryRun: true });
+```
+
+- Lazy startup + explicit on-demand resource init:
+
+```ts
+const runtime = await run(app, { lazy: true, initMode: "parallel" });
+const db = await runtime.getLazyResourceValue("app.db");
 ```
 
 - Custom process error routing:
@@ -6463,9 +6473,10 @@ flowchart TD
 
 1. **Leaf resources first** — resources with no dependencies initialize first
 2. **Dependent resources after** — each resource waits for its dependencies
-3. **Initialization strategy** — sequential by default, or parallel for dependency-ready branches when using `run(app, { initMode: "parallel" })`
-4. **Middleware registration** — happens after resources are available
-5. **Ready event** — signals all initialization complete
+3. **Initialization strategy** — sequential by default, or parallel for dependency-ready branches when using `run(app, { initMode: "parallel" })` (string literal is supported)
+4. **Lazy startup (optional)** — with `run(app, { lazy: true })`, startup skips resources that are unused during bootstrap; initialize them on-demand with `await runtime.getLazyResourceValue(...)`
+5. **Middleware registration** — happens after resources are available
+6. **Ready event** — signals all initialization complete
 
 **Example dependency resolution:**
 

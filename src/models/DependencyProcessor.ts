@@ -39,6 +39,7 @@ export class DependencyProcessor {
   protected readonly resourceInitializer: ResourceInitializer;
   protected readonly logger!: Logger;
   protected readonly initMode: ResourceInitMode;
+  protected readonly lazy: boolean;
   private readonly pendingHookEvents = new Map<string, IEventEmission<any>[]>();
   private readonly drainingHookIds = new Set<string>();
   private readonly inFlightResourceInitializations = new Map<
@@ -52,9 +53,11 @@ export class DependencyProcessor {
     protected readonly taskRunner: TaskRunner,
     logger: Logger,
     initMode: ResourceInitMode = ResourceInitMode.Sequential,
+    lazy = false,
   ) {
     this.logger = logger.with({ source: "dependencyProcessor" });
     this.initMode = initMode;
+    this.lazy = lazy;
     this.resourceInitializer = new ResourceInitializer(
       store,
       eventManager,
@@ -74,9 +77,9 @@ export class DependencyProcessor {
     // events; hooks must be dependency-ready before that happens.
     await this.computeHookDependencies();
 
-    if (this.initMode === ResourceInitMode.Parallel) {
+    if (!this.lazy && this.initMode === ResourceInitMode.Parallel) {
       await this.initializeUninitializedResourcesParallel();
-    } else {
+    } else if (!this.lazy) {
       for (const resource of this.store.resources.values()) {
         await this.processResourceDependencies(resource);
       }

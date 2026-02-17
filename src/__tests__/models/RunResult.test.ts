@@ -49,6 +49,7 @@ describe("RunResult", () => {
     expect(typeof r.runTask).toBe("function");
     expect(typeof r.emitEvent).toBe("function");
     expect(typeof r.getResourceValue).toBe("function");
+    expect(typeof r.getLazyResourceValue).toBe("function");
     expect(typeof r.getResourceConfig).toBe("function");
     expect(r.logger).toBeDefined();
 
@@ -182,7 +183,65 @@ describe("RunResult", () => {
     expect(() => r.getResourceConfig("nope.res")).toThrow(
       'Resource "nope.res" not found.',
     );
+    await expect(r.getLazyResourceValue("nope.res")).rejects.toThrow(
+      'Resource "nope.res" not found.',
+    );
 
     await r.dispose();
+  });
+
+  it("supports explicit lazy resource access and blocks getResourceValue for startup-unused resources", async () => {
+    const lazyInit = jest.fn(async () => ({ lazy: true }));
+    const lazyOnly = defineResource({
+      id: "rr.lazy.only",
+      init: lazyInit,
+    });
+
+    const app = defineResource({
+      id: "rr.lazy.app",
+      register: [lazyOnly],
+      async init() {
+        return "ready";
+      },
+    });
+
+    const runtime = await run(app, { lazy: true, shutdownHooks: false });
+    expect(lazyInit).toHaveBeenCalledTimes(0);
+
+    expect(() => runtime.getResourceValue(lazyOnly)).toThrow(
+      /getLazyResourceValue/,
+    );
+
+    const lazyValue = await runtime.getLazyResourceValue(lazyOnly);
+    expect(lazyValue).toEqual({ lazy: true });
+    expect(lazyInit).toHaveBeenCalledTimes(1);
+
+    // strict lazy mode policy: direct sync access remains blocked for startup-unused resources
+    expect(() => runtime.getResourceValue(lazyOnly)).toThrow(
+      /getLazyResourceValue/,
+    );
+
+    await runtime.dispose();
+  });
+
+  it("returns stored value for getLazyResourceValue when runtime has no lazy loader", async () => {
+    const only = defineResource({
+      id: "rr.lazy.dryrun.only",
+      async init() {
+        return "ready";
+      },
+    });
+    const app = defineResource({
+      id: "rr.lazy.dryrun.app",
+      register: [only],
+      async init() {
+        return "app";
+      },
+    });
+
+    const runtime = await run(app, { dryRun: true, shutdownHooks: false });
+    const value = await runtime.getLazyResourceValue(only);
+    expect(value).toBeUndefined();
+    await runtime.dispose();
   });
 });

@@ -54,10 +54,16 @@ export type RunOptions = {
    */
   runtimeEventCycleDetection?: boolean;
   /**
+   * Defaults to false.
+   * When true, startup skips initializing resources that are not used during bootstrap.
+   * Such resources can be initialized on-demand via `runResult.getLazyResourceValue(...)`.
+   */
+  lazy?: boolean;
+  /**
    * Defaults to `sequential`.
    * Controls how resources are initialized during startup.
    */
-  initMode?: ResourceInitMode;
+  initMode?: ResourceInitMode | "sequential" | "parallel";
   /**
    * Specify in which mode to run "dev", "prod" or "test".
    * If inside Node this is automatically detected from the NODE_ENV environment variable if not provided.

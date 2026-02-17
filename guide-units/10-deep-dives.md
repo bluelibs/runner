@@ -80,9 +80,10 @@ flowchart TD
 
 1. **Leaf resources first** — resources with no dependencies initialize first
 2. **Dependent resources after** — each resource waits for its dependencies
-3. **Initialization strategy** — sequential by default, or parallel for dependency-ready branches when using `run(app, { initMode: "parallel" })`
-4. **Middleware registration** — happens after resources are available
-5. **Ready event** — signals all initialization complete
+3. **Initialization strategy** — sequential by default, or parallel for dependency-ready branches when using `run(app, { initMode: "parallel" })` (string literal is supported)
+4. **Lazy startup (optional)** — with `run(app, { lazy: true })`, startup skips resources that are unused during bootstrap; initialize them on-demand with `await runtime.getLazyResourceValue(...)`
+5. **Middleware registration** — happens after resources are available
+6. **Ready event** — signals all initialization complete
 
 **Example dependency resolution:**
 
