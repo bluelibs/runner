@@ -1,9 +1,9 @@
 import { defineTag } from "../define";
 import { debugTag } from "./resources/debug/debug.tag";
 import { tunnelTag } from "./resources/tunnel/tunnel.tag";
-import { tunnelPolicyTag } from "./resources/tunnel/tunnel.policy.tag";
+import { tunnelTaskPolicyTag } from "./resources/tunnel/tunnel.policy.tag";
 
-export const globalTags = {
+const globalTagsBase = {
   system: defineTag<{
     metadata?: Record<string, any>;
   }>({
@@ -26,7 +26,7 @@ export const globalTags = {
   }),
   debug: debugTag,
   tunnel: tunnelTag,
-  tunnelPolicy: tunnelPolicyTag,
+  tunnelTaskPolicy: tunnelTaskPolicyTag,
   authValidator: defineTag({
     id: "globals.tags.authValidator",
     meta: {
@@ -36,3 +36,16 @@ export const globalTags = {
     },
   }),
 };
+
+type GlobalTags = typeof globalTagsBase & {
+  /** @deprecated Use globals.tags.tunnelTaskPolicy instead. */
+  tunnelPolicy: typeof tunnelTaskPolicyTag;
+};
+
+export const globalTags = globalTagsBase as GlobalTags;
+
+Object.defineProperty(globalTags, "tunnelPolicy", {
+  get: () => globalTags.tunnelTaskPolicy,
+  enumerable: false,
+  configurable: false,
+});

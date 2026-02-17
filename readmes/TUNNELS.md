@@ -365,7 +365,7 @@ Tunnel resources can route events with `emit`.
 ## Tunnel Middleware Policy
 
 By default, caller-side task middleware is skipped for tunneled tasks.
-Use `globals.tags.tunnelPolicy` to allow selected caller middleware.
+Use `globals.tags.tunnelTaskPolicy` to allow selected caller middleware.
 
 ```ts
 import { r, globals } from "@bluelibs/runner";
@@ -373,7 +373,7 @@ import { r, globals } from "@bluelibs/runner";
 const riskyTask = r
   .task("app.tasks.risky")
   .tags([
-    globals.tags.tunnelPolicy.with({
+    globals.tags.tunnelTaskPolicy.with({
       client: { middlewareAllowList: ["app.middleware.task.auth"] },
     }),
   ])

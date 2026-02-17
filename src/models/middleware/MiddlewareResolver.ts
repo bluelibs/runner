@@ -70,13 +70,13 @@ export class MiddlewareResolver {
 
     // Tunneled tasks skip caller-side middleware by default.
     // Only explicitly allowlisted middleware runs locally.
-    if (!globalTags.tunnelPolicy.exists(tDef)) {
+    if (!globalTags.tunnelTaskPolicy.exists(tDef)) {
       return [];
     }
 
     // Use the Store definition to avoid relying on object-identity.
     // Consumers can pass a different task object with the same id.
-    const cfg = globalTags.tunnelPolicy.extract(tDef) as
+    const cfg = globalTags.tunnelTaskPolicy.extract(tDef) as
       | TunnelTaskMiddlewarePolicyConfig
       | undefined;
     const clientAllowList = getClientMiddlewareAllowList(cfg);
