@@ -202,14 +202,14 @@ export class RunResult<V> implements IRuntime<V> {
    * // Run with options for journal forwarding
    * const result = await runtime.runTask(greet, undefined, { journal });
    */
-  public runTask<TTask extends ITask<any, Promise<any>, any> | string>(
+  public runTask = <TTask extends ITask<any, Promise<any>, any> | string>(
     task: TTask,
     ...args: TTask extends ITask<infer I, any, any>
       ? I extends undefined | void
         ? [input?: I, options?: TaskCallOptions]
         : [input: I, options?: TaskCallOptions]
       : [input?: unknown, options?: TaskCallOptions]
-  ): TTask extends ITask<any, infer O, any> ? O : Promise<any> {
+  ): TTask extends ITask<any, infer O, any> ? O : Promise<any> => {
     this.ensureRuntimeIsActive();
     const [input, options] = args as [unknown, TaskCallOptions | undefined];
     let resolvedTask: ITask<any, Promise<any>, any>;
@@ -229,7 +229,7 @@ export class RunResult<V> implements IRuntime<V> {
       input,
       options,
     ) as TTask extends ITask<any, infer O, any> ? O : Promise<any>;
-  }
+  };
 
   /**
    * Emits an event to trigger all registered hooks listening for it.
