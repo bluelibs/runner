@@ -364,9 +364,12 @@ describe("createHttpSmartClient (unit)", () => {
         sink.setTimeout = () => sink;
         sink.destroy = () => undefined;
         // verify header passed
-        expect(
-          String(((opts as http.RequestOptions).headers || {})["x-token"]),
-        ).toBe("secret");
+        const token = (
+          (opts as http.RequestOptions).headers as
+            | http.OutgoingHttpHeaders
+            | undefined
+        )?.["x-token"];
+        expect(String(token)).toBe("secret");
         return sink;
       }) as any;
     const c = createHttpSmartClient({
