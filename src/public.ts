@@ -37,6 +37,7 @@ const globals = {
   events: globalEvents,
   resources: globalResources,
   middleware: globalMiddlewares,
+  middlewares: globalMiddlewares, // Some people prefer this forced plural, for consistency
   tags: globalTags,
   tunnels,
   debug,
