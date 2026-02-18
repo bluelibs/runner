@@ -1,5 +1,4 @@
 import { globals, r } from "../../public";
-import { CronOnError } from "../../globals/types";
 import { run } from "../../run";
 
 describe("global cron resource (additional)", () => {
@@ -65,41 +64,6 @@ describe("global cron resource (additional)", () => {
     await runtime.dispose();
   });
 
-  it("ignores already-stopped task executions when an orphaned callback runs", async () => {
-    let attempts = 0;
-
-    const clearTimeoutSpy = jest
-      .spyOn(globalThis, "clearTimeout")
-      .mockImplementation(() => undefined);
-
-    const stopTask = r
-      .task("app.tasks.stop-guard")
-      .tags([
-        globals.tags.cron.with({
-          expression: "* * * * *",
-          immediate: true,
-          onError: CronOnError.Stop,
-        }),
-      ])
-      .run(async () => {
-        attempts += 1;
-        throw new Error("planned stop");
-      })
-      .build();
-
-    const app = r.resource("app").register([stopTask]).build();
-    const runtime = await run(app);
-
-    await flushMicrotasks();
-    jest.advanceTimersByTime(60_000);
-    await flushMicrotasks();
-
-    expect(clearTimeoutSpy).toHaveBeenCalled();
-    expect(attempts).toBe(1);
-
-    await runtime.dispose();
-  });
-
   it("fails when a task declares multiple cron tags", async () => {
     const duplicateCronTask = r
       .task("app.tasks.duplicate-cron")
@@ -128,10 +92,17 @@ describe("global cron resource (additional)", () => {
   });
 
   it("cleans up schedules on dispose", async () => {
+    let attempts = 0;
+    const clearTimeoutSpy = jest
+      .spyOn(globalThis, "clearTimeout")
+      .mockImplementation(() => undefined);
+
     const scheduledTask = r
       .task("app.tasks.cleanup")
       .tags([globals.tags.cron.with({ expression: "* * * * *" })])
-      .run(async () => undefined)
+      .run(async () => {
+        attempts += 1;
+      })
       .build();
 
     const app = r.resource("app").register([scheduledTask]).build();
@@ -141,6 +112,12 @@ describe("global cron resource (additional)", () => {
     expect(cron.schedules.size).toBe(1);
     await runtime.dispose();
     expect(cron.schedules.size).toBe(0);
+
+    jest.advanceTimersByTime(60_000);
+    await flushMicrotasks();
+
+    expect(clearTimeoutSpy).toHaveBeenCalled();
+    expect(attempts).toBe(0);
   });
 
   it("suppresses all log output when silent is true", async () => {
@@ -214,5 +191,86 @@ describe("global cron resource (additional)", () => {
 
     await runtime.dispose();
     logSpy.mockRestore();
+  });
+
+  it("runs immediate tasks once per interval after startup", async () => {
+    let runs = 0;
+
+    const immediateTask = r
+      .task("app.tasks.immediate-single-stream")
+      .tags([
+        globals.tags.cron.with({
+          expression: "* * * * *",
+          immediate: true,
+        }),
+      ])
+      .run(async () => {
+        runs += 1;
+      })
+      .build();
+
+    const app = r.resource("app").register([immediateTask]).build();
+    const runtime = await run(app);
+
+    await flushMicrotasks();
+    expect(runs).toBe(1);
+
+    jest.advanceTimersByTime(60_000);
+    await flushMicrotasks();
+    expect(runs).toBe(2);
+
+    jest.advanceTimersByTime(60_000);
+    await flushMicrotasks();
+    expect(runs).toBe(3);
+
+    await runtime.dispose();
+  });
+
+  it("schedules multiple cron tasks independently", async () => {
+    let immediateRuns = 0;
+    let regularRuns = 0;
+
+    const immediateTask = r
+      .task("app.tasks.multi.immediate")
+      .tags([
+        globals.tags.cron.with({
+          expression: "* * * * *",
+          immediate: true,
+        }),
+      ])
+      .run(async () => {
+        immediateRuns += 1;
+      })
+      .build();
+
+    const regularTask = r
+      .task("app.tasks.multi.regular")
+      .tags([globals.tags.cron.with({ expression: "* * * * *" })])
+      .run(async () => {
+        regularRuns += 1;
+      })
+      .build();
+
+    const app = r
+      .resource("app")
+      .register([immediateTask, regularTask])
+      .build();
+    const runtime = await run(app);
+
+    await flushMicrotasks();
+    expect(immediateRuns).toBe(1);
+    expect(regularRuns).toBe(0);
+
+    jest.advanceTimersByTime(60_000);
+    await flushMicrotasks();
+    expect(immediateRuns).toBe(2);
+    expect(regularRuns).toBe(1);
+
+    jest.advanceTimersByTime(60_000);
+    await flushMicrotasks();
+    expect(immediateRuns).toBe(3);
+    expect(regularRuns).toBe(2);
+
+    await runtime.dispose();
   });
 });

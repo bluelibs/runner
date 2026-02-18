@@ -56,6 +56,11 @@ export const cronResource = defineResource<
         return;
       }
 
+      if (taskState.timer) {
+        clearTimeout(taskState.timer);
+        taskState.timer = undefined;
+      }
+
       const nextRunAt = CronParser.getNextRun(
         taskState.config.expression,
         from,
@@ -181,9 +186,9 @@ export const cronResource = defineResource<
 
       if (config.immediate) {
         void executeTask(taskState);
+      } else {
+        scheduleNext(taskState, new Date());
       }
-
-      scheduleNext(taskState, new Date());
     }
 
     const toPublicState = (
