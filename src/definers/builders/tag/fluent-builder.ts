@@ -26,6 +26,10 @@ export function makeTagBuilder<TConfig, TEnforceIn, TEnforceOut>(
       return makeTagBuilder(next);
     },
 
+    schema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
+      return builder.configSchema(schema);
+    },
+
     config<TNewConfig>(config: TNewConfig) {
       const next = clone(state, { config }) as BuilderState<
         TNewConfig,

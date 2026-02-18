@@ -178,6 +178,7 @@ const requestHandler = r
 
     // Create a contextual logger with bound metadata with source and context
     const requestLogger = logger.with({
+      // Logger already comes with the source set. You can override it or add more context as needed.
       source: requestHandler.id,
       additionalContext: {
         requestId: request.requestId,

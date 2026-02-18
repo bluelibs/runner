@@ -1,4 +1,7 @@
-import { validationError } from "../../errors";
+import {
+  inputSchemaValidationError,
+  resultSchemaValidationError,
+} from "../../errors";
 import type { IValidationSchema } from "../../defs";
 import { normalizeError } from "../../globals/resources/tunnel/error-utils";
 
@@ -22,7 +25,7 @@ export class ValidationHelper {
     try {
       return schema.parse(value);
     } catch (error) {
-      return validationError.throw({
+      return inputSchemaValidationError.throw({
         subject: `${type} input`,
         id,
         originalError: normalizeError(error),
@@ -45,7 +48,7 @@ export class ValidationHelper {
     try {
       return schema.parse(value);
     } catch (error) {
-      return validationError.throw({
+      return resultSchemaValidationError.throw({
         subject: `${type} result`,
         id,
         originalError: normalizeError(error),

@@ -138,6 +138,21 @@ export interface ResourceFluentBuilder<
     TMiddleware
   >;
 
+  /**
+   * Alias for configSchema. Use this to define the resource configuration validation contract.
+   */
+  schema<TNewConfig>(
+    schema: IValidationSchema<TNewConfig>,
+  ): ResourceFluentBuilder<
+    TNewConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+
   resultSchema<TResolved>(
     schema: IValidationSchema<TResolved>,
   ): ResourceFluentBuilder<

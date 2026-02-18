@@ -13,7 +13,7 @@ import {
   dependencyNotFoundError,
   unknownItemTypeError,
   eventNotFoundError,
-  circularDependenciesError,
+  circularDependencyError,
   lockedError,
   storeAlreadyInitializedError,
   validationError,
@@ -392,7 +392,7 @@ describe("Errors", () => {
       expect(unknownItemTypeError.is(unk)).toBe(true);
 
       const cyc = capture(() =>
-        circularDependenciesError.throw({ cycles: ["a->b->a"] }),
+        circularDependencyError.throw({ cycles: ["a->b->a"] }),
       );
       expect(cyc.message).toContain("Circular dependencies detected");
 

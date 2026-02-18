@@ -68,8 +68,13 @@ export class DependencyExtractor {
     const object = {} as DependencyValuesType<T>;
 
     for (const key in map) {
+      const dependency = map[key];
+      if (dependency === undefined) {
+        continue;
+      }
+
       try {
-        object[key] = await this.extractDependency(map[key], source);
+        object[key] = await this.extractDependency(dependency, source);
         const val = object[key] as unknown;
         if (val instanceof Logger) {
           (object as Record<string, unknown>)[key] = val.with({ source });

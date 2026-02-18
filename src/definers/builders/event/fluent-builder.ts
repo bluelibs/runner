@@ -28,6 +28,10 @@ export function makeEventBuilder<TPayload>(
       return makeEventBuilder<TNew>(next);
     },
 
+    schema<TNew>(schema: IValidationSchema<TNew>) {
+      return builder.payloadSchema(schema);
+    },
+
     tags<TNewTags extends TagType[]>(
       t: TNewTags,
       options?: { override?: boolean },
@@ -37,6 +41,11 @@ export function makeEventBuilder<TPayload>(
         tags: mergeArray(state.tags, t, override) as TagType[],
       });
       return makeEventBuilder<TPayload>(next);
+    },
+
+    throws(_list) {
+      // Throws is only for documentation on and Event, because events themselves don't throw.
+      return builder;
     },
 
     meta<TNewMeta extends IEventMeta>(m: TNewMeta) {

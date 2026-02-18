@@ -444,6 +444,50 @@ Best practices:
 
 > **runtime:** "Timeouts: you tie a kitchen timer to my ankle and yell 'hustle.' When the bell rings, you throw a `TimeoutError` like a penalty flag. It's not me, it's your molasses‑flavored endpoint. I just blow the whistle."
 
+---
+
+## Cron Scheduling
+
+Need recurring task execution without bringing in a separate scheduler process? Runner ships with a built-in global cron scheduler.
+
+You mark tasks with `globals.tags.cron.with({...})`, and `globals.resources.cron` discovers and schedules them at startup. The cron resource is registered by default, so there is no extra bootstrap wiring needed.
+
+```typescript
+import { r, globals } from "@bluelibs/runner";
+
+const sendDigest = r
+  .task("app.tasks.sendDigest")
+  .tags([
+    globals.tags.cron.with({
+      expression: "0 9 * * *",
+      timezone: "UTC",
+      immediate: false,
+      onError: "continue",
+    }),
+  ])
+  .run(async () => {
+    // send digest
+  })
+  .build();
+
+const app = r.resource("app").register([sendDigest]).build();
+```
+
+Cron options:
+
+- `expression` (required): 5-field cron expression.
+- `input`: static input payload used for each run.
+- `timezone`: timezone for parser evaluation.
+- `immediate`: run once immediately on startup, then continue schedule.
+- `enabled`: set to `false` to disable scheduling without removing the tag.
+- `onError`: `"continue"` (default) or `"stop"` for that schedule.
+
+Operational notes:
+
+- One cron tag per task is supported. If you need multiple schedules, fork the task and tag each fork.
+- Scheduler uses `setTimeout` chaining, which keeps it portable across supported runtimes.
+- Startup and execution lifecycle messages are emitted via `globals.resources.logger`.
+
 ## Concurrency Utilities
 
 Runner includes two battle-tested primitives for managing concurrent operations:
@@ -469,12 +513,12 @@ Imagine this: Your API has a rate limit of 100 requests/second, but 1,000 users 
 
 ### When to use Semaphore
 
-| Use case | Why Semaphore helps |
-|----------|---------------------|
-| API rate limiting | Prevents 429 errors by throttling requests |
-| Database connection pools | Keeps you within pool size limits |
-| Heavy CPU tasks | Prevents memory/CPU exhaustion |
-| Third-party service limits | Respects external service quotas |
+| Use case                   | Why Semaphore helps                        |
+| -------------------------- | ------------------------------------------ |
+| API rate limiting          | Prevents 429 errors by throttling requests |
+| Database connection pools  | Keeps you within pool size limits          |
+| Heavy CPU tasks            | Prevents memory/CPU exhaustion             |
+| Third-party service limits | Respects external service quotas           |
 
 ### Basic usage
 
@@ -599,12 +643,12 @@ Picture this: Two users register at the same time, and your code writes their da
 
 ### When to use Queue
 
-| Use case | Why Queue helps |
-|----------|-----------------|
-| File system writes | Prevents file corruption from concurrent access |
-| Sequential API calls | Maintains request ordering |
-| Database migrations | Ensures schema changes apply in order |
-| Audit logs | Guarantees chronological ordering |
+| Use case             | Why Queue helps                                 |
+| -------------------- | ----------------------------------------------- |
+| File system writes   | Prevents file corruption from concurrent access |
+| Sequential API calls | Maintains request ordering                      |
+| Database migrations  | Ensures schema changes apply in order           |
+| Audit logs           | Guarantees chronological ordering               |
 
 ### Basic usage
 

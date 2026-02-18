@@ -56,7 +56,7 @@ export const contextError = error<{ details?: string } & DefaultErrorType>(
   .build();
 
 // Circular dependencies
-export const circularDependenciesError = error<
+export const circularDependencyError = error<
   { cycles: string[] } & DefaultErrorType
 >("runner.errors.circularDependencies")
   .format(({ cycles }) => {
@@ -81,6 +81,12 @@ export const circularDependenciesError = error<
     "Break the cycle by extracting shared state into a new resource that both sides depend on, or use events for indirect communication.",
   )
   .build();
+
+/** @deprecated Use circularDependencyError instead. */
+export const circularDependenciesError = circularDependencyError;
+
+/** @deprecated Use circularDependencyError instead. */
+export const dependencyCycleError = circularDependencyError;
 
 // Event not found
 export const eventNotFoundError = error<{ id: string } & DefaultErrorType>(
@@ -191,7 +197,7 @@ export const storeAlreadyInitializedError = error<DefaultErrorType>(
   )
   .build();
 
-// Validation error
+// Validation error (input, result, config)
 export const validationError = error<
   {
     subject: string;
@@ -218,6 +224,11 @@ export const validationError = error<
     return `Check the ${subject} passed to "${id.toString()}". Ensure it matches the schema defined via .${schemaHint}().`;
   })
   .build();
+
+/** Canonical error for input validation failures */
+export const inputSchemaValidationError = validationError;
+/** Canonical error for result validation failures */
+export const resultSchemaValidationError = validationError;
 
 // Event cycle (runtime)
 export const eventCycleError = error<

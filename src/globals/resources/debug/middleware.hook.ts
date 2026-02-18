@@ -1,5 +1,6 @@
 import { defineResource } from "../../../define";
-import { globalResources } from "../../globalResources";
+import { loggerResource as logger } from "../logger.resource";
+import { middlewareManagerResource as middlewareManager } from "../middlewareManager.resource";
 import { globalTags } from "../../globalTags";
 import { getConfig } from "./types";
 import { debugConfig } from "./debugConfig.resource";
@@ -17,9 +18,9 @@ export const middlewareInterceptorResource = defineResource({
   },
   tags: [globalTags.system],
   dependencies: {
-    logger: globalResources.logger,
+    logger,
     debugConfig,
-    middlewareManager: globalResources.middlewareManager,
+    middlewareManager,
   },
   init: async (event, deps) => {
     const { logger, debugConfig, middlewareManager } = deps;

@@ -12,3 +12,5 @@ export function clone<TConfig, TEnforceIn, TEnforceOut, TNextConfig = TConfig>(
     ...patch,
   });
 }
+
+export { mergeArray } from "../shared/mergeUtils";

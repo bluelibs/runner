@@ -37,6 +37,8 @@ import { nodeExposure } from "@bluelibs/runner/node";
 const server = r
   .resource<{ port: number }>("app.server")
   .context(() => ({ app: express() }))
+  // .schema is an alias for .configSchema / .inputSchema / .payloadSchema etc.
+  .schema(z.object({ port: z.number().default(3000) }))
   .init(async ({ port }, _deps, ctx) => {
     ctx.app.use(express.json());
     const listener = ctx.app.listen(port);
@@ -48,7 +50,7 @@ const server = r
 const createUser = r
   .task("app.tasks.createUser")
   .dependencies({ logger: globals.resources.logger })
-  .inputSchema<{ name: string }>({ parse: (value) => value })
+  .schema<{ name: string }>({ parse: (value) => value })
   .resultSchema<{ id: string; name: string }>({ parse: (value) => value })
   .run(async (input, { logger }) => {
     await logger.info(`Creating user ${input.name}`);
@@ -85,7 +87,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 
 - `.with(config)` exists on configurable built definitions (for example resources, task/resource middleware, and tags). Fluent builders use chained methods plus `.build()`.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` creates a new resource with a different id but the same definition. Use `register: "drop"` to avoid re-registering nested items, or `register: "deep"` to deep-fork **registered resources** with new ids via `reId` (other registerables are not kept; resource dependencies pointing to deep-forked resources are remapped to those forks). Export forked resources to use as dependencies.
-- `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object with helpers such as `runTask`, `getResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
+- `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
 
 ### Resource Forking
@@ -105,7 +107,7 @@ import { r } from "@bluelibs/runner";
 // Assuming: userService, loggingMiddleware, and tracingMiddleware are defined elsewhere
 const sendEmail = r
   .task("app.tasks.sendEmail")
-  .inputSchema<{ to: string; subject: string; body: string }>({
+  .schema<{ to: string; subject: string; body: string }>({
     parse: (value) => value,
   })
   .dependencies({ emailer: userService })
@@ -122,8 +124,11 @@ const sendEmail = r
 - `.dependencies()` accepts a literal map or function `(config) => deps`; appends (shallow-merge) by default
 - `.middleware()` appends by default
 - `.tags()` appends by default
+- `.schema()` is a unified alias for `inputSchema`, `configSchema`, `payloadSchema`, and `dataSchema` (errors).
+- For tasks, `.schema()` maps to `inputSchema` only; keep output validation explicit with `.resultSchema()`.
 - Pass `{ override: true }` to any of these methods to replace instead of append
 - Provide result validation with `.resultSchema()` when the function returns structured data
+- All builders support `.meta({ ... })` for documentation and tooling metadata.
 
 ## Events and Hooks
 
@@ -328,6 +333,44 @@ const getUser = r
   .build();
 ```
 
+## Cron Scheduling
+
+Use `globals.tags.cron` to schedule tasks with cron expressions. The scheduler lives in `globals.resources.cron` and is registered by default, so tagged tasks begin scheduling automatically at runtime startup.
+
+```ts
+import { r, globals } from "@bluelibs/runner";
+
+const cleanupTask = r
+  .task("app.tasks.cleanup")
+  .tags([
+    globals.tags.cron.with({
+      expression: "*/5 * * * *",
+      immediate: true,
+      onError: "continue",
+    }),
+  ])
+  .run(async () => {
+    // cleanup logic
+  })
+  .build();
+
+const app = r.resource("app").register([cleanupTask]).build();
+```
+
+`globals.tags.cron.with({...})` options:
+
+- `expression` (required): 5-field cron expression
+- `input`: static input passed to the task on each run
+- `timezone`: timezone for scheduling
+- `immediate`: run once immediately at startup, then continue schedule
+- `enabled`: disable schedule when `false`
+- `onError`: `"continue"` (default) or `"stop"`
+
+Notes:
+
+- One cron tag per task is supported. If you need multiple schedules, use task forking and tag each fork.
+- Cron startup logs are emitted through `globals.resources.logger`.
+
 ## Async Context
 
 Async Context provides per-request/thread-local state via the platform's `AsyncLocalStorage` (Node, and Deno when `AsyncLocalStorage` is available). Use the fluent builder under `r.asyncContext` or the classic `asyncContext({ ... })` export.
@@ -413,15 +456,18 @@ import { r } from "@bluelibs/runner";
 const AppError = r
   .error<{ code: number; message: string }>("app.errors.AppError")
   .httpCode(400)
-  .dataSchema({ parse: (value) => value })
+  // .schema is an alias for .dataSchema in errors
+  .schema(z.object({ code: z.number(), message: z.string() }))
   .format((d) => `[${d.code}] ${d.message}`)
   .remediation("Check the request payload and retry with valid data.")
+  .tags([criticalTag])
   .build();
 
 try {
   AppError.throw({ code: 400, message: "Oops" });
 } catch (err) {
   if (AppError.is(err, { code: 400 })) {
+    // Narrowed to RunnerError<TData>
     // err.message -> "[400] Oops\n\nRemediation: Check the request payload and retry with valid data."
     // err.httpCode -> 400
     // err.remediation -> "Check the request payload and retry with valid data."
@@ -432,8 +478,7 @@ try {
 const error = AppError.new({ code: 400, message: "Oops" });
 throw error;
 
-// Alias:
-throw AppError.create({ code: 400, message: "Oops" });
+// .create() is deprecated; use .new() or .throw() for better DX.
 ```
 
 - Recommended ids: `{domain}.errors.{PascalCaseName}` (for example: `app.errors.InvalidCredentials`).
@@ -442,8 +487,9 @@ throw AppError.create({ code: 400, message: "Oops" });
 - `.remediation(stringOrFn)` attaches fix-it advice. Accepts a static string or `(data) => string`. When present, `error.message` and `error.toString()` include `\n\nRemediation: <advice>`. The raw advice is also available via `error.remediation`.
 - `message` is not required in the data unless your custom formatter expects it.
 - `helper.new(data)` constructs and returns a typed `RunnerError` without throwing (useful for `throw helper.new(data)` semantics).
-- `helper.create(data)` is an alias for `helper.new(data)`.
 - `helper.is(err, partialData?)` accepts an optional partial data filter and performs shallow strict matching (`===`) on each provided key.
+- `helper.tags` and `helper.meta` expose documentation metadata for introspection.
+- For circular dependency detection, use `circularDependencyError`. Backward-compatible aliases `circularDependenciesError` and `dependencyCycleError` remain exported as deprecated names.
 - Declare a task/resource error contract with `.throws([AppError])` (or ids). This is declarative only and does not imply DI.
 - `.throws()` is also available on hooks, task middleware, and resource middleware builders — same semantics.
 - `.throws([...])` accepts error helpers or string ids, normalizes to ids, and deduplicates repeated declarations.
@@ -622,13 +668,14 @@ test("sends welcome email", async () => {
 - `globals.resources.logger` exposes the framework logger; register your own logger resource and override it at the root to capture logs centrally.
 - Hooks and tasks emit metadata through `globals.resources.store`. Query it for dashboards or editor plugins.
 - Use middleware for tracing (`r.middleware.task("...").run(...)`) to wrap every task call.
+- Global infra resources are split into dedicated modules under `src/globals/resources/*.resource.ts` (for example `store.resource.ts`, `logger.resource.ts`, `eventManager.resource.ts`), while public consumption remains `globals.resources.*`.
 - `Semaphore` and `Queue` publish local lifecycle events through isolated `EventManager` instances (`on/once`). These are separate from the global EventManager used for business-level application events. Event names: semaphore → `queued/acquired/released/timeout/aborted/disposed`; queue → `enqueue/start/finish/error/cancel/disposed`.
 
 ## Metadata & Namespacing
 
 - Meta: `.meta({ title, description })` on tasks/resources/events/middleware for human-friendly docs and tooling; extend meta types via module augmentation when needed.
 - Namespacing: keep ids consistent with `domain.resources.name`, `domain.tasks.name`, `domain.events.name`, `domain.hooks.on-name`, `domain.middleware.{task|resource}.name`, `domain.errors.ErrorName`, and `domain.ctx.name`.
-- Runtime validation: `inputSchema`, `resultSchema`, `payloadSchema`, `configSchema` share the same `parse(input)` contract; config validation happens on `.with()`, task/event validation happens on call/emit.
+- Runtime validation: `inputSchema`, `resultSchema`, `payloadSchema`, `configSchema` share the same `parse(input)` contract; config validation happens on `.with()`, task/event validation happens on call/emit. Use `.schema()` as a unified alias (input/payload/schema/data) for simplicity.
 
 ## Advanced Patterns
 
@@ -637,14 +684,3 @@ test("sends welcome email", async () => {
 - **Async coordination:** `Semaphore` (O(1) linked queue for heavy contention) and `Queue` live in the main package. Both use isolated EventManagers internally for their lifecycle events, separate from the global EventManager used for business-level application events.
 - **Event safety:** Runner detects event emission cycles and throws an `EventCycleError` with the offending chain.
 - **Internal services:** `globals.resources.runtime` resolves to the same runtime object returned by `run(...)`. It supports `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`. Bootstrap note: when injected inside a resource `init()`, only that resource's dependencies are guaranteed initialized; unrelated resources may still be pending.
-
-## Interop With Classic APIs
-
-Existing code that uses `resource({ ... })`, `task({ ... })`, or `defineX` keeps working. You can gradually migrate:
-
-```ts
-import { r, resource as classicResource } from "@bluelibs/runner";
-
-const classic = classicResource({ id: "legacy", init: async () => "ok" });
-const modern = r.resource("modern").register([classic]).build();
-```

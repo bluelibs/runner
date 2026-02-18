@@ -1695,7 +1695,7 @@ For production, use Redis for state/pub-sub and RabbitMQ with quorum queues for 
 Install required Node dependencies:
 
 ```bash
-npm install ioredis amqplib cron-parser
+npm install ioredis amqplib
 ```
 
 ### Quick Start - Production Configuration

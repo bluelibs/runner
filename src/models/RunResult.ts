@@ -1,11 +1,12 @@
 import {
-  DependencyMapType,
   IEvent,
   IEventEmitOptions,
   IEventEmitReport,
   IResource,
   ITask,
 } from "../defs";
+import { IRuntime } from "../types/runner";
+import type { TaskCallOptions } from "../types/utilities";
 // For RunResult convenience API, preserve the original simple messages
 import type { EventManager } from "./EventManager";
 import type { Logger } from "./Logger";
@@ -61,7 +62,7 @@ type RunResultLazyOptions = {
  * const result = await runtime.runTask(myTask, { input: "data" });
  * await runtime.dispose();
  */
-export class RunResult<V> {
+export class RunResult<V> implements IRuntime<V> {
   /**
    * The root value returned by the root resource's init function.
    * Set via `setValue()` after the root resource initializes.
@@ -194,47 +195,41 @@ export class RunResult<V> {
    - The task's core logic
    - Result validation (via resultSchema)
    *
-   * @param task - The task definition or task ID string to execute
-   * @param args - The input argument (required if task expects input)
-   * @returns The task's result, validated against resultSchema if defined
-   * @throws RuntimeError if task is not found or runtime is disposed
-   *
    * @example
    * // Run with task definition
    * const result = await runtime.runTask(createUser, { name: "Alice" });
    *
-   * // Run with string ID
-   * const result = await runtime.runTask("app.tasks.createUser", { name: "Alice" });
+   * // Run with options for journal forwarding
+   * const result = await runtime.runTask(greet, undefined, { journal });
    */
-  public runTask = <
-    I = undefined,
-    O extends Promise<any> = any,
-    D extends DependencyMapType = DependencyMapType,
-  >(
-    /**
-     * The task to execute. Can be either:
-     * - A task definition object (ITask)
-     * - A task ID string (for dynamic lookup)
-     */
-    task: ITask<I, O, D> | string,
-    /**
-     * Input to pass to the task.
-     * Omit if the task accepts no input (I extends undefined).
-     */
-    ...args: I extends undefined | void ? [] : [I]
-  ) => {
+  public runTask<TTask extends ITask<any, Promise<any>, any> | string>(
+    task: TTask,
+    ...args: TTask extends ITask<infer I, any, any>
+      ? I extends undefined | void
+        ? [input?: I, options?: TaskCallOptions]
+        : [input: I, options?: TaskCallOptions]
+      : [input?: unknown, options?: TaskCallOptions]
+  ): TTask extends ITask<any, infer O, any> ? O : Promise<any> {
     this.ensureRuntimeIsActive();
+    const [input, options] = args as [unknown, TaskCallOptions | undefined];
+    let resolvedTask: ITask<any, Promise<any>, any>;
 
     if (typeof task === "string") {
       const taskId = task;
       if (!this.store.tasks.has(taskId)) {
         runtimeElementNotFoundError.throw({ type: "Task", elementId: taskId });
       }
-      task = this.store.tasks.get(taskId)!.task;
+      resolvedTask = this.store.tasks.get(taskId)!.task;
+    } else {
+      resolvedTask = task;
     }
 
-    return this.taskRunner.run(task, ...args);
-  };
+    return this.taskRunner.run(
+      resolvedTask,
+      input,
+      options,
+    ) as TTask extends ITask<any, infer O, any> ? O : Promise<any>;
+  }
 
   /**
    * Emits an event to trigger all registered hooks listening for it.

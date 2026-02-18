@@ -38,7 +38,7 @@ export function defineTag<
     typeof value === "object" && value !== null && !Array.isArray(value);
   const foundation = {
     id,
-    meta: definition.meta,
+    meta: definition.meta ?? {},
     config: definition.config,
     configSchema: definition.configSchema,
   } as ITag<TConfig, TEnforceInputContract, TEnforceOutputContract>;

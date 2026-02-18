@@ -1,4 +1,5 @@
 import { defineTag } from "../define";
+import { cronTag } from "./cron/cron.tag";
 import { debugTag } from "./resources/debug/debug.tag";
 import { tunnelTag } from "./resources/tunnel/tunnel.tag";
 import { tunnelTaskPolicyTag } from "./resources/tunnel/tunnel.policy.tag";
@@ -25,6 +26,7 @@ const globalTagsBase = {
     },
   }),
   debug: debugTag,
+  cron: cronTag,
   tunnel: tunnelTag,
   tunnelTaskPolicy: tunnelTaskPolicyTag,
   authValidator: defineTag({

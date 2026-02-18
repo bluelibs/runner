@@ -67,6 +67,10 @@ export function makeResourceMiddlewareBuilder<
       return makeResourceMiddlewareBuilder<TNew, In, Out, D>(next);
     },
 
+    schema<TNew>(schema: IValidationSchema<TNew>) {
+      return builder.configSchema(schema);
+    },
+
     run(fn) {
       const next = cloneRes(state, { run: fn as typeof state.run });
       return makeResourceMiddlewareBuilder<C, In, Out, D>(next);

@@ -29,6 +29,14 @@ export interface ResourceMiddlewareFluentBuilder<
   configSchema<TNew>(
     schema: IValidationSchema<TNew>,
   ): ResourceMiddlewareFluentBuilder<TNew, In, Out, D>;
+
+  /**
+   * Alias for configSchema. Use this to define the middleware configuration validation contract.
+   */
+  schema<TNew>(
+    schema: IValidationSchema<TNew>,
+  ): ResourceMiddlewareFluentBuilder<TNew, In, Out, D>;
+
   run(
     fn: IResourceMiddlewareDefinition<C, In, Out, D>["run"],
   ): ResourceMiddlewareFluentBuilder<C, In, Out, D>;

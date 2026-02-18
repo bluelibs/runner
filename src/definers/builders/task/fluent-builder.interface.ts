@@ -71,6 +71,13 @@ export interface TaskFluentBuilder<
     schema: IValidationSchema<TNewInput>,
   ): TaskFluentBuilder<TNewInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
 
+  /**
+   * Alias for inputSchema. Use this to define the task input validation contract.
+   */
+  schema<TNewInput>(
+    schema: IValidationSchema<TNewInput>,
+  ): TaskFluentBuilder<TNewInput, TOutput, TDeps, TMeta, TTags, TMiddleware>;
+
   resultSchema<TResolved>(
     schema: IValidationSchema<TResolved>,
   ): TaskFluentBuilder<

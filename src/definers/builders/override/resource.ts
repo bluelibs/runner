@@ -285,6 +285,9 @@ function makeResourceOverrideBuilder<
         TMiddleware
       >(base, next);
     },
+    schema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
+      return builder.configSchema(schema);
+    },
     resultSchema<TResolved>(schema: IValidationSchema<TResolved>) {
       const next = cloneResourceState<
         TConfig,

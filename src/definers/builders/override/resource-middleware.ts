@@ -134,6 +134,10 @@ function makeResourceMiddlewareOverrideBuilder<
       );
     },
 
+    schema<TNew>(schema: IValidationSchema<TNew>) {
+      return builder.configSchema(schema);
+    },
+
     run(fn) {
       const next = cloneResourceMiddlewareState(state, { run: fn });
       return makeResourceMiddlewareOverrideBuilder(base, next);

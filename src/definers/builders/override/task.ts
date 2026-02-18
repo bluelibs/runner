@@ -199,6 +199,10 @@ function makeTaskOverrideBuilder<
       >(base, next);
     },
 
+    schema<TNewInput>(schema: IValidationSchema<TNewInput>) {
+      return builder.inputSchema(schema);
+    },
+
     resultSchema<TResolved>(schema: IValidationSchema<TResolved>) {
       const next = cloneTaskState<
         TInput,

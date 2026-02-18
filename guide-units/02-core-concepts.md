@@ -1151,7 +1151,7 @@ import { r } from "@bluelibs/runner";
 const userNotFoundError = r
   .error<{ code: number; message: string }>("app.errors.userNotFound")
   .httpCode(404)
-  .dataSchema(z.object({ ... }))
+  .schema(z.object({ ... }))
   .format((d) => `[${d.code}] ${d.message}`)
   .remediation("Verify the user ID exists before calling getUser.")
   .build();
@@ -1168,6 +1168,8 @@ const app = r.resource("app").register([userNotFoundError, getUser]).build();
 ```
 
 The thrown `Error` has `name = id`. By default `message` is `JSON.stringify(data)`, but `.format(data => string)` lets you craft a human-friendly message instead. When `.remediation()` is provided, the fix-it advice is appended to `message` and `toString()`, and is also accessible as `error.remediation`. If you set `.httpCode(...)`, the helper and thrown error expose `httpCode`.
+
+For dependency cycle detection, use the canonical helper name `circularDependencyError`. Legacy aliases `circularDependenciesError` and `dependencyCycleError` remain available as deprecated compatibility exports.
 
 ```ts
 try {

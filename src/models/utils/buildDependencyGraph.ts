@@ -3,6 +3,22 @@ import type { IDependentNode } from "./findCircularDependencies";
 import type { IEvent } from "../../defs";
 import { isOptional, isEvent } from "../../define";
 
+const readStringId = (value: unknown): string | undefined => {
+  if (!value || typeof value !== "object") {
+    return undefined;
+  }
+
+  const id = (value as { id?: unknown }).id;
+  return typeof id === "string" ? id : undefined;
+};
+
+const getDependencyId = (dependency: unknown): string | undefined =>
+  readStringId(
+    isOptional(dependency)
+      ? (dependency as { inner: unknown }).inner
+      : dependency,
+  );
+
 /**
  * Creates blank dependency nodes for every registered task, middleware, resource,
  * and hook. Populates both the shared nodeMap and the flat dependents list.
@@ -81,8 +97,11 @@ export function buildDependencyGraph(
     // Add task dependencies
     if (task.task.dependencies) {
       for (const [depKey, depItem] of Object.entries(task.task.dependencies)) {
-        const candidate = isOptional(depItem) ? depItem.inner : depItem;
-        const depNode = nodeMap.get(candidate.id);
+        const depId = getDependencyId(depItem);
+        if (!depId) {
+          continue;
+        }
+        const depNode = nodeMap.get(depId);
         if (depNode) {
           node.dependencies[depKey] = depNode;
         }
@@ -106,9 +125,11 @@ export function buildDependencyGraph(
 
     if (middleware.dependencies) {
       for (const [depKey, depItem] of Object.entries(middleware.dependencies)) {
-        const candidate = isOptional(depItem) ? depItem.inner : depItem;
-
-        const depNode = nodeMap.get(candidate.id);
+        const depId = getDependencyId(depItem);
+        if (!depId) {
+          continue;
+        }
+        const depNode = nodeMap.get(depId);
         if (depNode) {
           node.dependencies[depKey] = depNode;
         }
@@ -137,9 +158,11 @@ export function buildDependencyGraph(
     const { middleware } = storeResourceMiddleware;
     if (middleware.dependencies) {
       for (const [depKey, depItem] of Object.entries(middleware.dependencies)) {
-        const candidate = isOptional(depItem) ? depItem.inner : depItem;
-
-        const depNode = nodeMap.get(candidate.id);
+        const depId = getDependencyId(depItem);
+        if (!depId) {
+          continue;
+        }
+        const depNode = nodeMap.get(depId);
         if (depNode) {
           node.dependencies[depKey] = depNode;
         }
@@ -171,9 +194,11 @@ export function buildDependencyGraph(
       for (const [depKey, depItem] of Object.entries(
         resource.resource.dependencies,
       )) {
-        const candidate = isOptional(depItem) ? depItem.inner : depItem;
-
-        const depNode = nodeMap.get(candidate.id);
+        const depId = getDependencyId(depItem);
+        if (!depId) {
+          continue;
+        }
+        const depNode = nodeMap.get(depId);
         if (depNode) {
           node.dependencies[depKey] = depNode;
         }
@@ -193,8 +218,11 @@ export function buildDependencyGraph(
     const node = nodeMap.get(hook.hook.id)!;
     if (hook.hook.dependencies) {
       for (const [depKey, depItem] of Object.entries(hook.hook.dependencies)) {
-        const candidate = isOptional(depItem) ? depItem.inner : depItem;
-        const depNode = nodeMap.get(candidate.id);
+        const depId = getDependencyId(depItem);
+        if (!depId) {
+          continue;
+        }
+        const depNode = nodeMap.get(depId);
 
         if (depNode) {
           node.dependencies[depKey] = depNode;

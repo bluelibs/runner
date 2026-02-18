@@ -3,7 +3,8 @@ import {
   defineResourceMiddleware,
 } from "../../../define";
 import { debugConfig } from "./debugConfig.resource";
-import { globalResources } from "../../globalResources";
+import { loggerResource as logger } from "../logger.resource";
+import { storeResource as store } from "../store.resource";
 import { globalTags } from "../../globalTags";
 import { getConfig } from "./types";
 
@@ -11,9 +12,9 @@ export const tasksTrackerMiddleware = defineTaskMiddleware({
   id: "globals.debug.middleware.task.executionTracker",
   everywhere: (task) => !globalTags.system.exists(task),
   dependencies: {
-    logger: globalResources.logger,
+    logger,
     debugConfig,
-    store: globalResources.store,
+    store,
   },
   run: async ({ task, next }, { logger, debugConfig, store: _store }) => {
     const start = Date.now();
@@ -49,9 +50,9 @@ export const tasksTrackerMiddleware = defineTaskMiddleware({
 export const resourcesTrackerMiddleware = defineResourceMiddleware({
   id: "globals.debug.middleware.resource.executionTracker",
   dependencies: {
-    logger: globalResources.logger,
+    logger,
     debugConfig,
-    store: globalResources.store,
+    store,
   },
   everywhere: (resource) => !globalTags.system.exists(resource),
   run: async ({ resource, next }, { logger, debugConfig, store: _store }) => {

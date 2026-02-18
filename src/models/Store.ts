@@ -9,7 +9,7 @@ import {
 } from "../defs";
 import { findCircularDependencies } from "./utils/findCircularDependencies";
 import {
-  circularDependenciesError,
+  circularDependencyError,
   storeAlreadyInitializedError,
   eventEmissionCycleError,
   lockedError,
@@ -37,6 +37,8 @@ import { RunResult } from "./RunResult";
 import { getAllThrows } from "../tools/getAllThrows";
 import type { ITask } from "../types/task";
 import { registerStoreBuiltins } from "./BuiltinsRegistry";
+
+const INTERNAL_ROOT_CRON_DEPENDENCY_KEY = "__runnerCron";
 
 // Re-export types for backward compatibility
 export type {
@@ -173,14 +175,28 @@ export class Store {
   }
 
   private setupRootResource(rootDefinition: IResource<any>, config: unknown) {
+    const resolvedDependencies =
+      typeof rootDefinition.dependencies === "function"
+        ? rootDefinition.dependencies(config)
+        : rootDefinition.dependencies;
+
+    const dependenciesObject = (resolvedDependencies || {}) as Record<
+      string,
+      unknown
+    >;
+
+    const rootDependencies = {
+      ...dependenciesObject,
+      [INTERNAL_ROOT_CRON_DEPENDENCY_KEY]:
+        dependenciesObject[INTERNAL_ROOT_CRON_DEPENDENCY_KEY] ||
+        globalResources.cron,
+    };
+
     // Clone the root definition so per-run dependency/register resolution
     // never mutates the reusable user definition object.
     const root: IResource<any> = {
       ...rootDefinition,
-      dependencies:
-        typeof rootDefinition.dependencies === "function"
-          ? rootDefinition.dependencies(config)
-          : rootDefinition.dependencies,
+      dependencies: rootDependencies,
     };
 
     this.root = {
@@ -201,7 +217,7 @@ export class Store {
     const dependentNodes = this.registry.getDependentNodes();
     const circularDependencies = findCircularDependencies(dependentNodes);
     if (circularDependencies.cycles.length > 0) {
-      circularDependenciesError.throw({ cycles: circularDependencies.cycles });
+      circularDependencyError.throw({ cycles: circularDependencies.cycles });
     }
   }
 

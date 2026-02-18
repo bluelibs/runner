@@ -4,6 +4,8 @@ import {
   mergeDepsNoConfig,
   cloneState,
 } from "../../definers/builders/utils";
+import { mergeArray as mergeErrorBuilderArray } from "../../definers/builders/error/utils";
+import { mergeArray as mergeTagBuilderArray } from "../../definers/builders/tag/utils";
 import "../../definers/builders/task.phantom";
 import { makeErrorBuilder } from "../../definers/builders/error/fluent-builder";
 import { defineError } from "../../definers/defineError";
@@ -23,6 +25,11 @@ describe("definers builders utils", () => {
     expect(mergeArray([1, 2], [3], false)).toEqual([1, 2, 3]);
     expect(mergeArray([1, 2], [3], true)).toEqual([3]);
     expect(mergeArray(undefined, [3], false)).toEqual([3]);
+  });
+
+  it("error/tag builder utils re-export mergeArray", () => {
+    expect(mergeErrorBuilderArray([1], [2], false)).toEqual([1, 2]);
+    expect(mergeTagBuilderArray([1], [2], true)).toEqual([2]);
   });
 
   it("mergeDepsNoConfig merges objects and/or functions", () => {
@@ -86,5 +93,15 @@ describe("error fluent builder + defineError", () => {
     } catch (err) {
       expect(E.is(err)).toBe(true);
     }
+  });
+
+  it("defineError meta getter falls back for nullish meta", () => {
+    const E = defineError({
+      id: "tests.errors.nullMeta",
+      format: () => "x",
+      meta: null as unknown as Record<string, never>,
+    });
+
+    expect(E.meta).toEqual({});
   });
 });

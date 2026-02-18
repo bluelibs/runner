@@ -1,6 +1,68 @@
 import { DebugFriendlyConfig } from "../globals/resources/debug";
 import { LogLevels, PrintStrategy } from "../models/Logger";
 import { OnUnhandledError } from "../models/UnhandledError";
+import { IEvent, IEventEmitOptions, IEventEmitReport } from "../defs";
+import { IResource } from "./resource";
+import { ITask } from "./task";
+import { TaskCallOptions } from "./utilities";
+
+/**
+ * Common interface for the Runner runtime instance.
+ * Provides access to tasks, events, resources, and lifecycle management.
+ */
+export interface IRuntime<V = unknown> {
+  /**
+   * Executes a registered task.
+   */
+  runTask<TTask extends ITask<any, Promise<any>, any> | string>(
+    task: TTask,
+    ...args: TTask extends ITask<infer I, any, any>
+      ? I extends undefined | void
+        ? [input?: I, options?: TaskCallOptions]
+        : [input: I, options?: TaskCallOptions]
+      : [input?: unknown, options?: TaskCallOptions]
+  ): TTask extends ITask<any, infer O, any> ? O : Promise<any>;
+
+  /**
+   * Emits an event to trigger hooks.
+   */
+  emitEvent<P>(
+    event: IEvent<P> | string,
+    payload?: P extends undefined | void ? undefined : P,
+    options?: IEventEmitOptions,
+  ): Promise<void | IEventEmitReport>;
+
+  /**
+   * Synchronously retrieves an initialized resource value.
+   */
+  getResourceValue<Output extends Promise<any>>(
+    resource: string | IResource<any, Output, any, any, any>,
+  ): Output extends Promise<infer U> ? U : Output;
+
+  /**
+   * Initializes and returns a resource value on-demand (lazy mode only).
+   */
+  getLazyResourceValue<Output extends Promise<any>>(
+    resource: string | IResource<any, Output, any, any, any>,
+  ): Promise<Output extends Promise<infer U> ? U : Output>;
+
+  /**
+   * Retrieves the configuration passed to a resource.
+   */
+  getResourceConfig<Config>(
+    resource: string | IResource<Config, any, any, any, any>,
+  ): Config;
+
+  /** Returns the ID of the root resource. */
+  getRootId(): string;
+  /** Returns the configuration passed to the root resource. */
+  getRootConfig<Config = unknown>(): Config;
+  /** Returns the initialized value of the root resource. */
+  getRootValue<Value = V>(): Value;
+
+  /** Disposes the runtime and all resources. */
+  dispose(): Promise<void>;
+}
 
 export type RunOptions = {
   /**

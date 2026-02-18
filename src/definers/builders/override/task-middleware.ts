@@ -120,6 +120,10 @@ function makeTaskMiddlewareOverrideBuilder<
       return makeTaskMiddlewareOverrideBuilder<TNew, In, Out, D>(base, next);
     },
 
+    schema<TNew>(schema: IValidationSchema<TNew>) {
+      return builder.configSchema(schema);
+    },
+
     run(fn) {
       const next = cloneTaskMiddlewareState(state, { run: fn });
       return makeTaskMiddlewareOverrideBuilder(base, next);

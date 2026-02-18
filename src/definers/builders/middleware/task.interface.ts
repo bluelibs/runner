@@ -29,6 +29,14 @@ export interface TaskMiddlewareFluentBuilder<
   configSchema<TNew>(
     schema: IValidationSchema<TNew>,
   ): TaskMiddlewareFluentBuilder<TNew, In, Out, D>;
+
+  /**
+   * Alias for configSchema. Use this to define the middleware configuration validation contract.
+   */
+  schema<TNew>(
+    schema: IValidationSchema<TNew>,
+  ): TaskMiddlewareFluentBuilder<TNew, In, Out, D>;
+
   run(
     fn: ITaskMiddlewareDefinition<C, In, Out, D>["run"],
   ): TaskMiddlewareFluentBuilder<C, In, Out, D>;

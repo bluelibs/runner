@@ -3,6 +3,7 @@ import type {
   IErrorMeta,
   IValidationSchema,
   IErrorHelper,
+  TagType,
 } from "../../../defs";
 
 export interface ErrorFluentBuilder<
@@ -13,6 +14,17 @@ export interface ErrorFluentBuilder<
   serialize(fn: (data: TData) => string): ErrorFluentBuilder<TData>;
   parse(fn: (raw: string) => TData): ErrorFluentBuilder<TData>;
   dataSchema(schema: IValidationSchema<TData>): ErrorFluentBuilder<TData>;
+
+  /**
+   * Alias for dataSchema. Use this to define the error data validation contract.
+   */
+  schema(schema: IValidationSchema<TData>): ErrorFluentBuilder<TData>;
+
+  tags<TNewTags extends TagType[]>(
+    t: TNewTags,
+    options?: { override?: boolean },
+  ): ErrorFluentBuilder<TData>;
+
   build(): IErrorHelper<TData>;
   format(fn: (data: TData) => string): ErrorFluentBuilder<TData>;
   /**

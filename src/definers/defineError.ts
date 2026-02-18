@@ -5,6 +5,8 @@ import {
   IErrorHelper,
   IErrorDefinitionFinal,
 } from "../types/error";
+import type { IErrorMeta } from "../types/meta";
+import type { TagType } from "../types/tag";
 import {
   symbolError,
   symbolFilePath,
@@ -89,6 +91,12 @@ export class ErrorHelper<
   get httpCode(): number | undefined {
     return this.definition.httpCode;
   }
+  get tags(): TagType[] {
+    return this.definition.tags ?? [];
+  }
+  get meta(): IErrorMeta {
+    return this.definition.meta ?? {};
+  }
   private buildRunnerError(...args: ErrorThrowArgs<TData>): RunnerError<TData> {
     const data = (args[0] ?? ({} as TData)) as TData;
     const parsed = this.definition.dataSchema
@@ -111,6 +119,7 @@ export class ErrorHelper<
   ["new"](...args: ErrorThrowArgs<TData>): RunnerError<TData> {
     return this.buildRunnerError(...args);
   }
+  /** @deprecated use .new() or .throw() for better DX */
   create(...args: ErrorThrowArgs<TData>): RunnerError<TData> {
     return this["new"](...args);
   }

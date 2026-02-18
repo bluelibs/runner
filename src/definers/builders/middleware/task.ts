@@ -67,6 +67,10 @@ export function makeTaskMiddlewareBuilder<
       return makeTaskMiddlewareBuilder<TNew, In, Out, D>(next);
     },
 
+    schema<TNew>(schema: IValidationSchema<TNew>) {
+      return builder.configSchema(schema);
+    },
+
     run(fn) {
       const next = cloneTask(state, { run: fn as typeof state.run });
       return makeTaskMiddlewareBuilder<C, In, Out, D>(next);

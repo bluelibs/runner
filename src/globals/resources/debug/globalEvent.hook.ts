@@ -1,5 +1,5 @@
 import { defineHook } from "../../../define";
-import { globalResources } from "../../globalResources";
+import { loggerResource as logger } from "../logger.resource";
 import { globalTags } from "../../globalTags";
 import { hasSystemTag } from "./utils";
 import { debugConfig } from "./debugConfig.resource";
@@ -9,7 +9,7 @@ export const globalEventListener = defineHook({
   id: "globals.debug.hooks.onAnyEvent",
   on: "*",
   dependencies: {
-    logger: globalResources.logger,
+    logger,
     debugConfig,
   },
   run: async (event, { logger, debugConfig }) => {

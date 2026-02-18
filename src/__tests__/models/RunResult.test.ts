@@ -4,6 +4,7 @@ import {
   defineEvent,
   defineHook,
 } from "../../define";
+import { journal } from "../..";
 import { globalResources } from "../../globals/globalResources";
 import { EventEmissionFailureMode } from "../../defs";
 import { TaskRunner } from "../../models";
@@ -128,6 +129,34 @@ describe("RunResult", () => {
     expect(config).toEqual({ seed: 123 });
 
     await r.dispose();
+  });
+
+  it("supports runTask call-options via input/options arguments", async () => {
+    const seenJournals: unknown[] = [];
+
+    const noInputTask = defineTask<void, Promise<string>>({
+      id: "rr.options.noInputTask",
+      run: async (_input, _deps, context) => {
+        seenJournals.push(context?.journal);
+        return "ok";
+      },
+    });
+
+    const app = defineResource({
+      id: "rr.options.app",
+      register: [noInputTask],
+      dependencies: { noInputTask },
+      init: async () => "ready",
+    });
+
+    const runtime = await run(app);
+    const twoArgOptionsJournal = journal.create();
+    await runtime.runTask(noInputTask, undefined, {
+      journal: twoArgOptionsJournal,
+    });
+
+    expect(seenJournals[0]).toBe(twoArgOptionsJournal);
+    await runtime.dispose();
   });
 
   it("emitEvent supports report mode for aggregated listener failures", async () => {
