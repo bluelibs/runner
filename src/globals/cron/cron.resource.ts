@@ -49,6 +49,8 @@ export const cronResource = defineResource<
     const scopedLogger = logger.with({ source: "globals.resources.cron" });
     const scheduledTasks = store.getTasksWithTag(cronTag);
 
+    const isSilent = (config: CronTagConfig): boolean => config.silent === true;
+
     const scheduleNext = (taskState: CronTaskState, from: Date): void => {
       if (context.disposed || taskState.stopped) {
         return;
@@ -74,17 +76,19 @@ export const cronResource = defineResource<
         return;
       }
 
-      await scopedLogger.info(
-        `Running cron task \"${taskState.task.id}\" (${taskState.config.expression}).`,
-        {
-          data: {
-            taskId: taskState.task.id,
-            expression: taskState.config.expression,
-            timezone: taskState.config.timezone,
-            scheduledAt: taskState.nextRunAt?.toISOString(),
+      if (!isSilent(taskState.config)) {
+        await scopedLogger.info(
+          `Running cron task "${taskState.task.id}" (${taskState.config.expression}).`,
+          {
+            data: {
+              taskId: taskState.task.id,
+              expression: taskState.config.expression,
+              timezone: taskState.config.timezone,
+              scheduledAt: taskState.nextRunAt?.toISOString(),
+            },
           },
-        },
-      );
+        );
+      }
 
       try {
         await taskRunner.run(taskState.task, taskState.config.input);
@@ -98,17 +102,19 @@ export const cronResource = defineResource<
                 message: String(error),
               });
 
-        await scopedLogger.error(
-          `Cron task \"${taskState.task.id}\" failed during execution.`,
-          {
-            error: normalizedError,
-            data: {
-              taskId: taskState.task.id,
-              expression: taskState.config.expression,
-              onError: taskState.config.onError || CronOnError.Continue,
+        if (!isSilent(taskState.config)) {
+          await scopedLogger.error(
+            `Cron task "${taskState.task.id}" failed during execution.`,
+            {
+              error: normalizedError,
+              data: {
+                taskId: taskState.task.id,
+                expression: taskState.config.expression,
+                onError: taskState.config.onError || CronOnError.Continue,
+              },
             },
-          },
-        );
+          );
+        }
 
         if (
           (taskState.config.onError || CronOnError.Continue) ===
@@ -129,15 +135,17 @@ export const cronResource = defineResource<
     for (const task of scheduledTasks) {
       const config = getCronConfig(task);
       if (config.enabled === false) {
-        await scopedLogger.info(
-          `Cron task \"${task.id}\" is disabled and will not be scheduled.`,
-          {
-            data: {
-              taskId: task.id,
-              expression: config.expression,
+        if (!isSilent(config)) {
+          await scopedLogger.info(
+            `Cron task "${task.id}" is disabled and will not be scheduled.`,
+            {
+              data: {
+                taskId: task.id,
+                expression: config.expression,
+              },
             },
-          },
-        );
+          );
+        }
         continue;
       }
 
@@ -149,18 +157,20 @@ export const cronResource = defineResource<
         });
       }
 
-      await scopedLogger.info(
-        `Cron task \"${task.id}\" started with expression \"${config.expression}\".`,
-        {
-          data: {
-            taskId: task.id,
-            expression: config.expression,
-            timezone: config.timezone,
-            immediate: !!config.immediate,
-            onError: config.onError || CronOnError.Continue,
+      if (!isSilent(config)) {
+        await scopedLogger.info(
+          `Cron task "${task.id}" started with expression "${config.expression}".`,
+          {
+            data: {
+              taskId: task.id,
+              expression: config.expression,
+              timezone: config.timezone,
+              immediate: !!config.immediate,
+              onError: config.onError || CronOnError.Continue,
+            },
           },
-        },
-      );
+        );
+      }
 
       const taskState: CronTaskState = {
         task,
@@ -224,18 +234,6 @@ export const cronResource = defineResource<
 });
 
 function getCronConfig(task: AnyTask): CronTagConfig {
-  const cronTagCount = task.tags.filter((tag: { id: string }) => {
-    return tag.id === cronTag.id;
-  }).length;
-  if (cronTagCount !== 1) {
-    return cronExecutionError.throw({
-      taskId: task.id,
-      expression: "<unknown>",
-      message:
-        "A task can only declare one cron tag. Use task fork() to create multiple schedules.",
-    });
-  }
-
   const config = cronTag.extract(task);
   if (!config) {
     return cronExecutionError.throw({

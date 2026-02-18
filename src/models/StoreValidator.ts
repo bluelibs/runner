@@ -1,10 +1,21 @@
 import {
+  duplicateTagIdOnDefinitionError,
   duplicateRegistrationError,
   middlewareNotRegisteredError,
   tagNotFoundError,
 } from "../errors";
 import { ITaggable } from "../defs";
 import { StoreRegistry } from "./StoreRegistry";
+
+type SanityCheckTaggable = ITaggable & {
+  id: string;
+  tags?: ITaggable["tags"];
+};
+
+type TaggableEntry = {
+  definitionType: string;
+  definition: SanityCheckTaggable;
+};
 
 export class StoreValidator {
   constructor(private registry: StoreRegistry) {}
@@ -66,30 +77,62 @@ export class StoreValidator {
       });
     }
 
+    this.ensureTagIdsAreUniquePerDefinition();
     this.ensureAllTagsUsedAreRegistered();
   }
 
-  ensureAllTagsUsedAreRegistered() {
-    const taggables: ITaggable[] = [
-      ...Array.from(this.registry.tasks.values()).map((x) => x.task),
-      ...Array.from(this.registry.resources.values()).map((x) => x.resource),
-      ...Array.from(this.registry.events.values()).map((x) => x.event),
-      ...Array.from(this.registry.taskMiddlewares.values()).map(
-        (x) => x.middleware,
-      ),
-      ...Array.from(this.registry.resourceMiddlewares.values()).map(
-        (x) => x.middleware,
-      ),
-      ...Array.from(this.registry.hooks.values()).map((x) => x.hook),
+  private getTaggableEntries(): TaggableEntry[] {
+    return [
+      ...Array.from(this.registry.tasks.values()).map((x) => ({
+        definitionType: "Task",
+        definition: x.task,
+      })),
+      ...Array.from(this.registry.resources.values()).map((x) => ({
+        definitionType: "Resource",
+        definition: x.resource,
+      })),
+      ...Array.from(this.registry.events.values()).map((x) => ({
+        definitionType: "Event",
+        definition: x.event,
+      })),
+      ...Array.from(this.registry.taskMiddlewares.values()).map((x) => ({
+        definitionType: "Task middleware",
+        definition: x.middleware,
+      })),
+      ...Array.from(this.registry.resourceMiddlewares.values()).map((x) => ({
+        definitionType: "Resource middleware",
+        definition: x.middleware,
+      })),
+      ...Array.from(this.registry.hooks.values()).map((x) => ({
+        definitionType: "Hook",
+        definition: x.hook,
+      })),
     ];
+  }
 
-    for (const taggable of taggables) {
-      const tags = taggable.tags;
-      if (tags) {
-        for (const tag of tags) {
-          if (!this.registry.tags.has(tag.id)) {
-            tagNotFoundError.throw({ id: tag.id });
-          }
+  private ensureTagIdsAreUniquePerDefinition() {
+    for (const { definitionType, definition } of this.getTaggableEntries()) {
+      const tags = Array.isArray(definition.tags) ? definition.tags : [];
+      const seenTagIds = new Set<string>();
+      for (const tag of tags) {
+        if (seenTagIds.has(tag.id)) {
+          duplicateTagIdOnDefinitionError.throw({
+            definitionType,
+            definitionId: definition.id,
+            tagId: tag.id,
+          });
+        }
+        seenTagIds.add(tag.id);
+      }
+    }
+  }
+
+  ensureAllTagsUsedAreRegistered() {
+    for (const { definition } of this.getTaggableEntries()) {
+      const tags = Array.isArray(definition.tags) ? definition.tags : [];
+      for (const tag of tags) {
+        if (!this.registry.tags.has(tag.id)) {
+          tagNotFoundError.throw({ id: tag.id });
         }
       }
     }

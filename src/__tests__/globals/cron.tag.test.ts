@@ -38,5 +38,8 @@ describe("cronTag", () => {
     expect(() =>
       cronTag.with({ expression: "* * * * *", onError: "nope" } as never),
     ).toThrow(/onError/i);
+    expect(() =>
+      cronTag.with({ expression: "* * * * *", silent: "yes" } as never),
+    ).toThrow(/silent/i);
   });
 });

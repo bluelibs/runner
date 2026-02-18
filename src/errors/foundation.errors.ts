@@ -174,6 +174,23 @@ export const tagNotFoundError = error<{ id: string } & DefaultErrorType>(
   )
   .build();
 
+export const duplicateTagIdOnDefinitionError = error<
+  {
+    definitionType: string;
+    definitionId: string;
+    tagId: string;
+  } & DefaultErrorType
+>("runner.errors.duplicateTagIdOnDefinition")
+  .format(
+    ({ definitionType, definitionId, tagId }) =>
+      `${definitionType} "${definitionId}" declares duplicate tag "${tagId}". A definition can only include a tag id once.`,
+  )
+  .remediation(
+    ({ definitionId, tagId }) =>
+      `Remove the duplicate "${tagId}" tag from "${definitionId}", or fork the definition when you need separate tagged variants.`,
+  )
+  .build();
+
 // Locked
 export const lockedError = error<{ what: string } & DefaultErrorType>(
   "runner.errors.locked",

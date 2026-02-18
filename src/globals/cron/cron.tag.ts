@@ -57,6 +57,12 @@ export const cronTag = defineTag<CronTagConfig>({
         });
       }
 
+      if (value.silent !== undefined && typeof value.silent !== "boolean") {
+        return cronConfigurationError.throw({
+          message: 'Cron tag config "silent" must be a boolean.',
+        });
+      }
+
       return {
         expression: value.expression,
         input: value.input,
@@ -64,6 +70,7 @@ export const cronTag = defineTag<CronTagConfig>({
         immediate: value.immediate,
         enabled: value.enabled,
         onError: value.onError,
+        silent: value.silent,
       };
     },
   },

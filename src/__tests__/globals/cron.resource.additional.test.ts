@@ -111,7 +111,9 @@ describe("global cron resource (additional)", () => {
       .build();
 
     const app = r.resource("app").register([duplicateCronTask]).build();
-    await expect(run(app)).rejects.toThrow(/only declare one cron tag/i);
+    await expect(run(app)).rejects.toThrow(
+      /duplicate tag "globals\.tags\.cron"/i,
+    );
   });
 
   it("fails when cron tag is present without configuration", async () => {
@@ -139,5 +141,78 @@ describe("global cron resource (additional)", () => {
     expect(cron.schedules.size).toBe(1);
     await runtime.dispose();
     expect(cron.schedules.size).toBe(0);
+  });
+
+  it("suppresses all log output when silent is true", async () => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
+
+    let attempts = 0;
+
+    const silentTask = r
+      .task("app.tasks.silent")
+      .tags([
+        globals.tags.cron.with({
+          expression: "* * * * *",
+          silent: true,
+        }),
+      ])
+      .run(async () => {
+        attempts += 1;
+        throw new Error("silent failure");
+      })
+      .build();
+
+    const app = r.resource("app").register([silentTask]).build();
+    const runtime = await run(app);
+
+    jest.advanceTimersByTime(60_000);
+    await flushMicrotasks();
+
+    expect(attempts).toBe(1);
+
+    const cronLogs = [
+      ...logSpy.mock.calls,
+      ...warnSpy.mock.calls,
+      ...errorSpy.mock.calls,
+    ].filter((args) =>
+      args.some((a) => typeof a === "string" && a.includes("app.tasks.silent")),
+    );
+    expect(cronLogs).toHaveLength(0);
+
+    await runtime.dispose();
+    logSpy.mockRestore();
+    warnSpy.mockRestore();
+    errorSpy.mockRestore();
+  });
+
+  it("suppresses disabled-task log when silent is true", async () => {
+    const logSpy = jest.spyOn(console, "log").mockImplementation(() => {});
+
+    const disabledSilentTask = r
+      .task("app.tasks.disabled-silent")
+      .tags([
+        globals.tags.cron.with({
+          expression: "* * * * *",
+          enabled: false,
+          silent: true,
+        }),
+      ])
+      .run(async () => undefined)
+      .build();
+
+    const app = r.resource("app").register([disabledSilentTask]).build();
+    const runtime = await run(app);
+
+    const cronLogs = logSpy.mock.calls.filter((args) =>
+      args.some(
+        (a) => typeof a === "string" && a.includes("app.tasks.disabled-silent"),
+      ),
+    );
+    expect(cronLogs).toHaveLength(0);
+
+    await runtime.dispose();
+    logSpy.mockRestore();
   });
 });

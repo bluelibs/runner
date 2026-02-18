@@ -365,6 +365,7 @@ const app = r.resource("app").register([cleanupTask]).build();
 - `immediate`: run once immediately at startup, then continue schedule
 - `enabled`: disable schedule when `false`
 - `onError`: `"continue"` (default) or `"stop"`
+- `silent`: suppress all cron log output for this task when `true` (default `false`)
 
 Notes:
 

@@ -3363,6 +3363,7 @@ Cron options:
 - `immediate`: run once immediately on startup, then continue schedule.
 - `enabled`: set to `false` to disable scheduling without removing the tag.
 - `onError`: `"continue"` (default) or `"stop"` for that schedule.
+- `silent`: suppress all cron log output for this task when `true` (default `false`).
 
 Operational notes:
 
