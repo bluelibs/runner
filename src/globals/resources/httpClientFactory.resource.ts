@@ -49,7 +49,7 @@ export const httpClientFactory = defineResource({
     // Collect contexts from store.asyncContexts
     const contexts = Array.from(
       store.asyncContexts.values(),
-    ) as unknown as IAsyncContext<any>[];
+    ) as IAsyncContext<any>[];
 
     const create: HttpClientFactory = (config: HttpClientFactoryConfig) =>
       createHttpClient({

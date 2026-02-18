@@ -39,6 +39,11 @@ export interface IAsyncLocalStorage<T> {
   run<R>(store: T, callback: () => R): R;
 }
 
+type WorkerAwareGlobal = typeof globalThis & {
+  importScripts?: (...urls: string[]) => void;
+  WorkerGlobalScope?: new () => unknown;
+};
+
 /**
  * Backward-compatible utility functions retained for consumers
  * importing environment guards from `platform/types`.
@@ -60,24 +65,22 @@ export function isBrowser(): boolean {
  * Worker-like runtimes are now modeled under the "edge" platform id.
  */
 export function isWebWorker(): boolean {
+  const workerGlobal = globalThis as WorkerAwareGlobal;
   return !!(
     typeof self !== "undefined" &&
-    typeof (
-      globalThis as unknown as { importScripts: (urls: string[]) => void }
-    ).importScripts === "function" &&
+    typeof workerGlobal.importScripts === "function" &&
     typeof window === "undefined"
   );
 }
 
 export function isEdge(): boolean {
   if (isWebWorker()) return true;
+  const workerGlobal = globalThis as WorkerAwareGlobal;
+  const workerCtor = workerGlobal.WorkerGlobalScope;
   return !!(
-    typeof (globalThis as unknown as { WorkerGlobalScope?: new () => unknown })
-      .WorkerGlobalScope !== "undefined" &&
+    typeof workerCtor !== "undefined" &&
     typeof self !== "undefined" &&
-    self instanceof
-      (globalThis as unknown as { WorkerGlobalScope: new () => unknown })
-        .WorkerGlobalScope
+    self instanceof workerCtor
   );
 }
 

@@ -60,7 +60,11 @@ const createUser = r
   .build();
 
 // Compose resources and run your application
-const app = r.resource("app").register([db, mailer, createUser]).build();
+const app = r
+  .resource("app") // top-level app resource
+  .register([db, mailer, createUser]) // register all elements
+  .build();
+
 const runtime = await run(app);
 await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 // await runtime.dispose() when you are done.

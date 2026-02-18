@@ -4,22 +4,32 @@ import * as Busboy from "busboy";
 import type { FileInfo, FieldInfo } from "busboy";
 
 // Handle both ESM and CJS interop
-const busboyFactory: (cfg: {
+type BusboyFactory = (cfg: {
   headers: IncomingHttpHeaders;
   limits?: MultipartLimits;
-}) => unknown = (() => {
-  const mod = Busboy as unknown as { default?: unknown };
-  if (typeof mod.default === "function") {
-    return mod.default as (cfg: {
-      headers: IncomingHttpHeaders;
-      limits?: MultipartLimits;
-    }) => unknown;
+}) => unknown;
+
+function isBusboyFactory(value: unknown): value is BusboyFactory {
+  return typeof value === "function";
+}
+
+function resolveBusboyFactory(moduleValue: unknown): BusboyFactory {
+  if (isBusboyFactory(moduleValue)) {
+    return moduleValue;
   }
-  return Busboy as unknown as (cfg: {
-    headers: IncomingHttpHeaders;
-    limits?: MultipartLimits;
-  }) => unknown;
-})();
+  if (moduleValue && typeof moduleValue === "object") {
+    const defaultExport = (moduleValue as { default?: unknown }).default;
+    if (isBusboyFactory(defaultExport)) {
+      return defaultExport;
+    }
+  }
+  throw new Error("Invalid Busboy module shape");
+}
+
+const busboyFactory: BusboyFactory = (cfg) => {
+  const factory = resolveBusboyFactory(Busboy);
+  return factory(cfg);
+};
 
 import type { SerializerLike } from "../../serializer";
 // Import with explicit .ts extension to prevent tsup from resolving it

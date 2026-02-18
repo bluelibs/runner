@@ -22,12 +22,12 @@ export function makeTagBuilder<TConfig, TEnforceIn, TEnforceOut>(
     configSchema<TNewConfig>(schema: IValidationSchema<TNewConfig>) {
       const next = clone(state, {
         configSchema: schema,
-      }) as unknown as BuilderState<TNewConfig, TEnforceIn, TEnforceOut>;
+      }) as BuilderState<TNewConfig, TEnforceIn, TEnforceOut>;
       return makeTagBuilder(next);
     },
 
     config<TNewConfig>(config: TNewConfig) {
-      const next = clone(state, { config }) as unknown as BuilderState<
+      const next = clone(state, { config }) as BuilderState<
         TNewConfig,
         TEnforceIn,
         TEnforceOut

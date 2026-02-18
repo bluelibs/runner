@@ -106,8 +106,10 @@ function buildContextHeaderOrThrow(options: {
   return serializer.stringify(map);
 }
 
-function requestLib(url: URL): typeof http {
-  return url.protocol === "https:" ? (https as unknown as typeof http) : http;
+type RequestModule = Pick<typeof http, "request">;
+
+function requestLib(url: URL): RequestModule {
+  return url.protocol === "https:" ? https : http;
 }
 
 function toHttpStatusError(options: {
@@ -208,7 +210,7 @@ async function postJson<T = any>(
               );
               return;
             }
-            resolveOnce(undefined as unknown as T);
+            resolveOnce(undefined as T);
             return;
           }
           try {
@@ -351,7 +353,7 @@ async function postMultipart(
           headers,
           timeout: cfg.timeoutMs,
         },
-        (res) => resolveOnce({ stream: res as unknown as Readable, res }),
+        (res) => resolveOnce({ stream: res as Readable, res }),
       );
       req.on("error", rejectOnce);
       req.on("timeout", () => {
@@ -414,8 +416,7 @@ async function postOctetStream(
           // any immediate source errors (propagated via req.destroy)
           // to reject the promise first.
           setImmediate(() => {
-            if (!settled)
-              resolveOnce({ stream: res as unknown as Readable, res });
+            if (!settled) resolveOnce({ stream: res as Readable, res });
           });
         },
       );
@@ -465,9 +466,7 @@ function parseMaybeJsonResponse<T = any>(
             );
             return;
           }
-          const json = text
-            ? (serializer.parse(text) as T)
-            : (undefined as unknown as T);
+          const json = text ? (serializer.parse(text) as T) : (undefined as T);
           resolve(json);
         } catch (e) {
           if (statusCode >= 400) {
@@ -499,7 +498,7 @@ function parseMaybeJsonResponse<T = any>(
       }),
     );
   }
-  return Promise.resolve(res as unknown as Readable);
+  return Promise.resolve(res as Readable);
 }
 
 function rethrowTyped(

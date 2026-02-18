@@ -19,7 +19,16 @@ type ResourceMiddlewareOverrideState<
   In,
   Out,
   D extends DependencyMapType,
-> = Readonly<IResourceMiddlewareDefinition<C, In, Out, D>>;
+> = Readonly<{
+  id: string;
+  dependencies: D | ((config: C) => D);
+  configSchema: IValidationSchema<C> | undefined;
+  run: IResourceMiddlewareDefinition<any, In, Out, any>["run"];
+  meta?: IMiddlewareMeta;
+  tags?: TagType[];
+  everywhere?: IResourceMiddlewareDefinition<C, In, Out, D>["everywhere"];
+  throws?: ThrowsList;
+}>;
 
 function cloneResourceMiddlewareState<
   C,
@@ -36,15 +45,16 @@ function cloneResourceMiddlewareState<
     ResourceMiddlewareOverrideState<TNextConfig, TNextIn, TNextOut, TNextDeps>
   >,
 ): ResourceMiddlewareOverrideState<TNextConfig, TNextIn, TNextOut, TNextDeps> {
-  return Object.freeze({
-    ...(state as unknown as ResourceMiddlewareOverrideState<
-      TNextConfig,
-      TNextIn,
-      TNextOut,
-      TNextDeps
-    >),
+  const next = {
+    ...state,
     ...patch,
-  });
+  } as ResourceMiddlewareOverrideState<
+    TNextConfig,
+    TNextIn,
+    TNextOut,
+    TNextDeps
+  >;
+  return Object.freeze(next);
 }
 
 function makeResourceMiddlewareOverrideBuilder<
@@ -70,22 +80,35 @@ function makeResourceMiddlewareOverrideBuilder<
         override,
       );
 
-      const next = cloneResourceMiddlewareState<C, In, Out, D & TNewDeps>(
-        state as unknown as ResourceMiddlewareOverrideState<
+      const next = cloneResourceMiddlewareState<
+        C,
+        In,
+        Out,
+        D,
+        C,
+        In,
+        Out,
+        D & TNewDeps
+      >(state, {
+        dependencies: nextDependencies as D & TNewDeps,
+      });
+
+      if (override) {
+        const overridden = cloneResourceMiddlewareState<
           C,
           In,
           Out,
-          D & TNewDeps
-        >,
-        {
-          dependencies: nextDependencies as unknown as D & TNewDeps,
-        },
-      );
-
-      if (override) {
+          D & TNewDeps,
+          C,
+          In,
+          Out,
+          TNewDeps
+        >(next, {
+          dependencies: nextDependencies as TNewDeps,
+        });
         return makeResourceMiddlewareOverrideBuilder<C, In, Out, TNewDeps>(
           base,
-          next as ResourceMiddlewareOverrideState<C, In, Out, TNewDeps>,
+          overridden,
         );
       }
       return makeResourceMiddlewareOverrideBuilder<C, In, Out, D & TNewDeps>(
@@ -95,10 +118,16 @@ function makeResourceMiddlewareOverrideBuilder<
     },
 
     configSchema<TNew>(schema: IValidationSchema<TNew>) {
-      const next = cloneResourceMiddlewareState<TNew, In, Out, D>(
-        state as unknown as ResourceMiddlewareOverrideState<TNew, In, Out, D>,
-        { configSchema: schema },
-      );
+      const next = cloneResourceMiddlewareState<
+        C,
+        In,
+        Out,
+        D,
+        TNew,
+        In,
+        Out,
+        D
+      >(state, { configSchema: schema });
       return makeResourceMiddlewareOverrideBuilder<TNew, In, Out, D>(
         base,
         next,

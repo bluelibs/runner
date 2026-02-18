@@ -90,7 +90,7 @@ function cloneResourceState<
   TNextMiddleware
 > {
   return Object.freeze({
-    ...(state as unknown as ResourceOverrideState<
+    ...(state as ResourceOverrideState<
       TNextConfig,
       TNextValue,
       TNextDeps,
@@ -169,7 +169,7 @@ function makeResourceOverrideBuilder<
           state.dependencies,
           deps,
           override,
-        ) as unknown as TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
+        ) as TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
       });
 
       return makeResourceOverrideBuilder(base, next);
@@ -227,10 +227,7 @@ function makeResourceOverrideBuilder<
         [...TTags, ...TNewTags],
         TMiddleware
       >(state, {
-        tags: mergeArray(state.tags, tags, override) as unknown as [
-          ...TTags,
-          ...TNewTags,
-        ],
+        tags: mergeArray(state.tags, tags, override) as [...TTags, ...TNewTags],
       });
       return makeResourceOverrideBuilder(base, next);
     },

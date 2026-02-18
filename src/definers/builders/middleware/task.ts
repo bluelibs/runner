@@ -38,33 +38,32 @@ export function makeTaskMiddlewareBuilder<
         override,
       );
 
-      const next = cloneTask<C, In, Out, D & TNewDeps>(
-        state as unknown as TaskMwState<C, In, Out, D & TNewDeps>,
-        {
-          dependencies: nextDependencies as unknown as D & TNewDeps,
-        },
-      );
+      const next = cloneTask<C, In, Out, D, C, In, Out, D & TNewDeps>(state, {
+        dependencies: nextDependencies as D & TNewDeps,
+      });
 
       if (override) {
-        return makeTaskMiddlewareBuilder<C, In, Out, TNewDeps>(
-          next as unknown as TaskMwState<C, In, Out, TNewDeps>,
-        );
+        const overridden = cloneTask<
+          C,
+          In,
+          Out,
+          D & TNewDeps,
+          C,
+          In,
+          Out,
+          TNewDeps
+        >(next, {
+          dependencies: nextDependencies as TNewDeps,
+        });
+        return makeTaskMiddlewareBuilder<C, In, Out, TNewDeps>(overridden);
       }
       return makeTaskMiddlewareBuilder<C, In, Out, D & TNewDeps>(next);
     },
 
     configSchema<TNew>(schema: IValidationSchema<TNew>) {
-      const next = cloneTask<TNew, In, Out, D>(
-        state as unknown as TaskMwState<TNew, In, Out, D>,
-        {
-          configSchema: schema as unknown as TaskMwState<
-            TNew,
-            In,
-            Out,
-            D
-          >["configSchema"],
-        },
-      );
+      const next = cloneTask<C, In, Out, D, TNew, In, Out, D>(state, {
+        configSchema: schema,
+      });
       return makeTaskMiddlewareBuilder<TNew, In, Out, D>(next);
     },
 
@@ -111,7 +110,7 @@ export function makeTaskMiddlewareBuilder<
       }
 
       const middleware = defineTaskMiddleware({
-        ...(state as unknown as ITaskMiddlewareDefinition<C, In, Out, D>),
+        ...(state as ITaskMiddlewareDefinition<C, In, Out, D>),
       });
       (middleware as { [symbolFilePath]?: string })[symbolFilePath] =
         state.filePath;

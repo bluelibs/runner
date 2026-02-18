@@ -63,13 +63,13 @@ export function makeHookBuilder<
       const next = clone<TDeps, TOn, TMeta, TDeps & TNewDeps, TOn, TMeta>(
         state as BuilderState<TDeps, TOn, TMeta>,
         {
-          dependencies: nextDependencies as unknown as TDeps & TNewDeps,
+          dependencies: nextDependencies as TDeps & TNewDeps,
         },
       );
 
       if (override) {
         return makeHookBuilder<TNewDeps, TOn, TMeta>(
-          next as unknown as BuilderState<TNewDeps, TOn, TMeta>,
+          next as BuilderState<TNewDeps, TOn, TMeta>,
         );
       }
       return makeHookBuilder<TDeps & TNewDeps, TOn, TMeta>(next);
@@ -125,7 +125,7 @@ export function makeHookBuilder<
       }
 
       const hook = defineHook({
-        ...(state as unknown as IHookDefinition<TDeps, any, TMeta>),
+        ...(state as IHookDefinition<TDeps, any, TMeta>),
       });
       (hook as { [symbolFilePath]?: string })[symbolFilePath] = state.filePath;
       // Runtime validation guarantees TOn is valid

@@ -7,11 +7,40 @@ import type { TaskMwState, ResMwState } from "./types";
 export function cloneTask<C, In, Out, D extends DependencyMapType>(
   s: TaskMwState<C, In, Out, D>,
   patch: Partial<TaskMwState<C, In, Out, D>>,
-): TaskMwState<C, In, Out, D> {
-  return Object.freeze({
+): TaskMwState<C, In, Out, D>;
+export function cloneTask<
+  C,
+  In,
+  Out,
+  D extends DependencyMapType,
+  TNextConfig,
+  TNextIn,
+  TNextOut,
+  TNextDeps extends DependencyMapType,
+>(
+  s: TaskMwState<C, In, Out, D>,
+  patch: Partial<TaskMwState<TNextConfig, TNextIn, TNextOut, TNextDeps>>,
+): TaskMwState<TNextConfig, TNextIn, TNextOut, TNextDeps>;
+export function cloneTask<
+  C,
+  In,
+  Out,
+  D extends DependencyMapType,
+  TNextConfig = C,
+  TNextIn = In,
+  TNextOut = Out,
+  TNextDeps extends DependencyMapType = D,
+>(
+  s: TaskMwState<C, In, Out, D>,
+  patch: Partial<TaskMwState<TNextConfig, TNextIn, TNextOut, TNextDeps>>,
+): TaskMwState<TNextConfig, TNextIn, TNextOut, TNextDeps> {
+  const next = {
     ...s,
     ...patch,
-  });
+  };
+  return Object.freeze({
+    ...next,
+  }) as TaskMwState<TNextConfig, TNextIn, TNextOut, TNextDeps>;
 }
 
 /**
@@ -20,11 +49,40 @@ export function cloneTask<C, In, Out, D extends DependencyMapType>(
 export function cloneRes<C, In, Out, D extends DependencyMapType>(
   s: ResMwState<C, In, Out, D>,
   patch: Partial<ResMwState<C, In, Out, D>>,
-): ResMwState<C, In, Out, D> {
-  return Object.freeze({
+): ResMwState<C, In, Out, D>;
+export function cloneRes<
+  C,
+  In,
+  Out,
+  D extends DependencyMapType,
+  TNextConfig,
+  TNextIn,
+  TNextOut,
+  TNextDeps extends DependencyMapType,
+>(
+  s: ResMwState<C, In, Out, D>,
+  patch: Partial<ResMwState<TNextConfig, TNextIn, TNextOut, TNextDeps>>,
+): ResMwState<TNextConfig, TNextIn, TNextOut, TNextDeps>;
+export function cloneRes<
+  C,
+  In,
+  Out,
+  D extends DependencyMapType,
+  TNextConfig = C,
+  TNextIn = In,
+  TNextOut = Out,
+  TNextDeps extends DependencyMapType = D,
+>(
+  s: ResMwState<C, In, Out, D>,
+  patch: Partial<ResMwState<TNextConfig, TNextIn, TNextOut, TNextDeps>>,
+): ResMwState<TNextConfig, TNextIn, TNextOut, TNextDeps> {
+  const next = {
     ...s,
     ...patch,
-  });
+  };
+  return Object.freeze({
+    ...next,
+  }) as ResMwState<TNextConfig, TNextIn, TNextOut, TNextDeps>;
 }
 
 export { mergeArray } from "../shared/mergeUtils";
@@ -47,7 +105,7 @@ export function mergeDependencies<
   type Result = (TExisting & TNew) | ((config: C) => TExisting & TNew);
 
   if (override || !existing) {
-    return addition as unknown as Result;
+    return addition as Result;
   }
 
   if (isFnExisting && isFnAddition) {

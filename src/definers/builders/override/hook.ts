@@ -68,10 +68,11 @@ function cloneHookState<
   state: HookOverrideState<TDeps, TOn, TMeta>,
   patch: Partial<HookOverrideState<TNextDeps, TNextOn, TNextMeta>>,
 ): HookOverrideState<TNextDeps, TNextOn, TNextMeta> {
-  return Object.freeze({
-    ...(state as unknown as HookOverrideState<TNextDeps, TNextOn, TNextMeta>),
+  const next = {
+    ...state,
     ...patch,
-  });
+  } as HookOverrideState<TNextDeps, TNextOn, TNextMeta>;
+  return Object.freeze(next);
 }
 
 function makeHookOverrideBuilder<
@@ -103,7 +104,7 @@ function makeHookOverrideBuilder<
       );
 
       const next = cloneHookState<TDeps, TOn, TMeta, NextDeps>(state, {
-        dependencies: nextDependencies as unknown as NextDeps,
+        dependencies: nextDependencies as NextDeps,
       });
 
       return makeHookOverrideBuilder<NextDeps, TOn, TMeta>(base, next);

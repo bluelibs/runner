@@ -13,7 +13,7 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
     if (this.alsProbed) return;
     this.alsProbed = true;
 
-    const g = globalThis as unknown as Record<string, unknown>;
+    const g = globalThis as Record<string, unknown>;
 
     // Keep universal behavior unchanged for non-Deno runtimes.
     if (typeof g.Deno === "undefined") return;
@@ -37,7 +37,7 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   }
 
   onUncaughtException(handler: (error: any) => void) {
-    const tgt = globalThis as unknown as Record<string, any>;
+    const tgt = globalThis as Record<string, any>;
     if (tgt.addEventListener) {
       const h = (e: any) => handler(e?.error ?? e);
       tgt.addEventListener("error", h);
@@ -47,7 +47,7 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   }
 
   onUnhandledRejection(handler: (reason: any) => void) {
-    const tgt = globalThis as unknown as Record<string, any>;
+    const tgt = globalThis as Record<string, any>;
     if (tgt.addEventListener) {
       const wrap = (e: any) => handler(e?.reason ?? e);
       tgt.addEventListener("unhandledrejection", wrap);
@@ -57,13 +57,13 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   }
 
   onShutdownSignal(handler: () => void) {
-    const tgt = globalThis as unknown as Record<string, any>;
+    const tgt = globalThis as Record<string, any>;
     if (tgt.addEventListener) {
       const handlers: { before?: any; visibility?: any } = {};
       handlers.before = (_e?: any) => handler();
       tgt.addEventListener("beforeunload", handlers.before);
 
-      const doc = (globalThis as unknown as Record<string, any>).document;
+      const doc = (globalThis as Record<string, any>).document;
       if (doc) {
         handlers.visibility = () => {
           if (doc.visibilityState === "hidden") handler();
@@ -85,13 +85,13 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   }
 
   getEnv(key: string): string | undefined {
-    const g = globalThis as unknown as Record<string, any>;
+    const g = globalThis as Record<string, any>;
     if (g.__ENV__ && typeof g.__ENV__ === "object") return g.__ENV__[key];
     if (
       typeof process !== "undefined" &&
-      (process as unknown as { env: Record<string, string> }).env
+      (process as { env: Record<string, string> }).env
     )
-      return (process as unknown as { env: Record<string, string> }).env[key];
+      return (process as { env: Record<string, string> }).env[key];
     if (g.env && typeof g.env === "object") return g.env[key];
     return undefined;
   }

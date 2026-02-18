@@ -31,21 +31,11 @@ export function taskMiddlewareBuilder<
     id,
     filePath,
     dependencies: {} as D,
-    configSchema: undefined as unknown as TaskMwState<
-      C,
-      In,
-      Out,
-      D
-    >["configSchema"],
-    run: undefined as unknown as TaskMwState<C, In, Out, D>["run"],
+    configSchema: undefined,
+    run: undefined,
     meta: {} as IMiddlewareMeta,
     tags: [] as TagType[],
-    everywhere: undefined as unknown as TaskMwState<
-      C,
-      In,
-      Out,
-      D
-    >["everywhere"],
+    everywhere: undefined,
     throws: undefined,
   });
 
@@ -66,16 +56,11 @@ export function resourceMiddlewareBuilder<
     id,
     filePath,
     dependencies: {} as D,
-    configSchema: undefined as unknown as ResMwState<
-      C,
-      In,
-      Out,
-      D
-    >["configSchema"],
-    run: undefined as unknown as ResMwState<C, In, Out, D>["run"],
+    configSchema: undefined,
+    run: undefined,
     meta: {} as IMiddlewareMeta,
     tags: [] as TagType[],
-    everywhere: undefined as unknown as ResMwState<C, In, Out, D>["everywhere"],
+    everywhere: undefined,
     throws: undefined,
   });
 

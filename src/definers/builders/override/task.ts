@@ -61,17 +61,18 @@ function cloneTaskState<
   TNextTags,
   TNextMiddleware
 > {
-  return Object.freeze({
-    ...(state as unknown as TaskOverrideState<
-      TNextInput,
-      TNextOutput,
-      TNextDeps,
-      TNextMeta,
-      TNextTags,
-      TNextMiddleware
-    >),
+  const next = {
+    ...state,
     ...patch,
-  });
+  } as TaskOverrideState<
+    TNextInput,
+    TNextOutput,
+    TNextDeps,
+    TNextMeta,
+    TNextTags,
+    TNextMiddleware
+  >;
+  return Object.freeze(next);
 }
 
 function makeTaskOverrideBuilder<
@@ -119,7 +120,7 @@ function makeTaskOverrideBuilder<
         TTags,
         TMiddleware
       >(state, {
-        dependencies: nextDependencies as unknown as TDeps & TNewDeps,
+        dependencies: nextDependencies as TDeps & TNewDeps,
       });
 
       return makeTaskOverrideBuilder(base, next);
@@ -238,7 +239,7 @@ function makeTaskOverrideBuilder<
       const wrapped = (input: unknown, deps: unknown) =>
         fn(
           input as ResolveInput<TInput, TNewInput>,
-          deps as unknown as DependencyValuesType<TDeps>,
+          deps as DependencyValuesType<TDeps>,
         );
 
       const next = cloneTaskState<

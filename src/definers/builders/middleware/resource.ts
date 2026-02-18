@@ -38,33 +38,32 @@ export function makeResourceMiddlewareBuilder<
         override,
       );
 
-      const next = cloneRes<C, In, Out, D & TNewDeps>(
-        state as unknown as ResMwState<C, In, Out, D & TNewDeps>,
-        {
-          dependencies: nextDependencies as unknown as D & TNewDeps,
-        },
-      );
+      const next = cloneRes<C, In, Out, D, C, In, Out, D & TNewDeps>(state, {
+        dependencies: nextDependencies as D & TNewDeps,
+      });
 
       if (override) {
-        return makeResourceMiddlewareBuilder<C, In, Out, TNewDeps>(
-          next as unknown as ResMwState<C, In, Out, TNewDeps>,
-        );
+        const overridden = cloneRes<
+          C,
+          In,
+          Out,
+          D & TNewDeps,
+          C,
+          In,
+          Out,
+          TNewDeps
+        >(next, {
+          dependencies: nextDependencies as TNewDeps,
+        });
+        return makeResourceMiddlewareBuilder<C, In, Out, TNewDeps>(overridden);
       }
       return makeResourceMiddlewareBuilder<C, In, Out, D & TNewDeps>(next);
     },
 
     configSchema<TNew>(schema: IValidationSchema<TNew>) {
-      const next = cloneRes<TNew, In, Out, D>(
-        state as unknown as ResMwState<TNew, In, Out, D>,
-        {
-          configSchema: schema as unknown as ResMwState<
-            TNew,
-            In,
-            Out,
-            D
-          >["configSchema"],
-        },
-      );
+      const next = cloneRes<C, In, Out, D, TNew, In, Out, D>(state, {
+        configSchema: schema,
+      });
       return makeResourceMiddlewareBuilder<TNew, In, Out, D>(next);
     },
 
@@ -111,7 +110,7 @@ export function makeResourceMiddlewareBuilder<
       }
 
       const middleware = defineResourceMiddleware({
-        ...(state as unknown as IResourceMiddlewareDefinition<C, In, Out, D>),
+        ...(state as IResourceMiddlewareDefinition<C, In, Out, D>),
       });
       (middleware as { [symbolFilePath]?: string })[symbolFilePath] =
         state.filePath;

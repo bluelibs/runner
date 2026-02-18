@@ -97,18 +97,18 @@ export function respondStream(
   applySecurityHeaders(res);
   // Some unit tests stub `res` without full stream interface (no `.on`).
   // Prefer pipe when destination looks like a Writable stream, otherwise manually forward chunks.
-  const canPipe = typeof (res as unknown as { on?: unknown }).on === "function";
+  const canPipe = typeof (res as { on?: unknown }).on === "function";
   if (canPipe) {
     stream.pipe(res);
     return;
   }
 
   const safeWrite = (payload: Buffer) => {
-    (res as unknown as { write?: (chunk: Buffer) => unknown }).write?.(payload);
+    (res as { write?: (chunk: Buffer) => unknown }).write?.(payload);
   };
 
   const safeEnd = () => {
-    (res as unknown as { end?: () => unknown }).end?.();
+    (res as { end?: () => unknown }).end?.();
   };
 
   const handleData = (chunk: unknown) => {
@@ -117,7 +117,7 @@ export function respondStream(
   };
 
   const removeDataListener = () => {
-    const emitter = stream as unknown as {
+    const emitter = stream as {
       removeListener?: (
         event: string,
         handler: (...args: any[]) => void,
@@ -145,19 +145,19 @@ export function respondStream(
     if (!res.writableEnded) safeEnd();
   };
 
-  const read = (
-    stream as unknown as { read?: (size?: number) => unknown }
-  ).read?.bind(stream) as undefined | ((size?: number) => unknown);
+  const read = (stream as { read?: (size?: number) => unknown }).read?.bind(
+    stream,
+  ) as undefined | ((size?: number) => unknown);
   if (typeof read === "function") {
     let chunk: unknown;
     while ((chunk = read()) != null) {
       handleData(chunk);
     }
-    const state = (stream as unknown as { _readableState?: unknown })
-      ._readableState as { ended?: unknown } | undefined;
+    const state = (stream as { _readableState?: unknown })._readableState as
+      | { ended?: unknown }
+      | undefined;
     const ended = Boolean(
-      (stream as unknown as { readableEnded?: unknown }).readableEnded ||
-      state?.ended,
+      (stream as { readableEnded?: unknown }).readableEnded || state?.ended,
     );
     if (ended) {
       if (!res.writableEnded) safeEnd();
@@ -169,7 +169,7 @@ export function respondStream(
   stream.once("end", handleEnd);
   stream.once("error", handleError);
 
-  const resume = (stream as unknown as { resume?: () => unknown }).resume;
+  const resume = (stream as { resume?: () => unknown }).resume;
   if (typeof resume === "function") {
     resume.call(stream);
   }

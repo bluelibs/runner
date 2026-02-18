@@ -11,7 +11,7 @@ import { cancellationError } from "../../errors";
  * the first one is used.
  */
 export function getContentType(headers: IncomingHttpHeaders): string {
-  const raw = (headers as unknown as Record<string, unknown>)["content-type"];
+  const raw = (headers as Record<string, unknown>)["content-type"];
   if (Array.isArray(raw)) return String(raw[0]);
   return String(raw ?? "");
 }

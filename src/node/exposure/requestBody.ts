@@ -58,7 +58,7 @@ export async function readRequestBody(
     };
 
     const cleanup = () => {
-      const emitter = req as unknown as {
+      const emitter = req as {
         removeListener?: (
           event: string,
           handler: (...args: any[]) => void,

@@ -8,7 +8,7 @@ export function clone<TConfig, TEnforceIn, TEnforceOut, TNextConfig = TConfig>(
   patch: Partial<BuilderState<TNextConfig, TEnforceIn, TEnforceOut>>,
 ): BuilderState<TNextConfig, TEnforceIn, TEnforceOut> {
   return Object.freeze({
-    ...(s as unknown as BuilderState<TNextConfig, TEnforceIn, TEnforceOut>),
+    ...(s as BuilderState<TNextConfig, TEnforceIn, TEnforceOut>),
     ...patch,
   });
 }

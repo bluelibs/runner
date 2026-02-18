@@ -49,7 +49,7 @@ export function clone<
 > {
   return Object.freeze({
     // We reuse the frozen state while widening generics, hence the temporary cast.
-    ...(s as unknown as BuilderState<
+    ...(s as BuilderState<
       TNextConfig,
       TNextValue,
       TNextDeps,
@@ -156,7 +156,7 @@ export function mergeDependencies<
   type Result = (TExisting & TNew) | ((config: TConfig) => TExisting & TNew);
 
   if (override || !existing) {
-    return addition as unknown as Result;
+    return addition as Result;
   }
 
   if (isFnExisting && isFnAddition) {

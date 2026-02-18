@@ -41,13 +41,10 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
     const mode = value.mode || "none";
     const delivery = value.eventDeliveryMode || "mirror";
     // Cast store to Store type for helper functions
-    const typedStore = store as unknown as Store;
+    const typedStore = store as Store;
     const tasks = value.tasks ? resolveTasks(typedStore, value.tasks) : [];
     const events = value.events
-      ? resolveEvents(
-          typedStore,
-          value.events as unknown as TunnelEventSelector,
-        )
+      ? resolveEvents(typedStore, value.events as TunnelEventSelector)
       : [];
 
     if (mode === "client" || mode === "both") {
@@ -89,8 +86,8 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
       st.task = {
         ...st.task,
         run: (async (input: unknown) => {
-          return value.run!(t as unknown as ITask, input);
-        }) as unknown as ITask["run"],
+          return value.run!(t as ITask, input);
+        }) as ITask["run"],
         isTunneled: true,
         [symbolTunneledBy]: resourceId,
       } as any;

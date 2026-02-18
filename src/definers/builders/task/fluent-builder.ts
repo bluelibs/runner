@@ -63,7 +63,7 @@ export function makeTaskBuilder<
         TTags,
         TMiddleware
       >(state, {
-        dependencies: nextDependencies as unknown as TDeps & TNewDeps,
+        dependencies: nextDependencies as TDeps & TNewDeps,
       });
 
       return makeTaskBuilder(next);
@@ -182,7 +182,7 @@ export function makeTaskBuilder<
       const wrapped = (input: unknown, deps: unknown) =>
         fn(
           input as ResolveInput<TInput, TNewInput>,
-          deps as unknown as DependencyValuesType<TDeps>, // Dependencies are injected at runtime
+          deps as DependencyValuesType<TDeps>, // Dependencies are injected at runtime
         );
 
       const next = clone<

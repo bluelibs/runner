@@ -23,7 +23,7 @@ const isWaitingSignalStep = (step: {
 }): step is { stepId: string; result: WaitingSignalResult } => {
   const result = step.result;
   if (!isRecord(result)) return false;
-  const waitResult = result as unknown as WaitingSignalResult;
+  const waitResult = result as WaitingSignalResult;
   if (waitResult.state !== "waiting") return false;
   if (typeof waitResult.signalId !== "string") return false;
   if (waitResult.timerId !== undefined) {

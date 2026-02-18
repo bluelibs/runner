@@ -84,7 +84,7 @@ export function makeResourceBuilder<
           state.dependencies,
           deps,
           override,
-        ) as unknown as TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
+        ) as TIsOverride extends true ? TNewDeps : TDeps & TNewDeps,
       });
 
       return makeResourceBuilder(next);
@@ -142,10 +142,7 @@ export function makeResourceBuilder<
         [...TTags, ...TNewTags],
         TMiddleware
       >(state, {
-        tags: mergeArray(state.tags, tags, override) as unknown as [
-          ...TTags,
-          ...TNewTags,
-        ],
+        tags: mergeArray(state.tags, tags, override) as [...TTags, ...TNewTags],
       });
       return makeResourceBuilder(next);
     },
