@@ -50,8 +50,8 @@ const server = r
 const createUser = r
   .task("app.tasks.createUser")
   .dependencies({ logger: globals.resources.logger })
-  .schema<{ name: string }>({ parse: (value) => value })
-  .resultSchema<{ id: string; name: string }>({ parse: (value) => value })
+  .schema<{ name: string }>({ parse: (value) => value }) // parses the input
+  .resultSchema<{ id: string; name: string }>({ parse: (value) => value }) // parses the response
   .run(async (input, { logger }) => {
     await logger.info(`Creating user ${input.name}`);
     return { id: "user-1", name: input.name };
