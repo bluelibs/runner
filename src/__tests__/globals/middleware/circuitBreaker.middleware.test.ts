@@ -1,6 +1,7 @@
 import { defineTask, defineResource } from "../../../define";
 import { run } from "../../../run";
 import {
+  circuitBreakerResource,
   circuitBreakerMiddleware,
   CircuitBreakerOpenError,
 } from "../../../globals/middleware/circuitBreaker.middleware";
@@ -256,5 +257,32 @@ describe("Circuit Breaker Middleware", () => {
     });
 
     await run(app);
+  });
+
+  it("should clear status map on runtime dispose", async () => {
+    const task = defineTask({
+      id: "task.dispose.status",
+      middleware: [circuitBreakerMiddleware.with({ failureThreshold: 2 })],
+      run: async () => {
+        throw createMessageError("boom");
+      },
+    });
+
+    let statusMapRef: Map<string, unknown> | undefined;
+    const app = defineResource({
+      id: "app.dispose.status",
+      register: [task],
+      dependencies: { task, state: circuitBreakerResource },
+      async init(_, { task, state }) {
+        await expect(task()).rejects.toThrow("boom");
+        statusMapRef = state.statusMap as Map<string, unknown>;
+        expect(statusMapRef.size).toBe(1);
+      },
+    });
+
+    const runtime = await run(app);
+    await runtime.dispose();
+
+    expect(statusMapRef?.size).toBe(0);
   });
 });

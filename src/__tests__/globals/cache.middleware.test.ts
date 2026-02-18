@@ -661,6 +661,36 @@ describe("Caching System", () => {
       await run(app);
     });
 
+    it("should cache circular and BigInt inputs with default keyBuilder", async () => {
+      type CircularBigIntInput = { id: bigint; self?: unknown };
+      const runSpy = jest.fn(async (_input: CircularBigIntInput) => "ok");
+
+      const testTask = defineTask({
+        id: "circular.bigint.task",
+        middleware: [cacheMiddleware],
+        run: async (input: CircularBigIntInput) => runSpy(input),
+      });
+
+      const app = defineResource({
+        id: "app",
+        register: [cacheResource, cacheMiddleware, testTask],
+        dependencies: { testTask },
+        async init(_, { testTask }) {
+          const input = { id: 1n } as CircularBigIntInput;
+          input.self = input;
+
+          const result1 = await testTask(input);
+          const result2 = await testTask(input);
+
+          expect(result1).toBe("ok");
+          expect(result2).toBe("ok");
+          expect(runSpy).toHaveBeenCalledTimes(1);
+        },
+      });
+
+      await run(app);
+    });
+
     it("should handle null and undefined inputs", async () => {
       const testTask = defineTask({
         id: "null.undefined.task",

@@ -29,6 +29,7 @@ describe("tunnel protocol - more branches", () => {
   });
 
   it("assertOkEnvelope invalid input uses fallback message when provided", () => {
+    expect.assertions(1);
     try {
       assertOkEnvelope(undefined, {
         fallbackMessage: "INVALID",

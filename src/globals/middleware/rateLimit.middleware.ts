@@ -1,6 +1,8 @@
 import { defineResource, defineTaskMiddleware } from "../../define";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
+import { RunnerError } from "../../definers/defineError";
+import { middlewareRateLimitExceededError, RunnerErrorId } from "../../errors";
 
 export interface RateLimitMiddlewareConfig {
   /**
@@ -52,10 +54,14 @@ const rateLimitConfigSchema = {
 /**
  * Custom error class for rate limit errors.
  */
-export class RateLimitError extends Error {
+export class RateLimitError extends RunnerError<{ message: string }> {
   constructor(message: string) {
-    super(message);
-    this.name = "RateLimitError";
+    super(
+      RunnerErrorId.MiddlewareRateLimitExceeded,
+      message,
+      { message },
+      middlewareRateLimitExceededError.httpCode,
+    );
   }
 }
 
@@ -98,6 +104,7 @@ export const rateLimitResource = defineResource({
  */
 export const rateLimitTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.rateLimit",
+  throws: [middlewareRateLimitExceededError],
   configSchema: rateLimitConfigSchema,
   dependencies: { state: rateLimitResource },
   async run(

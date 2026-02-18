@@ -2,6 +2,7 @@ import { registerProcessLevelSafetyNets } from "../../tools/processShutdownHooks
 
 describe("processShutdownHooks", () => {
   it("logs when a process safety-net handler throws", async () => {
+    expect.assertions(2);
     const consoleSpy = jest
       .spyOn(console, "error")
       .mockImplementation(() => undefined);

@@ -5,6 +5,7 @@ import type {
 } from "../core/interfaces/queue";
 import { connectAmqplib } from "../optionalDeps/amqplib";
 import { durableQueueNotInitializedError } from "../../../errors";
+import { randomUUID } from "node:crypto";
 
 type ConsumeMessage = { content: Buffer };
 
@@ -103,7 +104,7 @@ export class RabbitMQQueue implements IDurableQueue {
     const channel = this.channel;
     if (!channel) durableQueueNotInitializedError.throw();
 
-    const id = Math.random().toString(36).substring(2, 10);
+    const id = randomUUID();
     const fullMessage: QueueMessage<T> = {
       ...message,
       id,

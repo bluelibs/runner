@@ -68,6 +68,8 @@ describe("Store disposal regressions", () => {
   });
 
   it("aggregates multiple disposal failures and normalizes non-Error throws", async () => {
+    expect.assertions(5);
+
     const fixture = createTestFixture();
     const { store } = fixture;
     store.setTaskRunner(fixture.createTaskRunner());

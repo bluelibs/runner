@@ -1,5 +1,7 @@
 import { defineTaskMiddleware, defineResourceMiddleware } from "../../define";
 import { journal } from "../../models/ExecutionJournal";
+import { RunnerError } from "../../definers/defineError";
+import { middlewareTimeoutError, RunnerErrorId } from "../../errors";
 
 enum AbortSignalEventType {
   Abort = "abort",
@@ -17,10 +19,14 @@ export interface TimeoutMiddlewareConfig {
  * Custom error class for timeout errors.
  * Using a class allows proper instanceof checks.
  */
-export class TimeoutError extends Error {
+export class TimeoutError extends RunnerError<{ message: string }> {
   constructor(message: string) {
-    super(message);
-    this.name = "TimeoutError";
+    super(
+      RunnerErrorId.MiddlewareTimeout,
+      message,
+      { message },
+      middlewareTimeoutError.httpCode,
+    );
   }
 }
 
@@ -37,6 +43,7 @@ export const journalKeys = {
 
 export const timeoutTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.timeout.task",
+  throws: [middlewareTimeoutError],
   async run({ task, next, journal }, _deps, config: TimeoutMiddlewareConfig) {
     const input = task?.input;
 
@@ -98,6 +105,7 @@ export const timeoutTaskMiddleware = defineTaskMiddleware({
 
 export const timeoutResourceMiddleware = defineResourceMiddleware({
   id: "globals.middleware.timeout.resource",
+  throws: [middlewareTimeoutError],
   async run({ resource, next }, _deps, config: TimeoutMiddlewareConfig) {
     const input = resource?.config;
     const ttl = Math.max(0, config.ttl);

@@ -1,6 +1,8 @@
 import { defineTaskMiddleware, defineResource } from "../../define";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalTags } from "../globalTags";
+import { RunnerError } from "../../definers/defineError";
+import { middlewareCircuitBreakerOpenError, RunnerErrorId } from "../../errors";
 
 /**
  * States of the Circuit Breaker
@@ -30,10 +32,14 @@ export interface CircuitBreakerMiddlewareConfig {
 /**
  * Error thrown when the circuit is OPEN
  */
-export class CircuitBreakerOpenError extends Error {
+export class CircuitBreakerOpenError extends RunnerError<{ message: string }> {
   constructor(message: string) {
-    super(message);
-    this.name = "CircuitBreakerOpenError";
+    super(
+      RunnerErrorId.MiddlewareCircuitBreakerOpen,
+      message,
+      { message },
+      middlewareCircuitBreakerOpenError.httpCode,
+    );
   }
 }
 
@@ -67,10 +73,14 @@ export const circuitBreakerResource = defineResource({
       statusMap: new Map<string, CircuitBreakerStatus>(),
     };
   },
+  dispose: async (state) => {
+    state.statusMap.clear();
+  },
 });
 
 export const circuitBreakerMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.circuitBreaker",
+  throws: [middlewareCircuitBreakerOpenError],
   dependencies: { state: circuitBreakerResource },
   async run(
     { task, next, journal },

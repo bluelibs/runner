@@ -25,6 +25,7 @@ export interface ConcurrencyMiddlewareConfig {
 export interface ConcurrencyState {
   semaphoresByConfig: WeakMap<ConcurrencyMiddlewareConfig, Semaphore>;
   semaphoresByKey: Map<string, { semaphore: Semaphore; limit: number }>;
+  semaphores: Set<Semaphore>;
 }
 
 export const concurrencyResource = defineResource({
@@ -33,7 +34,15 @@ export const concurrencyResource = defineResource({
   init: async () => ({
     semaphoresByConfig: new WeakMap<ConcurrencyMiddlewareConfig, Semaphore>(),
     semaphoresByKey: new Map<string, { semaphore: Semaphore; limit: number }>(),
+    semaphores: new Set<Semaphore>(),
   }),
+  dispose: async (state) => {
+    for (const semaphore of state.semaphores) {
+      semaphore.dispose();
+    }
+    state.semaphores.clear();
+    state.semaphoresByKey.clear();
+  },
 });
 
 /**
@@ -59,6 +68,7 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
           semaphore = existing.semaphore;
         } else {
           semaphore = new Semaphore(config.limit);
+          state.semaphores.add(semaphore);
           state.semaphoresByKey.set(config.key, {
             semaphore,
             limit: config.limit,
@@ -68,6 +78,7 @@ export const concurrencyTaskMiddleware = defineTaskMiddleware({
         semaphore = state.semaphoresByConfig.get(config);
         if (!semaphore) {
           semaphore = new Semaphore(config.limit);
+          state.semaphores.add(semaphore);
           state.semaphoresByConfig.set(config, semaphore);
         }
       }

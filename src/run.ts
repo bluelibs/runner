@@ -20,6 +20,8 @@ import { RunResult } from "./models/RunResult";
 import { ResourceInitMode, RunOptions } from "./types/runner";
 import { getPlatform } from "./platform";
 
+const activeRunResults = new Set<RunResult<any>>();
+
 /**
  * This is the central function that kicks off you runner. You can run as many resources as you want in a single process, they will run in complete isolation.
  *
@@ -116,6 +118,7 @@ export async function run<C, V extends Promise<any>>(
         unhookShutdown = undefined;
       }
     } finally {
+      activeRunResults.delete(runtimeResult);
       await store.dispose();
     }
   };
@@ -193,6 +196,7 @@ export async function run<C, V extends Promise<any>>(
       },
     });
     runtimeResult.setValue(store.root.value);
+    activeRunResults.add(runtimeResult);
 
     return runtimeResult;
   } catch (err) {
@@ -200,6 +204,32 @@ export async function run<C, V extends Promise<any>>(
     await disposeAll();
     throw err;
   }
+}
+
+export async function __disposeActiveRunResultsForTests(): Promise<void> {
+  await __disposeActiveRunResultsForTestsExcept();
+}
+
+export function __snapshotActiveRunResultsForTests(): ReadonlySet<
+  RunResult<any>
+> {
+  return new Set(activeRunResults);
+}
+
+export async function __disposeActiveRunResultsForTestsExcept(
+  keep: ReadonlySet<RunResult<any>> = new Set(),
+): Promise<void> {
+  await Promise.all(
+    Array.from(activeRunResults)
+      .filter((runtime) => !keep.has(runtime))
+      .map(async (runtime) => {
+        try {
+          await runtime.dispose();
+        } catch {
+          // Best-effort cleanup in tests; preserve original test failure surface.
+        }
+      }),
+  );
 }
 
 // process hooks moved to processHooks.ts for clarity

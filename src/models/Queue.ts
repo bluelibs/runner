@@ -105,6 +105,12 @@ export class Queue {
       .catch((error) => {
         this.pendingTaskCount -= 1;
         this.emit("error", taskId, error as Error);
+      })
+      .finally(() => {
+        if (this.pendingTaskCount === 0) {
+          // Break the settled chain so long-lived queues do not retain every historical task.
+          this.tail = Promise.resolve();
+        }
       });
 
     return result;

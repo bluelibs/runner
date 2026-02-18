@@ -188,6 +188,7 @@ describe("EventManager Parallel Execution", () => {
   });
 
   it("should aggregate multiple errors in the same batch", async () => {
+    expect.assertions(4);
     eventManager.addListener(
       parallelEvent,
       async () => {

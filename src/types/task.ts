@@ -34,7 +34,7 @@ export type { ITaskMeta } from "./meta";
 
 export interface ITaskDefinition<
   TInput = undefined,
-  TOutput extends Promise<any> = any,
+  TOutput extends Promise<unknown> = Promise<unknown>,
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],
@@ -93,7 +93,7 @@ export interface ITaskDefinition<
 
 export interface ITask<
   TInput = any,
-  TOutput extends Promise<any> = any,
+  TOutput extends Promise<unknown> = Promise<unknown>,
   TDependencies extends DependencyMapType = {},
   TMeta extends ITaskMeta = any,
   TTags extends TagType[] = TagType[],

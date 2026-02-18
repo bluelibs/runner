@@ -95,6 +95,7 @@ describe("Temporal Middleware: Throttle", () => {
   });
 
   it("should reject scheduled callers when the scheduled execution fails", async () => {
+    expect.assertions(3);
     const config = { ms: 50 };
     const deps = { state: { throttleStates: new WeakMap() } };
 
@@ -141,6 +142,7 @@ describe("Temporal Middleware: Throttle", () => {
   });
 
   it("should clear a pending scheduled execution when window elapsed but timer is still pending", async () => {
+    expect.assertions(4);
     jest.useFakeTimers();
     const config = { ms: 50 };
     let callCount = 0;
@@ -229,6 +231,7 @@ describe("Temporal Middleware: Throttle", () => {
   });
 
   it("should clear latestInput after scheduled execution completes", async () => {
+    expect.assertions(4);
     type ThrottleRunInput = Parameters<typeof throttleTaskMiddleware.run>[0];
     type ThrottleRunDeps = Parameters<typeof throttleTaskMiddleware.run>[1];
     type ThrottleRunConfig = Parameters<typeof throttleTaskMiddleware.run>[2];

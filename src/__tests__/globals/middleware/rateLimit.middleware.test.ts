@@ -80,6 +80,7 @@ describe("Rate Limit Middleware", () => {
   });
 
   it("should reset exactly at window boundary", async () => {
+    expect.assertions(1);
     jest.useFakeTimers();
     let callCount = 0;
     const config = { windowMs: 100, max: 1 };

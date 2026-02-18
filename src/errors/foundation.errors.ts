@@ -320,12 +320,18 @@ export const runResultDisposedError = error<DefaultErrorType>(
   "runner.errors.runResultDisposed",
 )
   .format(() => "RunResult has been disposed.")
+  .remediation(
+    "Create a new runtime via run(...) before calling runtime APIs again. Dispose is terminal for a RunResult instance.",
+  )
   .build();
 
 export const runtimeRootNotAvailableError = error<DefaultErrorType>(
   "runner.errors.runtimeRootNotAvailable",
 )
   .format(() => "Root resource is not available.")
+  .remediation(
+    "Ensure run(...) completed successfully and you are not in dry-run mode when accessing the root value.",
+  )
   .build();
 
 export const runtimeRootNotInitializedError = error<
@@ -334,6 +340,10 @@ export const runtimeRootNotInitializedError = error<
   .format(
     ({ rootId }) =>
       `Root resource "${rootId.toString()}" is not initialized yet.`,
+  )
+  .remediation(
+    ({ rootId }) =>
+      `Await run(...) completion and avoid accessing root "${rootId}" during bootstrap/lazy initialization windows.`,
   )
   .build();
 
@@ -344,6 +354,9 @@ export const runResultDisposeDuringBootstrapError = error<DefaultErrorType>(
     () =>
       "RunResult.dispose() is not available during bootstrap. Wait for run() to finish initialization.",
   )
+  .remediation(
+    "Call dispose() only after run(...) resolves and the runtime is fully initialized.",
+  )
   .build();
 
 export const runtimeElementNotFoundError = error<
@@ -352,6 +365,10 @@ export const runtimeElementNotFoundError = error<
   .format(
     ({ type, elementId }) =>
       `${type.toString()} "${elementId.toString()}" not found.`,
+  )
+  .remediation(
+    ({ type, elementId }) =>
+      `Register ${type.toString()} "${elementId.toString()}" in the root resource tree before requesting it from the runtime.`,
   )
   .build();
 

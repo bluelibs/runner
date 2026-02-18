@@ -115,6 +115,7 @@ describe("Temporal Middleware: Dispose", () => {
   });
 
   it("rejects debounce callers when callback runs after state becomes disposed", async () => {
+    expect.assertions(1);
     const state = createTemporalState();
     const deps = { state };
 
@@ -150,6 +151,7 @@ describe("Temporal Middleware: Dispose", () => {
   });
 
   it("rejects throttle callers when callback runs after state becomes disposed", async () => {
+    expect.assertions(2);
     const state = createTemporalState();
     const deps = { state };
 
@@ -232,6 +234,7 @@ describe("Temporal Middleware: Dispose", () => {
   });
 
   it("recreates tracked debounce state set when missing", async () => {
+    expect.assertions(2);
     jest.useFakeTimers();
     try {
       const state = createTemporalState();

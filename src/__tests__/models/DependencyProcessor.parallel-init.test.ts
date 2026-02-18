@@ -51,6 +51,8 @@ describe("DependencyProcessor parallel init internals", () => {
   });
 
   it("normalizes non-Error parallel init rejections into Error and throws single failure directly", async () => {
+    expect.assertions(2);
+
     const fixture = createTestFixture();
     const { store, eventManager, logger } = fixture;
     const taskRunner = fixture.createTaskRunner();

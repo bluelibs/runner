@@ -72,6 +72,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     taskId: string,
   ): Promise<void> => {
     if (req.method !== "POST") {
+      applyCorsActual(req, res, cors);
       respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
       return;
     }

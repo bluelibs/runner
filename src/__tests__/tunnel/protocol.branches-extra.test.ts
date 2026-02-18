@@ -6,6 +6,7 @@ import {
 
 describe("tunnel protocol - branches extra", () => {
   it("assertOkEnvelope throws INVALID_RESPONSE with default message when envelope is not object", () => {
+    expect.assertions(2);
     try {
       assertOkEnvelope(undefined);
       fail("should throw");
@@ -29,6 +30,7 @@ describe("tunnel protocol - branches extra", () => {
   });
 
   it("assertOkEnvelope not ok and no error and no fallback uses default message", () => {
+    expect.assertions(1);
     try {
       assertOkEnvelope({ ok: false } as any);
       fail("should throw");

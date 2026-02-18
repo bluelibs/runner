@@ -6,6 +6,7 @@ import type { IEventBus } from "./bus";
 import type { IDurableContext } from "./context";
 import type { Schedule } from "../types";
 import type { DurableAuditEmitter } from "../audit";
+import type { Logger } from "../../../../models/Logger";
 
 export interface ITaskExecutor {
   run<TInput, TResult>(
@@ -26,6 +27,7 @@ export interface DurableServiceConfig {
   store: IDurableStore;
   queue?: IDurableQueue;
   eventBus?: IEventBus;
+  logger?: Logger;
   taskExecutor?: ITaskExecutor;
   determinism?: {
     /**

@@ -8,6 +8,7 @@ import { createDurableRunnerAuditEmitter } from "../emitters/runnerAuditEmitter"
 import type { EventManager } from "../../../models/EventManager";
 import type { TaskRunner } from "../../../models/TaskRunner";
 import type { Store } from "../../../models/Store";
+import type { Logger } from "../../../models/Logger";
 import type { ITask } from "../../../types/task";
 import { initDurableWorker } from "./DurableWorker";
 import { durableExecutionInvariantError } from "../../../errors";
@@ -27,12 +28,17 @@ export interface RunnerDurableDeps {
   taskRunner: TaskRunner;
   eventManager: EventManager;
   runnerStore: Store;
+  logger: Logger;
 }
 
 export async function createRunnerDurableRuntime(
   config: RunnerDurableRuntimeConfig,
   deps: RunnerDurableDeps,
 ): Promise<DurableResource> {
+  const durableLogger = (config.logger ?? deps.logger).with({
+    source: "durable.runtime",
+  });
+
   const runnerEmitter = createDurableRunnerAuditEmitter({
     eventManager: deps.eventManager,
   });
@@ -59,6 +65,7 @@ export async function createRunnerDurableRuntime(
 
   const service = await initDurableService({
     ...config,
+    logger: durableLogger,
     audit: {
       ...config.audit,
       emitter: auditEmitter,
@@ -85,7 +92,11 @@ export async function createRunnerDurableRuntime(
   });
 
   if (config.worker === true && config.queue) {
-    await initDurableWorker(service, config.queue);
+    await initDurableWorker(
+      service,
+      config.queue,
+      durableLogger.with({ source: "durable.worker" }),
+    );
   }
 
   return new DurableResource(

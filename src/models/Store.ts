@@ -3,14 +3,11 @@ import {
   RegisterableItems,
   ITag,
   AnyTask,
-  ITaskMiddleware,
-  IResourceMiddleware,
   TaggedTask,
   TaggedResource,
   AnyResource,
 } from "../defs";
 import { findCircularDependencies } from "./utils/findCircularDependencies";
-import { globalEventsArray } from "../globals/globalEvents";
 import {
   circularDependenciesError,
   storeAlreadyInitializedError,
@@ -30,36 +27,7 @@ import {
 } from "../types/storeTypes";
 import { TaskRunner } from "./TaskRunner";
 import { globalResources } from "../globals/globalResources";
-import { requireContextTaskMiddleware } from "../globals/middleware/requireContext.middleware";
-import {
-  retryTaskMiddleware,
-  retryResourceMiddleware,
-} from "../globals/middleware/retry.middleware";
-import {
-  timeoutTaskMiddleware,
-  timeoutResourceMiddleware,
-} from "../globals/middleware/timeout.middleware";
-import {
-  concurrencyTaskMiddleware,
-  concurrencyResource,
-} from "../globals/middleware/concurrency.middleware";
-import {
-  debounceTaskMiddleware,
-  throttleTaskMiddleware,
-  temporalResource,
-} from "../globals/middleware/temporal.middleware";
-import { fallbackTaskMiddleware } from "../globals/middleware/fallback.middleware";
-import {
-  rateLimitTaskMiddleware,
-  rateLimitResource,
-} from "../globals/middleware/rateLimit.middleware";
-import {
-  circuitBreakerMiddleware,
-  circuitBreakerResource,
-} from "../globals/middleware/circuitBreaker.middleware";
-import { tunnelResourceMiddleware } from "../globals/middleware/tunnel.middleware";
 import { OnUnhandledError } from "./UnhandledError";
-import { globalTags } from "../globals/globalTags";
 import { MiddlewareManager } from "./MiddlewareManager";
 import { RunnerMode } from "../types/runner";
 import { detectRunnerMode } from "../tools/detectRunnerMode";
@@ -68,6 +36,7 @@ import { getResourcesInDisposeOrder as computeDisposeOrder } from "./utils/dispo
 import { RunResult } from "./RunResult";
 import { getAllThrows } from "../tools/getAllThrows";
 import type { ITask } from "../types/task";
+import { registerStoreBuiltins } from "./BuiltinsRegistry";
 
 // Re-export types for backward compatibility
 export type {
@@ -183,9 +152,6 @@ export class Store {
     );
     builtInResourcesMap.set(globalResources.runtime, runtimeResult);
 
-    this.registry.storeGenericItem(globalResources.queue);
-    this.registry.storeGenericItem(globalResources.httpClientFactory);
-
     for (const [resource, value] of builtInResourcesMap.entries()) {
       this.registry.storeGenericItem(resource);
       const entry = this.resources.get(resource.id);
@@ -195,56 +161,7 @@ export class Store {
         this.recordResourceInitialized(resource.id);
       }
     }
-
-    // Register global tags
-    Object.values(globalTags).forEach((tag) => {
-      this.registry.storeTag(tag);
-    });
-
-    // Register global events
-    globalEventsArray.forEach((event) => {
-      this.registry.storeEvent(event);
-    });
-
-    // Register built-in middlewares
-    // Built-in middlewares currently target tasks only; adjust as needed per kind
-    const builtInTaskMiddlewares = [
-      requireContextTaskMiddleware,
-      retryTaskMiddleware,
-      timeoutTaskMiddleware,
-      concurrencyTaskMiddleware,
-      debounceTaskMiddleware,
-      throttleTaskMiddleware,
-      fallbackTaskMiddleware,
-      rateLimitTaskMiddleware,
-      circuitBreakerMiddleware,
-    ];
-    builtInTaskMiddlewares.forEach((middleware) => {
-      this.registry.taskMiddlewares.set(middleware.id, {
-        middleware: middleware as ITaskMiddleware<any>,
-        computedDependencies: {},
-        isInitialized: false,
-      });
-    });
-
-    const builtInResourceMiddlewares = [
-      retryResourceMiddleware,
-      timeoutResourceMiddleware,
-      tunnelResourceMiddleware,
-    ];
-    builtInResourceMiddlewares.forEach((middleware) => {
-      this.registry.resourceMiddlewares.set(middleware.id, {
-        middleware: middleware as IResourceMiddleware<any>,
-        computedDependencies: {},
-        isInitialized: false,
-      });
-    });
-
-    // Register built-in resources that support the middlewares
-    this.registry.storeGenericItem(rateLimitResource);
-    this.registry.storeGenericItem(circuitBreakerResource);
-    this.registry.storeGenericItem(temporalResource);
-    this.registry.storeGenericItem(concurrencyResource);
+    registerStoreBuiltins(this.registry);
   }
 
   public setTaskRunner(taskRunner: TaskRunner) {

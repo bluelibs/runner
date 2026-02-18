@@ -21,12 +21,14 @@ export const durableResource = r
     taskRunner: globals.resources.taskRunner,
     eventManager: globals.resources.eventManager,
     runnerStore: globals.resources.store,
+    logger: globals.resources.logger,
   })
-  .init(async (config, { taskRunner, eventManager, runnerStore }) => {
+  .init(async (config, { taskRunner, eventManager, runnerStore, logger }) => {
     return await createRunnerDurableRuntime(config, {
       taskRunner,
       eventManager,
       runnerStore,
+      logger,
     });
   })
   .dispose(async (durable, config) =>

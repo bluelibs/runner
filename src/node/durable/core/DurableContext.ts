@@ -128,7 +128,7 @@ export class DurableContext implements IDurableContext {
     stepId: string | DurableStepId<T>,
     optionsOrFn?: StepOptions | (() => Promise<T>),
     fn?: () => Promise<T>,
-  ): any {
+  ): IStepBuilder<T> | Promise<T> {
     const resolvedStepId = this.getStepId(stepId);
     this.determinism.assertUserStepId(resolvedStepId);
     this.determinism.assertUniqueStepId(resolvedStepId);

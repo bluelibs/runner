@@ -14,6 +14,7 @@ import {
   sleepingExecution,
 } from "./DurableService.unit.helpers";
 import { createMessageError } from "../../../errors";
+import { Logger, type ILog } from "../../../models/Logger";
 
 describe("durable: DurableService — polling & lifecycle (unit)", () => {
   it("polls timers and handles schedule timers end-to-end", async () => {
@@ -258,10 +259,20 @@ describe("durable: DurableService — polling & lifecycle (unit)", () => {
     }
 
     const store = new ExplodingStore();
+    const logs: ILog[] = [];
+    const logger = new Logger({
+      printThreshold: null,
+      printStrategy: "pretty",
+      bufferLogs: false,
+    });
+    logger.onLog((log) => {
+      logs.push(log);
+    });
     const service = await initDurableService({
       store,
       taskExecutor: createTaskExecutor({}),
       polling: { interval: 5 },
+      logger,
     });
 
     await store.createTimer({
@@ -280,17 +291,17 @@ describe("durable: DurableService — polling & lifecycle (unit)", () => {
 
     await new Promise((resolve) => setTimeout(resolve, 25));
 
-    const consoleSpy = jest
-      .spyOn(console, "error")
-      .mockImplementation(() => {});
     store.shouldThrow = true;
 
     await new Promise((resolve) => setTimeout(resolve, 25));
-    expect(consoleSpy).toHaveBeenCalledWith(
-      "DurableService polling error:",
-      expect.any(Error),
+    expect(logs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          level: "error",
+          message: "Durable polling loop failed.",
+        }),
+      ]),
     );
-    consoleSpy.mockRestore();
 
     await service.stop();
   });

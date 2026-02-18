@@ -48,6 +48,8 @@ describe("DependencyProcessor Consistency", () => {
   });
 
   it("should annotate Error failures with resourceId and cause", async () => {
+    expect.assertions(4);
+
     const error = new Error(ErrorMessage.Boom);
     const broken = r
       .resource(ResourceId.Broken)
@@ -79,6 +81,8 @@ describe("DependencyProcessor Consistency", () => {
   });
 
   it("should keep existing resourceId and cause when present", async () => {
+    expect.assertions(4);
+
     const error = new Error(ErrorMessage.WithResource);
     Object.defineProperty(error, "resourceId", {
       value: ResourceId.BrokenWithMeta,
@@ -298,6 +302,8 @@ describe("DependencyProcessor Consistency", () => {
   });
 
   it("should annotate dependency-triggered resource initialization errors", async () => {
+    expect.assertions(4);
+
     const broken = r
       .resource(ResourceId.BrokenViaDependency)
       .init(async () => {

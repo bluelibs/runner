@@ -12,6 +12,7 @@ import type {
   ListExecutionsOptions,
 } from "../core/interfaces/store";
 import type { DurableAuditEntry } from "../core/audit";
+import { randomUUID } from "node:crypto";
 
 export class MemoryStore implements IDurableStore {
   private executions = new Map<string, Execution>();
@@ -285,7 +286,7 @@ export class MemoryStore implements IDurableStore {
     this.pruneExpiredLocks(now);
     const lock = this.locks.get(resource);
     if (lock && lock.expires > now) return null;
-    const lockId = Math.random().toString(36).substring(2, 10);
+    const lockId = randomUUID();
     this.locks.set(resource, { id: lockId, expires: now + ttlMs });
     return lockId;
   }

@@ -69,7 +69,7 @@ export const retryTaskMiddleware = defineTaskMiddleware({
         // Calculate delay using custom strategy or default exponential backoff
         const delay = config.delayStrategy
           ? config.delayStrategy(attempts, err)
-          : 100 * Math.pow(2, attempts);
+          : getDefaultRetryDelayMs(attempts);
 
         if (delay > 0) {
           await new Promise((resolve) => setTimeout(resolve, delay));
@@ -101,7 +101,7 @@ export const retryResourceMiddleware = defineResourceMiddleware({
         }
         const delay = config.delayStrategy
           ? config.delayStrategy(attempts, err)
-          : 100 * Math.pow(2, attempts);
+          : getDefaultRetryDelayMs(attempts);
         if (delay > 0) {
           await new Promise((resolve) => setTimeout(resolve, delay));
         }
@@ -110,3 +110,9 @@ export const retryResourceMiddleware = defineResourceMiddleware({
     }
   },
 });
+
+function getDefaultRetryDelayMs(attempt: number): number {
+  const baseDelayMs = 100 * Math.pow(2, attempt);
+  const jitterMs = Math.floor(Math.random() * Math.max(1, baseDelayMs / 2));
+  return baseDelayMs + jitterMs;
+}

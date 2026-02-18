@@ -1,15 +1,12 @@
 import {
   DependencyMapType,
   DependencyValuesType,
-  ITask,
-  IResource,
   IEvent,
   IEventEmission,
   IEventEmitOptions,
-  TaskLocalInterceptor,
+  IResource,
+  ITask,
   ResourceDependencyValuesType,
-  TaskDependencyWithIntercept,
-  TaskCallOptions,
 } from "../defs";
 import { Store } from "./Store";
 import {
@@ -18,33 +15,29 @@ import {
   HookStoreElementType,
   HookDependencyState,
 } from "../types/storeTypes";
-import * as utils from "../define";
 import { EventManager } from "./EventManager";
 import { ResourceInitializer } from "./ResourceInitializer";
 import { TaskRunner } from "./TaskRunner";
-import {
-  dependencyNotFoundError,
-  eventNotFoundError,
-  unknownItemTypeError,
-  parallelInitSchedulingError,
-} from "../errors";
+import { eventNotFoundError } from "../errors";
 import { Logger } from "./Logger";
-import { findDependencyStrategy } from "./utils/dependencyStrategies";
 import { ResourceInitMode } from "../types/runner";
-import { getResourceDependencyIds } from "./utils/resourceDependencyIds";
+import { DependencyExtractor } from "./dependency-processor/DependencyExtractor";
+import { HookEventBuffer } from "./dependency-processor/HookEventBuffer";
+import { ResourceScheduler } from "./dependency-processor/ResourceScheduler";
 
 /**
  * Resolves and caches computed dependencies for store items (resources, tasks, middleware, hooks).
  */
 export class DependencyProcessor {
-  private static readonly MAX_HOOK_FLUSH_PASSES_WITHOUT_CYCLE_DETECTION = 128;
   protected readonly resourceInitializer: ResourceInitializer;
+  protected readonly dependencyExtractor: DependencyExtractor;
+  protected readonly hookEventBuffer: HookEventBuffer;
+  protected readonly resourceScheduler: ResourceScheduler;
   protected readonly logger!: Logger;
   protected readonly initMode: ResourceInitMode;
   protected readonly lazy: boolean;
-  protected readonly runtimeEventCycleDetection: boolean;
-  private readonly pendingHookEvents = new Map<string, IEventEmission<any>[]>();
-  private readonly drainingHookIds = new Set<string>();
+  public readonly pendingHookEvents: Map<string, IEventEmission<any>[]>;
+  public readonly drainingHookIds: Set<string>;
   private readonly inFlightResourceInitializations = new Map<
     string,
     Promise<void>
@@ -62,11 +55,27 @@ export class DependencyProcessor {
     this.logger = logger.with({ source: "dependencyProcessor" });
     this.initMode = initMode;
     this.lazy = lazy;
-    this.runtimeEventCycleDetection = runtimeEventCycleDetection;
     this.resourceInitializer = new ResourceInitializer(
       store,
       eventManager,
       logger,
+    );
+    this.hookEventBuffer = new HookEventBuffer(
+      eventManager,
+      this.logger,
+      runtimeEventCycleDetection,
+    );
+    this.pendingHookEvents = this.hookEventBuffer.pendingHookEvents;
+    this.drainingHookIds = this.hookEventBuffer.drainingHookIds;
+    this.dependencyExtractor = new DependencyExtractor(
+      store,
+      eventManager,
+      taskRunner,
+      this.logger,
+      async (resource) => this.ensureResourceInitialized(resource),
+    );
+    this.resourceScheduler = new ResourceScheduler(store, async (resource) =>
+      this.ensureResourceInitialized(resource),
     );
   }
 
@@ -112,55 +121,7 @@ export class DependencyProcessor {
   }
 
   private collectStartupRequiredResourceIds(): Set<string> {
-    const requiredResourceIds = new Set<string>();
-    const pendingResourceIds: string[] = [];
-
-    const collectFromDependencies = (dependencies: unknown) => {
-      const dependencyIds = getResourceDependencyIds(dependencies);
-      for (const dependencyId of dependencyIds) {
-        if (requiredResourceIds.has(dependencyId)) {
-          continue;
-        }
-
-        const dependencyResource = this.store.resources.get(dependencyId);
-        if (!dependencyResource) {
-          continue;
-        }
-
-        requiredResourceIds.add(dependencyId);
-        pendingResourceIds.push(dependencyId);
-      }
-    };
-
-    for (const middleware of this.store.resourceMiddlewares.values()) {
-      collectFromDependencies(middleware.middleware.dependencies);
-    }
-
-    for (const middleware of this.store.taskMiddlewares.values()) {
-      collectFromDependencies(middleware.middleware.dependencies);
-    }
-
-    for (const hook of this.store.hooks.values()) {
-      collectFromDependencies(hook.hook.dependencies);
-    }
-
-    for (const task of this.store.tasks.values()) {
-      collectFromDependencies(task.task.dependencies);
-    }
-
-    collectFromDependencies(this.store.root.resource.dependencies);
-
-    while (pendingResourceIds.length > 0) {
-      const resourceId = pendingResourceIds.pop()!;
-      const resource = this.store.resources.get(resourceId);
-      if (!resource) {
-        continue;
-      }
-
-      collectFromDependencies(resource.resource.dependencies);
-    }
-
-    return requiredResourceIds;
+    return this.resourceScheduler.collectStartupRequiredResourceIds();
   }
 
   private async computeTaskDependencies(
@@ -244,70 +205,9 @@ export class DependencyProcessor {
   private async initializeUninitializedResourcesParallel(
     targetResourceIds?: ReadonlySet<string>,
   ) {
-    const rootId = this.store.root.resource.id;
-
-    while (true) {
-      const pending = Array.from(this.store.resources.values()).filter(
-        (resource) =>
-          resource.resource.id !== rootId &&
-          resource.isInitialized === false &&
-          (targetResourceIds === undefined ||
-            targetResourceIds.has(resource.resource.id)),
-      );
-      if (pending.length === 0) {
-        return;
-      }
-
-      const readyWave = pending.filter((resource) =>
-        this.isResourceReadyForParallelInit(resource),
-      );
-
-      if (readyWave.length === 0) {
-        parallelInitSchedulingError.throw();
-      }
-
-      const results = await Promise.allSettled(
-        readyWave.map((resource) => this.ensureResourceInitialized(resource)),
-      );
-      const failures = results
-        .filter(
-          (result): result is PromiseRejectedResult =>
-            result.status === "rejected",
-        )
-        .map((result) =>
-          result.reason instanceof Error
-            ? result.reason
-            : new Error(String(result.reason)),
-        );
-
-      if (failures.length === 1) {
-        throw failures[0];
-      }
-
-      if (failures.length > 1) {
-        throw Object.assign(
-          new Error(
-            `${failures.length} resources failed during parallel initialization.`,
-          ),
-          {
-            name: "AggregateError",
-            errors: failures,
-          },
-        );
-      }
-    }
-  }
-
-  private isResourceReadyForParallelInit(
-    resource: ResourceStoreElementType<any, any, any>,
-  ): boolean {
-    const dependencyIds = getResourceDependencyIds(
-      resource.resource.dependencies,
+    await this.resourceScheduler.initializeUninitializedResourcesParallel(
+      targetResourceIds,
     );
-    return dependencyIds.every((dependencyId) => {
-      const dependencyResource = this.store.resources.get(dependencyId);
-      return dependencyResource?.isInitialized === true;
-    });
   }
 
   private async ensureResourceInitialized(
@@ -339,6 +239,7 @@ export class DependencyProcessor {
         resource.isInitialized = true;
         this.store.recordResourceInitialized(resourceId);
       } catch (error: unknown) {
+        this.resetResourceInitializationState(resource);
         this.rethrowResourceInitError(resourceId, error);
       }
     })();
@@ -350,6 +251,15 @@ export class DependencyProcessor {
     } finally {
       this.inFlightResourceInitializations.delete(resourceId);
     }
+  }
+
+  private resetResourceInitializationState(
+    resource: ResourceStoreElementType<any, any, any>,
+  ): void {
+    resource.context = undefined;
+    resource.value = undefined;
+    resource.isInitialized = false;
+    resource.computedDependencies = undefined;
   }
 
   private rethrowResourceInitError(resourceId: string, error: unknown): never {
@@ -412,61 +322,7 @@ export class DependencyProcessor {
     deps: TD,
     extracted: DependencyValuesType<TD>,
   ): ResourceDependencyValuesType<TD> {
-    const wrapped: Record<string, unknown> = {};
-    for (const key of Object.keys(deps) as Array<keyof TD>) {
-      const original = deps[key];
-      const value = (extracted as Record<string, unknown>)[key as string];
-      if (utils.isOptional(original)) {
-        const inner = (original as { inner: unknown }).inner;
-        if (utils.isTask(inner)) {
-          wrapped[key as string] = value
-            ? this.makeTaskWithIntercept(inner)
-            : undefined;
-        } else {
-          wrapped[key as string] = value as unknown;
-        }
-        continue;
-      }
-      if (utils.isTask(original)) {
-        wrapped[key as string] = this.makeTaskWithIntercept(original);
-      } else {
-        wrapped[key as string] = value as unknown;
-      }
-    }
-    return wrapped as ResourceDependencyValuesType<TD>;
-  }
-
-  private makeTaskWithIntercept<
-    I,
-    O extends Promise<any>,
-    D extends DependencyMapType,
-  >(original: ITask<I, O, D>): TaskDependencyWithIntercept<I, O> {
-    const taskId = original.id;
-    const fn: (input: I, options?: TaskCallOptions) => O = (input, options) => {
-      const storeTask = this.getStoreTaskOrThrow(taskId);
-      const effective: ITask<I, O, D> = storeTask.task;
-
-      return this.taskRunner.run(effective, input, options) as O;
-    };
-    return Object.assign(fn, {
-      intercept: (middleware: TaskLocalInterceptor<I, O>) => {
-        this.store.checkLock();
-        const storeTask = this.getStoreTaskOrThrow(taskId);
-
-        if (!storeTask.interceptors) storeTask.interceptors = [];
-        storeTask.interceptors.push(middleware);
-      },
-    }) as TaskDependencyWithIntercept<I, O>;
-  }
-
-  private getStoreTaskOrThrow(
-    taskId: string,
-  ): TaskStoreElementType<any, any, any> {
-    const storeTask = this.store.tasks.get(taskId);
-    if (storeTask === undefined) {
-      return dependencyNotFoundError.throw({ key: `Task ${taskId}` });
-    }
-    return storeTask;
+    return this.dependencyExtractor.wrapResourceDependencies(deps, extracted);
   }
 
   public async initializeRoot() {
@@ -528,139 +384,24 @@ export class DependencyProcessor {
     hookId: string,
     event: IEventEmission<any>,
   ): void {
-    const queue = this.pendingHookEvents.get(hookId);
-    if (queue) {
-      queue.push(event);
-      return;
-    }
-    this.pendingHookEvents.set(hookId, [event]);
+    this.hookEventBuffer.enqueue(hookId, event);
   }
 
   private async flushBufferedHookEvents(
     hookStoreElement: HookStoreElementType,
   ): Promise<void> {
-    if (hookStoreElement.dependencyState !== HookDependencyState.Ready) {
-      return;
-    }
-
-    const hook = hookStoreElement.hook;
-    if (this.drainingHookIds.has(hook.id)) {
-      return;
-    }
-
-    if (!this.pendingHookEvents.has(hook.id)) {
-      return;
-    }
-
-    this.drainingHookIds.add(hook.id);
-    try {
-      let flushPasses = 0;
-      while (true) {
-        flushPasses += 1;
-        if (
-          !this.runtimeEventCycleDetection &&
-          flushPasses >
-            DependencyProcessor.MAX_HOOK_FLUSH_PASSES_WITHOUT_CYCLE_DETECTION
-        ) {
-          await this.logger.error(
-            `Aborting buffered hook event flush for "${hook.id}" after ${flushPasses - 1} passes because runtime event cycle detection is disabled.`,
-          );
-          break;
-        }
-
-        const queue = this.pendingHookEvents.get(hook.id);
-        if (!queue || queue.length === 0) {
-          this.pendingHookEvents.delete(hook.id);
-          break;
-        }
-        this.pendingHookEvents.delete(hook.id);
-
-        for (const queuedEvent of queue) {
-          if (queuedEvent.source === hook.id) {
-            continue;
-          }
-          await this.eventManager.executeHookWithInterceptors(
-            hook,
-            queuedEvent,
-            hookStoreElement.computedDependencies,
-          );
-        }
-      }
-    } finally {
-      this.drainingHookIds.delete(hook.id);
-    }
+    await this.hookEventBuffer.flush(hookStoreElement);
   }
 
   async extractDependencies<T extends DependencyMapType>(
     map: T,
     source: string,
   ): Promise<DependencyValuesType<T>> {
-    const object = {} as DependencyValuesType<T>;
-
-    for (const key in map) {
-      try {
-        object[key] = await this.extractDependency(map[key], source);
-        // Special handling, a little bit of magic and memory sacrifice for the sake of observability.
-        // Maybe later we can allow this to be opt-in to save 'memory' in the case of large tasks?
-        const val = object[key] as unknown;
-        if (val instanceof Logger) {
-          (object as Record<string, unknown>)[key] = val.with({ source });
-        }
-      } catch (e) {
-        const errorMessage = String(e);
-        this.logger.error(
-          `Failed to extract dependency from source: ${source} -> ${key} with error: ${errorMessage}`,
-        );
-
-        throw e;
-      }
-    }
-    this.logger.trace(`Finished computing dependencies for source: ${source}`);
-
-    return object;
+    return this.dependencyExtractor.extractDependencies(map, source);
   }
 
   async extractDependency(object: unknown, source: string) {
-    this.logger.trace(
-      `Extracting dependency -> ${source} -> ${(object as { id?: string })?.id}`,
-    );
-
-    let isOpt = false;
-    let item: unknown = object;
-
-    if (utils.isOptional(object)) {
-      isOpt = true;
-      item = object.inner;
-    }
-
-    const itemWithId = item as { id: string };
-    const strategy = findDependencyStrategy(item);
-    if (!strategy) {
-      return unknownItemTypeError.throw({ item });
-    }
-
-    // For optional deps, check existence first
-    if (isOpt) {
-      const exists = strategy.getStoreMap(this.store).has(itemWithId.id);
-      if (!exists) return undefined;
-    }
-
-    // Dispatch to the appropriate extraction method
-    if (utils.isResource(item)) return this.extractResourceDependency(item);
-    if (utils.isTask(item)) return this.extractTaskDependency(item);
-    if (utils.isEvent(item)) return this.extractEventDependency(item, source);
-
-    // Errors and async contexts are their own value
-    // For non-optional deps, verify they exist in the store
-    if (!isOpt) {
-      const exists = strategy.getStoreMap(this.store).has(itemWithId.id);
-      if (!exists) {
-        const label = utils.isError(item) ? "Error" : "AsyncContext";
-        dependencyNotFoundError.throw({ key: `${label} ${itemWithId.id}` });
-      }
-    }
-
-    return item;
+    return this.dependencyExtractor.extractDependency(object, source);
   }
 
   /**
@@ -669,44 +410,17 @@ export class DependencyProcessor {
    * @returns
    */
   extractEventDependency(object: IEvent<any>, source: string) {
-    return async (input: any, options?: IEventEmitOptions) => {
-      return this.eventManager.emit(object, input, source, options);
-    };
+    return this.dependencyExtractor.extractEventDependency(object, source) as (
+      input: any,
+      options?: IEventEmitOptions,
+    ) => Promise<any>;
   }
 
   async extractTaskDependency(object: ITask<any, any, {}>) {
-    const storeTask = this.store.tasks.get(object.id);
-    if (storeTask === undefined) {
-      dependencyNotFoundError.throw({ key: `Task ${object.id}` });
-    }
-
-    const st = storeTask!;
-    if (!st.isInitialized) {
-      // it's sanitised
-      const dependencies = st.task.dependencies as DependencyMapType;
-
-      st.computedDependencies = await this.extractDependencies(
-        dependencies,
-        st.task.id,
-      );
-      st.isInitialized = true;
-    }
-
-    return (input: unknown, options?: TaskCallOptions) => {
-      return this.taskRunner.run(st.task, input, options);
-    };
+    return this.dependencyExtractor.extractTaskDependency(object);
   }
 
   async extractResourceDependency(object: IResource<any, any, any>) {
-    // check if it exists in the store with the value
-    const storeResource = this.store.resources.get(object.id);
-    if (storeResource === undefined) {
-      dependencyNotFoundError.throw({ key: `Resource ${object.id}` });
-    }
-
-    const sr = storeResource!;
-    await this.ensureResourceInitialized(sr);
-
-    return sr.value;
+    return this.dependencyExtractor.extractResourceDependency(object);
   }
 }

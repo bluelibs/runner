@@ -3,6 +3,7 @@ import type {
   MessageHandler,
   QueueMessage,
 } from "../core/interfaces/queue";
+import { randomUUID } from "node:crypto";
 
 export class MemoryQueue implements IDurableQueue {
   private queue: QueueMessage<unknown>[] = [];
@@ -13,7 +14,7 @@ export class MemoryQueue implements IDurableQueue {
   async enqueue<T>(
     message: Omit<QueueMessage<T>, "id" | "createdAt" | "attempts">,
   ): Promise<string> {
-    const id = Math.random().toString(36).substring(2, 10);
+    const id = randomUUID();
     const fullMessage: QueueMessage<unknown> = {
       ...message,
       id,
@@ -65,7 +66,15 @@ export class MemoryQueue implements IDurableQueue {
         }
 
         this.inFlight.set(next.id, next);
-        await this.handler(next);
+        try {
+          await this.handler(next);
+        } catch {
+          // Fail-safe: if consumer throws before ack/nack, requeue and keep processing.
+          this.inFlight.delete(next.id);
+          if (next.attempts < next.maxAttempts) {
+            this.queue.push(next);
+          }
+        }
       }
     } finally {
       this.isProcessing = false;

@@ -35,6 +35,7 @@ describe("EdgePlatformAdapter ALS support", () => {
   });
 
   it("should fall back to unsupported ALS wrapper when ALS is unavailable", () => {
+    expect.assertions(3);
     const adapter = new EdgePlatformAdapter();
     // Force the noop path by marking as probed with no class found
     (adapter as unknown as { alsProbed: boolean }).alsProbed = true;

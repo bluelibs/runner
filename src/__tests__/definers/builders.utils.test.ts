@@ -75,6 +75,7 @@ describe("error fluent builder + defineError", () => {
   });
 
   it("defineError defaults format when missing", () => {
+    expect.assertions(1);
     const E = defineError<{ message: string }>({
       id: "tests.errors.defaultFormat",
       dataSchema: { parse: (v: unknown) => v as { message: string } },

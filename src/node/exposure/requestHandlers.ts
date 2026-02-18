@@ -148,8 +148,8 @@ export function createRequestHandlers(
     res: ServerResponse,
   ): Promise<void> => {
     prepareRequest(req, res);
-    // Allow GET and POST for discovery
-    if (req.method !== "GET" && req.method !== "POST") {
+    if (req.method !== "GET") {
+      applyCorsActual(req, res, cors);
       respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
       return;
     }

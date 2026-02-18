@@ -4246,6 +4246,57 @@ For tasks, prefer static dependencies (required or `.optional()`) and branch at 
 
 ---
 
+## Execution Journal (Advanced Coordination)
+
+When multiple middleware need to exchange execution-local state without polluting task input/output, use the **ExecutionJournal**.
+
+- Use typed keys via `journal.createKey<T>(...)`
+- `set()` is fail-fast by default (duplicate key writes throw)
+- Use `{ override: true }` only when mutation is intentional
+- Forward journal explicitly in nested task calls when you need shared trace/state continuity
+
+For the full API and patterns, see the Execution Journal section in [Core Concepts](./02-core-concepts.md#execution-journal).
+
+---
+
+## Task Interceptors
+
+Task interceptors let a resource surgically wrap a specific dependency task at init time:
+
+```typescript
+const installer = r
+  .resource("app.installer")
+  .dependencies({ taskA })
+  .init(async (_config, { taskA }) => {
+    taskA.intercept(async (next, input) => {
+      const result = await next(input);
+      return { ...result, intercepted: true };
+    });
+  })
+  .build();
+```
+
+Use this when behavior should be scoped to a particular wiring path, not globally.
+
+For deeper lifecycle guidance, see [Runtime Lifecycle](./03-runtime-lifecycle.md#task-interceptors).
+
+---
+
+## Durable Workflows (Node-only)
+
+Durable workflows provide replay-safe, crash-recoverable orchestration primitives:
+
+- `ctx.step(...)` for deterministic checkpoints
+- `ctx.sleep(...)` for durable timers
+- `ctx.waitForSignal(...)` for durable external synchronization
+- `ctx.switch(...)` for replay-safe branching
+
+Use them when business processes must survive process restarts and resume correctly.
+
+See [Durable Workflows](../readmes/DURABLE_WORKFLOWS.md) for complete API and patterns.
+
+---
+
 ## Serialization
 
 Ever sent a `Date` over JSON and gotten `"2024-01-15T..."` back as a string? Runner's serializer preserves types across the wire.
@@ -4322,7 +4373,7 @@ The serializer is hardened against common attacks:
 - **Prototype pollution blocked**: Filters `__proto__`, `constructor`, `prototype` keys
 - **Depth limits**: Configurable max depth prevents stack overflow
 
-> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](./TUNNELS.md) for file upload patterns.
+> **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](../readmes/TUNNELS.md) for file upload patterns.
 
 ### Tunnels: Bridging Runners
 
@@ -4369,7 +4420,7 @@ const remoteTasksTunnel = r
 
 This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
 
-For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](./TUNNELS.md).
+For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](../readmes/TUNNELS.md).
 
 ---
 

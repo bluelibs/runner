@@ -21,6 +21,7 @@ import {
   PollingManager,
 } from "./managers";
 import { durableExecutionInvariantError } from "../../../errors";
+import { Logger } from "../../../models/Logger";
 
 export { DurableExecutionError } from "./utils";
 
@@ -48,11 +49,20 @@ export class DurableService implements IDurableService {
   private readonly signalHandler: SignalHandler;
   private readonly executionManager: ExecutionManager;
   private readonly pollingManager: PollingManager;
+  private readonly logger: Logger;
 
   /** Unique worker ID for distributed timer coordination */
   private readonly workerId: string;
 
   constructor(private readonly config: DurableServiceConfig) {
+    const baseLogger =
+      config.logger ??
+      new Logger({
+        printThreshold: "error",
+        printStrategy: "pretty",
+        bufferLogs: false,
+      });
+    this.logger = baseLogger.with({ source: "durable.service" });
     this.workerId = config.workerId ?? createExecutionId();
 
     // Initialize task registry
@@ -138,6 +148,7 @@ export class DurableService implements IDurableService {
         processExecution: (id) => this.executionManager.processExecution(id),
         kickoffExecution: (id) => this.executionManager.kickoffExecution(id),
       },
+      this.logger,
     );
   }
 

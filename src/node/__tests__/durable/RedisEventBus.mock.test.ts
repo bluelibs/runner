@@ -62,43 +62,37 @@ describe("durable: RedisEventBus", () => {
   });
 
   it("logs handler errors instead of throwing", async () => {
-    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const onHandlerError = jest.fn();
     const serializer = new Serializer();
+    bus = new RedisEventBus({ redis: redisMock, onHandlerError });
 
-    try {
-      await bus.subscribe("chan", async () => {
-        throw createMessageError("boom");
-      });
+    await bus.subscribe("chan", async () => {
+      throw createMessageError("boom");
+    });
 
-      const event = { type: "t", payload: {}, timestamp: new Date() };
-      onMessage?.("durable:bus:chan", serializer.stringify(event));
+    const event = { type: "t", payload: {}, timestamp: new Date() };
+    onMessage?.("durable:bus:chan", serializer.stringify(event));
 
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(spy).toHaveBeenCalledWith(expect.any(Error));
-    } finally {
-      spy.mockRestore();
-    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onHandlerError).toHaveBeenCalledWith(expect.any(Error));
   });
 
   it("logs synchronous handler errors instead of throwing", async () => {
-    const spy = jest.spyOn(console, "error").mockImplementation(() => {});
+    const onHandlerError = jest.fn();
     const serializer = new Serializer();
+    bus = new RedisEventBus({ redis: redisMock, onHandlerError });
 
-    try {
-      await bus.subscribe("chan", () => {
-        throw createMessageError("sync-boom");
-      });
+    await bus.subscribe("chan", () => {
+      throw createMessageError("sync-boom");
+    });
 
-      const event = { type: "t", payload: {}, timestamp: new Date() };
-      expect(() =>
-        onMessage?.("durable:bus:chan", serializer.stringify(event)),
-      ).not.toThrow();
+    const event = { type: "t", payload: {}, timestamp: new Date() };
+    expect(() =>
+      onMessage?.("durable:bus:chan", serializer.stringify(event)),
+    ).not.toThrow();
 
-      await new Promise((resolve) => setTimeout(resolve, 0));
-      expect(spy).toHaveBeenCalledWith(expect.any(Error));
-    } finally {
-      spy.mockRestore();
-    }
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(onHandlerError).toHaveBeenCalledWith(expect.any(Error));
   });
 
   it("supports tree-encoded Date timestamps (Serializer path)", async () => {

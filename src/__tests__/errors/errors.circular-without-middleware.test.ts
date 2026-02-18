@@ -2,6 +2,7 @@ import { circularDependenciesError } from "../../errors";
 
 describe("Errors: CircularDependenciesError guidance without middleware", () => {
   it("omits middleware-specific guidance when cycles lack 'middleware'", () => {
+    expect.assertions(3);
     const cycles = [
       "taskA -> taskB -> taskA",
       "resourceX -> resourceY -> resourceX",
@@ -16,6 +17,7 @@ describe("Errors: CircularDependenciesError guidance without middleware", () => 
   });
 
   it("includes middleware-specific guidance when cycles mention middleware", () => {
+    expect.assertions(1);
     const cycles = ["middlewareA -> taskX -> middlewareA"];
     try {
       circularDependenciesError.throw({ cycles });

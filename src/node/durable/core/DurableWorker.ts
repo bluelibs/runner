@@ -1,5 +1,6 @@
 import type { IDurableQueue, QueueMessage } from "./interfaces/queue";
 import type { IDurableExecutionProcessor } from "./interfaces/service";
+import { Logger } from "../../../models/Logger";
 
 /**
  * Durable queue consumer (worker process role).
@@ -10,10 +11,22 @@ import type { IDurableExecutionProcessor } from "./interfaces/service";
  * horizontally: the store is the source of truth, the queue provides delivery.
  */
 export class DurableWorker {
+  private readonly logger: Logger;
+
   constructor(
     private readonly service: IDurableExecutionProcessor,
     private readonly queue: IDurableQueue,
-  ) {}
+    logger?: Logger,
+  ) {
+    const baseLogger =
+      logger ??
+      new Logger({
+        printThreshold: "error",
+        printStrategy: "pretty",
+        bufferLogs: false,
+      });
+    this.logger = baseLogger.with({ source: "durable.worker" });
+  }
 
   async start(): Promise<void> {
     await this.queue.consume(async (message) => {
@@ -21,7 +34,14 @@ export class DurableWorker {
         await this.handleMessage(message);
         await this.queue.ack(message.id);
       } catch (error) {
-        console.error(`Worker error processing message ${message.id}:`, error);
+        try {
+          await this.logger.error("Durable worker failed to process message.", {
+            error,
+            data: { messageId: message.id },
+          });
+        } catch {
+          // Logging must not affect message acknowledgement flow.
+        }
         await this.queue.nack(message.id, true);
       }
     });
@@ -50,8 +70,9 @@ export class DurableWorker {
 export async function initDurableWorker(
   service: IDurableExecutionProcessor,
   queue: IDurableQueue,
+  logger?: Logger,
 ): Promise<DurableWorker> {
-  const worker = new DurableWorker(service, queue);
+  const worker = new DurableWorker(service, queue, logger);
   await worker.start();
   return worker;
 }

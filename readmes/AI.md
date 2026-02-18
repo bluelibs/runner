@@ -19,6 +19,13 @@ const serializer = new Serializer({
 });
 ```
 
+`Serializer` also supports hardening knobs:
+- `allowedTypes` to allow-list runtime type ids during deserialize
+- `maxDepth` to cap recursion depth
+- `maxRegExpPatternLength` and `allowUnsafeRegExp` to guard RegExp payloads
+
+Default behavior note: `symbolPolicy` defaults to `SymbolPolicy.AllowAll`; use `WellKnownOnly` (or stricter) for untrusted inputs.
+
 ## Resources
 
 ```ts
@@ -75,7 +82,7 @@ await runtime.runTask(createUser, { name: "Ada" });
 // runtime.dispose() when you are done.
 ```
 
-- `r.*.with(config)` produces a configured copy of the definition.
+- `.with(config)` exists on configurable built definitions (for example resources, task/resource middleware, and tags). Fluent builders use chained methods plus `.build()`.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` creates a new resource with a different id but the same definition. Use `register: "drop"` to avoid re-registering nested items, or `register: "deep"` to deep-fork **registered resources** with new ids via `reId` (other registerables are not kept; resource dependencies pointing to deep-forked resources are remapped to those forks). Export forked resources to use as dependencies.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object with helpers such as `runTask`, `getResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
@@ -157,7 +164,7 @@ const sendWelcomeEmail = r
   .build();
 ```
 
-- Use `.on(onAnyOf(...))` to listen to several events while keeping inference.
+- Use `.on(onAnyOf(...))` to listen to several events while keeping inference. Import `onAnyOf` from `@bluelibs/runner/defs` (or `@bluelibs/runner` if you already re-export it in your local facade).
 - Hooks can set `.order(priority)`; lower numbers run first. Call `event.stopPropagation()` inside `run` to cancel downstream hooks.
 - Wildcard hooks use `.on("*")` and receive every emission except events tagged with `globals.tags.excludeFromGlobalHooks`.
 - Use `.parallel(true)` on event definitions to enable batched parallel execution:

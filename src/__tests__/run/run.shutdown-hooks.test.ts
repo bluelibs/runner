@@ -65,6 +65,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
   });
 
   it("calls dispose() on SIGTERM and exits gracefully", async () => {
+    expect.assertions(2);
     const disposed: string[] = [];
     const app = defineResource({
       id: "tests.app.shutdown",
@@ -101,6 +102,7 @@ describe("run.ts shutdown hooks & error boundary", () => {
   });
 
   it("exits with code 1 when shutdown disposers fail", async () => {
+    expect.assertions(2);
     const app = defineResource({
       id: "tests.app.shutdown.fail",
       async init() {

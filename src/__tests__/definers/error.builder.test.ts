@@ -13,6 +13,7 @@ describe("error builder", () => {
   });
 
   it("build() returns an ErrorHelper that can throw and type-narrow via is()", () => {
+    expect.assertions(4);
     const AppError = r
       .error<{ code: number; message: string }>("tests.errors.app")
       .dataSchema({
@@ -120,6 +121,7 @@ describe("error builder", () => {
   });
 
   it("is() narrows unknown to a typed runner error shape", () => {
+    expect.assertions(2);
     const E = r
       .error<{ code: number }>("tests.errors.narrowing")
       .format((d) => `Code: ${d.code}`)
@@ -187,6 +189,7 @@ describe("error builder", () => {
   });
 
   it("accepts format in builder chain (smoke)", () => {
+    expect.assertions(1);
     const E = r
       .error<{ message: string }>("tests.errors.display")
       .format((d) => d.message)
@@ -199,6 +202,7 @@ describe("error builder", () => {
   });
 
   it("accepts meta in builder chain (smoke)", () => {
+    expect.assertions(1);
     const E = r
       .error<{ message: string }>("tests.errors.meta")
       .meta({ title: "Test Error", description: "A test error" })
@@ -222,6 +226,7 @@ describe("error builder", () => {
   });
 
   it("supports httpCode in builder and exposes it on helper and thrown error", () => {
+    expect.assertions(3);
     const E = r
       .error<{ reason: string }>("tests.errors.httpCode")
       .httpCode(404)
@@ -262,6 +267,7 @@ describe("error builder", () => {
 
   describe("remediation", () => {
     it("appends static remediation advice to message and toString()", () => {
+      expect.assertions(3);
       const E = r
         .error<{ code: number }>("tests.errors.remediation.static")
         .format((d) => `Error code ${d.code}`)
@@ -284,6 +290,7 @@ describe("error builder", () => {
     });
 
     it("supports data-dependent remediation function", () => {
+      expect.assertions(2);
       const E = r
         .error<{ field: string }>("tests.errors.remediation.dynamic")
         .format((d) => `Missing field: ${d.field}`)
@@ -303,6 +310,7 @@ describe("error builder", () => {
     });
 
     it("omits remediation from message when not provided", () => {
+      expect.assertions(2);
       const E = r
         .error<{ code: number }>("tests.errors.remediation.none")
         .format((d) => `Error ${d.code}`)
@@ -319,6 +327,7 @@ describe("error builder", () => {
     });
 
     it("exposes remediation as a property on the thrown error", () => {
+      expect.assertions(1);
       const E = r
         .error<{ code: number }>("tests.errors.remediation.prop")
         .format((d) => `Error ${d.code}`)
@@ -334,6 +343,7 @@ describe("error builder", () => {
     });
 
     it("remediation property is undefined when not provided", () => {
+      expect.assertions(1);
       const E = r
         .error<{ code: number }>("tests.errors.remediation.undefined")
         .format((d) => `Error ${d.code}`)
@@ -348,6 +358,7 @@ describe("error builder", () => {
     });
 
     it("appends remediation label even when remediation is an empty string", () => {
+      expect.assertions(1);
       const E = r
         .error<{ code: number }>("tests.errors.remediation.empty")
         .format((d) => `Error ${d.code}`)
@@ -450,6 +461,7 @@ describe("error builder", () => {
     });
 
     it("narrows to RunnerError type with accessible properties", () => {
+      expect.assertions(6);
       const E = r
         .error<{ field: string }>("tests.errors.static.is.narrow")
         .httpCode(400)
@@ -476,6 +488,7 @@ describe("error builder", () => {
     });
 
     it("works with RunnerError class directly for instanceof checks", () => {
+      expect.assertions(2);
       const E = r
         .error<{ code: number }>("tests.errors.static.is.instanceof")
         .build();

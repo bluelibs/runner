@@ -13,6 +13,7 @@ import type { TaskRegistry } from "./TaskRegistry";
 import type { ScheduleManager } from "./ScheduleManager";
 import { parseSignalState, createExecutionId } from "../utils";
 import { clearTimeout, setTimeout } from "node:timers";
+import { Logger } from "../../../../models/Logger";
 
 export interface PollingConfig {
   enabled?: boolean;
@@ -41,6 +42,7 @@ export class PollingManager {
   private isRunning = false;
   private pollingTimer: ReturnType<typeof setTimeout> | null = null;
   private pollingWake: (() => void) | null = null;
+  private readonly logger: Logger;
 
   constructor(
     private readonly workerId: string,
@@ -53,7 +55,17 @@ export class PollingManager {
     private readonly auditLogger: AuditLogger,
     private readonly scheduleManager: ScheduleManager,
     private readonly callbacks: PollingManagerCallbacks,
-  ) {}
+    logger?: Logger,
+  ) {
+    const baseLogger =
+      logger ??
+      new Logger({
+        printThreshold: "error",
+        printStrategy: "pretty",
+        bufferLogs: false,
+      });
+    this.logger = baseLogger.with({ source: "durable.polling" });
+  }
 
   start(): void {
     if (this.isRunning) return;
@@ -84,7 +96,11 @@ export class PollingManager {
           await this.handleTimer(timer);
         }
       } catch (error) {
-        console.error("DurableService polling error:", error);
+        try {
+          await this.logger.error("Durable polling loop failed.", { error });
+        } catch {
+          // Logging must not crash durable polling loops.
+        }
       }
 
       if (!this.isRunning) return;
@@ -248,7 +264,20 @@ export class PollingManager {
       await this.store.deleteTimer(timer.id);
     } catch (error) {
       // Keep the timer pending so it can be retried by the poller.
-      console.error("DurableService timer handling error:", error);
+      try {
+        await this.logger.error("Durable timer handling failed.", {
+          error,
+          data: {
+            timerId: timer.id,
+            timerType: timer.type,
+            executionId: timer.executionId,
+            taskId: timer.taskId,
+            scheduleId: timer.scheduleId,
+          },
+        });
+      } catch {
+        // Logging must not crash durable timer retry loops.
+      }
     }
   }
 }

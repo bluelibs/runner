@@ -4,6 +4,7 @@ import type { Execution, Schedule, Timer } from "../../durable/core/types";
 import { MemoryQueue } from "../../durable/queue/MemoryQueue";
 import { MemoryStore } from "../../durable/store/MemoryStore";
 import { createMessageError } from "../../../errors";
+import { Logger, type ILog } from "../../../models/Logger";
 
 describe("durable: memory backends", () => {
   describe("MemoryStore", () => {
@@ -200,6 +201,35 @@ describe("durable: memory backends", () => {
       expect(calls).toBe(1);
     });
 
+    it("requeues when handler throws before ack/nack", async () => {
+      await queue.enqueue({ type: "execute", payload: {}, maxAttempts: 2 });
+      let calls = 0;
+
+      await queue.consume(async (msg) => {
+        calls += 1;
+        if (msg.attempts === 1) {
+          throw createMessageError("handler-crash");
+        }
+        await queue.ack(msg.id);
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(calls).toBe(2);
+    });
+
+    it("does not requeue thrown handlers when maxAttempts is already reached", async () => {
+      await queue.enqueue({ type: "execute", payload: {}, maxAttempts: 1 });
+      let calls = 0;
+
+      await queue.consume(async () => {
+        calls += 1;
+        throw createMessageError("handler-crash-no-requeue");
+      });
+
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      expect(calls).toBe(1);
+    });
+
     it("drops messages that exceed maxAttempts", async () => {
       await queue.enqueue({ type: "execute", payload: {}, maxAttempts: 0 });
       const handler = jest.fn();
@@ -232,11 +262,9 @@ describe("durable: memory backends", () => {
     });
 
     it("logs handler errors without crashing", async () => {
-      const consoleSpy = jest
-        .spyOn(console, "error")
-        .mockImplementation(() => {});
+      const onHandlerError = jest.fn();
 
-      const bus = new MemoryEventBus();
+      const bus = new MemoryEventBus({ onHandlerError });
       await bus.publish("no-subscribers", {
         type: "noop",
         payload: null,
@@ -252,12 +280,76 @@ describe("durable: memory backends", () => {
         timestamp: new Date(),
       });
 
-      expect(consoleSpy).toHaveBeenCalledWith(
-        expect.stringContaining("Error in MemoryEventBus handler"),
-        expect.any(Error),
-      );
+      expect(onHandlerError).toHaveBeenCalledWith(expect.any(Error));
+    });
 
-      consoleSpy.mockRestore();
+    it("reports handler errors through logger when callback is not provided", async () => {
+      const logs: ILog[] = [];
+      const logger = new Logger({
+        printThreshold: null,
+        printStrategy: "pretty",
+        bufferLogs: false,
+      });
+      logger.onLog((log) => {
+        logs.push(log);
+      });
+
+      const bus = new MemoryEventBus({ logger });
+      await bus.subscribe("topic", async () => {
+        throw createMessageError("logger-path");
+      });
+
+      await bus.publish("topic", {
+        type: "t",
+        payload: {},
+        timestamp: new Date(),
+      });
+
+      expect(logs).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            level: "error",
+            message: "MemoryEventBus handler failed.",
+          }),
+        ]),
+      );
+    });
+
+    it("logs callback failures when onHandlerError throws", async () => {
+      const logs: ILog[] = [];
+      const logger = new Logger({
+        printThreshold: null,
+        printStrategy: "pretty",
+        bufferLogs: false,
+      });
+      logger.onLog((log) => {
+        logs.push(log);
+      });
+
+      const bus = new MemoryEventBus({
+        logger,
+        onHandlerError: async () => {
+          throw createMessageError("callback-failed");
+        },
+      });
+      await bus.subscribe("topic", async () => {
+        throw createMessageError("handler-failed");
+      });
+
+      await bus.publish("topic", {
+        type: "t",
+        payload: {},
+        timestamp: new Date(),
+      });
+
+      expect(logs).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            level: "error",
+            message: "MemoryEventBus error callback failed.",
+          }),
+        ]),
+      );
     });
 
     it("supports unsubscribe", async () => {

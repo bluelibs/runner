@@ -266,6 +266,7 @@ describe("EventManager", () => {
   });
 
   it("parallel listeners aggregate errors with listener ids", async () => {
+    expect.assertions(7);
     const parallelEvent = defineEvent<string>({
       id: "parallel",
       parallel: true,
@@ -331,6 +332,7 @@ describe("EventManager", () => {
   });
 
   it("single parallel error is annotated with listener id", async () => {
+    expect.assertions(3);
     const parallelEvent = defineEvent<string>({
       id: "parallel-single",
       parallel: true,

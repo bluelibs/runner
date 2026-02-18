@@ -240,6 +240,7 @@ describe("Timeout Middleware", () => {
   });
 
   it("should reject when the timeout timer fires (task middleware)", async () => {
+    expect.assertions(1);
     jest.useFakeTimers();
     const journalInstance = executionJournal.create();
     try {
@@ -263,6 +264,7 @@ describe("Timeout Middleware", () => {
   });
 
   it("should reject when the timeout timer fires (resource middleware)", async () => {
+    expect.assertions(1);
     jest.useFakeTimers();
     try {
       const promise = timeoutResourceMiddleware.run(

@@ -202,6 +202,8 @@ describe("run behavioral scenarios", () => {
   });
 
   it("aggregates parallel resource initialization failures", async () => {
+    expect.assertions(3);
+
     const first = defineResource({
       id: "init.mode.parallel.fail.first",
       async init() {

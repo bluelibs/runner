@@ -22,6 +22,7 @@ import {
 
 describe("error helpers extra branches", () => {
   it("createMessageError preserves Error semantics", () => {
+    expect.assertions(4);
     try {
       createMessageError("boom");
       fail("Expected throw");
@@ -40,6 +41,7 @@ describe("error helpers extra branches", () => {
   });
 
   it("contextError default message branch", () => {
+    expect.assertions(1);
     try {
       // no details -> uses fallback branch
       contextError.throw({});
@@ -50,6 +52,7 @@ describe("error helpers extra branches", () => {
   });
 
   it("resourceNotFoundError message", () => {
+    expect.assertions(1);
     try {
       resourceNotFoundError.throw({ id: "x" });
       fail("Expected throw");
@@ -59,6 +62,7 @@ describe("error helpers extra branches", () => {
   });
 
   it("platformUnsupportedFunctionError smoke", () => {
+    expect.assertions(1);
     try {
       platformUnsupportedFunctionError.throw({ functionName: "testFn" });
       fail("Expected throw");
@@ -127,6 +131,7 @@ describe("error helpers extra branches", () => {
     });
 
     it("includes remediation advice in the message", () => {
+      expect.assertions(3);
       try {
         dependencyNotFoundError.throw({ key: "myService" });
         fail("Expected throw");
@@ -138,6 +143,7 @@ describe("error helpers extra branches", () => {
     });
 
     it("includes static remediation when data is not referenced", () => {
+      expect.assertions(1);
       try {
         contextError.throw({});
         fail("Expected throw");
@@ -147,6 +153,7 @@ describe("error helpers extra branches", () => {
     });
 
     it("includes data-dependent remediation for duplicateRegistration", () => {
+      expect.assertions(2);
       try {
         duplicateRegistrationError.throw({ type: "Task", id: "test.task" });
         fail("Expected throw");
@@ -157,6 +164,7 @@ describe("error helpers extra branches", () => {
     });
 
     it("validationError remediation suggests inputSchema for input subjects", () => {
+      expect.assertions(1);
       try {
         validationError.throw({
           subject: "Task input",
@@ -170,6 +178,7 @@ describe("error helpers extra branches", () => {
     });
 
     it("validationError remediation suggests configSchema for config subjects", () => {
+      expect.assertions(1);
       try {
         validationError.throw({
           subject: "Resource config",
@@ -183,6 +192,7 @@ describe("error helpers extra branches", () => {
     });
 
     it("validationError remediation suggests resultSchema for result subjects", () => {
+      expect.assertions(1);
       try {
         validationError.throw({
           subject: "Task result",
@@ -196,6 +206,7 @@ describe("error helpers extra branches", () => {
     });
 
     it("validationError remediation falls back to schema for other subjects", () => {
+      expect.assertions(4);
       try {
         validationError.throw({
           subject: "Event payload",

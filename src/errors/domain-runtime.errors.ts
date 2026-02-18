@@ -84,6 +84,36 @@ export const middlewareContextRequiredError = error<
   )
   .build();
 
+export const middlewareTimeoutError = error<
+  { message: string } & DefaultErrorType
+>(RunnerErrorId.MiddlewareTimeout)
+  .format(({ message }) => message)
+  .httpCode(408)
+  .remediation(
+    "Increase timeout ttl when appropriate, or optimize the operation to complete within the configured deadline.",
+  )
+  .build();
+
+export const middlewareCircuitBreakerOpenError = error<
+  { message: string } & DefaultErrorType
+>(RunnerErrorId.MiddlewareCircuitBreakerOpen)
+  .format(({ message }) => message)
+  .httpCode(503)
+  .remediation(
+    "Reduce downstream failures, tune circuit breaker thresholds/timeouts, or retry later when the circuit transitions back to HALF_OPEN/CLOSED.",
+  )
+  .build();
+
+export const middlewareRateLimitExceededError = error<
+  { message: string } & DefaultErrorType
+>(RunnerErrorId.MiddlewareRateLimitExceeded)
+  .format(({ message }) => message)
+  .httpCode(429)
+  .remediation(
+    "Reduce request frequency, increase allowed window/max limits, or retry after the configured reset time.",
+  )
+  .build();
+
 export const tunnelTaskNotFoundError = error<
   { taskId: string } & DefaultErrorType
 >(RunnerErrorId.TunnelTaskNotFound)
@@ -332,6 +362,23 @@ export const durableScheduleConfigError = error<
   .format(({ message }) => message)
   .remediation(
     "Provide valid durable schedule configuration and ensure cron/interval values are valid.",
+  )
+  .build();
+
+export const durableExecutionError = error<
+  {
+    message: string;
+    executionId: string;
+    taskId: string;
+    attempt: number;
+    causeInfo?: { message: string; stack?: string };
+  } & DefaultErrorType
+>(RunnerErrorId.DurableExecutionError)
+  .format(({ message }) => message)
+  .httpCode(500)
+  .remediation(
+    ({ executionId }) =>
+      `Inspect durable execution "${executionId}" history and failure cause, then retry/resume based on workflow semantics.`,
   )
   .build();
 
