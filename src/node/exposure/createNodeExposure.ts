@@ -49,6 +49,8 @@ export async function createNodeExposure(
       cors: httpConfig?.cors,
       serializer,
       limits: httpConfig?.limits,
+      disableDiscovery: httpConfig?.disableDiscovery,
+      authRateLimit: httpConfig?.auth?.rateLimit,
     });
 
   const serverControls = await createExposureServer({

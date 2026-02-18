@@ -80,7 +80,7 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
     for (const t of tasks) {
       const st = typedStore.tasks.get(t.id)!;
       // Enforce single-owner policy: a task can be tunneled by only one resource
-      const currentOwner = (st.task as any)[symbolTunneledBy];
+      const currentOwner = st.task[symbolTunneledBy];
       const resourceId = resource.definition.id;
       if (currentOwner && currentOwner !== resourceId) {
         tunnelOwnershipConflictError.throw({
@@ -97,7 +97,7 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
         }) as ITask["run"],
         isTunneled: true,
         [symbolTunneledBy]: resourceId,
-      } as any;
+      } as typeof st.task;
     }
 
     if (events.length > 0) {

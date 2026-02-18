@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 
 import {
   jsonOkResponse,
+  jsonErrorResponse,
   METHOD_NOT_ALLOWED_RESPONSE,
   NOT_FOUND_RESPONSE,
   respondJson,
@@ -29,6 +30,7 @@ import { createEventHandler } from "./handlers/eventHandler";
 import { safeLogWarn } from "./logging";
 import { ensureRequestId, getRequestId } from "./requestIdentity";
 import type { MultipartLimits } from "./multipart";
+import { AuthRateLimiter, type AuthRateLimitConfig } from "./authRateLimiter";
 
 enum ExposureAuditLogKey {
   AuthFailure = "exposure.auth.failure",
@@ -48,6 +50,8 @@ export interface RequestProcessingDeps {
     json?: { maxSize?: number };
     multipart?: MultipartLimits;
   };
+  disableDiscovery?: boolean;
+  authRateLimit?: AuthRateLimitConfig | false;
 }
 
 export interface NodeExposureRequestHandlers {
@@ -72,6 +76,16 @@ export function createRequestHandlers(
   } = deps;
   const serializer = deps.serializer;
   const cors = deps.cors;
+
+  // Auth failure rate limiter — enabled by default, opt-out with `false`.
+  const rateLimiter =
+    deps.authRateLimit !== false
+      ? new AuthRateLimiter(
+          deps.authRateLimit && typeof deps.authRateLimit === "object"
+            ? deps.authRateLimit
+            : undefined,
+        )
+      : undefined;
 
   const extractErrorCode = (response: JsonResponse): string | undefined => {
     if (!response.body || typeof response.body !== "object") return;
@@ -100,8 +114,18 @@ export function createRequestHandlers(
   };
 
   const auditedAuthenticator: Authenticator = async (req) => {
+    const ip = req.socket?.remoteAddress ?? "unknown";
+
+    if (rateLimiter?.isBlocked(ip)) {
+      return {
+        ok: false as const,
+        response: jsonErrorResponse(429, "Too Many Requests", "RATE_LIMITED"),
+      };
+    }
+
     const authResult = await authenticator(req);
     if (!authResult.ok) {
+      rateLimiter?.recordFailure(ip);
       const path = requestUrl(req).pathname;
       safeLogWarn(logger, ExposureAuditLogKey.AuthFailure, {
         requestId: getRequestId(req),
@@ -184,6 +208,11 @@ export function createRequestHandlers(
     res: ServerResponse,
   ): Promise<void> => {
     prepareRequest(req, res);
+    if (deps.disableDiscovery) {
+      applyCorsActual(req, res, cors);
+      respondJson(res, NOT_FOUND_RESPONSE, serializer);
+      return;
+    }
     if (req.method !== "GET") {
       applyCorsActual(req, res, cors);
       respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);

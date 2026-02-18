@@ -8,6 +8,8 @@ import type {
 import type { ITask } from "../../defs";
 import type { TaskRunner } from "../../models/TaskRunner";
 
+import type { AuthRateLimitConfig } from "./authRateLimiter";
+
 export interface NodeExposureHttpAuthConfig {
   header?: string;
   token?: string | string[];
@@ -19,6 +21,11 @@ export interface NodeExposureHttpAuthConfig {
    * all tasks and events to unauthenticated access.
    */
   allowAnonymous?: boolean;
+  /**
+   * Rate-limit auth failures per IP to slow down brute-force attempts.
+   * Pass `false` to disable. Default: 10 failures per 60 s.
+   */
+  rateLimit?: AuthRateLimitConfig | false;
 }
 
 function safeCompare(a: string, b: string): boolean {
@@ -88,7 +95,7 @@ export function createAuthenticator(
         ok: false,
         response: jsonErrorResponse(
           500,
-          "Authentication not configured. Set auth.token, add validator tasks, or explicitly enable auth.allowAnonymous.",
+          "Authentication not configured.",
           "AUTH_NOT_CONFIGURED",
         ),
       };

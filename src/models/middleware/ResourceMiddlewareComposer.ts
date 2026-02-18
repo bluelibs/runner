@@ -131,7 +131,7 @@ export class ResourceMiddlewareComposer {
         );
 
       next = this.wrapWithInterceptors<TConfig, TValue>(
-        baseMiddlewareRunner as any,
+        baseMiddlewareRunner as (config: TConfig) => TValue,
         middlewareInterceptors,
         resource,
       );

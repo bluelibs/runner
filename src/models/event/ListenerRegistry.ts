@@ -127,8 +127,9 @@ export class ListenerRegistry {
       }
       this.cachedMergedListeners.set(eventId, cached);
     }
-    // Return a shallow copy to ensure snapshot isolation.
-    return cached.slice();
+    // The cache is invalidated on mutation, so returning it directly is safe.
+    // Callers that mutate (e.g. parallel batching) must copy themselves.
+    return cached;
   }
 
   private invalidateCache(eventId?: string): void {

@@ -2,6 +2,10 @@ import { AsyncLocalStorage } from "node:async_hooks";
 import type { Store } from "../../../models/Store";
 import type { IEventDefinition } from "../../../types/event";
 import type { AnyTask, ITask } from "../../../types/task";
+import type {
+  DependencyMapType,
+  DependencyValuesType,
+} from "../../../types/utilities";
 import type { IDurableContext } from "./interfaces/context";
 import type {
   DurableStartAndWaitResult,
@@ -161,7 +165,10 @@ export class DurableResource implements IDurableResource {
 
     return await recordFlowShape(async (ctx) => {
       const depsWithRecorder = this.injectRecorderIntoDurableDeps(deps, ctx);
-      await effectiveTask.run(resolvedInput as TInput, depsWithRecorder as any);
+      await effectiveTask.run(
+        resolvedInput as TInput,
+        depsWithRecorder as DependencyValuesType<DependencyMapType>,
+      );
     });
   }
 

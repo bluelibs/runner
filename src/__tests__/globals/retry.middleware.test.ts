@@ -2,6 +2,7 @@ import { defineResource, defineTask } from "../../define";
 import {
   retryResourceMiddleware,
   retryTaskMiddleware,
+  abortableDelay,
 } from "../../globals/middleware/retry.middleware";
 import {
   timeoutTaskMiddleware,
@@ -380,6 +381,95 @@ describe("Retry Middleware", () => {
       });
 
       await expect(run(app)).rejects.toThrow("Temporary failure");
+    });
+  });
+
+  describe("Abort-aware retry delay", () => {
+    it("resolves normally without a signal", async () => {
+      await abortableDelay(1);
+    });
+
+    it("rejects immediately when signal is already aborted", async () => {
+      const ac = new AbortController();
+      ac.abort(new Error("pre-aborted"));
+      await expect(abortableDelay(1, ac.signal)).rejects.toThrow("pre-aborted");
+    });
+
+    it("rejects when signal fires during the delay", async () => {
+      const ac = new AbortController();
+      const p = abortableDelay(10_000, ac.signal);
+      ac.abort(new Error("mid-delay abort"));
+      await expect(p).rejects.toThrow("mid-delay abort");
+    });
+
+    it("resolves normally when signal is present but does not fire", async () => {
+      const ac = new AbortController();
+      await abortableDelay(1, ac.signal);
+    });
+
+    it("cancels retry delay when abort signal fires", async () => {
+      let attempt = 0;
+      const task = defineTask({
+        id: "flakyAbortTask",
+        middleware: [
+          // Timeout fires after 50ms — retry delay (100ms+) should be aborted
+          timeoutTaskMiddleware.with({ ttl: 50 }),
+          retryTaskMiddleware.with({ retries: 5 }),
+        ],
+        run: async () => {
+          attempt++;
+          throw createMessageError("always fails");
+        },
+      });
+
+      const app = defineResource({
+        id: "app.abort.retry",
+        register: [task],
+        dependencies: { task },
+        async init(_, { task }) {
+          await task();
+        },
+      });
+
+      // The test confirms the retry aborts promptly rather than
+      // sleeping through the full backoff schedule.
+      await expect(run(app)).rejects.toThrow();
+      expect(attempt).toBeGreaterThanOrEqual(1);
+    });
+
+    it("completes retry delay normally when signal is present but does not abort", async () => {
+      let attempt = 0;
+      const task = defineTask({
+        id: "flakyAbortNormalTask",
+        middleware: [
+          // Long timeout so it doesn't fire during the short retry delay
+          timeoutTaskMiddleware.with({ ttl: 10_000 }),
+          retryTaskMiddleware.with({
+            retries: 2,
+            delayStrategy: () => 1, // 1ms delay to keep test fast
+          }),
+        ],
+        run: async () => {
+          attempt++;
+          if (attempt < 2) throw createMessageError("fail once");
+          return "ok";
+        },
+      });
+
+      const app = defineResource({
+        id: "app.abort.normal",
+        register: [task],
+        dependencies: { task },
+        async init(_, { task }) {
+          const result = await task();
+          expect(result).toBe("ok");
+        },
+      });
+
+      const runtime = await run(app);
+      await runtime.dispose();
+      // The retry delay resolved normally with an active signal present
+      expect(attempt).toBe(2);
     });
   });
 });

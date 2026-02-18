@@ -92,7 +92,19 @@ export function respondStream(
   res.statusCode = status;
   res.setHeader("content-type", contentType);
   if (headers) {
-    for (const [k, v] of Object.entries(headers)) res.setHeader(k, v);
+    // Security: prevent overriding security-sensitive headers from task code
+    const blockedHeaders = new Set([
+      "set-cookie",
+      "access-control-allow-origin",
+      "access-control-allow-credentials",
+      "x-content-type-options",
+      "x-frame-options",
+    ]);
+    for (const [k, v] of Object.entries(headers)) {
+      if (!blockedHeaders.has(k.toLowerCase())) {
+        res.setHeader(k, v);
+      }
+    }
   }
   applySecurityHeaders(res);
   // Some unit tests stub `res` without full stream interface (no `.on`).

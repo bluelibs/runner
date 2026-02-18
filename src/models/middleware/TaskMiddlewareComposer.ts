@@ -255,7 +255,10 @@ export class TaskMiddlewareComposer {
         this.interceptorRegistry.getTaskMiddlewareInterceptors(middleware.id);
 
       next = this.wrapWithInterceptors<TInput, TOutput, TDeps>(
-        baseMiddlewareRunner as any,
+        baseMiddlewareRunner as (
+          input: TInput,
+          journal: ExecutionJournal,
+        ) => TOutput,
         middlewareInterceptors,
         task,
       );

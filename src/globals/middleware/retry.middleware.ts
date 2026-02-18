@@ -72,7 +72,10 @@ export const retryTaskMiddleware = defineTaskMiddleware({
           : getDefaultRetryDelayMs(attempts);
 
         if (delay > 0) {
-          await new Promise((resolve) => setTimeout(resolve, delay));
+          const signal = journal.get(
+            timeoutJournalKeys.abortController,
+          )?.signal;
+          await abortableDelay(delay, signal);
         }
 
         attempts++;
@@ -103,7 +106,7 @@ export const retryResourceMiddleware = defineResourceMiddleware({
           ? config.delayStrategy(attempts, err)
           : getDefaultRetryDelayMs(attempts);
         if (delay > 0) {
-          await new Promise((resolve) => setTimeout(resolve, delay));
+          await abortableDelay(delay);
         }
         attempts++;
       }
@@ -115,4 +118,29 @@ function getDefaultRetryDelayMs(attempt: number): number {
   const baseDelayMs = 100 * Math.pow(2, attempt);
   const jitterMs = Math.floor(Math.random() * Math.max(1, baseDelayMs / 2));
   return baseDelayMs + jitterMs;
+}
+
+/**
+ * Delay that can be cancelled via an AbortSignal so retries don't block disposal.
+ * @internal Exported for testing only.
+ */
+export function abortableDelay(
+  ms: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  if (!signal) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+  if (signal.aborted) return Promise.reject(signal.reason);
+  return new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms);
+    function onAbort() {
+      clearTimeout(timer);
+      reject(signal!.reason);
+    }
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 }

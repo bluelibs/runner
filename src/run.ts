@@ -23,11 +23,24 @@ import { getPlatform } from "./platform";
 const activeRunResults = new Set<RunResult<any>>();
 
 /**
- * This is the central function that kicks off you runner. You can run as many resources as you want in a single process, they will run in complete isolation.
+ * This is the central function that kicks off your runner. You can run as many resources as you want in a single process, they will run in complete isolation.
  *
  * @param resourceOrResourceWithConfig - The resource or resource with config to run.
  * @param options - The options for the run.
  * @returns A promise that resolves to the result of the run.
+ *
+ * @example
+ * ```ts
+ * import { r, run } from "@bluelibs/runner";
+ *
+ * const app = r.resource("app")
+ *   .register([myTask, myService])
+ *   .build();
+ *
+ * const runtime = await run(app);
+ * await runtime.runTask(myTask, { name: "Ada" });
+ * await runtime.dispose();
+ * ```
  */
 export async function run<C, V extends Promise<any>>(
   resourceOrResourceWithConfig:

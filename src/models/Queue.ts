@@ -136,6 +136,7 @@ export class Queue {
     await this.tail.catch(() => {});
     this.abortController = new AbortController();
 
+    this.activeListeners.clear();
     this.eventManager.dispose();
   }
 

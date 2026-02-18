@@ -95,6 +95,20 @@ export const circuitBreakerMiddleware = defineTaskMiddleware({
 
     let status = statusMap.get(taskId);
     if (!status) {
+      // Evict stale CLOSED entries once the map grows past a safety threshold.
+      // Task IDs are typically static so this rarely fires, but guards against
+      // pathological dynamic-registration workloads.
+      if (statusMap.size >= 10_000) {
+        for (const [key, entry] of statusMap) {
+          if (
+            entry.state === CircuitBreakerState.CLOSED &&
+            entry.failures === 0
+          ) {
+            statusMap.delete(key);
+          }
+        }
+      }
+
       status = {
         state: CircuitBreakerState.CLOSED,
         failures: 0,

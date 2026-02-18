@@ -249,6 +249,7 @@ export class Semaphore {
     }
 
     this.emit("disposed");
+    this.activeListeners.clear();
     this.eventManager.dispose();
   }
 
