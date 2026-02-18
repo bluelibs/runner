@@ -168,7 +168,7 @@ export function createDashboardMiddleware(
     }
   });
 
-  api.get("/executions-stuck", async (req, res) => {
+  api.get("/executions-stuck", async (_req, res) => {
     try {
       const executions = await operator.listStuckExecutions();
       res.json(executions);

@@ -50,7 +50,6 @@ export async function createNodeExposure(
       serializer,
       limits: httpConfig?.limits,
       disableDiscovery: httpConfig?.disableDiscovery,
-      authRateLimit: httpConfig?.auth?.rateLimit,
     });
 
   const serverControls = await createExposureServer({

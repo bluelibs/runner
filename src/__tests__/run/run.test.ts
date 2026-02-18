@@ -61,7 +61,7 @@ describe("run", () => {
     it("should be able to register a task with dependencies and execute it", async () => {
       const dependencyTask = defineTask({
         id: "dependency.task",
-        run: async (_, { _d1 }) => {
+        run: async (_) => {
           return "Dependency";
         },
       });

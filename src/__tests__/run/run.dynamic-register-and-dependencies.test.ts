@@ -728,7 +728,7 @@ describe("Dynamic Register and Dependencies", () => {
         id: "service.cache",
         init: async (config: { ttl: number; size: number }) => ({
           get: (key: string) => `cached-${key}-ttl:${config.ttl}`,
-          set: (key: string, value: any) => `set-${key}-size:${config.size}`,
+          set: (key: string, _value: any) => `set-${key}-size:${config.size}`,
         }),
       });
 
@@ -900,7 +900,7 @@ describe("Dynamic Register and Dependencies", () => {
 
       const authMiddleware = defineTaskMiddleware({
         id: "middleware.auth",
-        dependencies: (config: {
+        dependencies: (_config: {
           auditEnabled: boolean;
           requiredRole: string;
         }) => ({
@@ -910,7 +910,7 @@ describe("Dynamic Register and Dependencies", () => {
         run: async (
           { task, next },
           deps,
-          config: { auditEnabled: boolean; requiredRole: string },
+          _config: { auditEnabled: boolean; requiredRole: string },
         ) => {
           const userRole = task?.input?.userRole || "guest";
 
@@ -1175,7 +1175,7 @@ describe("Dynamic Register and Dependencies", () => {
 
       const childService = defineResource({
         id: "service.child",
-        dependencies: (config: {
+        dependencies: (_config: {
           parentConfig: {
             appName: string;
             enableMetrics: boolean;
@@ -1185,7 +1185,7 @@ describe("Dynamic Register and Dependencies", () => {
           parent: parentService,
         }),
         init: async (
-          config: {
+          _config: {
             parentConfig: {
               appName: string;
               enableMetrics: boolean;

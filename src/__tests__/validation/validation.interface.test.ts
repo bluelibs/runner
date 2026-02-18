@@ -338,7 +338,7 @@ describe("Generic Validation Interface", () => {
       const timingMiddleware = defineTaskMiddleware({
         id: "middleware.timing",
         configSchema: configSchema,
-        run: async ({ next }, _, config) => {
+        run: async ({ next }, _, _config) => {
           return next();
         },
       });
@@ -364,7 +364,7 @@ describe("Generic Validation Interface", () => {
         run: async ({ next }, _, config) => {
           const start = Date.now();
           const result = await next();
-          const duration = Date.now() - start;
+          Date.now() - start;
           expect(typeof (config as { timeout: number }).timeout).toBe("number");
           return result;
         },

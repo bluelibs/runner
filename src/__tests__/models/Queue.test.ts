@@ -316,8 +316,10 @@ describe("Queue", () => {
     const unsubscribe = q.on("finish", () => {});
 
     const listeners = (
-      q as unknown as { eventManager: { listeners: Map<string, unknown[]> } }
-    ).eventManager.listeners;
+      q as unknown as {
+        eventManager: { registry: { listeners: Map<string, unknown[]> } };
+      }
+    ).eventManager.registry.listeners;
     expect(listeners.get("queue.events.finish")).toHaveLength(1);
 
     unsubscribe();
@@ -330,8 +332,10 @@ describe("Queue", () => {
     q.once("finish", () => {});
 
     const listeners = (
-      q as unknown as { eventManager: { listeners: Map<string, unknown[]> } }
-    ).eventManager.listeners;
+      q as unknown as {
+        eventManager: { registry: { listeners: Map<string, unknown[]> } };
+      }
+    ).eventManager.registry.listeners;
     expect(listeners.get("queue.events.finish")).toHaveLength(1);
 
     await q.run(async () => "ok");

@@ -18,7 +18,7 @@ export const requireContextTaskMiddleware = defineTaskMiddleware({
     }
 
     // This will throw if the context is not available
-    const _ctx = config.context.use();
+    config.context.use();
 
     return next(task?.input);
   },

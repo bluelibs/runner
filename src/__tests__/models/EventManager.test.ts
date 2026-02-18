@@ -967,10 +967,11 @@ describe("EventManager", () => {
   it("hasListeners returns true when only global listeners exist and event has empty array", () => {
     const handler = jest.fn();
     eventManager.addGlobalListener(handler);
-    (eventManager as unknown as { listeners: Map<any, any> }).listeners.set(
-      eventDefinition.id,
-      [],
-    );
+    (
+      eventManager as unknown as {
+        registry: { listeners: Map<any, any> };
+      }
+    ).registry.listeners.set(eventDefinition.id, []);
     expect(eventManager.hasListeners(eventDefinition)).toBe(true);
   });
 
@@ -1050,7 +1051,7 @@ describe("EventManager", () => {
     });
 
     it("should allow interceptors to prevent emission", async () => {
-      const interceptor = jest.fn(async (next, event) => {
+      const interceptor = jest.fn(async (_next, _event) => {
         // Don't call next, preventing emission
         return Promise.resolve();
       });
@@ -1071,7 +1072,7 @@ describe("EventManager", () => {
         // Call next but interceptor2 will prevent emission
         return next(event);
       });
-      const interceptor2 = jest.fn(async (next, event) => {
+      const interceptor2 = jest.fn(async (_next, _event) => {
         // Don't call next, preventing emission
         return Promise.resolve();
       });
@@ -1280,7 +1281,7 @@ describe("EventManager", () => {
     });
 
     it("should allow hook interceptors to prevent hook execution", async () => {
-      const interceptor = jest.fn(async (next, hook, event) => {
+      const interceptor = jest.fn(async (_next, _hook, _event) => {
         // Don't call next, preventing hook execution
         return "interceptorResult";
       });
@@ -1401,7 +1402,7 @@ describe("EventManager", () => {
     });
 
     it("should handle interceptors that throw errors", async () => {
-      const interceptor = jest.fn(async (next, event) => {
+      const interceptor = jest.fn(async (_next, _event) => {
         throw createMessageError("Interceptor error");
       });
 
@@ -1417,7 +1418,7 @@ describe("EventManager", () => {
     });
 
     it("should handle hook interceptors that throw errors", async () => {
-      const interceptor = jest.fn(async (next, hook, event) => {
+      const interceptor = jest.fn(async (_next, _hook, _event) => {
         throw createMessageError("Hook interceptor error");
       });
 
@@ -1515,7 +1516,7 @@ describe("EventManager", () => {
 
   it("uses only event-specific listeners when excludeFromGlobal is set (avoids merging)", async () => {
     const spy = jest.spyOn(
-      eventManager as unknown as { getCachedMergedListeners: any },
+      (eventManager as unknown as { registry: any }).registry,
       "getCachedMergedListeners",
     );
 
@@ -1539,14 +1540,12 @@ describe("EventManager", () => {
     spy.mockRestore();
   });
 
-  it("exposes getCachedMergedListeners for backward compatibility", () => {
+  it("delegates getCachedMergedListeners to registry", () => {
     const manager = new EventManager();
     const registry = (manager as unknown as { registry: any }).registry;
     const spy = jest.spyOn(registry, "getCachedMergedListeners");
 
-    (
-      manager as unknown as { getCachedMergedListeners: any }
-    ).getCachedMergedListeners("evt-bc");
+    registry.getCachedMergedListeners("evt-bc");
 
     expect(spy).toHaveBeenCalledWith("evt-bc");
   });

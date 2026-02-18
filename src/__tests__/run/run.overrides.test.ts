@@ -148,7 +148,7 @@ describe("run.overrides", () => {
     const resourceOverride: definitions.IResource<any> = {
       ...resource,
       overrides: [overrideTask],
-      async init(config: { test: string }) {
+      async init(_config: { test: string }) {
         return "Resource init";
       },
     };

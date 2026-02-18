@@ -20,7 +20,7 @@ class MockValidationSchema<T> implements IValidationSchema<T> {
 
 describe("Validation Edge Cases", () => {
   it("should handle non-Error thrown from task input validation", async () => {
-    const taskSchema = new MockValidationSchema<string>((input: unknown) => {
+    const taskSchema = new MockValidationSchema<string>((_input: unknown) => {
       // Throw a non-Error object to trigger the instanceof Error === false branch
       throw "Non-error string thrown";
     });
@@ -28,7 +28,7 @@ describe("Validation Edge Cases", () => {
     const task = defineTask({
       id: "task.nonErrorValidation",
       inputSchema: taskSchema,
-      run: async (input: string) => "success",
+      run: async (_input: string) => "success",
     });
 
     const app = defineResource({
@@ -47,14 +47,14 @@ describe("Validation Edge Cases", () => {
   });
 
   it("should handle non-Error thrown from resource config validation", async () => {
-    const configSchema = new MockValidationSchema<any>((input: unknown) => {
+    const configSchema = new MockValidationSchema<any>((_input: unknown) => {
       throw "Resource config error string";
     });
 
     const resource = defineResource({
       id: "resource.nonErrorValidation",
       configSchema: configSchema,
-      init: async (config: any) => "success",
+      init: async (_config: any) => "success",
     });
 
     expect(() => {
@@ -68,7 +68,7 @@ describe("Validation Edge Cases", () => {
   });
 
   it("should handle non-Error thrown from middleware config validation", async () => {
-    const configSchema = new MockValidationSchema<any>((input: unknown) => {
+    const configSchema = new MockValidationSchema<any>((_input: unknown) => {
       throw "Middleware config error string";
     });
 
@@ -107,7 +107,7 @@ describe("Validation Edge Cases", () => {
   });
 
   it("should handle non-Error thrown from event payload validation", async () => {
-    const payloadSchema = new MockValidationSchema<any>((input: unknown) => {
+    const payloadSchema = new MockValidationSchema<any>((_input: unknown) => {
       throw "Event payload error string";
     });
 
@@ -119,7 +119,7 @@ describe("Validation Edge Cases", () => {
     const listenerTask = defineHook({
       id: "task.listener",
       on: event,
-      run: async (event) => {
+      run: async (_event) => {
         // This won't be called because validation will fail
       },
     });

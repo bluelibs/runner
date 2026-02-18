@@ -127,7 +127,7 @@ describe("durable: DurableService — polling & lifecycle (unit)", () => {
     class BlockingStore extends MemoryStore {
       private callCount = 0;
 
-      override async getReadyTimers(now?: Date): Promise<Timer[]> {
+      override async getReadyTimers(_now?: Date): Promise<Timer[]> {
         this.callCount += 1;
         if (this.callCount === 1) {
           return await new Promise<Timer[]>((resolve) => {

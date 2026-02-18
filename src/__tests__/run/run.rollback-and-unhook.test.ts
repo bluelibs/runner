@@ -71,7 +71,7 @@ describe("run.ts rollback and unhooking", () => {
       (() => {}) as unknown as never;
 
     // First run: should react to SIGINT
-    const first = await run(app, {
+    await run(app, {
       shutdownHooks: true,
       errorBoundary: false,
     });

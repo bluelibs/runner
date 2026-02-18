@@ -91,7 +91,7 @@ describe("createHttpSmartClient - multipart", () => {
     let capturedBody = Buffer.alloc(0);
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: any, cb: any) => {
         const env = { ok: true, result: "OK" };
         const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
@@ -227,7 +227,7 @@ describe("createHttpSmartClient - multipart", () => {
           use: () => 1,
           serialize: (v: any) => String(v),
           parse: (s: string) => s,
-          provide: (v: any, fn: any) => fn(),
+          provide: (_v: any, fn: any) => fn(),
           require: () => ({}) as any,
         } as any,
       ],

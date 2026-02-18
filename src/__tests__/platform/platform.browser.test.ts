@@ -69,7 +69,7 @@ describe("PlatformAdapter (Browser)", () => {
     globalThis.addEventListener = addSpy;
     globalThis.removeEventListener = removeSpy;
 
-    const { window: originalWindow, ..._rest } = globalThis as unknown as {
+    const { window: originalWindow } = globalThis as unknown as {
       window: unknown;
     };
     // Force fallback path by deleting window if it exists (in jsdom it usually does)

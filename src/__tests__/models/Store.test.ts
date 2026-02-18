@@ -1,5 +1,4 @@
 import { Store } from "../../models/Store";
-import { EventManager } from "../../models/EventManager";
 import {
   defineResource,
   defineTask,
@@ -8,28 +7,19 @@ import {
   defineTaskMiddleware,
 } from "../../define";
 import { run } from "../../run";
-import {
-  Logger,
-  MiddlewareManager,
-  OnUnhandledError,
-  RunResult,
-  TaskRunner,
-} from "../../models";
+import { MiddlewareManager, RunResult, TaskRunner } from "../../models";
 import { RunnerMode } from "../../types/runner";
 import { createTestFixture } from "../test-utils";
 import { createMessageError } from "../../errors";
 
 describe("Store", () => {
-  let eventManager: EventManager;
   let store: Store;
-  let logger: Logger;
-  let onUnhandledError: OnUnhandledError;
   let runtimeResult: RunResult<unknown>;
   let taskRunner: TaskRunner;
 
   beforeEach(() => {
     const fixture = createTestFixture();
-    ({ eventManager, logger, onUnhandledError, store } = fixture);
+    ({ store } = fixture);
     taskRunner = fixture.createTaskRunner();
     store.setTaskRunner(taskRunner);
     runtimeResult = fixture.createRuntimeResult(taskRunner);
@@ -122,7 +112,7 @@ describe("Store", () => {
   });
 
   it("should dispose of resources correctly", async () => {
-    const disposeFn = jest.fn(async (...args: any[]) => {});
+    const disposeFn = jest.fn(async (..._args: any[]) => {});
     const testResource = defineResource({
       id: "test.resource",
       dispose: disposeFn,

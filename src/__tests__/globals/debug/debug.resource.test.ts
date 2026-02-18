@@ -112,7 +112,7 @@ describe("globals.resources.debug", () => {
         testTask,
       ],
       dependencies: { testTask, subResource },
-      async init(_, { testTask }) {
+      async init(_) {
         return "done";
       },
     });
@@ -428,7 +428,7 @@ describe("globals.resources.debug", () => {
       id: "tests.app.flags",
       register: [collector.with({ value: "test" }), testEvent, testTask],
       dependencies: { testTask, collector },
-      async init(_c, { testTask }) {
+      async init(_c) {
         return "done";
       },
     });

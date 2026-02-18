@@ -896,9 +896,9 @@ describe("Semaphore", () => {
 
       const listeners = (
         sem as unknown as {
-          eventManager: { listeners: Map<string, unknown[]> };
+          eventManager: { registry: { listeners: Map<string, unknown[]> } };
         }
-      ).eventManager.listeners;
+      ).eventManager.registry.listeners;
       expect(listeners.get("semaphore.events.released")).toHaveLength(1);
 
       unsubscribe();
@@ -912,9 +912,9 @@ describe("Semaphore", () => {
 
       const listeners = (
         sem as unknown as {
-          eventManager: { listeners: Map<string, unknown[]> };
+          eventManager: { registry: { listeners: Map<string, unknown[]> } };
         }
-      ).eventManager.listeners;
+      ).eventManager.registry.listeners;
       expect(listeners.get("semaphore.events.released")).toHaveLength(1);
 
       await sem.acquire();

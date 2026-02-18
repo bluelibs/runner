@@ -267,7 +267,6 @@ describe("Retry Middleware", () => {
     });
 
     it("should respect stopRetryIf condition", async () => {
-      const errorSpy = jest.fn();
       const resource = defineResource({
         id: "fatalResource",
         middleware: [
@@ -285,7 +284,7 @@ describe("Retry Middleware", () => {
         id: "app",
         register: [resource],
         dependencies: { resource },
-        async init(_, { resource }) {},
+        async init(_) {},
       });
 
       await expect(run(app)).rejects.toThrow("FATAL");
@@ -349,7 +348,7 @@ describe("Retry Middleware", () => {
         id: "app",
         register: [resource],
         dependencies: { resource },
-        async init(_, { resource }) {},
+        async init(_) {},
       });
 
       const runPromise = run(app);
@@ -377,7 +376,7 @@ describe("Retry Middleware", () => {
         id: "app",
         register: [resource],
         dependencies: { resource },
-        async init(_, { resource }) {},
+        async init(_) {},
       });
 
       await expect(run(app)).rejects.toThrow("Temporary failure");

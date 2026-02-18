@@ -59,7 +59,7 @@ describe("Fallback Middleware", () => {
             `fixed:${err.message}:${input}`,
         }),
       ],
-      run: async (input: string) => {
+      run: async (_input: string) => {
         throw createMessageError("fail");
       },
     });
@@ -87,7 +87,7 @@ describe("Fallback Middleware", () => {
     const task = defineTask({
       id: "fallback.task",
       middleware: [fallbackTaskMiddleware.with({ fallback: planB })],
-      run: async (input: string) => {
+      run: async (_input: string) => {
         throw createMessageError("fail");
       },
     });

@@ -31,7 +31,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
         use: () => ({ a: 1 }),
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
-        provide: (v: any, fn: any) => fn(),
+        provide: (_v: any, fn: any) => fn(),
         require: () => ({}),
       },
     ];
@@ -81,7 +81,7 @@ describe("createExposureFetch - context header and typed rethrow", () => {
         },
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
-        provide: (v: any, fn: any) => fn(),
+        provide: (_v: any, fn: any) => fn(),
         require: () => ({}),
       },
     ];

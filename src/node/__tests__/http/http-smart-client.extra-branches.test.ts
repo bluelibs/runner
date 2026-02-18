@@ -109,7 +109,7 @@ describe("createHttpSmartClient - extra branches", () => {
   it("multipart: detects sentinel in nested arrays/objects (buffer side)", async () => {
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: any, cb: any) => {
         const env = { ok: true, result: "ARR" };
         const body = Buffer.from(new Serializer().stringify(env), "utf8");
         const res = Readable.from([body]);
@@ -175,7 +175,7 @@ describe("createHttpSmartClient - extra branches", () => {
   });
 
   it("multipart JSON empty body: parseMaybeJsonResponse returns undefined → assertOkEnvelope throws", async () => {
-    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
       // Respond with JSON content-type but no body text
       const res = new Readable({
         read() {
@@ -248,7 +248,7 @@ describe("createHttpSmartClient - extra branches", () => {
   it("multipart: JSON response body arrives in multiple string chunks", async () => {
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: any, cb: any) => {
         const env = { ok: true, result: 77 };
         const text = new Serializer().stringify(env);
         const res = new Readable({

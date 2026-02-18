@@ -13,8 +13,8 @@
     "strict": true,
     "strictNullChecks": true,
     "noImplicitThis": false,
-    "noUnusedLocals": false,
-    "noUnusedParameters": false,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "skipLibCheck": true,
     "baseUrl": "../..",
     "paths": {

@@ -42,7 +42,6 @@ export const memoryDurableResource = r
     { taskRunner, eventManager, runnerStore, logger },
     ctx,
   ): Promise<DurableResource> {
-    const _namespace = config.namespace ?? this.id;
     const baseLogger =
       config.logger ??
       logger ??

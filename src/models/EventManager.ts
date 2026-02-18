@@ -14,7 +14,6 @@ import {
   HandlerOptionsDefaults,
   HookExecutionInterceptor,
   IEventHandlerOptions,
-  IListenerStorage,
 } from "./event/types";
 import { ListenerRegistry, createListener } from "./event/ListenerRegistry";
 import { composeInterceptors } from "./event/InterceptorPipeline";
@@ -30,11 +29,6 @@ import { CycleContext } from "./event/CycleContext";
  * Listeners are processed in order based on their priority.
  */
 export class EventManager {
-  // Core storage for event listeners (kept for backward-compatibility with tests)
-  private listeners: Map<string, IListenerStorage[]>;
-  private globalListeners: IListenerStorage[];
-  private cachedMergedListeners: Map<string, IListenerStorage[]>;
-
   // Interceptors storage (tests access these directly)
   private emissionInterceptors: EventEmissionInterceptor[] = [];
   private hookInterceptors: HookExecutionInterceptor[] = [];
@@ -53,11 +47,6 @@ export class EventManager {
       options?.runtimeEventCycleDetection ?? true;
     this.registry = new ListenerRegistry();
     this.cycleContext = new CycleContext(this.runtimeEventCycleDetection);
-
-    // expose registry collections for backward-compatibility (tests reach into these)
-    this.listeners = this.registry.listeners;
-    this.globalListeners = this.registry.globalListeners;
-    this.cachedMergedListeners = this.registry.cachedMergedListeners;
   }
 
   // ==================== PUBLIC API ====================
@@ -450,14 +439,6 @@ export class EventManager {
     this.registry.clear();
     this.emissionInterceptors.length = 0;
     this.hookInterceptors.length = 0;
-  }
-
-  /**
-   * Retrieves cached merged listeners for an event, or creates them if not cached.
-   * Kept for backward compatibility (tests spy on this).
-   */
-  private getCachedMergedListeners(eventId: string): IListenerStorage[] {
-    return this.registry.getCachedMergedListeners(eventId);
   }
 }
 

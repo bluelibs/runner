@@ -26,7 +26,7 @@ import { r } from "../../../";
   const middlewareWithConfig = r.middleware
     .task("middleware.config")
     .configSchema<MiddlewareConfig>({ parse: (x: any) => x })
-    .run(async ({ next }, deps, config: MiddlewareConfig) => {
+    .run(async ({ next }, _deps, _config: MiddlewareConfig) => {
       return next();
     })
     .build();
@@ -34,7 +34,7 @@ import { r } from "../../../";
   const middlewareWithOptionalConfig = r.middleware
     .task("middleware.optional.config")
     .configSchema<MiddlewareOptionalConfig>({ parse: (x: any) => x })
-    .run(async ({ next }, deps, config: MiddlewareOptionalConfig) => {
+    .run(async ({ next }, _deps, _config: MiddlewareOptionalConfig) => {
       return next();
     })
     .build();
@@ -49,7 +49,7 @@ import { r } from "../../../";
   const baseTask = r
     .task("task.base")
     .inputSchema<InputTask>({ parse: (x: any) => x })
-    .run(async (input: InputTask) => "Task executed")
+    .run(async (_input: InputTask) => "Task executed")
     .build();
 
   const task = r
@@ -83,7 +83,7 @@ import { r } from "../../../";
   const dummyResource = r
     .resource<ResourceType>("dummy.resource")
     .configSchema<ResourceType>({ parse: (x: any) => x })
-    .init(async (config: ResourceType) => "Resource Value")
+    .init(async (_config: ResourceType) => "Resource Value")
     .build();
 
   const dummyResourceNoConfig = r
@@ -94,7 +94,7 @@ import { r } from "../../../";
   const dummyResourceOptionalConfig = r
     .resource<string | undefined>("dummy.resource.optional.config")
     .configSchema<string | undefined>({ parse: (x: any) => x })
-    .init(async (config?: string) => "Resource Value")
+    .init(async (_config?: string) => "Resource Value")
     .build();
 
   const testResource3 = r

@@ -126,7 +126,7 @@ D("nodeExposure - unit server", () => {
   });
 
   it("auto-attaches to a provided server and detaches on dispose", async () => {
-    const externalServer = http.createServer((req, res) => {
+    const externalServer = http.createServer((_req, res) => {
       res.statusCode = 200;
       res.end("external");
     });

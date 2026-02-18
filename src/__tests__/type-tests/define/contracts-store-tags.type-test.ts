@@ -25,7 +25,7 @@ import type { Store } from "../../../models/Store";
   defineTask({
     id: "task",
     tags,
-    run: async (input: { name: string }) => {
+    run: async (_input: { name: string }) => {
       return {
         age: 123,
         name: "123",

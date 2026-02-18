@@ -120,7 +120,7 @@ describe("createTestResource", () => {
     });
     const { value: t, dispose } = await run(createTestResource(app));
 
-    const ok1: number | undefined = await t.runTask(sum, { a: 1, b: 2 });
+    await t.runTask(sum, { a: 1, b: 2 });
     // Type-only checks (do not execute)
     const typeOnly = () => {
       // @ts-expect-error bad input
@@ -130,7 +130,7 @@ describe("createTestResource", () => {
     };
     void typeOnly;
 
-    const ok2: number | undefined = await t.runTask(usesUpper, {
+    await t.runTask(usesUpper, {
       n: 3,
     } as const);
 

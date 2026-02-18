@@ -171,7 +171,7 @@ describe("http-client (universal)", () => {
           use: () => ({ a: 1 }),
           serialize: (v: any) => JSON.stringify(v),
           parse: (s: string) => JSON.parse(s),
-          provide: (v: any, fn: any) => fn(),
+          provide: (_v: any, fn: any) => fn(),
           require: () => ({}) as any,
         } as unknown as any,
       ],
@@ -270,7 +270,7 @@ describe("http-client (universal)", () => {
     // Intentionally pass meta without name to exercise default filename branch
     const file = createWebFile({} as any, blob, "FDEF");
     const fetchMock = jest.fn(
-      async (url: any, init?: any) =>
+      async (_url: any, _init?: any) =>
         ({
           text: async () =>
             new Serializer().stringify({ ok: true, result: "DEF" }),
@@ -294,7 +294,7 @@ describe("http-client (universal)", () => {
       "FERR",
     );
     const serializer = new Serializer();
-    const fetchMock = jest.fn(async (url: any, init?: any) => {
+    const fetchMock = jest.fn(async (_url: any, _init?: any) => {
       const env = {
         ok: false,
         error: {

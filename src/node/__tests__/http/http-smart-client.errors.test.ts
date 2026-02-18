@@ -48,7 +48,7 @@ describe("http smart/mixed client typed errors", () => {
   it("rethrows typed app error via errorRegistry on JSON path", async () => {
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: any, cb: any) => {
         const env = {
           ok: false,
           error: {
@@ -79,7 +79,7 @@ describe("http smart/mixed client typed errors", () => {
   it("rethrows typed app error via errorRegistry on smart path (mixed client)", async () => {
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: any, cb: any) => {
         const env = {
           ok: false,
           error: {
@@ -115,7 +115,7 @@ describe("http smart/mixed client typed errors", () => {
   it("rethrows typed app error via errorRegistry on event path", async () => {
     const reqSpy = jest
       .spyOn(http, "request")
-      .mockImplementation((opts: any, cb: any) => {
+      .mockImplementation((_opts: any, cb: any) => {
         const env = {
           ok: false,
           error: {

@@ -31,14 +31,14 @@ import {
 
   const middlewareWithConfig = defineTaskMiddleware({
     id: "middleware.config",
-    run: async (input, deps, config: MiddlewareConfig) => {
+    run: async (input, _deps, _config: MiddlewareConfig) => {
       return input;
     },
   });
 
   const middlewareWithOptionalConfig = defineTaskMiddleware({
     id: "middleware.optional.config",
-    run: async (input, deps, config: MiddlewareOptionalConfig) => {
+    run: async (input, _deps, _config: MiddlewareOptionalConfig) => {
       return input;
     },
   });
@@ -53,7 +53,7 @@ import {
 
   const baseTask = defineTask({
     id: "task",
-    run: async (input: InputTask) => "Task executed",
+    run: async (_input: InputTask) => "Task executed",
   });
 
   const task = defineTask({
@@ -85,7 +85,7 @@ import {
 
   const dummyResource = defineResource({
     id: "dummy.resource",
-    init: async (config: ResourceType) => "Resource Value",
+    init: async (_config: ResourceType) => "Resource Value",
   });
   const dummyResourceNoConfig = defineResource({
     id: "dummy.resource",
@@ -93,7 +93,7 @@ import {
   });
   const dummyResourceOptionalConfig = defineResource({
     id: "dummy.resource",
-    init: async (config?: string) => "Resource Value",
+    init: async (_config?: string) => "Resource Value",
   });
 
   defineResource({
@@ -175,7 +175,7 @@ import {
     { output: number }
   >({
     id: "middleware",
-    run: async ({ next }) => {
+    run: async ({ next: _next }) => {
       return {
         output: 123,
       };

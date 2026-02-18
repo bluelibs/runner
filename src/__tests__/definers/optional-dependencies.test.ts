@@ -352,7 +352,7 @@ describe("Optional dependencies", () => {
         nonRegisteredResource: nonRegisteredResource.optional(),
         nonRegisteredTask: nonRegisteredTask.optional(),
       },
-      run: async ({ next, resource }, deps) => {
+      run: async ({ next, resource: _resource }, deps) => {
         expect(deps.registeredResource).toBeDefined();
         expect(deps.registeredTask).toBeDefined();
         expect(deps.nonRegisteredResource).toBeUndefined();
@@ -399,7 +399,7 @@ describe("Optional dependencies", () => {
         registeredResource: registeredResource,
         nonRegisteredResource: nonRegisteredResource.optional(),
       },
-      run: async (event, deps) => {
+      run: async (_event, deps) => {
         expect(deps.registeredResource).toBeDefined();
         expect(deps.nonRegisteredResource).toBeUndefined();
         inHook = true;
@@ -417,7 +417,7 @@ describe("Optional dependencies", () => {
       },
     });
 
-    const r = await run(app);
+    await run(app);
     expect(inHook).toBe(true);
   });
 });

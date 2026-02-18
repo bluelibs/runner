@@ -316,7 +316,7 @@ describe("MiddlewareManager", () => {
     const task = defineTask({
       id: "task.nonError",
       resultSchema: {
-        parse: (value: any) => {
+        parse: (_value: any) => {
           throw "string error"; // throw non-Error
         },
       },
@@ -455,7 +455,7 @@ describe("MiddlewareManager", () => {
       // Add global interceptor that uses executionInput.next
       manager.intercept(
         "task",
-        async (wrappedNext: any, executionInput: any) => {
+        async (_wrappedNext: any, executionInput: any) => {
           order.push("global-interceptor:before");
           // Verify journal is on executionInput
           expect(executionInput.journal).toBeDefined();
@@ -543,7 +543,7 @@ describe("MiddlewareManager", () => {
       );
       const manager = new MiddlewareManager(store, eventManager, logger);
 
-      manager.intercept("task", async (next: any, input: any) => {
+      manager.intercept("task", async (_next: any, _input: any) => {
         throw createMessageError("interceptor error");
       });
 
@@ -574,7 +574,7 @@ describe("MiddlewareManager", () => {
       );
       const manager = new MiddlewareManager(store, eventManager, logger);
 
-      manager.intercept("resource", async (next: any, input: any) => {
+      manager.intercept("resource", async (_next: any, _input: any) => {
         throw createMessageError("interceptor error");
       });
 
@@ -742,7 +742,7 @@ describe("MiddlewareManager", () => {
       // This interceptor uses executionInput.next instead of the wrappedNext
       manager.interceptMiddleware(
         taskMiddleware,
-        async (wrappedNext: any, executionInput: any) => {
+        async (_wrappedNext: any, executionInput: any) => {
           order.push("interceptor:before");
           // Use executionInput.next directly to cover that code path
           const result = await executionInput.next(executionInput.task.input);
@@ -865,7 +865,7 @@ describe("MiddlewareManager", () => {
       // This interceptor calls next with undefined, triggering the ?? fallback
       manager.interceptMiddleware(
         taskMiddleware,
-        async (wrappedNext: any, executionInput: any) => {
+        async (_wrappedNext: any, executionInput: any) => {
           order.push("interceptor:before");
           // Call with undefined to trigger ?? branch
           const result = await executionInput.next();

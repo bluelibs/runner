@@ -1,13 +1,11 @@
 import { TaskRunner } from "../../models/TaskRunner";
 import { Store } from "../../models/Store";
-import { EventManager } from "../../models/EventManager";
 import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
 import { Logger } from "../../models";
 import { createTestFixture } from "../test-utils";
 
 describe("TaskRunner", () => {
   let store: Store;
-  let eventManager: EventManager;
   let taskRunner: TaskRunner;
   let logger: Logger;
   let onUnhandledError: jest.Mock;
@@ -15,7 +13,6 @@ describe("TaskRunner", () => {
   beforeEach(() => {
     const fixture = createTestFixture();
     store = fixture.store;
-    eventManager = fixture.eventManager;
     logger = fixture.logger;
     onUnhandledError = fixture.onUnhandledError;
     taskRunner = fixture.createTaskRunner();

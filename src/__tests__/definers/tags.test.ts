@@ -35,7 +35,7 @@ describe("Configurable Tags", () => {
       const simpleTag = defineTag<{ value: string }>({
         id: "simple.tag",
         configSchema: {
-          parse: (input) => {
+          parse: (_input) => {
             throw createMessageError("Validation Error");
           },
         },

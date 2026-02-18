@@ -10,5 +10,5 @@ export type {
 } from "./LogPrinter";
 export * from "./Semaphore";
 export * from "./Queue";
-export type { OnUnhandledError } from "./UnhandledError";
+export * from "./UnhandledError";
 export * from "./RunResult";

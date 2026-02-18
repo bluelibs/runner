@@ -284,7 +284,7 @@ describe("Errors", () => {
     const task = defineTask({
       id: "test.task",
       dependencies: { offTheGrid },
-      run: async (_, deps) => {
+      run: async (_, _deps) => {
         throw "Should not even be here";
       },
     });

@@ -362,11 +362,11 @@ describe("Custom Type Tests", () => {
       serializer.addType(secondType);
 
       const obj1: FirstType = { type: "first", value: "test1" };
-      const _obj2: SecondType = { type: "second", value: "test2" };
+      ({ type: "second", value: "test2" }) satisfies SecondType;
 
       const serialized1 = serializer.serialize(obj1);
       callOrder = [];
-      const _deserialized1 = serializer.deserialize<FirstType>(serialized1);
+      serializer.deserialize<FirstType>(serialized1);
 
       expect(callOrder).toEqual(["first-deserialize"]);
     });

@@ -21,7 +21,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
   });
 
   it("event(): aggregates mixed string+buffer chunks as JSON", async () => {
-    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
       const payload = new Serializer().stringify({
         ok: true,
         result: undefined,
@@ -56,7 +56,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
   });
 
   it("multipart: parseMaybeJsonResponse aggregates mixed chunks", async () => {
-    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
       const env = { ok: true, result: 123 };
       const text = new Serializer().stringify(env);
       const res = new Readable({
@@ -127,7 +127,7 @@ describe("createHttpSmartClient - postJson extra coverage", () => {
         use: () => ({ k: 1 }),
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
-        provide: (v: any, fn: any) => fn(),
+        provide: (_v: any, fn: any) => fn(),
         require: () => ({}) as any,
       },
     ];

@@ -80,7 +80,7 @@ describe("Caching System", () => {
 
       const customCacheFactoryTask = defineTask({
         id: "globals.tasks.cacheFactory",
-        run: async (options: any) => {
+        run: async (_options: any) => {
           return new CustomCache();
         },
       });
@@ -143,7 +143,7 @@ describe("Caching System", () => {
 
       const redisCacheFactoryTask = defineTask({
         id: "globals.tasks.cacheFactory",
-        run: async (options: any) => {
+        run: async (_options: any) => {
           return new RedisLikeCache();
         },
       });
@@ -591,7 +591,7 @@ describe("Caching System", () => {
 
     const asyncCacheFactoryTask = defineTask({
       id: "globals.tasks.cacheFactory",
-      run: async (options: any) => {
+      run: async (_options: any) => {
         return new AsyncMockCache();
       },
     });
@@ -909,7 +909,7 @@ describe("Caching System", () => {
 
       const disposableCacheFactoryTask = defineTask({
         id: "globals.tasks.cacheFactory",
-        run: async (options: any) => {
+        run: async (_options: any) => {
           return new AsyncDisposableCache();
         },
       });
@@ -995,7 +995,7 @@ describe("Caching System", () => {
 
       const invalidCacheFactoryTask = defineTask({
         id: "globals.tasks.cacheFactory",
-        run: async (options: any) => {
+        run: async (_options: any) => {
           return new InvalidCache() as any;
         },
       });

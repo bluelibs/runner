@@ -20,8 +20,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Chaining appends types
-    const task = r
-      .task("test.task")
+    r.task("test.task")
       .inputSchema<{ input: number }>({ parse: (v: any) => v })
       .resultSchema<number>({ parse: (v: any) => v })
       .dependencies({ a: depA })
@@ -36,8 +35,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Override replaces (TS errors on accessing a, so no need for @ts-expect-error)
-    const taskOverride = r
-      .task("test.task.override")
+    r.task("test.task.override")
       .inputSchema<{ input: number }>({ parse: (v: any) => v })
       .resultSchema<number>({ parse: (v: any) => v })
       .dependencies({ a: depA })
@@ -70,8 +68,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Chaining appends types
-    const resource = r
-      .resource("test.resource")
+    r.resource("test.resource")
       .resultSchema<string>({ parse: (v: any) => v })
       .dependencies({ a: depA })
       .dependencies({ b: depB }) // appends
@@ -85,8 +82,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Override replaces (TS errors on accessing a)
-    const resourceOverride = r
-      .resource("test.resource.override")
+    r.resource("test.resource.override")
       .resultSchema<string>({ parse: (v: any) => v })
       .dependencies({ a: depA })
       .dependencies({ b: depB }, { override: true })
@@ -127,8 +123,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Chaining appends
-    const hook = r
-      .hook("test.hook")
+    r.hook("test.hook")
       .on([eventA, eventB])
       .dependencies({ a: depA })
       .dependencies({ b: depB })
@@ -141,12 +136,11 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Override (TS errors on accessing a)
-    const hookOverride = r
-      .hook("test.hook.override")
+    r.hook("test.hook.override")
       .on(eventA)
       .dependencies({ a: depA })
       .dependencies({ b: depB }, { override: true })
-      .run(async (event, deps) => {
+      .run(async (_event, deps) => {
         // deps.b.handleB();  // valid
         // @ts-expect-error Property 'a' does not exist after override
         deps.a.handleA();
@@ -173,7 +167,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Task middleware chaining
-    const taskMw = r.middleware
+    r.middleware
       .task("test.taskMw")
       .dependencies({ a: depA })
       .dependencies({ b: depB }) // appends
@@ -187,11 +181,11 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Resource middleware chaining
-    const resourceMw = r.middleware
+    r.middleware
       .resource("test.resourceMw")
       .dependencies({ a: depA })
       .dependencies({ b: depB })
-      .run(async ({ next }, deps) => {
+      .run(async ({ next }, _deps) => {
         // deps.a.logA();  // valid
         // deps.b.logB();  // valid
         return next();
@@ -199,7 +193,7 @@ describe("fluent builders: dependency chaining", () => {
       .build();
 
     // Override (TS errors on accessing a)
-    const taskMwOverride = r.middleware
+    r.middleware
       .task("test.taskMw.override")
       .dependencies({ a: depA })
       .dependencies({ b: depB }, { override: true })

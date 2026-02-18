@@ -21,7 +21,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
     req.setTimeout = () => req;
 
     // http.request mock wires callback with a dummy IncomingMessage and returns req
-    jest.spyOn(http, "request").mockImplementation((opts: any, cb: any) => {
+    jest.spyOn(http, "request").mockImplementation((_opts: any, cb: any) => {
       // supply a trivial IncomingMessage so code can attach listeners if needed
       const res = new Readable({ read() {} });
       (res as any).headers = { "content-type": "application/octet-stream" };
@@ -65,7 +65,7 @@ describe("createHttpSmartClient - octet-stream source error", () => {
         use: () => ({ z: 9 }),
         serialize: (v: any) => JSON.stringify(v),
         parse: (s: string) => JSON.parse(s),
-        provide: (v: any, fn: any) => fn(),
+        provide: (_v: any, fn: any) => fn(),
         require: () => ({}) as any,
       },
     ];

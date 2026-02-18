@@ -270,7 +270,7 @@ describe("http-fetch-tunnel.resource (unit)", () => {
     const parse = jest
       .spyOn(serializer, "parse")
       .mockImplementation((text: string) => JSON.parse(text).wrapped);
-    const addType = jest.spyOn(serializer, "addType");
+    jest.spyOn(serializer, "addType");
 
     const fetchImpl: typeof fetch = (async (_url: any, init: any) => {
       expect(init.body).toBe(
