@@ -15,7 +15,6 @@ import {
 } from "../../serializer/marker-key-escapes";
 import { TypeRegistry } from "../../serializer/type-registry";
 import { deserializeLegacy } from "../../serializer/deserializer";
-import { SymbolPolicy } from "../../serializer/types";
 
 describe("Serializer Module Coverage", () => {
   describe("validation.ts", () => {
@@ -70,7 +69,7 @@ describe("Serializer Module Coverage", () => {
       const registry = new TypeRegistry({
         allowedTypes: null,
         regExpValidator: { maxPatternLength: 1024, allowUnsafe: false },
-        symbolPolicy: SymbolPolicy.AllowAll,
+        symbolPolicy: "allow-all",
       });
 
       const typeList = registry.getTypeList();
@@ -88,7 +87,7 @@ describe("Serializer Module Coverage", () => {
       const registry = new TypeRegistry({
         allowedTypes: null,
         regExpValidator: { maxPatternLength: 1024, allowUnsafe: false },
-        symbolPolicy: SymbolPolicy.AllowAll,
+        symbolPolicy: "allow-all",
       });
 
       const source = Object.create({ inherited: 1 }) as Record<string, unknown>;

@@ -27,7 +27,6 @@ import type {
   DeserializationContext,
   SerializedNode,
 } from "../../serializer/types";
-import { SymbolPolicy } from "../../serializer/types";
 
 describe("GraphSerializer coverage", () => {
   const serializer = new Serializer();
@@ -37,7 +36,7 @@ describe("GraphSerializer coverage", () => {
     typeRegistry: new TypeRegistry({
       allowedTypes: null,
       regExpValidator: { maxPatternLength: 1024, allowUnsafe: false },
-      symbolPolicy: SymbolPolicy.AllowAll,
+      symbolPolicy: "allow-all",
     }),
   });
 

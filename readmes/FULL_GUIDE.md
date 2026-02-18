@@ -4344,10 +4344,10 @@ const restored = serializer.deserialize(data);
 When you deserialize untrusted data, configure the serializer explicitly:
 
 ```typescript
-import { Serializer, SymbolPolicy } from "@bluelibs/runner";
+import { Serializer } from "@bluelibs/runner";
 
 const serializer = new Serializer({
-  symbolPolicy: SymbolPolicy.WellKnownOnly,
+  symbolPolicy: "well-known-only",
   allowedTypes: ["Date", "RegExp", "Map", "Set", "Uint8Array", "BigInt"],
   maxDepth: 64,
   maxRegExpPatternLength: 2000,
@@ -4355,7 +4355,7 @@ const serializer = new Serializer({
 });
 ```
 
-`symbolPolicy` defaults to `SymbolPolicy.AllowAll`. Prefer `WellKnownOnly` (or stricter) for untrusted input.
+`symbolPolicy` defaults to `"allow-all"`. Prefer `"well-known-only"` (or stricter) for untrusted input.
 
 ### Custom types
 

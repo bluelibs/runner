@@ -22,7 +22,7 @@ The serializer accepts the following options:
 | `maxRegExpPatternLength` | `number`   | `1024`     | Maximum allowed RegExp pattern length                                  |
 | `allowUnsafeRegExp`      | `boolean`  | `false`    | Allow patterns that fail the RegExp safety heuristic                   |
 | `allowedTypes`           | `string[]` | `null`     | Whitelist of type IDs allowed during deserialization (null = all)      |
-| `symbolPolicy`           | `string`   | `AllowAll` | Symbol deserialization policy: `AllowAll`, `WellKnownOnly`, `Disabled` |
+| `symbolPolicy`           | `string`   | `allow-all` | Symbol deserialization policy: `allow-all`, `well-known-only`, `disabled` |
 | `pretty`                 | `boolean`  | `false`    | Enable indented JSON output                                            |
 
 ---

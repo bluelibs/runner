@@ -93,11 +93,13 @@ export interface SerializedGraph {
   nodes: Record<string, SerializedNode>;
 }
 
-export enum SymbolPolicy {
-  AllowAll = "AllowAll",
-  WellKnownOnly = "WellKnownOnly",
-  Disabled = "Disabled",
-}
+export const SymbolPolicy = {
+  AllowAll: "allow-all",
+  WellKnownOnly: "well-known-only",
+  Disabled: "disabled",
+} as const;
+
+export type SymbolPolicy = (typeof SymbolPolicy)[keyof typeof SymbolPolicy];
 
 export enum SymbolPolicyErrorMessage {
   GlobalSymbolsNotAllowed = "Global symbols are not allowed",

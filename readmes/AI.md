@@ -12,19 +12,20 @@ When deserializing untrusted payloads, configure the serializer to restrict
 symbol handling so payloads cannot grow the global Symbol registry.
 
 ```ts
-import { Serializer, SymbolPolicy } from "@bluelibs/runner";
+import { Serializer } from "@bluelibs/runner";
 
 const serializer = new Serializer({
-  symbolPolicy: SymbolPolicy.WellKnownOnly,
+  symbolPolicy: "well-known-only",
 });
 ```
 
 `Serializer` also supports hardening knobs:
+
 - `allowedTypes` to allow-list runtime type ids during deserialize
 - `maxDepth` to cap recursion depth
 - `maxRegExpPatternLength` and `allowUnsafeRegExp` to guard RegExp payloads
 
-Default behavior note: `symbolPolicy` defaults to `SymbolPolicy.AllowAll`; use `WellKnownOnly` (or stricter) for untrusted inputs.
+Default behavior note: `symbolPolicy` defaults to `"allow-all"`; use `"well-known-only"` (or stricter) for untrusted inputs.
 
 ## Resources
 

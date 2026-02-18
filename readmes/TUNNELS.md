@@ -238,6 +238,28 @@ nodeExposure.with({
 - Async-context hydration is controlled per server tunnel resource via `allowAsyncContext` (defaults to `true` when omitted).
 - Use infra-level rate limiting for multi-instance consistency and better throughput.
 
+### Passing Your Own Correlation Id
+
+If you already have a request id in your app, set it in the client `onRequest` hook:
+
+```ts
+import { createHttpMixedClient } from "@bluelibs/runner/node";
+import { Serializer } from "@bluelibs/runner";
+
+const client = createHttpMixedClient({
+  baseUrl: "http://127.0.0.1:7070/__runner",
+  auth: { token: "dev-secret" },
+  onRequest: ({ headers }) => {
+    const requestId = getRequestIdFromYourContext();
+    if (requestId) headers["x-runner-request-id"] = requestId;
+  },
+});
+```
+
+Validation rules for incoming ids are strict: `^[A-Za-z0-9._:-]+$` and max length `128`. If invalid or missing, server generates one and echoes the final value in the response header.
+
+If you route through a tunnel resource (`globals.tags.tunnel` in `mode: "client"`), pass the same `onRequest` callback when creating the HTTP client in that resource.
+
 ### HTTP Header Reference
 
 | Header                | Direction         | Required                            | Purpose                                                                                                                      |
@@ -255,6 +277,23 @@ Notes:
   - `allowAsyncContext: true` (or omitted): hydrate registered async contexts
   - `allowAsyncContext: false`: ignore header for those selected ids
 - If multiple server tunnels expose the same id, async-context policy is fail-safe: if any tunnel sets `allowAsyncContext: false`, hydration is disabled for that id.
+
+### Correlation Id in Logs
+
+`nodeExposure` includes `requestId` automatically for built-in audit/error logs:
+
+- `exposure.auth.failure`
+- `exposure.task.error`
+- `exposure.event.error`
+
+For your own task logs, read it from exposure context headers:
+
+```ts
+import { useExposureContext } from "@bluelibs/runner/node";
+
+const { headers } = useExposureContext();
+const requestId = headers["x-runner-request-id"];
+```
 
 ## Authentication (Not Just A String)
 
