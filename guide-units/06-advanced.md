@@ -95,7 +95,7 @@ When multiple middleware need to exchange execution-local state without pollutin
 - Use `{ override: true }` only when mutation is intentional
 - Forward journal explicitly in nested task calls when you need shared trace/state continuity
 
-For the full API and patterns, see the Execution Journal section in [Core Concepts](./02-core-concepts.md#execution-journal).
+For the full API and patterns, see the Execution Journal section in [Core Concepts](#execution-journal).
 
 ---
 
@@ -118,7 +118,7 @@ const installer = r
 
 Use this when behavior should be scoped to a particular wiring path, not globally.
 
-For deeper lifecycle guidance, see [Runtime Lifecycle](./03-runtime-lifecycle.md#task-interceptors).
+For deeper lifecycle guidance, see [Runtime Lifecycle](#task-interceptors).
 
 ---
 
@@ -144,14 +144,16 @@ It also supports object graphs that plain JSON cannot represent, including circu
 
 ### What it handles
 
-| Type          | JSON   | Runner Serializer |
-| ------------- | ------ | ----------------- |
-| `Date`        | String | Date object       |
-| `RegExp`      | Lost   | RegExp object     |
-| `Map`, `Set`  | Lost   | Preserved         |
-| `Uint8Array`  | Lost   | Preserved         |
-| Circular refs | Error  | Preserved         |
-| Self refs     | Error  | Preserved         |
+| Type          | JSON                        | Runner Serializer                                                                                  |
+| ------------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
+| `Date`        | String                      | Date object                                                                                        |
+| `RegExp`      | Lost                        | RegExp object                                                                                      |
+| `Map`, `Set`  | Lost                        | Preserved                                                                                          |
+| `Uint8Array`  | Lost                        | Preserved                                                                                          |
+| `bigint`      | Lost/unsafe numeric coercion | Preserved as `__type: "BigInt"` (decimal string payload)                                          |
+| `symbol`      | Lost                        | Supports `Symbol.for(key)` and well-known symbols (unique `Symbol("...")` values are rejected)   |
+| Circular refs | Error                       | Preserved                                                                                          |
+| Self refs     | Error                       | Preserved                                                                                          |
 
 ### Two modes
 
@@ -176,6 +178,24 @@ const restored = serializer.deserialize(data);
 // restored.members[0] === restored.lead (same object!)
 // restored.self === restored (self-reference preserved)
 ```
+
+### Safety configuration for untrusted payloads
+
+When you deserialize untrusted data, configure the serializer explicitly:
+
+```typescript
+import { Serializer, SymbolPolicy } from "@bluelibs/runner";
+
+const serializer = new Serializer({
+  symbolPolicy: SymbolPolicy.WellKnownOnly,
+  allowedTypes: ["Date", "RegExp", "Map", "Set", "Uint8Array", "BigInt"],
+  maxDepth: 64,
+  maxRegExpPatternLength: 2000,
+  allowUnsafeRegExp: false,
+});
+```
+
+`symbolPolicy` defaults to `SymbolPolicy.AllowAll`. Prefer `WellKnownOnly` (or stricter) for untrusted input.
 
 ### Custom types
 
@@ -211,7 +231,9 @@ The serializer is hardened against common attacks:
 
 - **ReDoS protection**: Validates RegExp patterns against catastrophic backtracking
 - **Prototype pollution blocked**: Filters `__proto__`, `constructor`, `prototype` keys
-- **Depth limits**: Configurable max depth prevents stack overflow
+- **Depth limits**: `maxDepth` prevents stack overflows
+- **Type allow-listing**: `allowedTypes` narrows which runtime type ids are accepted
+- **Symbol registry safety**: `symbolPolicy` controls symbol deserialization behavior
 
 > **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](../readmes/TUNNELS.md) for file upload patterns.
 
@@ -259,6 +281,16 @@ const remoteTasksTunnel = r
 ```
 
 This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
+
+For typed remote error hydration, pass an `errorRegistry` to the client:
+
+```typescript
+// Assuming: AppError = r.error<{ code: number }>("app.errors.AppError").build()
+const client = createClient({
+  url: "http://remote-runner:8080/__runner",
+  errorRegistry: new Map([[AppError.id, AppError]]),
+});
+```
 
 For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](../readmes/TUNNELS.md).
 
@@ -440,25 +472,27 @@ Sometimes you need to replace a component entirely. Maybe you're doing integrati
 You can now use a dedicated helper `override()` or the fluent builder `r.override(...)` to safely override any property on tasks, resources, or middleware — except `id`. This ensures the identity is preserved, while allowing behavior changes.
 
 ```typescript
+import { override, r } from "@bluelibs/runner";
+
 const productionEmailer = r
   .resource("app.emailer")
   .init(async () => new SMTPEmailer())
   .build();
 
 // Option 1: Fluent override builder (Recommended)
-const testEmailer = r
+const fluentOverrideEmailer = r
   .override(productionEmailer)
   .init(async () => new MockEmailer())
   .build();
 
 // Option 2: Using override() helper to change behavior while preserving id
-const testEmailer = override(productionEmailer, {
+const helperOverrideEmailer = override(productionEmailer, {
   init: async () => new MockEmailer(),
 });
 
 // Option 3: The system is really flexible, and override is just bringing in type safety, nothing else under the hood.
 // Using spread operator works the same way but does not provide type-safety.
-const testEmailer = r
+const manualOverrideEmailer = r
   .resource("app.emailer")
   .init(async () => ({}))
   .build();
@@ -466,10 +500,8 @@ const testEmailer = r
 const app = r
   .resource("app")
   .register([productionEmailer])
-  .overrides([testEmailer]) // This replaces the production version
+  .overrides([fluentOverrideEmailer]) // This replaces the production version
   .build();
-
-import { override } from "@bluelibs/runner";
 
 // Tasks
 const originalTask = r
@@ -490,10 +522,10 @@ const overriddenResource = override(originalResource, {
 });
 
 // Middleware
-const originalMiddleware = taskMiddleware({
-  id: "app.middleware.log",
-  run: async ({ next }) => next(),
-});
+const originalMiddleware = r.middleware
+  .task("app.middleware.log")
+  .run(async ({ next }) => next())
+  .build();
 const overriddenMiddleware = override(originalMiddleware, {
   run: async ({ task, next }) => {
     const result = await next(task?.input);
@@ -1172,52 +1204,52 @@ Sometimes you'll run into circular type dependencies because of your file struct
 
 ### The Problem
 
-Consider these resources that create a circular dependency:
+Consider this graph that creates a circular *type inference* dependency:
 
 ```typescript
 // FILE: a.ts
-export const aResource = defineResource({
-  dependencies: { b: bResource },
-  // ... depends on B resource.
-});
-// For whatever reason, you decide to put the task in the same file.
-export const aTask = defineTask({
-  dependencies: { a: aResource },
-});
+export const aResource = r
+  .resource("a.resource")
+  .dependencies({ b: bResource })
+  .init(async () => "a")
+  .build();
+
+export const aTask = r
+  .task("a.tasks.run")
+  .dependencies({ a: aResource })
+  .run(async () => "ok")
+  .build();
 
 // FILE: b.ts
-export const bResource = defineResource({
-  id: "b.resource",
-  dependencies: { c: cResource },
-});
+export const bResource = r
+  .resource("b.resource")
+  .dependencies({ c: cResource })
+  .init(async () => "b")
+  .build();
 
 // FILE: c.ts
-export const cResource = defineResource({
-  id: "c.resource",
-  dependencies: { aTask }, // Creates circular **type** dependency! Cannot infer types properly, even if the runner boots because there's no circular dependency.
-  async init(_, { aTask }) {
-    return `C depends on aTask`;
-  },
-});
+export const cResource = r
+  .resource("c.resource")
+  .dependencies({ aTask }) // Creates circular type inference across files.
+  .init(async (_config, { aTask }) => `C depends on ${await aTask(undefined)}`)
+  .build();
 ```
 
-A depends B depends C depends ATask. No circular dependency, yet Typescript struggles with these, but there's a way to handle it gracefully.
+A depends on B, B depends on C, and C depends on A's task. Runtime can still boot, but TypeScript inference can get stuck in this cycle.
 
 ### The Solution
 
-The fix is to explicitly type the resource that completes the circle using a simple assertion `IResource<Config, ReturnType>`. This breaks the TypeScript inference chain while maintaining runtime functionality:
+The fix is to explicitly type the resource that completes the circle using `IResource<TConfig, Promise<TValue>, TDependencies>`. This breaks the inference chain while maintaining runtime behavior:
 
 ```typescript
 // c.resource.ts - The key change
-import { IResource } from "../../defs";
+import type { IResource } from "@bluelibs/runner";
 
-export const cResource = defineResource({
-  id: "c.resource",
-  dependencies: { a: aResource },
-  async init(_, { a }) {
-    return `C depends on ${a}`;
-  },
-}) as IResource<void, Promise<string>>; // void because it has no config, string because it returns a string
+export const cResource = r
+  .resource("c.resource")
+  .dependencies({ a: aResource })
+  .init(async (_config, { a }) => `C depends on ${a}`)
+  .build() as IResource<void, Promise<string>>;
 ```
 
 #### Why This Works
@@ -1229,7 +1261,7 @@ export const cResource = defineResource({
 #### Best Practices
 
 1. **Identify the "leaf" resource**: Choose the resource that logically should break the chain (often the one that doesn't need complex type inference)
-2. **Use explicit typing**: Add the `IResource<Dependencies, ReturnType>` type annotation
+2. **Use explicit typing**: Add `IResource<Config, Promise<Value>, Dependencies>` annotation
 3. **Document the decision**: Add a comment explaining why the explicit typing is needed
 4. **Consider refactoring**: If you have many circular dependencies, consider if your architecture could be simplified
 
@@ -1243,16 +1275,16 @@ type MyDependencies = {
   anotherResource: AnotherResourceType;
 };
 
-export const problematicResource = defineResource({
-  id: "problematic.resource",
-  dependencies: {
+export const problematicResource = r
+  .resource("problematic.resource")
+  .dependencies({
     /* ... */
-  },
-  async init(config, deps) {
+  })
+  .init(async (config, deps) => {
     // Your logic here
     return someComplexObject;
-  },
-}) as IResource<MyDependencies, ComplexReturnType>;
+  })
+  .build() as IResource<void, Promise<ComplexReturnType>, MyDependencies>;
 ```
 
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.

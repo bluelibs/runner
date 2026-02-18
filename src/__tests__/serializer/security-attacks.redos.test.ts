@@ -6,6 +6,7 @@
 
 import { describe, it, expect, beforeEach } from "@jest/globals";
 import { Serializer } from "../../serializer/index";
+import { isRegExpPatternSafe } from "../../serializer/regexp-validator";
 
 describe("Serializer Security Attacks", () => {
   let serializer: Serializer;
@@ -72,11 +73,11 @@ describe("Serializer Security Attacks", () => {
     it("should detect unsafe nested quantifiers by default", () => {
       // Patterns like (a+)+ can cause catastrophic backtracking
       const unsafePattern = "(a+)+";
-      expect(serializer.isRegExpPatternSafe(unsafePattern)).toBe(false);
+      expect(isRegExpPatternSafe(unsafePattern)).toBe(false);
     });
 
     it("should detect ambiguous quantified alternation patterns", () => {
-      expect(serializer.isRegExpPatternSafe("^(a|aa)+$")).toBe(false);
+      expect(isRegExpPatternSafe("^(a|aa)+$")).toBe(false);
 
       const payload = JSON.stringify({
         __type: "RegExp",
@@ -89,7 +90,7 @@ describe("Serializer Security Attacks", () => {
     });
 
     it("should allow safe alternation patterns", () => {
-      expect(serializer.isRegExpPatternSafe("(ab|cd)+")).toBe(true);
+      expect(isRegExpPatternSafe("(ab|cd)+")).toBe(true);
 
       const payload = JSON.stringify({
         __type: "RegExp",

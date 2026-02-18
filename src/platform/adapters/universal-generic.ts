@@ -1,5 +1,15 @@
 import type { IAsyncLocalStorage, IPlatformAdapter } from "../types";
 import { platformUnsupportedFunctionError } from "../../errors";
+import { normalizeError } from "../../globals/resources/tunnel/error-utils";
+
+interface GenericEventTarget extends Record<string, unknown> {
+  addEventListener?: (type: string, listener: (event: unknown) => void) => void;
+  removeEventListener?: (
+    type: string,
+    listener: (event: unknown) => void,
+  ) => void;
+  document?: { visibilityState?: unknown };
+}
 
 // A generic, non-detecting adapter that uses globalThis listeners and no Node APIs.
 export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
@@ -13,7 +23,7 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
     if (this.alsProbed) return;
     this.alsProbed = true;
 
-    const g = globalThis as Record<string, unknown>;
+    const g = globalThis as GenericEventTarget;
 
     // Keep universal behavior unchanged for non-Deno runtimes.
     if (typeof g.Deno === "undefined") return;
@@ -36,20 +46,38 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
     }
   }
 
-  onUncaughtException(handler: (error: any) => void) {
-    const tgt = globalThis as Record<string, any>;
+  onUncaughtException(handler: (error: unknown) => void) {
+    const tgt = globalThis as GenericEventTarget;
     if (tgt.addEventListener) {
-      const h = (e: any) => handler(e?.error ?? e);
+      const h = (event: unknown) => {
+        const error =
+          event &&
+          typeof event === "object" &&
+          "error" in event &&
+          (event as { error?: unknown }).error !== undefined
+            ? (event as { error?: unknown }).error
+            : event;
+        handler(normalizeError(error));
+      };
       tgt.addEventListener("error", h);
       return () => tgt.removeEventListener?.("error", h);
     }
     return () => {};
   }
 
-  onUnhandledRejection(handler: (reason: any) => void) {
-    const tgt = globalThis as Record<string, any>;
+  onUnhandledRejection(handler: (reason: unknown) => void) {
+    const tgt = globalThis as GenericEventTarget;
     if (tgt.addEventListener) {
-      const wrap = (e: any) => handler(e?.reason ?? e);
+      const wrap = (event: unknown) => {
+        const reason =
+          event &&
+          typeof event === "object" &&
+          "reason" in event &&
+          (event as { reason?: unknown }).reason !== undefined
+            ? (event as { reason?: unknown }).reason
+            : event;
+        handler(reason);
+      };
       tgt.addEventListener("unhandledrejection", wrap);
       return () => tgt.removeEventListener?.("unhandledrejection", wrap);
     }
@@ -57,13 +85,16 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   }
 
   onShutdownSignal(handler: () => void) {
-    const tgt = globalThis as Record<string, any>;
+    const tgt = globalThis as GenericEventTarget;
     if (tgt.addEventListener) {
-      const handlers: { before?: any; visibility?: any } = {};
-      handlers.before = (_e?: any) => handler();
+      const handlers: {
+        before?: () => void;
+        visibility?: () => void;
+      } = {};
+      handlers.before = () => handler();
       tgt.addEventListener("beforeunload", handlers.before);
 
-      const doc = (globalThis as Record<string, any>).document;
+      const doc = tgt.document;
       if (doc) {
         handlers.visibility = () => {
           if (doc.visibilityState === "hidden") handler();
@@ -72,7 +103,9 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
       }
 
       return () => {
-        tgt.removeEventListener?.("beforeunload", handlers.before);
+        if (handlers.before) {
+          tgt.removeEventListener?.("beforeunload", handlers.before);
+        }
         if (handlers.visibility)
           tgt.removeEventListener?.("visibilitychange", handlers.visibility);
       };
@@ -85,14 +118,18 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
   }
 
   getEnv(key: string): string | undefined {
-    const g = globalThis as Record<string, any>;
-    if (g.__ENV__ && typeof g.__ENV__ === "object") return g.__ENV__[key];
+    const g = globalThis as GenericEventTarget;
+    if (g.__ENV__ && typeof g.__ENV__ === "object") {
+      return (g.__ENV__ as Record<string, string | undefined>)[key];
+    }
     if (
       typeof process !== "undefined" &&
       (process as { env: Record<string, string> }).env
     )
       return (process as { env: Record<string, string> }).env[key];
-    if (g.env && typeof g.env === "object") return g.env[key];
+    if (g.env && typeof g.env === "object") {
+      return (g.env as Record<string, string | undefined>)[key];
+    }
     return undefined;
   }
 
@@ -109,13 +146,13 @@ export class GenericUniversalPlatformAdapter implements IPlatformAdapter {
 
     // Construct without throw; error only when used
     return {
-      getStore: (): any => {
-        platformUnsupportedFunctionError.throw({
+      getStore: (): T | undefined => {
+        return platformUnsupportedFunctionError.throw({
           functionName: "createAsyncLocalStorage",
         });
       },
-      run: (_store: any, _callback: () => any): any => {
-        platformUnsupportedFunctionError.throw({
+      run: <R>(_store: T, _callback: () => R): R => {
+        return platformUnsupportedFunctionError.throw({
           functionName: "createAsyncLocalStorage",
         });
       },

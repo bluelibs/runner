@@ -114,6 +114,7 @@ export class ResourceScheduler {
           {
             name: "AggregateError",
             errors: failures,
+            cause: failures[0],
           },
         );
       }

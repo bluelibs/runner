@@ -35,14 +35,14 @@ export class BrowserPlatformAdapter implements IPlatformAdapter {
   readonly id: PlatformId = "browser";
   async init() {}
 
-  onUncaughtException(handler: (error: Error) => void) {
+  onUncaughtException(handler: (error: unknown) => void) {
     const g = globalThis as BrowserGlobalScope;
     const target: BrowserEventTarget = g.window ?? g;
     const h: EventListener = (e) => {
       // Pass through the error property if it exists, otherwise the raw event
       // Runtime may receive non-Error values from browser events
       const errorEvent = e as ErrorEvent;
-      handler((errorEvent?.error ?? e) as Error);
+      handler(errorEvent?.error ?? e);
     };
     target.addEventListener?.("error", h);
     return () => target.removeEventListener?.("error", h);

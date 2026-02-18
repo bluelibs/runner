@@ -266,6 +266,7 @@ export class Store {
         {
           name: "AggregateError",
           errors: disposalErrors,
+          cause: disposalErrors[0],
         },
       );
     }

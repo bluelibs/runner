@@ -142,6 +142,126 @@ describe("requestHandlers - routing and dispatching", () => {
         : undefined;
       expect(json?.error?.code).toBe("NOT_FOUND");
     });
+
+    it("logs allow-list selector failures during discovery", async () => {
+      const logger = {
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+      };
+      const store = {
+        tasks: new Map([["task.a", { task: { id: "task.a" } }]]),
+        events: new Map(),
+        resources: new Map([
+          [
+            "srv",
+            {
+              resource: { id: "srv", tags: [globalTags.tunnel] },
+              value: {
+                mode: "server",
+                transport: "http",
+                tasks: () => {
+                  throw "selector failed";
+                },
+              },
+            },
+          ],
+        ]),
+        asyncContexts: new Map(),
+      } as any;
+
+      const deps: any = {
+        store,
+        taskRunner: { run: async () => 1 },
+        eventManager: { emit: async () => {} },
+        logger,
+        authenticator: async () => ({ ok: true }),
+        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "discovery" }),
+          isUnderBase: () => true,
+        },
+        cors: undefined,
+        serializer,
+      };
+      const { handleDiscovery } = createRequestHandlers(deps);
+      const { req, res } = createReqRes({
+        method: HttpMethod.Get,
+        url: "/api/discovery",
+      });
+
+      await handleDiscovery(req, res);
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        "[runner] Tunnel allow-list selector failed; item skipped.",
+        expect.objectContaining({
+          selectorKind: "task",
+          candidateId: "task.a",
+          tunnelResourceId: "srv",
+          error: expect.any(Error),
+        }),
+      );
+    });
+
+    it("forwards selector Error instances to logger without rewrapping", async () => {
+      const logger = {
+        info: jest.fn(),
+        warn: jest.fn(),
+        error: jest.fn(),
+      };
+      const selectorError = new Error("selector failed");
+      const store = {
+        tasks: new Map([["task.a", { task: { id: "task.a" } }]]),
+        events: new Map(),
+        resources: new Map([
+          [
+            "srv",
+            {
+              resource: { id: "srv", tags: [globalTags.tunnel] },
+              value: {
+                mode: "server",
+                transport: "http",
+                tasks: () => {
+                  throw selectorError;
+                },
+              },
+            },
+          ],
+        ]),
+        asyncContexts: new Map(),
+      } as any;
+
+      const deps: any = {
+        store,
+        taskRunner: { run: async () => 1 },
+        eventManager: { emit: async () => {} },
+        logger,
+        authenticator: async () => ({ ok: true }),
+        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "discovery" }),
+          isUnderBase: () => true,
+        },
+        cors: undefined,
+        serializer,
+      };
+      const { handleDiscovery } = createRequestHandlers(deps);
+      const { req, res } = createReqRes({
+        method: HttpMethod.Get,
+        url: "/api/discovery",
+      });
+
+      await handleDiscovery(req, res);
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        "[runner] Tunnel allow-list selector failed; item skipped.",
+        expect.objectContaining({
+          error: selectorError,
+        }),
+      );
+    });
   });
 
   describe("Authentication and Authorization", () => {

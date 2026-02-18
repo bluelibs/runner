@@ -6,6 +6,7 @@ import type {
 import { connectAmqplib } from "../optionalDeps/amqplib";
 import { durableQueueNotInitializedError } from "../../../errors";
 import { randomUUID } from "node:crypto";
+import { Logger } from "../../../models/Logger";
 
 type ConsumeMessage = { content: Buffer };
 
@@ -44,6 +45,7 @@ export interface RabbitMQQueueConfig {
     messageTtl?: number;
   };
   prefetch?: number;
+  logger?: Pick<Logger, "error">;
 }
 
 export class RabbitMQQueue implements IDurableQueue {
@@ -55,6 +57,7 @@ export class RabbitMQQueue implements IDurableQueue {
   private readonly isQuorum: boolean;
   private readonly deadLetterQueue?: string;
   private readonly messageTtl?: number;
+  private readonly logger: Pick<Logger, "error">;
   private messageMap = new Map<string, ConsumeMessage>();
 
   constructor(config: RabbitMQQueueConfig) {
@@ -65,6 +68,21 @@ export class RabbitMQQueue implements IDurableQueue {
     this.isQuorum = config.queue?.quorum ?? true;
     this.deadLetterQueue = config.queue?.deadLetter;
     this.messageTtl = config.queue?.messageTtl;
+    this.logger =
+      config.logger ??
+      new Logger({
+        printThreshold: "error",
+        printStrategy: "pretty",
+        bufferLogs: false,
+      }).with({ source: "durable.rabbitmq.queue" });
+  }
+
+  private reportError(message: string, data: Record<string, unknown>) {
+    try {
+      void this.logger.error(message, data);
+    } catch {
+      // Ignore logger failures to preserve queue processing flow.
+    }
   }
 
   async init(): Promise<void> {
@@ -145,7 +163,14 @@ export class RabbitMQQueue implements IDurableQueue {
             ...parsed,
             attempts: currentAttempts + 1,
           } as QueueMessage<T>;
-        } catch {
+        } catch (error) {
+          this.reportError(
+            "RabbitMQQueue failed to parse incoming message; nacking without requeue.",
+            {
+              error: error instanceof Error ? error : new Error(String(error)),
+              payload: msg.content.toString(),
+            },
+          );
           channel!.nack(msg, false, false);
           return;
         }
@@ -153,7 +178,14 @@ export class RabbitMQQueue implements IDurableQueue {
 
         try {
           await handler(content);
-        } catch {
+        } catch (error) {
+          this.reportError(
+            "RabbitMQQueue handler threw; leaving ack/nack to consumer.",
+            {
+              error: error instanceof Error ? error : new Error(String(error)),
+              messageId: content.id,
+            },
+          );
           // Let the consumer decide ack/nack
         }
       },

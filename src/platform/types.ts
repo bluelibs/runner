@@ -14,7 +14,7 @@ export type PlatformClearTimeout = (
 export interface IPlatformAdapter {
   readonly id: PlatformId;
   // Process management
-  onUncaughtException(handler: (error: Error) => void): () => void;
+  onUncaughtException(handler: (error: unknown) => void): () => void;
   onUnhandledRejection(handler: (reason: unknown) => void): () => void;
   onShutdownSignal(handler: () => void): () => void;
   exit(code: number): void;

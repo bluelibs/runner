@@ -125,7 +125,7 @@ export interface IResourceDefinition<
    * @returns Promise<void>
    */
   dispose?: (
-    this: any,
+    this: unknown,
     value: TValue extends Promise<infer U> ? U : TValue,
     config: TConfig,
     dependencies: ResourceDependencyValuesType<TDependencies>,

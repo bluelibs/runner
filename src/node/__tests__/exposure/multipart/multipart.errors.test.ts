@@ -7,7 +7,10 @@ import {
   createErroringRequest,
   createRequestFromBody,
 } from "./multipart.test.utils";
-import { createMessageError } from "../../../../errors";
+import {
+  createMessageError,
+  nodeExposureMultipartLimitExceededError,
+} from "../../../../errors";
 
 const serializer = new Serializer();
 
@@ -105,5 +108,46 @@ describe("parseMultipartInput - Errors", () => {
     if (finalize.ok)
       throw createMessageError("Expected finalize to report missing file part");
     expectErrorCode(finalize.response, "MISSING_FILE_PART");
+  });
+
+  it("falls back safely when multipart limit error has no response payload", async () => {
+    const manifest = JSON.stringify({
+      input: {
+        file: { $runnerFile: "File", id: "F1", meta: { name: "late.txt" } },
+      },
+    });
+    const req = createMultipartRequest(boundary, [
+      part(
+        boundary,
+        [
+          'Content-Disposition: form-data; name="__manifest"',
+          "Content-Type: application/json; charset=utf-8",
+        ],
+        manifest,
+      ),
+    ]);
+
+    const originalCreate = nodeExposureMultipartLimitExceededError.create.bind(
+      nodeExposureMultipartLimitExceededError,
+    );
+    const createSpy = jest
+      .spyOn(nodeExposureMultipartLimitExceededError, "create")
+      .mockImplementation(() =>
+        originalCreate({ message: "Multipart limit exceeded" } as any),
+      );
+
+    try {
+      const parsed = await parseMultipartInput(req, undefined, serializer, {
+        files: 0,
+      });
+      if (parsed.ok) {
+        throw createMessageError(
+          "Expected invalid multipart when response payload is missing",
+        );
+      }
+      expectErrorCode(parsed.response, "INVALID_MULTIPART");
+    } finally {
+      createSpy.mockRestore();
+    }
   });
 });

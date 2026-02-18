@@ -5,6 +5,7 @@ import * as fs from "node:fs";
 import { IDurableService } from "../core/interfaces/service";
 import { DurableOperator } from "../core/DurableOperator";
 import { ExecutionStatus } from "../core/types";
+import { normalizeError } from "../../../globals/resources/tunnel/error-utils";
 
 function findUp(startDir: string, filename: string): string | null {
   let current = startDir;
@@ -109,6 +110,8 @@ export function createDashboardMiddleware(
 
   const isNonEmptyString = (value: unknown): value is string =>
     typeof value === "string" && value.trim().length > 0;
+  const getErrorMessage = (error: unknown): string =>
+    normalizeError(error).message;
 
   api.get("/executions", async (req, res) => {
     try {
@@ -160,8 +163,8 @@ export function createDashboardMiddleware(
       });
 
       res.json(executions);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ error: getErrorMessage(err) });
     }
   });
 
@@ -169,8 +172,8 @@ export function createDashboardMiddleware(
     try {
       const executions = await operator.listStuckExecutions();
       res.json(executions);
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ error: getErrorMessage(err) });
     }
   });
 
@@ -184,8 +187,8 @@ export function createDashboardMiddleware(
       }
 
       res.json({ ...execution, steps, audit });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ error: getErrorMessage(err) });
     }
   });
 
@@ -247,8 +250,8 @@ export function createDashboardMiddleware(
       }
 
       res.json({ success: true });
-    } catch (err: any) {
-      res.status(500).json({ error: err.message });
+    } catch (err: unknown) {
+      res.status(500).json({ error: getErrorMessage(err) });
     }
   });
 

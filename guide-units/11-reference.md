@@ -55,26 +55,68 @@ const myHook = r
   .on(myEvent)
   .run(async (event) => console.log(event.data))
   .build();
+
+// Error Helper
+const appError = r
+  .error<{ code: number; message: string }>("app.errors.AppError")
+  .build();
+
+// Tag
+const auditTag = r.tag("app.tags.audit").build();
+
+// Async Context (Node-only)
+const requestContext = r
+  .asyncContext<{ requestId: string }>("app.ctx.request")
+  .build();
 ```
 
 ### Running Your App
 
 ```typescript
 // Basic
-const { runTask, dispose } = await run(app);
+const basicRuntime = await run(app);
+const { runTask, dispose } = basicRuntime;
 
 // With options
-const { runTask, dispose } = await run(app, {
-  debug: "verbose", // "normal" | "verbose"
+const configuredRuntime = await run(app, {
+  debug: "verbose", // "normal" | "verbose" | Partial<DebugConfig>
+  logs: {
+    printThreshold: "info",
+    printStrategy: "pretty",
+    bufferLogs: false,
+  },
+  errorBoundary: true,
+  shutdownHooks: true,
   onUnhandledError: ({ error }) => console.error(error),
+  dryRun: false,
+  lazy: false,
+  initMode: "sequential", // "sequential" | "parallel"
+  runtimeEventCycleDetection: true,
+  mode: "prod", // "dev" | "prod" | "test"
 });
+const { runTask: runTaskWithOptions, dispose: disposeWithOptions } =
+  configuredRuntime;
 
 // Execute tasks
 const result = await runTask(myTask, input);
 
 // Cleanup
 await dispose();
+await disposeWithOptions();
 ```
+
+| Run Option                    | Purpose                                                                 |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| `debug`                      | Enable Runner debug logging                                             |
+| `logs`                       | Configure logger strategy/threshold/buffering                           |
+| `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
+| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with `dispose()`                            |
+| `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
+| `dryRun`                     | Validate graph without running resource `init()`                        |
+| `lazy`                       | Defer startup-unused resources until on-demand access                   |
+| `initMode`                   | Choose startup scheduler strategy (`sequential` or `parallel`)          |
+| `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                            |
+| `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)           |
 
 ### Testing Patterns
 
@@ -86,6 +128,34 @@ const result = await myTask.run(input, { db: mockDb, logger: mockLogger });
 const { runTask, dispose } = await run(testApp);
 const result = await runTask(myTask, input);
 await dispose();
+```
+
+### Override Patterns
+
+```typescript
+import { override, r } from "@bluelibs/runner";
+
+const realMailer = r
+  .resource("app.mailer")
+  .init(async () => new SMTPEmailer())
+  .build();
+
+// Fluent override builder
+const mockMailer = r
+  .override(realMailer)
+  .init(async () => new MockMailer())
+  .build();
+
+// Helper override
+const helperMockMailer = override(realMailer, {
+  init: async () => new MockMailer(),
+});
+
+const app = r
+  .resource("app")
+  .register([realMailer])
+  .overrides([mockMailer])
+  .build();
 ```
 
 ### Built-in Middleware
@@ -139,6 +209,16 @@ const app = r.resource("app")
 // Emit events
 await myEvent({ data: "value" });
 
+// Emit with options
+const emitReport = await myEvent(
+  { data: "value" },
+  { failureMode: "aggregate", throwOnError: false, report: true },
+);
+
+// Runtime emit helper supports the same options
+const runtime = await run(app);
+await runtime.emitEvent(myEvent, { data: "value" }, { report: true });
+
 // Global logging
 const task = r.task("id")
   .dependencies({ logger: globals.resources.logger })
@@ -147,6 +227,14 @@ const task = r.task("id")
   })
   .build();
 ```
+
+### Event Emission Options
+
+| Option         | Type                              | Default      | Purpose                                      |
+| -------------- | --------------------------------- | ------------ | -------------------------------------------- |
+| `failureMode`  | `"fail-fast" \| "aggregate"`      | `fail-fast`  | Stop on first listener error or aggregate all |
+| `throwOnError` | `boolean`                         | `true`       | Throw after listener failure(s)               |
+| `report`       | `boolean`                         | `false`      | Return `IEventEmitReport` for listener outcomes |
 
 ### Type Helpers
 

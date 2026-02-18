@@ -11,23 +11,23 @@ export type LogLevels =
 export interface ILogInfo {
   source?: string;
   error?: unknown | Error;
-  data?: Record<string, any>;
-  context?: Record<string, any>;
-  [key: string]: any;
+  data?: Record<string, unknown>;
+  context?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface ILog {
   level: LogLevels;
   source?: string;
-  message: any;
+  message: unknown;
   timestamp: Date;
   error?: {
     name: string;
     message: string;
     stack?: string;
   };
-  data?: Record<string, any>;
-  context?: Record<string, any>;
+  data?: Record<string, unknown>;
+  context?: Record<string, unknown>;
 }
 
 export type PrintStrategy = PrinterStrategy;
@@ -36,7 +36,7 @@ export class Logger {
   private printStrategy: PrintStrategy = "pretty";
   private bufferLogs: boolean = false;
   private buffer: ILog[] = [];
-  private boundContext: Record<string, any> = {};
+  private boundContext: Record<string, unknown> = {};
   private isLocked: boolean = false;
   private useColors: boolean = true;
   private printer: LogPrinter;
@@ -61,7 +61,7 @@ export class Logger {
       bufferLogs: boolean;
       useColors?: boolean;
     },
-    boundContext: Record<string, any> = {},
+    boundContext: Record<string, unknown> = {},
     source?: string,
     printer?: LogPrinter,
   ) {
@@ -105,7 +105,7 @@ export class Logger {
     additionalContext: context,
   }: {
     source?: string;
-    additionalContext?: Record<string, any>;
+    additionalContext?: Record<string, unknown>;
   }): Logger {
     const child = new Logger(
       {
@@ -128,7 +128,7 @@ export class Logger {
    */
   public async log(
     level: LogLevels,
-    message: any,
+    message: unknown,
     logInfo: ILogInfo = {},
   ): Promise<void> {
     const { source, error, data, ...context } = logInfo;
@@ -176,27 +176,27 @@ export class Logger {
     };
   }
 
-  public async info(message: any, logInfo?: ILogInfo) {
+  public async info(message: unknown, logInfo?: ILogInfo) {
     await this.log("info", message, logInfo);
   }
 
-  public async error(message: any, logInfo?: ILogInfo) {
+  public async error(message: unknown, logInfo?: ILogInfo) {
     await this.log("error", message, logInfo);
   }
 
-  public async warn(message: any, logInfo?: ILogInfo) {
+  public async warn(message: unknown, logInfo?: ILogInfo) {
     await this.log("warn", message, logInfo);
   }
 
-  public async debug(message: any, logInfo?: ILogInfo) {
+  public async debug(message: unknown, logInfo?: ILogInfo) {
     await this.log("debug", message, logInfo);
   }
 
-  public async trace(message: any, logInfo?: ILogInfo) {
+  public async trace(message: unknown, logInfo?: ILogInfo) {
     await this.log("trace", message, logInfo);
   }
 
-  public async critical(message: any, logInfo?: ILogInfo) {
+  public async critical(message: unknown, logInfo?: ILogInfo) {
     await this.log("critical", message, logInfo);
   }
 
@@ -210,7 +210,7 @@ export class Logger {
   /**
    * @param listener - A listener that will be triggered for every log.
    */
-  public onLog(listener: (log: ILog) => any) {
+  public onLog(listener: (log: ILog) => void | Promise<void>) {
     if (this.rootLogger && this.rootLogger !== this) {
       this.rootLogger.onLog(listener);
     } else {

@@ -11,8 +11,6 @@ import type {
   SerializerOptions,
   SerializedGraph,
   DeserializationContext,
-  SerializedValue,
-  SerializedNode,
 } from "./types";
 import { SymbolPolicy } from "./types";
 import { TypeRegistry } from "./type-registry";
@@ -20,7 +18,6 @@ import {
   isGraphPayload,
   toNodeRecord,
   isObjectReference,
-  isSerializedTypeRecord,
   DEFAULT_UNSAFE_KEYS,
 } from "./validation";
 import { serializeValue, type SerializeState } from "./graph-serializer";
@@ -28,19 +25,11 @@ import { serializeTreeValue } from "./tree-serializer";
 import {
   deserializeValue as deserializeValueFn,
   deserializeLegacy,
-  resolveReference as resolveReferenceFn,
-  mergePlaceholder as mergePlaceholderFn,
 } from "./deserializer";
 import {
   normalizeMaxDepth,
   normalizeMaxRegExpPatternLength,
 } from "./option-normalizers";
-import {
-  isBoundedQuantifier,
-  isQuantifierAt,
-  isQuantifierChar,
-  isRegExpPatternSafe,
-} from "./regexp-validator";
 
 const GRAPH_VERSION = 1;
 const DEFAULT_MAX_DEPTH = 1000;
@@ -188,91 +177,6 @@ export class Serializer {
     typeDef: TypeDefinition<TInstance, TSerialized>,
   ): void {
     this.typeRegistry.addType(typeDef);
-  }
-
-  /**
-   * @internal - Exposed for testing RegExp safety validation
-   */
-  public readonly isRegExpPatternSafe = (pattern: string): boolean => {
-    return isRegExpPatternSafe(pattern);
-  };
-
-  /**
-   * @internal - Exposed for testing quantifier detection
-   */
-  public readonly isQuantifierAt = (
-    pattern: string,
-    index: number,
-  ): boolean => {
-    return isQuantifierAt(pattern, index);
-  };
-
-  /**
-   * @internal - Exposed for testing quantifier character detection
-   */
-  public readonly isQuantifierChar = (
-    char: string,
-    pattern: string,
-    index: number,
-  ): boolean => {
-    return isQuantifierChar(char, pattern, index);
-  };
-
-  /**
-   * @internal - Exposed for testing bounded quantifier detection
-   */
-  public readonly isBoundedQuantifier = (
-    pattern: string,
-    index: number,
-  ): boolean => {
-    return isBoundedQuantifier(pattern, index);
-  };
-
-  /**
-   * @internal - Exposed for test compatibility
-   */
-  public toNodeRecord(
-    nodes: Record<string, SerializedNode>,
-  ): Record<string, SerializedNode> {
-    return toNodeRecord(nodes, this.unsafeKeys);
-  }
-
-  /**
-   * @internal - Exposed for test compatibility
-   */
-  public deserializeValue(
-    value: SerializedValue,
-    context: DeserializationContext,
-    depth: number = 0,
-  ): unknown {
-    return deserializeValueFn(value, context, depth, this.runtimeOptions);
-  }
-
-  /**
-   * @internal - Exposed for test compatibility
-   */
-  public resolveReference(
-    id: string,
-    context: DeserializationContext,
-    depth: number = 0,
-  ): unknown {
-    return resolveReferenceFn(id, context, depth, this.runtimeOptions);
-  }
-
-  /**
-   * @internal - Exposed for test compatibility
-   */
-  public mergePlaceholder(placeholder: unknown, result: unknown): unknown {
-    return mergePlaceholderFn(placeholder, result, this.unsafeKeys);
-  }
-
-  /**
-   * @internal - Exposed for test compatibility
-   */
-  public isSerializedTypeRecord(
-    value: unknown,
-  ): value is { __type: string; value: unknown } {
-    return isSerializedTypeRecord(value);
   }
 
   private jsonStringify(value: unknown): string {

@@ -272,6 +272,7 @@ export class EventManager {
           {
             name: "AggregateError",
             errors: executionReport.errors,
+            cause: executionReport.errors[0],
           },
         );
       }
@@ -334,6 +335,14 @@ export class EventManager {
       isGlobal: true,
     });
     this.registry.addGlobalListener(newListener);
+  }
+
+  /**
+   * Removes listeners registered with the provided listener id.
+   */
+  removeListenerById(id: string): void {
+    this.checkLock();
+    this.registry.removeListenerById(id);
   }
 
   /**

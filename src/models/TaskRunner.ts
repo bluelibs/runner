@@ -5,12 +5,15 @@ import { Logger } from "./Logger";
 import { MiddlewareManager } from "./MiddlewareManager";
 import type { ExecutionJournal } from "../types/executionJournal";
 import type { TaskCallOptions } from "../types/utilities";
+import { normalizeError } from "../globals/resources/tunnel/error-utils";
+
+type CachedTaskRunner = (
+  input: unknown,
+  journal?: ExecutionJournal,
+) => Promise<unknown>;
 
 export class TaskRunner {
-  protected readonly runnerStore = new Map<
-    string | symbol,
-    (input: any, journal?: ExecutionJournal) => Promise<any>
-  >();
+  protected readonly runnerStore = new Map<string | symbol, CachedTaskRunner>();
 
   constructor(
     protected readonly store: Store,
@@ -41,17 +44,21 @@ export class TaskRunner {
     options?: TaskCallOptions,
   ): Promise<TOutput | undefined> {
     const canUseCachedRunner = this.store.isLocked;
-    let runner = canUseCachedRunner ? this.runnerStore.get(task.id) : undefined;
+    let runner = canUseCachedRunner
+      ? (this.runnerStore.get(task.id) as
+          | ((input: TInput, journal?: ExecutionJournal) => Promise<TOutput>)
+          | undefined)
+      : undefined;
     if (!runner) {
       runner = this.createRunnerWithMiddleware<TInput, TOutput, TDeps>(task);
       if (canUseCachedRunner) {
-        this.runnerStore.set(task.id, runner);
+        this.runnerStore.set(task.id, runner as CachedTaskRunner);
       }
     }
 
     try {
       // Pass journal if provided; composer will use it or create new
-      return await runner(input, options?.journal);
+      return await runner(input as TInput, options?.journal);
     } catch (error) {
       try {
         await this.store.onUnhandledError({
@@ -59,7 +66,20 @@ export class TaskRunner {
           kind: "task",
           source: task.id,
         });
-      } catch (_) {}
+      } catch (reporterError) {
+        try {
+          await this.logger.error(
+            "[runner] Failed to report unhandled task error.",
+            {
+              source: task.id,
+              error: normalizeError(reporterError),
+              data: { originalError: normalizeError(error) },
+            },
+          );
+        } catch {
+          // Avoid recursive failure loops if logger reporting also fails.
+        }
+      }
       throw error;
     }
   }

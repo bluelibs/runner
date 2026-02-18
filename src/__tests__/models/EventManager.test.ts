@@ -152,6 +152,40 @@ describe("EventManager", () => {
     }).toThrow("Cannot modify the EventManager when it is locked.");
   });
 
+  it("should remove listeners by id and stop future invocations", async () => {
+    const removedHandler = jest.fn();
+    const keptHandler = jest.fn();
+
+    eventManager.addListener(eventDefinition, removedHandler, {
+      id: "remove-me",
+    });
+    eventManager.addListener(eventDefinition, keptHandler, { id: "keep-me" });
+
+    await eventManager.emit(eventDefinition, "before", "test");
+    expect(removedHandler).toHaveBeenCalledTimes(1);
+    expect(keptHandler).toHaveBeenCalledTimes(1);
+
+    removedHandler.mockClear();
+    keptHandler.mockClear();
+
+    eventManager.removeListenerById("remove-me");
+    await eventManager.emit(eventDefinition, "after", "test");
+
+    expect(removedHandler).not.toHaveBeenCalled();
+    expect(keptHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it("removeListenerById should be a no-op for unknown ids", () => {
+    expect(() => eventManager.removeListenerById("missing-id")).not.toThrow();
+  });
+
+  it("should lock and prevent removing listeners by id", () => {
+    eventManager.lock();
+    expect(() => {
+      eventManager.removeListenerById("any");
+    }).toThrow("Cannot modify the EventManager when it is locked.");
+  });
+
   it("should handle multiple events", async () => {
     const eventDef1 = defineEvent<string>({ id: "event1" });
     const eventDef2 = defineEvent<string>({ id: "event2" });

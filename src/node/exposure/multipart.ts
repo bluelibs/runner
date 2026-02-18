@@ -3,11 +3,33 @@ import { PassThrough } from "node:stream";
 import * as Busboy from "busboy";
 import type { FileInfo, FieldInfo } from "busboy";
 
+interface BusboyInstance extends NodeJS.WritableStream {
+  on(
+    event: "field",
+    listener: (name: string, value: unknown, info: FieldInfo) => void,
+  ): this;
+  on(
+    event: "file",
+    listener: (
+      name: string,
+      stream: NodeJS.ReadableStream,
+      info: FileInfo,
+    ) => void,
+  ): this;
+  on(
+    event: "fieldsLimit" | "filesLimit" | "partsLimit",
+    listener: () => void,
+  ): this;
+  on(event: "close" | "finish", listener: () => void): this;
+  on(event: "error", listener: (error: unknown) => void): this;
+  once(event: "error", listener: (error: unknown) => void): this;
+}
+
 // Handle both ESM and CJS interop
 type BusboyFactory = (cfg: {
   headers: IncomingHttpHeaders;
   limits?: MultipartLimits;
-}) => unknown;
+}) => BusboyInstance;
 
 function isBusboyFactory(value: unknown): value is BusboyFactory {
   return typeof value === "function";
@@ -32,6 +54,7 @@ const busboyFactory: BusboyFactory = (cfg) => {
 };
 
 import type { SerializerLike } from "../../serializer";
+import { nodeExposureMultipartLimitExceededError } from "../../errors";
 // Import with explicit .ts extension to prevent tsup from resolving it
 // via the native-node-modules plugin (which looks for paths ending in .node)
 import { NodeInputFile } from "../files/inputFile.model";
@@ -60,17 +83,22 @@ interface MultipartSuccess {
 
 type MultipartResult = MultipartSuccess | { ok: false; response: JsonResponse };
 
-enum MultipartLimitErrorMessage {
-  LimitExceeded = "Multipart limit exceeded",
+function createMultipartLimitError(response: JsonResponse): Error {
+  return nodeExposureMultipartLimitExceededError.create({
+    message: "Multipart limit exceeded",
+    response,
+  });
 }
 
-class MultipartLimitError extends Error {
-  readonly response: JsonResponse;
-
-  constructor(response: JsonResponse) {
-    super(MultipartLimitErrorMessage.LimitExceeded);
-    this.response = response;
+function getMultipartLimitResponse(error: unknown): JsonResponse | undefined {
+  if (!nodeExposureMultipartLimitExceededError.is(error)) {
+    return;
   }
+  const response = error.data.response;
+  if (!response || typeof response !== "object") {
+    return;
+  }
+  return response as JsonResponse;
 }
 
 interface FileEntry {
@@ -142,7 +170,9 @@ export async function parseMultipartInput(
     if (!entry) {
       const maxFiles = limits.files;
       if (typeof maxFiles === "number" && files.size >= maxFiles) {
-        throw new MultipartLimitError(payloadTooLarge("Files limit exceeded"));
+        throw createMultipartLimitError(
+          payloadTooLarge("Files limit exceeded"),
+        );
       }
       const pass = new PassThrough();
       pass.on("error", () => {
@@ -166,7 +196,7 @@ export async function parseMultipartInput(
     return entry;
   };
 
-  let busboyInst: any | undefined;
+  let busboyInst: BusboyInstance | undefined;
 
   const destroyAllStreamsSafely = () => {
     const error = new Error();
@@ -257,8 +287,9 @@ export async function parseMultipartInput(
         resolveReady({ ok: true, value: hydrated, finalize: finalizePromise });
       }
     } catch (error) {
-      if (error instanceof MultipartLimitError) {
-        fail(error.response);
+      const limitResponse = getMultipartLimitResponse(error);
+      if (limitResponse) {
+        fail(limitResponse);
         return;
       }
       fail(jsonErrorResponse(400, "Invalid manifest", "INVALID_MULTIPART"));
@@ -295,8 +326,9 @@ export async function parseMultipartInput(
           "file",
         );
       } catch (error) {
-        if (error instanceof MultipartLimitError) {
-          fail(error.response);
+        const limitResponse = getMultipartLimitResponse(error);
+        if (limitResponse) {
+          fail(limitResponse);
           stream.resume();
           return;
         }

@@ -11,7 +11,9 @@ type AnyResource = IResource<any, any, any, any, any, any, any>;
 
 export type ResourceRegisterList =
   | Array<RegisterableItems>
-  | ((config: any) => Array<RegisterableItems>)
+  | {
+      bivarianceHack(config: unknown): Array<RegisterableItems>;
+    }["bivarianceHack"]
   | undefined;
 
 function resolveReId(
@@ -112,7 +114,7 @@ function createDeepForkContext(
 
     const baseRegister = base.register;
 
-    const ensureForkedForRegisterConfig = (config: any) => {
+    const ensureForkedForRegisterConfig = (config: unknown) => {
       const items =
         typeof baseRegister === "function"
           ? baseRegister(config)
@@ -138,7 +140,7 @@ function createDeepForkContext(
 
     forked.register =
       typeof baseRegister === "function"
-        ? (config: any) => {
+        ? (config: unknown) => {
             const items = ensureForkedForRegisterConfig(config);
             return mapRegisterItems(items);
           }
@@ -158,7 +160,7 @@ function createDeepForkContext(
     } else {
       // Always expose dependencies as a function in deep mode so remapping is order-independent
       // (and so config-dependent register lists can influence what gets remapped).
-      forked.dependencies = (config: any) => {
+      forked.dependencies = (config: unknown) => {
         ensureForkedForRegisterConfig(config);
         const deps =
           typeof baseDependencies === "function"

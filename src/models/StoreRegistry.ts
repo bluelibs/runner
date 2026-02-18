@@ -307,14 +307,14 @@ export class StoreRegistry {
    * Used to fetch the value cloned, and if we're dealing with an override, we need to extend the previous value.
    */
   private getFreshValue<
-    T extends { id: string; dependencies?: any; config?: any },
+    T extends { id: string; dependencies?: unknown; config?: unknown },
     MapType,
   >(
     item: T,
     collection: Map<string, MapType>,
     key: keyof MapType,
     overrideMode: StoringMode,
-    config?: any, // If provided config, takes precedence over config in item.
+    config?: unknown, // If provided config, takes precedence over config in item.
   ): T {
     let currentItem: T;
     if (overrideMode === "override") {
@@ -324,10 +324,15 @@ export class StoreRegistry {
       currentItem = { ...item };
     }
 
-    currentItem.dependencies =
-      typeof currentItem.dependencies === "function"
-        ? currentItem.dependencies(config || currentItem.config)
-        : currentItem.dependencies;
+    if (typeof currentItem.dependencies === "function") {
+      const dependencyFactory = currentItem.dependencies as (
+        cfg: unknown,
+      ) => unknown;
+      const effectiveConfig = config ?? currentItem.config;
+      currentItem.dependencies = dependencyFactory(
+        effectiveConfig,
+      ) as T["dependencies"];
+    }
 
     return currentItem;
   }

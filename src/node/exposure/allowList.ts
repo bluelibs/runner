@@ -1,6 +1,10 @@
-import { computeAllowList } from "../tunnel/allowlist";
-import type { TunnelAllowList } from "../tunnel/allowlist";
+import {
+  computeAllowList,
+  type TunnelAllowList,
+  type AllowListSelectorErrorInfo,
+} from "../tunnel/allowlist";
 import type { Store } from "../../models/Store";
+import type { Logger } from "../../models/Logger";
 
 import { jsonErrorResponse } from "./httpResponse";
 import type { AllowListGuard } from "./types";
@@ -16,8 +20,31 @@ enum AllowListErrorMessage {
 export function createAllowListGuard(
   store: Store,
   allowOpen: boolean = false,
+  logger?: Logger,
 ): AllowListGuard {
-  const allowList = (): TunnelAllowList => computeAllowList(store);
+  const reportSelectorError = ({
+    selectorKind,
+    candidateId,
+    tunnelResourceId,
+    error,
+  }: AllowListSelectorErrorInfo) => {
+    try {
+      logger!.warn(
+        "[runner] Tunnel allow-list selector failed; item skipped.",
+        {
+          error,
+          data: { selectorKind, candidateId, tunnelResourceId },
+        },
+      );
+    } catch {
+      // Ignore logger failures and preserve allow-list behavior.
+    }
+  };
+
+  const allowList = (): TunnelAllowList =>
+    logger
+      ? computeAllowList(store, reportSelectorError)
+      : computeAllowList(store);
 
   return {
     ensureTask(id) {

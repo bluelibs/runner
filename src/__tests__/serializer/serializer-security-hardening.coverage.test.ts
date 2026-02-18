@@ -1,5 +1,13 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
 import { Serializer } from "../../serializer/index";
+import {
+  isBoundedQuantifier,
+  isQuantifierAt,
+  isQuantifierChar,
+  isRegExpPatternSafe,
+} from "../../serializer/regexp-validator";
+import { DEFAULT_UNSAFE_KEYS, toNodeRecord } from "../../serializer/validation";
+import { mergePlaceholder } from "../../serializer/deserializer";
 
 describe("Serializer security hardening coverage", () => {
   let serializer: Serializer;
@@ -122,56 +130,36 @@ describe("Serializer security hardening coverage", () => {
     });
 
     it("covers RegExp heuristic helpers", () => {
-      const helpers = serializer as any;
-      const isBoundedQuantifier = helpers.isBoundedQuantifier as (
-        pattern: string,
-        index: number,
-      ) => boolean;
-      const isQuantifierAt = helpers.isQuantifierAt as (
-        pattern: string,
-        index: number,
-      ) => boolean;
-      const isQuantifierChar = helpers.isQuantifierChar as (
-        char: string,
-        pattern: string,
-        index: number,
-      ) => boolean;
-      const isRegExpPatternSafe = helpers.isRegExpPatternSafe as (
-        pattern: string,
-      ) => boolean;
-
-      expect(isBoundedQuantifier.call(helpers, "a{1,2}", 1)).toBe(true);
-      expect(isBoundedQuantifier.call(helpers, "a{1x}", 1)).toBe(false);
-      expect(isBoundedQuantifier.call(helpers, "a{", 1)).toBe(false);
-      expect(isQuantifierAt.call(helpers, "a+", 1)).toBe(true);
-      expect(isQuantifierAt.call(helpers, "a", 1)).toBe(false);
-      expect(isQuantifierAt.call(helpers, "a{1,2}", 1)).toBe(true);
-      expect(isQuantifierChar.call(helpers, "?", "(?", 1)).toBe(false);
-      expect(isQuantifierChar.call(helpers, "?", "a?", 1)).toBe(true);
-      expect(isRegExpPatternSafe.call(helpers, "((?:\\w+))[a-z]")).toBe(true);
-      expect(isRegExpPatternSafe.call(helpers, "(a+)+")).toBe(false);
-      expect(isRegExpPatternSafe.call(helpers, "^(a|aa)+$")).toBe(false);
-      expect(isRegExpPatternSafe.call(helpers, "(ab|cd)+")).toBe(true);
-      expect(isRegExpPatternSafe.call(helpers, "\\(?a")).toBe(true);
-      expect(isRegExpPatternSafe.call(helpers, "(ab)+")).toBe(true);
-      expect(isRegExpPatternSafe.call(helpers, "(a|)+")).toBe(false);
-      expect(isRegExpPatternSafe.call(helpers, "(a\\|b|aa)+")).toBe(true);
-      expect(isRegExpPatternSafe.call(helpers, "([a|b]|aa)+")).toBe(true);
-      expect(isRegExpPatternSafe.call(helpers, "((ab)|a)+")).toBe(true);
-      expect(isRegExpPatternSafe.call(helpers, "(?:a|aa)+")).toBe(false);
-      expect(isRegExpPatternSafe.call(helpers, "(?=a|aa)+")).toBe(false);
-      expect(isRegExpPatternSafe.call(helpers, "(?!a|aa)+")).toBe(false);
-      expect(isRegExpPatternSafe.call(helpers, "(?>a|aa)+")).toBe(false);
-      expect(isRegExpPatternSafe.call(helpers, "(?<=a|aa)+")).toBe(false);
-      expect(isRegExpPatternSafe.call(helpers, "(?<!a|aa)+")).toBe(false);
-      expect(isRegExpPatternSafe.call(helpers, "(?<name>a|aa)+")).toBe(false);
-      expect(isRegExpPatternSafe.call(helpers, "(?<a|aa)+")).toBe(true);
-      expect(isRegExpPatternSafe.call(helpers, ")a")).toBe(true);
+      expect(isBoundedQuantifier("a{1,2}", 1)).toBe(true);
+      expect(isBoundedQuantifier("a{1x}", 1)).toBe(false);
+      expect(isBoundedQuantifier("a{", 1)).toBe(false);
+      expect(isQuantifierAt("a+", 1)).toBe(true);
+      expect(isQuantifierAt("a", 1)).toBe(false);
+      expect(isQuantifierAt("a{1,2}", 1)).toBe(true);
+      expect(isQuantifierChar("?", "(?", 1)).toBe(false);
+      expect(isQuantifierChar("?", "a?", 1)).toBe(true);
+      expect(isRegExpPatternSafe("((?:\\w+))[a-z]")).toBe(true);
+      expect(isRegExpPatternSafe("(a+)+")).toBe(false);
+      expect(isRegExpPatternSafe("^(a|aa)+$")).toBe(false);
+      expect(isRegExpPatternSafe("(ab|cd)+")).toBe(true);
+      expect(isRegExpPatternSafe("\\(?a")).toBe(true);
+      expect(isRegExpPatternSafe("(ab)+")).toBe(true);
+      expect(isRegExpPatternSafe("(a|)+")).toBe(false);
+      expect(isRegExpPatternSafe("(a\\|b|aa)+")).toBe(true);
+      expect(isRegExpPatternSafe("([a|b]|aa)+")).toBe(true);
+      expect(isRegExpPatternSafe("((ab)|a)+")).toBe(true);
+      expect(isRegExpPatternSafe("(?:a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe("(?=a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe("(?!a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe("(?>a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe("(?<=a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe("(?<!a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe("(?<name>a|aa)+")).toBe(false);
+      expect(isRegExpPatternSafe("(?<a|aa)+")).toBe(true);
+      expect(isRegExpPatternSafe(")a")).toBe(true);
     });
 
     it("covers node/key filtering helpers in graph and merge paths", () => {
-      const helpers = serializer as any;
-
       const proto = {};
       Object.defineProperty(proto, "inherited", {
         enumerable: true,
@@ -184,7 +172,7 @@ describe("Serializer security hardening coverage", () => {
         value: { polluted: true },
       };
 
-      const record = helpers.toNodeRecord(nodes);
+      const record = toNodeRecord(nodes as any);
       expect(record.safe).toBeDefined();
       expect(Object.prototype.hasOwnProperty.call(record, "constructor")).toBe(
         false,
@@ -203,7 +191,11 @@ describe("Serializer security hardening coverage", () => {
       mergeSource.safe = 1;
       (mergeSource as { constructor: unknown }).constructor = 2;
 
-      const merged = helpers.mergePlaceholder(placeholder, mergeSource);
+      const merged = mergePlaceholder(
+        placeholder,
+        mergeSource,
+        DEFAULT_UNSAFE_KEYS,
+      );
       expect(merged).toBe(placeholder);
       expect(placeholder.safe).toBe(1);
       expect(

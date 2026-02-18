@@ -4,10 +4,11 @@ import { debugResource } from "../../../globals/resources/debug";
 import { globalResources } from "../../../globals/globalResources";
 import { globalTags } from "../../../globals/globalTags";
 import { defineEvent, defineHook } from "../../../define";
+import type { ILog } from "../../../models/Logger";
 
 describe("debug resource - ignored system/lifecycle events", () => {
   it("does not log system/lifecycle events from global listener", async () => {
-    const logs: Array<{ level: string; message: string }> = [];
+    const logs: ILog[] = [];
 
     const collector = defineResource({
       id: "tests.collector.ignored",
@@ -40,9 +41,9 @@ describe("debug resource - ignored system/lifecycle events", () => {
 
     // Ensure no event log about [event] tests.* from system emission
     const infoLogs = logs.filter((l) => l.level === "info");
-    expect(infoLogs.some((l) => l.message.includes("[event] tests."))).toBe(
-      false,
-    );
+    expect(
+      infoLogs.some((l) => String(l.message).includes("[event] tests.")),
+    ).toBe(false);
   });
 
   it("does not track system-tagged task execution in middleware (early return branch)", async () => {

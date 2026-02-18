@@ -94,7 +94,7 @@ describe("Logger", () => {
     const logger = createLogger({ buffer: true, threshold: "trace" });
     const levels: string[] = [];
     logger.onLog((log) => {
-      levels.push(log.message);
+      levels.push(String(log.message));
     });
 
     await logger.info("first");

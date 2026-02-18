@@ -50,6 +50,7 @@ export const concurrencyResource = defineResource({
  */
 export const concurrencyTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.concurrency",
+  throws: [middlewareConcurrencyConflictError],
   dependencies: { state: concurrencyResource },
   async run({ task, next }, { state }, config: ConcurrencyMiddlewareConfig) {
     let semaphore = config.semaphore;

@@ -306,6 +306,7 @@ export class Semaphore {
     const id = ++this.listenerId;
     this.activeListeners.add(id);
     const eventDef = SemaphoreEvents[type];
+    const listenerId = `semaphore-listener-${id}`;
 
     this.eventManager.addListener(
       eventDef,
@@ -315,13 +316,14 @@ export class Semaphore {
         }
       },
       {
-        id: `semaphore-listener-${id}`,
+        id: listenerId,
         filter: () => this.activeListeners.has(id),
       },
     );
 
     return () => {
       this.activeListeners.delete(id);
+      this.eventManager.removeListenerById(listenerId);
     };
   }
 
@@ -332,23 +334,26 @@ export class Semaphore {
     const id = ++this.listenerId;
     this.activeListeners.add(id);
     const eventDef = SemaphoreEvents[type];
+    const listenerId = `semaphore-listener-once-${id}`;
 
     this.eventManager.addListener(
       eventDef,
       (emission: IEventEmission<SemaphoreEvent>) => {
         if (this.activeListeners.has(id)) {
           this.activeListeners.delete(id);
+          this.eventManager.removeListenerById(listenerId);
           handler(emission.data);
         }
       },
       {
-        id: `semaphore-listener-once-${id}`,
+        id: listenerId,
         filter: () => this.activeListeners.has(id),
       },
     );
 
     return () => {
       this.activeListeners.delete(id);
+      this.eventManager.removeListenerById(listenerId);
     };
   }
 

@@ -28,6 +28,7 @@ import {
 } from "./errorHandlers";
 import { withExposureContext } from "./contextWrapper";
 import { getRequestId } from "../requestIdentity";
+import type { MultipartLimits } from "../multipart";
 
 interface TaskHandlerDeps {
   store: NodeExposureDeps["store"];
@@ -40,8 +41,9 @@ interface TaskHandlerDeps {
   serializer: SerializerLike;
   limits?: {
     json?: { maxSize?: number };
-    multipart?: any;
+    multipart?: MultipartLimits;
   };
+  allowAsyncContext?: (taskId: string) => boolean;
 }
 
 export const createTaskHandler = (deps: TaskHandlerDeps) => {
@@ -55,6 +57,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     cors,
     serializer,
     limits,
+    allowAsyncContext = () => true,
   } = deps;
 
   const isReadableStream = (value: unknown): value is NodeJS.ReadableStream =>
@@ -71,6 +74,8 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
     res: ServerResponse,
     taskId: string,
   ): Promise<void> => {
+    const allowAsyncContextForTask = allowAsyncContext(taskId);
+
     if (req.method !== "POST") {
       applyCorsActual(req, res, cors);
       respondJson(res, METHOD_NOT_ALLOWED_RESPONSE, serializer);
@@ -115,6 +120,7 @@ export const createTaskHandler = (deps: TaskHandlerDeps) => {
           controller,
           { store, router, serializer },
           fn,
+          { allowAsyncContext: allowAsyncContextForTask },
         );
 
       if (isMultipart(contentType)) {

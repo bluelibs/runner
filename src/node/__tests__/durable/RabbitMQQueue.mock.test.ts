@@ -20,6 +20,7 @@ describe("durable: RabbitMQQueue", () => {
   let channelMock: ChannelMock;
   let connMock: ConnectionMock;
   let queue: RabbitMQQueue;
+  let loggerError: jest.Mock;
 
   beforeEach(() => {
     channelMock = {
@@ -38,6 +39,7 @@ describe("durable: RabbitMQQueue", () => {
     jest
       .spyOn(amqplibModule, "connectAmqplib")
       .mockResolvedValue(connMock as any);
+    loggerError = jest.fn();
     queue = new RabbitMQQueue({
       url: "amqp://localhost",
       queue: {
@@ -46,6 +48,7 @@ describe("durable: RabbitMQQueue", () => {
         deadLetter: "dlq",
         messageTtl: 1000,
       },
+      logger: { error: loggerError },
     });
   });
 
@@ -145,6 +148,12 @@ describe("durable: RabbitMQQueue", () => {
       false,
       false,
     );
+    expect(loggerError).toHaveBeenCalledWith(
+      "RabbitMQQueue failed to parse incoming message; nacking without requeue.",
+      expect.objectContaining({
+        error: expect.any(Error),
+      }),
+    );
   });
 
   it("increments attempts before passing messages to the handler", async () => {
@@ -199,6 +208,105 @@ describe("durable: RabbitMQQueue", () => {
       expect.anything(),
       false,
       false,
+    );
+  });
+
+  it("normalizes primitive parse failures before reporting", async () => {
+    await queue.init();
+    let consumer:
+      | ((msg: { content: Buffer } | null) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(async (_q: string, h: any) => {
+      consumer = h;
+    });
+    await queue.consume(async () => {});
+
+    const parseSpy = jest
+      .spyOn(JSON, "parse")
+      .mockImplementationOnce((): never => {
+        throw "primitive-parse-error";
+      });
+    try {
+      await consumer?.({ content: Buffer.from('{"id":"x"}') });
+    } finally {
+      parseSpy.mockRestore();
+    }
+
+    expect(loggerError).toHaveBeenCalledWith(
+      "RabbitMQQueue failed to parse incoming message; nacking without requeue.",
+      expect.objectContaining({
+        error: expect.any(Error),
+      }),
+    );
+  });
+
+  it("reports primitive handler failures and preserves consumer ack/nack control", async () => {
+    await queue.init();
+    let consumer:
+      | ((msg: { content: Buffer } | null) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(async (_q: string, h: any) => {
+      consumer = h;
+    });
+    await queue.consume(async () => {
+      throw "primitive-handler-error";
+    });
+
+    await consumer?.({
+      content: Buffer.from(
+        JSON.stringify({
+          id: "handler-primitive",
+          type: "execute",
+          payload: {},
+          attempts: 0,
+          maxAttempts: 1,
+          createdAt: new Date().toISOString(),
+        }),
+      ),
+    });
+
+    expect(loggerError).toHaveBeenCalledWith(
+      "RabbitMQQueue handler threw; leaving ack/nack to consumer.",
+      expect.objectContaining({
+        error: expect.any(Error),
+        messageId: "handler-primitive",
+      }),
+    );
+    expect(channelMock.nack).not.toHaveBeenCalled();
+  });
+
+  it("reports Error handler failures without wrapping", async () => {
+    await queue.init();
+    let consumer:
+      | ((msg: { content: Buffer } | null) => Promise<void>)
+      | undefined;
+    channelMock.consume.mockImplementation(async (_q: string, h: any) => {
+      consumer = h;
+    });
+    const handlerError = new Error("handler-error");
+    await queue.consume(async () => {
+      throw handlerError;
+    });
+
+    await consumer?.({
+      content: Buffer.from(
+        JSON.stringify({
+          id: "handler-error-id",
+          type: "execute",
+          payload: {},
+          attempts: 0,
+          maxAttempts: 1,
+          createdAt: new Date().toISOString(),
+        }),
+      ),
+    });
+
+    expect(loggerError).toHaveBeenCalledWith(
+      "RabbitMQQueue handler threw; leaving ack/nack to consumer.",
+      expect.objectContaining({
+        error: handlerError,
+        messageId: "handler-error-id",
+      }),
     );
   });
 

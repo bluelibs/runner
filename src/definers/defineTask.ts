@@ -73,11 +73,13 @@ export function defineTask<
 defineTask.phantom = <Input = undefined, Output extends Promise<any> = any>(
   taskConfig: Omit<ITaskDefinition<Input, Output, any, any, any, any>, "run">,
 ) => {
+  const phantomRun = (async (_input: Input) => {
+    phantomTaskNotRoutedError.throw({ taskId: taskConfig.id });
+  }) as unknown as ITaskDefinition<Input, Output, any, any, any, any>["run"];
+
   const taskDef = defineTask({
     ...taskConfig,
-    run: async (_input: any): Promise<any> => {
-      phantomTaskNotRoutedError.throw({ taskId: taskConfig.id });
-    },
+    run: phantomRun,
   });
 
   taskDef[symbolPhantomTask] = true;

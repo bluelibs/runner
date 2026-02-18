@@ -23,6 +23,7 @@ export async function createNodeExposure(
   const allowList = createAllowListGuard(
     store,
     !!httpConfig?.dangerouslyAllowOpenExposure,
+    logger,
   );
 
   // Discover auth validator tasks

@@ -1,5 +1,6 @@
 import { defineTaskMiddleware, defineResource } from "../../define";
 import { globalTags } from "../globalTags";
+import { middlewareTemporalDisposedError } from "../../errors";
 
 export interface TemporalMiddlewareConfig {
   ms: number;
@@ -9,18 +10,18 @@ type TimeoutHandle = ReturnType<typeof setTimeout>;
 
 export interface DebounceState {
   timeoutId?: TimeoutHandle;
-  latestInput?: any;
-  resolveList: ((value: any) => void)[];
-  rejectList: ((error: any) => void)[];
+  latestInput?: unknown;
+  resolveList: ((value: unknown) => void)[];
+  rejectList: ((error: unknown) => void)[];
 }
 
 export interface ThrottleState {
   lastExecution: number;
   timeoutId?: TimeoutHandle;
-  latestInput?: any;
-  resolveList: ((value: any) => void)[];
-  rejectList: ((error: any) => void)[];
-  currentPromise?: Promise<any>;
+  latestInput?: unknown;
+  resolveList: ((value: unknown) => void)[];
+  rejectList: ((error: unknown) => void)[];
+  currentPromise?: Promise<unknown>;
 }
 
 export interface TemporalResourceState {
@@ -35,7 +36,9 @@ const TEMPORAL_DISPOSED_ERROR_MESSAGE =
   "Temporal middleware resource has been disposed.";
 
 function createTemporalDisposedError() {
-  return new Error(TEMPORAL_DISPOSED_ERROR_MESSAGE);
+  return middlewareTemporalDisposedError.create({
+    message: TEMPORAL_DISPOSED_ERROR_MESSAGE,
+  });
 }
 
 function rejectDebounceState(state: DebounceState, error: Error) {
@@ -109,6 +112,7 @@ export const temporalResource = defineResource({
  */
 export const debounceTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.debounce",
+  throws: [middlewareTemporalDisposedError],
   dependencies: { state: temporalResource },
   async run({ task, next }, { state }, config: TemporalMiddlewareConfig) {
     if (state.isDisposed === true) {
@@ -177,6 +181,7 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
  */
 export const throttleTaskMiddleware = defineTaskMiddleware({
   id: "globals.middleware.task.throttle",
+  throws: [middlewareTemporalDisposedError],
   dependencies: { state: temporalResource },
   async run({ task, next }, { state }, config: TemporalMiddlewareConfig) {
     if (state.isDisposed === true) {
@@ -202,8 +207,8 @@ export const throttleTaskMiddleware = defineTaskMiddleware({
     const remaining = config.ms - (now - throttleState.lastExecution);
 
     if (remaining <= 0) {
-      let pendingResolves: Array<(value: any) => void> = [];
-      let pendingRejects: Array<(error: any) => void> = [];
+      let pendingResolves: Array<(value: unknown) => void> = [];
+      let pendingRejects: Array<(error: unknown) => void> = [];
 
       if (throttleState.timeoutId) {
         // This can happen if a scheduled timeout from the previous window is

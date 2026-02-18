@@ -114,6 +114,15 @@ export const middlewareRateLimitExceededError = error<
   )
   .build();
 
+export const middlewareTemporalDisposedError = error<
+  { message: string } & DefaultErrorType
+>(RunnerErrorId.MiddlewareTemporalDisposed)
+  .format(({ message }) => message)
+  .remediation(
+    "Ensure temporal middleware is not used after runtime disposal; create a fresh runtime instance before invoking tasks again.",
+  )
+  .build();
+
 export const tunnelTaskNotFoundError = error<
   { taskId: string } & DefaultErrorType
 >(RunnerErrorId.TunnelTaskNotFound)
@@ -273,6 +282,16 @@ export const nodeInputFileUnavailableError = error<DefaultErrorType>(
   .format(() => "InputFile stream is not available")
   .remediation(
     "Ensure a valid stream is attached and has not been disposed before accessing it.",
+  )
+  .build();
+
+export const nodeExposureMultipartLimitExceededError = error<
+  { message: string; response?: unknown } & DefaultErrorType
+>(RunnerErrorId.NodeExposureMultipartLimitExceeded)
+  .format(({ message }) => message)
+  .httpCode(413)
+  .remediation(
+    "Increase multipart limits only when safe, or reduce uploaded payload size/field counts to fit configured constraints.",
   )
   .build();
 

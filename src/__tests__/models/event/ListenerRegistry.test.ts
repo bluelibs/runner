@@ -100,4 +100,71 @@ describe("ListenerRegistry", () => {
     const merged = registry.mergeSortedListeners([l1, l3], [l2]);
     expect(merged).toEqual([l1, l2, l3]);
   });
+
+  it("removeListenerById removes event-specific listeners and clears empty maps", () => {
+    const registry = new ListenerRegistry();
+    const ev1Listener = createListener({
+      handler: jest.fn(),
+      order: 0,
+      id: "ev1-listener",
+    });
+    const ev2Listener = createListener({
+      handler: jest.fn(),
+      order: 0,
+      id: "ev2-listener",
+    });
+
+    registry.addListener("ev1", ev1Listener);
+    registry.addListener("ev2", ev2Listener);
+    registry.getCachedMergedListeners("ev1");
+    registry.getCachedMergedListeners("ev2");
+
+    registry.removeListenerById("ev1-listener");
+
+    expect(registry.listeners.get("ev1")).toBeUndefined();
+    expect(registry.listeners.get("ev2")).toEqual([ev2Listener]);
+    expect(registry.cachedMergedListeners.has("ev1")).toBe(false);
+    expect(registry.cachedMergedListeners.has("ev2")).toBe(true);
+  });
+
+  it("removeListenerById invalidates global cache when removing global listener", () => {
+    const registry = new ListenerRegistry();
+    const globalListener = createListener({
+      handler: jest.fn(),
+      order: 0,
+      id: "global-listener",
+      isGlobal: true,
+    });
+
+    registry.addGlobalListener(globalListener);
+    registry.getCachedMergedListeners("ev");
+    expect(registry.globalListenersCacheValid).toBe(true);
+
+    registry.removeListenerById("global-listener");
+
+    expect(registry.globalListeners).toEqual([]);
+    expect(registry.globalListenersCacheValid).toBe(false);
+  });
+
+  it("removeListenerById removes same id across multiple events", () => {
+    const registry = new ListenerRegistry();
+    const sharedA = createListener({
+      handler: jest.fn(),
+      order: 0,
+      id: "shared",
+    });
+    const sharedB = createListener({
+      handler: jest.fn(),
+      order: 0,
+      id: "shared",
+    });
+
+    registry.addListener("ev1", sharedA);
+    registry.addListener("ev2", sharedB);
+
+    registry.removeListenerById("shared");
+
+    expect(registry.listeners.get("ev1")).toBeUndefined();
+    expect(registry.listeners.get("ev2")).toBeUndefined();
+  });
 });

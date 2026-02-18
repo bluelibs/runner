@@ -50,6 +50,7 @@ function createAggregateError(
   return Object.assign(new Error(message), {
     errors,
     name: "AggregateError",
+    cause: errors[0],
   });
 }
 

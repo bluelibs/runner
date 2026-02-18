@@ -3,6 +3,7 @@ import { defineError } from "../../../../definers/defineError";
 import { Serializer } from "../../../../serializer";
 import * as requestBody from "../../../exposure/requestBody";
 import { cancellationError } from "../../../../errors";
+import { globalTags } from "../../../../globals/globalTags";
 import {
   createReqRes,
   HeaderName,
@@ -228,6 +229,163 @@ describe("requestHandlers - task handling", () => {
         ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
         : undefined;
       expect(json?.result).toBe(321);
+    });
+
+    it("skips async context hydration when tunnel policy disables it", async () => {
+      let current: any;
+      const parse = jest.fn((s: string) => JSON.parse(s));
+      const provide = jest.fn((v: any, fn: any) => {
+        current = v;
+        return fn();
+      });
+      const ctx = {
+        id: "ctx.disabled",
+        use: () => current,
+        serialize: (v: any) => JSON.stringify(v),
+        parse,
+        provide,
+        require: () => ({}) as any,
+      } as any;
+
+      const deps: any = {
+        store: {
+          tasks: new Map([
+            ["t.ctx.disabled", { task: { id: "t.ctx.disabled" } }],
+          ]),
+          resources: new Map([
+            [
+              "srv",
+              {
+                resource: { id: "srv", tags: [globalTags.tunnel] },
+                value: {
+                  mode: "server",
+                  transport: "http",
+                  allowAsyncContext: false,
+                  tasks: ["t.ctx.disabled"],
+                },
+              },
+            ],
+          ]),
+          errors: new Map(),
+          asyncContexts: new Map([[ctx.id, ctx]]),
+        },
+        taskRunner: {
+          run: async () => {
+            expect(ctx.use()).toBeUndefined();
+            return "ok";
+          },
+        },
+        eventManager: {} as any,
+        logger: { info: () => {}, warn: () => {}, error: () => {} },
+        authenticator: async () => ({ ok: true }),
+        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "task", id: "t.ctx.disabled" }),
+          isUnderBase: () => true,
+        },
+        cors: undefined,
+        serializer,
+      };
+
+      const { handleTask } = createRequestHandlers(deps);
+      const headers = {
+        [HeaderName.ContentType]: MimeType.ApplicationJson,
+        [HeaderName.XRunnerContext]: serializer.stringify({
+          [ctx.id]: ctx.serialize({ v: 99 }),
+        }),
+      } satisfies NodeLikeHeaders;
+
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/task/t.ctx.disabled",
+        headers,
+        body: JSON.stringify({ input: { a: 1 } }),
+      });
+      await handleTask(req, res);
+      expect(res._status).toBe(200);
+      const json = res._buf
+        ? (serializer.parse((res._buf as Buffer).toString("utf8")) as any)
+        : undefined;
+      expect(json?.result).toBe("ok");
+      expect(parse).not.toHaveBeenCalled();
+      expect(provide).not.toHaveBeenCalled();
+    });
+
+    it("uses tunnel-level allowAsyncContext=false policy for task ids", async () => {
+      let current: any;
+      const parse = jest.fn((s: string) => JSON.parse(s));
+      const provide = jest.fn((v: any, fn: any) => {
+        current = v;
+        return fn();
+      });
+      const ctx = {
+        id: "ctx.tunnel.policy.task",
+        use: () => current,
+        serialize: (v: any) => JSON.stringify(v),
+        parse,
+        provide,
+        require: () => ({}) as any,
+      } as any;
+
+      const deps: any = {
+        store: {
+          tasks: new Map([["t.ctx.policy", { task: { id: "t.ctx.policy" } }]]),
+          events: new Map(),
+          resources: new Map([
+            [
+              "srv",
+              {
+                resource: { id: "srv", tags: [globalTags.tunnel] },
+                value: {
+                  mode: "server",
+                  transport: "http",
+                  allowAsyncContext: false,
+                  tasks: ["t.ctx.policy"],
+                },
+              },
+            ],
+          ]),
+          errors: new Map(),
+          asyncContexts: new Map([[ctx.id, ctx]]),
+        },
+        taskRunner: {
+          run: async () => {
+            expect(ctx.use()).toBeUndefined();
+            return "ok";
+          },
+        },
+        eventManager: {} as any,
+        logger: { info: () => {}, warn: () => {}, error: () => {} },
+        authenticator: async () => ({ ok: true }),
+        allowList: { ensureTask: () => null, ensureEvent: () => null },
+        router: {
+          basePath: "/api",
+          extract: () => ({ kind: "task", id: "t.ctx.policy" }),
+          isUnderBase: () => true,
+        },
+        cors: undefined,
+        serializer,
+      };
+
+      const { handleTask } = createRequestHandlers(deps);
+      const headers = {
+        [HeaderName.ContentType]: MimeType.ApplicationJson,
+        [HeaderName.XRunnerContext]: serializer.stringify({
+          [ctx.id]: ctx.serialize({ v: 123 }),
+        }),
+      } satisfies NodeLikeHeaders;
+      const { req, res } = createReqRes({
+        method: HttpMethod.Post,
+        url: "/api/task/t.ctx.policy",
+        headers,
+        body: JSON.stringify({ input: { a: 1 } }),
+      });
+
+      await handleTask(req, res);
+      expect(res._status).toBe(200);
+      expect(parse).not.toHaveBeenCalled();
+      expect(provide).not.toHaveBeenCalled();
     });
   });
 

@@ -549,11 +549,13 @@ const app = r
 
 Tunnels let you call Runner tasks/events across a process boundary over a small HTTP surface (Node-only exposure via `nodeExposure`), while preserving task ids, middleware, validation, typed errors, and async context.
 
+Important boundary: tunnels are for inter-runner/service-to-service communication, not for exposing a public browser-facing API directly.
+
 For "no call-site changes", register a client-mode tunnel resource tagged with `globals.tags.tunnel` plus phantom tasks for the remote ids; the tunnel middleware auto-routes selected tasks/events to an HTTP client. For explicit boundaries, create a client once and call `client.task(id, input)` / `client.event(id, payload)` directly. Full guide: `readmes/TUNNELS.md`.
 
 Node client note: prefer `createHttpMixedClient` (it uses the serialized-JSON path via Runner `Serializer` + `fetch` when possible and switches to the streaming-capable Smart path when needed). If a task may return a stream even for plain JSON inputs (ex: downloads), set `forceSmart` on Mixed (or use `createHttpSmartClient` directly).
 
-Node exposure hardening: use `x-runner-request-id` for request correlation and enforce rate limiting at the edge/proxy layer.
+Node exposure hardening: use `x-runner-request-id` for request correlation, set `allowAsyncContext: false` on server tunnel resources unless context propagation is required, and enforce rate limiting at the edge/proxy layer.
 
 ## Serialization
 

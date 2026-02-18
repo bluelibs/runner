@@ -101,7 +101,7 @@ export class UniversalPlatformAdapter implements IPlatformAdapter {
     return this.inner!;
   }
 
-  onUncaughtException(handler: (error: Error) => void) {
+  onUncaughtException(handler: (error: unknown) => void) {
     return this.get().onUncaughtException(handler);
   }
   onUnhandledRejection(handler: (reason: unknown) => void) {

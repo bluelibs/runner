@@ -2,6 +2,8 @@
 
 > **Status**: Draft spec derived from Runner implementation. This document formalizes the wire protocol for HTTP tunnels, enabling interoperability, debugging, and future extensions. It is not a normative standard but reflects the current behavior of `nodeExposure` and fetch-based clients like `createHttpClient`. For usage, see [TUNNELS.md](TUNNELS.md).
 
+> **Boundary**: This protocol is intended for inter-runner/service-to-service communication, not as a public web API contract for untrusted internet clients.
+
 ## Table of Contents
 
 - [Runner Tunnel HTTP Protocol Policy (v1.0)](#runner-tunnel-http-protocol-policy-v10)
@@ -95,7 +97,7 @@ Requests (JSON/multipart) wrap payloads in objects like `{ input: <value> }`. Re
 | --- | --- | --- | --- |
 | `x-runner-token` | client -> server | Yes (unless `auth.allowAnonymous: true`) | Authentication token. Header name can be overridden by `auth.header`. |
 | `x-runner-request-id` | client <-> server | Optional | Correlation id. Server accepts valid incoming ids and otherwise generates one; response echoes final id. |
-| `x-runner-context` | client -> server | Optional | Serializer-encoded async-context map. Server restores only registered contexts; invalid entries are ignored. |
+| `x-runner-context` | client -> server | Optional | Serializer-encoded async-context map. Server restores only registered contexts for tunnel-selected ids where `allowAsyncContext !== false`; invalid entries are ignored. |
 | `content-type` | client -> server | Yes | Request mode selector (`application/json`, `multipart/form-data`, `application/octet-stream`). |
 | `x-content-type-options` | server -> client | Always | Security header set to `nosniff`. |
 | `x-frame-options` | server -> client | Always | Security header set to `DENY`. |
@@ -254,6 +256,7 @@ Server routes by `Content-Type`.
 - **Transport**: A Serializer-encoded map sent in `x-runner-context` header (applies to JSON, multipart, and octet-stream).
 - **Rules**: Stable IDs; optional `serialize`/`parse` hooks. Filtered for size/serializability.
 - **Security**: Server only restores known registered contexts; invalid headers/entries are ignored.
+- **Gate**: Set `allowAsyncContext: false` on server tunnel resources to disable server-side hydration of `x-runner-context` for selected ids.
 
 ### Streaming
 

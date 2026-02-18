@@ -1,13 +1,29 @@
 import { defineTaskMiddleware, isTask } from "../../define";
+import type { ITask } from "../../defs";
 import { journal as journalHelper } from "../../models/ExecutionJournal";
 import { globalResources } from "../globalResources";
+
+type FallbackTask = ITask;
+type FallbackResolver = {
+  bivarianceHack(error: unknown, input: unknown): unknown | Promise<unknown>;
+}["bivarianceHack"];
+type FallbackValue =
+  | string
+  | number
+  | boolean
+  | bigint
+  | symbol
+  | null
+  | undefined
+  | Record<string, unknown>
+  | Array<unknown>;
 
 export interface FallbackMiddlewareConfig {
   /**
    * The fallback to use if the task fails.
    * Can be a value, a function that returns a value (or promise), or another task.
    */
-  fallback: any;
+  fallback: FallbackTask | FallbackResolver | FallbackValue;
 }
 
 /**
@@ -57,7 +73,7 @@ export const fallbackTaskMiddleware = defineTaskMiddleware({
 
       if (typeof fallback === "function") {
         // If it's a function, call it with the error and task input
-        return await fallback(error, task.input);
+        return await (fallback as FallbackResolver)(error, task.input);
       }
 
       // Otherwise, return the fallback value directly

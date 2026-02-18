@@ -310,4 +310,57 @@ describe("Queue", () => {
     await q.run(async () => "first");
     expect(seen).toEqual([]); // No events received because we unsubscribed
   });
+
+  it("hard-removes on() listeners from EventManager storage when unsubscribed", () => {
+    const q = new Queue();
+    const unsubscribe = q.on("finish", () => {});
+
+    const listeners = (
+      q as unknown as { eventManager: { listeners: Map<string, unknown[]> } }
+    ).eventManager.listeners;
+    expect(listeners.get("queue.events.finish")).toHaveLength(1);
+
+    unsubscribe();
+
+    expect(listeners.get("queue.events.finish")).toBeUndefined();
+  });
+
+  it("hard-removes once() listeners from EventManager storage after first fire", async () => {
+    const q = new Queue();
+    q.once("finish", () => {});
+
+    const listeners = (
+      q as unknown as { eventManager: { listeners: Map<string, unknown[]> } }
+    ).eventManager.listeners;
+    expect(listeners.get("queue.events.finish")).toHaveLength(1);
+
+    await q.run(async () => "ok");
+    await flushMicroTasks();
+
+    expect(listeners.get("queue.events.finish")).toBeUndefined();
+  });
+
+  it("refreshes AbortController after dispose({ cancel: true })", async () => {
+    const q = new Queue();
+    const before = (q as unknown as { abortController: AbortController })
+      .abortController;
+
+    const running = q.run(
+      async (signal) =>
+        new Promise<void>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(new Error("aborted")), {
+            once: true,
+          });
+        }),
+    );
+
+    await flushMicroTasks();
+    await expect(q.dispose({ cancel: true })).resolves.toBeUndefined();
+    await expect(running).rejects.toThrow("aborted");
+
+    const after = (q as unknown as { abortController: AbortController })
+      .abortController;
+    expect(after).not.toBe(before);
+    expect(after.signal.aborted).toBe(false);
+  });
 });

@@ -27,21 +27,29 @@ import { IErrorHelper } from "../types/error";
 import { symbolAsyncContext, symbolError } from "../types/symbols";
 import type { IAsyncContext } from "../types/asyncContext";
 
+function hasBrand(definition: unknown, symbol: symbol): boolean {
+  if (definition === null || definition === undefined) {
+    return false;
+  }
+  if (typeof definition !== "object" && typeof definition !== "function") {
+    return false;
+  }
+  return Boolean((definition as Record<symbol, unknown>)[symbol]);
+}
+
 /**
  * Type guard: checks if a definition is a Task.
  * @param definition - Any value to test.
  * @returns True when `definition` is a branded Task.
  */
-export function isTask(definition: any): definition is ITask {
-  return definition && definition[symbolTask];
+export function isTask(definition: unknown): definition is ITask {
+  return hasBrand(definition, symbolTask);
 }
 
 /** Type guard: checks if a definition is a Phantom Task. */
-export function isPhantomTask(definition: any): definition is IPhantomTask {
+export function isPhantomTask(definition: unknown): definition is IPhantomTask {
   return (
-    definition &&
-    definition[symbolTask] &&
-    Boolean(definition[symbolPhantomTask])
+    hasBrand(definition, symbolTask) && hasBrand(definition, symbolPhantomTask)
   );
 }
 
@@ -50,8 +58,8 @@ export function isPhantomTask(definition: any): definition is IPhantomTask {
  * @param definition - Any value to test.
  * @returns True when `definition` is a branded Resource.
  */
-export function isResource(definition: any): definition is IResource {
-  return definition && definition[symbolResource];
+export function isResource(definition: unknown): definition is IResource {
+  return hasBrand(definition, symbolResource);
 }
 
 /**
@@ -60,9 +68,9 @@ export function isResource(definition: any): definition is IResource {
  * @returns True when `definition` is a branded ResourceWithConfig.
  */
 export function isResourceWithConfig(
-  definition: any,
+  definition: unknown,
 ): definition is IResourceWithConfig {
-  return definition && definition[symbolResourceWithConfig];
+  return hasBrand(definition, symbolResourceWithConfig);
 }
 
 /**
@@ -70,13 +78,13 @@ export function isResourceWithConfig(
  * @param definition - Any value to test.
  * @returns True when `definition` is a branded Event.
  */
-export function isEvent(definition: any): definition is IEvent {
-  return definition && definition[symbolEvent];
+export function isEvent(definition: unknown): definition is IEvent {
+  return hasBrand(definition, symbolEvent);
 }
 
 /** Type guard: checks if a definition is a Hook. */
-export function isHook(definition: any): definition is IHook {
-  return definition && definition[symbolHook];
+export function isHook(definition: unknown): definition is IHook {
+  return hasBrand(definition, symbolHook);
 }
 
 /**
@@ -85,15 +93,15 @@ export function isHook(definition: any): definition is IHook {
  * @returns True when `definition` is a branded Middleware.
  */
 export function isTaskMiddleware(
-  definition: any,
+  definition: unknown,
 ): definition is ITaskMiddleware {
-  return definition && definition[symbolTaskMiddleware];
+  return hasBrand(definition, symbolTaskMiddleware);
 }
 
 export function isResourceMiddleware(
-  definition: any,
+  definition: unknown,
 ): definition is IResourceMiddleware {
-  return definition && definition[symbolResourceMiddleware];
+  return hasBrand(definition, symbolResourceMiddleware);
 }
 
 /**
@@ -101,25 +109,25 @@ export function isResourceMiddleware(
  * @param definition - Any value to test.
  * @returns True when `definition` is a branded Tag.
  */
-export function isTag(definition: any): definition is ITag {
-  return definition && definition[symbolTag];
+export function isTag(definition: unknown): definition is ITag {
+  return hasBrand(definition, symbolTag);
 }
 
 /** Type guard: checks if a definition is an Optional Dependency wrapper. */
 export function isOptional(
-  definition: any,
+  definition: unknown,
 ): definition is IOptionalDependency<any> {
-  return definition && definition[symbolOptionalDependency];
+  return hasBrand(definition, symbolOptionalDependency);
 }
 
 /** Type guard: checks if a definition is an Error helper. */
-export function isError(definition: any): definition is IErrorHelper<any> {
-  return Boolean(definition && definition[symbolError]);
+export function isError(definition: unknown): definition is IErrorHelper<any> {
+  return hasBrand(definition, symbolError);
 }
 
 /** Type guard: checks if a definition is an Async Context. */
 export function isAsyncContext(
-  definition: any,
+  definition: unknown,
 ): definition is IAsyncContext<any> {
-  return Boolean(definition && definition[symbolAsyncContext]);
+  return hasBrand(definition, symbolAsyncContext);
 }

@@ -8,17 +8,21 @@ import {
 import { errorMessage, safeLogError } from "./logging";
 import type { RequestHandler } from "./types";
 import type { Logger } from "../../models/Logger";
+import type { NodeExposureHttpCorsConfig } from "./resourceTypes";
+import { applyCorsActual } from "./cors";
 
 export function makeRequestListener(options: {
   handler: RequestHandler;
   respondOnMiss: boolean;
   logger: Logger;
+  cors?: NodeExposureHttpCorsConfig;
 }): http.RequestListener {
-  const { handler, respondOnMiss, logger } = options;
+  const { handler, respondOnMiss, logger, cors } = options;
   return (req, res) => {
     handler(req, res)
       .then((handled) => {
         if (!handled && respondOnMiss && !res.writableEnded) {
+          applyCorsActual(req, res, cors);
           respondJson(res, NOT_FOUND_RESPONSE);
         }
       })
@@ -27,6 +31,7 @@ export function makeRequestListener(options: {
           error: errorMessage(error),
         });
         if (!res.writableEnded) {
+          applyCorsActual(req, res, cors);
           respondJson(
             res,
             jsonErrorResponse(500, "Internal Error", "INTERNAL_ERROR"),

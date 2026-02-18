@@ -12,9 +12,13 @@ describe("node exposure - server lifecycle", () => {
     const invokeListener = async (
       listener: ReturnType<typeof makeRequestListener>,
       res: any,
+      req?: import("http").IncomingMessage,
     ) => {
       await new Promise<void>((resolve) => {
-        listener({} as unknown as import("http").IncomingMessage, res);
+        listener(
+          (req ?? { headers: {} }) as import("http").IncomingMessage,
+          res,
+        );
         setImmediate(resolve);
       });
     };
@@ -26,6 +30,9 @@ describe("node exposure - server lifecycle", () => {
       payload: Buffer.alloc(0),
       setHeader(key: string, value: string) {
         this.headers.set(key.toLowerCase(), value);
+      },
+      getHeader(key: string) {
+        return this.headers.get(key.toLowerCase());
       },
       end(payload?: any) {
         this.writableEnded = true;
@@ -48,6 +55,30 @@ describe("node exposure - server lifecycle", () => {
       await invokeListener(listener, res);
       expect(res.statusCode).toBe(404);
       expect(res.writableEnded).toBe(true);
+      expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    });
+
+    it("applies configured CORS when handler reports miss", async () => {
+      const logger = { error: () => {} } as unknown as Logger;
+      const res = createResponse();
+      const req = {
+        headers: { origin: "https://trusted.example" },
+      } as unknown as import("http").IncomingMessage;
+      const listener = makeRequestListener({
+        handler: async () => false,
+        respondOnMiss: true,
+        logger,
+        cors: {
+          origin: ["https://trusted.example"],
+          credentials: true,
+        },
+      });
+      await invokeListener(listener, res, req);
+      expect(res.statusCode).toBe(404);
+      expect(res.headers.get("access-control-allow-origin")).toBe(
+        "https://trusted.example",
+      );
+      expect(res.headers.get("access-control-allow-credentials")).toBe("true");
     });
 
     it("ignores miss when respondOnMiss is disabled", async () => {
@@ -96,6 +127,34 @@ describe("node exposure - server lifecycle", () => {
         "INTERNAL_ERROR",
       );
       expect(errors[0]?.error).toBe("boom");
+      expect(res.headers.get("access-control-allow-origin")).toBe("*");
+    });
+
+    it("applies configured CORS when handler throws", async () => {
+      const logger = {
+        error: () => {},
+      } as unknown as Logger;
+      const res = createResponse();
+      const req = {
+        headers: { origin: "https://trusted.example" },
+      } as unknown as import("http").IncomingMessage;
+      const listener = makeRequestListener({
+        handler: async () => {
+          throw createMessageError("boom");
+        },
+        respondOnMiss: false,
+        logger,
+        cors: {
+          origin: ["https://trusted.example"],
+          credentials: true,
+        },
+      });
+      await invokeListener(listener, res, req);
+      expect(res.statusCode).toBe(500);
+      expect(res.headers.get("access-control-allow-origin")).toBe(
+        "https://trusted.example",
+      );
+      expect(res.headers.get("access-control-allow-credentials")).toBe("true");
     });
 
     it("does not write response when handler throws after response ended", async () => {

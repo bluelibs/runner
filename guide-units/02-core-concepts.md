@@ -1281,8 +1281,8 @@ The returned ids are deduplicated and, when applicable, include declarations acr
 The core concepts above cover most use cases. For specialized features:
 
 - **Async Context**: Per-request/thread-local state via `r.asyncContext()`. See [Async Context](#async-context) for Node.js `AsyncLocalStorage` patterns.
-- **Durable Workflows** (Node-only): Replay-safe primitives like `ctx.step()`, `ctx.sleep()`, and `ctx.waitForSignal()`. See [Durable Workflows](./readmes/DURABLE_WORKFLOWS.md).
-- **HTTP Tunnels**: Expose tasks over HTTP or call remote Runners. See [Tunnels](./readmes/TUNNELS.md).
-- **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](./readmes/SERIALIZER_PROTOCOL.md).
+- **Durable Workflows** (Node-only): Replay-safe primitives like `ctx.step()`, `ctx.sleep()`, and `ctx.waitForSignal()`. See [Durable Workflows](../readmes/DURABLE_WORKFLOWS.md).
+- **HTTP Tunnels**: Expose tasks over HTTP or call remote Runners. See [Tunnels](../readmes/TUNNELS.md).
+- **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](../readmes/SERIALIZER_PROTOCOL.md).
 
 ---

@@ -11,13 +11,35 @@ import {
   serializeNonFiniteNumber,
   SpecialTypeId,
 } from "../../serializer/special-values";
+import {
+  DEFAULT_UNSAFE_KEYS,
+  isSerializedTypeRecord,
+  toNodeRecord,
+} from "../../serializer/validation";
+import {
+  deserializeValue,
+  mergePlaceholder,
+  resolveReference,
+  type DeserializerOptions,
+} from "../../serializer/deserializer";
+import { TypeRegistry } from "../../serializer/type-registry";
 import type {
   DeserializationContext,
   SerializedNode,
 } from "../../serializer/types";
+import { SymbolPolicy } from "../../serializer/types";
 
 describe("GraphSerializer coverage", () => {
   const serializer = new Serializer();
+  const deserializerOptions = (): DeserializerOptions => ({
+    maxDepth: 1000,
+    unsafeKeys: DEFAULT_UNSAFE_KEYS,
+    typeRegistry: new TypeRegistry({
+      allowedTypes: null,
+      regExpValidator: { maxPatternLength: 1024, allowUnsafe: false },
+      symbolPolicy: SymbolPolicy.AllowAll,
+    }),
+  });
 
   it("skips inherited properties but preserves undefined values during serialization", () => {
     const base = { inherited: "skip-me" };
@@ -50,7 +72,7 @@ describe("GraphSerializer coverage", () => {
   });
 
   it("handles malformed graph payload nodes defensively", () => {
-    const nodeRecord = serializer.toNodeRecord(null as never);
+    const nodeRecord = toNodeRecord(null as never);
     expect(Object.keys(nodeRecord)).toHaveLength(0);
   });
 
@@ -86,7 +108,12 @@ describe("GraphSerializer coverage", () => {
     const protoObj = Object.create({ hidden: true });
     protoObj.visible = 5;
 
-    const value = serializer.deserializeValue(protoObj, context) as {
+    const value = deserializeValue(
+      protoObj,
+      context,
+      0,
+      deserializerOptions(),
+    ) as {
       visible: number;
       hidden?: unknown;
     };
@@ -96,15 +123,15 @@ describe("GraphSerializer coverage", () => {
 
   it("mergePlaceholder covers identity and fallback branches", () => {
     const target = { k: 1 };
-    const merged = serializer.mergePlaceholder(target, target);
+    const merged = mergePlaceholder(target, target, DEFAULT_UNSAFE_KEYS);
     expect(merged).toBe(target);
 
-    const fallback = serializer.mergePlaceholder(5, "x");
+    const fallback = mergePlaceholder(5, "x", DEFAULT_UNSAFE_KEYS);
     expect(fallback).toBe("x");
   });
 
   it("isSerializedTypeRecord guards non-objects", () => {
-    expect(serializer.isSerializedTypeRecord(5)).toBe(false);
+    expect(isSerializedTypeRecord(5)).toBe(false);
   });
 
   it("skips inherited keys when resolving object references", () => {
@@ -123,7 +150,12 @@ describe("GraphSerializer coverage", () => {
       resolvingRefs: new Set<string>(),
     };
 
-    const result = serializer.resolveReference("obj", context) as {
+    const result = resolveReference(
+      "obj",
+      context,
+      0,
+      deserializerOptions(),
+    ) as {
       own: unknown[];
       ghost?: unknown;
     };
@@ -146,9 +178,10 @@ describe("GraphSerializer coverage", () => {
   });
 
   it("mergePlaceholder handles Date instances", () => {
-    const merged = serializer.mergePlaceholder(
+    const merged = mergePlaceholder(
       new Date(0),
       new Date("2024-01-01T00:00:00.000Z"),
+      DEFAULT_UNSAFE_KEYS,
     );
     expect(merged).toBeInstanceOf(Date);
     expect((merged as Date).getTime()).toBe(
@@ -218,7 +251,12 @@ describe("GraphSerializer coverage", () => {
       resolvingRefs: new Set<string>(),
     };
     expect(() =>
-      serializer.deserializeValue({ __type: "Missing", value: {} }, ctx),
+      deserializeValue(
+        { __type: "Missing", value: {} },
+        ctx,
+        0,
+        deserializerOptions(),
+      ),
     ).toThrow(/Unknown type/);
   });
 });

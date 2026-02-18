@@ -79,8 +79,8 @@ describe("Phantom tasks - fluent builders", () => {
         async (): Promise<TunnelRunner> => ({
           mode: "client",
           tasks: [ph.id],
-          run: async (task: { id: string }, input: { v: string }) =>
-            `TUN:${task.id}:${input?.v}`,
+          run: async (task: { id: string }, input: unknown) =>
+            `TUN:${task.id}:${(input as { v?: string } | undefined)?.v}`,
         }),
       )
       .build();

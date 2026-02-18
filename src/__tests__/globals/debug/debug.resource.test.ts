@@ -18,7 +18,7 @@ Error.stackTraceLimit = Infinity;
 
 describe("globals.resources.debug", () => {
   it("logs non-system events, non-lifecycle events via global event listener", async () => {
-    const logs: Array<{ level: string; message: string }> = [];
+    const logs: ILog[] = [];
 
     const collector = defineResource({
       id: "tests.collector",
@@ -60,7 +60,9 @@ describe("globals.resources.debug", () => {
 
     const infoLogs = logs.filter((l) => l.level === "info");
     expect(
-      infoLogs.some((l) => l.message.includes("Event tests.event emitted")),
+      infoLogs.some((l) =>
+        String(l.message).includes("Event tests.event emitted"),
+      ),
     ).toBe(true);
   });
 
@@ -72,7 +74,7 @@ describe("globals.resources.debug", () => {
       dependencies: { logger: globalResources.logger },
       async init(_, { logger }) {
         logger.onLog((log) => {
-          messages.push(log.message);
+          messages.push(String(log.message));
         });
         return messages;
       },
@@ -139,7 +141,7 @@ describe("globals.resources.debug", () => {
   });
 
   it("auto-registers debug via run(options.debug) and logs events", async () => {
-    const logs: Array<{ level: string; message: string }> = [];
+    const logs: ILog[] = [];
 
     const collector = defineResource({
       id: "tests.collector.options.debug",
@@ -225,7 +227,7 @@ describe("globals.resources.debug", () => {
     await run(app);
 
     const resourceLogs = logs.filter((l) =>
-      l.message.includes("Resource tests.resource.with.config"),
+      String(l.message).includes("Resource tests.resource.with.config"),
     );
     expect(resourceLogs).toHaveLength(2);
     expect(resourceLogs[0].data).toEqual({ config: { name: "test" } });
@@ -338,7 +340,7 @@ describe("globals.resources.debug", () => {
   });
 
   it("should work for when we don't print result, input, or error", async () => {
-    const logs: Array<{ level: string; message: string }> = [];
+    const logs: ILog[] = [];
 
     const collector = defineResource({
       id: "tests.collector.options.debug",
@@ -374,7 +376,7 @@ describe("globals.resources.debug", () => {
 
     await rr.runTask(testTask);
 
-    const messages = logs.map((l) => l.message);
+    const messages = logs.map((l) => String(l.message));
     expect(messages.some((m) => m.includes(`Resource ${collector.id}`))).toBe(
       true,
     );

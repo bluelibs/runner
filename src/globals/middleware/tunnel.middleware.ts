@@ -28,13 +28,20 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
   DependencyMapType
 >({
   id: "globals.middleware.resource.tunnel",
+  throws: [
+    tunnelClientContractError,
+    tunnelTaskNotFoundError,
+    tunnelEventNotFoundError,
+    tunnelOwnershipConflictError,
+  ],
   dependencies: {
     store: globalResources.store,
     eventManager: globalResources.eventManager,
+    logger: globalResources.logger,
   },
   // Only applies to resources tagged with globals.tags.tunnel
   everywhere: (resource) => globalTags.tunnel.exists(resource),
-  run: async ({ resource, next }, { store, eventManager }) => {
+  run: async ({ resource, next }, { store, eventManager, logger }) => {
     // Initialize the resource and get its value (tunnel runner)
     const value = await next(resource.config);
 
@@ -121,7 +128,19 @@ export const tunnelResourceMiddleware = defineResourceMiddleware<
             try {
               const remotePayload = await value.emit!(emission);
               if (remotePayload !== undefined) emission.data = remotePayload;
-            } catch (_) {
+            } catch (error) {
+              try {
+                await logger.warn(
+                  "Tunnel remote-first delivery failed; falling back to local listeners.",
+                  {
+                    source: resource.definition.id,
+                    error,
+                    data: { eventId: emission.id },
+                  },
+                );
+              } catch {
+                // Ignore logger failures to preserve fallback semantics.
+              }
               // Remote failed; fall back to local
               return next(emission);
             }

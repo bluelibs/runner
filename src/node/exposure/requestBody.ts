@@ -4,6 +4,7 @@ import type { SerializerLike } from "../../serializer";
 import { jsonErrorResponse } from "./httpResponse";
 import type { JsonResponse } from "./types";
 import { cancellationError } from "../../errors";
+import { normalizeError } from "../../globals/resources/tunnel/error-utils";
 
 export async function readRequestBody(
   req: IncomingMessage,
@@ -23,7 +24,7 @@ export async function readRequestBody(
         try {
           cancellationError.throw({ reason: "Request aborted" });
         } catch (e) {
-          return e instanceof Error ? e : new Error(String(e));
+          return normalizeError(e);
         }
       })();
       reject(err);
@@ -35,7 +36,7 @@ export async function readRequestBody(
     };
     const onError = (err: unknown) => {
       cleanup();
-      reject(err instanceof Error ? err : new Error(String(err)));
+      reject(normalizeError(err));
     };
     const onEnd = () => {
       if (aborted) return;
@@ -107,8 +108,8 @@ export async function readJsonBody<T>(
   let body: Buffer;
   try {
     body = await readRequestBody(req, signal, maxSize);
-  } catch (err: any) {
-    if (err.message === "PAYLOAD_TOO_LARGE") {
+  } catch (err: unknown) {
+    if (normalizeError(err).message === "PAYLOAD_TOO_LARGE") {
       return {
         ok: false,
         response: jsonErrorResponse(

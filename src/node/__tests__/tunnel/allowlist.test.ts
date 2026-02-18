@@ -133,6 +133,9 @@ describe("computeAllowList (server-mode http tunnels)", () => {
     expect(list.taskIds.has(t3.id)).toBe(false);
     expect(list.eventIds.has(e1.id)).toBe(true);
     expect(list.eventIds.has(e2.id)).toBe(false);
+    expect(list.taskAcceptsAsyncContext.get(t1.id)).toBe(true);
+    expect(list.taskAcceptsAsyncContext.get(t2.id)).toBe(true);
+    expect(list.eventAcceptsAsyncContext.get(e1.id)).toBe(true);
     await rr.dispose();
   });
 
@@ -246,11 +249,125 @@ describe("computeAllowList (server-mode http tunnels)", () => {
       events,
     } as unknown as Store;
 
-    const list = computeAllowList(store);
+    const onSelectorError = jest.fn();
+    const list = computeAllowList(store, onSelectorError);
     expect(list.enabled).toBe(true);
     expect(list.taskIds.has("func.throw.tasks.good")).toBe(true);
     expect(list.taskIds.has("func.throw.tasks.bad")).toBe(false);
     expect(list.eventIds.has("func.throw.events.good")).toBe(true);
     expect(list.eventIds.has("func.throw.events.bad")).toBe(false);
+    expect(onSelectorError).toHaveBeenCalledTimes(2);
+    expect(onSelectorError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selectorKind: "task",
+        candidateId: "func.throw.tasks.bad",
+        tunnelResourceId: "srv",
+      }),
+    );
+    expect(onSelectorError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selectorKind: "event",
+        candidateId: "func.throw.events.bad",
+        tunnelResourceId: "srv",
+      }),
+    );
+  });
+
+  it("uses default selector reporter when no reporter is provided", () => {
+    const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const tasks = new Map([
+      ["bad.primitive", { task: { id: "func.warn.tasks.bad.primitive" } }],
+      ["bad.error", { task: { id: "func.warn.tasks.bad.error" } }],
+    ]);
+    const selectorError = new Error("selector error");
+    const store = {
+      resources: new Map([
+        [
+          "srv",
+          {
+            resource: { id: "srv", tags: [globalTags.tunnel] },
+            value: {
+              mode: "server",
+              transport: "http",
+              tasks: (task: { id: string }) => {
+                if (task.id.endsWith(".primitive")) {
+                  throw "primitive-task-error";
+                }
+                throw selectorError;
+              },
+            } satisfies TunnelRunner,
+          },
+        ],
+      ]),
+      tasks,
+      events: new Map(),
+    } as unknown as Store;
+
+    try {
+      const list = computeAllowList(store);
+      expect(list.enabled).toBe(true);
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[runner] Tunnel allow-list selector failed; item skipped.",
+        expect.objectContaining({
+          selectorKind: "task",
+          candidateId: "func.warn.tasks.bad.primitive",
+          tunnelResourceId: "srv",
+          error: expect.any(Error),
+        }),
+      );
+      expect(warnSpy).toHaveBeenCalledWith(
+        "[runner] Tunnel allow-list selector failed; item skipped.",
+        expect.objectContaining({
+          selectorKind: "task",
+          candidateId: "func.warn.tasks.bad.error",
+          tunnelResourceId: "srv",
+          error: selectorError,
+        }),
+      );
+    } finally {
+      warnSpy.mockRestore();
+    }
+  });
+
+  it("tracks async-context policy per selected task/event and rejects on conflicts", async () => {
+    const t = defineTask<void, Promise<void>>({
+      id: "policy.task",
+      run: async () => undefined,
+    });
+    const e = defineEvent<void>({ id: "policy.event" });
+
+    const allowTunnel = defineResource({
+      id: "policy.allow",
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "server",
+        transport: "http",
+        allowAsyncContext: true,
+        tasks: [t.id],
+        events: [e.id],
+      }),
+    });
+    const rejectTunnel = defineResource({
+      id: "policy.reject",
+      tags: [globalTags.tunnel],
+      init: async (): Promise<TunnelRunner> => ({
+        mode: "server",
+        transport: "http",
+        allowAsyncContext: false,
+        tasks: [t.id],
+        events: [e.id],
+      }),
+    });
+
+    const app = defineResource({
+      id: "policy.app",
+      register: [t, e, allowTunnel, rejectTunnel],
+    });
+    const rr = await run(app);
+    const store = await rr.getResourceValue(globalResources.store as any);
+    const list = computeAllowList(store);
+    expect(list.taskAcceptsAsyncContext.get(t.id)).toBe(false);
+    expect(list.eventAcceptsAsyncContext.get(e.id)).toBe(false);
+    await rr.dispose();
   });
 });

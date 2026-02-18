@@ -134,6 +134,7 @@ export class Queue {
 
     // wait for everything already chained to settle
     await this.tail.catch(() => {});
+    this.abortController = new AbortController();
 
     this.eventManager.dispose();
   }
@@ -142,6 +143,7 @@ export class Queue {
     const id = ++this.listenerId;
     this.activeListeners.add(id);
     const eventDef = QueueEvents[type];
+    const listenerId = `queue-listener-${id}`;
 
     this.eventManager.addListener(
       eventDef,
@@ -151,13 +153,14 @@ export class Queue {
         }
       },
       {
-        id: `queue-listener-${id}`,
+        id: listenerId,
         filter: () => this.activeListeners.has(id),
       },
     );
 
     return () => {
       this.activeListeners.delete(id);
+      this.eventManager.removeListenerById(listenerId);
     };
   }
 
@@ -165,23 +168,26 @@ export class Queue {
     const id = ++this.listenerId;
     this.activeListeners.add(id);
     const eventDef = QueueEvents[type];
+    const listenerId = `queue-listener-once-${id}`;
 
     this.eventManager.addListener(
       eventDef,
       (emission: IEventEmission<QueueEvent>) => {
         if (this.activeListeners.has(id)) {
           this.activeListeners.delete(id);
+          this.eventManager.removeListenerById(listenerId);
           handler(emission.data);
         }
       },
       {
-        id: `queue-listener-once-${id}`,
+        id: listenerId,
         filter: () => this.activeListeners.has(id),
       },
     );
 
     return () => {
       this.activeListeners.delete(id);
+      this.eventManager.removeListenerById(listenerId);
     };
   }
 

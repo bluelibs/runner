@@ -128,7 +128,7 @@ export class DependencyExtractor {
   }
 
   extractEventDependency(object: IEvent<any>, source: string) {
-    return async (input: any, options?: IEventEmitOptions) => {
+    return async (input: unknown, options?: IEventEmitOptions) => {
       return this.eventManager.emit(object, input, source, options);
     };
   }

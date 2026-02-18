@@ -889,5 +889,39 @@ describe("Semaphore", () => {
       sem.release();
       expect(seen).toEqual([]); // No events received because we unsubscribed
     });
+
+    it("hard-removes on() listeners from EventManager storage when unsubscribed", () => {
+      const sem = new Semaphore(1);
+      const unsubscribe = sem.on("released", () => {});
+
+      const listeners = (
+        sem as unknown as {
+          eventManager: { listeners: Map<string, unknown[]> };
+        }
+      ).eventManager.listeners;
+      expect(listeners.get("semaphore.events.released")).toHaveLength(1);
+
+      unsubscribe();
+
+      expect(listeners.get("semaphore.events.released")).toBeUndefined();
+    });
+
+    it("hard-removes once() listeners from EventManager storage after first fire", async () => {
+      const sem = new Semaphore(1);
+      sem.once("released", () => {});
+
+      const listeners = (
+        sem as unknown as {
+          eventManager: { listeners: Map<string, unknown[]> };
+        }
+      ).eventManager.listeners;
+      expect(listeners.get("semaphore.events.released")).toHaveLength(1);
+
+      await sem.acquire();
+      sem.release();
+      await Promise.resolve();
+
+      expect(listeners.get("semaphore.events.released")).toBeUndefined();
+    });
   });
 });

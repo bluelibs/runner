@@ -1,4 +1,5 @@
 import { getPlatform } from "../platform";
+import { normalizeError } from "../globals/resources/tunnel/error-utils";
 
 const platform = getPlatform();
 
@@ -11,35 +12,31 @@ const activeErrorHandlers = new Set<
 >();
 let processSafetyNetsInstalled = false;
 
-function toError(value: unknown): Error {
-  return value instanceof Error ? value : new Error(String(value));
-}
-
 function installGlobalProcessSafetyNetsOnce() {
   if (processSafetyNetsInstalled) return;
   processSafetyNetsInstalled = true;
-  const onUncaughtException = async (err: any) => {
+  const onUncaughtException = async (err: unknown) => {
     for (const handler of activeErrorHandlers) {
       try {
         await handler(err, "uncaughtException");
       } catch (handlerError) {
         console.error("[runner] Process error handler failed.", {
           source: "uncaughtException",
-          originalError: toError(err),
-          handlerError: toError(handlerError),
+          originalError: normalizeError(err),
+          handlerError: normalizeError(handlerError),
         });
       }
     }
   };
-  const onUnhandledRejection = async (reason: any) => {
+  const onUnhandledRejection = async (reason: unknown) => {
     for (const handler of activeErrorHandlers) {
       try {
         await handler(reason, "unhandledRejection");
       } catch (handlerError) {
         console.error("[runner] Process error handler failed.", {
           source: "unhandledRejection",
-          originalError: toError(reason),
-          handlerError: toError(handlerError),
+          originalError: normalizeError(reason),
+          handlerError: normalizeError(handlerError),
         });
       }
     }
@@ -76,7 +73,7 @@ function installGlobalShutdownHooksOnce() {
         try {
           await d();
         } catch (disposeError) {
-          const normalizedError = toError(disposeError);
+          const normalizedError = normalizeError(disposeError);
           disposalErrors.push(normalizedError);
           console.error("[runner] Shutdown disposer failed.", normalizedError);
         } finally {

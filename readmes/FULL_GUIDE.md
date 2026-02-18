@@ -2509,9 +2509,9 @@ The returned ids are deduplicated and, when applicable, include declarations acr
 The core concepts above cover most use cases. For specialized features:
 
 - **Async Context**: Per-request/thread-local state via `r.asyncContext()`. See [Async Context](#async-context) for Node.js `AsyncLocalStorage` patterns.
-- **Durable Workflows** (Node-only): Replay-safe primitives like `ctx.step()`, `ctx.sleep()`, and `ctx.waitForSignal()`. See [Durable Workflows](./DURABLE_WORKFLOWS.md).
-- **HTTP Tunnels**: Expose tasks over HTTP or call remote Runners. See [Tunnels](./TUNNELS.md).
-- **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](./SERIALIZER_PROTOCOL.md).
+- **Durable Workflows** (Node-only): Replay-safe primitives like `ctx.step()`, `ctx.sleep()`, and `ctx.waitForSignal()`. See [Durable Workflows](../readmes/DURABLE_WORKFLOWS.md).
+- **HTTP Tunnels**: Expose tasks over HTTP or call remote Runners. See [Tunnels](../readmes/TUNNELS.md).
+- **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](../readmes/SERIALIZER_PROTOCOL.md).
 
 ---
 ## run() and RunOptions
@@ -4255,7 +4255,7 @@ When multiple middleware need to exchange execution-local state without pollutin
 - Use `{ override: true }` only when mutation is intentional
 - Forward journal explicitly in nested task calls when you need shared trace/state continuity
 
-For the full API and patterns, see the Execution Journal section in [Core Concepts](./02-core-concepts.md#execution-journal).
+For the full API and patterns, see the Execution Journal section in [Core Concepts](#execution-journal).
 
 ---
 
@@ -4278,7 +4278,7 @@ const installer = r
 
 Use this when behavior should be scoped to a particular wiring path, not globally.
 
-For deeper lifecycle guidance, see [Runtime Lifecycle](./03-runtime-lifecycle.md#task-interceptors).
+For deeper lifecycle guidance, see [Runtime Lifecycle](#task-interceptors).
 
 ---
 
@@ -4304,14 +4304,16 @@ It also supports object graphs that plain JSON cannot represent, including circu
 
 ### What it handles
 
-| Type          | JSON   | Runner Serializer |
-| ------------- | ------ | ----------------- |
-| `Date`        | String | Date object       |
-| `RegExp`      | Lost   | RegExp object     |
-| `Map`, `Set`  | Lost   | Preserved         |
-| `Uint8Array`  | Lost   | Preserved         |
-| Circular refs | Error  | Preserved         |
-| Self refs     | Error  | Preserved         |
+| Type          | JSON                        | Runner Serializer                                                                                  |
+| ------------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
+| `Date`        | String                      | Date object                                                                                        |
+| `RegExp`      | Lost                        | RegExp object                                                                                      |
+| `Map`, `Set`  | Lost                        | Preserved                                                                                          |
+| `Uint8Array`  | Lost                        | Preserved                                                                                          |
+| `bigint`      | Lost/unsafe numeric coercion | Preserved as `__type: "BigInt"` (decimal string payload)                                          |
+| `symbol`      | Lost                        | Supports `Symbol.for(key)` and well-known symbols (unique `Symbol("...")` values are rejected)   |
+| Circular refs | Error                       | Preserved                                                                                          |
+| Self refs     | Error                       | Preserved                                                                                          |
 
 ### Two modes
 
@@ -4336,6 +4338,24 @@ const restored = serializer.deserialize(data);
 // restored.members[0] === restored.lead (same object!)
 // restored.self === restored (self-reference preserved)
 ```
+
+### Safety configuration for untrusted payloads
+
+When you deserialize untrusted data, configure the serializer explicitly:
+
+```typescript
+import { Serializer, SymbolPolicy } from "@bluelibs/runner";
+
+const serializer = new Serializer({
+  symbolPolicy: SymbolPolicy.WellKnownOnly,
+  allowedTypes: ["Date", "RegExp", "Map", "Set", "Uint8Array", "BigInt"],
+  maxDepth: 64,
+  maxRegExpPatternLength: 2000,
+  allowUnsafeRegExp: false,
+});
+```
+
+`symbolPolicy` defaults to `SymbolPolicy.AllowAll`. Prefer `WellKnownOnly` (or stricter) for untrusted input.
 
 ### Custom types
 
@@ -4371,7 +4391,9 @@ The serializer is hardened against common attacks:
 
 - **ReDoS protection**: Validates RegExp patterns against catastrophic backtracking
 - **Prototype pollution blocked**: Filters `__proto__`, `constructor`, `prototype` keys
-- **Depth limits**: Configurable max depth prevents stack overflow
+- **Depth limits**: `maxDepth` prevents stack overflows
+- **Type allow-listing**: `allowedTypes` narrows which runtime type ids are accepted
+- **Symbol registry safety**: `symbolPolicy` controls symbol deserialization behavior
 
 > **Note:** File uploads use the tunnel layer's multipart handling, not the serializer. See [Tunnels](../readmes/TUNNELS.md) for file upload patterns.
 
@@ -4419,6 +4441,16 @@ const remoteTasksTunnel = r
 ```
 
 This is just a glimpse. With tunnels, you can build microservices, CLIs, and admin panels that interact with your main application securely and efficiently.
+
+For typed remote error hydration, pass an `errorRegistry` to the client:
+
+```typescript
+// Assuming: AppError = r.error<{ code: number }>("app.errors.AppError").build()
+const client = createClient({
+  url: "http://remote-runner:8080/__runner",
+  errorRegistry: new Map([[AppError.id, AppError]]),
+});
+```
 
 For a deep dive into streaming, authentication, file uploads, and more, check out the [full Tunnels documentation](../readmes/TUNNELS.md).
 
@@ -4600,25 +4632,27 @@ Sometimes you need to replace a component entirely. Maybe you're doing integrati
 You can now use a dedicated helper `override()` or the fluent builder `r.override(...)` to safely override any property on tasks, resources, or middleware — except `id`. This ensures the identity is preserved, while allowing behavior changes.
 
 ```typescript
+import { override, r } from "@bluelibs/runner";
+
 const productionEmailer = r
   .resource("app.emailer")
   .init(async () => new SMTPEmailer())
   .build();
 
 // Option 1: Fluent override builder (Recommended)
-const testEmailer = r
+const fluentOverrideEmailer = r
   .override(productionEmailer)
   .init(async () => new MockEmailer())
   .build();
 
 // Option 2: Using override() helper to change behavior while preserving id
-const testEmailer = override(productionEmailer, {
+const helperOverrideEmailer = override(productionEmailer, {
   init: async () => new MockEmailer(),
 });
 
 // Option 3: The system is really flexible, and override is just bringing in type safety, nothing else under the hood.
 // Using spread operator works the same way but does not provide type-safety.
-const testEmailer = r
+const manualOverrideEmailer = r
   .resource("app.emailer")
   .init(async () => ({}))
   .build();
@@ -4626,10 +4660,8 @@ const testEmailer = r
 const app = r
   .resource("app")
   .register([productionEmailer])
-  .overrides([testEmailer]) // This replaces the production version
+  .overrides([fluentOverrideEmailer]) // This replaces the production version
   .build();
-
-import { override } from "@bluelibs/runner";
 
 // Tasks
 const originalTask = r
@@ -4650,10 +4682,10 @@ const overriddenResource = override(originalResource, {
 });
 
 // Middleware
-const originalMiddleware = taskMiddleware({
-  id: "app.middleware.log",
-  run: async ({ next }) => next(),
-});
+const originalMiddleware = r.middleware
+  .task("app.middleware.log")
+  .run(async ({ next }) => next())
+  .build();
 const overriddenMiddleware = override(originalMiddleware, {
   run: async ({ task, next }) => {
     const result = await next(task?.input);
@@ -5332,52 +5364,52 @@ Sometimes you'll run into circular type dependencies because of your file struct
 
 ### The Problem
 
-Consider these resources that create a circular dependency:
+Consider this graph that creates a circular *type inference* dependency:
 
 ```typescript
 // FILE: a.ts
-export const aResource = defineResource({
-  dependencies: { b: bResource },
-  // ... depends on B resource.
-});
-// For whatever reason, you decide to put the task in the same file.
-export const aTask = defineTask({
-  dependencies: { a: aResource },
-});
+export const aResource = r
+  .resource("a.resource")
+  .dependencies({ b: bResource })
+  .init(async () => "a")
+  .build();
+
+export const aTask = r
+  .task("a.tasks.run")
+  .dependencies({ a: aResource })
+  .run(async () => "ok")
+  .build();
 
 // FILE: b.ts
-export const bResource = defineResource({
-  id: "b.resource",
-  dependencies: { c: cResource },
-});
+export const bResource = r
+  .resource("b.resource")
+  .dependencies({ c: cResource })
+  .init(async () => "b")
+  .build();
 
 // FILE: c.ts
-export const cResource = defineResource({
-  id: "c.resource",
-  dependencies: { aTask }, // Creates circular **type** dependency! Cannot infer types properly, even if the runner boots because there's no circular dependency.
-  async init(_, { aTask }) {
-    return `C depends on aTask`;
-  },
-});
+export const cResource = r
+  .resource("c.resource")
+  .dependencies({ aTask }) // Creates circular type inference across files.
+  .init(async (_config, { aTask }) => `C depends on ${await aTask(undefined)}`)
+  .build();
 ```
 
-A depends B depends C depends ATask. No circular dependency, yet Typescript struggles with these, but there's a way to handle it gracefully.
+A depends on B, B depends on C, and C depends on A's task. Runtime can still boot, but TypeScript inference can get stuck in this cycle.
 
 ### The Solution
 
-The fix is to explicitly type the resource that completes the circle using a simple assertion `IResource<Config, ReturnType>`. This breaks the TypeScript inference chain while maintaining runtime functionality:
+The fix is to explicitly type the resource that completes the circle using `IResource<TConfig, Promise<TValue>, TDependencies>`. This breaks the inference chain while maintaining runtime behavior:
 
 ```typescript
 // c.resource.ts - The key change
-import { IResource } from "../../defs";
+import type { IResource } from "@bluelibs/runner";
 
-export const cResource = defineResource({
-  id: "c.resource",
-  dependencies: { a: aResource },
-  async init(_, { a }) {
-    return `C depends on ${a}`;
-  },
-}) as IResource<void, Promise<string>>; // void because it has no config, string because it returns a string
+export const cResource = r
+  .resource("c.resource")
+  .dependencies({ a: aResource })
+  .init(async (_config, { a }) => `C depends on ${a}`)
+  .build() as IResource<void, Promise<string>>;
 ```
 
 #### Why This Works
@@ -5389,7 +5421,7 @@ export const cResource = defineResource({
 #### Best Practices
 
 1. **Identify the "leaf" resource**: Choose the resource that logically should break the chain (often the one that doesn't need complex type inference)
-2. **Use explicit typing**: Add the `IResource<Dependencies, ReturnType>` type annotation
+2. **Use explicit typing**: Add `IResource<Config, Promise<Value>, Dependencies>` annotation
 3. **Document the decision**: Add a comment explaining why the explicit typing is needed
 4. **Consider refactoring**: If you have many circular dependencies, consider if your architecture could be simplified
 
@@ -5403,16 +5435,16 @@ type MyDependencies = {
   anotherResource: AnotherResourceType;
 };
 
-export const problematicResource = defineResource({
-  id: "problematic.resource",
-  dependencies: {
+export const problematicResource = r
+  .resource("problematic.resource")
+  .dependencies({
     /* ... */
-  },
-  async init(config, deps) {
+  })
+  .init(async (config, deps) => {
     // Your logic here
     return someComplexObject;
-  },
-}) as IResource<MyDependencies, ComplexReturnType>;
+  })
+  .build() as IResource<void, Promise<ComplexReturnType>, MyDependencies>;
 ```
 
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
@@ -5515,7 +5547,7 @@ The `r` namespace gives you a chainable, discoverable way to build Runner compon
 
 ```typescript
 // Classic API - you need to know the shape
-const task = task({
+const classicTask = task({
   id: "users.create",
   dependencies: { db },
   inputSchema: userSchema,
@@ -5525,7 +5557,7 @@ const task = task({
 });
 
 // Fluent API - autocomplete guides you
-const task = r
+const fluentTask = r
   .task("users.create") // Start here, then...
   .dependencies({ db }) // ...chain what you need
   .inputSchema(userSchema)
@@ -5638,7 +5670,7 @@ Every builder follows the same rhythm:
 3. **Implement** with `.run()` or `.init()`
 4. **Finish** with `.build()`
 
-For the complete API reference, see the [Fluent Builders documentation](./FLUENT_BUILDERS.md).
+For the complete API reference, see the [Fluent Builders documentation](../readmes/FLUENT_BUILDERS.md).
 
 > **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."
 ## Type Helpers
@@ -6192,6 +6224,12 @@ The quick-reference table for "I've seen this error, what do I do?"
 | `ValidationError: Task input...`        | Task rejects valid-looking input    | Input doesn't match `inputSchema`             | Check schema constraints (types, required fields)           |
 | `RateLimitError`                        | Task throws after repeated calls    | Exceeded rate limit threshold                 | Wait for window reset or increase `max` limit               |
 | `CircuitBreakerOpenError`               | All calls fail immediately          | Circuit tripped after failures                | Wait for `resetTimeout` or fix underlying service           |
+| `EventCycleError`                       | Emissions recurse / stack explodes  | Event graph emitted itself (direct/indirect)  | Break the cycle or emit asynchronously outside the chain    |
+| `InputContractViolationError`           | Type errors on task input           | Task input does not satisfy middleware/tag contract | Expand task input type to include required contract fields |
+| `OutputContractViolationError`          | Type errors on task output          | Task output does not satisfy middleware/tag contract | Return a contract-compatible shape or relax contract       |
+| `DurableExecutionError`                 | Durable workflow replay fails       | Step/signal shape changed incompatibly         | Keep step ids stable and migrate workflow logic carefully   |
+| `SemaphoreDisposedError`                | Acquire fails immediately           | Semaphore disposed while callers still running | Create a new semaphore per lifecycle and dispose at shutdown |
+| `QueueDeadlockError`                    | Queue stops progressing             | Job waited on work that required the same queue | Avoid self-wait cycles; split queues or redesign flow       |
 
 ---
 
@@ -6450,6 +6488,70 @@ const adminTask = r
   })
   .build();
 ```
+
+---
+
+### Runtime Safety Errors
+
+#### `EventCycleError`
+
+**Symptom**: Event emission loops forever, throws cycle error, or eventually hits `Maximum call stack size exceeded`.
+
+**Cause**: A hook emits an event that eventually re-emits the original event in the same chain.
+
+**Fix**:
+
+1. Break the direct/indirect event loop (A -> B -> A).
+2. Move follow-up emission to a separate async boundary when it should not be in the same chain.
+3. Keep `runtimeEventCycleDetection` enabled (default) unless you have fully proven your graph is acyclic.
+
+#### `InputContractViolationError` / `OutputContractViolationError`
+
+**Symptom**: TypeScript errors appear when composing middleware/tags with tasks.
+
+**Cause**: Contract middleware or contract tags require input/output shapes that the task does not satisfy.
+
+**Fix**:
+
+1. Update task input/output types to include contract requirements.
+2. Verify `inputSchema`/`resultSchema` inferred types match those contract shapes.
+3. If needed, narrow middleware/tag contracts to the actual shared surface.
+
+#### `DurableExecutionError`
+
+**Symptom**: Durable workflow resumes fail after deployment, replay diverges, or signal waiting behavior breaks.
+
+**Cause**: Durable step/signal flow changed incompatibly with already persisted executions.
+
+**Fix**:
+
+1. Keep durable step ids and ordering stable for in-flight executions.
+2. Introduce migration-safe branching/versioning in workflow logic.
+3. Use the durable workflows guide for replay-safe patterns: [Durable Workflows](../readmes/DURABLE_WORKFLOWS.md).
+
+#### `SemaphoreDisposedError`
+
+**Symptom**: `acquire()` fails immediately in active code paths.
+
+**Cause**: Semaphore instance was disposed before all callers completed.
+
+**Fix**:
+
+1. Scope semaphore lifecycle to the owning resource/container.
+2. Dispose semaphores during app shutdown, not while tasks still need them.
+3. Fail fast when a disposed semaphore is accessed unexpectedly.
+
+#### `QueueDeadlockError`
+
+**Symptom**: Queue appears stuck; queued jobs never complete.
+
+**Cause**: A queued job waits on work that itself requires the same queue, creating a deadlock.
+
+**Fix**:
+
+1. Avoid waiting on same-queue work from inside a queue job.
+2. Split responsibilities across separate queues when dependencies are cyclical.
+3. Keep queue operations one-directional to prevent self-dependency.
 
 ---
 
@@ -7557,26 +7659,68 @@ const myHook = r
   .on(myEvent)
   .run(async (event) => console.log(event.data))
   .build();
+
+// Error Helper
+const appError = r
+  .error<{ code: number; message: string }>("app.errors.AppError")
+  .build();
+
+// Tag
+const auditTag = r.tag("app.tags.audit").build();
+
+// Async Context (Node-only)
+const requestContext = r
+  .asyncContext<{ requestId: string }>("app.ctx.request")
+  .build();
 ```
 
 ### Running Your App
 
 ```typescript
 // Basic
-const { runTask, dispose } = await run(app);
+const basicRuntime = await run(app);
+const { runTask, dispose } = basicRuntime;
 
 // With options
-const { runTask, dispose } = await run(app, {
-  debug: "verbose", // "normal" | "verbose"
+const configuredRuntime = await run(app, {
+  debug: "verbose", // "normal" | "verbose" | Partial<DebugConfig>
+  logs: {
+    printThreshold: "info",
+    printStrategy: "pretty",
+    bufferLogs: false,
+  },
+  errorBoundary: true,
+  shutdownHooks: true,
   onUnhandledError: ({ error }) => console.error(error),
+  dryRun: false,
+  lazy: false,
+  initMode: "sequential", // "sequential" | "parallel"
+  runtimeEventCycleDetection: true,
+  mode: "prod", // "dev" | "prod" | "test"
 });
+const { runTask: runTaskWithOptions, dispose: disposeWithOptions } =
+  configuredRuntime;
 
 // Execute tasks
 const result = await runTask(myTask, input);
 
 // Cleanup
 await dispose();
+await disposeWithOptions();
 ```
+
+| Run Option                    | Purpose                                                                 |
+| ---------------------------- | ----------------------------------------------------------------------- |
+| `debug`                      | Enable Runner debug logging                                             |
+| `logs`                       | Configure logger strategy/threshold/buffering                           |
+| `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
+| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with `dispose()`                            |
+| `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
+| `dryRun`                     | Validate graph without running resource `init()`                        |
+| `lazy`                       | Defer startup-unused resources until on-demand access                   |
+| `initMode`                   | Choose startup scheduler strategy (`sequential` or `parallel`)          |
+| `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                            |
+| `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)           |
 
 ### Testing Patterns
 
@@ -7588,6 +7732,34 @@ const result = await myTask.run(input, { db: mockDb, logger: mockLogger });
 const { runTask, dispose } = await run(testApp);
 const result = await runTask(myTask, input);
 await dispose();
+```
+
+### Override Patterns
+
+```typescript
+import { override, r } from "@bluelibs/runner";
+
+const realMailer = r
+  .resource("app.mailer")
+  .init(async () => new SMTPEmailer())
+  .build();
+
+// Fluent override builder
+const mockMailer = r
+  .override(realMailer)
+  .init(async () => new MockMailer())
+  .build();
+
+// Helper override
+const helperMockMailer = override(realMailer, {
+  init: async () => new MockMailer(),
+});
+
+const app = r
+  .resource("app")
+  .register([realMailer])
+  .overrides([mockMailer])
+  .build();
 ```
 
 ### Built-in Middleware
@@ -7641,6 +7813,16 @@ const app = r.resource("app")
 // Emit events
 await myEvent({ data: "value" });
 
+// Emit with options
+const emitReport = await myEvent(
+  { data: "value" },
+  { failureMode: "aggregate", throwOnError: false, report: true },
+);
+
+// Runtime emit helper supports the same options
+const runtime = await run(app);
+await runtime.emitEvent(myEvent, { data: "value" }, { report: true });
+
 // Global logging
 const task = r.task("id")
   .dependencies({ logger: globals.resources.logger })
@@ -7649,6 +7831,14 @@ const task = r.task("id")
   })
   .build();
 ```
+
+### Event Emission Options
+
+| Option         | Type                              | Default      | Purpose                                      |
+| -------------- | --------------------------------- | ------------ | -------------------------------------------- |
+| `failureMode`  | `"fail-fast" \| "aggregate"`      | `fail-fast`  | Stop on first listener error or aggregate all |
+| `throwOnError` | `boolean`                         | `true`       | Throw after listener failure(s)               |
+| `report`       | `boolean`                         | `false`      | Return `IEventEmitReport` for listener outcomes |
 
 ### Type Helpers
 

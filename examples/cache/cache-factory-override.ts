@@ -49,7 +49,7 @@ const customCacheFactory = task({
 // Create some tasks that use caching
 const expensiveCalculation = task({
   id: "app.tasks.expensiveCalculation",
-  middleware: [globals.middlewares.cache.with({ ttl: 3000 })],
+  middleware: [globals.middleware.task.cache.with({ ttl: 3000 })],
   run: async (input: { number: number }) => {
     console.log(`🔢 Performing expensive calculation for ${input.number}`);
     // Simulate expensive work
@@ -60,7 +60,7 @@ const expensiveCalculation = task({
 
 const fetchUserData = task({
   id: "app.tasks.fetchUserData",
-  middleware: [globals.middlewares.cache.with({ ttl: 2000 })],
+  middleware: [globals.middleware.task.cache.with({ ttl: 2000 })],
   run: async (input: { userId: string }) => {
     console.log(`👤 Fetching user data for ${input.userId}`);
     // Simulate API call

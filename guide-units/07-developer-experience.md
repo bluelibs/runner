@@ -95,7 +95,7 @@ The `r` namespace gives you a chainable, discoverable way to build Runner compon
 
 ```typescript
 // Classic API - you need to know the shape
-const task = task({
+const classicTask = task({
   id: "users.create",
   dependencies: { db },
   inputSchema: userSchema,
@@ -105,7 +105,7 @@ const task = task({
 });
 
 // Fluent API - autocomplete guides you
-const task = r
+const fluentTask = r
   .task("users.create") // Start here, then...
   .dependencies({ db }) // ...chain what you need
   .inputSchema(userSchema)
@@ -218,7 +218,7 @@ Every builder follows the same rhythm:
 3. **Implement** with `.run()` or `.init()`
 4. **Finish** with `.build()`
 
-For the complete API reference, see the [Fluent Builders documentation](./readmes/FLUENT_BUILDERS.md).
+For the complete API reference, see the [Fluent Builders documentation](../readmes/FLUENT_BUILDERS.md).
 
 > **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."
 ## Type Helpers

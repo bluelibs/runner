@@ -8,6 +8,7 @@ import { InterceptorRegistry } from "./InterceptorRegistry";
 import { MiddlewareResolver } from "./MiddlewareResolver";
 import { ValidationHelper } from "./ValidationHelper";
 import { IResourceMiddlewareExecutionInput } from "../../types/resourceMiddleware";
+import type { ResourceMiddlewareInterceptor } from "./types";
 
 /**
  * Composes resource initialization chains with validation, interceptors, and middlewares.
@@ -108,7 +109,7 @@ export class ResourceMiddlewareComposer {
       const nextFunction = next;
 
       // Create base middleware runner
-      const baseMiddlewareRunner = async (cfg: any) => {
+      const baseMiddlewareRunner = async (cfg: TConfig) => {
         return storeMiddleware.middleware.run(
           {
             resource: {
@@ -154,9 +155,9 @@ export class ResourceMiddlewareComposer {
     }
 
     const createExecutionInput = (
-      config: any,
-      nextFunc: any,
-    ): IResourceMiddlewareExecutionInput<any> => ({
+      config: TConfig,
+      nextFunc: (config?: TConfig) => Promise<Awaited<TValue>>,
+    ): IResourceMiddlewareExecutionInput<TConfig, Awaited<TValue>> => ({
       resource: {
         definition: resource,
         config: config,
@@ -171,13 +172,21 @@ export class ResourceMiddlewareComposer {
       const nextFunction = currentNext;
 
       currentNext = (async (cfg: TConfig) => {
-        const executionInput = createExecutionInput(cfg, nextFunction);
+        const nextForExecutionInput = (
+          nextConfig?: TConfig,
+        ): Promise<Awaited<TValue>> => {
+          const effectiveConfig = nextConfig === undefined ? cfg : nextConfig;
+          return nextFunction(effectiveConfig) as Promise<Awaited<TValue>>;
+        };
+        const executionInput = createExecutionInput(cfg, nextForExecutionInput);
         const wrappedNext = (
           input: IResourceMiddlewareExecutionInput<TConfig, Awaited<TValue>>,
         ): Promise<Awaited<TValue>> => {
-          return nextFunction(input.resource.config) as any;
+          return nextFunction(input.resource.config) as Promise<
+            Awaited<TValue>
+          >;
         };
-        return (interceptor as any)(wrappedNext, executionInput);
+        return interceptor(wrappedNext, executionInput) as TValue;
       }) as (config: TConfig) => TValue;
     }
 
@@ -189,7 +198,7 @@ export class ResourceMiddlewareComposer {
    */
   private wrapWithInterceptors<TConfig, TValue extends Promise<any>>(
     middlewareRunner: (config: TConfig) => TValue,
-    interceptors: readonly any[],
+    interceptors: readonly ResourceMiddlewareInterceptor[],
     resource: IResource<TConfig, TValue, any, any>,
   ): (config: TConfig) => TValue {
     if (interceptors.length === 0) {
@@ -211,16 +220,20 @@ export class ResourceMiddlewareComposer {
             definition: resource,
             config: config,
           },
-          next: nextFunction as any,
+          next: nextFunction as (
+            resourceConfig?: TConfig,
+          ) => Promise<Awaited<TValue>>,
         };
 
         const wrappedNext = (
           input: IResourceMiddlewareExecutionInput<TConfig, Awaited<TValue>>,
         ): Promise<Awaited<TValue>> => {
-          return nextFunction(input.resource.config) as any;
+          return nextFunction(input.resource.config) as Promise<
+            Awaited<TValue>
+          >;
         };
 
-        return (interceptor as any)(wrappedNext, executionInput);
+        return interceptor(wrappedNext, executionInput) as TValue;
       }) as (config: TConfig) => TValue;
     }
 
