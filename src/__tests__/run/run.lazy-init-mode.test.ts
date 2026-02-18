@@ -134,6 +134,51 @@ describe("run lazy init mode behavior", () => {
     await runtime.dispose();
   });
 
+  it("lazy-loading a resource initializes its lazy resource dependencies first", async () => {
+    const initOrder: string[] = [];
+
+    const lazyResourceB = defineResource({
+      id: "init.mode.lazy.chain.b",
+      async init() {
+        initOrder.push("b");
+        return { id: "b" };
+      },
+    });
+
+    const lazyResourceA = defineResource({
+      id: "init.mode.lazy.chain.a",
+      dependencies: { lazyResourceB },
+      async init(_, { lazyResourceB }) {
+        initOrder.push("a");
+        return { from: lazyResourceB.id };
+      },
+    });
+
+    const app = defineResource({
+      id: "init.mode.lazy.chain.app",
+      register: [lazyResourceA, lazyResourceB],
+      async init() {
+        return "ok";
+      },
+    });
+
+    const runtime = await run(app, { lazy: true, shutdownHooks: false });
+
+    expect(initOrder).toEqual([]);
+
+    await expect(runtime.getLazyResourceValue(lazyResourceA)).resolves.toEqual({
+      from: "b",
+    });
+    expect(initOrder).toEqual(["b", "a"]);
+
+    await expect(runtime.getLazyResourceValue(lazyResourceB)).resolves.toEqual({
+      id: "b",
+    });
+    expect(initOrder).toEqual(["b", "a"]);
+
+    await runtime.dispose();
+  });
+
   it("initializes task middleware resource dependencies during startup in lazy+parallel mode", async () => {
     const warmupInit = jest.fn(async () => ({ warmed: true }));
     const cacheWarmup = defineResource({
