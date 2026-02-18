@@ -49,12 +49,14 @@ export function defineTask<
     [symbolFilePath]: filePath,
     id,
     dependencies: taskConfig.dependencies || ({} as Deps),
-    middleware: taskConfig.middleware || ([] as unknown as TMiddleware),
+    middleware:
+      taskConfig.middleware ||
+      ([] as TaskMiddlewareAttachmentType[] as TMiddleware),
     run: taskConfig.run,
     inputSchema: taskConfig.inputSchema,
     resultSchema: taskConfig.resultSchema,
     meta: taskConfig.meta || ({} as TMeta),
-    tags: taskConfig.tags || ([] as unknown as TTags),
+    tags: taskConfig.tags || ([] as TagType[] as TTags),
     throws: normalizeThrows({ kind: "task", id }, taskConfig.throws),
     // autorun,
     optional() {

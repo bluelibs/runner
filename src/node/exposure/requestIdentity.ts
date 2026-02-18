@@ -41,17 +41,7 @@ export function ensureRequestId(
   const requestId = getRequestId(req) ?? createRequestId();
   req.headers[REQUEST_ID_HEADER] = requestId;
   if (!res.headersSent) {
-    const wasHeadersSent = res.headersSent;
     res.setHeader(REQUEST_ID_HEADER, requestId);
-    const shouldRestoreHeadersSent =
-      !wasHeadersSent && res.headersSent && !res.writableEnded;
-    if (shouldRestoreHeadersSent) {
-      try {
-        (res as ServerResponse & { headersSent?: boolean }).headersSent = false;
-      } catch {
-        // Ignore readonly header flags in real Node responses.
-      }
-    }
   }
   return requestId;
 }

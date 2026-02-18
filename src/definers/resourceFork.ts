@@ -260,7 +260,7 @@ export function resolveForkedRegisterAndDependencies<
                 : dependencies;
             return remapResourceDependenciesInObject(baseDeps, {
               getForkedResourceByBaseId: ctx.getForkedResourceByBaseId,
-            }) as unknown as TDeps;
+            }) as TDeps;
           }
         : dependencies,
     };

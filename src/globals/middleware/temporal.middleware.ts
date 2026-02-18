@@ -48,7 +48,9 @@ function rejectDebounceState(state: DebounceState, error: Error) {
   state.resolveList = [];
   state.rejectList = [];
   state.latestInput = undefined;
-  rejectList.forEach((reject) => reject(error));
+  rejectList.forEach((reject) => {
+    reject(error);
+  });
 }
 
 function rejectThrottleState(state: ThrottleState, error: Error) {
@@ -62,7 +64,9 @@ function rejectThrottleState(state: ThrottleState, error: Error) {
   state.rejectList = [];
   state.latestInput = undefined;
   state.currentPromise = undefined;
-  rejectList.forEach((reject) => reject(error));
+  rejectList.forEach((reject) => {
+    reject(error);
+  });
 }
 
 export const temporalResource = defineResource({
@@ -145,15 +149,21 @@ export const debounceTaskMiddleware = defineTaskMiddleware({
 
       if (state.isDisposed === true) {
         const disposeError = createTemporalDisposedError();
-        rejectList.forEach((reject) => reject(disposeError));
+        rejectList.forEach((reject) => {
+          reject(disposeError);
+        });
         return;
       }
 
       try {
         const result = await next(latestInput);
-        resolveList.forEach((resolve) => resolve(result));
+        resolveList.forEach((resolve) => {
+          resolve(result);
+        });
       } catch (error) {
-        rejectList.forEach((reject) => reject(error));
+        rejectList.forEach((reject) => {
+          reject(error);
+        });
       }
     }, config.ms);
 
@@ -212,10 +222,14 @@ export const throttleTaskMiddleware = defineTaskMiddleware({
       throttleState.lastExecution = now;
       try {
         const result = await next(task.input);
-        pendingResolves.forEach((resolve) => resolve(result));
+        pendingResolves.forEach((resolve) => {
+          resolve(result);
+        });
         return result;
       } catch (error) {
-        pendingRejects.forEach((reject) => reject(error));
+        pendingRejects.forEach((reject) => {
+          reject(error);
+        });
         throw error;
       }
     } else {
@@ -237,15 +251,21 @@ export const throttleTaskMiddleware = defineTaskMiddleware({
 
           if (state.isDisposed === true) {
             const disposeError = createTemporalDisposedError();
-            rejectList.forEach((reject) => reject(disposeError));
+            rejectList.forEach((reject) => {
+              reject(disposeError);
+            });
             return;
           }
 
           try {
             const result = await next(latestInput);
-            resolveList.forEach((resolve) => resolve(result));
+            resolveList.forEach((resolve) => {
+              resolve(result);
+            });
           } catch (error) {
-            rejectList.forEach((reject) => reject(error));
+            rejectList.forEach((reject) => {
+              reject(error);
+            });
           }
         }, remaining);
       } else {

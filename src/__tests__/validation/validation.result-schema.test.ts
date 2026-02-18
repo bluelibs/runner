@@ -64,9 +64,9 @@ describe("Result Schema Validation", () => {
 
       const t = defineTask({
         id: "tests.result.task.invalid",
-        resultSchema,
+        resultSchema: resultSchema as any,
         async run() {
-          return { nope: true } as unknown as { ok: boolean };
+          return { nope: true };
         },
       });
 
@@ -176,9 +176,9 @@ describe("Result Schema Validation", () => {
 
       const r = defineResource({
         id: "tests.result.resource.invalid",
-        resultSchema,
+        resultSchema: resultSchema as any,
         async init() {
-          return { nope: true } as unknown as { connected: boolean };
+          return { nope: true };
         },
       });
 
@@ -218,7 +218,7 @@ describe("Result Schema Validation", () => {
         dependencies: { r },
         async init(_, { r }) {
           // Should receive middleware-modified value without validation error
-          expect((r as unknown as { broken: boolean }).broken).toBe(true);
+          expect((r as any).broken).toBe(true);
           return r;
         },
       });

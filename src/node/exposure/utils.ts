@@ -46,9 +46,9 @@ export function createAbortControllerForRequest(
   res: ServerResponse,
 ): AbortController {
   const controller = new AbortController();
-  const createClientClosedRequestError = () => {
+  const createClientClosedRequestError = (): Error => {
     try {
-      cancellationError.throw({ reason: "Client Closed Request" });
+      return cancellationError.throw({ reason: "Client Closed Request" });
     } catch (error) {
       return error instanceof Error ? error : new Error(String(error));
     }
@@ -58,11 +58,12 @@ export function createAbortControllerForRequest(
     try {
       controller.abort(createClientClosedRequestError());
     } catch (abortError) {
+      const normalized =
+        abortError instanceof Error
+          ? abortError
+          : new Error(String(abortError));
       console.error("[runner] Failed to abort request controller.", {
-        error:
-          abortError instanceof Error
-            ? abortError
-            : new Error(String(abortError)),
+        error: normalized,
       });
     }
   };

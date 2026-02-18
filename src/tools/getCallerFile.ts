@@ -17,6 +17,8 @@ export function getCallerFile(): string {
     if (isNodeInline()) {
       const err = new Error();
       Error.prepareStackTrace = (_err, stack) => stack;
+      // V8 sets err.stack to the raw CallSite[] array when prepareStackTrace returns it;
+      // TypeScript types this as string, so we reinterpret it as the structured form.
       const stack = err.stack as unknown as Array<{
         getFileName?: () => string | null;
       }>;

@@ -50,10 +50,17 @@ export type SerializedSymbolPayload =
   | { kind: SymbolPayloadKind.For; key: string }
   | { kind: SymbolPayloadKind.WellKnown; key: WellKnownSymbolKey };
 
+const getRuntimeWellKnownSymbol = (
+  key: WellKnownSymbolKey,
+): symbol | undefined => {
+  const value = Reflect.get(Symbol, key);
+  return typeof value === "symbol" ? value : undefined;
+};
+
 const getWellKnownSymbolKey = (value: symbol): WellKnownSymbolKey | null => {
   for (const key of WELL_KNOWN_SYMBOL_KEYS) {
-    const sym = (Symbol as unknown as Record<WellKnownSymbolKey, unknown>)[key];
-    if (typeof sym === "symbol" && sym === value) {
+    const runtimeSymbol = getRuntimeWellKnownSymbol(key);
+    if (runtimeSymbol === value) {
       return key;
     }
   }
@@ -213,10 +220,8 @@ export const SymbolType: TypeDefinition<symbol, SerializedSymbolPayload> = {
     if (parsed.kind === SymbolPayloadKind.For) {
       return Symbol.for(parsed.key);
     }
-    const value = (Symbol as unknown as Record<WellKnownSymbolKey, unknown>)[
-      parsed.key
-    ];
-    if (typeof value !== "symbol") {
+    const value = getRuntimeWellKnownSymbol(parsed.key);
+    if (!value) {
       throw unsupportedFeatureError(
         `Unsupported well-known symbol "${parsed.key}"`,
       );

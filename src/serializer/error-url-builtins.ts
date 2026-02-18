@@ -127,7 +127,7 @@ const getUrlConstructor = (): RuntimeUrlConstructor | null => {
   if (typeof value !== "function") {
     return null;
   }
-  return value as unknown as RuntimeUrlConstructor;
+  return value as RuntimeUrlConstructor;
 };
 
 const getUrlSearchParamsConstructor =
@@ -136,7 +136,7 @@ const getUrlSearchParamsConstructor =
     if (typeof value !== "function") {
       return null;
     }
-    return value as unknown as RuntimeUrlSearchParamsConstructor;
+    return value as RuntimeUrlSearchParamsConstructor;
   };
 
 export const ErrorType: TypeDefinition<Error, SerializedErrorPayload> = {
@@ -180,8 +180,12 @@ export const ErrorType: TypeDefinition<Error, SerializedErrorPayload> = {
     }
 
     for (const [propertyName, propertyValue] of Object.entries(customFields)) {
-      (restoredError as unknown as Record<string, unknown>)[propertyName] =
-        propertyValue;
+      Object.defineProperty(restoredError, propertyName, {
+        value: propertyValue,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+      });
     }
 
     return restoredError;

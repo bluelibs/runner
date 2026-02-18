@@ -39,5 +39,6 @@
 - Code retain 100% test coverage.
 - Ensure readmes/AI.md (minimal version of README)
 - Document 'why' in comments, not 'what' or 'how', as the code should be self-descriptive enough to explain those.
+- Use runner errors instead of 'throw new Error()' for better error handling and consistency.
 - Read guide-units/DOCS_STYLE_GUIDE.md to understand how we compose the main documentation.
   </new_feature>

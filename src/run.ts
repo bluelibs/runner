@@ -94,6 +94,7 @@ export async function run<C, V extends Promise<any>>(
     logger,
     normalizedInitMode,
     lazy,
+    runtimeEventCycleDetection,
   );
 
   store.setPreferInitOrderDisposal(

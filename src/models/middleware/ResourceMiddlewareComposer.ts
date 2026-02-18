@@ -70,7 +70,7 @@ export class ResourceMiddlewareComposer {
   ): (config: TConfig) => TValue {
     return (async (config: TConfig) => {
       if (!resource.init) {
-        return undefined as unknown as TValue;
+        return undefined;
       }
 
       const rawValue = await resource.init(config, dependencies, context);
@@ -80,8 +80,8 @@ export class ResourceMiddlewareComposer {
         resource.resultSchema,
         resource.id,
         "Resource",
-      ) as unknown as Awaited<TValue>;
-    }) as unknown as (config: TConfig) => TValue;
+      ) as Awaited<TValue>;
+    }) as (config: TConfig) => TValue;
   }
 
   /**
@@ -178,7 +178,7 @@ export class ResourceMiddlewareComposer {
           return nextFunction(input.resource.config) as any;
         };
         return (interceptor as any)(wrappedNext, executionInput);
-      }) as unknown as (config: TConfig) => TValue;
+      }) as (config: TConfig) => TValue;
     }
 
     return currentNext;
@@ -221,7 +221,7 @@ export class ResourceMiddlewareComposer {
         };
 
         return (interceptor as any)(wrappedNext, executionInput);
-      }) as unknown as (config: TConfig) => TValue;
+      }) as (config: TConfig) => TValue;
     }
 
     return wrapped;

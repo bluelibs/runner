@@ -3,6 +3,7 @@ import { run } from "../../run";
 import { DependencyProcessor } from "../../models/DependencyProcessor";
 import { createTestFixture } from "../test-utils";
 import { createMessageError } from "../../errors";
+import { ResourceInitMode } from "../../types/runner";
 
 enum ResourceId {
   Broken = "broken.resource",
@@ -436,5 +437,67 @@ describe("DependencyProcessor Consistency", () => {
       expect.objectContaining({ source: "outside" }),
       {},
     );
+  });
+
+  it("aborts buffered hook flush when cycle detection is disabled and events keep re-buffering", async () => {
+    const fixture = createTestFixture();
+    const { store, eventManager, logger } = fixture;
+    const taskRunner = fixture.createTaskRunner();
+    store.setTaskRunner(taskRunner);
+
+    const processor = new DependencyProcessor(
+      store,
+      eventManager,
+      taskRunner,
+      logger,
+      ResourceInitMode.Sequential,
+      false,
+      false,
+    );
+    type HookEvent = { source: string; data: unknown };
+    type HookStoreElementShape = {
+      hook: { id: string; run: () => Promise<void> };
+      computedDependencies: Record<string, never>;
+      dependencyState: string;
+    };
+    type DependencyProcessorInternals = {
+      flushBufferedHookEvents: (
+        hookStoreElement: HookStoreElementShape,
+      ) => Promise<void>;
+      pendingHookEvents: Map<string, HookEvent[]>;
+      drainingHookIds: Set<string>;
+    };
+    const internals = processor as unknown as DependencyProcessorInternals;
+
+    const hook = {
+      id: "test.hook.loop",
+      run: jest.fn(async () => undefined),
+    };
+    const hookStoreElement = {
+      hook,
+      computedDependencies: {},
+      dependencyState: "ready",
+    };
+
+    internals.pendingHookEvents.set(hook.id, [{ source: "outside", data: {} }]);
+
+    const executeSpy = jest
+      .spyOn(eventManager, "executeHookWithInterceptors")
+      .mockImplementation(async () => {
+        internals.pendingHookEvents.set(hook.id, [
+          { source: "outside", data: {} },
+        ]);
+      });
+    const consoleErrorSpy = jest
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+
+    await expect(
+      internals.flushBufferedHookEvents(hookStoreElement),
+    ).resolves.toBeUndefined();
+
+    expect(executeSpy).toHaveBeenCalled();
+    expect(consoleErrorSpy).toHaveBeenCalled();
+    expect(internals.drainingHookIds.has(hook.id)).toBe(false);
   });
 });

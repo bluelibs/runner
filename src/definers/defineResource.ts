@@ -74,10 +74,10 @@ export function defineResource<
     context: constConfig.context,
     configSchema: constConfig.configSchema,
     resultSchema: constConfig.resultSchema,
-    tags: constConfig.tags || ([] as unknown as TTags),
+    tags: constConfig.tags ?? [],
     throws: normalizeThrows({ kind: "resource", id }, constConfig.throws),
     meta: (constConfig.meta || {}) as TMeta,
-    middleware: constConfig.middleware || ([] as unknown as TMiddleware),
+    middleware: constConfig.middleware ?? [],
   } as IResource<TConfig, TValue, TDeps, TPrivate, TMeta, TTags, TMiddleware>;
 
   const resolveCurrent = (

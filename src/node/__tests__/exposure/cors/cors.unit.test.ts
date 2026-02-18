@@ -39,7 +39,6 @@ function createReqRes(init: {
     headersSent: false,
     setHeader(k: string, v: string) {
       this.headers[k.toLowerCase()] = v;
-      this.headersSent = true;
     },
     getHeader(k: string) {
       return this.headers[k.toLowerCase()];

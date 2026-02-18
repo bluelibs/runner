@@ -121,7 +121,7 @@ export function createHttpClient(cfg: HttpClientConfig): HttpClient {
     fd.append("__manifest", manifestText);
     for (const f of files) {
       const filename = f.meta?.name ?? "upload";
-      fd.append(`file:${f.id}`, f.blob as unknown as Blob, filename);
+      fd.append(`file:${f.id}`, f.blob, filename);
     }
     const headers = toHeaders(cfg.auth);
     const contextHeader = buildContextHeaderOrThrow(

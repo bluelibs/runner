@@ -89,7 +89,9 @@ export const queueResource = defineResource({
       clearTimeout(timer);
     });
     context.cleanupTimers.clear();
-    context.map.forEach((queue) => queue.dispose());
+    context.map.forEach((queue) => {
+      void queue.dispose();
+    });
     context.map.clear();
   },
   meta: {

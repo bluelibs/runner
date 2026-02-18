@@ -40,6 +40,18 @@ interface RuntimeBufferConstructor {
   isBuffer(value: unknown): boolean;
 }
 
+const isRuntimeBufferConstructor = (
+  value: unknown,
+): value is RuntimeBufferConstructor => {
+  if (typeof value !== "function") {
+    return false;
+  }
+
+  const from = Reflect.get(value, "from");
+  const isBuffer = Reflect.get(value, "isBuffer");
+  return typeof from === "function" && typeof isBuffer === "function";
+};
+
 const getTypedArrayConstructor = (
   typeId: TypedArrayTypeId,
 ): RuntimeTypedArrayConstructor | null => {
@@ -47,24 +59,15 @@ const getTypedArrayConstructor = (
   if (typeof value !== "function") {
     return null;
   }
-  return value as unknown as RuntimeTypedArrayConstructor;
+  return value as RuntimeTypedArrayConstructor;
 };
 
 const getRuntimeBufferConstructor = (): RuntimeBufferConstructor | null => {
   const value = (globalThis as Record<string, unknown>).Buffer;
-  if (typeof value !== "function") {
+  if (!isRuntimeBufferConstructor(value)) {
     return null;
   }
-
-  const valueRecord = value as unknown as Record<string, unknown>;
-  if (
-    typeof valueRecord.from !== "function" ||
-    typeof valueRecord.isBuffer !== "function"
-  ) {
-    return null;
-  }
-
-  return value as unknown as RuntimeBufferConstructor;
+  return value;
 };
 
 const isNodeBuffer = (value: unknown): boolean => {

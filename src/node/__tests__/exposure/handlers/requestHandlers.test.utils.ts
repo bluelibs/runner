@@ -108,7 +108,6 @@ export function createMockRes(init: CreateMockResInit = {}): MockRes {
       headers[String(name).toLowerCase()] = Array.isArray(value)
         ? value.join(",")
         : String(value);
-      this.headersSent = true;
     },
     getHeader(name: string) {
       return headers[String(name).toLowerCase()];

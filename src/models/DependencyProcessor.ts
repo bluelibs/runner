@@ -37,10 +37,12 @@ import { getResourceDependencyIds } from "./utils/resourceDependencyIds";
  * Resolves and caches computed dependencies for store items (resources, tasks, middleware, hooks).
  */
 export class DependencyProcessor {
+  private static readonly MAX_HOOK_FLUSH_PASSES_WITHOUT_CYCLE_DETECTION = 128;
   protected readonly resourceInitializer: ResourceInitializer;
   protected readonly logger!: Logger;
   protected readonly initMode: ResourceInitMode;
   protected readonly lazy: boolean;
+  protected readonly runtimeEventCycleDetection: boolean;
   private readonly pendingHookEvents = new Map<string, IEventEmission<any>[]>();
   private readonly drainingHookIds = new Set<string>();
   private readonly inFlightResourceInitializations = new Map<
@@ -55,10 +57,12 @@ export class DependencyProcessor {
     logger: Logger,
     initMode: ResourceInitMode = ResourceInitMode.Sequential,
     lazy = false,
+    runtimeEventCycleDetection = true,
   ) {
     this.logger = logger.with({ source: "dependencyProcessor" });
     this.initMode = initMode;
     this.lazy = lazy;
+    this.runtimeEventCycleDetection = runtimeEventCycleDetection;
     this.resourceInitializer = new ResourceInitializer(
       store,
       eventManager,
@@ -78,7 +82,9 @@ export class DependencyProcessor {
     // events; hooks must be dependency-ready before that happens.
     await this.computeHookDependencies();
 
-    if (!this.lazy && this.initMode === ResourceInitMode.Parallel) {
+    if (this.initMode === ResourceInitMode.Parallel && this.lazy) {
+      await this.initializeStartupRequiredResourcesParallel();
+    } else if (!this.lazy && this.initMode === ResourceInitMode.Parallel) {
       await this.initializeUninitializedResourcesParallel();
     } else if (!this.lazy) {
       for (const resource of this.store.resources.values()) {
@@ -94,6 +100,67 @@ export class DependencyProcessor {
     }
 
     await this.processResourceDependencies(this.store.root);
+  }
+
+  private async initializeStartupRequiredResourcesParallel() {
+    const requiredResourceIds = this.collectStartupRequiredResourceIds();
+    if (requiredResourceIds.size === 0) {
+      return;
+    }
+
+    await this.initializeUninitializedResourcesParallel(requiredResourceIds);
+  }
+
+  private collectStartupRequiredResourceIds(): Set<string> {
+    const requiredResourceIds = new Set<string>();
+    const pendingResourceIds: string[] = [];
+
+    const collectFromDependencies = (dependencies: unknown) => {
+      const dependencyIds = getResourceDependencyIds(dependencies);
+      for (const dependencyId of dependencyIds) {
+        if (requiredResourceIds.has(dependencyId)) {
+          continue;
+        }
+
+        const dependencyResource = this.store.resources.get(dependencyId);
+        if (!dependencyResource) {
+          continue;
+        }
+
+        requiredResourceIds.add(dependencyId);
+        pendingResourceIds.push(dependencyId);
+      }
+    };
+
+    for (const middleware of this.store.resourceMiddlewares.values()) {
+      collectFromDependencies(middleware.middleware.dependencies);
+    }
+
+    for (const middleware of this.store.taskMiddlewares.values()) {
+      collectFromDependencies(middleware.middleware.dependencies);
+    }
+
+    for (const hook of this.store.hooks.values()) {
+      collectFromDependencies(hook.hook.dependencies);
+    }
+
+    for (const task of this.store.tasks.values()) {
+      collectFromDependencies(task.task.dependencies);
+    }
+
+    collectFromDependencies(this.store.root.resource.dependencies);
+
+    while (pendingResourceIds.length > 0) {
+      const resourceId = pendingResourceIds.pop()!;
+      const resource = this.store.resources.get(resourceId);
+      if (!resource) {
+        continue;
+      }
+
+      collectFromDependencies(resource.resource.dependencies);
+    }
+
+    return requiredResourceIds;
   }
 
   private async computeTaskDependencies(
@@ -174,13 +241,18 @@ export class DependencyProcessor {
     );
   }
 
-  private async initializeUninitializedResourcesParallel() {
+  private async initializeUninitializedResourcesParallel(
+    targetResourceIds?: ReadonlySet<string>,
+  ) {
     const rootId = this.store.root.resource.id;
 
     while (true) {
       const pending = Array.from(this.store.resources.values()).filter(
         (resource) =>
-          resource.resource.id !== rootId && resource.isInitialized === false,
+          resource.resource.id !== rootId &&
+          resource.isInitialized === false &&
+          (targetResourceIds === undefined ||
+            targetResourceIds.has(resource.resource.id)),
       );
       if (pending.length === 0) {
         return;
@@ -361,7 +433,7 @@ export class DependencyProcessor {
         wrapped[key as string] = value as unknown;
       }
     }
-    return wrapped as unknown as ResourceDependencyValuesType<TD>;
+    return wrapped as ResourceDependencyValuesType<TD>;
   }
 
   private makeTaskWithIntercept<
@@ -384,7 +456,7 @@ export class DependencyProcessor {
         if (!storeTask.interceptors) storeTask.interceptors = [];
         storeTask.interceptors.push(middleware);
       },
-    }) as unknown as TaskDependencyWithIntercept<I, O>;
+    }) as TaskDependencyWithIntercept<I, O>;
   }
 
   private getStoreTaskOrThrow(
@@ -437,24 +509,16 @@ export class DependencyProcessor {
               eventNotFoundError.throw({ id: e.id });
             }
           }
-          this.eventManager.addListener(
-            eventDefinition as unknown as IEvent[],
-            handler,
-            {
-              order,
-            },
-          );
+          this.eventManager.addListener(eventDefinition as IEvent[], handler, {
+            order,
+          });
         } else {
           if (this.store.events.get(eventDefinition.id) === undefined) {
             eventNotFoundError.throw({ id: eventDefinition.id });
           }
-          this.eventManager.addListener(
-            eventDefinition as unknown as IEvent,
-            handler,
-            {
-              order,
-            },
-          );
+          this.eventManager.addListener(eventDefinition as IEvent, handler, {
+            order,
+          });
         }
       }
     }
@@ -490,7 +554,20 @@ export class DependencyProcessor {
 
     this.drainingHookIds.add(hook.id);
     try {
+      let flushPasses = 0;
       while (true) {
+        flushPasses += 1;
+        if (
+          !this.runtimeEventCycleDetection &&
+          flushPasses >
+            DependencyProcessor.MAX_HOOK_FLUSH_PASSES_WITHOUT_CYCLE_DETECTION
+        ) {
+          await this.logger.error(
+            `Aborting buffered hook event flush for "${hook.id}" after ${flushPasses - 1} passes because runtime event cycle detection is disabled.`,
+          );
+          break;
+        }
+
         const queue = this.pendingHookEvents.get(hook.id);
         if (!queue || queue.length === 0) {
           this.pendingHookEvents.delete(hook.id);

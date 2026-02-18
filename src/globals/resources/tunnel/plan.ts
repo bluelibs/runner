@@ -1,5 +1,3 @@
-import type { ITaskMiddleware } from "../../../defs";
-
 export type ValidationSide = "client" | "server" | "both";
 
 export interface ExecutionPlan {
@@ -17,8 +15,8 @@ export interface PlanMeta {
 
 export function computeExecutionPlanFromWhitelist(
   whitelist: {
-    client?: Array<string | ITaskMiddleware<any, any, any, any>>;
-    server?: Array<string | ITaskMiddleware<any, any, any, any>>;
+    client?: Array<string | { id: string }>;
+    server?: Array<string | { id: string }>;
   },
   opts?: { defaultValidation?: ValidationSide },
 ): ExecutionPlan {

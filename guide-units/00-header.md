@@ -31,10 +31,10 @@ import { z } from "zod";
 // resources are singletons with lifecycle management and async construction
 const db = r
   .resource("app.db")
-  .init(async () => ({
+  .init(async () => {
     const conn = await postgres.connect(process.env.DB_URL);
     return conn;
-  }))
+  })
   .build();
 
 const mailer = r

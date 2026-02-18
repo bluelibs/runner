@@ -76,6 +76,10 @@ export const httpTunnel = r
     const baseUrl = process.env[EnvVar.TunnelBaseUrl];
     const token = process.env[EnvVar.TunnelToken] ?? "dev-secret";
 
+    if (mode === "client" && !baseUrl) {
+      throw new Error("RUNNER_TUNNEL_BASE_URL is required in client mode");
+    }
+
     const client =
       mode === "client"
         ? clientFactory({ baseUrl, auth: { token } })

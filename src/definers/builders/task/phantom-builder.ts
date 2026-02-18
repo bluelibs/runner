@@ -41,6 +41,10 @@ export function makePhantomTaskBuilder<
   TTags,
   TMiddleware
 > {
+  // Widen state once so clone() calls with different type args don't need repetitive double-casts.
+  // clone() is purely structural — it spreads and freezes — so widening is safe here.
+  const anyState = state as PhantomBuilderState<any, any, any, any, any, any>;
+
   const builder: PhantomTaskFluentBuilder<
     TInput,
     TResolved,
@@ -74,8 +78,8 @@ export function makePhantomTaskBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, {
-        dependencies: nextDependencies as unknown as TDeps & TNewDeps,
+      >(anyState, {
+        dependencies: nextDependencies as TDeps & TNewDeps,
       });
 
       if (override) {
@@ -87,7 +91,7 @@ export function makePhantomTaskBuilder<
           TTags,
           TMiddleware
         >(
-          next as unknown as PhantomBuilderState<
+          next as PhantomBuilderState<
             TInput,
             TResolved,
             TNewDeps,
@@ -125,7 +129,7 @@ export function makePhantomTaskBuilder<
         TMeta,
         TTags,
         TNewMw
-      >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, {
+      >(anyState, {
         middleware: mergeArray(state.middleware, mw, override) as TNewMw,
       });
       return makePhantomTaskBuilder<
@@ -156,19 +160,17 @@ export function makePhantomTaskBuilder<
         TMeta,
         [...TTags, ...TNewTags],
         TMiddleware
-      >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, {
+      >(anyState, {
         tags: mergeArray(state.tags, t, override) as [...TTags, ...TNewTags],
       });
-      return makePhantomTaskBuilder(
-        next,
-      ) as unknown as PhantomTaskFluentBuilder<
+      return makePhantomTaskBuilder<
         TInput,
         TResolved,
         TDeps,
         TMeta,
         [...TTags, ...TNewTags],
         TMiddleware
-      >;
+      >(next);
     },
 
     inputSchema<TNewInput>(schema: IValidationSchema<TNewInput>) {
@@ -185,7 +187,7 @@ export function makePhantomTaskBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, {
+      >(anyState, {
         inputSchema: schema,
       });
       return makePhantomTaskBuilder<
@@ -212,7 +214,7 @@ export function makePhantomTaskBuilder<
         TMeta,
         TTags,
         TMiddleware
-      >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, {
+      >(anyState, {
         resultSchema: schema,
       });
       return makePhantomTaskBuilder<
@@ -239,7 +241,7 @@ export function makePhantomTaskBuilder<
         TNewMeta,
         TTags,
         TMiddleware
-      >(state as unknown as PhantomBuilderState<any, any, any, any, any, any>, {
+      >(anyState, {
         meta: m,
       });
       return makePhantomTaskBuilder<
@@ -253,10 +255,7 @@ export function makePhantomTaskBuilder<
     },
 
     throws(list: ThrowsList) {
-      const next = clone(
-        state as unknown as PhantomBuilderState<any, any, any, any, any, any>,
-        { throws: list },
-      );
+      const next = clone(anyState, { throws: list });
       return makePhantomTaskBuilder<
         TInput,
         TResolved,

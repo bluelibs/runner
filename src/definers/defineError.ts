@@ -132,7 +132,7 @@ export class ErrorHelper<
   }
   optional() {
     return {
-      inner: this as unknown as IErrorHelper<TData>,
+      inner: this as IErrorHelper<TData>,
       [symbolOptionalDependency]: true,
     } as const;
   }

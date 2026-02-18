@@ -16,7 +16,6 @@ function makeRes() {
     writableEnded: false,
     setHeader(k: string, v: string) {
       headers[k.toLowerCase()] = v;
-      this.headersSent = true;
     },
   } as unknown as ServerResponse & { headersSent: boolean };
   return { res, headers };
@@ -41,14 +40,13 @@ describe("requestIdentity", () => {
     expect(getRequestId(longReq)).toBeUndefined();
   });
 
-  it("ensures request id and restores mock headersSent behavior", () => {
+  it("ensures request id and preserves pre-send headersSent state", () => {
     const req = makeReq({});
     const { res, headers } = makeRes();
 
     const requestId = ensureRequestId(req, res);
     expect(requestId).toBeDefined();
     expect(headers["x-runner-request-id"]).toBe(requestId);
-    // Mock `setHeader` flips this to true; helper restores it for pre-send state.
     expect(res.headersSent).toBe(false);
   });
 

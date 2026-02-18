@@ -36,9 +36,7 @@ export function defineOverride<
 
   // Hooks should preserve the event binding identity as well.
   if ("on" in base && base.on !== undefined) {
-    (overridden as unknown as IHook<any, any, any>).on = (
-      base as IHook<any, any, any>
-    ).on;
+    (overridden as IHook<any, any, any>).on = (base as IHook<any, any, any>).on;
   }
 
   return overridden;

@@ -221,7 +221,7 @@ export class Store {
     ];
     builtInTaskMiddlewares.forEach((middleware) => {
       this.registry.taskMiddlewares.set(middleware.id, {
-        middleware: middleware as unknown as ITaskMiddleware<any>,
+        middleware: middleware as ITaskMiddleware<any>,
         computedDependencies: {},
         isInitialized: false,
       });
@@ -234,7 +234,7 @@ export class Store {
     ];
     builtInResourceMiddlewares.forEach((middleware) => {
       this.registry.resourceMiddlewares.set(middleware.id, {
-        middleware: middleware as unknown as IResourceMiddleware<any>,
+        middleware: middleware as IResourceMiddleware<any>,
         computedDependencies: {},
         isInitialized: false,
       });

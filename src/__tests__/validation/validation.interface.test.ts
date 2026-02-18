@@ -188,9 +188,7 @@ describe("Generic Validation Interface", () => {
         register: [mathTask],
         dependencies: { mathTask },
         init: async (_, { mathTask }) => {
-          const result = await (
-            mathTask as unknown as (i: string) => Promise<number>
-          )("42"); // String input should be transformed to number
+          const result = await mathTask("42" as any); // String input should be transformed to number
           expect(result).toBe(84);
           return result;
         },

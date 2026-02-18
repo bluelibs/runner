@@ -95,6 +95,8 @@ async function postSerialized<T = any>(options: {
           { httpCode: status },
         );
       }
+      // The endpoint returned an empty 2xx body — no payload to parse.
+      // Callers that expect void/undefined return are safe; typed return T requires the cast.
       return undefined as unknown as T;
     }
 

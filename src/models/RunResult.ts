@@ -42,7 +42,7 @@ type RunResultLazyOptions = {
    * Custom loader function for lazy resource initialization.
    * Called when accessing a resource that hasn't been initialized yet.
    */
-  lazyResourceLoader?: (resourceId: string) => Promise<unknown>;
+  lazyResourceLoader?: <T>(resourceId: string) => Promise<T>;
 };
 
 /**
@@ -375,8 +375,9 @@ export class RunResult<V> {
       return this.store.resources.get(resourceId)!.value;
     }
 
-    const value = await this.lazyOptions.lazyResourceLoader(resourceId);
-    return value as Output extends Promise<infer U> ? U : Output;
+    return this.lazyOptions.lazyResourceLoader<
+      Output extends Promise<infer U> ? U : Output
+    >(resourceId);
   };
 
   /**

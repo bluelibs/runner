@@ -17,10 +17,11 @@ describe("buildUniversalManifest", () => {
     expect(out.nodeFiles[0].source.type).toBe("buffer");
     // _node sidecar removed in cloned input
     expect(
-      (out.input as unknown as { f: { _node?: unknown } }).f._node,
+      (out.input as unknown as Record<string, Record<string, unknown>>).f._node,
     ).toBeUndefined();
     expect(
-      (out.input as unknown as { f: { $runnerFile: string } }).f.$runnerFile,
+      (out.input as unknown as Record<string, Record<string, unknown>>).f
+        .$runnerFile,
     ).toBe("File");
   });
 
@@ -35,10 +36,7 @@ describe("buildUniversalManifest", () => {
     expect(out.nodeFiles).toHaveLength(1);
     expect(out.nodeFiles[0].id).toBe("NS");
     expect(out.nodeFiles[0].source.type).toBe("stream");
-    expect(
-      (out.input as unknown as { arr: [{ nested: { _node?: unknown } }] })
-        .arr[0].nested._node,
-    ).toBeUndefined();
+    expect((out.input as any).arr[0].nested._node).toBeUndefined();
   });
 
   it("collects web blob files and strips sidecars", () => {
@@ -51,7 +49,7 @@ describe("buildUniversalManifest", () => {
     expect(out.webFiles).toHaveLength(1);
     expect(out.webFiles[0].id).toBe("WB");
     expect(
-      (out.input as unknown as { wf: { _web?: unknown } }).wf._web,
+      (out.input as unknown as Record<string, Record<string, unknown>>).wf._web,
     ).toBeUndefined();
   });
 });

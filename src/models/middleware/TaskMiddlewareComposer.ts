@@ -93,7 +93,7 @@ export class TaskMiddlewareComposer {
         task.id,
         "Task",
       );
-    }) as unknown as (input: TInput, journal: ExecutionJournal) => TOutput;
+    }) as (input: TInput, journal: ExecutionJournal) => TOutput;
   }
 
   /**
@@ -124,7 +124,7 @@ export class TaskMiddlewareComposer {
       const interceptor = storeTask.interceptors[i];
       const nextFunction = wrapped;
       wrapped = (async (input: TInput, journal: ExecutionJournal) =>
-        interceptor((inp) => nextFunction(inp, journal), input)) as unknown as (
+        interceptor((inp) => nextFunction(inp, journal), input)) as (
         input: TInput,
         journal: ExecutionJournal,
       ) => TOutput;
@@ -178,7 +178,7 @@ export class TaskMiddlewareComposer {
           return nextFunction(i.task.input, journal) as any;
         };
         return (interceptor as any)(wrappedNext, executionInput);
-      }) as unknown as (input: TInput, journal: ExecutionJournal) => TOutput;
+      }) as (input: TInput, journal: ExecutionJournal) => TOutput;
     }
 
     return currentNext;
@@ -295,7 +295,7 @@ export class TaskMiddlewareComposer {
         };
 
         return interceptor(wrappedNext, executionInput);
-      }) as unknown as (input: TInput, journal: ExecutionJournal) => TOutput;
+      }) as (input: TInput, journal: ExecutionJournal) => TOutput;
     }
 
     return wrapped;

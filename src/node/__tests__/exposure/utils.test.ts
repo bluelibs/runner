@@ -7,9 +7,7 @@ describe("node exposure utils", () => {
 
   afterEach(() => {
     jest.restoreAllMocks();
-    (
-      globalThis as { AbortController: typeof AbortController }
-    ).AbortController = originalAbortController;
+    Object.assign(globalThis, { AbortController: originalAbortController });
   });
 
   it("logs when request abort signaling throws an Error", () => {
@@ -21,10 +19,7 @@ describe("node exposure utils", () => {
       }
     }
 
-    (
-      globalThis as { AbortController: typeof AbortController }
-    ).AbortController =
-      ThrowingAbortController as unknown as typeof AbortController;
+    Object.assign(globalThis, { AbortController: ThrowingAbortController });
 
     const req = new EventEmitter();
     const res = new EventEmitter();
@@ -50,10 +45,7 @@ describe("node exposure utils", () => {
       }
     }
 
-    (
-      globalThis as { AbortController: typeof AbortController }
-    ).AbortController =
-      ThrowingAbortController as unknown as typeof AbortController;
+    Object.assign(globalThis, { AbortController: ThrowingAbortController });
 
     jest.spyOn(cancellationError, "throw").mockImplementation(() => {
       throw "cancel failed";
