@@ -2510,18 +2510,18 @@ Important bootstrap note: when `runtime` is injected inside a resource `init()`,
 
 Pass as the second argument to `run(app, options)`.
 
-| Option                       | Type                                            | Description                                                                                                                                                                                                                                                                                                                   |
-| ---------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `debug`                      | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                                                                                                                          |
-| `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                 |
-| `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                        |
-| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                                                                                                                            |
-| `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                 |
-| `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                          |
+| Option                       | Type                                            | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ---------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `debug`                      | `"normal" \| "verbose" \| Partial<DebugConfig>` | Enables debug resource to log runner internals. `"normal"` logs lifecycle events, `"verbose"` adds input/output. You can also pass a partial config object for fine-grained control.                                                                                                                                                                                                                                                                                                              |
+| `logs`                       | `object`                                        | Configures logging. `printThreshold` sets the minimum level to print (default: "info"). `printStrategy` sets the format (`pretty`, `json`, `json-pretty`, `plain`). `bufferLogs` holds logs until initialization is complete.                                                                                                                                                                                                                                                                     |
+| `errorBoundary`              | `boolean`                                       | (default: `true`) Installs process-level safety nets (`uncaughtException`/`unhandledRejection`) and routes them to `onUnhandledError`.                                                                                                                                                                                                                                                                                                                                                            |
+| `shutdownHooks`              | `boolean`                                       | (default: `true`) Installs `SIGINT`/`SIGTERM` listeners to call `dispose()` for graceful shutdown.                                                                                                                                                                                                                                                                                                                                                                                                |
+| `onUnhandledError`           | `(info) => void \| Promise<void>`               | Custom handler for unhandled errors captured by the boundary. Receives `{ error, kind, source }` (see [Unhandled Errors](#unhandled-errors)).                                                                                                                                                                                                                                                                                                                                                     |
+| `dryRun`                     | `boolean`                                       | Skips runtime initialization but fully builds and validates the dependency graph. Useful for CI smoke tests. `init()` is not called.                                                                                                                                                                                                                                                                                                                                                              |
 | `lazy`                       | `boolean`                                       | (default: `false`) Skips startup initialization for resources that are not used during bootstrap. In lazy mode, `getResourceValue(...)` throws for startup-unused resources and `getLazyResourceValue(...)` can initialize/read them on demand. When `lazy` is `false`, `getLazyResourceValue(...)` throws a fail-fast error. If combined with `initMode: "parallel"`, bootstrap-used resources still initialize in dependency-ready parallel waves while startup-unused resources stay deferred. |
-| `initMode`                   | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup scheduling strategy. Use string values directly (for example `initMode: "parallel"`), no enum import required.                                                                                                                                                                     |
-| `runtimeEventCycleDetection` | `boolean`                                       | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                                                                                                                  |
-| `mode`                       | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                                                                                                             |
+| `initMode`                   | `"sequential" \| "parallel"`                    | (default: `"sequential"`) Controls startup scheduling strategy. Use string values directly (for example `initMode: "parallel"`), no enum import required.                                                                                                                                                                                                                                                                                                                                         |
+| `runtimeEventCycleDetection` | `boolean`                                       | (default: `true`) Detects runtime event emission cycles to prevent deadlocks. Disable only if you are certain your event graph cannot cycle and you need maximum throughput.                                                                                                                                                                                                                                                                                                                      |
+| `mode`                       | `"dev" \| "prod" \| "test"`                     | Overrides Runner's detected mode. In Node.js, detection defaults to `NODE_ENV` when not provided.                                                                                                                                                                                                                                                                                                                                                                                                 |
 
 For available `DebugConfig` keys and examples, see [Debug Resource](#debug-resource).
 
@@ -2573,54 +2573,6 @@ await run(app, {
   onUnhandledError: ({ error }) => report(error),
 });
 ```
-
-## Task Interceptors
-
-_Resources can dynamically modify task behavior during initialization_
-
-Task interceptors (`task.intercept()`) are the modern replacement for component lifecycle events, allowing resources to dynamically modify task behavior without tight coupling.
-
-```typescript
-import { r, run } from "@bluelibs/runner";
-
-const calculatorTask = r
-  .task("app.tasks.calculator")
-  .run(async (input: { value: number }) => {
-    console.log("3. Task is running...");
-    return { result: input.value + 1 };
-  })
-  .build();
-
-const interceptorResource = r
-  .resource("app.interceptor")
-  .dependencies({ calculatorTask })
-  .init(async (_config, { calculatorTask }) => {
-    // Intercept the task to modify its behavior
-    calculatorTask.intercept(async (next, input) => {
-      console.log("1. Interceptor before task run");
-      const result = await next(input);
-      console.log("4. Interceptor after task run");
-      return { ...result, intercepted: true };
-    });
-  })
-  .build();
-
-const app = r
-  .resource("app")
-  .register([calculatorTask, interceptorResource])
-  .dependencies({ calculatorTask })
-  .init(async (_config, { calculatorTask }) => {
-    console.log("2. Calling the task...");
-    const result = await calculatorTask({ value: 10 });
-    console.log("5. Final result:", result);
-    // Final result: { result: 11, intercepted: true }
-  })
-  .build();
-
-await run(app);
-```
-
-> **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You're collapsing the waveform of a task at runtime and I'm Schrödinger's runtime, praying the cat hasn't overridden `run()` with `throw new Error('lol')`."
 
 ## Lifecycle Management
 
@@ -4249,26 +4201,51 @@ For the full API and patterns, see the Execution Journal section in [Core Concep
 
 ## Task Interceptors
 
-Task interceptors let a resource surgically wrap a specific dependency task at init time:
+_Resources can dynamically modify task behavior during initialization_
+
+Task interceptors (`task.intercept()`) are the modern replacement for component lifecycle events, allowing resources to dynamically modify task behavior without tight coupling.
 
 ```typescript
-const installer = r
-  .resource("app.installer")
-  .dependencies({ taskA })
-  .init(async (_config, { taskA }) => {
-    taskA.intercept(async (next, input) => {
+import { r, run } from "@bluelibs/runner";
+
+const calculatorTask = r
+  .task("app.tasks.calculator")
+  .run(async (input: { value: number }) => {
+    console.log("3. Task is running...");
+    return { result: input.value + 1 };
+  })
+  .build();
+
+const interceptorResource = r
+  .resource("app.interceptor")
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
+    // Intercept the task to modify its behavior
+    calculatorTask.intercept(async (next, input) => {
+      console.log("1. Interceptor before task run");
       const result = await next(input);
+      console.log("4. Interceptor after task run");
       return { ...result, intercepted: true };
     });
   })
   .build();
+
+const app = r
+  .resource("app")
+  .register([calculatorTask, interceptorResource])
+  .dependencies({ calculatorTask })
+  .init(async (_config, { calculatorTask }) => {
+    console.log("2. Calling the task...");
+    const result = await calculatorTask({ value: 10 });
+    console.log("5. Final result:", result);
+    // Final result: { result: 11, intercepted: true }
+  })
+  .build();
+
+await run(app);
 ```
 
-Use this when behavior should be scoped to a particular wiring path, not globally.
-
-For deeper lifecycle guidance, see [Runtime Lifecycle](#task-interceptors).
-
----
+> **runtime:** "'Modern replacement for lifecycle events.' Adorable rebrand for 'surgical monkey‑patching.' You're collapsing the waveform of a task at runtime and I'm Schrödinger's runtime, praying the cat hasn't overridden `run()` with `throw new Error('lol')`."
 
 ## Durable Workflows (Node-only)
 
@@ -4292,16 +4269,16 @@ It also supports object graphs that plain JSON cannot represent, including circu
 
 ### What it handles
 
-| Type          | JSON                        | Runner Serializer                                                                                  |
-| ------------- | --------------------------- | -------------------------------------------------------------------------------------------------- |
-| `Date`        | String                      | Date object                                                                                        |
-| `RegExp`      | Lost                        | RegExp object                                                                                      |
-| `Map`, `Set`  | Lost                        | Preserved                                                                                          |
-| `Uint8Array`  | Lost                        | Preserved                                                                                          |
-| `bigint`      | Lost/unsafe numeric coercion | Preserved as `__type: "BigInt"` (decimal string payload)                                          |
-| `symbol`      | Lost                        | Supports `Symbol.for(key)` and well-known symbols (unique `Symbol("...")` values are rejected)   |
-| Circular refs | Error                       | Preserved                                                                                          |
-| Self refs     | Error                       | Preserved                                                                                          |
+| Type          | JSON                         | Runner Serializer                                                                              |
+| ------------- | ---------------------------- | ---------------------------------------------------------------------------------------------- |
+| `Date`        | String                       | Date object                                                                                    |
+| `RegExp`      | Lost                         | RegExp object                                                                                  |
+| `Map`, `Set`  | Lost                         | Preserved                                                                                      |
+| `Uint8Array`  | Lost                         | Preserved                                                                                      |
+| `bigint`      | Lost/unsafe numeric coercion | Preserved as `__type: "BigInt"` (decimal string payload)                                       |
+| `symbol`      | Lost                         | Supports `Symbol.for(key)` and well-known symbols (unique `Symbol("...")` values are rejected) |
+| Circular refs | Error                        | Preserved                                                                                      |
+| Self refs     | Error                        | Preserved                                                                                      |
 
 ### Two modes
 
@@ -4506,12 +4483,12 @@ Think about generating API documentation automatically from your tasks, or build
 
 ### When to use Meta
 
-| Use case | Why Meta helps |
-|----------|---------------|
-| API docs | Generate documentation from component metadata |
-| Admin dashboards | Display component descriptions |
-| Billing | Categorize tasks by feature for metering |
-| Discovery | Search components by title/description |
+| Use case         | Why Meta helps                                 |
+| ---------------- | ---------------------------------------------- |
+| API docs         | Generate documentation from component metadata |
+| Admin dashboards | Display component descriptions                 |
+| Billing          | Categorize tasks by feature for metering       |
+| Discovery        | Search components by title/description         |
 
 ### Metadata Properties
 
@@ -4669,7 +4646,10 @@ const originalResource = r
   .resource("app.db")
   .init(async () => "conn")
   .build();
-const overriddenResource = r.override(originalResource, async () => "mock-conn");
+const overriddenResource = r.override(
+  originalResource,
+  async () => "mock-conn",
+);
 
 // Middleware
 const originalMiddleware = r.middleware
@@ -4693,11 +4673,11 @@ const overriddenMiddleware = r.override(
 
 These APIs solve different problems:
 
-| API                | What it does                                                                                   | Applies replacement? |
-| ------------------ | ---------------------------------------------------------------------------------------------- | -------------------- |
-| `r.override(base)` | Creates a new definition object with the same id (builder mode)                               | No (not by itself)   |
-| `r.override(base, fn)` | Creates a new definition object with replaced behavior (`init` or `run`)                 | No (not by itself)   |
-| `.overrides([...])` | Registers override *application requests* that Runner validates and applies during bootstrap | Yes                  |
+| API                    | What it does                                                                                 | Applies replacement? |
+| ---------------------- | -------------------------------------------------------------------------------------------- | -------------------- |
+| `r.override(base)`     | Creates a new definition object with the same id (builder mode)                              | No (not by itself)   |
+| `r.override(base, fn)` | Creates a new definition object with replaced behavior (`init` or `run`)                     | No (not by itself)   |
+| `.overrides([...])`    | Registers override _application requests_ that Runner validates and applies during bootstrap | Yes                  |
 
 Think of `r.override(...)` as **"build replacement definition"** and `.overrides([...])` as **"apply replacement in this container"**.
 
@@ -4754,7 +4734,12 @@ Fix: ensure the base target is in the resource graph first. If you wanted a sepa
 Fix: prefer:
 
 ```ts
-r.resource("test").register([app]).overrides([/* mocks */]).build();
+r.resource("test")
+  .register([app])
+  .overrides([
+    /* mocks */
+  ])
+  .build();
 ```
 
 Overrides can also extend behavior while reusing the base implementation:
@@ -4857,12 +4842,12 @@ Here's the issue: TypeScript types only exist at compile time. When your API rec
 
 ### When to use Runtime Validation
 
-| Use case | Why Runtime Validation helps |
-|----------|-------------------------------|
-| API input | Validate HTTP request bodies |
-| Database data | Validate data loaded from DB |
+| Use case          | Why Runtime Validation helps |
+| ----------------- | ---------------------------- |
+| API input         | Validate HTTP request bodies |
+| Database data     | Validate data loaded from DB |
 | External services | Validate responses from APIs |
-| User input | Validate form submissions |
+| User input        | Validate form submissions    |
 
 BlueLibs Runner includes a generic validation interface that works with any validation library, including [Zod](https://zod.dev/), [Yup](https://github.com/jquense/yup), [Joi](https://joi.dev/), and others.
 
@@ -5220,12 +5205,12 @@ Consider this: You have an authentication tag, and you want to ensure ALL tasks 
 
 ### When to use Type Contracts
 
-| Use case | Why Type Contracts help |
-|----------|------------------------|
-| Authentication | Ensure all auth tasks include userId |
-| API standardization | Enforce consistent response shapes |
-| Validation | Guarantee tasks return required fields |
-| Documentation | Make requirements self-enforcing |
+| Use case            | Why Type Contracts help                |
+| ------------------- | -------------------------------------- |
+| Authentication      | Ensure all auth tasks include userId   |
+| API standardization | Enforce consistent response shapes     |
+| Validation          | Guarantee tasks return required fields |
+| Documentation       | Make requirements self-enforcing       |
 
 ### Concept
 
@@ -5348,7 +5333,7 @@ We expose the internal services for advanced use cases (but try not to use them 
 
 When you call `run(app)`, Runner creates an isolated runtime container for that specific run. During bootstrap, it registers built-in global resources for that container, including `globals.resources.runtime`.
 
-`globals.resources.runtime` resolves to the same runtime object returned by `run(app)`, scoped to that container only. This lets code running *inside* the container inject `runtime` and perform runtime operations (`runTask`, `emitEvent`, `getResourceValue`, root helpers, etc.) without passing the outer runtime object around manually.
+`globals.resources.runtime` resolves to the same runtime object returned by `run(app)`, scoped to that container only. This lets code running _inside_ the container inject `runtime` and perform runtime operations (`runTask`, `emitEvent`, `getResourceValue`, root helpers, etc.) without passing the outer runtime object around manually.
 
 Bootstrap timing note: inside resource `init()`, `runtime` is available early, but that does **not** mean every registered resource is initialized yet. Runner guarantees dependency readiness for the currently initializing resource; unrelated resources may still be pending (especially with `initMode: "parallel"` or `lazy: true`).
 
@@ -5423,7 +5408,7 @@ Sometimes you'll run into circular type dependencies because of your file struct
 
 ### The Problem
 
-Consider this graph that creates a circular *type inference* dependency:
+Consider this graph that creates a circular _type inference_ dependency:
 
 ```typescript
 // FILE: a.ts
