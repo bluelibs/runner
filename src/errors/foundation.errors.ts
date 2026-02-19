@@ -30,6 +30,39 @@ export const dependencyNotFoundError = error<
   )
   .build();
 
+// Override target not registered
+export const overrideTargetNotRegisteredError = error<
+  {
+    targetId: string;
+    targetType:
+      | "Task"
+      | "Resource"
+      | "Task middleware"
+      | "Resource middleware"
+      | "Hook";
+    sources?: string[];
+  } & DefaultErrorType
+>("runner.errors.overrideTargetNotRegistered")
+  .format(({ targetId, targetType, sources }) => {
+    const sourceDetails =
+      sources && sources.length > 0
+        ? ` Requested from override(s) declared in: ${sources.join(", ")}.`
+        : "";
+
+    return `Override target ${targetType} "${targetId}" is not registered, so it cannot be overridden.${sourceDetails}`;
+  })
+  .remediation(({ targetId, targetType }) => {
+    const replacementPath = `Overrides replace existing ids. First register ${targetType.toLowerCase()} "${targetId}" in the graph via .register([...]), then apply .overrides([...]) from a parent resource.`;
+    const directRegistrationPath = `If you already control composition, you can register the overridden definition directly (without .overrides([...])) as long as only one definition for that id is registered.`;
+    const separateInstanceHint =
+      targetType === "Resource"
+        ? ` If you intended a separate resource instance (not a replacement), use .fork("new.id") on the base resource and register the fork.`
+        : ` If you intended a separate component (not a replacement), keep a different id and register it directly.`;
+
+    return `${replacementPath} ${directRegistrationPath}${separateInstanceHint}`;
+  })
+  .build();
+
 // Unknown item type
 export const unknownItemTypeError = error<{ item: unknown } & DefaultErrorType>(
   "runner.errors.unknownItemType",

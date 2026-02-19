@@ -485,12 +485,18 @@ const fluentOverrideEmailer = r
   .init(async () => new MockEmailer())
   .build();
 
-// Option 2: Using override() helper to change behavior while preserving id
+// Option 2: Typed shorthand for common behavior swaps
+const shorthandOverrideEmailer = r.override(
+  productionEmailer,
+  async () => new MockEmailer(),
+);
+
+// Option 3: Using override() helper to change behavior while preserving id
 const helperOverrideEmailer = override(productionEmailer, {
   init: async () => new MockEmailer(),
 });
 
-// Option 3: The system is really flexible, and override is just bringing in type safety, nothing else under the hood.
+// Option 4: The system is really flexible, and override is just bringing in type safety, nothing else under the hood.
 // Using spread operator works the same way but does not provide type-safety.
 const manualOverrideEmailer = r
   .resource("app.emailer")
@@ -508,35 +514,100 @@ const originalTask = r
   .task("app.tasks.compute")
   .run(async () => 1)
   .build();
-const overriddenTask = override(originalTask, {
-  run: async () => 2,
-});
+const overriddenTask = r.override(originalTask, async () => 2);
 
 // Resources
 const originalResource = r
   .resource("app.db")
   .init(async () => "conn")
   .build();
-const overriddenResource = override(originalResource, {
-  init: async () => "mock-conn",
-});
+const overriddenResource = r.override(originalResource, async () => "mock-conn");
 
 // Middleware
 const originalMiddleware = r.middleware
   .task("app.middleware.log")
   .run(async ({ next }) => next())
   .build();
-const overriddenMiddleware = override(originalMiddleware, {
-  run: async ({ task, next }) => {
+const overriddenMiddleware = r.override(
+  originalMiddleware,
+  async ({ task, next }) => {
     const result = await next(task?.input);
     return { wrapped: result };
   },
-});
+);
 
 // Even hooks
 ```
 
-The override builder starts from the base definition and applies fluent mutations (dependencies/tags/middleware append by default; use `{ override: true }` to replace). Hook overrides keep the same `.on` target.
+`r.override(base, fn)` is a typed shorthand for behavior replacement (`run` for tasks/hooks/middleware, `init` for resources). The override builder starts from the base definition and applies fluent mutations (dependencies/tags/middleware append by default; use `{ override: true }` to replace). Hook overrides keep the same `.on` target.
+
+### `r.override(...)` vs `.overrides([...])` (Critical Distinction)
+
+These APIs solve different problems:
+
+| API                | What it does                                                                                   | Applies replacement? |
+| ------------------ | ---------------------------------------------------------------------------------------------- | -------------------- |
+| `r.override(base)` | Creates a new definition object with the same id (builder mode)                               | No (not by itself)   |
+| `r.override(base, fn)` | Creates a new definition object with replaced behavior (`init` or `run`)                 | No (not by itself)   |
+| `.overrides([...])` | Registers override *application requests* that Runner validates and applies during bootstrap | Yes                  |
+
+Think of `r.override(...)` as **"build replacement definition"** and `.overrides([...])` as **"apply replacement in this container"**.
+
+```ts
+const mockMailer = r.override(realMailer, async () => new MockMailer()); // definition only
+
+const app = r
+  .resource("app")
+  .register([realMailer])
+  .overrides([mockMailer]) // replacement is applied here
+  .build();
+```
+
+Direct registration of an override definition is also valid when you control the composition and only register one version for that id:
+
+```ts
+const customMailer = r.override(realMailer, async () => new MockMailer());
+
+const app = r
+  .resource("app")
+  .register([customMailer]) // works: this is just the definition registered for that id
+  .build();
+```
+
+### Common Pitfalls (and Fixes)
+
+1. Creating an override but never applying/registering it:
+
+```ts
+const mockMailer = r.override(realMailer, async () => new MockMailer());
+await run(app); // no effect if app doesn't include mockMailer
+```
+
+Fix: register it directly or include it in `.overrides([...])`.
+
+2. Registering both base and override in `.register([...])`:
+
+```ts
+.register([realMailer, r.override(realMailer, async () => new MockMailer())])
+```
+
+Fix: either register only one definition for that id, or keep base in `register` and place replacement in `.overrides([...])`.
+
+3. Using `.overrides([...])` when target id is not registered:
+
+```ts
+.overrides([r.override(remoteMailer, async () => new MockMailer())])
+```
+
+Fix: ensure the base target is in the resource graph first. If you wanted a separate resource, use `.fork("new.id")` and register that fork.
+
+4. Overriding the root app directly in tests when a wrapper is clearer:
+
+Fix: prefer:
+
+```ts
+r.resource("test").register([app]).overrides([/* mocks */]).build();
+```
 
 Overrides can also extend behavior while reusing the base implementation:
 
@@ -556,7 +627,7 @@ const extendingEmailer = override(productionEmailer, {
 });
 ```
 
-Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the top) wins, because it's applied last. Conflicting overrides are allowed; overriding something that wasn't registered throws. Use override() to change behavior safely while preserving the original id.
+Overrides are applied after everything is registered. If multiple overrides target the same id, the one defined higher in the resource tree (closer to the top) wins, because it's applied last. Conflicting overrides are allowed; overriding something that wasn't registered throws a dedicated error with remediation (register the base first, or for resources use `.fork("new.id")` when you meant a separate instance). Use override() to change behavior safely while preserving the original id.
 
 > **runtime:** "Overrides: brain transplant surgery at runtime. You register a penguin and replace it with a velociraptor five lines later. Tests pass. Production screams. I simply update the name tag and pray."
 

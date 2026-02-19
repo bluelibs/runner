@@ -771,6 +771,14 @@ const result = await d.startAndWait(processOrder, {
   convenience wrapper for `start(...)` + `wait(executionId)`; returns
   `{ durable: { executionId }, data }`.
 
+`start()` and `startAndWait()` are the canonical APIs and are not deprecated.
+
+Deprecated compatibility aliases are still available:
+
+- `startExecution(taskOrTaskId, input)` -> `start(taskOrTaskId, input)`
+- `execute(taskOrTaskId, input)` -> `const { data } = await startAndWait(taskOrTaskId, input)`
+- `executeStrict(taskOrTaskId, input)` -> `startAndWait(taskOrTaskId, input)`
+
 `taskOrTaskId` can be:
 
 - an `ITask` (the built task object, returned by `.build()`)

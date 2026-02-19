@@ -29,6 +29,7 @@ export interface TestFacade {
  * Helper to create a minimal test harness resource that wraps a root app (or any registerable)
  * and exposes convenient testing utilities while running the full ecosystem
  * (registration, overrides, middleware, events) without modifying the core API.
+ * @deprecated Use run() in your tests instead, which provides the same benefits with a more flexible API and better type safety.
  */
 export function createTestResource(
   root: RegisterableItems,

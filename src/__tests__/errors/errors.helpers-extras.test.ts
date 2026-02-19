@@ -3,6 +3,7 @@ import {
   resourceNotFoundError,
   platformUnsupportedFunctionError,
   dependencyNotFoundError,
+  overrideTargetNotRegisteredError,
   duplicateRegistrationError,
   validationError,
   createMessageError,
@@ -160,6 +161,38 @@ describe("error helpers extra branches", () => {
       } catch (e: any) {
         expect(e.remediation).toContain("Task");
         expect(e.remediation).toContain(".fork()");
+      }
+    });
+
+    it("includes override-specific remediation with fork suggestion for resources", () => {
+      expect.assertions(4);
+      try {
+        overrideTargetNotRegisteredError.throw({
+          targetId: "app.db",
+          targetType: "Resource",
+          sources: ["tests.app"],
+        });
+        fail("Expected throw");
+      } catch (e: any) {
+        expect(e.message).toContain(
+          'Override target Resource "app.db" is not registered',
+        );
+        expect(e.message).toContain("tests.app");
+        expect(e.remediation).toContain(".register([...])");
+        expect(e.remediation).toContain('.fork("new.id")');
+      }
+    });
+
+    it("formats override-target message without source details when sources are absent", () => {
+      expect.assertions(1);
+      try {
+        overrideTargetNotRegisteredError.throw({
+          targetId: "app.mailer",
+          targetType: "Task",
+        });
+        fail("Expected throw");
+      } catch (e: any) {
+        expect(e.message).not.toContain("Requested from override(s)");
       }
     });
 

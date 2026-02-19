@@ -316,7 +316,7 @@ const getHealth = r
 
 Retrieve tagged items by using `globals.resources.store` inside a hook or resource and calling `store.getTasksWithTag(tag)`.
 
-**Node durable workflows must be tagged** with `durableWorkflowTag` from `@bluelibs/runner/node` to be discoverable via `durable.getWorkflows()` at runtime. This tag is required, not optional. Workflow execution is explicit via the durable API (`durable.start(...)` / `durable.startAndWait(...)`). The tag is discovery metadata only; `startAndWait(...)` provides the unified result envelope `{ durable: { executionId }, data }`.
+**Node durable workflows must be tagged** with `durableWorkflowTag` from `@bluelibs/runner/node` to be discoverable via `durable.getWorkflows()` at runtime. This tag is required, not optional. Workflow execution is explicit via the durable API (`durable.start(...)` / `durable.startAndWait(...)`) and these are the current, non-deprecated methods. The legacy aliases `durable.startExecution(...)`, `durable.execute(...)`, and `durable.executeStrict(...)` remain available as deprecated compatibility methods (`startExecution` -> `start`, `execute` -> `startAndWait(...).data`, `executeStrict` -> `startAndWait`). The tag is discovery metadata only; `startAndWait(...)` provides the unified result envelope `{ durable: { executionId }, data }`.
 
 - Contract tags (a "smart tag"): define type contracts for task input/output (or resource config/value) via `r.tag<TConfig, TInputContract, TOutputContract>(id)`. They don't change runtime behavior; they shape the inferred types and compose with contract middleware.
 - Smart tags: built-in tags like `globals.tags.system`, `globals.tags.debug`, and `globals.tags.excludeFromGlobalHooks` change framework behavior; use them for per-component debug or to opt out of global hooks.
@@ -523,19 +523,30 @@ throw error;
 Override a task/resource/hook/middleware while preserving `id`. Use the helper or the fluent override builder:
 
 ```ts
-const mockMailer = r
+const mockMailer = r.override(realMailer, async () => new MockMailer());
+
+const tracedMailer = r
   .override(realMailer)
-  .init(async () => new MockMailer())
+  .init(async (config, deps) => {
+    const base = await realMailer.init(config, deps);
+    return { ...base, trace: true };
+  })
   .build();
 
 const app = r
   .resource("app")
   .register([realMailer])
-  .overrides([mockMailer])
+  .overrides([mockMailer, tracedMailer])
   .build();
 ```
 
+- `r.override(base, fn)` is a typed shorthand for common behavior swaps:
+  - task/hook/task-middleware/resource-middleware: replaces `run`
+  - resource: replaces `init`
 - `r.override(base)` starts from the base definition and applies fluent mutations using the same composition rules as the base builder.
+- `r.override(...)` creates replacement definitions; `.overrides([...])` applies them in a specific container during bootstrap.
+- Registering only the replacement definition is valid; registering both base and replacement in `.register([...])` causes duplicate-id errors.
+- `.overrides([...])` requires the target id to already be present in the graph; if you wanted a second resource instance instead of replacement, use `.fork("new.id")`.
 - Hook overrides keep the same `.on` target; only behavior/metadata is overridable.
 - The `override(base, patch)` helper remains for direct, shallow patches.
 

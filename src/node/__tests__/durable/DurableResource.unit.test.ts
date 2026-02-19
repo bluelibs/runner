@@ -181,6 +181,10 @@ describe("durable: DurableResource", () => {
     expect(service.start).toHaveBeenCalledWith(task, { a: 1 }, undefined);
     expect(await durable.start(task.id, { a: 2 })).toBe("e1");
     expect(service.start).toHaveBeenCalledWith(task.id, { a: 2 }, undefined);
+    expect(await durable.startExecution(task, { a: 3 })).toBe("e1");
+    expect(service.start).toHaveBeenCalledWith(task, { a: 3 }, undefined);
+    expect(await durable.startExecution(task.id, { a: 4 })).toBe("e1");
+    expect(service.start).toHaveBeenCalledWith(task.id, { a: 4 }, undefined);
 
     expect(await durable.wait<string>("e1")).toBe("ok");
     expect(service.wait).toHaveBeenCalledWith("e1", undefined);
@@ -201,6 +205,36 @@ describe("durable: DurableResource", () => {
     expect(service.startAndWait).toHaveBeenCalledWith(
       task.id,
       { a: 2 },
+      undefined,
+    );
+    expect(await durable.execute(task, { a: 5 })).toBe("ok");
+    expect(service.startAndWait).toHaveBeenCalledWith(
+      task,
+      { a: 5 },
+      undefined,
+    );
+    expect(await durable.execute(task.id, { a: 6 })).toBe("ok");
+    expect(service.startAndWait).toHaveBeenCalledWith(
+      task.id,
+      { a: 6 },
+      undefined,
+    );
+    expect(await durable.executeStrict(task, { a: 7 })).toEqual({
+      durable: { executionId: "e1" },
+      data: "ok",
+    });
+    expect(service.startAndWait).toHaveBeenCalledWith(
+      task,
+      { a: 7 },
+      undefined,
+    );
+    expect(await durable.executeStrict(task.id, { a: 8 })).toEqual({
+      durable: { executionId: "e1" },
+      data: "ok",
+    });
+    expect(service.startAndWait).toHaveBeenCalledWith(
+      task.id,
+      { a: 8 },
       undefined,
     );
 

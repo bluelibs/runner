@@ -146,6 +146,9 @@ const mockMailer = r
   .init(async () => new MockMailer())
   .build();
 
+// Typed shorthand
+const shorthandMockMailer = r.override(realMailer, async () => new MockMailer());
+
 // Helper override
 const helperMockMailer = override(realMailer, {
   init: async () => new MockMailer(),
@@ -157,6 +160,12 @@ const app = r
   .overrides([mockMailer])
   .build();
 ```
+
+Quick rule:
+- `r.override(...)` builds the replacement definition.
+- `.overrides([...])` applies replacement during bootstrap.
+- Registering only the replacement definition is valid.
+- Registering both base and replacement in `.register([...])` causes duplicate-id errors.
 
 ### Built-in Middleware
 
