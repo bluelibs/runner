@@ -87,7 +87,12 @@ await runtime.runTask(createUser, { name: "Ada" });
 
 - `.with(config)` exists on configurable built definitions (for example resources, task/resource middleware, and tags). Fluent builders use chained methods plus `.build()`.
 - `r.*.fork(newId, { register: "keep" | "drop" | "deep", reId })` creates a new resource with a different id but the same definition. Use `register: "drop"` to avoid re-registering nested items, or `register: "deep"` to deep-fork **registered resources** with new ids via `reId` (other registerables are not kept; resource dependencies pointing to deep-forked resources are remapped to those forks). Export forked resources to use as dependencies.
-- Resource boundaries can be narrowed with `.exports([...])` (on object definitions or fluent builders). Without `exports`, everything remains public (backward compatible). With `exports`, everything else in that resource subtree is private across boundaries (tasks/resources/events/hooks/middleware, etc.). This gives safer refactors and clearer contracts because internal items cannot be referenced from outside. `.exports([])` means nothing is public. This also scopes `.everywhere()` middleware: non-exported middleware only applies inside its own registration subtree. If a resource exports a child resource, that child's own exported surface is visible transitively, but each intermediate resource boundary must allow the path (for example, `A -> B -> C` is blocked if `B.exports([])`). Visibility is validated at `run(...)` init time. IDs remain globally unique even for private items.
+- Resource boundaries can be narrowed with `.exports([...])` (on object definitions or fluent builders) to enforce encapsulation:
+  - **Omit `.exports()`**: Everything remains public (backward compatible).
+  - **`.exports([])`**: Nothing is public. Everything else in that resource subtree is private across boundaries (tasks, hooks, middleware, etc.).
+  - **Scoping**: Provides safer refactors as internal items cannot be referenced from outside. It also scopes `.everywhere()` middleware: non-exported middleware only applies inside its own registration subtree.
+  - **Transitive Visibility**: If a resource exports a child resource, that child's own exported surface is visible transitively, but each intermediate boundary must allow the path (e.g., `A -> B -> C` is blocked if `B.exports([])`).
+  - **Validation**: Visibility is validated at `run(...)` init time. IDs remain globally unique even for private items.
 - `run(root)` wires dependencies, runs `init`, emits lifecycle events, and returns a runtime object (`IRuntime`) with helpers such as `runTask`, `emitEvent`, `getResourceValue`, `getLazyResourceValue`, `getResourceConfig`, `getRootId`, `getRootConfig`, `getRootValue`, and `dispose`.
 - Enable verbose logging with `run(root, { debug: "verbose" })`.
 
@@ -688,6 +693,7 @@ test("sends welcome email", async () => {
 
 - Meta: `.meta({ title, description })` on tasks/resources/events/middleware for human-friendly docs and tooling; extend meta types via module augmentation when needed.
 - Namespacing: keep ids consistent with `domain.resources.name`, `domain.tasks.name`, `domain.events.name`, `domain.hooks.on-name`, `domain.middleware.{task|resource}.name`, `domain.errors.ErrorName`, and `domain.ctx.name`.
+- File Structure: While not strictly enforced, prefer co-locating definitions by domain in a feature-driven folder structure (e.g., `src/domains/users/tasks/createUser.task.ts`) and naming files after the item type (`*.task.ts`, `*.resource.ts`, `*.event.ts`) for easier navigation and AI context ingestion.
 - Runtime validation: `inputSchema`, `resultSchema`, `payloadSchema`, `configSchema` share the same `parse(input)` contract; config validation happens on `.with()`, task/event validation happens on call/emit. Use `.schema()` as a unified alias (input/payload/schema/data) for simplicity.
 
 ## Advanced Patterns
