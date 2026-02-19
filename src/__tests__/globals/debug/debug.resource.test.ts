@@ -486,4 +486,45 @@ describe("globals.resources.debug", () => {
     );
     expect(eventLog?.data).toBeUndefined();
   });
+
+  it("does not swallow the original task error if the logger throws an error", async () => {
+    const badLoggerResource = defineResource({
+      id: "tests.badLogger",
+      dependencies: { logger: globalResources.logger },
+      async init(_, { logger }) {
+        jest.spyOn(logger, "error").mockImplementationOnce(() => {
+          throw new Error("Logger crashed");
+        });
+      },
+    });
+
+    const failingTask = defineTask({
+      id: "tests.failing.task.swallow",
+      async run() {
+        throw createMessageError("Original Task Error");
+      },
+    });
+
+    const app = defineResource({
+      id: "tests.app.swallow",
+      register: [debugResource.with("verbose"), badLoggerResource, failingTask],
+      dependencies: { badLoggerResource },
+      async init() {
+        return "ready";
+      },
+    });
+
+    const harness = defineResource({
+      id: "tests.harness.swallow",
+      register: [app],
+    });
+
+    const rr = await run(harness);
+
+    // Running the task should reject with the "Original Task Error"
+    // and NOT the "Logger crashed" error
+    await expect(rr.runTask(failingTask)).rejects.toThrow(
+      "Original Task Error",
+    );
+  });
 });

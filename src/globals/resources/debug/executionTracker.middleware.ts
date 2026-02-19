@@ -29,16 +29,27 @@ export const tasksTrackerMiddleware = defineTaskMiddleware({
       data: shouldShowData ? { input: task!.input } : undefined,
     });
 
-    const result = await next(task!.input);
-    const duration = Date.now() - start;
-    const taskCompleteMessage = `Task ${
-      task!.definition.id
-    } completed in ${duration}ms`;
-    const shouldShowResult = debugConfig.logTaskOutput && result;
-    await logger.info(taskCompleteMessage, {
-      data: shouldShowResult ? { result } : undefined,
-    });
-    return result;
+    try {
+      const result = await next(task!.input);
+      const duration = Date.now() - start;
+      const taskCompleteMessage = `Task ${
+        task!.definition.id
+      } completed in ${duration}ms`;
+      const shouldShowResult = debugConfig.logTaskOutput && result;
+      await logger.info(taskCompleteMessage, {
+        data: shouldShowResult ? { result } : undefined,
+      });
+      return result;
+    } catch (error) {
+      try {
+        await logger.error(String(error), {
+          error,
+        });
+      } catch {
+        // Best-effort error logging; do not overshadow the original task error
+      }
+      throw error;
+    }
   },
   meta: {
     title: "Execution Tracker",

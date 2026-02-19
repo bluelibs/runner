@@ -5,7 +5,6 @@ import { Logger } from "./Logger";
 import { MiddlewareManager } from "./MiddlewareManager";
 import type { ExecutionJournal } from "../types/executionJournal";
 import type { TaskCallOptions } from "../types/utilities";
-import { normalizeError } from "../globals/resources/tunnel/error-utils";
 
 type CachedTaskRunner = (
   input: unknown,
@@ -56,32 +55,8 @@ export class TaskRunner {
       }
     }
 
-    try {
-      // Pass journal if provided; composer will use it or create new
-      return await runner(input as TInput, options?.journal);
-    } catch (error) {
-      try {
-        await this.store.onUnhandledError({
-          error,
-          kind: "task",
-          source: task.id,
-        });
-      } catch (reporterError) {
-        try {
-          await this.logger.error(
-            "[runner] Failed to report unhandled task error.",
-            {
-              source: task.id,
-              error: normalizeError(reporterError),
-              data: { originalError: normalizeError(error) },
-            },
-          );
-        } catch {
-          // Avoid recursive failure loops if logger reporting also fails.
-        }
-      }
-      throw error;
-    }
+    // Pass journal if provided; composer will use it or create new
+    return await runner(input as TInput, options?.journal);
   }
 
   /**

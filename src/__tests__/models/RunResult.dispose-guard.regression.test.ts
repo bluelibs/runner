@@ -72,7 +72,7 @@ describe("RunResult disposal guards", () => {
     expect(disposeCalls).toBe(1);
   });
 
-  it("allows retrying dispose when cleanup previously failed", async () => {
+  it("prevents zombie state by marking runtime as disposed even if cleanup fails", async () => {
     const app = defineResource({
       id: "runresult.dispose.retry.app",
       async init() {
@@ -82,18 +82,20 @@ describe("RunResult disposal guards", () => {
 
     const runtime = await run(app, { shutdownHooks: false });
 
-    let disposeAttempts = 0;
     const disposeSpy = jest
       .spyOn(runtime.store, "dispose")
       .mockImplementation(async () => {
-        disposeAttempts += 1;
-        if (disposeAttempts === 1) {
-          throw createMessageError("first dispose failure");
-        }
+        throw createMessageError("first dispose failure");
       });
 
     await expect(runtime.dispose()).rejects.toThrow("first dispose failure");
+    // Should resolve on second call because `#disposed` is true
     await expect(runtime.dispose()).resolves.toBeUndefined();
-    expect(disposeSpy).toHaveBeenCalledTimes(2);
+    // And it shouldn't have invoked store.dispose() again
+    expect(disposeSpy).toHaveBeenCalledTimes(1);
+
+    // Furthermore, calling tasks should throw disposed error, preventing zombie state
+    const dummyTask = defineTask({ id: "dummy", run: async () => {} });
+    expect(() => runtime.runTask(dummyTask)).toThrow(/disposed/i);
   });
 });

@@ -1,20 +1,18 @@
 import { TaskRunner } from "../../models/TaskRunner";
 import { Store } from "../../models/Store";
 import { defineTask, defineResource, defineTaskMiddleware } from "../../define";
-import { Logger } from "../../models";
+
 import { createTestFixture } from "../test-utils";
 
 describe("TaskRunner", () => {
   let store: Store;
   let taskRunner: TaskRunner;
-  let logger: Logger;
-  let onUnhandledError: jest.Mock;
+  // no logger or onUnhandledError needed
 
   beforeEach(() => {
     const fixture = createTestFixture();
     store = fixture.store;
-    logger = fixture.logger;
-    onUnhandledError = fixture.onUnhandledError;
+
     taskRunner = fixture.createTaskRunner();
   });
 
@@ -146,18 +144,14 @@ describe("TaskRunner", () => {
     await expect(taskRunner.run(task, undefined)).rejects.toThrow(error);
   });
 
-  it("logs reporter failures when onUnhandledError itself throws", async () => {
-    const taskError = new Error("Task failure");
-    const reporterError = new Error("Reporter failure");
-    onUnhandledError.mockRejectedValue(reporterError);
-    const loggerErrorSpy = jest
-      .spyOn(logger, "error")
-      .mockResolvedValue(undefined);
+  it("does not route task execution errors to onUnhandledError", async () => {
+    const error = new Error("Business logic error");
+    const onUnhandledErrorSpy = jest.spyOn(store, "onUnhandledError");
 
     const task = defineTask({
-      id: "taskRunner.reporterFailure",
+      id: "testTask.unhandled",
       run: async () => {
-        throw taskError;
+        throw error;
       },
     });
 
@@ -167,46 +161,8 @@ describe("TaskRunner", () => {
       isInitialized: false,
     });
 
-    await expect(taskRunner.run(task, undefined)).rejects.toThrow(taskError);
-    expect(loggerErrorSpy).toHaveBeenCalledWith(
-      "[runner] Failed to report unhandled task error.",
-      expect.objectContaining({
-        source: task.id,
-        error: reporterError,
-      }),
-    );
-  });
-
-  it("normalizes non-Error reporter failures before logging", async () => {
-    onUnhandledError.mockRejectedValue("reporter-failure");
-    const loggerErrorSpy = jest
-      .spyOn(logger, "error")
-      .mockResolvedValue(undefined);
-
-    const task = defineTask({
-      id: "taskRunner.reporterFailure.primitive",
-      run: async () => {
-        throw "primitive-task-error";
-      },
-    });
-
-    store.tasks.set(task.id, {
-      task,
-      computedDependencies: {},
-      isInitialized: false,
-    });
-
-    await expect(taskRunner.run(task, undefined)).rejects.toBe(
-      "primitive-task-error",
-    );
-    expect(loggerErrorSpy).toHaveBeenCalledWith(
-      "[runner] Failed to report unhandled task error.",
-      expect.objectContaining({
-        source: task.id,
-        error: expect.any(Error),
-        data: { originalError: expect.any(Error) },
-      }),
-    );
+    await expect(taskRunner.run(task, undefined)).rejects.toThrow(error);
+    expect(onUnhandledErrorSpy).not.toHaveBeenCalled();
   });
 
   // Global lifecycle events removed
