@@ -96,9 +96,9 @@
     "typecheck": "tsc -p config/ts/tsconfig.json --noEmit",
     "lint": "eslint --config config/eslint/eslint.config.mjs ./src",
     "lint:fix": "eslint --config config/eslint/eslint.config.mjs ./src --fix",
-    "audit": "npm audit --audit-level=moderate",
+    "audit": "better-npm-audit audit --level moderate",
     "audit:prod": "npm audit --omit=dev --audit-level=high",
-    "audit:full": "npm audit --audit-level=moderate",
+    "audit:full": "better-npm-audit audit --level moderate",
     "qa": "npm run coverage:ai && npm run lint:fix && npm run typecheck && npm run build",
     "prepublishOnly": "npm run clean && npm run build && npm run build:dashboard",
     "postbuild": "npm run guide:compose",
@@ -109,6 +109,7 @@
     "guide:compose": "node ./scripts/compose-guide.mjs"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@types/amqplib": "^0.10.7",
     "@types/benchmark": "^2.1.5",
     "@types/busboy": "^1.5.4",
@@ -118,8 +119,9 @@
     "@typescript-eslint/eslint-plugin": "8.56.0",
     "@typescript-eslint/parser": "8.56.0",
     "benchmark": "^2.1.4",
+    "better-npm-audit": "^3.11.0",
     "busboy": "^1.6.0",
-    "eslint": "^9.39.2",
+    "eslint": "^10.0.0",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-jest": "^29.15.0",
     "eslint-plugin-prettier": "^5.5.5",
@@ -165,6 +167,9 @@
     "amqplib": "^0.10.9",
     "busboy": "^1.6.0",
     "ioredis": "^5.7.0"
+  },
+  "overrides": {
+    "minimatch": "10.2.1"
   },
   "prettier": {
     "trailingComma": "all",

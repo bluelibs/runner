@@ -93,12 +93,9 @@ export function defineTag<
      * @returns
      */
     exists(target: ITaggable | TagType[]): boolean {
-      let currentTags: TagType[] = [];
-      if (Array.isArray(target)) {
-        currentTags = target;
-      } else {
-        currentTags = target.tags;
-      }
+      const currentTags: TagType[] = Array.isArray(target)
+        ? target
+        : target.tags;
 
       for (const candidate of currentTags) {
         if (candidate.id === id) {
@@ -114,12 +111,9 @@ export function defineTag<
      * @returns
      */
     extract(target: ITaggable | TagType[]): TConfig | undefined {
-      let currentTags: TagType[] = [];
-      if (Array.isArray(target)) {
-        currentTags = target;
-      } else {
-        currentTags = target.tags || [];
-      }
+      const currentTags: TagType[] = Array.isArray(target)
+        ? target
+        : target.tags || [];
 
       for (const candidate of currentTags) {
         if (candidate.id === id) {

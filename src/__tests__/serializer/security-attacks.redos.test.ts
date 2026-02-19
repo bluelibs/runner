@@ -54,7 +54,7 @@ describe("Serializer Security Attacks", () => {
         new RegExp("a", "v");
         supportsVFlag = true;
       } catch {
-        supportsVFlag = false;
+        // supportsVFlag remains false
       }
       if (!supportsVFlag) {
         return;
