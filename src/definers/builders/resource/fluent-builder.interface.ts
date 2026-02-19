@@ -233,6 +233,27 @@ export interface ResourceFluentBuilder<
     TMiddleware
   >;
 
+  /**
+   * Declares which registered items are visible outside this resource's
+   * registration subtree. When present, only listed items can be referenced
+   * from outside. Omitting `.exports()` = everything is public.
+   *
+   * Follows standard composition rules: appends by default, replaces
+   * when `{ override: true }` is passed.
+   */
+  exports(
+    items: Array<RegisterableItems>,
+    options?: { override?: boolean },
+  ): ResourceFluentBuilder<
+    TConfig,
+    TValue,
+    TDeps,
+    TContext,
+    TMeta,
+    TTags,
+    TMiddleware
+  >;
+
   overrides(
     o: Array<OverridableElements>,
     options?: { override?: boolean },

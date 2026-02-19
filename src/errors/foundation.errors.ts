@@ -376,6 +376,30 @@ export const taskNotRegisteredError = error<
   )
   .build();
 
+// Visibility violation — item is internal to a resource that declared exports
+export const visibilityViolationError = error<
+  {
+    targetId: string;
+    targetType: string;
+    ownerResourceId: string;
+    consumerId: string;
+    consumerType: string;
+    exportedIds: string[];
+  } & DefaultErrorType
+>("runner.errors.visibilityViolation")
+  .format(
+    ({ targetId, targetType, ownerResourceId, consumerId, consumerType }) =>
+      `${targetType} "${targetId}" is internal to resource "${ownerResourceId}" and cannot be referenced by ${consumerType} "${consumerId}".`,
+  )
+  .remediation(({ targetId, ownerResourceId, exportedIds }) => {
+    const exported =
+      exportedIds.length > 0
+        ? `Resource "${ownerResourceId}" exports: [${exportedIds.join(", ")}].`
+        : `Resource "${ownerResourceId}" has no exports.`;
+    return `${exported} Either add "${targetId}" to ${ownerResourceId}'s .exports([...]), or restructure to use an exported item instead.`;
+  })
+  .build();
+
 // RunResult/runtime surface errors (kept message-compatible with existing API expectations)
 export const runResultDisposedError = error<DefaultErrorType>(
   "runner.errors.runResultDisposed",

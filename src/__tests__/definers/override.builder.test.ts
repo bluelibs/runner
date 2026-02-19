@@ -272,6 +272,8 @@ describe(SuiteName.OverrideBuilder, () => {
       .init(async () => ResourceValue.Override)
       .dispose(async () => undefined)
       .meta({ [MetaKey.Label]: ResourceValue.Override } as Record<string, any>)
+      .exports([registerA])
+      .exports([registerB], { override: true })
       .overrides([overrideTask])
       .overrides([overrideTask], { override: true })
       .throws([errorHelper])
@@ -289,6 +291,7 @@ describe(SuiteName.OverrideBuilder, () => {
     expect(overrideResource.meta).toEqual({
       [MetaKey.Label]: ResourceValue.Override,
     });
+    expect(overrideResource.exports).toEqual([registerB]);
     expect(overrideResource.overrides).toEqual([overrideTask]);
     expect(overrideResource.throws).toEqual([ErrorId.Resource]);
   });

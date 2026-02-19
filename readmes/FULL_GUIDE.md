@@ -206,6 +206,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 **Benefits:**
 
 - **Explicit wiring** — Dependencies are declared in code, not discovered at runtime
+- **Architectural isolation** — Use resource `.exports([...])` to keep domain internals private and expose only stable contracts
 - **Type-driven** — TypeScript inference flows through tasks, resources, and middleware
 - **Testable by default** — Call `.run()` with mocks or run the full app, no special harnesses
 - **Traceable** — Stack traces and debug output stay aligned with your source
@@ -1382,6 +1383,63 @@ const app = r.resource("app").register([base, forked]).build();
 - **Each fork gets independent runtime** — no shared state
 - **`register` defaults to `"keep"`**
 - **Export forked resources** to use them as typed dependencies
+
+#### Resource Exports and Isolation Boundaries
+
+As your app grows, isolation keeps domain internals from leaking across resource boundaries. Use `.exports([...])` to define a small public surface and keep everything else private.
+
+Think of this as an **architectural boundary** for wiring, not a sandbox:
+
+- It controls what other resources can reference through dependencies and explicit hook/middleware wiring
+- It helps enforce domain contracts at bootstrap
+- It does not change the flat store model or id uniqueness rules
+
+**Why this matters in real projects:**
+
+- **Safer refactors**: internal tasks/events/hooks/middleware can change without breaking outside consumers
+- **Clear ownership**: each resource exposes a deliberate contract instead of ambient access
+- **Fail-fast architecture checks**: invalid cross-boundary references fail during `run(app)` bootstrap
+- **Predictable cross-cutting behavior**: private `.everywhere()` middleware stays inside its resource subtree
+
+```typescript
+const calculateTax = r
+  .task("billing.tasks.calculateTax")
+  .run(async (amount: number) => amount * 0.1)
+  .build();
+
+const createInvoice = r
+  .task("billing.tasks.createInvoice")
+  .dependencies({ calculateTax })
+  .run(async (amount: number, deps) => amount + (await deps.calculateTax(amount)))
+  .build();
+
+const billing = r
+  .resource("billing")
+  .register([calculateTax, createInvoice])
+  .exports([createInvoice]) // public surface
+  .build();
+```
+
+**Semantics:**
+
+- No `.exports()` means backward-compatible behavior: everything remains public
+- `.exports([])` means nothing from that resource is public outside its registration subtree
+- Visibility checks cover dependency references, hook `.on(event)` subscriptions, and middleware attachment
+- `.everywhere()` middleware follows visibility; non-exported middleware applies only inside its subtree
+- If a resource exports a child resource, that child's own exported surface is visible transitively
+- Validation happens at `run(app)` initialization, not at declaration time
+- IDs remain globally unique even for private items; visibility does not bypass duplicate-id checks
+- `runtime.runTask(task)` / `runtime.runTask("task.id")` remains allowed even for private tasks (runtime is an operator surface)
+
+**Nested export chain rule (`A -> B -> C`):**
+
+- `A.exports([c])` works only if every boundary in between allows it
+- If `B.exports([])` is present, `A` cannot expose `c` from inside `B` to external consumers
+
+**Wildcard hooks note:**
+
+- Explicit hook event references are visibility-checked
+- Wildcard hooks (`.on("*")`) are global by design; use explicit events when you need strict boundary enforcement
 
 #### Optional Dependencies
 
@@ -6196,6 +6254,7 @@ The quick-reference table for "I've seen this error, what do I do?"
 | `TypeError: X is not a function`        | Task call fails at runtime          | Forgot `.build()` on task/resource definition | Add `.build()` at the end of your fluent chain              |
 | `Resource "X" not found`                | Runtime crash during initialization | Component not registered                      | Add to `.register([...])` in parent resource                |
 | `Config validation failed for X`        | Startup crash before app runs       | Missing `.with()` config for resource         | Provide required config: `resource.with({ ... })`           |
+| `"X" is internal to resource "Y" and cannot be referenced by ...` (`visibilityViolationError`) | `run(app)` fails during bootstrap | Cross-resource reference to a non-exported item | Export the item with `.exports([...])` or depend on an already exported contract |
 | `Circular dependencies detected: ...` (`circularDependencyError`) | `run(app)` fails before startup | Actual runtime dependency graph cycle         | Break the dependency loop across tasks/resources/middleware/hooks |
 | `Circular dependency detected` (type inference) | TypeScript inference fails          | Import cycle between files                    | Use explicit type annotation: `as IResource<Config, Value>` |
 | `TimeoutError`                          | Task hangs then throws              | Operation exceeded timeout TTL                | Increase TTL or investigate underlying slow operation       |
@@ -6290,7 +6349,43 @@ await dispose();
 
 **Symptom**: Dependencies undefined, middleware not applied, chaos.
 
----
+### Visibility Boundaries with `.exports()`
+
+**Symptom**: `run(app)` fails with `runner.errors.visibilityViolation`.
+
+This usually means a task/resource/hook/middleware is referencing an item that is internal to a resource that declared `.exports(...)`.
+
+```typescript
+const internalTask = r.task("billing.tasks.internal").run(async () => 1).build();
+
+const billing = r
+  .resource("billing")
+  .register([internalTask])
+  .exports([]) // everything private outside billing subtree
+  .build();
+
+const root = r
+  .resource("app")
+  .register([billing])
+  .dependencies({ internalTask }) // invalid cross-boundary reference
+  .build();
+```
+
+**Why Runner throws early**: this catches accidental coupling at startup instead of letting hidden runtime dependencies spread through the codebase.
+
+**Fix paths:**
+
+1. Export the item from the owning resource: `.exports([internalTask])`
+2. Depend on a different already-exported item
+3. Move the consumer inside the same resource registration subtree
+
+**Important notes:**
+
+- Checks run at `run(app)` init time, not definition time
+- `.exports([])` means "nothing public"
+- Private items still participate in global id uniqueness; duplicate ids still fail registration
+
+--- 
 
 ### Debug Mode
 
@@ -7819,6 +7914,26 @@ const task = r.task("id")
   })
   .build();
 ```
+
+### Resource Isolation (`.exports`)
+
+```typescript
+const internalTask = r.task("billing.tasks.internal").run(async () => 1).build();
+const publicTask = r.task("billing.tasks.public").run(async () => 2).build();
+
+const billing = r
+  .resource("billing")
+  .register([internalTask, publicTask])
+  .exports([publicTask]) // only this is visible outside billing
+  .build();
+```
+
+Quick rules:
+- No `.exports()` means everything public (backward compatible)
+- `.exports([])` means everything private outside that subtree
+- Visibility is enforced at `run(app)` bootstrap
+- Private `.everywhere()` middleware applies only inside its resource subtree
+- Duplicate ids still fail globally, even for private items
 
 ### Event Emission Options
 

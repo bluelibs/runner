@@ -237,6 +237,26 @@ const task = r.task("id")
   .build();
 ```
 
+### Resource Isolation (`.exports`)
+
+```typescript
+const internalTask = r.task("billing.tasks.internal").run(async () => 1).build();
+const publicTask = r.task("billing.tasks.public").run(async () => 2).build();
+
+const billing = r
+  .resource("billing")
+  .register([internalTask, publicTask])
+  .exports([publicTask]) // only this is visible outside billing
+  .build();
+```
+
+Quick rules:
+- No `.exports()` means everything public (backward compatible)
+- `.exports([])` means everything private outside that subtree
+- Visibility is enforced at `run(app)` bootstrap
+- Private `.everywhere()` middleware applies only inside its resource subtree
+- Duplicate ids still fail globally, even for private items
+
 ### Event Emission Options
 
 | Option         | Type                              | Default      | Purpose                                      |

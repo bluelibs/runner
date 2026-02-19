@@ -273,6 +273,63 @@ const app = r.resource("app").register([base, forked]).build();
 - **`register` defaults to `"keep"`**
 - **Export forked resources** to use them as typed dependencies
 
+#### Resource Exports and Isolation Boundaries
+
+As your app grows, isolation keeps domain internals from leaking across resource boundaries. Use `.exports([...])` to define a small public surface and keep everything else private.
+
+Think of this as an **architectural boundary** for wiring, not a sandbox:
+
+- It controls what other resources can reference through dependencies and explicit hook/middleware wiring
+- It helps enforce domain contracts at bootstrap
+- It does not change the flat store model or id uniqueness rules
+
+**Why this matters in real projects:**
+
+- **Safer refactors**: internal tasks/events/hooks/middleware can change without breaking outside consumers
+- **Clear ownership**: each resource exposes a deliberate contract instead of ambient access
+- **Fail-fast architecture checks**: invalid cross-boundary references fail during `run(app)` bootstrap
+- **Predictable cross-cutting behavior**: private `.everywhere()` middleware stays inside its resource subtree
+
+```typescript
+const calculateTax = r
+  .task("billing.tasks.calculateTax")
+  .run(async (amount: number) => amount * 0.1)
+  .build();
+
+const createInvoice = r
+  .task("billing.tasks.createInvoice")
+  .dependencies({ calculateTax })
+  .run(async (amount: number, deps) => amount + (await deps.calculateTax(amount)))
+  .build();
+
+const billing = r
+  .resource("billing")
+  .register([calculateTax, createInvoice])
+  .exports([createInvoice]) // public surface
+  .build();
+```
+
+**Semantics:**
+
+- No `.exports()` means backward-compatible behavior: everything remains public
+- `.exports([])` means nothing from that resource is public outside its registration subtree
+- Visibility checks cover dependency references, hook `.on(event)` subscriptions, and middleware attachment
+- `.everywhere()` middleware follows visibility; non-exported middleware applies only inside its subtree
+- If a resource exports a child resource, that child's own exported surface is visible transitively
+- Validation happens at `run(app)` initialization, not at declaration time
+- IDs remain globally unique even for private items; visibility does not bypass duplicate-id checks
+- `runtime.runTask(task)` / `runtime.runTask("task.id")` remains allowed even for private tasks (runtime is an operator surface)
+
+**Nested export chain rule (`A -> B -> C`):**
+
+- `A.exports([c])` works only if every boundary in between allows it
+- If `B.exports([])` is present, `A` cannot expose `c` from inside `B` to external consumers
+
+**Wildcard hooks note:**
+
+- Explicit hook event references are visibility-checked
+- Wildcard hooks (`.on("*")`) are global by design; use explicit events when you need strict boundary enforcement
+
 #### Optional Dependencies
 
 Mark dependencies as optional when they may not be registered. The injected value will be `undefined` if the dependency is missing:

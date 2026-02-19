@@ -15,6 +15,7 @@ The quick-reference table for "I've seen this error, what do I do?"
 | `TypeError: X is not a function`        | Task call fails at runtime          | Forgot `.build()` on task/resource definition | Add `.build()` at the end of your fluent chain              |
 | `Resource "X" not found`                | Runtime crash during initialization | Component not registered                      | Add to `.register([...])` in parent resource                |
 | `Config validation failed for X`        | Startup crash before app runs       | Missing `.with()` config for resource         | Provide required config: `resource.with({ ... })`           |
+| `"X" is internal to resource "Y" and cannot be referenced by ...` (`visibilityViolationError`) | `run(app)` fails during bootstrap | Cross-resource reference to a non-exported item | Export the item with `.exports([...])` or depend on an already exported contract |
 | `Circular dependencies detected: ...` (`circularDependencyError`) | `run(app)` fails before startup | Actual runtime dependency graph cycle         | Break the dependency loop across tasks/resources/middleware/hooks |
 | `Circular dependency detected` (type inference) | TypeScript inference fails          | Import cycle between files                    | Use explicit type annotation: `as IResource<Config, Value>` |
 | `TimeoutError`                          | Task hangs then throws              | Operation exceeded timeout TTL                | Increase TTL or investigate underlying slow operation       |
@@ -109,7 +110,43 @@ await dispose();
 
 **Symptom**: Dependencies undefined, middleware not applied, chaos.
 
----
+### Visibility Boundaries with `.exports()`
+
+**Symptom**: `run(app)` fails with `runner.errors.visibilityViolation`.
+
+This usually means a task/resource/hook/middleware is referencing an item that is internal to a resource that declared `.exports(...)`.
+
+```typescript
+const internalTask = r.task("billing.tasks.internal").run(async () => 1).build();
+
+const billing = r
+  .resource("billing")
+  .register([internalTask])
+  .exports([]) // everything private outside billing subtree
+  .build();
+
+const root = r
+  .resource("app")
+  .register([billing])
+  .dependencies({ internalTask }) // invalid cross-boundary reference
+  .build();
+```
+
+**Why Runner throws early**: this catches accidental coupling at startup instead of letting hidden runtime dependencies spread through the codebase.
+
+**Fix paths:**
+
+1. Export the item from the owning resource: `.exports([internalTask])`
+2. Depend on a different already-exported item
+3. Move the consumer inside the same resource registration subtree
+
+**Important notes:**
+
+- Checks run at `run(app)` init time, not definition time
+- `.exports([])` means "nothing public"
+- Private items still participate in global id uniqueness; duplicate ids still fail registration
+
+--- 
 
 ### Debug Mode
 

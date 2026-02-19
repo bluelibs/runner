@@ -4,6 +4,7 @@ import type {
   IResourceMeta,
   IValidationSchema,
   OverridableElements,
+  RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   TagType,
@@ -347,6 +348,21 @@ export function makeResourceBuilder<
         TMiddleware
       >(next);
     },
+    exports(items: Array<RegisterableItems>, options?: { override?: boolean }) {
+      const override = options?.override ?? false;
+      const next = clone(state, {
+        exports: mergeArray(state.exports, items, override),
+      });
+      return makeResourceBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(next);
+    },
     build() {
       const definition: IResourceDefinition<
         TConfig,
@@ -372,6 +388,7 @@ export function makeResourceBuilder<
         meta: state.meta,
         overrides: state.overrides,
         throws: state.throws,
+        exports: state.exports,
       };
       const resource = defineResource(definition);
       (resource as { [symbolFilePath]?: string })[symbolFilePath] =

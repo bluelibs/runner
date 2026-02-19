@@ -102,6 +102,9 @@ export class MiddlewareResolver {
   ): ITaskMiddleware[] {
     return Array.from(this.store.taskMiddlewares.values())
       .filter((x) => Boolean(x.middleware.everywhere))
+      .filter((x) =>
+        this.store.isItemVisibleToConsumer(x.middleware.id, task.id),
+      )
       .filter((x) => {
         if (typeof x.middleware.everywhere === "function") {
           return x.middleware.everywhere(task);
@@ -119,6 +122,9 @@ export class MiddlewareResolver {
   ): IResourceMiddleware[] {
     return Array.from(this.store.resourceMiddlewares.values())
       .filter((x) => Boolean(x.middleware.everywhere))
+      .filter((x) =>
+        this.store.isItemVisibleToConsumer(x.middleware.id, resource.id),
+      )
       .filter((x) => {
         if (typeof x.middleware.everywhere === "function") {
           return x.middleware.everywhere(resource);

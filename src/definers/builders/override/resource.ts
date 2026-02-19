@@ -5,6 +5,7 @@ import type {
   IResourceMeta,
   IValidationSchema,
   OverridableElements,
+  RegisterableItems,
   ResourceInitFn,
   ResourceMiddlewareAttachmentType,
   TagType,
@@ -432,6 +433,21 @@ function makeResourceOverrideBuilder<
         TMiddleware
       >(base, next);
     },
+    exports(items: Array<RegisterableItems>, options?: { override?: boolean }) {
+      const override = options?.override ?? false;
+      const next = cloneResourceState(state, {
+        exports: mergeArray(state.exports ?? [], items, override),
+      });
+      return makeResourceOverrideBuilder<
+        TConfig,
+        TValue,
+        TDeps,
+        TContext,
+        TMeta,
+        TTags,
+        TMiddleware
+      >(base, next);
+    },
     build() {
       const normalizedThrows = normalizeThrows(
         { kind: "resource", id: state.id },
@@ -487,6 +503,7 @@ export function resourceOverrideBuilder<
     meta: base.meta,
     overrides: base.overrides,
     throws: base.throws,
+    exports: base.exports,
   });
 
   return makeResourceOverrideBuilder(base, initial);

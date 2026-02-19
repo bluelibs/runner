@@ -119,6 +119,17 @@ export class Store {
     return this.middlewareManager;
   }
 
+  /**
+   * Checks whether a registered item is visible to a consumer id under the
+   * current exports visibility model.
+   */
+  public isItemVisibleToConsumer(
+    targetId: string,
+    consumerId: string,
+  ): boolean {
+    return this.registry.visibilityTracker.isAccessible(targetId, consumerId);
+  }
+
   get isLocked() {
     return this.#isLocked;
   }

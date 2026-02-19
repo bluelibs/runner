@@ -79,6 +79,9 @@ export class StoreValidator {
 
     this.ensureTagIdsAreUniquePerDefinition();
     this.ensureAllTagsUsedAreRegistered();
+
+    // Validate module boundary visibility after all items are registered
+    this.registry.visibilityTracker.validateVisibility(this.registry);
   }
 
   private getTaggableEntries(): TaggableEntry[] {

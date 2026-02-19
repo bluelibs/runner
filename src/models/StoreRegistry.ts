@@ -33,6 +33,7 @@ import { IErrorHelper } from "../types/error";
 import type { IAsyncContext } from "../types/asyncContext";
 import { HookDependencyState } from "../types/storeTypes";
 import { LockableMap } from "../tools/LockableMap";
+import { VisibilityTracker } from "./VisibilityTracker";
 
 type StoringMode = "normal" | "override";
 export class StoreRegistry {
@@ -55,6 +56,7 @@ export class StoreRegistry {
     "asyncContexts",
   );
   public errors = new LockableMap<string, IErrorHelper<any>>("errors");
+  public readonly visibilityTracker = new VisibilityTracker();
 
   private validator: StoreValidator;
 
@@ -217,8 +219,15 @@ export class StoreRegistry {
     element.register = items;
 
     for (const item of items) {
+      // Track which resource owns each registered item
+      this.visibilityTracker.recordOwnership(element.id, item);
       // will call registration if it detects another resource.
       this.storeGenericItem<_C>(item);
+    }
+
+    // Record exports after all items are registered so ids are available
+    if (element.exports) {
+      this.visibilityTracker.recordExports(element.id, element.exports);
     }
   }
 
