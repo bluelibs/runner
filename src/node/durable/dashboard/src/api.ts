@@ -1,5 +1,5 @@
 import { getDashboardBasePath } from "./basePath";
-import { dashboardApiRequestError } from "../../../../errors";
+import { throwDashboardApiRequestError } from "./errors";
 
 export const ExecutionStatus = {
   Pending: "pending",
@@ -91,9 +91,9 @@ export const api = {
 
       const res = await fetch(url);
       if (!res.ok) {
-        dashboardApiRequestError.throw({
-          message: await extractErrorMessage(res, "Failed to fetch executions"),
-        });
+        throwDashboardApiRequestError(
+          await extractErrorMessage(res, "Failed to fetch executions"),
+        );
       }
       return res.json();
     },
@@ -101,9 +101,9 @@ export const api = {
       const apiBase = getApiBasePath();
       const res = await fetch(`${apiBase}/executions/${id}`);
       if (!res.ok) {
-        dashboardApiRequestError.throw({
-          message: await extractErrorMessage(res, "Failed to fetch execution"),
-        });
+        throwDashboardApiRequestError(
+          await extractErrorMessage(res, "Failed to fetch execution"),
+        );
       }
       return res.json();
     },
@@ -117,9 +117,9 @@ export const api = {
         body: JSON.stringify({ executionId }),
       });
       if (!res.ok) {
-        dashboardApiRequestError.throw({
-          message: await extractErrorMessage(res, "Failed to retry rollback"),
-        });
+        throwDashboardApiRequestError(
+          await extractErrorMessage(res, "Failed to retry rollback"),
+        );
       }
     },
     skipStep: async (executionId: string, stepId: string) => {
@@ -130,9 +130,9 @@ export const api = {
         body: JSON.stringify({ executionId, stepId }),
       });
       if (!res.ok) {
-        dashboardApiRequestError.throw({
-          message: await extractErrorMessage(res, "Failed to skip step"),
-        });
+        throwDashboardApiRequestError(
+          await extractErrorMessage(res, "Failed to skip step"),
+        );
       }
     },
     forceFail: async (executionId: string, reason: string) => {
@@ -143,9 +143,9 @@ export const api = {
         body: JSON.stringify({ executionId, reason }),
       });
       if (!res.ok) {
-        dashboardApiRequestError.throw({
-          message: await extractErrorMessage(res, "Failed to force fail"),
-        });
+        throwDashboardApiRequestError(
+          await extractErrorMessage(res, "Failed to force fail"),
+        );
       }
     },
     editState: async (
@@ -160,9 +160,9 @@ export const api = {
         body: JSON.stringify({ executionId, stepId, state: newState }),
       });
       if (!res.ok) {
-        dashboardApiRequestError.throw({
-          message: await extractErrorMessage(res, "Failed to edit state"),
-        });
+        throwDashboardApiRequestError(
+          await extractErrorMessage(res, "Failed to edit state"),
+        );
       }
     },
   },
