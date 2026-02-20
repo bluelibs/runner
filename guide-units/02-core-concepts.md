@@ -31,6 +31,7 @@ Here's a complete example showing you everything:
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
+// Assuming: emailService and logger resources are defined elsewhere
 // 1. Define your task - it's just a function with a name and dependencies
 const sendEmail = r
   .task("app.tasks.sendEmail")
@@ -129,6 +130,8 @@ const userService = r
 Resources can be configured with type-safe options. No more guessing at config shapes.
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 type SMTPConfig = {
   smtpUrl: string;
   from: string;
@@ -201,6 +204,8 @@ const mktMailer = r.resource("app.mailers.mkt").init(...).build();
 **Fork instead:**
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 // Define a reusable template
 const mailerBase = r
   .resource<{ smtp: string }>("base.mailer")
@@ -243,6 +248,8 @@ const app = r
 **Deep fork example:**
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const child = r
   .resource("app.base.child")
   .init(async () => ({ ok: true }))
@@ -291,6 +298,8 @@ Think of this as an **architectural boundary** for wiring, not a sandbox:
 - **Predictable cross-cutting behavior**: private `.everywhere()` middleware stays inside its resource subtree
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const calculateTax = r
   .task("billing.tasks.calculateTax")
   .run(async (amount: number) => amount * 0.1)
@@ -299,7 +308,9 @@ const calculateTax = r
 const createInvoice = r
   .task("billing.tasks.createInvoice")
   .dependencies({ calculateTax })
-  .run(async (amount: number, deps) => amount + (await deps.calculateTax(amount)))
+  .run(
+    async (amount: number, deps) => amount + (await deps.calculateTax(amount)),
+  )
   .build();
 
 const billing = r
@@ -335,6 +346,8 @@ const billing = r
 Mark dependencies as optional when they may not be registered. The injected value will be `undefined` if the dependency is missing:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const analyticsService = r
   .resource("app.analytics")
   .init(async () => ({ track: (event: string) => console.log(event) }))
@@ -360,6 +373,9 @@ Optional dependencies work on tasks, resources, events, async contexts, and erro
 For cases where you need to share variables between `init()` and `dispose()` methods (because sometimes cleanup is complicated), use the enhanced context pattern:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
+// Assuming: connectToDatabase and createPool are defined elsewhere
 const dbResource = r
   .resource("db.service")
   .context(() => ({
@@ -469,6 +485,7 @@ const registerUser = r
 Use this when one failing hook should not block the entire emission path and you want full error visibility.
 
 ```typescript
+// Assuming: userService is defined elsewhere
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userService, userRegistered })
@@ -493,6 +510,8 @@ const sendWelcomeEmail = r
 Sometimes you need to be the nosy neighbor of your application:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const logAllEventsHook = r
   .hook("app.hooks.logAllEvents")
   .on("*")
@@ -529,6 +548,7 @@ const internalEvent = r
 Hooks are the modern way to subscribe to events. They are lightweight event subscribers, similar to tasks, but with a few key differences.
 
 ```typescript
+// Assuming: userRegistered and logger are defined elsewhere
 const myHook = r
   .hook("app.hooks.onUserRegistered")
   .on(userRegistered)
@@ -627,6 +647,8 @@ Available system event:
 Sometimes you need to prevent other hooks from processing an event. The `stopPropagation()` method gives you fine-grained control over event flow:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const criticalAlert = r
   .event("app.events.alert")
   .payloadSchema<{ severity: "low" | "medium" | "high" | "critical" }>({
@@ -690,6 +712,8 @@ const adminTask = r
 For middleware with input/output contracts:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 // Middleware that enforces specific input and output types
 type AuthConfig = { requiredRole: string };
 type AuthInput = { user: { role: string } };
@@ -997,6 +1021,7 @@ const customJournal = journal.create();
 customJournal.set(traceIdKey, "manual-trace-id");
 
 // Forward explicit journal to a nested task call
+// Assuming: myTask is defined elsewhere
 const orchestratorTask = r
   .task("app.tasks.orchestrator")
   .dependencies({ myTask })
@@ -1054,6 +1079,8 @@ const getUserTask = r
 Repeated `.tags()` calls append by default. If you want to replace the existing list, pass `{ override: true }`.
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const apiTag = r.tag("app.tags.api").build();
 const cacheableTag = r.tag("app.tags.cacheable").build();
 const internalTag = r.tag("app.tags.internal").build();
@@ -1104,6 +1131,8 @@ const routeRegistration = r
 #### Tag Extraction and Processing
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 // Check if a tag exists and extract its configuration
 const performanceTag = r
   .tag<{ warnAboveMs: number }>("performance.monitor")
@@ -1182,6 +1211,8 @@ Consider this: You have an authentication tag, and you want to ensure ALL tasks 
 ### Contract Tags Code Example
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 // Tags that enforce type contracts input/output for tasks or config/value for resources
 type InputType = { id: string };
 type OutputType = { name: string };

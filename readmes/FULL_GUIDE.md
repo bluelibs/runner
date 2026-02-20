@@ -78,9 +78,9 @@ await runtime.runTask(createUser, { name: "Ada", email: "ada@example.com" });
 | [GitHub Repository](https://github.com/bluelibs/runner)                                                             | GitHub  | Source code, issues, and releases   |
 | [Runner Dev Tools](https://github.com/bluelibs/runner-dev)                                                          | GitHub  | Development CLI and tooling         |
 | [API Documentation](https://bluelibs.github.io/runner/)                                                             | Docs    | TypeDoc-generated reference         |
-| [AI-Friendly Docs](./AI.md)                                                                                 | Docs    | Compact summary (<5000 tokens)      |
-| [Full Guide](./FULL_GUIDE.md)                                                                               | Docs    | Complete documentation (composed)   |
-| [Support & Release Policy](./ENTERPRISE.md)                                                                 | Docs    | Support windows and deprecation     |
+| [AI-Friendly Docs](./AI.md)                                                                                         | Docs    | Compact summary (<5000 tokens)      |
+| [Full Guide](./FULL_GUIDE.md)                                                                                       | Docs    | Complete documentation (composed)   |
+| [Support & Release Policy](./ENTERPRISE.md)                                                                         | Docs    | Support windows and deprecation     |
 | [Design Documents](https://github.com/bluelibs/runner/tree/main/readmes)                                            | Docs    | Architecture notes and deep dives   |
 | [Example: Express + OpenAPI + SQLite](https://github.com/bluelibs/runner/tree/main/examples/express-openapi-sqlite) | Example | REST API with OpenAPI specification |
 | [Example: Fastify + MikroORM + PostgreSQL](https://github.com/bluelibs/runner/tree/main/examples/fastify-mikroorm)  | Example | Full-stack application with ORM     |
@@ -128,6 +128,7 @@ Use these minimums before starting:
 If you use the Node-only package (`@bluelibs/runner/node`) for durable workflows or exposure, stay on a supported Node LTS line.
 
 ---
+
 ## Why Runner?
 
 Modern applications are complex. They integrate with multiple services, have many moving parts, and need to be resilient, testable, and maintainable. Traditional frameworks often rely on reflection, magic, or heavy abstractions that obscure the flow of data and control. This leads to brittle systems that are hard to debug and evolve.
@@ -303,6 +304,7 @@ Any resource can be 'run' independently, giving you incredible freedom of testin
 - [Under the Hood](#under-the-hood) - Architecture deep dive
 - [Integration Recipes](#integration-recipes) - Docker, k8s, observability
 - [Community & Support](#community--support) - Getting help
+
 ## What Is This Thing?
 
 BlueLibs Runner is a TypeScript-first dependency injection framework built around **tasks** (functions) and **resources** (singletons). It's explicit and composition-first: you write normal async functions; Runner wires dependencies, middleware, events/hooks, and lifecycle.
@@ -896,6 +898,7 @@ Now that you know the patterns, here's your learning path:
 > **runtime:** "Seven patterns. That's it. You just learned what takes most developers three debugging sessions and a Stack Overflow rabbit hole to figure out. The other 10% of midnight emergencies? That's why I log everything."
 
 ---
+
 ## Quick Wins: Copy-Paste Solutions
 
 Production-ready patterns you can use today. Each example is complete and tested.
@@ -1109,6 +1112,7 @@ Each pattern here is runnable as-is. They rely only on Runner's built-ins, so yo
 > **runtime:** "Six production problems, six one-liners. You bolted middleware onto tasks like Lego bricks and called it architecture. I respect the pragmatism. Ship it."
 
 ---
+
 ## The Big Five
 
 The framework is built around five core concepts: Tasks, Resources, Events, Middleware, and Tags. Understanding them is key to using Runner effectively.
@@ -1142,13 +1146,13 @@ Here's a complete example showing you everything:
 ```typescript
 import { r, run } from "@bluelibs/runner";
 
+// Assuming: emailService is defined elsewhere
 // 1. Define your task - it's just a function with a name and dependencies
 const sendEmail = r
   .task("app.tasks.sendEmail")
-  .dependencies({ emailService, logger }) // What does this task need?
-  .run(async (input, { emailService, logger }) => {
+  .dependencies({ emailService }) // What does this task need?
+  .run(async (input, { emailService }) => {
     // Your business logic here
-    await logger.info(`Sending email to ${input.to}`);
     return emailService.send(input);
   })
   .build();
@@ -1240,6 +1244,8 @@ const userService = r
 Resources can be configured with type-safe options. No more guessing at config shapes.
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 type SMTPConfig = {
   smtpUrl: string;
   from: string;
@@ -1312,6 +1318,8 @@ const mktMailer = r.resource("app.mailers.mkt").init(...).build();
 **Fork instead:**
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 // Define a reusable template
 const mailerBase = r
   .resource<{ smtp: string }>("base.mailer")
@@ -1354,6 +1362,8 @@ const app = r
 **Deep fork example:**
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const child = r
   .resource("app.base.child")
   .init(async () => ({ ok: true }))
@@ -1402,6 +1412,8 @@ Think of this as an **architectural boundary** for wiring, not a sandbox:
 - **Predictable cross-cutting behavior**: private `.everywhere()` middleware stays inside its resource subtree
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const calculateTax = r
   .task("billing.tasks.calculateTax")
   .run(async (amount: number) => amount * 0.1)
@@ -1410,7 +1422,9 @@ const calculateTax = r
 const createInvoice = r
   .task("billing.tasks.createInvoice")
   .dependencies({ calculateTax })
-  .run(async (amount: number, deps) => amount + (await deps.calculateTax(amount)))
+  .run(
+    async (amount: number, deps) => amount + (await deps.calculateTax(amount)),
+  )
   .build();
 
 const billing = r
@@ -1446,6 +1460,8 @@ const billing = r
 Mark dependencies as optional when they may not be registered. The injected value will be `undefined` if the dependency is missing:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const analyticsService = r
   .resource("app.analytics")
   .init(async () => ({ track: (event: string) => console.log(event) }))
@@ -1471,6 +1487,9 @@ Optional dependencies work on tasks, resources, events, async contexts, and erro
 For cases where you need to share variables between `init()` and `dispose()` methods (because sometimes cleanup is complicated), use the enhanced context pattern:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
+// Assuming: connectToDatabase and createPool are defined elsewhere
 const dbResource = r
   .resource("db.service")
   .context(() => ({
@@ -1580,6 +1599,7 @@ const registerUser = r
 Use this when one failing hook should not block the entire emission path and you want full error visibility.
 
 ```typescript
+// Assuming: userService is defined elsewhere
 const registerUser = r
   .task("app.tasks.registerUser")
   .dependencies({ userService, userRegistered })
@@ -1604,6 +1624,8 @@ const sendWelcomeEmail = r
 Sometimes you need to be the nosy neighbor of your application:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const logAllEventsHook = r
   .hook("app.hooks.logAllEvents")
   .on("*")
@@ -1640,6 +1662,7 @@ const internalEvent = r
 Hooks are the modern way to subscribe to events. They are lightweight event subscribers, similar to tasks, but with a few key differences.
 
 ```typescript
+// Assuming: userRegistered and logger are defined elsewhere
 const myHook = r
   .hook("app.hooks.onUserRegistered")
   .on(userRegistered)
@@ -1738,6 +1761,8 @@ Available system event:
 Sometimes you need to prevent other hooks from processing an event. The `stopPropagation()` method gives you fine-grained control over event flow:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const criticalAlert = r
   .event("app.events.alert")
   .payloadSchema<{ severity: "low" | "medium" | "high" | "critical" }>({
@@ -1801,6 +1826,8 @@ const adminTask = r
 For middleware with input/output contracts:
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 // Middleware that enforces specific input and output types
 type AuthConfig = { requiredRole: string };
 type AuthInput = { user: { role: string } };
@@ -2108,6 +2135,7 @@ const customJournal = journal.create();
 customJournal.set(traceIdKey, "manual-trace-id");
 
 // Forward explicit journal to a nested task call
+// Assuming: myTask is defined elsewhere
 const orchestratorTask = r
   .task("app.tasks.orchestrator")
   .dependencies({ myTask })
@@ -2165,6 +2193,8 @@ const getUserTask = r
 Repeated `.tags()` calls append by default. If you want to replace the existing list, pass `{ override: true }`.
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 const apiTag = r.tag("app.tags.api").build();
 const cacheableTag = r.tag("app.tags.cacheable").build();
 const internalTag = r.tag("app.tags.internal").build();
@@ -2215,6 +2245,8 @@ const routeRegistration = r
 #### Tag Extraction and Processing
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 // Check if a tag exists and extract its configuration
 const performanceTag = r
   .tag<{ warnAboveMs: number }>("performance.monitor")
@@ -2293,6 +2325,8 @@ Consider this: You have an authentication tag, and you want to ensure ALL tasks 
 ### Contract Tags Code Example
 
 ```typescript
+import { r } from "@bluelibs/runner";
+
 // Tags that enforce type contracts input/output for tasks or config/value for resources
 type InputType = { id: string };
 type OutputType = { name: string };
@@ -2456,6 +2490,7 @@ The core concepts above cover most use cases. For specialized features:
 - **Serialization**: Custom type serialization for Dates, RegExp, binary, and custom shapes. See [Serializer Protocol](../readmes/SERIALIZER_PROTOCOL.md).
 
 ---
+
 ## run() and RunOptions
 
 The `run()` function is your application's entry point. It initializes all resources, wires up dependencies, and returns handles for interacting with your system.
@@ -2772,6 +2807,7 @@ await run(app, {
 - Stop accepting new work before cleaning up
 
 > **runtime:** "An error boundary: a trampoline under your tightrope. I'm the one bouncing, cataloging mid‑air exceptions, and deciding whether to end the show or juggle chainsaws with a smile. The audience hears music; I hear stack traces."
+
 ## Caching
 
 Avoid recomputing expensive work by caching task results with TTL-based eviction:
@@ -3599,6 +3635,7 @@ await q.dispose({ cancel: true }); // emits cancel + disposed
 ```
 
 > **runtime:** "Queue: one line, no cutting, no vibes. Throughput takes a contemplative pause while I prevent you from queuing a queue inside a queue and summoning a small black hole."
+
 ## Observability Strategy (Logs, Metrics, and Traces)
 
 Runner gives you primitives for all three observability signals:
@@ -4098,6 +4135,7 @@ await authLogger.warn("Failed login attempt", { data: { email, ip } });
 ```
 
 > **runtime:** "'Zero‑overhead when disabled.' Groundbreaking—like a lightbulb that uses no power when it's off. Flip to `debug: 'verbose'` and behold a 4K documentary of your mistakes, narrated by your stack traces."
+
 ## Advanced Patterns
 
 This section covers patterns for building resilient, distributed applications. Use these when your app grows beyond a single process or needs to handle partial failures gracefully.
@@ -5494,6 +5532,7 @@ export const problematicResource = r
 This pattern allows you to maintain clean, type-safe code while handling the inevitable circular dependencies that arise in complex applications.
 
 > **runtime:** "Circular dependencies: Escher stairs for types. You serenade the compiler with 'as IResource' and I do the parkour at runtime. It works. It's weird. Nobody tell the linter."
+
 ## Async Context
 
 Ever needed to pass a request ID, user session, or trace ID through your entire call stack without threading it through every function parameter? That's what Async Context does.
@@ -5583,6 +5622,7 @@ const sessionContext = r
 ```
 
 > **runtime:** "Async Context: your data playing hide-and-seek across the event loop. One forgotten `.provide()` and the 'Context not available' error will find you at 3am, exactly where your stack trace is least helpful."
+
 ## Fluent Builders (`r.*`)
 
 The `r` namespace gives you a chainable, discoverable way to build Runner components. Instead of memorizing object shapes, you get autocomplete that guides you through the options.
@@ -5717,6 +5757,7 @@ Every builder follows the same rhythm:
 For the complete API reference, see the [Fluent Builders documentation](../readmes/FLUENT_BUILDERS.md).
 
 > **runtime:** "Fluent builders: method chaining dressed up for a job interview. You type a dot and I whisper possibilities. It's the same definition either way—I just appreciate the ceremony."
+
 ## Type Helpers
 
 When you need to reference a task's input type in another function, or pass a resource's value type to a generic, these utility types save you from re-declaring the same shapes.
@@ -5881,6 +5922,7 @@ const app = r
 When running, open `http://localhost:1337` for the visual DevTools.
 
 > **Note:** Runner Dev Tools is intended for development and controlled environments. Treat it as privileged operational access.
+
 ## Real-World Example: The Complete Package
 
 This example shows everything working together in a realistic Express application:
@@ -6079,6 +6121,7 @@ process.on("SIGTERM", async () => {
 ```
 
 > **runtime:** "Real-World Example: the happy path. In production you'll add validation, auth, observability, and a few weird edge cases. The wiring pattern stays the same."
+
 ## Testing
 
 Runner's explicit dependency injection makes testing straightforward. Call `.run()` on a task with plain mocks for fast unit tests, or spin up the full runtime when you need middleware and lifecycle behavior.
@@ -6144,6 +6187,7 @@ describe("registerUser task", () => {
 Use `run()` to start the full app with middleware, events, and lifecycle. Swap infrastructure with `override()`.
 
 Important:
+
 - `r.override(base, fn)` (or `override(base, patch)`) creates a replacement definition.
 - `.overrides([...])` is what applies replacements in the running container.
 - If you place both base and replacement in `.register([...])`, you'll get duplicate-id registration errors.
@@ -6222,6 +6266,7 @@ await run(app, { debug: "verbose" });
 ```
 
 > **runtime:** "Testing: an elaborate puppet show where every string behaves. Then production walks in, kicks the stage, and asks for pagination. Still — nice coverage badge."
+
 ## Troubleshooting
 
 When things go sideways, this is your field manual. No fluff, just fixes.
@@ -6234,25 +6279,25 @@ When things go sideways, this is your field manual. No fluff, just fixes.
 
 The quick-reference table for "I've seen this error, what do I do?"
 
-| Error                                   | Symptom                             | Likely Cause                                  | Fix                                                         |
-| --------------------------------------- | ----------------------------------- | --------------------------------------------- | ----------------------------------------------------------- |
-| `TypeError: X is not a function`        | Task call fails at runtime          | Forgot `.build()` on task/resource definition | Add `.build()` at the end of your fluent chain              |
-| `Resource "X" not found`                | Runtime crash during initialization | Component not registered                      | Add to `.register([...])` in parent resource                |
-| `Config validation failed for X`        | Startup crash before app runs       | Missing `.with()` config for resource         | Provide required config: `resource.with({ ... })`           |
-| `"X" is internal to resource "Y" and cannot be referenced by ...` (`visibilityViolationError`) | `run(app)` fails during bootstrap | Cross-resource reference to a non-exported item | Export the item with `.exports([...])` or depend on an already exported contract |
-| `Circular dependencies detected: ...` (`circularDependencyError`) | `run(app)` fails before startup | Actual runtime dependency graph cycle         | Break the dependency loop across tasks/resources/middleware/hooks |
-| `Circular dependency detected` (type inference) | TypeScript inference fails          | Import cycle between files                    | Use explicit type annotation: `as IResource<Config, Value>` |
-| `TimeoutError`                          | Task hangs then throws              | Operation exceeded timeout TTL                | Increase TTL or investigate underlying slow operation       |
-| `Cannot read property 'X' of undefined` | Task crashes mid-execution          | Dependency not properly injected              | Check `.dependencies({})` matches what you use              |
-| `ValidationError: Task input...`        | Task rejects valid-looking input    | Input doesn't match `inputSchema`             | Check schema constraints (types, required fields)           |
-| `RateLimitError`                        | Task throws after repeated calls    | Exceeded rate limit threshold                 | Wait for window reset or increase `max` limit               |
-| `CircuitBreakerOpenError`               | All calls fail immediately          | Circuit tripped after failures                | Wait for `resetTimeout` or fix underlying service           |
-| `EventCycleError`                       | Emissions recurse / stack explodes  | Event graph emitted itself (direct/indirect)  | Break the cycle or emit asynchronously outside the chain    |
-| `InputContractViolationError`           | Type errors on task input           | Task input does not satisfy middleware/tag contract | Expand task input type to include required contract fields |
-| `OutputContractViolationError`          | Type errors on task output          | Task output does not satisfy middleware/tag contract | Return a contract-compatible shape or relax contract       |
-| `DurableExecutionError`                 | Durable workflow replay fails       | Step/signal shape changed incompatibly         | Keep step ids stable and migrate workflow logic carefully   |
-| `SemaphoreDisposedError`                | Acquire fails immediately           | Semaphore disposed while callers still running | Create a new semaphore per lifecycle and dispose at shutdown |
-| `QueueDeadlockError`                    | Queue stops progressing             | Job waited on work that required the same queue | Avoid self-wait cycles; split queues or redesign flow       |
+| Error                                                                                          | Symptom                             | Likely Cause                                         | Fix                                                                              |
+| ---------------------------------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------- | -------------------------------------------------------------------------------- |
+| `TypeError: X is not a function`                                                               | Task call fails at runtime          | Forgot `.build()` on task/resource definition        | Add `.build()` at the end of your fluent chain                                   |
+| `Resource "X" not found`                                                                       | Runtime crash during initialization | Component not registered                             | Add to `.register([...])` in parent resource                                     |
+| `Config validation failed for X`                                                               | Startup crash before app runs       | Missing `.with()` config for resource                | Provide required config: `resource.with({ ... })`                                |
+| `"X" is internal to resource "Y" and cannot be referenced by ...` (`visibilityViolationError`) | `run(app)` fails during bootstrap   | Cross-resource reference to a non-exported item      | Export the item with `.exports([...])` or depend on an already exported contract |
+| `Circular dependencies detected: ...` (`circularDependencyError`)                              | `run(app)` fails before startup     | Actual runtime dependency graph cycle                | Break the dependency loop across tasks/resources/middleware/hooks                |
+| `Circular dependency detected` (type inference)                                                | TypeScript inference fails          | Import cycle between files                           | Use explicit type annotation: `as IResource<Config, Value>`                      |
+| `TimeoutError`                                                                                 | Task hangs then throws              | Operation exceeded timeout TTL                       | Increase TTL or investigate underlying slow operation                            |
+| `Cannot read property 'X' of undefined`                                                        | Task crashes mid-execution          | Dependency not properly injected                     | Check `.dependencies({})` matches what you use                                   |
+| `ValidationError: Task input...`                                                               | Task rejects valid-looking input    | Input doesn't match `inputSchema`                    | Check schema constraints (types, required fields)                                |
+| `RateLimitError`                                                                               | Task throws after repeated calls    | Exceeded rate limit threshold                        | Wait for window reset or increase `max` limit                                    |
+| `CircuitBreakerOpenError`                                                                      | All calls fail immediately          | Circuit tripped after failures                       | Wait for `resetTimeout` or fix underlying service                                |
+| `EventCycleError`                                                                              | Emissions recurse / stack explodes  | Event graph emitted itself (direct/indirect)         | Break the cycle or emit asynchronously outside the chain                         |
+| `InputContractViolationError`                                                                  | Type errors on task input           | Task input does not satisfy middleware/tag contract  | Expand task input type to include required contract fields                       |
+| `OutputContractViolationError`                                                                 | Type errors on task output          | Task output does not satisfy middleware/tag contract | Return a contract-compatible shape or relax contract                             |
+| `DurableExecutionError`                                                                        | Durable workflow replay fails       | Step/signal shape changed incompatibly               | Keep step ids stable and migrate workflow logic carefully                        |
+| `SemaphoreDisposedError`                                                                       | Acquire fails immediately           | Semaphore disposed while callers still running       | Create a new semaphore per lifecycle and dispose at shutdown                     |
+| `QueueDeadlockError`                                                                           | Queue stops progressing             | Job waited on work that required the same queue      | Avoid self-wait cycles; split queues or redesign flow                            |
 
 ---
 
@@ -6341,7 +6386,10 @@ await dispose();
 This usually means a task/resource/hook/middleware is referencing an item that is internal to a resource that declared `.exports(...)`.
 
 ```typescript
-const internalTask = r.task("billing.tasks.internal").run(async () => 1).build();
+const internalTask = r
+  .task("billing.tasks.internal")
+  .run(async () => 1)
+  .build();
 
 const billing = r
   .resource("billing")
@@ -6349,7 +6397,7 @@ const billing = r
   .exports([]) // everything private outside billing subtree
   .build();
 
-const root = r
+const app = r
   .resource("app")
   .register([billing])
   .dependencies({ internalTask }) // invalid cross-boundary reference
@@ -6370,7 +6418,7 @@ const root = r
 - `.exports([])` means "nothing public"
 - Private items still participate in global id uniqueness; duplicate ids still fail registration
 
---- 
+---
 
 ### Debug Mode
 
@@ -6679,6 +6727,7 @@ npm ls @bluelibs/runner
 4. **Open an issue**: [New Issue](https://github.com/bluelibs/runner/issues/new)
 
 ---
+
 ## Under the Hood
 
 For developers who want to understand how Runner actually works—not just how to use it.
@@ -7661,6 +7710,7 @@ const paymentTask = r
 > **runtime:** "Integration recipes: the cookbook for making me play nice with everyone else's code. Redis, Kubernetes, OpenTelemetry—I've been to all their parties. Just remember: every integration is a new failure mode. I'll be here, logging everything."
 
 ---
+
 ## Quick Reference: Cheat Sheet
 
 **Bookmark this section for quick lookups!**
@@ -7768,18 +7818,18 @@ await dispose();
 await disposeWithOptions();
 ```
 
-| Run Option                    | Purpose                                                                 |
-| ---------------------------- | ----------------------------------------------------------------------- |
-| `debug`                      | Enable Runner debug logging                                             |
-| `logs`                       | Configure logger strategy/threshold/buffering                           |
-| `errorBoundary`              | Catch process-level unhandled exceptions/rejections                     |
-| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with `dispose()`                            |
-| `onUnhandledError`           | Custom handler for normalized unhandled errors                          |
-| `dryRun`                     | Validate graph without running resource `init()`                        |
-| `lazy`                       | Defer startup-unused resources until on-demand access                   |
-| `initMode`                   | Choose startup scheduler strategy (`sequential` or `parallel`)          |
-| `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                            |
-| `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)           |
+| Run Option                   | Purpose                                                        |
+| ---------------------------- | -------------------------------------------------------------- |
+| `debug`                      | Enable Runner debug logging                                    |
+| `logs`                       | Configure logger strategy/threshold/buffering                  |
+| `errorBoundary`              | Catch process-level unhandled exceptions/rejections            |
+| `shutdownHooks`              | Auto-handle SIGINT/SIGTERM with `dispose()`                    |
+| `onUnhandledError`           | Custom handler for normalized unhandled errors                 |
+| `dryRun`                     | Validate graph without running resource `init()`               |
+| `lazy`                       | Defer startup-unused resources until on-demand access          |
+| `initMode`                   | Choose startup scheduler strategy (`sequential` or `parallel`) |
+| `runtimeEventCycleDetection` | Detect event cycles at runtime and fail fast                   |
+| `mode`                       | Override environment mode detection (`dev` / `prod` / `test`)  |
 
 ### Testing Patterns
 
@@ -7810,7 +7860,10 @@ const mockMailer = r
   .build();
 
 // Typed shorthand
-const shorthandMockMailer = r.override(realMailer, async () => new MockMailer());
+const shorthandMockMailer = r.override(
+  realMailer,
+  async () => new MockMailer(),
+);
 
 // Helper override
 const helperMockMailer = override(realMailer, {
@@ -7825,6 +7878,7 @@ const app = r
 ```
 
 Quick rule:
+
 - `r.override(...)` builds the replacement definition.
 - `.overrides([...])` applies replacement during bootstrap.
 - Registering only the replacement definition is valid.
@@ -7903,8 +7957,14 @@ const task = r.task("id")
 ### Resource Isolation (`.exports`)
 
 ```typescript
-const internalTask = r.task("billing.tasks.internal").run(async () => 1).build();
-const publicTask = r.task("billing.tasks.public").run(async () => 2).build();
+const internalTask = r
+  .task("billing.tasks.internal")
+  .run(async () => 1)
+  .build();
+const publicTask = r
+  .task("billing.tasks.public")
+  .run(async () => 2)
+  .build();
 
 const billing = r
   .resource("billing")
@@ -7914,6 +7974,7 @@ const billing = r
 ```
 
 Quick rules:
+
 - No `.exports()` means everything public (backward compatible)
 - `.exports([])` means everything private outside that subtree
 - Visibility is enforced at `run(app)` bootstrap
@@ -7922,11 +7983,11 @@ Quick rules:
 
 ### Event Emission Options
 
-| Option         | Type                              | Default      | Purpose                                      |
-| -------------- | --------------------------------- | ------------ | -------------------------------------------- |
-| `failureMode`  | `"fail-fast" \| "aggregate"`      | `fail-fast`  | Stop on first listener error or aggregate all |
-| `throwOnError` | `boolean`                         | `true`       | Throw after listener failure(s)               |
-| `report`       | `boolean`                         | `false`      | Return `IEventEmitReport` for listener outcomes |
+| Option         | Type                         | Default     | Purpose                                         |
+| -------------- | ---------------------------- | ----------- | ----------------------------------------------- |
+| `failureMode`  | `"fail-fast" \| "aggregate"` | `fail-fast` | Stop on first listener error or aggregate all   |
+| `throwOnError` | `boolean`                    | `true`      | Throw after listener failure(s)                 |
+| `report`       | `boolean`                    | `false`     | Return `IEventEmitReport` for listener outcomes |
 
 ### Type Helpers
 
@@ -8063,11 +8124,11 @@ Current support channels:
 
 When a public API is deprecated, use this lifecycle:
 
-| Stage             | What Happens                                                        | Removal |
-| ----------------- | ------------------------------------------------------------------- | ------- |
-| **Announced**     | Release note entry + docs note with replacement path                | No      |
-| **Warned**        | Deprecated marker in docs/types and migration recommendation        | No      |
-| **Removed**       | Removed in next allowed major with migration notes in release notes | Yes     |
+| Stage         | What Happens                                                        | Removal |
+| ------------- | ------------------------------------------------------------------- | ------- |
+| **Announced** | Release note entry + docs note with replacement path                | No      |
+| **Warned**    | Deprecated marker in docs/types and migration recommendation        | No      |
+| **Removed**   | Removed in next allowed major with migration notes in release notes | Yes     |
 
 If a behavior changes without breaking types (for example default values), document it in your release notes.
 
@@ -8111,14 +8172,14 @@ Use this list before promoting a Runner app to production:
 
 Node-only entrypoint: `@bluelibs/runner/node`.
 
-| Export                                                | Purpose                                                                 |
-| ----------------------------------------------------- | ----------------------------------------------------------------------- |
-| `nodeExposure`                                        | Expose tasks/events over HTTP                                           |
-| `createHttpMixedClient`, `createHttpSmartClient`      | Node tunnel clients (JSON + multipart + streaming modes)                |
-| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart tunnel calls                       |
-| `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path         |
-| `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution                |
-| `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                           |
+| Export                                                | Purpose                                                         |
+| ----------------------------------------------------- | --------------------------------------------------------------- |
+| `nodeExposure`                                        | Expose tasks/events over HTTP                                   |
+| `createHttpMixedClient`, `createHttpSmartClient`      | Node tunnel clients (JSON + multipart + streaming modes)        |
+| `createNodeFile`, `NodeInputFile`                     | Build Node file inputs for multipart tunnel calls               |
+| `readInputFileToBuffer`, `writeInputFileToPath`       | Convert `InputFile` payloads to `Buffer` or persisted file path |
+| `useExposureContext`, `hasExposureContext`            | Access request/response/signal in exposed task execution        |
+| `memoryDurableResource`, `redisDurableResource`, etc. | Durable workflow runtime, stores, and helpers                   |
 
 See also:
 
